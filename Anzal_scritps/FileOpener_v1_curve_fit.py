@@ -18,7 +18,6 @@ from scipy.optimize import curve_fit
 av_color = "000000" # black 
 trial_color = "#377eb8" # blue 
 fit_color = "#de6f00" # orange
-np.set_printoptions(threshold=np.inf)
 
 
 #dictionary of all availabe IOs and the file extensions in neo 
@@ -253,234 +252,299 @@ def average_trials(segments,ch_no):
     trial_av = np.mean(trial_av,axis=0)
     return trial_av
 
-def fit_double_exp(x, A1, tau1, A2, tau2, C):
-    """
-    Double exponential function.
-    x, trace or signal to pass it in
-    A1, tau1: Amplitude and time constant of the first exponential.
-    A2, tau2: Amplitude and time constant of the second exponential.
-    C: Constant offset.
-    """
-    return A1 * np.exp(-x / tau1) + A2 * np.exp(-x / tau2) + C
 
+def func_mono_exp(x, a, b, c, d):
+    return a * np.exp(-(x-b)/c) + d
 
-from scipy.stats import linregress
-
-def fitted_trace(t, signal, sampling_rate, tau_window_ms=500.0):
-    """
-    Fits a single exponential decay to a synaptic signal, with a data-driven initial guess for tau.
+def Fit_single_trace(Trace, Time_trace, x_start,x_end):
     
-    Parameters
-    ----------
-    t : np.ndarray
-        Time array for the recorded signal (seconds).
-    signal : np.ndarray
-        The recorded signal (EPSP, EPSC, IPSC) as a 1D array.
-    sampling_rate : float
-        Sampling rate in Hz (samples per second).
-    tau_window_ms : float, optional
-        The length of the window after the peak (in ms) used to estimate the initial tau guess.
-        Default is 5 ms.
-        
-    Returns
-    -------
-    fitted_signal : np.ndarray
-        The fitted curve evaluated at times t.
-    A_fit : float
-        Fitted amplitude.
-    tau_fit : float
-        Fitted time constant.
-    baseline_fit : float
-        Fitted baseline.
+    idx_start=np.ravel(np.where(Time_trace >=x_start))[0]
+    idx_stop=np.ravel(np.where(Time_trace >= x_end))[0]
+    x = Time_trace[idx_start:idx_stop]
+    y = Trace[idx_start:idx_stop]
+    x2=np.array(np.squeeze(x))
+    y2=np.array(np.squeeze(y))  
+    
+    try:
+        param_bounds=([-np.inf,0.,0.,-1000.],[np.inf,1.,10.,1000.])      # be careful ok for seconds. If millisec change param 2 and 3
+        popt, pcov = curve_fit(func_mono_exp, x2, y2,bounds=param_bounds, max_nfev = 10000) 
+        print ('tau decay =',popt[2]*1000, ' ms' )
+        return popt[2], popt, idx_start, idx_stop
+    except:
+        print ('Fit failed')
+        popt[2]= float('nan')
+        popt= float('nan')
+        return popt[2], popt, idx_start, idx_stop
+        pass
+
+
+def fit_epsp_with_alpha(t, signal, sampling_rate,
+                        debug=True):
     """
+    Fits an alpha function to an EPSP segment of the signal and reconstructs the waveform.
 
-    # --- Baseline Calculation ---
-    baseline_window_ms = 5.0
-    baseline_points = int((baseline_window_ms / 1000.0) * sampling_rate)
-    baseline = np.mean(signal[:baseline_points])
-
-    # --- Find Peak ---
-    # If you know your event is an EPSP/EPSC (positive deflection), use argmax.
-    # If it's an IPSC (negative), you might use argmin.
-    peak_index = np.argmax(signal)  # Adjust if needed
-    t_peak = t[peak_index]
-    A_init = signal[peak_index] - baseline
-
-    # --- Estimate tau_init from Data Window ---
-    # Define the end time for the tau estimation window
-    tau_window_s = tau_window_ms / 1000.0
-    end_time_for_tau = t_peak + tau_window_s
-
-    # Extract indices for the tau estimation window
-    window_indices = np.where((t >= t_peak) & (t <= end_time_for_tau))[0]
-
-    # Ensure we have enough points in the window
-    if len(window_indices) > 2:
-        # Subtract baseline in that window
-        signal_window = signal[window_indices] - baseline
-        time_window = t[window_indices] - t_peak
-
-        # Use only positive values for log (if EPSC/EPSP). If IPSC is negative, invert sign appropriately.
-        # For EPSC/EPSP: signal_window should be positive around the peak.
-        # If IPSC is negative, you may consider signal_window = baseline - signal[window_indices].
+    Parameters:
+        t (numpy.ndarray): 1D array of time points.
+        signal (numpy.ndarray): 1D array of signal values.
+        debug (bool): If True, plots intermediate results for debugging.
         
-        # Filter to keep only positive values (for log)
-        valid_indices = np.where(signal_window > 0)[0]
-        if len(valid_indices) > 2:
-            signal_window_pos = signal_window[valid_indices]
-            time_window_pos = time_window[valid_indices]
+    Returns:
+        numpy.ndarray: Reconstructed waveform based on the fitted alpha function.
+    """
+    def alpha_function(t, A, t0, tau):
+        alpha = (t - t0) * np.exp(-(t - t0) / tau)
+        alpha[t < t0] = 0
+        return A * alpha
+    
+    # Estimate baseline and threshold
+    baseline = np.mean(signal[:int(0.002*sampling_rate)])#np.median(signal)
+    std_dev = np.std(signal)
+    signal = signal-baseline
+    start_time = t[int(0.0015*sampling_rate)]  # Example: Apply the mask only for times > 0.005 seconds
+    threshold = np.mean(signal[:int(0.002*sampling_rate)]) #+ 1.5 * std_dev
+    epsp_mask = (signal >=threshold) & (t >=start_time)
+    
+    if debug:
+        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal, label="Signal")
+        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
+        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
+        plt.legend()
+        plt.title("Signal with Baseline and Threshold")
+        plt.show()
+    
+    # Check if EPSP region is detected
+    if not np.any(epsp_mask):
+        raise RuntimeError("No EPSP detected in the signal.")
+    
+    t_epsp = t[epsp_mask]
+    signal_epsp = signal[epsp_mask]
+    
+    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
+        raise RuntimeError("Insufficient data points for fitting.")
+    
+    # Initial guess and bounds
+    A_init = np.max(signal_epsp) - baseline 
+    t0_init = t_epsp[0]
+    tau_init = 0.0005
+    p0 = [A_init, t0_init, tau_init]
+    #bounds = ([-1*A_init, t_epsp[0], 1e-4], [10000 * A_init, t_epsp[-1], 10000])
+    bounds = ([-np.inf, t_epsp[0], 1e-4], [np.inf, t_epsp[-1], 10e4])
+    try:
+        popt, _ = curve_fit(alpha_function, t_epsp, signal_epsp, p0=p0,
+                            bounds=bounds, maxfev=10000)
+        A_fit, t0_fit, tau_fit = popt
+        reconstructed_waveform = alpha_function(t, A_fit, t0_fit, tau_fit)
+    except Exception as e:
+        raise RuntimeError(f"Alpha function fitting failed: {e}")
+    
+    if debug:
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal, label="Original Signal", alpha=0.7)
+        plt.plot(t, reconstructed_waveform, label="Fitted Waveform", linestyle='--')
+        plt.axvline(t_epsp[0])
+        plt.axvline(t_epsp[-1])
+        plt.xlabel("Time")
+        plt.ylabel("Signal")
+        plt.legend()
+        plt.title("EPSP Fitting")
+        plt.show()
+    
+    return reconstructed_waveform
 
-            # Take the natural log of the amplitude portion
-            ln_signal = np.log(signal_window_pos)
 
-            # Perform a linear regression: ln(V - baseline) vs (t - t_peak)
-            slope, intercept, r_value, p_value, std_err = linregress(time_window_pos, ln_signal)
+def fit_epsp_with_alpha_sum(t, signal, sampling_rate, debug=True):
+    """
+    Fits a sum of two alpha functions (one positive, one negative) to an EPSP segment 
+    of the signal and reconstructs the waveform.
 
-            # slope ≈ -1 / tau
-            tau_init = -1.0 / slope if slope < 0 else 0.005  # fallback if slope is positive
-        else:
-            # Fallback if insufficient valid points
-            tau_init = 0.005
-    else:
-        # Fallback if window too small
-        tau_init = 0.005
+    Parameters:
+        t (numpy.ndarray): 1D array of time points.
+        signal (numpy.ndarray): 1D array of signal values.
+        sampling_rate (float): Sampling rate of the signal in Hz.
+        debug (bool): If True, plots intermediate results for debugging.
 
-    # --- Define the single exponential model ---
-    def single_exp(t_array, A, tau, baseline_param):
-        return baseline_param + A * np.exp(-(t_array - t_peak) / tau)
+    Returns:
+        numpy.ndarray: Reconstructed waveform based on the fitted alpha functions.
+    """
+    def alpha_function(t, A, t0, tau):
+        alpha = (t - t0) * np.exp(-(t - t0) / tau)
+        alpha[t < t0] = 0
+        return A * alpha
 
-    p0 = [A_init, tau_init, baseline]
+    def combined_alpha_function(t, A1, t01, tau1, A2, t02, tau2):
+        return (alpha_function(t, A1, t01, tau1) +
+                alpha_function(t, A2, t02, tau2))
 
-    # Optional parameter bounds
-    A_bounds = (0, 50)
-    tau_bounds = (1e-4, 0.5)
-    baseline_bounds = (baseline - 5*abs(A_init), baseline + 5*abs(A_init))
+    # Estimate baseline and threshold
+    baseline = np.mean(signal[:int(0.002 * sampling_rate)])
+    std_dev = np.std(signal)
+    signal = signal - baseline  # Remove baseline
+    start_time = t[int(0.0015 * sampling_rate)]  # Apply the mask only for times > start_time
+    threshold = np.mean(signal[:int(0.002 * sampling_rate)])
 
-    # Fit the curve
-    popt, pcov = curve_fit(
-        single_exp, t, signal, p0=p0,
-        bounds=([0, tau_bounds[0], baseline_bounds[0]],
-                [np.inf, tau_bounds[1], baseline_bounds[1]])
+    # Create mask for EPSP region
+    epsp_mask = (signal >= threshold) & (t >= start_time)
+
+    if debug:
+        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal, label="Signal")
+        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
+        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
+        plt.legend()
+        plt.title("Signal with Baseline and Threshold")
+        plt.show()
+
+    # Check if EPSP region is detected
+    if not np.any(epsp_mask):
+        raise RuntimeError("No EPSP detected in the signal.")
+
+    t_epsp = t[epsp_mask]
+    signal_epsp = signal[epsp_mask]
+
+    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
+        raise RuntimeError("Insufficient data points for fitting.")
+
+    # Initial guesses and bounds for the parameters
+    A1_init = np.max(signal_epsp)
+    t01_init = t_epsp[0]
+    tau1_init = 0.0005
+
+    A2_init = -1 * A1_init
+    t02_init = t_epsp[0] + 0.001  # Slightly shifted
+    tau2_init = 0.0005
+
+    p0 = [A1_init, t01_init, tau1_init, A2_init, t02_init, tau2_init]
+    bounds = (
+        [-np.inf, t_epsp[0], 1e-4, -np.inf, t_epsp[0], 1e-4],
+        [np.inf, t_epsp[-1], 1.0, np.inf, t_epsp[-1], 1.0]
     )
 
-    A_fit, tau_fit, baseline_fit = popt
-    fitted_signal = single_exp(t, A_fit, tau_fit, baseline_fit)
+    try:
+        popt, _ = curve_fit(combined_alpha_function, t_epsp, 
+                            signal_epsp, p0=p0, bounds=bounds, 
+                            maxfev=100000
+                           )
+        A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit = popt
+        reconstructed_waveform = combined_alpha_function(t, A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit)
+    except Exception as e:
+        raise RuntimeError(f"Alpha function fitting failed: {e}")
 
-    return fitted_signal#, A_fit, tau_fit, baseline_fit
+    if debug:
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal, label="Original Signal", alpha=0.7)
+        plt.plot(t, reconstructed_waveform, label="Fitted Waveform (Sum of Alphas)", linestyle='--')
+        plt.axvline(t_epsp[0], linestyle='--', color='grey', label="EPSP Start")
+        plt.axvline(t_epsp[-1], linestyle='--', color='grey', label="EPSP End")
+        plt.xlabel("Time")
+        plt.ylabel("Signal")
+        plt.legend()
+        plt.title("EPSP Fitting with Sum of Alpha Functions")
+        plt.show()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return reconstructed_waveform
 
 
 
+def fit_epsp_with_alpha_sum(t, signal, sampling_rate, 
+                            debug=False):
+    """
+    Fits a sum of two alpha functions (one positive, one negative) to an EPSP segment 
+    of the signal and reconstructs the waveform.
 
+    Parameters:
+        t (numpy.ndarray): 1D array of time points.
+        signal (numpy.ndarray): 1D array of signal values.
+        sampling_rate (float): Sampling rate of the signal in Hz.
+        debug (bool): If True, plots intermediate results for debugging.
 
+    Returns:
+        numpy.ndarray: Reconstructed waveform based on the fitted alpha functions.
+    """
+    def alpha_function(t, A, t0, tau):
+        alpha = (t - t0) * np.exp(-(t - t0) / tau)
+        alpha[t < t0] = 0
+        return A * alpha
 
+    def combined_alpha_function(t, A1, t01, tau1, A2, t02, tau2):
+        return (alpha_function(t, A1, t01, tau1) +
+                alpha_function(t, A2, t02, tau2))
 
+    # Estimate baseline and threshold
+    baseline = np.mean(signal[:int(0.002 * sampling_rate)])
+    std_dev = np.std(signal)
+    signal = signal - baseline  # Remove baseline
+    start_time = t[int(0.0015 * sampling_rate)]  # Apply the mask only for times > start_time
+    threshold = np.mean(signal[:int(0.002 * sampling_rate)])
 
+    # Create mask for EPSP region
+    epsp_mask = (signal >= threshold) & (t >= start_time)
 
+    if debug:
+        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal, label="Signal")
+        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
+        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
+        plt.legend()
+        plt.title("Signal with Baseline and Threshold")
+        plt.show()
 
+    # Check if EPSP region is detected
+    if not np.any(epsp_mask):
+        raise RuntimeError("No EPSP detected in the signal.")
 
+    t_epsp = t[epsp_mask]
+    signal_epsp = signal[epsp_mask]
 
+    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
+        raise RuntimeError("Insufficient data points for fitting.")
 
+    # Initial guesses and bounds for the parameters
+    A1_init = np.max(signal_epsp)
+    t01_init = t_epsp[0]
+    tau1_init = 0.0005
 
+    A2_init = -0.5 * A1_init
+    t02_init = t_epsp[0] + 0.001  # Slightly shifted
+    tau2_init = 0.0005
 
+    p0 = [A1_init, t01_init, tau1_init, A2_init, t02_init, tau2_init]
+    bounds = (
+        [-np.inf, t_epsp[0], 1e-4, -np.inf, t_epsp[0], 1e-4],
+        [np.inf, t_epsp[-1], 1.0, np.inf, t_epsp[-1], 1.0]
+    )
 
+    try:
+        popt, _ = curve_fit(
+            combined_alpha_function, t_epsp, signal_epsp, p0=p0, bounds=bounds, maxfev=10000
+        )
+        A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit = popt
+        reconstructed_waveform = combined_alpha_function(t, A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit)
+    except Exception as e:
+        raise RuntimeError(f"Alpha function fitting failed: {e}")
 
+    if debug:
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal, label="Original Signal", alpha=0.7)
+        plt.plot(t, reconstructed_waveform, label="Fitted Waveform (Sum of Alphas)", linestyle='--')
+        plt.axvline(t_epsp[0], linestyle='--', color='grey', label="EPSP Start")
+        plt.axvline(t_epsp[-1], linestyle='--', color='grey', label="EPSP End")
+        plt.xlabel("Time")
+        plt.ylabel("Signal")
+        plt.legend()
+        plt.title("EPSP Fitting with Sum of Alpha Functions")
+        plt.show()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#def fitted_trace(t, signal,sampling_rate):
-#    
-#    #baseline = np.mean(signal[:int(0.005*sampling_rate)])
-#    #signal=signal-baseline
-#    #param_bounds=([-np.inf,0.,0.,-1000.,0],[np.inf,1.,10.,1000.,0.5])
-#    a1_max = np.max(signal)
-#    a2_max = a1_max
-#    a1_min = np.min(signal)
-#    a2_min = a1_min
-#    c_max = int(0.005*sampling_rate)
-#    c_min = int(0.001*sampling_rate)
-#    tau1_max =100
-#    tau1_min =5
-#    tau2_max =100
-#    tau2_min =5
-#
-#    #param_bounds=([a1_min,0.,a2_min,0.,0.],[a1_max,1,a2_max,0.,0.5])
-#    #param_bounds=([a1_min,0.0001,a2_min,0.0001,0.],[a1_max,1.,a2_max,1.,0.5])
-#    param_bounds=([a1_min,tau1_min,a2_min,tau2_min,c_min],
-#                  [a1_max,tau1_max,a2_max,tau2_max,c_max])
-#    popt, pcov = curve_fit(fit_double_exp, t, signal,
-#                           bounds=param_bounds, max_nfev = 100000)
-#    A1, tau1, A2, tau2, C = popt
-#    fitted_curve = fit_double_exp(t, *popt)
-#    return fitted_curve
-
-#def plot_single_channel_trials(segments,t,
-#                               sampling_rate,
-#                               channel_list,num_chan):
-#    """
-#    function can access the segments and plot each trial in rows of subplot 
-#    """
-#    num_trials=len(segments)
-#    fig,axs = plt.subplots(nrows=num_trials, ncols=1,figsize=(5,15), 
-#                           sharex=True, sharey=False)
-#    for ch_no,channel_name in enumerate(channel_list):
-#        for s, segment in enumerate(segments):
-#            trial_no = s
-#            units = str(segment.analogsignals[ch_no].units).split()[-1]
-#            signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
-#            if s==0:
-#                print()
-#            axs[s].plot(t,signal)
-#            axs[s].plot(t,filt_sig)
-#            axs[s].set_title(f"trial: {s}")
-#            axs[s].set_ylabel(units)
-#    plt.tight_layout()
-#    plt.show()
-#    pass
-
+    return reconstructed_waveform
 
 def plot_single_channel_trials(segments,t,
                                sampling_rate,
                                channel_list,num_chan):
-    #num_trials=len(segments)
-    num_trials = 4
+    num_trials=len(segments)
+    #num_trials = 4
     fig,axs = plt.subplots(nrows=num_trials, ncols=1,figsize=(5,15), 
                            sharex=True, sharey=False)
     for ch_no,channel_name in enumerate(channel_list):
@@ -502,11 +566,17 @@ def plot_single_channel_trials(segments,t,
             axs[s].set_ylabel(units)
         trial_av = average_trials(segments,ch_no)
         ftc_ti = int(sampling_rate*0.05)
-        ftc_tf = int(sampling_rate*0.0508)
-        fit_av = fitted_trace(t[ftc_ti:ftc_tf],
-                              trial_av[ftc_ti:ftc_tf],
-                              sampling_rate)
-    axs[3].plot(t[ftc_ti:ftc_tf],fit_av)
+        ftc_tf = int(sampling_rate*1)
+        #fit_av = fitted_trace(t[ftc_ti:ftc_tf],
+        #                      trial_av[ftc_ti:ftc_tf],
+        #                      sampling_rate)
+        fit_av = fit_epsp_with_alpha_sum(t[ftc_ti:ftc_tf],
+                                         trial_av[ftc_ti:ftc_tf],
+                                         sampling_rate
+                                        )+baseline_av 
+
+
+    #axs[3].plot(t[ftc_ti:ftc_tf],fit_av)
     axs[3].plot(t,trial_av,color=av_color)
     plt.tight_layout()
     plt.show()
@@ -527,20 +597,30 @@ def plot_multi_channel_trials(segments,t,
             trial_no = s
             units = str(segment.analogsignals[ch_no].units).split()[-1]
             signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
+            #baseline_trial = np.mean(signal[:int(0.005*sampling_rate)])
+            #signal = signal-baseline_trial
             axs_.plot(t,signal,color=trial_color,alpha=0.6)
             axs_.set_title(f"channel: {channel_name}")
             if s==0:
                 axs_.set_ylabel(units)
         trial_av = average_trials(segments,ch_no)
+        baseline_av =np.mean(trial_av[:int(0.002*sampling_rate)])
+        trial_av = trial_av-baseline_av
         ftc_ti = int(sampling_rate*7.1)
         ftc_tf = int(sampling_rate*7.2)
-        fit_av = fitted_trace(t[ftc_ti:ftc_tf],
-                              trial_av[ftc_ti:ftc_tf],
-                              sampling_rate)
-        axs[ch_no].plot(t,trial_av,color=av_color)
-        print(f"fit_curve: {t[ftc_ti:ftc_tf]}")
-        axs[ch_no].plot(t[ftc_ti:ftc_tf],fit_av,color=fit_color)
-        axs[ch_no].set_xlim(t[ftc_ti],t[ftc_tf])
+        #fit_av = fit_epsp_with_alpha(t[ftc_ti:ftc_tf],
+        #                             trial_av[ftc_ti:ftc_tf],
+        #                             sampling_rate
+        #                            )+baseline_av 
+        if ch_no==0:
+            fit_av = fit_epsp_with_alpha_sum(t[ftc_ti:ftc_tf],
+                                             trial_av[ftc_ti:ftc_tf],
+                                             sampling_rate
+                                            )+baseline_av 
+            axs[ch_no].plot(t,trial_av+baseline_av,color=av_color)
+            #print(f"fit_curve: {t[ftc_ti:ftc_tf]}")
+            axs[ch_no].plot(t[ftc_ti:ftc_tf],fit_av,color=fit_color)
+        #axs[ch_no].set_xlim(t[ftc_ti],t[ftc_tf])
     plt.tight_layout()
     plt.show()
     pass
