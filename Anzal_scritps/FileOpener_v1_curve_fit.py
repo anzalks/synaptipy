@@ -356,192 +356,192 @@ def fit_epsp_with_alpha(t, signal, sampling_rate,
     
     return reconstructed_waveform
 
+#fit EPSP with sum of alpha fucntion
+#def fit_epsp_with_alpha_sum(t, signal, sampling_rate, debug=True):
+#    """
+#    Fits a sum of two alpha functions (one positive, one negative) to an EPSP segment 
+#    of the signal and reconstructs the waveform.
+#
+#    Parameters:
+#        t (numpy.ndarray): 1D array of time points.
+#        signal (numpy.ndarray): 1D array of signal values.
+#        sampling_rate (float): Sampling rate of the signal in Hz.
+#        debug (bool): If True, plots intermediate results for debugging.
+#
+#    Returns:
+#        numpy.ndarray: Reconstructed waveform based on the fitted alpha functions.
+#    """
+#    def alpha_function(t, A, t0, tau):
+#        alpha = (t - t0) * np.exp(-(t - t0) / tau)
+#        alpha[t < t0] = 0
+#        return A * alpha
+#
+#    def combined_alpha_function(t, A1, t01, tau1, A2, t02, tau2):
+#        return (alpha_function(t, A1, t01, tau1) +
+#                alpha_function(t, A2, t02, tau2))
+#
+#    # Estimate baseline and threshold
+#    baseline = np.mean(signal[:int(0.002 * sampling_rate)])
+#    std_dev = np.std(signal)
+#    signal = signal - baseline  # Remove baseline
+#    start_time = t[int(0.0015 * sampling_rate)]  # Apply the mask only for times > start_time
+#    threshold = np.mean(signal[:int(0.002 * sampling_rate)])
+#
+#    # Create mask for EPSP region
+#    epsp_mask = (signal >= threshold) & (t >= start_time)
+#
+#    if debug:
+#        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
+#        plt.figure(figsize=(10, 5))
+#        plt.plot(t, signal, label="Signal")
+#        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
+#        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
+#        plt.legend()
+#        plt.title("Signal with Baseline and Threshold")
+#        plt.show()
+#
+#    # Check if EPSP region is detected
+#    if not np.any(epsp_mask):
+#        raise RuntimeError("No EPSP detected in the signal.")
+#
+#    t_epsp = t[epsp_mask]
+#    signal_epsp = signal[epsp_mask]
+#
+#    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
+#        raise RuntimeError("Insufficient data points for fitting.")
+#
+#    # Initial guesses and bounds for the parameters
+#    A1_init = np.max(signal_epsp)
+#    t01_init = t_epsp[0]
+#    tau1_init = 0.0005
+#
+#    A2_init = -1 * A1_init
+#    t02_init = t_epsp[0] + 0.001  # Slightly shifted
+#    tau2_init = 0.0005
+#
+#    p0 = [A1_init, t01_init, tau1_init, A2_init, t02_init, tau2_init]
+#    bounds = (
+#        [-np.inf, t_epsp[0], 1e-4, -np.inf, t_epsp[0], 1e-4],
+#        [np.inf, t_epsp[-1], 1.0, np.inf, t_epsp[-1], 1.0]
+#    )
+#
+#    try:
+#        popt, _ = curve_fit(combined_alpha_function, t_epsp, 
+#                            signal_epsp, p0=p0, bounds=bounds, 
+#                            maxfev=100000
+#                           )
+#        A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit = popt
+#        reconstructed_waveform = combined_alpha_function(t, A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit)
+#    except Exception as e:
+#        raise RuntimeError(f"Alpha function fitting failed: {e}")
+#
+#    if debug:
+#        plt.figure(figsize=(10, 5))
+#        plt.plot(t, signal, label="Original Signal", alpha=0.7)
+#        plt.plot(t, reconstructed_waveform, label="Fitted Waveform (Sum of Alphas)", linestyle='--')
+#        plt.axvline(t_epsp[0], linestyle='--', color='grey', label="EPSP Start")
+#        plt.axvline(t_epsp[-1], linestyle='--', color='grey', label="EPSP End")
+#        plt.xlabel("Time")
+#        plt.ylabel("Signal")
+#        plt.legend()
+#        plt.title("EPSP Fitting with Sum of Alpha Functions")
+#        plt.show()
+#
+#    return reconstructed_waveform
 
-def fit_epsp_with_alpha_sum(t, signal, sampling_rate, debug=True):
-    """
-    Fits a sum of two alpha functions (one positive, one negative) to an EPSP segment 
-    of the signal and reconstructs the waveform.
-
-    Parameters:
-        t (numpy.ndarray): 1D array of time points.
-        signal (numpy.ndarray): 1D array of signal values.
-        sampling_rate (float): Sampling rate of the signal in Hz.
-        debug (bool): If True, plots intermediate results for debugging.
-
-    Returns:
-        numpy.ndarray: Reconstructed waveform based on the fitted alpha functions.
-    """
-    def alpha_function(t, A, t0, tau):
-        alpha = (t - t0) * np.exp(-(t - t0) / tau)
-        alpha[t < t0] = 0
-        return A * alpha
-
-    def combined_alpha_function(t, A1, t01, tau1, A2, t02, tau2):
-        return (alpha_function(t, A1, t01, tau1) +
-                alpha_function(t, A2, t02, tau2))
-
-    # Estimate baseline and threshold
-    baseline = np.mean(signal[:int(0.002 * sampling_rate)])
-    std_dev = np.std(signal)
-    signal = signal - baseline  # Remove baseline
-    start_time = t[int(0.0015 * sampling_rate)]  # Apply the mask only for times > start_time
-    threshold = np.mean(signal[:int(0.002 * sampling_rate)])
-
-    # Create mask for EPSP region
-    epsp_mask = (signal >= threshold) & (t >= start_time)
-
-    if debug:
-        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
-        plt.figure(figsize=(10, 5))
-        plt.plot(t, signal, label="Signal")
-        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
-        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
-        plt.legend()
-        plt.title("Signal with Baseline and Threshold")
-        plt.show()
-
-    # Check if EPSP region is detected
-    if not np.any(epsp_mask):
-        raise RuntimeError("No EPSP detected in the signal.")
-
-    t_epsp = t[epsp_mask]
-    signal_epsp = signal[epsp_mask]
-
-    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
-        raise RuntimeError("Insufficient data points for fitting.")
-
-    # Initial guesses and bounds for the parameters
-    A1_init = np.max(signal_epsp)
-    t01_init = t_epsp[0]
-    tau1_init = 0.0005
-
-    A2_init = -1 * A1_init
-    t02_init = t_epsp[0] + 0.001  # Slightly shifted
-    tau2_init = 0.0005
-
-    p0 = [A1_init, t01_init, tau1_init, A2_init, t02_init, tau2_init]
-    bounds = (
-        [-np.inf, t_epsp[0], 1e-4, -np.inf, t_epsp[0], 1e-4],
-        [np.inf, t_epsp[-1], 1.0, np.inf, t_epsp[-1], 1.0]
-    )
-
-    try:
-        popt, _ = curve_fit(combined_alpha_function, t_epsp, 
-                            signal_epsp, p0=p0, bounds=bounds, 
-                            maxfev=100000
-                           )
-        A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit = popt
-        reconstructed_waveform = combined_alpha_function(t, A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit)
-    except Exception as e:
-        raise RuntimeError(f"Alpha function fitting failed: {e}")
-
-    if debug:
-        plt.figure(figsize=(10, 5))
-        plt.plot(t, signal, label="Original Signal", alpha=0.7)
-        plt.plot(t, reconstructed_waveform, label="Fitted Waveform (Sum of Alphas)", linestyle='--')
-        plt.axvline(t_epsp[0], linestyle='--', color='grey', label="EPSP Start")
-        plt.axvline(t_epsp[-1], linestyle='--', color='grey', label="EPSP End")
-        plt.xlabel("Time")
-        plt.ylabel("Signal")
-        plt.legend()
-        plt.title("EPSP Fitting with Sum of Alpha Functions")
-        plt.show()
-
-    return reconstructed_waveform
 
 
-
-def fit_epsp_with_alpha_sum(t, signal, sampling_rate, 
-                            debug=False):
-    """
-    Fits a sum of two alpha functions (one positive, one negative) to an EPSP segment 
-    of the signal and reconstructs the waveform.
-
-    Parameters:
-        t (numpy.ndarray): 1D array of time points.
-        signal (numpy.ndarray): 1D array of signal values.
-        sampling_rate (float): Sampling rate of the signal in Hz.
-        debug (bool): If True, plots intermediate results for debugging.
-
-    Returns:
-        numpy.ndarray: Reconstructed waveform based on the fitted alpha functions.
-    """
-    def alpha_function(t, A, t0, tau):
-        alpha = (t - t0) * np.exp(-(t - t0) / tau)
-        alpha[t < t0] = 0
-        return A * alpha
-
-    def combined_alpha_function(t, A1, t01, tau1, A2, t02, tau2):
-        return (alpha_function(t, A1, t01, tau1) +
-                alpha_function(t, A2, t02, tau2))
-
-    # Estimate baseline and threshold
-    baseline = np.mean(signal[:int(0.002 * sampling_rate)])
-    std_dev = np.std(signal)
-    signal = signal - baseline  # Remove baseline
-    start_time = t[int(0.0015 * sampling_rate)]  # Apply the mask only for times > start_time
-    threshold = np.mean(signal[:int(0.002 * sampling_rate)])
-
-    # Create mask for EPSP region
-    epsp_mask = (signal >= threshold) & (t >= start_time)
-
-    if debug:
-        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
-        plt.figure(figsize=(10, 5))
-        plt.plot(t, signal, label="Signal")
-        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
-        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
-        plt.legend()
-        plt.title("Signal with Baseline and Threshold")
-        plt.show()
-
-    # Check if EPSP region is detected
-    if not np.any(epsp_mask):
-        raise RuntimeError("No EPSP detected in the signal.")
-
-    t_epsp = t[epsp_mask]
-    signal_epsp = signal[epsp_mask]
-
-    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
-        raise RuntimeError("Insufficient data points for fitting.")
-
-    # Initial guesses and bounds for the parameters
-    A1_init = np.max(signal_epsp)
-    t01_init = t_epsp[0]
-    tau1_init = 0.0005
-
-    A2_init = -0.5 * A1_init
-    t02_init = t_epsp[0] + 0.001  # Slightly shifted
-    tau2_init = 0.0005
-
-    p0 = [A1_init, t01_init, tau1_init, A2_init, t02_init, tau2_init]
-    bounds = (
-        [-np.inf, t_epsp[0], 1e-4, -np.inf, t_epsp[0], 1e-4],
-        [np.inf, t_epsp[-1], 1.0, np.inf, t_epsp[-1], 1.0]
-    )
-
-    try:
-        popt, _ = curve_fit(
-            combined_alpha_function, t_epsp, signal_epsp, p0=p0, bounds=bounds, maxfev=10000
-        )
-        A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit = popt
-        reconstructed_waveform = combined_alpha_function(t, A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit)
-    except Exception as e:
-        raise RuntimeError(f"Alpha function fitting failed: {e}")
-
-    if debug:
-        plt.figure(figsize=(10, 5))
-        plt.plot(t, signal, label="Original Signal", alpha=0.7)
-        plt.plot(t, reconstructed_waveform, label="Fitted Waveform (Sum of Alphas)", linestyle='--')
-        plt.axvline(t_epsp[0], linestyle='--', color='grey', label="EPSP Start")
-        plt.axvline(t_epsp[-1], linestyle='--', color='grey', label="EPSP End")
-        plt.xlabel("Time")
-        plt.ylabel("Signal")
-        plt.legend()
-        plt.title("EPSP Fitting with Sum of Alpha Functions")
-        plt.show()
-
-    return reconstructed_waveform
+#def fit_epsp_with_alpha_sum(t, signal, sampling_rate, 
+#                            debug=False):
+#    """
+#    Fits a sum of two alpha functions (one positive, one negative) to an EPSP segment 
+#    of the signal and reconstructs the waveform.
+#
+#    Parameters:
+#        t (numpy.ndarray): 1D array of time points.
+#        signal (numpy.ndarray): 1D array of signal values.
+#        sampling_rate (float): Sampling rate of the signal in Hz.
+#        debug (bool): If True, plots intermediate results for debugging.
+#
+#    Returns:
+#        numpy.ndarray: Reconstructed waveform based on the fitted alpha functions.
+#    """
+#    def alpha_function(t, A, t0, tau):
+#        alpha = (t - t0) * np.exp(-(t - t0) / tau)
+#        alpha[t < t0] = 0
+#        return A * alpha
+#
+#    def combined_alpha_function(t, A1, t01, tau1, A2, t02, tau2):
+#        return (alpha_function(t, A1, t01, tau1) +
+#                alpha_function(t, A2, t02, tau2))
+#
+#    # Estimate baseline and threshold
+#    baseline = np.mean(signal[:int(0.002 * sampling_rate)])
+#    std_dev = np.std(signal)
+#    signal = signal - baseline  # Remove baseline
+#    start_time = t[int(0.0015 * sampling_rate)]  # Apply the mask only for times > start_time
+#    threshold = np.mean(signal[:int(0.002 * sampling_rate)])
+#
+#    # Create mask for EPSP region
+#    epsp_mask = (signal >= threshold) & (t >= start_time)
+#
+#    if debug:
+#        print(f"Baseline: {baseline}, Std Dev: {std_dev}, Threshold: {threshold}")
+#        plt.figure(figsize=(10, 5))
+#        plt.plot(t, signal, label="Signal")
+#        plt.axhline(baseline, color='green', linestyle='--', label="Baseline")
+#        plt.axhline(threshold, color='red', linestyle='--', label="Threshold")
+#        #plt.legend()
+#        plt.title("Signal with Baseline and Threshold")
+#        plt.show()
+#
+#    # Check if EPSP region is detected
+#    if not np.any(epsp_mask):
+#        raise RuntimeError("No EPSP detected in the signal.")
+#
+#    t_epsp = t[epsp_mask]
+#    signal_epsp = signal[epsp_mask]
+#
+#    if len(t_epsp) < 5:  # Ensure sufficient data points for fitting
+#        raise RuntimeError("Insufficient data points for fitting.")
+#
+#    # Initial guesses and bounds for the parameters
+#    A1_init = np.max(signal_epsp)
+#    t01_init = t_epsp[0]
+#    tau1_init = 0.0005
+#
+#    A2_init = -0.5 * A1_init
+#    t02_init = t_epsp[0] + 0.001  # Slightly shifted
+#    tau2_init = 0.0005
+#
+#    p0 = [A1_init, t01_init, tau1_init, A2_init, t02_init, tau2_init]
+#    bounds = (
+#        [-np.inf, t_epsp[0], 1e-4, -np.inf, t_epsp[0], 1e-4],
+#        [np.inf, t_epsp[-1], 1.0, np.inf, t_epsp[-1], 1.0]
+#    )
+#
+#    try:
+#        popt, _ = curve_fit(
+#            combined_alpha_function, t_epsp, signal_epsp, p0=p0, bounds=bounds, maxfev=10000
+#        )
+#        A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit = popt
+#        reconstructed_waveform = combined_alpha_function(t, A1_fit, t01_fit, tau1_fit, A2_fit, t02_fit, tau2_fit)
+#    except Exception as e:
+#        raise RuntimeError(f"Alpha function fitting failed: {e}")
+#
+#    if debug:
+#        plt.figure(figsize=(10, 5))
+#        plt.plot(t, signal, label="Original Signal", alpha=0.7)
+#        plt.plot(t, reconstructed_waveform, label="Fitted Waveform (Sum of Alphas)", linestyle='--')
+#        plt.axvline(t_epsp[0], linestyle='--', color='grey', label="EPSP Start")
+#        plt.axvline(t_epsp[-1], linestyle='--', color='grey', label="EPSP End")
+#        plt.xlabel("Time")
+#        plt.ylabel("Signal")
+#        plt.legend()
+#        plt.title("EPSP Fitting with Sum of Alpha Functions")
+#        plt.show()
+#
+#    return reconstructed_waveform
 
 def bandpass_filter(signal, lowcut, highcut, sampling_rate, order=2):
     nyquist = 0.5 * sampling_rate
@@ -755,7 +755,7 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
 
         plt.xlabel("Time (s)")
         plt.ylabel("Signal")
-        plt.legend()
+#        plt.legend()
         plt.title("Alpha Function Fitting to Detected Peaks")
         plt.show()
 
