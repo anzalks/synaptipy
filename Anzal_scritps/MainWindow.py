@@ -80,7 +80,7 @@ def MainWindow():
         [
             sg.Button("Previous", key="-PREV-", visible=False),
             sg.Button("Next", key="-NEXT-", visible=False),
-            sg.Button("Reset"), sg.Button("Exit")
+            sg.Button("Reset")
         ]
     ]
 

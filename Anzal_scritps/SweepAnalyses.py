@@ -6,6 +6,7 @@ __email__            = "anzalks@ncbs.res.in"
 from pathlib import Path
 import neo.io as nIO
 import numpy as np
+import pandas as pd
 import multiprocessing
 import time
 import argparse
@@ -55,6 +56,20 @@ def read_numpy_array(file_path):
         trial_data = np.load(file_path)
     return trial_data
 
+def read_pd_get_numpy(hdf_file_path):
+    ext = hdf_file_path.suffix.split('.')[-1]
+    hdf_file_path = str(hdf_file_path)
+    if "h5" in ext:
+        trial_df =pd.read_hdf(hdf_file_path)
+    else:
+        "trial data format must be hdf"
+    try:
+        sweep_data = trial_df["trial"].to_numpy()
+        sweep_time = trial_df["time"].to_numpy()
+    except AttributeError:
+        raise ValueError(f"trace and time header is not matching to"
+                         f"'trial', 'time' ")
+    return sweep_data, sweep_time
 
 def apply_filter(data, fs,cutoff_freqs=(0.1,5000),
                  filter_type='bandpass',order=3):
@@ -179,7 +194,9 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
 
     fitted_results = []
     scores = []
+    valid_peak_sig = []
     valid_peaks = []
+    valid_peaks_t = []
 
     for peak in peaks:
         if properties["peak_heights"][np.where(peaks == peak)[0][0]] <= global_baseline:
@@ -237,6 +254,8 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
                 fitted_results.append((full_signal_fit, t))
                 scores.append(r2_score)
                 valid_peaks.append(peak)
+                valid_peaks_t.append(t[peak])
+                valid_peak_sig.append(signal_window)
         except RuntimeError:
             print(f"Failed to fit alpha function at peak index {peak}.")
         except ValueError as e:
@@ -267,10 +286,10 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
         plt.title("Alpha Function Fitting to Detected Peaks")
         plt.show()
 
-    return fitted_results,valid_peaks
+    return fitted_results,valid_peak_sig, valid_peaks, valid_peaks_t
 
 def baseline_measurement(TrialData):
-    trialDatBsln = np.round(TrialData,2)
+    trialDatBsln = np.round(TrialData,1)
     trialDatBsln,count =mode(trialDatBsln,keepdims=False)
     return trialDatBsln[0]
 
@@ -278,14 +297,22 @@ def collect_peak_stats(TrialData,t,sampling_rate,
                        use_local_baseline=True,
                        debug=False,
                        score_threshold=0.8):
-    fitted_results = fit_alpha_peaks(TrialData, t, sampling_rate,
-                                     use_local_baseline=use_local_baseline, 
-                                     debug=debug, 
-                                     score_threshold=score_threshold)
+    swp_fit,
+    swp,
+    pks, 
+    pks_t = fit_alpha_peaks(TrialData, 
+                            t, 
+                            sampling_rate,
+                            use_local_baseline=use_local_baseline, 
+                            debug=debug, 
+                            score_threshold=score_threshold)
     t_trial = float(len(t)/sampling_rate)
-    num_peaks = len(fitted_results)
-    freq_peaks =num_peaks/num_peaks
-    peak_vals,peak_ts = [],[]
+    num_peaks = len(pks)
+    freq_peaks =num_peaks/t_trial
+    peak_stats= {'fitted_curve':swp_fit,'raw_trace':swp,
+                 'peak_amplitude':pks,
+                 'peak_time':pks_t,'peak_frequency':freq_peaks}
+    return peak_stats
 
 
 
@@ -306,9 +333,12 @@ def main():
     #listed out arguments
     parser.add_argument('--file-path', '-f'
                         , required = False,default ='./', type=str
-                        , help = 'path to sweep data in numpy array'
+                        , help = 'path to df with trace and time in .h5'
                        )
-
+    parser.add_argument('--sampling-rate', '-s'
+                        , required = False,default =20000., type=float
+                        , help = 'Sampling rate of the trace'
+                       )
 
 
 
@@ -319,8 +349,14 @@ def main():
     file_path = Path(args.file_path)
     
     #call the fucntion to open np file
-    trial_data = read_numpy_array(file_path)
+    sweep_data, sweep_time = read_pd_get_numpy(file_path)
+    
     #run analyses on single trial data
+    peak_stats = collect_peak_stats(TrialData,t,sampling_rate,
+                                    use_local_baseline=True,
+                                    debug=False,
+                                    score_threshold=0.8)
+    baseline = baseline_measurement(trial_data)
 
 
 if __name__  == '__main__':
