@@ -557,7 +557,7 @@ def compute_peak_parameters(signal, t, baseline, sampling_rate):
         peak_amplitude = signal[peak] - baseline
         rise_region = signal[:peak]
         try:
-            t0_idx = np.where(rise_region >= 0.5 * peak_amplitude)[0][0]
+            t0_idx = np.where(rise_region >= 0.05 * peak_amplitude)[0][0]
             t0 = t[t0_idx]
         except IndexError:
             continue
