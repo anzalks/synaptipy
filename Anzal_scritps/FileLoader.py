@@ -224,9 +224,11 @@ def read_with_IO(file_name,SigGrpMode='split-all',
     ti = sample_trace.t_start
     tf = sample_trace.t_stop
     t = np.linspace(0,float(tf-ti),len(sample_trace))
+    num_trial = len(segments)
     file_prop = {"sampling rate ":f"{sampling_rate} {sampling_rate_unit}",
                  "gorup mode":SigGrpMode,
-                 "duration of recording":f"{float(tf-ti)} {time_units}"
+                 "duration of recording":f"{float(tf-ti)} {time_units}",
+                 "no of trials":num_trial
                 }
     return reader, file_prop 
 
@@ -267,11 +269,12 @@ def plot_multi_channel_trials(segments,t,
                               sampling_rate,
                               time_units,
                               trial_no,
+                              plot_all_traces,
                               trial_average,
                               channel_list,num_chan):
     fig,axs = plt.subplots(nrows=num_chan, ncols=1, 
                            sharex=True, sharey=False)
-    if trial_average:
+    if plot_all_traces:
         for ch_no,channel_name in enumerate(channel_list):
             for s, segment in enumerate(segments):
                 if num_chan>1:
@@ -285,8 +288,8 @@ def plot_multi_channel_trials(segments,t,
                 axs_.set_title(f"channel: {channel_name}")
                 if s==0:
                     axs_.set_ylabel(units)
-            trial_av = average_trials(segments,ch_no)
             if trial_average:
+                trial_av = average_trials(segments,ch_no)
                 axs_.plot(t,trial_av,color=av_color)
             else:
                 continue
@@ -300,13 +303,14 @@ def plot_multi_channel_trials(segments,t,
                 units = str(segments[trial_no].analogsignals[ch_no].units).split()[-1]
                 signal =  np.ravel(segments[trial_no].analogsignals[ch_no].magnitude)
                 axs_.plot(t,signal,color=trial_color)
-                axs_.set_title(f"channel: {channel_name}")
+                axs_.set_title(f"channel: {channel_name}  sweep: {trial_no+1}")
                 axs_.set_ylabel(units)
         axs_.set_xlabel(f"time ({time_units})")
     return fig
 
 
 def plot_raw_traces(reader,channel_list, num_chan,
+                    plot_all_traces,
                     trial_average,
                     trial_no, 
                     SigGrpMode='split'):
@@ -330,6 +334,7 @@ def plot_raw_traces(reader,channel_list, num_chan,
                                     sampling_rate,
                                     time_units,
                                     trial_no,
+                                    plot_all_traces,
                                     trial_average,
                                     channel_list,num_chan)
     return fig 
@@ -340,6 +345,7 @@ def plot_raw_traces(reader,channel_list, num_chan,
 
 def show_data(reader,
               trial_no=0,
+              plot_all_traces = True,
               trial_average=False):
     channel_list, num_chan  = get_channel_name(reader)
     try:
@@ -352,12 +358,13 @@ def show_data(reader,
         print(f"couldn't calculate injected current")
         print(f"trial_no:.......{trial_no}")
     fig=plot_raw_traces(reader,channel_list,num_chan,
+                        plot_all_traces=plot_all_traces,
                         trial_average=trial_average,
                         trial_no=trial_no,
                         SigGrpMode='split')
     
     plt.tight_layout()
-    plt.show()
+    #plt.show()
     return fig 
 
 
@@ -418,7 +425,7 @@ def load_files():
             break
 
     window.close()
-    return reader
+    return reader,file_prop
 
 
 
