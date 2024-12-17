@@ -184,7 +184,8 @@ def file_properties(reader,channel_list, num_chan,
     return file_prop 
 
 
-def read_with_IO(file_name, ext=None, IO=None):
+def read_with_IO(file_name,SigGrpMode='split-all',
+                 ext=None, IO=None):
     if file_name==None:
         pass
     if isinstance(file_name, str):
@@ -212,8 +213,22 @@ def read_with_IO(file_name, ext=None, IO=None):
         raise ValueError(f"'{usedIO}' is not a valid IO class in neo.io")
 
     reader = io_class(file_name)
-
-    return reader 
+    
+    block  = reader.read_block(signal_group_mode=SigGrpMode)
+    segments = block.segments
+    sample_trace = segments[0].analogsignals[0]
+    sampling_rate = sample_trace.sampling_rate.magnitude
+    print(f"sampling_rate:{sampling_rate}")
+    sampling_rate_unit = str(sample_trace.sampling_rate.units).split()[-1]
+    time_units = str(sample_trace.times.units).split()[-1]
+    ti = sample_trace.t_start
+    tf = sample_trace.t_stop
+    t = np.linspace(0,float(tf-ti),len(sample_trace))
+    file_prop = {"sampling rate ":f"{sampling_rate} {sampling_rate_unit}",
+                 "gorup mode":SigGrpMode,
+                 "duration of recording":f"{float(tf-ti)} {time_units}"
+                }
+    return reader, file_prop 
 
 def channel_name_to_index(reader, channel_name):
     """
@@ -247,101 +262,6 @@ def average_trials(segments,ch_no):
     trial_av = np.mean(trial_av,axis=0)
     return trial_av
 
-def plot_single_trial_sing_ch(segments,t,trial_no,
-                              sampling_rate,
-                              time_units,
-                              channel_list,num_chan,
-                              fig,axs):
-    for ch_no,channel_name in enumerate(channel_list):
-        units = str(segments[trial_no].analogsignals[ch_no].units).split()[-1]
-        signal =  np.ravel(segments[trial_no].analogsignals[ch_no].magnitude)
-        axs[ch_no].plot(t,signal,color=trial_color,alpha=0.6)
-        axs[ch_no].set_title(f"trial: {s+1}")
-        axs[ch_no].set_ylabel(units)
-        axs[ch_no].set_xlabel(f"time ({time_units})")
-    return fig, axs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def plot_all_trial_sing_ch(segments,t,
-                           sampling_rate,
-                           time_units,
-                           trial_no,
-                           channel_list,num_chan,
-                           fig,axs):
-    for ch_no,channel_name in enumerate(channel_list):
-        for s, segment in enumerate(segments):
-            trial_no = s
-            units = str(segment.analogsignals[ch_no].units).split()[-1]
-            signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
-            axs[s].plot(t,signal,color=trial_color,alpha=0.6)
-            axs[s].set_title(f"trial: {s+1}")
-            axs[s].set_ylabel(units)
-        axs[s].set_xlabel(f"time ({time_units})")
-
-def plot_all_trial_av_sing_ch(segments,t,
-                              sampling_rate,
-                              time_units,
-                              channel_list,num_chan,
-                              fig,axs):
-    for ch_no,channel_name in enumerate(channel_list):
-        for s, segment in enumerate(segments):
-            if num_chan>1:
-                axs_=axs[ch_no]
-            else:
-                axs_=axs
-            trial_no = s
-            units = str(segment.analogsignals[ch_no].units).split()[-1]
-            signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
-            axs_.plot(t,signal,color=trial_color,alpha=0.6)
-            trial_av = average_trials(segments,ch_no)
-            axs_.plot(t,trial_av,color=av_color)
-            axs_.set_title(f"Average of {s+1} trials")
-        axs_.set_xlabel(f"time ({time_units})")
-    #plt.show()
-    return fig
-
-
-def plot_single_channel_trials(segments,t,
-                               sampling_rate,
-                               time_units,
-                               trial_no,
-                               trial_average,
-                               channel_list,num_chan):
-    if trial_average==True:
-        fig,axs = plt.subplots(nrows=1, ncols=1,#figsize=(4,8), 
-                               sharex=True, sharey=False)
-        plot_all_trial_av_sing_ch(segments,t,              
-                                  sampling_rate,
-                                  time_units,
-                                  channel_list,num_chan,
-                                  fig,axs)
-    else:
-        fig,axs = plt.subplots(nrows=len(segments), ncols=1,#figsize=(4,8), 
-                               sharex=True, sharey=False)
-        plot_all_trial_sing_ch(segments,t,
-                               sampling_rate,
-                               time_units,
-                               trial_no,
-                               channel_list,num_chan,
-                               fig,axs)
-    #plt.tight_layout()
-    #plt.show()
-    return fig
 
 def plot_multi_channel_trials(segments,t,
                               sampling_rate,
@@ -412,74 +332,7 @@ def plot_raw_traces(reader,channel_list, num_chan,
                                     trial_no,
                                     trial_average,
                                     channel_list,num_chan)
-
-
-
-    #if isinstance(trial_no,int):
-    #    print(f"plotting trial_no: {trial_no}")
-    #    fig = plot_multi_channel_trials(segments,t,
-    #                                    sampling_rate,
-    #                                    time_units,
-    #                                    trial_no,
-    #                                    trial_average,
-    #                                    channel_list,num_chan)
-
-
-    #    #if num_chan>1:
-    #    #    fig = plot_multi_channel_trials(segments,t,
-    #    #                                    sampling_rate,
-    #    #                                    time_units,
-    #    #                                    trial_no,
-    #    #                                    trial_average,
-    #    #                                    channel_list,num_chan)
-    #    #else:
-    #    #    fig = plot_single_channel_trials(segments,t,
-    #    #                                     sampling_rate,
-    #    #                                     time_units,
-    #    #                                     trial_no,
-    #    #                                     trial_average,
-    #    #                                     channel_list,num_chan)
-
-    #else:
-    #    fig = plot_multi_channel_trials(segments,t,
-    #                                    sampling_rate,
-    #                                    time_units,
-    #                                    trial_no,
-    #                                    trial_average,
-    #                                    channel_list,num_chan)
-
-
-
-
-        #if num_chan>1:
-        #    fig = plot_multi_channel_trials(segments,t,
-        #                                    sampling_rate,
-        #                                    time_units,
-        #                                    trial_no,
-        #                                    trial_average,
-        #                                    channel_list,num_chan)
-        #else:
-        #    fig = plot_single_channel_trials(segments,t,
-        #                                     sampling_rate,
-        #                                     time_units,
-        #                                     trial_no,
-        #                                     trial_average,
-        #                                     channel_list,num_chan)
-
-    
-    
-    
-    
-    
-    
-
-
-    file_prop = {"sampling rate ":f"{sampling_rate} {sampling_rate_unit}",
-                 "gorup mode":SigGrpMode,
-                 "duration of recording":f"{float(tf-ti)} {time_units}"
-                }
-    plt.tight_layout()
-    return fig, file_prop 
+    return fig 
 
 
 
@@ -498,13 +351,14 @@ def show_data(reader,
     except:
         print(f"couldn't calculate injected current")
         print(f"trial_no:.......{trial_no}")
-    fig, file_prop=plot_raw_traces(reader,channel_list,num_chan,
-                                   trial_average=trial_average,
-                                   trial_no=trial_no,
-                                   SigGrpMode='split')
-    file_prop["trial_average"] = trial_average
-    #plt.show()
-    return fig, file_prop
+    fig=plot_raw_traces(reader,channel_list,num_chan,
+                        trial_average=trial_average,
+                        trial_no=trial_no,
+                        SigGrpMode='split')
+    
+    plt.tight_layout()
+    plt.show()
+    return fig 
 
 
 def load_files():
@@ -536,7 +390,7 @@ def load_files():
                 sg.popup_error("Please select a valid file!")
                 continue
             print(f"event structure: {values}")
-            reader = read_with_IO(file_path)  # Assuming `read_with_IO` is defined elsewhere
+            reader,file_prop = read_with_IO(file_path)  # Assuming `read_with_IO` is defined elsewhere
             window.close()
             break
 
@@ -569,45 +423,6 @@ def load_files():
 
 
 
-
-
-#def load_files():
-#    sg.theme('DarkBlue')	
-#    
-#    layout= [  [sg.Text('Enter File name     '),
-#                sg.InputText(), sg.FileBrowse(),
-#                sg.Button('Start File'),key='-FILE_NAME-'
-#               ],
-#                [sg.Text('Enter Folder name '), sg.InputText(), sg.FolderBrowse(),sg.Button('Start Folder')]]
-#    
-#    window= sg.Window('Load files', layout, modal = True, location=(10,10))
-#    
-#    while True:
-#        event, values = window.read()
-#        if event in (None, 'Close'):	# if user closes window or clicks cancel
-#            break
-#        if event == 'Start File':
-#            print(f"event structure: {values}")
-#            reader = read_with_IO(values['-FILE_NAME-'])
-#            window.close()
-#
-#            break
-#        if event == 'Start Folder':
-#            list_file=glob.glob(os.path.join(values[1], '*.wcp'))
-#            FREC, FTIME, sampling = load_wcp(list_file[0])
-#            for file in list_file [1:]:
-#                REC, TIME, sampling = load_wcp(file)
-#                FREC = np.append(FREC,REC, axis = 0)
-#            FREC  = np.transpose(FREC)
-#            FTIME = np.transpose(FTIME)
-#            columns = [f"Trace-{x}" for x in range(len(FREC[1]))]
-#            RECORDINGS = pd.DataFrame(FREC, index = FTIME[:,0], columns = columns)
-#            window.close()
-#            break
-#    window.close()
-#    return reader
-
-
 def main():
     # Argument parser.
     description = '''A script that opens neural data using neo'''
@@ -636,7 +451,7 @@ def main():
     folder_path = Path(args.folder_path)
 
     #call the fucntion to open files
-    reader = read_with_IO(file_path)
+    reader,file_prop = read_with_IO(file_path)
     show_data(reader)
     
     #open files in a folder
