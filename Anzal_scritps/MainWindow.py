@@ -162,11 +162,12 @@ def Main():
                                    trial_no,
                                    plot_all_traces,
                                    trial_average)
-        sweep, time  = san.extract_sweep(reader,trial_no,
-                                         ChanToRead)
-        base_line = san.baseline_measurement(sweep)
-
-        analysed_result = f"sweep baseline: {base_line}"
+        sweep, time, sampling_rate = san.extract_sweep(reader,trial_no,
+                                                       ChanToRead)
+        base_line = san.baseline_measurement(sweep,debug=True)
+        #peak_stats = san.collect_peak_stats(sweep,time,sampling_rate,debug=True)
+        peak_stats = 'None'
+        analysed_result = f"sweep baseline: {base_line},peak stats: {peak_stats}"
         figure_canvas_agg = draw_figure(canvas, fig)
         # Refresh toolbar
         if toolbar:

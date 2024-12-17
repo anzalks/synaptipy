@@ -76,7 +76,7 @@ def extract_sweep(reader,trial_no,ChanToRead='IN0',debug=False):
         axs.set_ylabel(units)
         axs.set_xlabel(f"time ({time_units})")
         fig_.show()
-    return signal, t 
+    return signal, t, sampling_rate 
 
 
 def read_numpy_array(file_path):
@@ -208,14 +208,17 @@ def calculate_goodness_of_fit(signal, fitted_signals):
     return scores
 
 
-def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=False, score_threshold=0.8):
+def fit_alpha_peaks(signal, t, sampling_rate, 
+                    use_local_baseline=False, debug=False,
+                    score_threshold=0.8):
     smoothed_signal = gaussian_filter1d(signal, sigma=5)
     filtered_signal = smoothed_signal
     global_baseline = np.round(np.mean(filtered_signal), 1)
 
-    min_distance = int(0.02 * sampling_rate)
-    peaks, properties = find_peaks(filtered_signal, height=global_baseline + 0.5 * np.std(filtered_signal),
-                                    distance=min_distance, prominence=0.5 * np.std(filtered_signal))
+    min_distance = int(0.002 * sampling_rate)
+    #peaks, properties = find_peaks(filtered_signal, 
+    #                               height=global_baseline+0.1* np.std(filtered_signal),
+    #                                distance=min_distance, prominence=0.5 * np.std(filtered_signal))
 
     avg_params = compute_peak_parameters(filtered_signal, t, global_baseline, sampling_rate)
     if avg_params is None:
@@ -255,7 +258,7 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
         tau_fall_init = avg_tau_fall if not np.isnan(avg_tau_fall) else 0.01
 
         bounds = ([0.5 * A_init, t_window[0], 0.001, 0.001],
-                  [5.0 * A_init, t_window[-1], 0.05, 0.2])
+                  [10.0 * A_init, t_window[-1], 0.05, 0.2])
         p0 = [
             np.clip(A_init, bounds[0][0], bounds[1][0]),
             np.clip(t0_init, bounds[0][1], bounds[1][1]),
@@ -288,6 +291,14 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
                 valid_peaks.append(peak)
                 valid_peaks_t.append(t[peak])
                 valid_peak_sig.append(signal_window)
+            else:
+                fitted_results.append((None, None))
+                scores.append(None)
+                valid_peaks.append(None)
+                valid_peaks_t.append(None)
+                valid_peak_sig.append(None)
+
+
         except RuntimeError:
             print(f"Failed to fit alpha function at peak index {peak}.")
         except ValueError as e:
@@ -323,23 +334,24 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
 def baseline_measurement(TrialData,debug=False):
     trialDatBsln = np.round(TrialData,1)
     trialDatBsln,count =np.round(mode(trialDatBsln,keepdims=False),2)
+    fig_,axs_ = plt.subplots(1,1)
     if debug:
         print(f"trialDatBsln,count : {trialDatBsln,count}")
+        plt.plot(TrialData)
+        plt.axhline(trialDatBsln,color='k',linestyle=':')
+        fig_.show()
     return trialDatBsln
 
 def collect_peak_stats(TrialData,t,sampling_rate,
-                       use_local_baseline=True,
+                       use_local_baseline=False,
                        debug=False,
                        score_threshold=0.8):
-    swp_fit,
-    swp,
-    pks, 
-    pks_t = fit_alpha_peaks(TrialData, 
-                            t, 
-                            sampling_rate,
-                            use_local_baseline=use_local_baseline, 
-                            debug=debug, 
-                            score_threshold=score_threshold)
+    swp_fit,swp,pks, pks_t = fit_alpha_peaks(TrialData, 
+                                             t, 
+                                             sampling_rate,
+                                             use_local_baseline, 
+                                             debug, 
+                                             score_threshold)
     t_trial = float(len(t)/sampling_rate)
     num_peaks = len(pks)
     freq_peaks =num_peaks/t_trial
@@ -381,12 +393,16 @@ def main():
 
     #define the variable from parser
     file_path = Path(args.file_path)
+    reader,_ = fl.read_with_IO(file_path)
     
     #call the fucntion to open np file
-    sweep_data, sweep_time = read_pd_get_numpy(file_path)
+    #sweep_data, sweep_time = read_pd_get_numpy(file_path)
+    sweep, time, sampling_rate = extract_sweep(reader,
+                                               trial_no=1,
+                                               ChanToRead='IN0')
     
     #run analyses on single trial data
-    peak_stats = collect_peak_stats(sweep_data,t,sampling_rate,
+    peak_stats = collect_peak_stats(sweep,time,sampling_rate,
                                     use_local_baseline=True,
                                     debug=True,
                                     score_threshold=0.8)
