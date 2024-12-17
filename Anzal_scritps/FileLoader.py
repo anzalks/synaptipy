@@ -19,6 +19,7 @@ from scipy.ndimage import gaussian_filter1d
 import PySimpleGUI as sg 
 import pprint as pprint 
 
+
 av_color = "000000" # black 
 trial_color = "#377eb8" # blue 
 fit_color = "#de6f00" # orange
@@ -81,49 +82,6 @@ IODict = {'AlphaOmegaIO':['lsx', 'mpx'],
           'WinEdrIO':[],
           'WinWcpIO':['wcp'],
           }
-
-curve_features = {'EPSP':{'tau_rise':{'min':1,'max':5},
-                          'tau_fall':{'min':10,'max':100},
-                          'a_max':{'min':0,'max':30},
-                          'a_min':{'min':-10,'max':0}
-                         },
-                  'IPSP':{'tau_rise':{'min':1,'max':5},
-                          'tau_fall':{'min':10,'max':100},
-                          'a_max':{'min':0,'max':30},
-                          'a_min':{'min':-10,'max':0}
-                         },
-                  'EPSC':{'tau_rise':{'min':1,'max':5},
-                          'tau_fall':{'min':5,'max':100},
-                          'a_max':{'min':-1500,'max':0},
-                          'a_min':{'min':0,'max':100}
-                         },
-                  'IPSC':{'tau_rise':{'min':1,'max':5},
-                          'tau_fall':{'min':5,'max':100},
-                          'a_max':{'min':-1500,'max':0},
-                          'a_min':{'min':0,'max':100}
-                         }
-                 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -321,6 +279,7 @@ def plot_all_trial_ac_sing_ch(segments,t,
         axs.set_title(f"Average of {s} trials")
         axs.set_xlabel(f"time ({time_units})")
     #plt.tight_layout()
+    #plt.show()
     return fig
 
 
@@ -368,42 +327,18 @@ def plot_multi_channel_trials(segments,t,
             trial_no = s
             units = str(segment.analogsignals[ch_no].units).split()[-1]
             signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
-            #baseline_trial = np.mean(signal[:int(0.005*sampling_rate)])
-            #signal = signal-baseline_trial
             axs_.plot(t,signal,color=trial_color,alpha=0.6)
             axs_.set_title(f"channel: {channel_name}")
             if s==0:
                 axs_.set_ylabel(units)
         trial_av = average_trials(segments,ch_no)
-        #baseline_av =np.mean(trial_av[:int(0.002*sampling_rate)])
-        #trial_av = trial_av-baseline_av
         ftc_ti = int(sampling_rate*7.1)
         ftc_tf = int(sampling_rate*7.2)
         if trial_average:
             axs[ch_no].plot(t,trial_av,color=av_color)
         else:
             continue
-        ##fit_av = fit_epsp_with_alpha(t[ftc_ti:ftc_tf],
-        ##                             trial_av[ftc_ti:ftc_tf],
-        ##                             sampling_rate
-        ##                            )+baseline_av 
-        #if ch_no==0:
-        #    #fitted_results =fit_alpha_peaks(trial_av, t, sampling_rate,
-        #    #                                use_local_baseline=True,
-        #    #                                debug=False)
-        #    #for i in fitted_results:
-        #    #    axs[ch_no].plot(i[1],i[0]+baseline_av,color=fit_color)
-        #    #fit_av = fit_epsp_with_alpha_sum(t[ftc_ti:ftc_tf],
-        #    #                                 trial_av[ftc_ti:ftc_tf],
-        #    #                                 sampling_rate
-        #    #                                )+baseline_av 
-        #    #axs[ch_no].plot(t[ftc_ti:ftc_tf],fit_av,color=fit_color)
-        #    axs[ch_no].plot(t,trial_av+baseline_av,color=av_color)
-        #    #print(f"fit_curve: {t[ftc_ti:ftc_tf]}")
-        ##axs[ch_no].set_xlim(t[ftc_ti],t[ftc_tf])
     axs[ch_no].set_xlabel(f"time ({time_units})")
-    #plt.tight_layout()
-    #plt.show()
     return fig
 
 

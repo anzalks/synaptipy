@@ -6,7 +6,7 @@ __email__            = "anzalks@ncbs.res.in"
 
 import glob
 import os
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2Tk
 from matplotlib.backend_bases import MouseButton
 import PySimpleGUI as sg
 from matplotlib import pyplot as plt
@@ -67,7 +67,8 @@ def MainWindow():
             sg.Frame(
                 'Raw Traces',
                 [
-                    [sg.Canvas(key="-CANVAS-", expand_x=True, expand_y=True)]
+                    [sg.Canvas(key="-CANVAS-", expand_x=True, expand_y=True)],
+                    [sg.Canvas(key="-TOOLBAR-")]
                 ],
                 relief="groove", border_width=3, expand_x=True, expand_y=True
             )
@@ -91,7 +92,9 @@ def Main():
 
     # Access the PySimpleGUI canvas
     canvas_elem = window1["-CANVAS-"]
+    toolbar_elem = window1["-TOOLBAR-"]
     canvas = canvas_elem.TKCanvas
+    toolbar_canvas = toolbar_elem.Widget
     figure_canvas_agg = None  # Initialize placeholder for the drawn figure
 
     # Placeholder for the figure and axis limits
@@ -152,6 +155,7 @@ def Main():
 
             fig.canvas.draw()
 
+
     def update_zoom_sliders(values):
         """Updates the axis limits based on zoom slider values."""
         if fig is not None:
@@ -183,6 +187,7 @@ def Main():
                 ax.set_ylim(y_center - y_range / 2, y_center + y_range / 2)
 
             fig.canvas.draw()
+
 
     def show_axis(index):
         """Show only the axis at the given index as a standalone figure."""
@@ -256,6 +261,9 @@ def Main():
                 ax.set_xlim(initial_lims[ax]["x"])
                 ax.set_ylim(initial_lims[ax]["y"])
             fig.canvas.draw()
+            
+            
+
             window1['-XZOOM-'].update(100)
             window1['-YZOOM-'].update(100)
         
@@ -266,7 +274,8 @@ def Main():
         if event == "-PREV-" and not values['-PLOT_ALL-']:
             current_axis_index = (current_axis_index - 1) % len(axes)
             show_axis(current_axis_index)
-
+        #toolbar = NavigationToolbar2Tk(figure_canvas_agg, toolbar_canvas)
+        #toolbar.update()
     window1.close()
 
 if __name__ == '__main__':

@@ -4,7 +4,6 @@ __maintainer__       = "Anzal KS"
 __email__            = "anzalks@ncbs.res.in"
 
 from pathlib import Path
-import neo.io as nIO
 import numpy as np
 import multiprocessing
 import time
