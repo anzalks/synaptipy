@@ -18,6 +18,7 @@ from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import mode
+import FileLoader as fl
 
 av_color = "000000" # black 
 trial_color = "#377eb8" # blue 
@@ -45,6 +46,37 @@ curve_features = {'EPSP':{'tau_rise':{'min':1,'max':5},
                           'a_min':{'min':0,'max':100}
                          }
                  }
+
+
+def extract_sweep(reader,trial_no,ChanToRead='IN0',debug=False):
+    block  = reader.read_block(signal_group_mode='split-all')
+    segments = block.segments
+    sample_trace = segments[0].analogsignals[0]
+    sampling_rate = sample_trace.sampling_rate.magnitude
+    sampling_rate_unit = str(sample_trace.sampling_rate.units).split()[-1]
+    time_units = str(sample_trace.times.units).split()[-1] 
+    ti = sample_trace.t_start
+    tf = sample_trace.t_stop
+    t = np.linspace(0,float(tf-ti),len(sample_trace))
+    try:
+        ch_no = fl.channel_name_to_index(reader, ChanToRead)
+        #print(f"ChanToRead: {ChanToRead}.......ch_no:{ch_no}")
+    except AttributeError:
+        raise ValueError(f"input channel name provide doesn't exist")
+    
+    units = str(segments[trial_no].analogsignals[ch_no].units).split()[-1]
+    signal =  np.ravel(segments[trial_no].analogsignals[ch_no].magnitude)
+    if debug:
+        fig_,axs = plt.subplots(nrows=1, 
+                           ncols=1, 
+                           sharex=True, 
+                           sharey=False)
+        axs.plot(t,signal,color=trial_color)
+        axs.set_title(f"channel: {ChanToRead}  sweep: {trial_no+1}")
+        axs.set_ylabel(units)
+        axs.set_xlabel(f"time ({time_units})")
+        fig_.show()
+    return signal, t 
 
 
 def read_numpy_array(file_path):
@@ -288,10 +320,12 @@ def fit_alpha_peaks(signal, t, sampling_rate, use_local_baseline=False, debug=Fa
 
     return fitted_results,valid_peak_sig, valid_peaks, valid_peaks_t
 
-def baseline_measurement(TrialData):
+def baseline_measurement(TrialData,debug=False):
     trialDatBsln = np.round(TrialData,1)
-    trialDatBsln,count =mode(trialDatBsln,keepdims=False)
-    return trialDatBsln[0]
+    trialDatBsln,count =np.round(mode(trialDatBsln,keepdims=False),2)
+    if debug:
+        print(f"trialDatBsln,count : {trialDatBsln,count}")
+    return trialDatBsln
 
 def collect_peak_stats(TrialData,t,sampling_rate,
                        use_local_baseline=True,
@@ -352,11 +386,11 @@ def main():
     sweep_data, sweep_time = read_pd_get_numpy(file_path)
     
     #run analyses on single trial data
-    peak_stats = collect_peak_stats(TrialData,t,sampling_rate,
+    peak_stats = collect_peak_stats(sweep_data,t,sampling_rate,
                                     use_local_baseline=True,
-                                    debug=False,
+                                    debug=True,
                                     score_threshold=0.8)
-    baseline = baseline_measurement(trial_data)
+    baseline = baseline_measurement(sweep_data)
 
 
 if __name__  == '__main__':

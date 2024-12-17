@@ -11,6 +11,7 @@ from matplotlib.backend_bases import MouseButton
 import PySimpleGUI as sg
 from matplotlib import pyplot as plt
 import FileLoader
+import SweepAnalyses as san
 import pprint as pprint
 import matplotlib
 from matplotlib.widgets import RectangleSelector
@@ -106,14 +107,19 @@ def MainWindow():
         ],
 
         [
-            sg.Button("Run Sweep\nAnalysis", key="-S_ANALYSIS-",visible=False),
             sg.Frame(
                 "Analysed Results",
-                [[sg.Text("", size=(60, 4), key="-CHAN_PROP-", relief="groove")]],
+                [
+                    [sg.Text("", size=(60, 4), key="-AN_RESULTS-",
+                              relief="groove")],
+                    [sg.Button("Run Sweep\nAnalysis",
+                               key="-S_ANALYSIS-",visible=False)],
+                ],
                 relief="ridge",
-                border_width=3,
+                border_width=5,
+                size=(400, 150),
                 expand_x=True,
-                expand_y=False,visible=False,
+                expand_y=False,
             ),
 
         ]
@@ -143,7 +149,8 @@ def Main():
     fig = None
     trial_no = 0  # Default trial number
 
-    def update_trial_figure(trial_no, reader, plot_all_traces, trial_average):
+    def update_trial_figure(trial_no, reader, plot_all_traces,
+                            trial_average,ChanToRead="Im0"):
         """Updates the figure based on the trial number."""
         nonlocal fig, figure_canvas_agg, toolbar
         # Clear previous canvas
@@ -152,10 +159,14 @@ def Main():
 
         # Reload the figure for the specific trial
         fig = FileLoader.show_data(reader,
-                                   trial_no=trial_no,
-                                   plot_all_traces=plot_all_traces,
-                                   trial_average=trial_average)
-        analysed_result = f"test: {trial_no}"
+                                   trial_no,
+                                   plot_all_traces,
+                                   trial_average)
+        sweep, time  = san.extract_sweep(reader,trial_no,
+                                         ChanToRead)
+        base_line = san.baseline_measurement(sweep)
+
+        analysed_result = f"sweep baseline: {base_line}"
         figure_canvas_agg = draw_figure(canvas, fig)
         # Refresh toolbar
         if toolbar:
@@ -177,7 +188,12 @@ def Main():
             trial_no = 0
             max_trials = file_prop["no of trials"]
             chan_name,num_chan = FileLoader.get_channel_name(reader)
-            update_trial_figure(trial_no, reader, plot_all_traces, values["-PLOT_AV-"])
+            chan_name_ = chan_name[0]
+            print(f"chan_name_:{chan_name_}.....")
+            update_trial_figure(trial_no, reader, 
+                                plot_all_traces=plot_all_traces,
+                                trial_average=values["-PLOT_AV-"],
+                                ChanToRead=chan_name_)
 
             # Update file details
             file_details = pprint.pformat(file_prop, indent=4)
@@ -192,15 +208,22 @@ def Main():
             window["-PREV-"].update(visible=not plot_all_traces)
             window["-NEXT-"].update(visible=not plot_all_traces)
             window["-S_ANALYSIS-"].update(visible=True)
+            window["-AN_RESULTS-"].update(visible=True)
         
         if event == "Reset" and fig:
             trial_no = 0
-            update_trial_figure(trial_no, reader, plot_all_traces, values["-PLOT_AV-"])
+            update_trial_figure(trial_no, reader, 
+                                plot_all_traces=plot_all_traces,
+                                trial_average=values["-PLOT_AV-"],
+                                ChanToRead=chan_name_)
 
         if event == "-NEXT-":
             if trial_no < max_trials - 1:
                 trial_no += 1
-                update_trial_figure(trial_no, reader, plot_all_traces, values["-PLOT_AV-"])
+                update_trial_figure(trial_no, reader, 
+                                    plot_all_traces=plot_all_traces,
+                                    trial_average=values["-PLOT_AV-"],
+                                    ChanToRead=chan_name_)
             else:
                 sg.popup("You are already at the last trial!",
                          title="End of Trials")
@@ -208,18 +231,25 @@ def Main():
         if event == "-PREV-" and trial_no > 0:
             if trial_no > 0:
                 trial_no -= 1
-                update_trial_figure(trial_no, reader, plot_all_traces, values["-PLOT_AV-"])
+                update_trial_figure(trial_no, reader, 
+                                    plot_all_traces=plot_all_traces,
+                                    trial_average=values["-PLOT_AV-"],
+                                    ChanToRead=chan_name_)
+
+
+
             else:
                 sg.popup("You are already at the first trial!", 
                          title="Start of Trials")
         if event == "-S_ANALYSIS-":
-            
-            
-            analysed_result = update_trial_figure(trial_no, 
-                                                  reader, plot_all_traces,
-                                                  values["-PLOT_AV-"])
-            sg.popup(f"Result: {analysed_result}", 
-                     title="Running Analysis")
+            analysed_result = update_trial_figure(trial_no, reader, 
+                                                  plot_all_traces=plot_all_traces,
+                                                  trial_average=values["-PLOT_AV-"],
+                                                  ChanToRead=chan_name_)
+            analysed_result = pprint.pformat(analysed_result, indent=4)
+            window["-AN_RESULTS-"].update(analysed_result)
+            #sg.popup(f"Result: {analysed_result}", 
+            #         title="Running Analysis")
 
 
 
