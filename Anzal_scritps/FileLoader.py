@@ -247,9 +247,40 @@ def average_trials(segments,ch_no):
     trial_av = np.mean(trial_av,axis=0)
     return trial_av
 
+def plot_single_trial_sing_ch(segments,t,trial_no,
+                              sampling_rate,
+                              time_units,
+                              channel_list,num_chan,
+                              fig,axs):
+    for ch_no,channel_name in enumerate(channel_list):
+        units = str(segments[trial_no].analogsignals[ch_no].units).split()[-1]
+        signal =  np.ravel(segments[trial_no].analogsignals[ch_no].magnitude)
+        axs[ch_no].plot(t,signal,color=trial_color,alpha=0.6)
+        axs[ch_no].set_title(f"trial: {s+1}")
+        axs[ch_no].set_ylabel(units)
+        axs[ch_no].set_xlabel(f"time ({time_units})")
+    return fig, axs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def plot_all_trial_sing_ch(segments,t,
                            sampling_rate,
                            time_units,
+                           trial_no,
                            channel_list,num_chan,
                            fig,axs):
     for ch_no,channel_name in enumerate(channel_list):
@@ -258,66 +289,15 @@ def plot_all_trial_sing_ch(segments,t,
             units = str(segment.analogsignals[ch_no].units).split()[-1]
             signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
             axs[s].plot(t,signal,color=trial_color,alpha=0.6)
-            axs[s].set_title(f"trial: {s}")
+            axs[s].set_title(f"trial: {s+1}")
             axs[s].set_ylabel(units)
         axs[s].set_xlabel(f"time ({time_units})")
 
-def plot_all_trial_ac_sing_ch(segments,t,
+def plot_all_trial_av_sing_ch(segments,t,
                               sampling_rate,
                               time_units,
                               channel_list,num_chan,
                               fig,axs):
-    for ch_no,channel_name in enumerate(channel_list):
-        for s, segment in enumerate(segments):
-            trial_no = s
-            units = str(segment.analogsignals[ch_no].units).split()[-1]
-            signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
-            axs.plot(t,signal,color=trial_color,alpha=0.6)
-            axs.set_ylabel(units)
-        trial_av = average_trials(segments,ch_no)
-        axs.plot(t,trial_av,color=av_color)
-        axs.set_title(f"Average of {s} trials")
-        axs.set_xlabel(f"time ({time_units})")
-    #plt.tight_layout()
-    #plt.show()
-    return fig
-
-
-def plot_single_channel_trials(segments,t,
-                               sampling_rate,
-                               time_units,
-                               trial_average,
-                               channel_list,num_chan):
-    if trial_average==True:
-        num_trials=1
-    else:
-        num_trials=len(segments)
-    fig,axs = plt.subplots(nrows=num_trials, ncols=1,#figsize=(4,8), 
-                           sharex=True, sharey=False)
-    if trial_average==True:
-        plot_all_trial_ac_sing_ch(segments,t,              
-                                  sampling_rate,
-                                  time_units,
-                                  channel_list,num_chan,
-                                  fig,axs)
-    else:
-        plot_all_trial_sing_ch(segments,t,
-                               sampling_rate,
-                               time_units,
-                               channel_list,num_chan,
-                               fig,axs)
-    #plt.tight_layout()
-    #plt.show()
-    return fig
-
-def plot_multi_channel_trials(segments,t,
-                              sampling_rate,
-                              time_units,
-                              trial_average,
-                              channel_list,num_chan):
-    fig,axs = plt.subplots(nrows=num_chan, ncols=1, 
-                           sharex=True, sharey=False)
-    
     for ch_no,channel_name in enumerate(channel_list):
         for s, segment in enumerate(segments):
             if num_chan>1:
@@ -328,22 +308,87 @@ def plot_multi_channel_trials(segments,t,
             units = str(segment.analogsignals[ch_no].units).split()[-1]
             signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
             axs_.plot(t,signal,color=trial_color,alpha=0.6)
-            axs_.set_title(f"channel: {channel_name}")
-            if s==0:
+            trial_av = average_trials(segments,ch_no)
+            axs_.plot(t,trial_av,color=av_color)
+            axs_.set_title(f"Average of {s+1} trials")
+        axs_.set_xlabel(f"time ({time_units})")
+    #plt.show()
+    return fig
+
+
+def plot_single_channel_trials(segments,t,
+                               sampling_rate,
+                               time_units,
+                               trial_no,
+                               trial_average,
+                               channel_list,num_chan):
+    if trial_average==True:
+        fig,axs = plt.subplots(nrows=1, ncols=1,#figsize=(4,8), 
+                               sharex=True, sharey=False)
+        plot_all_trial_av_sing_ch(segments,t,              
+                                  sampling_rate,
+                                  time_units,
+                                  channel_list,num_chan,
+                                  fig,axs)
+    else:
+        fig,axs = plt.subplots(nrows=len(segments), ncols=1,#figsize=(4,8), 
+                               sharex=True, sharey=False)
+        plot_all_trial_sing_ch(segments,t,
+                               sampling_rate,
+                               time_units,
+                               trial_no,
+                               channel_list,num_chan,
+                               fig,axs)
+    #plt.tight_layout()
+    #plt.show()
+    return fig
+
+def plot_multi_channel_trials(segments,t,
+                              sampling_rate,
+                              time_units,
+                              trial_no,
+                              trial_average,
+                              channel_list,num_chan):
+    fig,axs = plt.subplots(nrows=num_chan, ncols=1, 
+                           sharex=True, sharey=False)
+    if trial_average:
+        for ch_no,channel_name in enumerate(channel_list):
+            for s, segment in enumerate(segments):
+                if num_chan>1:
+                    axs_=axs[ch_no]
+                else:
+                    axs_=axs
+                trial_no = s
+                units = str(segment.analogsignals[ch_no].units).split()[-1]
+                signal =  np.ravel(segment.analogsignals[ch_no].magnitude)
+                axs_.plot(t,signal,color=trial_color,alpha=0.6)
+                axs_.set_title(f"channel: {channel_name}")
+                if s==0:
+                    axs_.set_ylabel(units)
+            trial_av = average_trials(segments,ch_no)
+            if trial_average:
+                axs_.plot(t,trial_av,color=av_color)
+            else:
+                continue
+        axs_.set_xlabel(f"time ({time_units})")
+    else:
+        for ch_no,channel_name in enumerate(channel_list):
+                if num_chan>1:
+                    axs_=axs[ch_no]
+                else:
+                    axs_=axs
+                units = str(segments[trial_no].analogsignals[ch_no].units).split()[-1]
+                signal =  np.ravel(segments[trial_no].analogsignals[ch_no].magnitude)
+                axs_.plot(t,signal,color=trial_color)
+                axs_.set_title(f"channel: {channel_name}")
                 axs_.set_ylabel(units)
-        trial_av = average_trials(segments,ch_no)
-        ftc_ti = int(sampling_rate*7.1)
-        ftc_tf = int(sampling_rate*7.2)
-        if trial_average:
-            axs[ch_no].plot(t,trial_av,color=av_color)
-        else:
-            continue
-    axs[ch_no].set_xlabel(f"time ({time_units})")
+        axs_.set_xlabel(f"time ({time_units})")
     return fig
 
 
 def plot_raw_traces(reader,channel_list, num_chan,
                     trial_average,
+                    trial_no, 
                     SigGrpMode='split'):
     if SigGrpMode=='split':
         SigGrpMode = 'split-all'
@@ -360,22 +405,80 @@ def plot_raw_traces(reader,channel_list, num_chan,
     ti = sample_trace.t_start
     tf = sample_trace.t_stop
     t = np.linspace(0,float(tf-ti),len(sample_trace))
-    if num_chan>1:
-        fig = plot_multi_channel_trials(segments,t,
-                                        sampling_rate,
-                                        time_units,
-                                        trial_average,
-                                        channel_list,num_chan)
-    else:
-        fig = plot_single_channel_trials(segments,t,
-                                         sampling_rate,
-                                         time_units,
-                                         trial_average,
-                                         channel_list,num_chan)
+    print(trial_no)
+    fig = plot_multi_channel_trials(segments,t,
+                                    sampling_rate,
+                                    time_units,
+                                    trial_no,
+                                    trial_average,
+                                    channel_list,num_chan)
+
+
+
+    #if isinstance(trial_no,int):
+    #    print(f"plotting trial_no: {trial_no}")
+    #    fig = plot_multi_channel_trials(segments,t,
+    #                                    sampling_rate,
+    #                                    time_units,
+    #                                    trial_no,
+    #                                    trial_average,
+    #                                    channel_list,num_chan)
+
+
+    #    #if num_chan>1:
+    #    #    fig = plot_multi_channel_trials(segments,t,
+    #    #                                    sampling_rate,
+    #    #                                    time_units,
+    #    #                                    trial_no,
+    #    #                                    trial_average,
+    #    #                                    channel_list,num_chan)
+    #    #else:
+    #    #    fig = plot_single_channel_trials(segments,t,
+    #    #                                     sampling_rate,
+    #    #                                     time_units,
+    #    #                                     trial_no,
+    #    #                                     trial_average,
+    #    #                                     channel_list,num_chan)
+
+    #else:
+    #    fig = plot_multi_channel_trials(segments,t,
+    #                                    sampling_rate,
+    #                                    time_units,
+    #                                    trial_no,
+    #                                    trial_average,
+    #                                    channel_list,num_chan)
+
+
+
+
+        #if num_chan>1:
+        #    fig = plot_multi_channel_trials(segments,t,
+        #                                    sampling_rate,
+        #                                    time_units,
+        #                                    trial_no,
+        #                                    trial_average,
+        #                                    channel_list,num_chan)
+        #else:
+        #    fig = plot_single_channel_trials(segments,t,
+        #                                     sampling_rate,
+        #                                     time_units,
+        #                                     trial_no,
+        #                                     trial_average,
+        #                                     channel_list,num_chan)
+
+    
+    
+    
+    
+    
+    
+
+
     file_prop = {"sampling rate ":f"{sampling_rate} {sampling_rate_unit}",
                  "gorup mode":SigGrpMode,
                  "duration of recording":f"{float(tf-ti)} {time_units}"
                 }
+    plt.tight_layout()
     return fig, file_prop 
 
 
@@ -383,6 +486,7 @@ def plot_raw_traces(reader,channel_list, num_chan,
 
 
 def show_data(reader,
+              trial_no=0,
               trial_average=False):
     channel_list, num_chan  = get_channel_name(reader)
     try:
@@ -393,10 +497,13 @@ def show_data(reader,
         injI =current_injected(reader)
     except:
         print(f"couldn't calculate injected current")
+        print(f"trial_no:.......{trial_no}")
     fig, file_prop=plot_raw_traces(reader,channel_list,num_chan,
-                                   trial_average,
+                                   trial_average=trial_average,
+                                   trial_no=trial_no,
                                    SigGrpMode='split')
     file_prop["trial_average"] = trial_average
+    #plt.show()
     return fig, file_prop
 
 
@@ -529,7 +636,8 @@ def main():
     folder_path = Path(args.folder_path)
 
     #call the fucntion to open files
-    show_data(file_path)
+    reader = read_with_IO(file_path)
+    show_data(reader)
     
     #open files in a folder
     if folder_path!=None:
