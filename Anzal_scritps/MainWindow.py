@@ -15,6 +15,9 @@ import SweepAnalyses as san
 import pprint as pprint
 import matplotlib
 from matplotlib.widgets import RectangleSelector
+from pynput import keyboard
+from threading import Thread
+
 
 
 
@@ -42,6 +45,8 @@ def add_toolbar(canvas, figure_canvas_agg):
     toolbar.update()
     toolbar.pack(side="top", fill="x", expand=False)
     return toolbar
+
+
 
 
 # Function to create the PySimpleGUI window layout
@@ -97,6 +102,7 @@ def MainWindow():
         ],
         [
             sg.Button("Reset", key="Reset"),  # Reset button first
+            #sg.Input(focus=False),
             sg.Column(
                 [[
                     sg.Button("Previous", key="-PREV-", visible=False),
@@ -130,13 +136,40 @@ def MainWindow():
 
     ]
 
-    return sg.Window("Synaptipy", layout, finalize=True, resizable=True)
+    return sg.Window("Synaptipy", layout,finalize=True, resizable=True)
 
 
 # Main function to handle the GUI and Matplotlib integration
 def Main():
     window = MainWindow()
-
+    # Flag to stop the listener when the window is closed
+    stop_listener = False
+    # Function to trigger PySimpleGUI events
+    def trigger_event(event_key):
+        if event_key == "Right":
+            window.write_event_value("-NEXT-", None)
+        elif event_key == "Left":
+            window.write_event_value("-PREV-", None)
+    # Listener function
+    def on_press(key):
+        try:
+            if key == keyboard.Key.right:
+                trigger_event("Right")
+            elif key == keyboard.Key.left:
+                trigger_event("Left")
+        except Exception as e:
+            print(f"Error: {e}")
+    # Function to run the listener in a separate thread
+    def start_listener():
+        global stop_listener
+        with keyboard.Listener(on_press=on_press) as listener:
+            while not stop_listener:
+                pass
+            listener.stop()
+    ##to activate keyboard read, mightnot work in all OS 
+    #listener_thread = Thread(target=start_listener, daemon=True)
+    #listener_thread.start()
+    
     # Access the PySimpleGUI canvases
     canvas_elem = window["-CANVAS-"]
     toolbar_elem = window["-TOOLBAR-"]
@@ -164,7 +197,7 @@ def Main():
                                    trial_average)
         sweep, time, sampling_rate = san.extract_sweep(reader,trial_no,
                                                        ChanToRead)
-        base_line = san.baseline_measurement(sweep,debug=True)
+        base_line = san.baseline_measurement(sweep)#,debug=True)
         #peak_stats = san.collect_peak_stats(sweep,time,sampling_rate,debug=True)
         peak_stats = 'None'
         analysed_result = f"sweep baseline: {base_line},peak stats: {peak_stats}"
@@ -178,6 +211,7 @@ def Main():
     while True:
         event, values = window.read()
         if event == sg.WIN_CLOSED:
+            stop_listener = True
             break
 
         if event == "-OPEN_FILE-":
@@ -218,7 +252,7 @@ def Main():
                                 trial_average=values["-PLOT_AV-"],
                                 ChanToRead=chan_name_)
 
-        if event == "-NEXT-":
+        if event in ("-NEXT-","Right"):
             if trial_no < max_trials - 1:
                 trial_no += 1
                 update_trial_figure(trial_no, reader, 
@@ -229,7 +263,7 @@ def Main():
                 sg.popup("You are already at the last trial!",
                          title="End of Trials")
 
-        if event == "-PREV-" and trial_no > 0:
+        if event in("-PREV-","Left"):
             if trial_no > 0:
                 trial_no -= 1
                 update_trial_figure(trial_no, reader, 
@@ -254,8 +288,8 @@ def Main():
 
 
 
-
     window.close()
+    stop_listener = True
 
 
 if __name__ == "__main__":
