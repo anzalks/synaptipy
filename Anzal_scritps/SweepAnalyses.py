@@ -337,10 +337,28 @@ def baseline_measurement(TrialData,debug=False):
     fig_,axs_ = plt.subplots(1,1)
     if debug:
         print(f"trialDatBsln,count : {trialDatBsln,count}")
-        plt.plot(TrialData)
-        plt.axhline(trialDatBsln,color='k',linestyle=':')
+        plt.plot(TrialData,label='raw sweep')
+        plt.axhline(trialDatBsln,color='k',linestyle=':',label='baseline')
+        fig_.legend()
         fig_.show()
     return trialDatBsln
+
+def offset_baseline(sweep,baseline,debug=False):
+    offsetted_sweep = sweep-baseline
+    offsetted_baseline=baseline_measurement(offsetted_sweep)
+    fig_,axs_ = plt.subplots(1,1)
+    if debug:
+        print(f"trialDatBsln,count : {baseline}")
+        plt.plot(offsetted_sweep,label='leak subsctracte\nsweep')
+        plt.axhline(baseline,color='k',linestyle=':',label="leak")
+        plt.axhline(offsetted_baseline,color='r',linestyle=':',label="baseline")
+        fig_.legend()
+        fig_.show()
+    return offsetted_baseline
+
+
+
+
 
 def collect_peak_stats(TrialData,t,sampling_rate,
                        use_local_baseline=False,
