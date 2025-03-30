@@ -42,14 +42,6 @@ def main():
     file_path = Path(args.file_path)
     folder_path = Path(args.folder_path)
 
-    #call the fucntion to open files
-    show_data(file_path)
-    
-    #open files in a folder
-    if folder_path!=None:
-        file_list = list_files(folder_path)
-        print(file_list)
-
 
 
 
