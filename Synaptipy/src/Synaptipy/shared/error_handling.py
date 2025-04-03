@@ -20,4 +20,8 @@ class PlottingError(SynaptipyError):
     """Error occurred during plot generation or update."""
     pass
 
+class ExportError(SynaptipyError, IOError):
+    """Error occurred during file saving/exporting."""
+    pass
+
 # Add more specific errors as needed

@@ -1,540 +1,445 @@
+# -*- coding: utf-8 -*-
 """
 Main Window for the Synaptipy GUI application.
 Uses PySide6 for the GUI framework and pyqtgraph for plotting.
+Features multi-panel plots per channel, channel selection,
+and different trial plotting modes (overlay+avg, single trial cycling).
 """
-# ... (keep existing imports: logging, sys, Path, Optional, np, pg, QtWidgets, QtCore, QtGui) ...
-import uuid # Import uuid for default identifier
-from datetime import datetime, timezone # Import datetime for NWB
 
-# Import from our package structure
-from Synaptipy.core.data_model import Recording, Channel # Channel needed for type hints
+# --- Standard Library Imports ---
+import logging
+import sys
+from pathlib import Path
+from typing import List, Optional, Dict, Any, Tuple
+import uuid
+from datetime import datetime, timezone
+
+# --- Third-Party Imports ---
+import numpy as np
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
+try:
+    import tzlocal # Optional, for local timezone handling
+except ImportError:
+    tzlocal = None
+
+# --- Synaptipy Imports ---
+from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-# --- Import NWB Exporter ---
 from Synaptipy.infrastructure.exporters import NWBExporter
-# ---
 from Synaptipy.shared import constants
-from Synaptipy.shared.error_handling import (FileReadError,
-                                             UnsupportedFormatError,
-                                             ExportError, # Added ExportError
-                                             SynaptipyError) # Base error
+from Synaptipy.shared.error_handling import (
+    FileReadError,
+    UnsupportedFormatError,
+    ExportError,
+    SynaptipyError
+)
 
+# --- Configure Logging ---
 log = logging.getLogger(__name__)
-# ... (keep pg config options) ...
 
-# --- Simple NWB Metadata Dialog ---
+# --- PyQtGraph Configuration ---
+pg.setConfigOption('imageAxisOrder', 'row-major')
+pg.setConfigOption('background', 'w')
+pg.setConfigOption('foreground', 'k')
+
+
+# --- NWB Metadata Dialog ---
 class NwbMetadataDialog(QtWidgets.QDialog):
     """Dialog to collect essential metadata for NWB export."""
     def __init__(self, default_identifier, default_start_time, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("NWB Session Metadata")
-        self.setModal(True) # Block main window until closed
-
+        super().__init__(parent); self.setWindowTitle("NWB Session Metadata"); self.setModal(True)
         self.layout = QtWidgets.QFormLayout(self)
-
-        self.session_description = QtWidgets.QLineEdit("Session description (e.g., experiment type, condition)")
-        self.identifier = QtWidgets.QLineEdit(default_identifier)
-        self.session_start_time_edit = QtWidgets.QDateTimeEdit(default_start_time)
-        self.session_start_time_edit.setCalendarPopup(True)
-        self.session_start_time_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-        self.experimenter = QtWidgets.QLineEdit("")
-        self.lab = QtWidgets.QLineEdit("")
-        self.institution = QtWidgets.QLineEdit("")
-        self.session_id = QtWidgets.QLineEdit("") # Optional
-
-        self.layout.addRow("Description*:", self.session_description)
-        self.layout.addRow("Identifier*:", self.identifier)
-        self.layout.addRow("Start Time*:", self.session_start_time_edit)
-        self.layout.addRow("Experimenter:", self.experimenter)
-        self.layout.addRow("Lab:", self.lab)
-        self.layout.addRow("Institution:", self.institution)
-        self.layout.addRow("Session ID:", self.session_id)
+        self.session_description = QtWidgets.QLineEdit("Session description..."); self.identifier = QtWidgets.QLineEdit(default_identifier)
+        self.session_start_time_edit = QtWidgets.QDateTimeEdit(default_start_time); self.session_start_time_edit.setCalendarPopup(True); self.session_start_time_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.experimenter = QtWidgets.QLineEdit(""); self.lab = QtWidgets.QLineEdit(""); self.institution = QtWidgets.QLineEdit(""); self.session_id = QtWidgets.QLineEdit("")
+        self.layout.addRow("Description*:", self.session_description); self.layout.addRow("Identifier*:", self.identifier); self.layout.addRow("Start Time*:", self.session_start_time_edit)
+        self.layout.addRow("Experimenter:", self.experimenter); self.layout.addRow("Lab:", self.lab); self.layout.addRow("Institution:", self.institution); self.layout.addRow("Session ID:", self.session_id)
         self.layout.addRow(QtWidgets.QLabel("* Required fields"))
-
-        # Dialog buttons
-        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
+        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel); self.button_box.accepted.connect(self.accept); self.button_box.rejected.connect(self.reject)
         self.layout.addRow(self.button_box)
-
     def get_metadata(self) -> Optional[Dict]:
-        """Returns the entered metadata as a dictionary if input is valid."""
-        desc = self.session_description.text().strip()
-        ident = self.identifier.text().strip()
-        start_time = self.session_start_time_edit.dateTime().toPython() # Get as Python datetime
+        desc = self.session_description.text().strip(); ident = self.identifier.text().strip(); start_time = self.session_start_time_edit.dateTime().toPython()
+        if not desc or not ident: QtWidgets.QMessageBox.warning(self, "Input Error", "Description and Identifier required."); return None
+        return {"session_description": desc, "identifier": ident, "session_start_time": start_time, "experimenter": self.experimenter.text().strip() or None, "lab": self.lab.text().strip() or None, "institution": self.institution.text().strip() or None, "session_id": self.session_id.text().strip() or None}
+# --- NwbMetadataDialog End ---
 
-        if not desc or not ident:
-            QtWidgets.QMessageBox.warning(self, "Input Error", "Session Description and Identifier are required.")
-            return None
 
-        return {
-            "session_description": desc,
-            "identifier": ident,
-            "session_start_time": start_time,
-            "experimenter": self.experimenter.text().strip() or None, # Use None if empty
-            "lab": self.lab.text().strip() or None,
-            "institution": self.institution.text().strip() or None,
-            "session_id": self.session_id.text().strip() or None,
-        }
-
+# --- MainWindow Class ---
 class MainWindow(QtWidgets.QMainWindow):
-    """Main application window."""
+    """Main application window with multi-panel plotting and trial modes."""
+    class PlotMode: OVERLAY_AVG = 0; CYCLE_SINGLE = 1
 
     def __init__(self):
-        super().__init__()
-        # ... (keep existing __init__ content: title, geometry, data state) ...
-        self.nwb_exporter = NWBExporter() # Add exporter instance
-
-        # --- UI Setup ---
+        super().__init__(); self.setWindowTitle("Synaptipy"); self.setGeometry(100, 100, 1400, 850)
+        # Core components
+        self.neo_adapter = NeoAdapter(); self.nwb_exporter = NWBExporter()
+        # Data state
+        self.current_recording: Optional[Recording] = None; self.file_list: List[Path] = []; self.current_file_index: int = -1
+        # UI / Plotting state - reset on each file load
+        self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}; self.channel_plots: Dict[str, pg.PlotItem] = {}
+        self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
+        # Plot control state
+        self.current_plot_mode: int = self.PlotMode.OVERLAY_AVG; self.current_trial_index: int = 0; self.max_trials_current_recording: int = 0
+        # Setup UI Widgets (created ONCE)
         self._setup_ui()
+        # Connect signals to slots
         self._connect_signals()
-
-        # --- Initial State ---
+        # Set initial enabled/disabled state
         self._update_ui_state()
 
     def _setup_ui(self):
-        """Create and arrange widgets."""
+        """Create and arrange widgets ONCE during initialization."""
         # --- Menu Bar ---
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("&File")
-        self.open_file_action = file_menu.addAction("&Open File...")
-        self.open_folder_action = file_menu.addAction("Open &Folder...")
-        file_menu.addSeparator()
-        # --- Add NWB Export Action ---
-        self.export_nwb_action = file_menu.addAction("Export to &NWB...")
-        self.export_nwb_action.setEnabled(False) # Disabled initially
-        # ---
-        file_menu.addSeparator()
-        self.quit_action = file_menu.addAction("&Quit")
-
-
-        main_widget = QtWidgets.QWidget()
-        self.setCentralWidget(main_widget)
-        main_layout = QtWidgets.QVBoxLayout(main_widget)
-
-        # --- Top Control Panel ---
-        top_panel = QtWidgets.QHBoxLayout()
-
-        # File Group (Use menu actions now, keep buttons maybe?)
-        file_group = QtWidgets.QGroupBox("File Operations")
-        file_layout = QtWidgets.QHBoxLayout(file_group)
-        # self.open_file_button = QtWidgets.QPushButton("Open File") # Replaced by menu
-        # self.open_folder_button = QtWidgets.QPushButton("Open Folder") # Replaced by menu
-        # file_layout.addWidget(self.open_file_button)
-        # file_layout.addWidget(self.open_folder_button)
-        # top_panel.addWidget(file_group) # Remove button group if only using menu
-
-        display_group = QtWidgets.QGroupBox("Display Options")
-        display_layout = QtWidgets.QVBoxLayout(display_group) # Changed to QVBoxLayout
-        self.downsample_checkbox = QtWidgets.QCheckBox("Auto Downsample Plot")
-        self.downsample_checkbox.setChecked(True)
-        # --- Add Averaging Checkbox ---
-        self.plot_average_checkbox = QtWidgets.QCheckBox("Plot Average Only")
-        self.plot_average_checkbox.setChecked(False)
-        # ---
-        display_layout.addWidget(self.downsample_checkbox)
-        display_layout.addWidget(self.plot_average_checkbox) # Add average checkbox
-        top_panel.addWidget(display_group)
-
-        # --- Metadata Display (Keep as before) ---
-        meta_group = QtWidgets.QGroupBox("File Information")
-        # ... (metadata labels setup remains the same) ...
-        meta_layout = QtWidgets.QFormLayout(meta_group)
-        self.filename_label = QtWidgets.QLabel("N/A")
-        self.sampling_rate_label = QtWidgets.QLabel("N/A")
-        self.channels_label = QtWidgets.QLabel("N/A")
-        self.duration_label = QtWidgets.QLabel("N/A")
-        self.nwb_start_time_label = QtWidgets.QLabel("N/A") # Add label for NWB start time
-        meta_layout.addRow("File:", self.filename_label)
-        meta_layout.addRow("Sampling Rate:", self.sampling_rate_label)
-        meta_layout.addRow("Duration:", self.duration_label)
-        meta_layout.addRow("NWB Start Time:", self.nwb_start_time_label) # Add NWB time
-        meta_layout.addRow("Channels:", self.channels_label)
-
-        top_panel.addWidget(meta_group)
-
-        main_layout.addLayout(top_panel)
-
-        # --- Main Plot Area (Keep as before) ---
-        plot_layout = QtWidgets.QHBoxLayout()
-        self.plot_widget = pg.PlotWidget(name="EphysPlot")
-        # ... (plot widget setup remains the same) ...
-        self.plot_widget.setLabel('bottom', "Time", units='s')
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.enableAutoRange(axis='y', enable=True)
-        self.plot_widget.setAutoVisible(y=True)
-        self.plot_legend = self.plot_widget.addLegend(offset=(10, 10))
-
-        plot_controls_layout = QtWidgets.QVBoxLayout()
-        self.zoom_in_button = QtWidgets.QPushButton("Zoom In")
-        self.zoom_out_button = QtWidgets.QPushButton("Zoom Out")
-        self.reset_view_button = QtWidgets.QPushButton("Reset View")
-        # ... (plot controls setup remains the same) ...
-        plot_controls_layout.addWidget(self.zoom_in_button)
-        plot_controls_layout.addWidget(self.zoom_out_button)
-        plot_controls_layout.addWidget(self.reset_view_button)
-        plot_controls_layout.addStretch()
-
-        plot_layout.addWidget(self.plot_widget, stretch=1)
-        plot_layout.addLayout(plot_controls_layout)
-        main_layout.addLayout(plot_layout, stretch=1)
-
-        # --- Folder Navigation (Keep as before) ---
-        nav_layout = QtWidgets.QHBoxLayout()
-        # ... (navigation buttons setup remains the same) ...
-        self.prev_file_button = QtWidgets.QPushButton("<< Previous File")
-        self.next_file_button = QtWidgets.QPushButton("Next File >>")
-        self.file_index_label = QtWidgets.QLabel("")
-        nav_layout.addWidget(self.prev_file_button)
-        nav_layout.addStretch()
-        nav_layout.addWidget(self.file_index_label)
-        nav_layout.addStretch()
-        nav_layout.addWidget(self.next_file_button)
-        main_layout.addLayout(nav_layout)
-
-
-        # --- Status Bar (Keep as before) ---
-        self.statusBar = QtWidgets.QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Ready. Open a file or folder.")
-
+        menu_bar = self.menuBar(); file_menu = menu_bar.addMenu("&File")
+        self.open_file_action = file_menu.addAction("&Open File..."); self.open_folder_action = file_menu.addAction("Open &Folder...")
+        file_menu.addSeparator(); self.export_nwb_action = file_menu.addAction("Export to &NWB...")
+        file_menu.addSeparator(); self.quit_action = file_menu.addAction("&Quit")
+        # --- Central Widget & Main Layout ---
+        main_widget = QtWidgets.QWidget(); self.setCentralWidget(main_widget); main_layout = QtWidgets.QHBoxLayout(main_widget)
+        # --- Left Control Panel ---
+        left_panel = QtWidgets.QVBoxLayout(); left_panel.setSpacing(10)
+        display_group = QtWidgets.QGroupBox("Display Options"); display_layout = QtWidgets.QVBoxLayout(display_group)
+        self.downsample_checkbox = QtWidgets.QCheckBox("Auto Downsample Plot"); self.downsample_checkbox.setChecked(True)
+        plot_mode_layout = QtWidgets.QHBoxLayout(); plot_mode_layout.addWidget(QtWidgets.QLabel("Plot Mode:"))
+        self.plot_mode_combobox = QtWidgets.QComboBox(); self.plot_mode_combobox.addItems(["Overlay All + Avg", "Cycle Single Trial"]); self.plot_mode_combobox.setCurrentIndex(self.current_plot_mode)
+        plot_mode_layout.addWidget(self.plot_mode_combobox); display_layout.addLayout(plot_mode_layout); display_layout.addWidget(self.downsample_checkbox); left_panel.addWidget(display_group)
+        # Channel Selection Group (Scroll Area setup)
+        self.channel_select_group = QtWidgets.QGroupBox("Channels"); self.channel_scroll_area = QtWidgets.QScrollArea(); self.channel_scroll_area.setWidgetResizable(True)
+        self.channel_select_widget = QtWidgets.QWidget(); self.channel_checkbox_layout = QtWidgets.QVBoxLayout(self.channel_select_widget); self.channel_checkbox_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.channel_scroll_area.setWidget(self.channel_select_widget); channel_group_layout = QtWidgets.QVBoxLayout(self.channel_select_group); channel_group_layout.addWidget(self.channel_scroll_area); left_panel.addWidget(self.channel_select_group)
+        # Metadata Display Group
+        meta_group = QtWidgets.QGroupBox("File Information"); meta_layout = QtWidgets.QFormLayout(meta_group)
+        self.filename_label = QtWidgets.QLabel("N/A"); self.sampling_rate_label = QtWidgets.QLabel("N/A"); self.channels_label = QtWidgets.QLabel("N/A"); self.duration_label = QtWidgets.QLabel("N/A"); self.nwb_start_time_label = QtWidgets.QLabel("N/A")
+        meta_layout.addRow("File:", self.filename_label); meta_layout.addRow("Sampling Rate:", self.sampling_rate_label); meta_layout.addRow("Duration:", self.duration_label); meta_layout.addRow("NWB Start Time:", self.nwb_start_time_label); meta_layout.addRow("Channels:", self.channels_label)
+        left_panel.addWidget(meta_group); left_panel.addStretch(); main_layout.addLayout(left_panel)
+        # --- Right Plot Area ---
+        right_panel = QtWidgets.QVBoxLayout()
+        # Top Plot Controls
+        plot_controls_layout = QtWidgets.QHBoxLayout(); plot_controls_layout.addWidget(QtWidgets.QLabel("View:"))
+        self.zoom_in_button = QtWidgets.QPushButton("Zoom In"); self.zoom_out_button = QtWidgets.QPushButton("Zoom Out"); self.reset_view_button = QtWidgets.QPushButton("Reset View")
+        plot_controls_layout.addWidget(self.zoom_in_button); plot_controls_layout.addWidget(self.zoom_out_button); plot_controls_layout.addWidget(self.reset_view_button)
+        plot_controls_layout.addStretch(1); plot_controls_layout.addWidget(QtWidgets.QLabel("Trial:"))
+        self.prev_trial_button = QtWidgets.QPushButton("<"); self.next_trial_button = QtWidgets.QPushButton(">"); self.trial_index_label = QtWidgets.QLabel("N/A")
+        plot_controls_layout.addWidget(self.prev_trial_button); plot_controls_layout.addWidget(self.trial_index_label); plot_controls_layout.addWidget(self.next_trial_button)
+        right_panel.addLayout(plot_controls_layout)
+        # Main Plot Area (GraphicsLayoutWidget created here)
+        self.graphics_layout_widget = pg.GraphicsLayoutWidget(); right_panel.addWidget(self.graphics_layout_widget, stretch=1)
+        # Folder Navigation
+        nav_layout = QtWidgets.QHBoxLayout(); self.prev_file_button = QtWidgets.QPushButton("<< Prev File"); self.next_file_button = QtWidgets.QPushButton("Next File >>"); self.folder_file_index_label = QtWidgets.QLabel("")
+        nav_layout.addWidget(self.prev_file_button); nav_layout.addStretch(); nav_layout.addWidget(self.folder_file_index_label); nav_layout.addStretch(); nav_layout.addWidget(self.next_file_button); right_panel.addLayout(nav_layout)
+        main_layout.addLayout(right_panel, stretch=1)
+        # --- Status Bar ---
+        self.statusBar = QtWidgets.QStatusBar(); self.setStatusBar(self.statusBar); self.statusBar.showMessage("Ready.")
 
     def _connect_signals(self):
         """Connect widget signals to handler slots."""
-        # File Menu Actions
+        # File Menu
         self.open_file_action.triggered.connect(self._open_file)
         self.open_folder_action.triggered.connect(self._open_folder)
-        self.export_nwb_action.triggered.connect(self._export_to_nwb) # Connect export
-        self.quit_action.triggered.connect(self.close) # Connect quit action
-
+        self.export_nwb_action.triggered.connect(self._export_to_nwb)
+        self.quit_action.triggered.connect(self.close)
         # Display Options
         self.downsample_checkbox.stateChanged.connect(self._trigger_plot_update)
-        self.plot_average_checkbox.stateChanged.connect(self._trigger_plot_update) # Connect average checkbox
-
+        self.plot_mode_combobox.currentIndexChanged.connect(self._on_plot_mode_changed)
         # Plot Controls
         self.zoom_in_button.clicked.connect(self._zoom_in)
         self.zoom_out_button.clicked.connect(self._zoom_out)
         self.reset_view_button.clicked.connect(self._reset_view)
+        # Trial Cycle Buttons
+        self.prev_trial_button.clicked.connect(self._prev_trial)
+        self.next_trial_button.clicked.connect(self._next_trial)
+        # Folder Navigation
+        self.prev_file_button.clicked.connect(self._prev_file_folder)
+        self.next_file_button.clicked.connect(self._next_file_folder)
+        # Channel checkboxes are connected dynamically in _create_channel_ui
 
-        # Navigation
-        self.prev_file_button.clicked.connect(self._prev_file)
-        self.next_file_button.clicked.connect(self._next_file)
+    # --- Reset UI and State ---
+    def _reset_ui_and_state_for_new_file(self):
+        """Fully resets UI elements and state related to channels and plots."""
+        log.info("Resetting UI and state for new file...")
+        # Clear Checkboxes UI and state
+        for checkbox in self.channel_checkboxes.values():
+            try: checkbox.stateChanged.disconnect(self._trigger_plot_update)
+            except (TypeError, RuntimeError): pass
+        while self.channel_checkbox_layout.count():
+            item = self.channel_checkbox_layout.takeAt(0); widget = item.widget()
+            if widget: widget.deleteLater()
+        self.channel_checkboxes.clear(); self.channel_select_group.setEnabled(False)
+        # Clear Plot Layout and state
+        self.graphics_layout_widget.clear(); self.channel_plots.clear(); self.channel_plot_data_items.clear()
+        # Reset Data State Variables
+        self.current_recording = None; self.max_trials_current_recording = 0; self.current_trial_index = 0
+        # Reset Metadata Display
+        self._clear_metadata_display()
+        # Reset Trial Label
+        self._update_trial_label()
 
+    # --- Create Channel UI (Checkboxes & Plot Panels) ---
+    def _create_channel_ui(self):
+        """Creates checkboxes AND PlotItems in the layout. Called ONCE per file load."""
+        if not self.current_recording or not self.current_recording.channels:
+            log.warning("No data to create channel UI."); self.channel_select_group.setEnabled(False); return
 
-    # --- Action Handlers (Slots) ---
+        self.channel_select_group.setEnabled(True)
+        sorted_channel_items = sorted(self.current_recording.channels.items(), key=lambda item: str(item[0]))
+        log.info(f"Creating UI for {len(sorted_channel_items)} channels.")
+        last_plot_item = None
+        for i, (chan_id, channel) in enumerate(sorted_channel_items):
+            if chan_id in self.channel_checkboxes or chan_id in self.channel_plots:
+                 log.error(f"State Error: UI element for {chan_id} exists during creation!"); continue
+            # Checkbox
+            checkbox = QtWidgets.QCheckBox(f"{channel.name} (ID: {chan_id})"); checkbox.setChecked(True)
+            checkbox.stateChanged.connect(self._trigger_plot_update); self.channel_checkbox_layout.addWidget(checkbox); self.channel_checkboxes[chan_id] = checkbox
+            # PlotItem
+            plot_item = self.graphics_layout_widget.addPlot(row=i, col=0); plot_item.setLabel('left', channel.name, units=channel.units or 'units'); plot_item.showGrid(x=True, y=True, alpha=0.3)
+            self.channel_plots[chan_id] = plot_item
+            # Link Axes
+            if last_plot_item: plot_item.setXLink(last_plot_item); plot_item.hideAxis('bottom')
+            last_plot_item = plot_item
+        # Configure last plot's axis
+        if last_plot_item: last_plot_item.setLabel('bottom', "Time", units='s'); last_plot_item.showAxis('bottom')
 
+    # --- Action Handlers (Slots) --- START ---
+
+    # --- File Loading ---
     def _open_file(self):
-        """Handle the 'Open File' menu action."""
-        # ... (logic remains the same) ...
-        filepath_str, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open Electrophysiology File", "", constants.NEO_FILE_FILTER
-        )
+        filepath_str, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", "", constants.NEO_FILE_FILTER)
         if filepath_str:
             filepath = Path(filepath_str)
-            self.file_list = [filepath]
-            self.current_file_index = 0
+            self.file_list = [filepath]; self.current_file_index = 0
             self._load_and_display_file(filepath)
-            self._update_ui_state()
-
 
     def _open_folder(self):
-        """Handle the 'Open Folder' menu action."""
-        # ... (logic remains the same) ...
-        folder_path_str = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Open Folder Containing Recordings", ""
-        )
+        folder_path_str = QtWidgets.QFileDialog.getExistingDirectory(self, "Open Folder", "")
         if folder_path_str:
             folder_path = Path(folder_path_str)
-            # ... (file finding logic remains the same) ...
-            supported_files = []
-            all_extensions = set()
-            for exts in constants.NEO_READER_EXTENSIONS.values():
-                all_extensions.update(ext.lstrip('*') for ext in exts)
-            for ext in all_extensions:
-                if not ext: continue
-                supported_files.extend(list(folder_path.glob(f"*{ext}")))
+            supported_files = []; all_extensions = set(ext.lstrip('*') for exts in constants.NEO_READER_EXTENSIONS.values() for ext in exts if ext)
+            for ext in all_extensions: supported_files.extend(list(folder_path.glob(f"*{ext}")))
             supported_files = sorted(list(set(supported_files)))
-
-            if not supported_files:
-                QtWidgets.QMessageBox.information(self, "No Files Found", f"No supported recording files found in '{folder_path}'.")
-                self.file_list = []
-                self.current_file_index = -1
-            else:
-                self.file_list = supported_files
-                self.current_file_index = 0
-                self._load_and_display_file(self.file_list[0])
+            if not supported_files: QtWidgets.QMessageBox.information(self, "No Files Found", f"No supported files in '{folder_path}'."); self.file_list = []; self.current_file_index = -1; self._reset_ui_and_state_for_new_file()
+            else: self.file_list = supported_files; self.current_file_index = 0; self._load_and_display_file(self.file_list[0])
             self._update_ui_state()
 
-
     def _load_and_display_file(self, filepath: Path):
-        """Load data using NeoAdapter and update the plot and metadata."""
-        # ... (loading logic remains mostly the same) ...
+        """Loads data, resets UI, creates new UI elements, updates display."""
         self.statusBar.showMessage(f"Loading '{filepath.name}'...")
+        QtWidgets.QApplication.processEvents()
+        self._reset_ui_and_state_for_new_file() # Full reset before loading
         try:
-            self.current_recording = self.neo_adapter.read_recording(filepath)
-            log.info(f"Successfully loaded {filepath.name}")
+            self.current_recording = self.neo_adapter.read_recording(filepath); log.info(f"Loaded {filepath.name}")
+            self.max_trials_current_recording = self.current_recording.max_trials if self.current_recording else 0
+            self._create_channel_ui() # Create checkboxes & plot panels
             self._update_metadata_display()
-            self._update_plot() # Plot immediately after load
+            self._update_plot() # Initial plot
             self.statusBar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
-        # ... (error handling remains the same) ...
         except (FileNotFoundError, UnsupportedFormatError, FileReadError, SynaptipyError) as e:
-            log.error(f"Failed to load file {filepath}: {e}", exc_info=True)
-            QtWidgets.QMessageBox.critical(self, "Loading Error", f"Could not load file:\n{filepath.name}\n\nError: {e}")
-            self.current_recording = None
-            self._clear_plot()
-            self._clear_metadata_display()
-            self.statusBar.showMessage(f"Error loading {filepath.name}. Ready.", 5000)
+            log.error(f"Load failed {filepath}: {e}", exc_info=False); QtWidgets.QMessageBox.critical(self, "Loading Error", f"Could not load file:\n{filepath.name}\n\nError: {e}"); self._clear_metadata_display(); self.statusBar.showMessage(f"Error loading {filepath.name}.", 5000)
         except Exception as e:
-             log.error(f"An unexpected error occurred loading {filepath}: {e}", exc_info=True)
-             QtWidgets.QMessageBox.critical(self, "Unexpected Error", f"An unexpected error occurred while loading:\n{filepath.name}\n\nError: {e}")
-             self.current_recording = None
-             self._clear_plot()
-             self._clear_metadata_display()
-             self.statusBar.showMessage(f"Unexpected error loading {filepath.name}. Ready.", 5000)
+             log.error(f"Unexpected error loading {filepath}: {e}", exc_info=True); QtWidgets.QMessageBox.critical(self, "Unexpected Error", f"Error loading:\n{filepath.name}\n\n{e}"); self._clear_metadata_display(); self.statusBar.showMessage(f"Error loading {filepath.name}.", 5000)
         finally:
-             self._update_ui_state() # Ensure UI state is correct after load attempt
+             self._update_ui_state()
 
+    # --- Display Option Changes ---
+    def _on_plot_mode_changed(self, index):
+        self.current_plot_mode = index
+        log.info(f"Plot mode changed to: {'Overlay+Avg' if index == self.PlotMode.OVERLAY_AVG else 'Cycle Single'}")
+        self._update_ui_state()
+        self._trigger_plot_update()
 
     def _trigger_plot_update(self):
-        """Slot to explicitly update plot when display options change."""
-        if self.current_recording:
-             self._update_plot()
+        if self.current_recording: self._update_plot()
 
+    # --- Plotting Core Logic ---
+    def _clear_plot_data_only(self):
+        """Clears only the plotted data lines from all existing PlotItems."""
+        # log.debug("Clearing data items") # Verbose
+        for chan_id, plot_item in self.channel_plots.items():
+            if plot_item is None or plot_item.scene() is None: continue
+            data_items = self.channel_plot_data_items.get(chan_id, [])
+            for data_item in data_items:
+                try: plot_item.removeItem(data_item)
+                except Exception: pass
+            plot_item.setTitle("")
+            items_to_remove = [item for item in plot_item.items if isinstance(item, pg.TextItem)]
+            for item in items_to_remove:
+                try: plot_item.removeItem(item)
+                except Exception: pass
+        self.channel_plot_data_items.clear()
 
     def _update_plot(self):
-        """Clear and redraw the plot based on current data and options."""
-        self._clear_plot()
-        if not self.current_recording or not self.current_recording.channels:
-            log.warning("Update plot called with no recording data.")
-            self.plot_widget.setTitle("No data loaded")
-            return
+        """Plots data onto the appropriate EXISTING PlotItems based on selections."""
+        self._clear_plot_data_only()
+        if not self.current_recording or not self.channel_plots: return
 
-        self.plot_widget.setTitle("") # Clear title
-        log.debug(f"Plotting {self.current_recording.num_channels} channels.")
+        plot_average_mode = self.current_plot_mode == self.PlotMode.OVERLAY_AVG
+        log.debug(f"Updating plot data. Mode: {'Overlay+Avg' if plot_average_mode else 'Cycle Single'}, Trial: {self.current_trial_index+1}/{self.max_trials_current_recording}")
 
-        first_channel_units = "Units"
-        has_plotted = False
-        plot_average = self.plot_average_checkbox.isChecked() # Check state
+        trial_pen = pg.mkPen(constants.TRIAL_COLOR + (constants.TRIAL_ALPHA,), width=constants.DEFAULT_PLOT_PEN_WIDTH)
+        avg_pen = pg.mkPen(constants.AVERAGE_COLOR, width=constants.DEFAULT_PLOT_PEN_WIDTH + 1)
+        single_trial_pen = pg.mkPen(constants.TRIAL_COLOR, width=constants.DEFAULT_PLOT_PEN_WIDTH)
+        any_data_plotted = False
 
-        if plot_average:
-             log.debug("Plotting averaged traces.")
+        for chan_id, plot_item in self.channel_plots.items():
+            checkbox = self.channel_checkboxes.get(chan_id)
+            channel = self.current_recording.channels.get(chan_id)
 
-        for i, channel in enumerate(self.current_recording.channels.values()):
-            data = None
-            time_vector = None
+            if checkbox and checkbox.isChecked() and channel:
+                plot_item.setVisible(True) # Make sure panel is visible
+                self.channel_plot_data_items[chan_id] = [] # Ready for new data items
 
-            # --- Get data based on checkbox state ---
-            if plot_average:
-                data = channel.get_averaged_data()
-                if data is not None:
-                     time_vector = channel.get_averaged_time_vector()
-                else:
-                     log.warning(f"Could not get averaged data for channel '{channel.name}'. Skipping.")
-                     continue # Skip plotting this channel if averaging failed
-            else:
-                # Plot first trial (or implement trial selection later)
-                if channel.num_trials > 0:
-                    data = channel.get_data(trial_index=0)
-                    time_vector = channel.get_time_vector(trial_index=0)
-                else:
-                    log.warning(f"Channel '{channel.name}' has no trials to plot.")
-                    continue
-            # -----------------------------------------
+                if plot_average_mode: # Overlay Mode
+                    plotted_something = False
+                    for trial_idx in range(channel.num_trials):
+                        data = channel.get_data(trial_idx); tvec = channel.get_relative_time_vector(trial_idx)
+                        if data is not None and tvec is not None:
+                            di = plot_item.plot(tvec, data, pen=trial_pen); self.channel_plot_data_items[chan_id].append(di); plotted_something = True
+                    avg_data = channel.get_averaged_data(); avg_tvec = channel.get_relative_averaged_time_vector()
+                    if avg_data is not None and avg_tvec is not None:
+                        di_avg = plot_item.plot(avg_tvec, avg_data, pen=avg_pen); self.channel_plot_data_items[chan_id].append(di_avg)
+                        enable_ds = self.downsample_checkbox.isChecked(); di_avg.opts['autoDownsample'] = enable_ds
+                        if enable_ds: di_avg.opts['autoDownsampleThreshold'] = constants.DOWNSAMPLING_THRESHOLD
+                        plotted_something = True
+                    elif channel.num_trials > 0: log.warning(f"Avg failed ch {chan_id}")
+                    if not plotted_something: plot_item.addItem(pg.TextItem(f"No overlay data", color='orange'))
+                    else: any_data_plotted = True
+                else: # Cycle Single Trial Mode
+                    idx = min(self.current_trial_index, channel.num_trials - 1) if channel.num_trials > 0 else -1
+                    if idx >= 0:
+                        data = channel.get_data(idx); tvec = channel.get_relative_time_vector(idx)
+                        if data is not None and tvec is not None:
+                            di = plot_item.plot(tvec, data, pen=single_trial_pen); self.channel_plot_data_items[chan_id].append(di)
+                            enable_ds = self.downsample_checkbox.isChecked(); di.opts['autoDownsample'] = enable_ds
+                            if enable_ds: di.opts['autoDownsampleThreshold'] = constants.DOWNSAMPLING_THRESHOLD
+                            any_data_plotted = True
+                        else: plot_item.addItem(pg.TextItem(f"Trial {idx+1} data error", color='r'))
+                    else: plot_item.addItem(pg.TextItem(f"No trials", color='orange'))
+            elif plot_item:
+                 # Hide the plot item if unchecked
+                 plot_item.hide() # Hiding might cause layout issues, test carefully
+                 # Alternatively, just ensure data is cleared (already done)
 
-            if data is None or time_vector is None:
-                log.error(f"Failed to retrieve data or time for channel '{channel.name}'. Skipping.")
-                continue
-
-            if not has_plotted: # Set Y label based on first successfully plotted channel
-                first_channel_units = channel.units if channel.units else "Unknown Units"
-                self.plot_widget.setLabel('left', "Amplitude", units=first_channel_units)
-
-            color = constants.PLOT_COLORS[i % len(constants.PLOT_COLORS)]
-            pen = pg.mkPen(color=color, width=constants.DEFAULT_PLOT_PEN_WIDTH)
-
-            # Add legend entry name
-            legend_name = f"{channel.name} (Avg)" if plot_average else f"{channel.name} (Tr 0)"
-
-            plot_item = self.plot_widget.plot(time_vector, data, pen=pen, name=legend_name)
-            log.debug(f"Added plot for Channel: {channel.name}, Mode: {'Average' if plot_average else 'Trial 0'}, Samples: {len(data)}")
-            has_plotted = True
-
-            # Apply downsampling options (same as before)
-            enable_ds = self.downsample_checkbox.isChecked()
-            plot_item.opts['autoDownsample'] = enable_ds
-            if enable_ds:
-                 plot_item.opts['autoDownsampleThreshold'] = constants.DOWNSAMPLING_THRESHOLD
-
-        if not has_plotted:
-             self.plot_widget.setTitle("No plottable data found for current settings")
-        # Optionally reset view after plot update?
-        # self._reset_view()
+        # Update trial label
+        self._update_trial_label()
+        if not any_data_plotted and self.current_recording:
+            log.info("No channels selected or no data plotted.")
+            # Add central message only if layout is truly empty
+            if not self.graphics_layout_widget.items():
+                 self.graphics_layout_widget.addLabel("No channels selected", row=0, col=0)
 
 
-    def _clear_plot(self):
-        """Remove all items from the plot and legend."""
-        # ... (logic remains the same) ...
-        log.debug("Clearing plot widget.")
-        for item in self.plot_widget.listDataItems():
-            self.plot_widget.removeItem(item)
-        if self.plot_legend:
-             self.plot_widget.removeItem(self.plot_legend)
-             self.plot_legend = self.plot_widget.addLegend(offset=(10, 10))
-        self.plot_widget.setTitle("")
-        self.plot_widget.setLabel('left', "Amplitude")
-
-
+    # --- Metadata Display ---
     def _update_metadata_display(self):
-        """Update labels with info from self.current_recording."""
         if self.current_recording:
-            rec = self.current_recording
-            self.filename_label.setText(rec.source_file.name)
+            rec = self.current_recording; self.filename_label.setText(rec.source_file.name)
             self.sampling_rate_label.setText(f"{rec.sampling_rate:.2f} Hz" if rec.sampling_rate else "N/A")
             self.duration_label.setText(f"{rec.duration:.3f} s" if rec.duration else "N/A")
-            # Display NWB start time if available
+            start_time_str = "Not extracted";
             if rec.session_start_time_dt:
-                 self.nwb_start_time_label.setText(rec.session_start_time_dt.strftime("%Y-%m-%d %H:%M:%S %Z"))
-            else:
-                 self.nwb_start_time_label.setText("Not extracted")
-
-            ch_names = ", ".join(rec.channel_names)
-            num_ch = rec.num_channels
-            max_tr = rec.max_trials
-            self.channels_label.setText(f"{num_ch} ch, {max_tr} trial(s): ({ch_names})")
-        else:
-            self._clear_metadata_display()
-
-
+                try: start_time_str = rec.session_start_time_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+                except ValueError: start_time_str = rec.session_start_time_dt.strftime("%Y-%m-%d %H:%M:%S")
+            self.nwb_start_time_label.setText(start_time_str)
+            num_ch = rec.num_channels; max_tr = self.max_trials_current_recording; self.channels_label.setText(f"{num_ch} ch, {max_tr} trial(s)")
+        else: self._clear_metadata_display()
     def _clear_metadata_display(self):
-        """Reset metadata labels to 'N/A'."""
-        # ... (reset logic remains the same) ...
-        self.filename_label.setText("N/A")
-        self.sampling_rate_label.setText("N/A")
-        self.channels_label.setText("N/A")
-        self.duration_label.setText("N/A")
-        self.nwb_start_time_label.setText("N/A") # Reset NWB time label
+        self.filename_label.setText("N/A"); self.sampling_rate_label.setText("N/A"); self.channels_label.setText("N/A"); self.duration_label.setText("N/A"); self.nwb_start_time_label.setText("N/A")
 
-
+    # --- UI State Update ---
     def _update_ui_state(self):
-        """Enable/disable widgets based on the current state."""
-        has_data = self.current_recording is not None
-        is_folder = len(self.file_list) > 1
-
-        # Plot controls
-        self.zoom_in_button.setEnabled(has_data)
-        self.zoom_out_button.setEnabled(has_data)
-        self.reset_view_button.setEnabled(has_data)
-        self.plot_average_checkbox.setEnabled(has_data) # Enable avg checkbox if data loaded
-        self.downsample_checkbox.setEnabled(has_data)
-
-        # Export action
-        self.export_nwb_action.setEnabled(has_data) # Enable export if data loaded
-
-        # Navigation controls (visibility and enabled state)
-        self.prev_file_button.setVisible(is_folder)
-        self.next_file_button.setVisible(is_folder)
-        self.file_index_label.setVisible(is_folder)
+        has_data = self.current_recording is not None; is_folder = len(self.file_list) > 1
+        is_cycling_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE; has_multiple_trials = self.max_trials_current_recording > 1
+        enable_data_controls = has_data
+        self.zoom_in_button.setEnabled(enable_data_controls); self.zoom_out_button.setEnabled(enable_data_controls); self.reset_view_button.setEnabled(enable_data_controls)
+        self.plot_mode_combobox.setEnabled(enable_data_controls); self.downsample_checkbox.setEnabled(enable_data_controls); self.export_nwb_action.setEnabled(enable_data_controls)
+        self.channel_select_group.setEnabled(enable_data_controls)
+        enable_trial_cycle = has_data and is_cycling_mode and has_multiple_trials
+        self.prev_trial_button.setEnabled(enable_trial_cycle and self.current_trial_index > 0)
+        self.next_trial_button.setEnabled(enable_trial_cycle and self.current_trial_index < self.max_trials_current_recording - 1)
+        self.trial_index_label.setVisible(has_data and is_cycling_mode)
+        self._update_trial_label()
+        self.prev_file_button.setVisible(is_folder); self.next_file_button.setVisible(is_folder); self.folder_file_index_label.setVisible(is_folder)
         if is_folder:
-             self.prev_file_button.setEnabled(self.current_file_index > 0)
-             self.next_file_button.setEnabled(self.current_file_index < len(self.file_list) - 1)
-             current_filename = self.file_list[self.current_file_index].name
-             self.file_index_label.setText(f"File {self.current_file_index + 1} / {len(self.file_list)}: {current_filename}")
-        else:
-            self.file_index_label.setText("")
+            self.prev_file_button.setEnabled(self.current_file_index > 0); self.next_file_button.setEnabled(self.current_file_index < len(self.file_list) - 1)
+            current_filename = self.file_list[self.current_file_index].name; self.folder_file_index_label.setText(f"File {self.current_file_index + 1}/{len(self.file_list)}: {current_filename}")
+        else: self.folder_file_index_label.setText("")
 
+    # --- Trial Label Update ---
+    def _update_trial_label(self):
+        if (self.current_recording and self.current_plot_mode == self.PlotMode.CYCLE_SINGLE and self.max_trials_current_recording > 0):
+            self.trial_index_label.setText(f"{self.current_trial_index + 1} / {self.max_trials_current_recording}")
+        else: self.trial_index_label.setText("N/A")
 
-    # --- Plot Control Slots (Keep _zoom_in, _zoom_out, _reset_view as before) ---
+    # --- Plot Control Slots (Corrected Again) ---
     def _zoom_in(self):
-        if not self.current_recording: return
-        self.plot_widget.getViewBox().scaleBy((0.8, 0.8))
+        # Calculate visible plots *inside* the method
+        visible_plots = [p for p in self.channel_plots.values() if p.isVisible()]
+        if visible_plots:
+            # Zoom on the first visible plot; linked axes should follow
+            visible_plots[0].getViewBox().scaleBy((0.8, 0.8))
+            log.debug("Zoomed In")
+        else:
+            log.debug("Zoom In clicked but no plots are visible.")
 
     def _zoom_out(self):
-        if not self.current_recording: return
-        self.plot_widget.getViewBox().scaleBy((1.25, 1.25))
+        # Calculate visible plots *inside* the method
+        visible_plots = [p for p in self.channel_plots.values() if p.isVisible()]
+        if visible_plots:
+            # Zoom on the first visible plot; linked axes should follow
+            visible_plots[0].getViewBox().scaleBy((1.25, 1.25))
+            log.debug("Zoomed Out")
+        else:
+            log.debug("Zoom Out clicked but no plots are visible.")
 
     def _reset_view(self):
-        if not self.current_recording: return
-        self.plot_widget.getViewBox().autoRange()
+        # Acts on all currently visible plots
+        log.debug("Resetting view for visible plots.")
+        visible_plots_found = False
+        # Iterate and check visibility *inside* the method
+        for plot_item in self.channel_plots.values():
+            if plot_item.isVisible():
+                plot_item.getViewBox().autoRange()
+                visible_plots_found = True
+        if visible_plots_found:
+            log.debug("View reset.")
+        else:
+            log.debug("Reset View clicked but no plots are visible.")
 
-    # --- Folder Navigation Slots (Keep _next_file, _prev_file as before) ---
-    def _next_file(self):
-        if self.file_list and self.current_file_index < len(self.file_list) - 1:
-            self.current_file_index += 1
-            filepath = self.file_list[self.current_file_index]
-            self._load_and_display_file(filepath)
-            # self._update_ui_state() # Called within _load_and_display_file's finally block
+    # --- Trial Navigation Slots ---
+    def _next_trial(self):
+        if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE and self.max_trials_current_recording > 0:
+            if self.current_trial_index < self.max_trials_current_recording - 1: self.current_trial_index += 1; log.debug(f"Next trial: {self.current_trial_index + 1}"); self._update_plot(); self._update_ui_state()
+            else: log.debug("Already at last trial.")
+    def _prev_trial(self):
+        if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
+            if self.current_trial_index > 0: self.current_trial_index -= 1; log.debug(f"Previous trial: {self.current_trial_index + 1}"); self._update_plot(); self._update_ui_state()
+            else: log.debug("Already at first trial.")
 
-    def _prev_file(self):
-        if self.file_list and self.current_file_index > 0:
-            self.current_file_index -= 1
-            filepath = self.file_list[self.current_file_index]
-            self._load_and_display_file(filepath)
-            # self._update_ui_state() # Called within _load_and_display_file's finally block
-
+    # --- Folder Navigation Slots ---
+    def _next_file_folder(self):
+        if self.file_list and self.current_file_index < len(self.file_list) - 1: self.current_file_index += 1; self._load_and_display_file(self.file_list[self.current_file_index]) # Reset happens in load
+    def _prev_file_folder(self):
+        if self.file_list and self.current_file_index > 0: self.current_file_index -= 1; self._load_and_display_file(self.file_list[self.current_file_index]) # Reset happens in load
 
     # --- NWB Export Slot ---
     def _export_to_nwb(self):
-        """Handles the 'Export to NWB' action."""
-        if not self.current_recording:
-            QtWidgets.QMessageBox.warning(self, "Export Error", "No recording data loaded to export.")
-            return
-
-        # 1. Get Output Filename
-        default_filename = self.current_recording.source_file.with_suffix(".nwb").name
-        output_path_str, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
-            self,
-            "Save Recording as NWB File",
-            default_filename, # Suggest filename based on source
-            "NWB Files (*.nwb)"
-        )
-
-        if not output_path_str:
-            self.statusBar.showMessage("NWB export cancelled.", 3000)
-            return # User cancelled
-
-        output_path = Path(output_path_str)
-
-        # 2. Get Metadata via Dialog
-        # Prepare defaults for dialog
-        default_id = str(uuid.uuid4())
-        default_time = self.current_recording.session_start_time_dt or datetime.now()
-        if default_time.tzinfo is None: # Ensure default time is timezone-aware for dialog
-             try:
-                 import tzlocal
-                 default_time = default_time.replace(tzinfo=tzlocal.get_localzone())
-             except ImportError:
-                  default_time = default_time.replace(tzinfo=timezone.utc) # Fallback to UTC
-
+        if not self.current_recording: return
+        default_filename = self.current_recording.source_file.with_suffix(".nwb").name; output_path_str, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save NWB", default_filename, "NWB Files (*.nwb)")
+        if not output_path_str: self.statusBar.showMessage("NWB export cancelled.", 3000); return
+        output_path = Path(output_path_str); default_id = str(uuid.uuid4()); default_time = self.current_recording.session_start_time_dt or datetime.now()
+        if default_time.tzinfo is None:
+            try: default_time = default_time.replace(tzinfo=tzlocal.get_localzone() if tzlocal else timezone.utc)
+            except Exception: default_time = default_time.replace(tzinfo=timezone.utc)
         dialog = NwbMetadataDialog(default_id, default_time, self)
-        if dialog.exec() == QtWidgets.QDialog.Accepted:
-            session_metadata = dialog.get_metadata()
-            if session_metadata is None: # Invalid input in dialog
-                return # Error message already shown by dialog
-        else:
-            self.statusBar.showMessage("NWB export cancelled (metadata input).", 3000)
-            return # User cancelled dialog
+        if dialog.exec() == QtWidgets.QDialog.Accepted: session_metadata = dialog.get_metadata();
+        else: self.statusBar.showMessage("NWB export cancelled.", 3000); return
+        if session_metadata is None: return
+        self.statusBar.showMessage(f"Exporting NWB..."); QtWidgets.QApplication.processEvents()
+        try: self.nwb_exporter.export(self.current_recording, output_path, session_metadata); log.info(f"Exported NWB to {output_path}"); self.statusBar.showMessage(f"Export successful: {output_path.name}", 5000); QtWidgets.QMessageBox.information(self, "Export Successful", f"Saved to:\n{output_path}")
+        except (ValueError, ExportError, SynaptipyError) as e: log.error(f"NWB Export failed: {e}", exc_info=False); self.statusBar.showMessage(f"NWB Export failed: {e}", 5000); QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Failed to export:\n{e}")
+        except Exception as e: log.error(f"Unexpected NWB Export error: {e}", exc_info=True); self.statusBar.showMessage("Unexpected NWB Export error.", 5000); QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Unexpected error:\n{e}")
 
-        # 3. Perform Export (Consider Threading for large files later)
-        self.statusBar.showMessage(f"Exporting to {output_path.name}...")
-        QtWidgets.QApplication.processEvents() # Update GUI briefly
-
-        try:
-            self.nwb_exporter.export(self.current_recording, output_path, session_metadata)
-            log.info(f"Successfully exported recording to {output_path}")
-            self.statusBar.showMessage(f"Export successful: {output_path.name}", 5000)
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Recording saved to:\n{output_path}")
-
-        except (ValueError, ExportError, SynaptipyError) as e:
-            log.error(f"NWB Export failed: {e}", exc_info=True)
-            self.statusBar.showMessage(f"NWB Export failed: {e}", 5000)
-            QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Failed to export file:\n{e}")
-        except Exception as e: # Catch unexpected errors
-             log.error(f"Unexpected error during NWB Export: {e}", exc_info=True)
-             self.statusBar.showMessage(f"Unexpected NWB Export error.", 5000)
-             QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"An unexpected error occurred during export:\n{e}")
-
-
+    # --- Close Event ---
     def closeEvent(self, event: QtGui.QCloseEvent):
-        """Handle the window closing event."""
-        # ... (logic remains the same) ...
         log.info("Close event triggered. Shutting down.")
         event.accept()
+# --- MainWindow Class --- END ---

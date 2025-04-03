@@ -53,6 +53,9 @@ PLOT_COLORS = [
     (100, 100, 100),# Gray
     # Add more colors if needed
 ]
-
+# Plotting Colors (RGB 0-255)
+TRIAL_COLOR = (55, 126, 184)  # Blueish (similar to #377eb8)
+AVERAGE_COLOR = (0, 0, 0)      # Black
+TRIAL_ALPHA = 100              # Alpha for overlaid trials (0-255, lower is more transparent)
 # Downsampling Constants
 DOWNSAMPLING_THRESHOLD = 100000 # Apply auto-downsampling if samples > this
