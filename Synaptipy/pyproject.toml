@@ -1,0 +1,38 @@
+[project]
+name = "Synaptipy"
+version = "0.1.0"
+description = "Electrophysiology Visualization Suite"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.23.5",
+    # --- GUI and Plotting ---
+    "PySide6>=6.5.0",
+    "pyqtgraph>=0.13.3",
+    # --- Core/Infra ---
+    "neo>=0.12.0",
+    "scipy",
+    # --- Export ---
+    "pynwb>=2.5.0",
+    "tzlocal", # Recommended for timezone handling in NWB
+    # "pandas",
+]
+
+[project.scripts]
+synaptipy-gui = "Synaptipy.application.__main__:run_gui"
+
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+# Optional: Add development dependencies (linters, formatters, testing tools)
+# [project.optional-dependencies]
+# dev = [
+#     "pytest",
+#     "pytest-qt",
+#     "pytest-mock",
+#     "flake8",
+#     "black",
+#     "isort",
+#     "build",
+#     "twine",
+# ]
