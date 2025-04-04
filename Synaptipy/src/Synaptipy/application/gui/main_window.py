@@ -12,6 +12,8 @@ Plot view resets strategically when channel visibility or plot options change.
 ## MOD: Inverted zoom slider behavior (min=out, max=in).
 ## MOD: Added X/Y scrollbars for panning.
 ## MOD: Rearranged Right Panel: Y Scrollbars are now immediately right of plots, Y Zoom sliders are further right.
+## MOD: Ensured individual Y controls stretch vertically.
+## MOD: Ensured global Y controls AND group boxes stretch vertically.
 """
 
 # --- Standard Library Imports ---
@@ -184,13 +186,14 @@ class MainWindow(QtWidgets.QMainWindow):
         y_controls_panel_layout.setContentsMargins(0, 0, 0, 0)
         y_controls_panel_layout.setSpacing(5)
 
-        # --- Y Scroll Column (NOW FIRST) --- ##
+        # --- Y Scroll Column (FIRST) --- ##
         y_scroll_widget = QtWidgets.QWidget()
         y_scroll_layout = QtWidgets.QVBoxLayout(y_scroll_widget)
         y_scroll_layout.setContentsMargins(0,0,0,0); y_scroll_layout.setSpacing(5)
         y_scroll_group = QtWidgets.QGroupBox("Y Scroll")
         y_scroll_group_layout = QtWidgets.QVBoxLayout(y_scroll_group)
-        y_scroll_layout.addWidget(y_scroll_group)
+        # Add GroupBox to the column layout, allow it to stretch vertically
+        y_scroll_layout.addWidget(y_scroll_group, stretch=1) # <<< Stretch the group box
 
         # Global Y Scrollbar (Visible when locked)
         self.global_y_scrollbar_widget = QtWidgets.QWidget()
@@ -198,30 +201,34 @@ class MainWindow(QtWidgets.QMainWindow):
         global_y_scrollbar_layout.setContentsMargins(0,0,0,0); global_y_scrollbar_layout.setSpacing(2)
         global_y_scrollbar_label = QtWidgets.QLabel("Global Scroll"); global_y_scrollbar_label.setAlignment(QtCore.Qt.AlignCenter)
         self.global_y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Vertical); self.global_y_scrollbar.setRange(0, self.SCROLLBAR_MAX_RANGE); self.global_y_scrollbar.setToolTip("Scroll Y-axis (All visible)")
-        global_y_scrollbar_layout.addWidget(global_y_scrollbar_label); global_y_scrollbar_layout.addWidget(self.global_y_scrollbar, stretch=1)
-        y_scroll_group_layout.addWidget(self.global_y_scrollbar_widget)
+        global_y_scrollbar_layout.addWidget(global_y_scrollbar_label);
+        global_y_scrollbar_layout.addWidget(self.global_y_scrollbar, stretch=1) # Stretch scrollbar within its widget
+        # Add the global widget container WITH STRETCH=1 to the group layout
+        y_scroll_group_layout.addWidget(self.global_y_scrollbar_widget, stretch=1) # <<< Stretch this widget
 
         # Container for Individual Y Scrollbars (Visible when unlocked)
         self.individual_y_scrollbars_container = QtWidgets.QWidget()
         self.individual_y_scrollbars_layout = QtWidgets.QVBoxLayout(self.individual_y_scrollbars_container)
         self.individual_y_scrollbars_layout.setContentsMargins(0, 5, 0, 0); self.individual_y_scrollbars_layout.setSpacing(10); self.individual_y_scrollbars_layout.setAlignment(QtCore.Qt.AlignTop)
-        y_scroll_group_layout.addWidget(self.individual_y_scrollbars_container, stretch=1)
+        # Add the individual container WITH STRETCH=1 to the group layout
+        y_scroll_group_layout.addWidget(self.individual_y_scrollbars_container, stretch=1) # Stretch this widget
 
-        y_scroll_layout.addStretch() # Push group towards top if container empty
-        # ADD SCROLL WIDGET TO THE PANEL LAYOUT FIRST
-        y_controls_panel_layout.addWidget(y_scroll_widget, stretch=1) # Add Scroll column FIRST
+        # y_scroll_layout.addStretch() # <<< REMOVED
+        # ADD SCROLL WIDGET (containing the stretched groupbox) TO THE PANEL LAYOUT FIRST
+        y_controls_panel_layout.addWidget(y_scroll_widget, stretch=1)
 
-        # --- Y Zoom Column (NOW SECOND) ---
+        # --- Y Zoom Column (SECOND) ---
         y_zoom_widget = QtWidgets.QWidget()
         y_zoom_layout = QtWidgets.QVBoxLayout(y_zoom_widget)
         y_zoom_layout.setContentsMargins(0,0,0,0); y_zoom_layout.setSpacing(5)
         y_zoom_group = QtWidgets.QGroupBox("Y Zoom")
         y_zoom_group_layout = QtWidgets.QVBoxLayout(y_zoom_group)
-        y_zoom_layout.addWidget(y_zoom_group)
+        # Add GroupBox to the column layout, allow it to stretch vertically
+        y_zoom_layout.addWidget(y_zoom_group, stretch=1) # <<< Stretch the group box
 
         self.y_lock_checkbox = QtWidgets.QCheckBox("Lock Axes")
         self.y_lock_checkbox.setChecked(self.y_axes_locked); self.y_lock_checkbox.setToolTip("Lock/Unlock Y-axis zoom & scroll")
-        y_zoom_group_layout.addWidget(self.y_lock_checkbox)
+        y_zoom_group_layout.addWidget(self.y_lock_checkbox) # Checkbox takes natural size
 
         # Global Y Slider (Visible when locked)
         self.global_y_slider_widget = QtWidgets.QWidget()
@@ -229,18 +236,21 @@ class MainWindow(QtWidgets.QMainWindow):
         global_y_slider_layout.setContentsMargins(0,0,0,0); global_y_slider_layout.setSpacing(2)
         global_y_slider_label = QtWidgets.QLabel("Global Zoom"); global_y_slider_label.setAlignment(QtCore.Qt.AlignCenter)
         self.global_y_slider = QtWidgets.QSlider(QtCore.Qt.Vertical); self.global_y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX); self.global_y_slider.setValue(self.SLIDER_DEFAULT_VALUE); self.global_y_slider.setToolTip("Adjust Y-axis zoom (All visible)")
-        global_y_slider_layout.addWidget(global_y_slider_label); global_y_slider_layout.addWidget(self.global_y_slider, stretch=1)
-        y_zoom_group_layout.addWidget(self.global_y_slider_widget)
+        global_y_slider_layout.addWidget(global_y_slider_label);
+        global_y_slider_layout.addWidget(self.global_y_slider, stretch=1) # Stretch slider within its widget
+        # Add the global widget container WITH STRETCH=1 to the group layout
+        y_zoom_group_layout.addWidget(self.global_y_slider_widget, stretch=1) # <<< Stretch this widget
 
         # Container for Individual Y Sliders (Visible when unlocked)
         self.individual_y_sliders_container = QtWidgets.QWidget()
         self.individual_y_sliders_layout = QtWidgets.QVBoxLayout(self.individual_y_sliders_container)
         self.individual_y_sliders_layout.setContentsMargins(0, 5, 0, 0); self.individual_y_sliders_layout.setSpacing(10); self.individual_y_sliders_layout.setAlignment(QtCore.Qt.AlignTop)
-        y_zoom_group_layout.addWidget(self.individual_y_sliders_container, stretch=1)
+        # Add the individual container WITH STRETCH=1 to the group layout
+        y_zoom_group_layout.addWidget(self.individual_y_sliders_container, stretch=1) # Stretch this widget
 
-        y_zoom_layout.addStretch() # Push group towards top if container empty
-        # ADD ZOOM WIDGET TO THE PANEL LAYOUT SECOND
-        y_controls_panel_layout.addWidget(y_zoom_widget, stretch=1) # Add Zoom column SECOND
+        # y_zoom_layout.addStretch() # <<< REMOVED
+        # ADD ZOOM WIDGET (containing the stretched groupbox) TO THE PANEL LAYOUT SECOND
+        y_controls_panel_layout.addWidget(y_zoom_widget, stretch=1)
 
         # Add the complete right panel (containing scroll and zoom) to the main layout
         main_layout.addWidget(y_controls_panel_widget, stretch=0) # Add combined Y controls panel, fixed size
@@ -371,29 +381,31 @@ class MainWindow(QtWidgets.QMainWindow):
             if last_plot_item: plot_item.setXLink(last_plot_item); plot_item.hideAxis('bottom')
             last_plot_item = plot_item
 
-            # Create individual Y slider (for the Y Zoom column)
-            ind_y_slider_widget = QtWidgets.QWidget()
+            # --- Create individual Y slider (for the Y Zoom column) ---
+            ind_y_slider_widget = QtWidgets.QWidget() # Container for label + slider
             ind_y_slider_layout = QtWidgets.QVBoxLayout(ind_y_slider_widget)
             ind_y_slider_layout.setContentsMargins(0,0,0,0); ind_y_slider_layout.setSpacing(2)
             slider_label = QtWidgets.QLabel(f"{channel.name or chan_id[:4]} Zoom"); slider_label.setAlignment(QtCore.Qt.AlignCenter); slider_label.setToolTip(f"Y Zoom for {channel.name or chan_id}")
             self.individual_y_slider_labels[chan_id] = slider_label
-            ind_y_slider_layout.addWidget(slider_label)
+            ind_y_slider_layout.addWidget(slider_label) # Label takes its natural height
             y_slider = QtWidgets.QSlider(QtCore.Qt.Vertical); y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX); y_slider.setValue(self.SLIDER_DEFAULT_VALUE); y_slider.setToolTip(f"Adjust Y zoom for {channel.name or chan_id}")
             y_slider.valueChanged.connect(partial(self._on_individual_y_zoom_changed, chan_id))
-            ind_y_slider_layout.addWidget(y_slider, stretch=1)
+            ind_y_slider_layout.addWidget(y_slider, stretch=1) # Slider stretches within its small container layout
             self.individual_y_sliders[chan_id] = y_slider
-            # ADD to the individual SLIDER container layout
-            self.individual_y_sliders_layout.addWidget(ind_y_slider_widget)
+            # ADD the container widget (label+slider) to the main individual SLIDER layout
+            # Give this container widget stretch=1 so it expands vertically in the individual_y_sliders_layout
+            self.individual_y_sliders_layout.addWidget(ind_y_slider_widget, stretch=1) # Stretch needed here
             ind_y_slider_widget.setVisible(False) # Initially hidden
 
-            ## MOD: Y-SCROLLBAR Create individual Y scrollbar (for the Y Scroll column) ##
+            # --- Create individual Y scrollbar (for the Y Scroll column) ---
             y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Vertical)
             y_scrollbar.setRange(0, self.SCROLLBAR_MAX_RANGE) # Set initial max range
             y_scrollbar.setToolTip(f"Scroll Y-axis for {channel.name or chan_id}")
             y_scrollbar.valueChanged.connect(partial(self._on_individual_y_scrollbar_changed, chan_id)) # Connect signal
             self.individual_y_scrollbars[chan_id] = y_scrollbar # Store it
-            # ADD to the individual SCROLLBAR container layout
-            self.individual_y_scrollbars_layout.addWidget(y_scrollbar, stretch=1) # Add directly with stretch
+            # ADD scrollbar directly to the individual SCROLLBAR container layout
+            # Give it stretch=1 so it expands vertically within that layout
+            self.individual_y_scrollbars_layout.addWidget(y_scrollbar, stretch=1) # Stretch needed here
             y_scrollbar.setVisible(False) # Initially hidden
             self._reset_scrollbar(y_scrollbar) # Set initial state (disabled, full page step)
 
@@ -1169,11 +1181,15 @@ if __name__ == '__main__':
 
     app = QtWidgets.QApplication(sys.argv)
     # Apply a style for better appearance if desired
-    # try:
-    #     import qdarkstyle
-    #     app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside6'))
-    # except ImportError:
-    #     log.info("qdarkstyle not found, using default style.")
+    try:
+        import qdarkstyle
+        # Use the PySide6 specific entry point if available
+        if hasattr(qdarkstyle, 'load_stylesheet_pyside6'):
+            app.setStyleSheet(qdarkstyle.load_stylesheet_pyside6())
+        else: # Fallback for older qdarkstyle versions
+             app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyside6'))
+    except ImportError:
+        log.info("qdarkstyle not found, using default style.")
 
     window = MainWindow()
     window.show()
