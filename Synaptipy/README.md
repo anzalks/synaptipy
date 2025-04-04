@@ -42,6 +42,6 @@ synaptipy-gui
 ```
 
 ## Screen grabs
-<img alt="img.png" src="img.png"/>
-<img alt="img_1.png" src="img_1.png"/>
-<img alt="img_2.png" src="img_2.png"/>
+![image](https://github.com/user-attachments/assets/0798e5f1-0962-4d90-8182-0a7fe18062ef)
+![image](https://github.com/user-attachments/assets/73cb6e19-4077-4f29-87bb-f50efee8f528)
+![image](https://github.com/user-attachments/assets/3f3ebde9-6787-4a98-bda0-91e0a2a76cc7)
