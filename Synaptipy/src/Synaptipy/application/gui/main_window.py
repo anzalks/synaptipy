@@ -115,24 +115,20 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug("Instantiating ExplorerTab...")
         self.explorer_tab = ExplorerTab(self.neo_adapter, self.nwb_exporter, self.status_bar, self)
         log.debug("Instantiating AnalyserTab...")
-        self.analyser_tab = AnalyserTab(self) # Assuming it doesn't need refs yet
-        log.debug("Instantiating ExporterTab...")
-
         # --- THIS IS THE LINE TO FIX ---
-        # Ensure you pass all required references from MainWindow
-        self.exporter_tab = ExporterTab(
-            explorer_tab_ref=self.explorer_tab,    # Pass the ExplorerTab instance
-            nwb_exporter_ref=self.nwb_exporter,  # Pass the NWBExporter instance
-            settings_ref=self.settings,          # Pass the QSettings instance
-            status_bar_ref=self.status_bar,      # Pass the QStatusBar instance
-            parent=self                          # Pass self as parent
-        )
+        # Pass the actual ExplorerTab instance, not self (MainWindow)
+        self.analyser_tab = AnalyserTab(explorer_tab_ref=self.explorer_tab, parent=self)
         # --- END FIX ---
+        log.debug("Instantiating ExporterTab...")
+        self.exporter_tab = ExporterTab(
+            explorer_tab_ref=self.explorer_tab, nwb_exporter_ref=self.nwb_exporter,
+            settings_ref=self.settings, status_bar_ref=self.status_bar, parent=self
+        )
 
         # --- Add Tabs ---
         self.tab_widget.addTab(self.explorer_tab, "Explorer")
         self.tab_widget.addTab(self.analyser_tab, "Analyser")
-        self.tab_widget.addTab(self.exporter_tab, "Exporter") # Add the exporter tab
+        self.tab_widget.addTab(self.exporter_tab, "Exporter")
 
         # --- Connect Signals FROM Tabs TO MainWindow ---
         self.explorer_tab.open_file_requested.connect(self._open_file_dialog)
@@ -226,39 +222,49 @@ class MainWindow(QtWidgets.QMainWindow):
     def _load_in_explorer(self, filepath: Path, file_list: List[Path], current_index: int):
         """Instructs the Explorer tab to load the file and updates dependent UI."""
         log.info(f"Requesting ExplorerTab to load: {filepath.name}")
-        load_successful = False  # Flag to track load outcome
-        if hasattr(self, 'explorer_tab') and self.explorer_tab:
-            try:
-                # Call the explorer tab's loading method
-                self.explorer_tab.load_recording_data(filepath, file_list, current_index)
-                # If no exception occurred, assume load was initiated successfully
-                # (The explorer tab logs errors internally if reading fails)
-                load_successful = True  # Or check explorer_tab.get_current_recording() is not None
-                # Switch focus to explorer tab upon initiating load
-                self.tab_widget.setCurrentWidget(self.explorer_tab)
-            except Exception as e:
-                # Catch errors happening *during the call* to load_recording_data,
-                # though most errors should be caught *inside* that method now.
-                log.error(f"Error occurred trying to initiate load in ExplorerTab: {e}", exc_info=True)
-                QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred initiating the file load:\n{e}")
-                load_successful = False
-            finally:
-                # --- UPDATE UI STATES AFTER LOAD ATTEMPT ---
-                # Always update menu and exporter tab state after trying to load
-                log.debug("Updating menu and exporter states after load attempt.")
-                self._update_menu_state()
-                if hasattr(self, 'exporter_tab') and self.exporter_tab:
-                    # Tell the exporter tab to refresh its view of the loaded data
-                    self.exporter_tab.update_state()
-                else:
-                    log.warning("Cannot update exporter tab state: Exporter tab not found.")
-        else:
+        if not (hasattr(self, 'explorer_tab') and self.explorer_tab):
             log.error("Cannot load file: Explorer tab not found or not initialized yet.")
             QtWidgets.QMessageBox.critical(self, "Internal Error", "Explorer tab is missing. Cannot load file.")
-            # Update state even if explorer tab is missing
+            # Attempt to update other tabs even if explorer is missing
             self._update_menu_state()
+            if hasattr(self, 'exporter_tab') and self.exporter_tab: self.exporter_tab.update_state()
+            if hasattr(self, 'analyser_tab') and self.analyser_tab: self.analyser_tab.update_state()
+            return  # Stop if explorer tab is missing
+
+        try:
+            # Call the explorer tab's loading method
+            self.explorer_tab.load_recording_data(filepath, file_list, current_index)
+            # If successful (no immediate exception), switch focus
+            self.tab_widget.setCurrentWidget(self.explorer_tab)
+        except Exception as e:
+            # Catch errors happening *during the call* to load_recording_data,
+            # although most file reading errors should be handled inside it now.
+            log.error(f"Error occurred trying to initiate load in ExplorerTab: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred initiating the file load:\n{e}")
+            # State update will happen in finally block
+        finally:
+            # --- UPDATE UI STATES AFTER LOAD ATTEMPT ---
+            # This block executes whether the try block succeeded or failed.
+            log.debug("Updating menu, exporter, and analyser states after load attempt.")
+            # 1. Update menu based on whether explorer *now* has data
+            self._update_menu_state()
+            # 2. Update exporter tab state
             if hasattr(self, 'exporter_tab') and self.exporter_tab:
-                self.exporter_tab.update_state()
+                try:
+                    self.exporter_tab.update_state()
+                except Exception as e_export_update:
+                    log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
+            else:
+                log.warning("Cannot update exporter tab state: Exporter tab not found.")
+            # 3. Update analyser tab state
+            if hasattr(self, 'analyser_tab') and self.analyser_tab:
+                try:
+                    self.analyser_tab.update_state()  # *** Ensure this runs ***
+                except Exception as e_analyse_update:
+                    log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+            else:
+                log.warning("Cannot update analyser tab state: Analyser tab not found.")
+            # --- End State Updates ---
 
 
     def _export_to_nwb(self):
