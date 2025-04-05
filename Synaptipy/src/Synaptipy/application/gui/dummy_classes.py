@@ -1,3 +1,4 @@
+# src/Synaptipy/application/gui/dummy_classes.py
 # -*- coding: utf-8 -*-
 """
 Dummy implementations for Synaptipy components used when the main library is not available.
@@ -8,10 +9,12 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timezone
 
-log = logging.getLogger(__name__)
+# Use a specific logger
+log = logging.getLogger('Synaptipy.application.gui.dummy_classes')
 
-# --- Try importing real Synaptipy ---
+# --- Try importing real Synaptipy using ABSOLUTE paths ---
 try:
+    # These imports assume Synaptipy is installed and accessible
     from Synaptipy.core.data_model import Recording, Channel
     from Synaptipy.infrastructure.file_readers import NeoAdapter
     from Synaptipy.infrastructure.exporters import NWBExporter
@@ -19,17 +22,15 @@ try:
     from Synaptipy.shared.error_handling import (
         FileReadError, UnsupportedFormatError, ExportError, SynaptipyError)
     SYNAPTIPY_AVAILABLE = True
-    log.info("Successfully imported Synaptipy modules.")
+    log.info("Successfully imported real Synaptipy modules.")
 
-except ImportError:
+except ImportError as import_err:
     # --- Synaptipy not found, set up dummy environment ---
-    print("Warning: Synaptipy modules not found. Using dummy implementations.")
-    log = logging.getLogger(__name__) # Ensure logger exists
-    log.warning("Synaptipy modules not found. Using dummy implementations.")
-
+    log.warning(f"Synaptipy modules not found (Error: {import_err}). Using dummy implementations.")
     SYNAPTIPY_AVAILABLE = False
 
-    # --- Define Dummy Classes ---
+    # --- Define Dummy Classes (Keep definitions as before) ---
+    # V V V Paste Dummy Class definitions here V V V
     class DummyChannel:
         def __init__(self, id, name, units='mV', num_trials=5, duration=1.0, rate=10000.0):
             self.id = id; self.name = name; self.units = units; self.num_trials = num_trials
@@ -71,8 +72,9 @@ except ImportError:
             if not Path(filepath).exists():
                 try: Path(filepath).touch()
                 except Exception as e: log.warning(f"Could not create dummy file {filepath}: {e}")
-            if '5ch' in str(filepath).lower(): num_chan = 5
-            elif '1ch' in str(filepath).lower(): num_chan = 1
+            fname_lower = str(filepath).lower()
+            if '5ch' in fname_lower: num_chan = 5
+            elif '1ch' in fname_lower: num_chan = 1
             else: num_chan = 3
             log.debug(f"DummyNeoAdapter: Creating recording with {num_chan} channels.")
             return DummyRecording(filepath, num_channels=num_chan)
@@ -85,7 +87,9 @@ except ImportError:
                 log.info(f"DummyNWBExporter: Touched output file {output_path}")
             except Exception as e:
                 log.error(f"DummyNWBExporter: Failed to touch output file {output_path}: {e}")
-                raise ExportError(f"Dummy export failed: {e}")
+                # Need to define ExportError within this block if real one failed
+                class DummyExportError(Exception): pass
+                raise DummyExportError(f"Dummy export failed: {e}")
 
     class DummyVisConstants:
         TRIAL_COLOR = '#888888'; TRIAL_ALPHA = 70; AVERAGE_COLOR = '#EE4B2B'
@@ -103,13 +107,17 @@ except ImportError:
     NeoAdapter, NWBExporter = DummyNeoAdapter, DummyNWBExporter
     VisConstants = DummyVisConstants()
     SynaptipyError, FileReadError, UnsupportedFormatError, ExportError = DummyErrors()
-# --- End Dummy Definitions ---
+    # ^ ^ ^ End of Dummy Class definitions ^ ^ ^
 
-# --- Define constants if VisConstants is None (i.e., real Synaptipy failed but dummies didn't fully replace) ---
-# This is a fallback in case the try-except logic needs refinement
-if VisConstants is None:
-    log.warning("VisConstants is None after dummy setup attempt, defining fallback constants.")
+# --- Define constants if VisConstants is None ---
+# This is a safety fallback
+if 'VisConstants' not in locals() or VisConstants is None:
+    log.warning("VisConstants is None after dummy setup, defining fallback constants.")
     class FallbackVisConstants:
         TRIAL_COLOR = '#888888'; TRIAL_ALPHA = 70; AVERAGE_COLOR = '#EE4B2B'
         DEFAULT_PLOT_PEN_WIDTH = 1; DOWNSAMPLING_THRESHOLD = 5000
     VisConstants = FallbackVisConstants()
+if 'NeoAdapter' not in locals(): NeoAdapter = DummyNeoAdapter # Ensure NeoAdapter exists even if only dummies defined
+if 'NWBExporter' not in locals(): NWBExporter = DummyNWBExporter
+if 'Recording' not in locals(): Recording = DummyRecording
+if 'SynaptipyError' not in locals(): SynaptipyError, FileReadError, UnsupportedFormatError, ExportError = DummyErrors()
