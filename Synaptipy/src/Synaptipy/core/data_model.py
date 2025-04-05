@@ -9,7 +9,7 @@ Recording sessions and individual data Channels.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any # Added Any for metadata dict
 import numpy as np
 from datetime import datetime, timezone # Required for Recording timestamp
 
@@ -188,7 +188,6 @@ class Channel:
             log.debug(f"Cannot average channel '{self.name}': No trials available.")
             return None
         if self.num_trials == 1:
-            # Check if the single trial is valid before returning
             single_trial = self.get_data(0)
             if single_trial is not None and np.issubdtype(single_trial.dtype, np.number):
                  log.debug(f"Only one trial for channel '{self.name}'. Returning it as 'average'.")
@@ -198,22 +197,18 @@ class Channel:
                  return None
 
         try:
-            # Ensure all trials are valid ndarrays before proceeding
             valid_trials = [t for t in self.data_trials if isinstance(t, np.ndarray) and np.issubdtype(t.dtype, np.number)]
             if len(valid_trials) != self.num_trials:
                  log.error(f"Cannot average channel '{self.name}': Contains non-numeric or invalid trial data.")
                  return None
-            if not valid_trials: # Should be covered by num_trials check, but safety
-                 return None
+            if not valid_trials: return None
 
-            # Check for consistent trial lengths
             first_trial_len = valid_trials[0].shape[0]
             if not all(arr.shape[0] == first_trial_len for arr in valid_trials):
                 lengths = {arr.shape[0] for arr in valid_trials}
                 log.error(f"Cannot average channel '{self.name}': Trials have different lengths: {lengths}.")
                 return None
 
-            # Stack valid trials and calculate mean
             stacked_trials = np.stack(valid_trials)
             averaged_data = np.mean(stacked_trials, axis=0)
             return averaged_data
@@ -231,18 +226,15 @@ class Channel:
          sampling rate is invalid.
          """
          avg_data = self.get_averaged_data()
-         if avg_data is None: return None # Averaging failed
+         if avg_data is None: return None
 
          num_samples_avg = avg_data.shape[0]
          if not isinstance(self.sampling_rate, (int, float)) or self.sampling_rate <= 0:
              log.error(f"Invalid sampling rate ({self.sampling_rate}) for channel '{self.name}'. Cannot calculate averaged time vector.")
              return None
 
-         try:
-             duration_avg = num_samples_avg / self.sampling_rate
-         except ZeroDivisionError:
-              log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate averaged time vector.")
-              return None
+         try: duration_avg = num_samples_avg / self.sampling_rate
+         except ZeroDivisionError: log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate averaged time vector."); return None
 
          return np.linspace(self.t_start, self.t_start + duration_avg, num_samples_avg, endpoint=False)
 
@@ -259,11 +251,8 @@ class Channel:
              log.error(f"Invalid sampling rate ({self.sampling_rate}) for channel '{self.name}'. Cannot calculate relative averaged time vector.")
              return None
 
-         try:
-            duration_avg = num_samples_avg / self.sampling_rate
-         except ZeroDivisionError:
-            log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate relative averaged time vector.")
-            return None
+         try: duration_avg = num_samples_avg / self.sampling_rate
+         except ZeroDivisionError: log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate relative averaged time vector."); return None
 
          return np.linspace(0.0, duration_avg, num_samples_avg, endpoint=False)
 
@@ -281,20 +270,19 @@ class Recording:
             source_file: The Path object pointing to the original data file.
         """
         if not isinstance(source_file, Path):
-             # Handle case where None or other type might be passed
              log.warning(f"Invalid source_file type ({type(source_file)}), setting to placeholder.")
              self.source_file: Path = Path("./unknown_source_file") # Or raise error
         else:
              self.source_file: Path = source_file
 
-        self.channels: Dict[str, Channel] = {} # Key: Channel ID
-        self.sampling_rate: Optional[float] = None # Global sampling rate (Hz), confirmed across channels or from block
-        self.duration: Optional[float] = None      # Estimated duration (seconds)
-        self.t_start: Optional[float] = None       # Global start time (seconds), relative to session start
-        self.session_start_time_dt: Optional[datetime] = None # Actual datetime object of session start
+        self.channels: Dict[str, Channel] = {}
+        self.sampling_rate: Optional[float] = None
+        self.duration: Optional[float] = None
+        self.t_start: Optional[float] = None
+        self.session_start_time_dt: Optional[datetime] = None
         self.protocol_name: Optional[str] = None
-        self.injected_current: Optional[float] = None # Estimated current range (PTP)
-        self.metadata: Dict[str, Any] = {} # Other miscellaneous metadata
+        self.injected_current: Optional[float] = None
+        self.metadata: Dict[str, Any] = {} # Use Any for metadata flexibility
 
     @property
     def num_channels(self) -> int:
@@ -318,10 +306,12 @@ class Recording:
         return max(num_trials_list) if num_trials_list else 0
 
 
-# Optional Experiment class remains unchanged
 class Experiment:
-    """Optional container for multiple Recordings."""
+    """
+    Optional container representing a collection of Recordings, potentially
+    from a single experimental session or related set. (Currently basic).
+    """
     def __init__(self):
         self.recordings: List[Recording] = []
-        self.metadata: Dict[str, Any] = {}
-        self.identifier: str = str(uuid.uuid4())
+        self.metadata: Dict[str, Any] = {} # Use Any for metadata flexibility
+        self.identifier: str = str(uuid.uuid4()) # Example unique ID for the experiment
