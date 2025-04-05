@@ -110,19 +110,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget = QtWidgets.QTabWidget()
         self.tab_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
         self.tab_widget.setMovable(True)
+
         # --- Instantiate Tabs ---
         log.debug("Instantiating ExplorerTab...")
         self.explorer_tab = ExplorerTab(self.neo_adapter, self.nwb_exporter, self.status_bar, self)
         log.debug("Instantiating AnalyserTab...")
-        self.analyser_tab = AnalyserTab(self)
+        self.analyser_tab = AnalyserTab(self) # Assuming it doesn't need refs yet
         log.debug("Instantiating ExporterTab...")
-        self.exporter_tab = ExporterTab(self)
+
+        # --- THIS IS THE LINE TO FIX ---
+        # Ensure you pass all required references from MainWindow
+        self.exporter_tab = ExporterTab(
+            explorer_tab_ref=self.explorer_tab,    # Pass the ExplorerTab instance
+            nwb_exporter_ref=self.nwb_exporter,  # Pass the NWBExporter instance
+            settings_ref=self.settings,          # Pass the QSettings instance
+            status_bar_ref=self.status_bar,      # Pass the QStatusBar instance
+            parent=self                          # Pass self as parent
+        )
+        # --- END FIX ---
+
         # --- Add Tabs ---
         self.tab_widget.addTab(self.explorer_tab, "Explorer")
         self.tab_widget.addTab(self.analyser_tab, "Analyser")
-        self.tab_widget.addTab(self.exporter_tab, "Exporter")
+        self.tab_widget.addTab(self.exporter_tab, "Exporter") # Add the exporter tab
+
         # --- Connect Signals FROM Tabs TO MainWindow ---
         self.explorer_tab.open_file_requested.connect(self._open_file_dialog)
+
         # --- Set Central Widget ---
         self.setCentralWidget(self.tab_widget)
         log.debug("Tabs setup complete.")
@@ -209,25 +223,42 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Loading Error", "Failed to identify the file to load.")
             self._update_menu_state() # Update menu state even on error
 
-
     def _load_in_explorer(self, filepath: Path, file_list: List[Path], current_index: int):
-        """Instructs the Explorer tab to load the file and updates menu state."""
+        """Instructs the Explorer tab to load the file and updates dependent UI."""
         log.info(f"Requesting ExplorerTab to load: {filepath.name}")
+        load_successful = False  # Flag to track load outcome
         if hasattr(self, 'explorer_tab') and self.explorer_tab:
             try:
+                # Call the explorer tab's loading method
                 self.explorer_tab.load_recording_data(filepath, file_list, current_index)
-                # Update menu items AFTER the load attempt in the tab
-                self._update_menu_state()
-                # Switch focus to explorer tab upon loading
+                # If no exception occurred, assume load was initiated successfully
+                # (The explorer tab logs errors internally if reading fails)
+                load_successful = True  # Or check explorer_tab.get_current_recording() is not None
+                # Switch focus to explorer tab upon initiating load
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
             except Exception as e:
-                log.error(f"Error occurred during ExplorerTab load_recording_data: {e}", exc_info=True)
-                QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred while trying to load the file in the Explorer Tab:\n{e}")
-                self._update_menu_state() # Ensure menu state is updated even if load fails
+                # Catch errors happening *during the call* to load_recording_data,
+                # though most errors should be caught *inside* that method now.
+                log.error(f"Error occurred trying to initiate load in ExplorerTab: {e}", exc_info=True)
+                QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred initiating the file load:\n{e}")
+                load_successful = False
+            finally:
+                # --- UPDATE UI STATES AFTER LOAD ATTEMPT ---
+                # Always update menu and exporter tab state after trying to load
+                log.debug("Updating menu and exporter states after load attempt.")
+                self._update_menu_state()
+                if hasattr(self, 'exporter_tab') and self.exporter_tab:
+                    # Tell the exporter tab to refresh its view of the loaded data
+                    self.exporter_tab.update_state()
+                else:
+                    log.warning("Cannot update exporter tab state: Exporter tab not found.")
         else:
             log.error("Cannot load file: Explorer tab not found or not initialized yet.")
             QtWidgets.QMessageBox.critical(self, "Internal Error", "Explorer tab is missing. Cannot load file.")
+            # Update state even if explorer tab is missing
             self._update_menu_state()
+            if hasattr(self, 'exporter_tab') and self.exporter_tab:
+                self.exporter_tab.update_state()
 
 
     def _export_to_nwb(self):

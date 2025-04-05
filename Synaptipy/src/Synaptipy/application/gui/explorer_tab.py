@@ -515,28 +515,60 @@ class ExplorerTab(QtWidgets.QWidget):
         if not self.current_recording or not self.channel_plots: log.warning("Update plot: No data/plots."); self._update_ui_state(); return
         is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
         log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
+
+        # --- Define Pens (Revised using RGBA Tuple) ---
         vis_const_available = VisConstants is not None
-        _trial_color_str = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
+        _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
         _trial_alpha_val = getattr(VisConstants, 'TRIAL_ALPHA', 70) if vis_const_available else 70
         _avg_color_str = getattr(VisConstants, 'AVERAGE_COLOR', '#EE4B2B') if vis_const_available else '#EE4B2B'
         _pen_width_val = getattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH', 1) if vis_const_available else 1
         _ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if vis_const_available else 5000
+
+        # Create trial_pen using RGBA tuple (robustly)
         try:
-            trial_qcolor = QtGui.QColor(_trial_color_str); alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
-            trial_qcolor.setAlpha(alpha_int); trial_pen = pg.mkPen(trial_qcolor, width=_pen_width_val, name="Trial")
-            log.debug(f"Trial pen: {trial_qcolor.name(QtGui.QColor.NameFormat.HexArgb)}")
+            # Check if color is already an RGB(A) tuple/list
+            if isinstance(_trial_color_def, (tuple, list)) and len(_trial_color_def) >= 3:
+                rgb_tuple = tuple(int(c) for c in _trial_color_def[:3])  # Take first 3 as RGB
+            elif isinstance(_trial_color_def, str):  # Assume hex string
+                color_hex = _trial_color_def.lstrip('#')
+                rgb_tuple = tuple(int(color_hex[i:i + 2], 16) for i in (0, 2, 4))
+            else:
+                raise ValueError(f"Unsupported color format: {_trial_color_def}")
+
+            # Ensure alpha is within 0-255 range
+            # Assuming TRIAL_ALPHA is 0-100 scale based on common usage
+            alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
+            # If alpha was meant to be 0-255 directly, use:
+            # alpha_int = max(0, min(255, int(_trial_alpha_val)))
+
+            rgba_tuple = rgb_tuple + (alpha_int,)  # Append alpha
+            trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")
+            log.debug(f"Created trial_pen with RGBA: {rgba_tuple}")
         except Exception as e:
-            log.error(f"Error creating trial_pen: {e}. Using fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
+            log.error(f"Error creating trial_pen with RGBA: {e}. Using fallback.")
+            trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")  # Simple gray fallback
+
+        # Create average_pen (usually opaque, simpler creation is fine)
         average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")
-        single_trial_pen = pg.mkPen(_trial_color_str, width=_pen_width_val, name="Single Trial")
+
+        # Create single_trial_pen (usually opaque)
+        single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val,
+                                    name="Single Trial")  # Use original definition here
+
+        # Downsampling settings
         enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
         ds_threshold = _ds_thresh_val
+
+        # --- (Rest of the _update_plot method remains the same) ---
         any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
+        # ... (plotting loop using trial_pen, average_pen, single_trial_pen) ...
         for chan_id, plot_item in self.channel_plots.items():
             checkbox = self.channel_checkboxes.get(chan_id); channel = self.current_recording.channels.get(chan_id)
             if checkbox and checkbox.isChecked() and channel and plot_item:
                 plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
                 if not is_cycle_mode:
+                    # ... (plot overlay trials using trial_pen) ...
+                    # ... (plot average using average_pen) ...
                     for trial_idx in range(channel.num_trials):
                         data, time_vec = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
                         if data is not None and time_vec is not None:
@@ -547,7 +579,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     if avg_data is not None and avg_time_vec is not None:
                         item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen); item.opts['autoDownsample'] = enable_downsampling; item.opts['autoDownsampleThreshold'] = ds_threshold
                         self.channel_plot_data_items.setdefault(chan_id, []).append(item); channel_plotted = True
-                else:
+
+                else: # Cycle mode
+                    # ... (plot single trial using single_trial_pen) ...
                     idx = min(self.current_trial_index, channel.num_trials - 1) if channel.num_trials > 0 else -1
                     if idx >= 0:
                         data, time_vec = channel.get_data(idx), channel.get_relative_time_vector(idx)
@@ -556,13 +590,14 @@ class ExplorerTab(QtWidgets.QWidget):
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item); channel_plotted = True
                         else: plot_item.addItem(pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5)))
                     else: plot_item.addItem(pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5)))
+
                 if not channel_plotted: plot_item.addItem(pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5)))
                 if channel_plotted: any_data_plotted = True
             elif plot_item: plot_item.hide()
 
-        # --- Axis linking logic ---
+        # --- Axis linking logic (Keep the fixed version from previous answer) ---
         last_visible_plot = visible_plots[-1] if visible_plots else None
-        for i, plot_item in enumerate(self.channel_plots.values()):
+        for i, plot_item in enumerate(self.channel_plots.values()): # Use enumerate if index 'i' is needed, otherwise just loop
             is_visible = plot_item in visible_plots; is_last = plot_item == last_visible_plot
             plot_item.showAxis('bottom', show=is_last)
             bottom_axis = plot_item.getAxis('bottom')
