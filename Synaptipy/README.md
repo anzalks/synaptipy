@@ -42,6 +42,7 @@ synaptipy-gui
 ```
 
 ## Screen grabs
-![image](https://github.com/user-attachments/assets/0798e5f1-0962-4d90-8182-0a7fe18062ef)
-![image](https://github.com/user-attachments/assets/73cb6e19-4077-4f29-87bb-f50efee8f528)
-![image](https://github.com/user-attachments/assets/3f3ebde9-6787-4a98-bda0-91e0a2a76cc7)
+![Screenshot 2025-04-07 at 12 55 35](https://github.com/user-attachments/assets/4c379633-59b2-4f8b-aa5f-db0ea24eed91)
+![Screenshot 2025-04-07 at 12 56 11](https://github.com/user-attachments/assets/a1c35c20-f697-4a17-b1ea-62282b184c1d)
+![Screenshot 2025-04-07 at 12 56 28](https://github.com/user-attachments/assets/1ff65828-8d09-4992-b7a7-b4fda0e8cdbc)
+![Screenshot 2025-04-07 at 12 57 09](https://github.com/user-attachments/assets/03bf9064-e745-4913-a08d-39bb72d4d94e)
