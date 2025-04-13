@@ -21,7 +21,7 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
     Returns:
         The calculated mean RMP (float) or None if calculation fails
         (e.g., invalid window, empty data slice).
-    #todo convert it into a dynamic setup
+    #todo convert it into a dynamic setup- eg: 95% points in one range, like 2 sdt of mean from the whole data points int he recording.
     """
     if not isinstance(data, np.ndarray) or data.ndim != 1 or data.size == 0:
         log.warning("calculate_rmp: Invalid data array provided.")
