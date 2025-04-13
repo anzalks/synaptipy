@@ -17,7 +17,7 @@ A multi-channel electrophysiology visualization and analysis toolkit built with 
 1.  **Clone the repository (or download the code):**
     ```bash
     git clone git clone https://github.com/anzalks/synaptipy.git
-    cd ./Synaptipy/
+    cd PATH_TO/Synaptipy/
     ```
 2.  **Create a virtual environment (Recommended):**
     ```bash

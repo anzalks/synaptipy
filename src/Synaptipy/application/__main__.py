@@ -25,7 +25,7 @@ if not log.hasHandlers() and not logging.getLogger().hasHandlers():
     handler.setFormatter(formatter)
     log.addHandler(handler)
 
-# This function will be called by the entry point script (e.g., synaptipy-gui)
+# This function will be called by the entry point script (e.g., Synaptipy-gui)
 def run_gui():
     """Sets up and runs the Synaptipy GUI application."""
     log.info(f"Application starting via run_gui... Synaptipy Library Available: {SYNAPTIPY_AVAILABLE}")
