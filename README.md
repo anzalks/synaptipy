@@ -10,7 +10,6 @@ A multi-channel electrophysiology visualization and analysis toolkit built with 
 *   Optional downsampling for large datasets.
 *   Plot individual trials or the average trace.
 *   Load single files or navigate through files in a folder.
-*   Export loaded recordings to NWB:N 2.0 format.
 
 ## Installation
 
