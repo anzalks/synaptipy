@@ -82,8 +82,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self._updating_limit_fields: bool = False
         self.selected_trial_indices: Set[int] = set()
         self.manual_limits_enabled: bool = False
-        self.manual_x_limits: Optional[Tuple[float, float]] = None
-        self.manual_y_limits: Optional[Tuple[float, float]] = None
+        # --- UPDATED: Limit storage ---
+        self.manual_x_limits: Optional[Tuple[float, float]] = None # Shared X limits
+        self.manual_limit_edits: Dict[str, Dict[str, QtWidgets.QLineEdit]] = {} # {chan_id: {'ymin': QLineEdit, 'ymax': QLineEdit}}
+        self.manual_channel_limits: Dict[str, Dict[str, Optional[Tuple[float, float]]]] = {} # {chan_id: {'y': (min, max)}}
+        # --- END UPDATE ---
 
         self._analysis_items: List[Dict[str, Any]] = []
 
@@ -133,12 +136,33 @@ class ExplorerTab(QtWidgets.QWidget):
         self.add_analysis_button: Optional[QtWidgets.QPushButton] = None
         self.analysis_set_label: Optional[QtWidgets.QLabel] = None
         self.clear_analysis_button: Optional[QtWidgets.QPushButton] = None
+        # References for the limit group itself and the grid layout
+        self.manual_limits_group: Optional[QtWidgets.QGroupBox] = None
+        self.limits_grid_layout: Optional[QtWidgets.QGridLayout] = None
+        # References for the fixed labels in the grid
+        self.xmin_label_widget: Optional[QtWidgets.QLabel] = None
+        self.xmax_label_widget: Optional[QtWidgets.QLabel] = None
+        self.ymin_label_widget: Optional[QtWidgets.QLabel] = None
+        self.ymax_label_widget: Optional[QtWidgets.QLabel] = None
+        # References for shared X limit widgets
+        self.xmin_edit: Optional[QtWidgets.QLineEdit] = None # Changed name
+        self.xmax_edit: Optional[QtWidgets.QLineEdit] = None # Changed name
+        # References for Y limit scroll area
+        self.y_limits_scroll_area: Optional[QtWidgets.QScrollArea] = None
+        self.y_limits_widget: Optional[QtWidgets.QWidget] = None
+        # --- UPDATED: HBox changed to VBox --- 
+        self.y_limits_vbox: Optional[QtWidgets.QVBoxLayout] = None # Holds HBoxes (rows) for each channel
+        # --- END UPDATE ---
+        # Keep references for the global enable checkbox and set button
+        self.enable_manual_limits_checkbox: Optional[QtWidgets.QCheckBox] = None
+        self.set_manual_limits_button: Optional[QtWidgets.QPushButton] = None
+        # --- End UI References ---
 
         # --- Setup ---
         self._setup_ui()
         self._connect_signals()
         self._update_ui_state()
-        self._update_limit_fields()
+        self._update_limit_fields() # Initial update
         self._update_analysis_set_display()
 
     # =========================================================================
@@ -153,7 +177,7 @@ class ExplorerTab(QtWidgets.QWidget):
         left_panel_widget = QtWidgets.QWidget()
         left_panel_layout = QtWidgets.QVBoxLayout(left_panel_widget)
         left_panel_layout.setSpacing(10)
-        left_panel_widget.setFixedWidth(250)
+        left_panel_widget.setMinimumWidth(200) # <<< ADDED
 
         # File Op Group
         file_op_group = QtWidgets.QGroupBox("Load Data")
@@ -198,40 +222,64 @@ class ExplorerTab(QtWidgets.QWidget):
         display_layout.addLayout(clear_avg_layout)
         left_panel_layout.addWidget(display_group)
 
-        # Manual Plot Limits Group
-        manual_limits_group = QtWidgets.QGroupBox("Manual Plot Limits")
-        manual_limits_layout = QtWidgets.QVBoxLayout(manual_limits_group)
+        # Manual Plot Limits Group - Setup Shell
+        self.manual_limits_group = QtWidgets.QGroupBox("Manual Plot Limits")
+        manual_limits_layout = QtWidgets.QVBoxLayout(self.manual_limits_group)
         manual_limits_layout.setSpacing(5)
         self.enable_manual_limits_checkbox = QtWidgets.QCheckBox("Enable Manual Limits")
-        self.enable_manual_limits_checkbox.setToolTip("Lock axes")
+        self.enable_manual_limits_checkbox.setToolTip("Apply manually set limits to plots. Disables zoom/pan.")
         manual_limits_layout.addWidget(self.enable_manual_limits_checkbox)
-        limits_grid_layout = QtWidgets.QGridLayout()
-        limits_grid_layout.setSpacing(3)
-        self.manual_limit_x_min_edit = QtWidgets.QLineEdit()
-        self.manual_limit_x_max_edit = QtWidgets.QLineEdit()
-        self.manual_limit_y_min_edit = QtWidgets.QLineEdit()
-        self.manual_limit_y_max_edit = QtWidgets.QLineEdit()
-        self.manual_limit_x_min_edit.setPlaceholderText("Auto")
-        self.manual_limit_x_max_edit.setPlaceholderText("Auto")
-        self.manual_limit_y_min_edit.setPlaceholderText("Auto")
-        self.manual_limit_y_max_edit.setPlaceholderText("Auto")
-        self.manual_limit_x_min_edit.setToolTip("X Min")
-        self.manual_limit_x_max_edit.setToolTip("X Max")
-        self.manual_limit_y_min_edit.setToolTip("Y Min")
-        self.manual_limit_y_max_edit.setToolTip("Y Max")
-        limits_grid_layout.addWidget(QtWidgets.QLabel("X Min:"), 0, 0)
-        limits_grid_layout.addWidget(self.manual_limit_x_min_edit, 0, 1)
-        limits_grid_layout.addWidget(QtWidgets.QLabel("X Max:"), 1, 0)
-        limits_grid_layout.addWidget(self.manual_limit_x_max_edit, 1, 1)
-        limits_grid_layout.addWidget(QtWidgets.QLabel("Y Min:"), 2, 0)
-        limits_grid_layout.addWidget(self.manual_limit_y_min_edit, 2, 1)
-        limits_grid_layout.addWidget(QtWidgets.QLabel("Y Max:"), 3, 0)
-        limits_grid_layout.addWidget(self.manual_limit_y_max_edit, 3, 1)
-        manual_limits_layout.addLayout(limits_grid_layout)
+
+        # --- UPDATED: Grid for Shared X Limits Only ---
+        self.limits_grid_layout = QtWidgets.QGridLayout()
+        self.limits_grid_layout.setSpacing(3)
+        # Change label text
+        self.xmin_label_widget = QtWidgets.QLabel("X Min:") # Renamed
+        self.xmax_label_widget = QtWidgets.QLabel("X Max:") # Renamed
+        self.limits_grid_layout.addWidget(self.xmin_label_widget, 0, 0)
+        self.limits_grid_layout.addWidget(self.xmax_label_widget, 1, 0)
+        # Add shared X limit edits (tooltips updated)
+        self.xmin_edit = QtWidgets.QLineEdit()
+        self.xmax_edit = QtWidgets.QLineEdit()
+        self.xmin_edit.setPlaceholderText("Auto")
+        self.xmax_edit.setPlaceholderText("Auto")
+        self.xmin_edit.setToolTip("Minimum X limit for all channels") # Tooltip ok
+        self.xmax_edit.setToolTip("Maximum X limit for all channels") # Tooltip ok
+        self.limits_grid_layout.addWidget(self.xmin_edit, 0, 1)
+        self.limits_grid_layout.addWidget(self.xmax_edit, 1, 1)
+        self.limits_grid_layout.setColumnStretch(1, 1)
+        manual_limits_layout.addLayout(self.limits_grid_layout)
+        # --- END X LIMITS UPDATE ---
+
+        # --- UPDATED: Label for Y Limits ---
+        y_limits_label = QtWidgets.QLabel("Y Limits:") # Renamed
+        manual_limits_layout.addWidget(y_limits_label)
+        # --- END Y LABEL UPDATE ---
+
+        self.y_limits_scroll_area = QtWidgets.QScrollArea()
+        self.y_limits_scroll_area.setWidgetResizable(True)
+        self.y_limits_scroll_area.setMaximumHeight(150) # <<< ADDED
+        # --- UPDATED: Scroll bar policies --- 
+        self.y_limits_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff) # No horizontal scroll
+        self.y_limits_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded) # Vertical scroll as needed
+        # --- END UPDATE ---
+
+        self.y_limits_widget = QtWidgets.QWidget()
+        # --- UPDATED: Changed layout to QVBoxLayout --- 
+        self.y_limits_vbox = QtWidgets.QVBoxLayout(self.y_limits_widget)
+        self.y_limits_vbox.setContentsMargins(2, 2, 2, 2)
+        self.y_limits_vbox.setSpacing(5) # Adjust spacing between rows
+        self.y_limits_vbox.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop) # Align channel rows to the top
+        # --- END UPDATE ---
+
+        self.y_limits_scroll_area.setWidget(self.y_limits_widget)
+        manual_limits_layout.addWidget(self.y_limits_scroll_area)
+        # --- END Y LIMITS SCROLL AREA ---
+
         self.set_manual_limits_button = QtWidgets.QPushButton("Set Manual Limits from Fields")
-        self.set_manual_limits_button.setToolTip("Store values")
+        self.set_manual_limits_button.setToolTip("Store the shared X and per-channel Y limit values entered above.") # Updated tooltip
         manual_limits_layout.addWidget(self.set_manual_limits_button)
-        left_panel_layout.addWidget(manual_limits_group)
+        left_panel_layout.addWidget(self.manual_limits_group)
 
         # Channel Selection Group
         self.channel_select_group = QtWidgets.QGroupBox("Channels")
@@ -271,8 +319,16 @@ class ExplorerTab(QtWidgets.QWidget):
         analysis_layout.addLayout(target_layout)
         self.add_analysis_button = QtWidgets.QPushButton("Add Target to Analysis Set")
         self.add_analysis_button.setIcon(QtGui.QIcon.fromTheme("list-add"))
-        self.add_analysis_button.setToolTip("Add selected target to analysis set.")
+        self.add_analysis_button.setToolTip("Add selected target from the currently displayed file to the analysis set.")
         analysis_layout.addWidget(self.add_analysis_button)
+
+        # --- UPDATED: Rename button and tooltip --- 
+        self.add_all_loaded_button = QtWidgets.QPushButton("Add Current File to Set") # Renamed
+        self.add_all_loaded_button.setIcon(QtGui.QIcon.fromTheme("document-add"))
+        self.add_all_loaded_button.setToolTip("Add the currently displayed file to the analysis set.") # Updated tooltip
+        analysis_layout.addWidget(self.add_all_loaded_button)
+        # --- END UPDATE ---
+
         self.analysis_set_label = QtWidgets.QLabel("Analysis Set: 0 items")
         self.analysis_set_label.setWordWrap(True)
         analysis_layout.addWidget(self.analysis_set_label)
@@ -336,7 +392,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # --- Right Panel ---
         y_controls_panel_widget = QtWidgets.QWidget()
         y_controls_panel_layout = QtWidgets.QHBoxLayout(y_controls_panel_widget)
-        y_controls_panel_widget.setFixedWidth(220)
+        y_controls_panel_widget.setMinimumWidth(180) # <<< ADDED
         y_controls_panel_layout.setContentsMargins(0, 0, 0, 0)
         y_controls_panel_layout.setSpacing(5)
         y_scroll_widget = QtWidgets.QWidget()
@@ -430,17 +486,28 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.clear_analysis_button: self.clear_analysis_button.clicked.connect(self._clear_analysis_set)
         self.plot_mode_combobox.currentIndexChanged.connect(self._update_ui_state)
         if self.analysis_target_combo: self.analysis_target_combo.currentIndexChanged.connect(self._update_ui_state)
+        # --- UPDATED: Rename method called by the renamed button --- 
+        if hasattr(self, 'add_all_loaded_button') and self.add_all_loaded_button:
+            self.add_all_loaded_button.clicked.connect(self._add_current_file_to_set) # Renamed method
+        # --- END UPDATE ---
         log.debug("ExplorerTab signal connections complete.")
 
 
     # =========================================================================
     # Public Methods for Interaction
     # =========================================================================
-    def load_recording_data(self, filepath: Path, file_list: List[Path], current_index: int):
-        log.info(f"ExplorerTab load_recording_data: {filepath.name}")
+    def load_recording_data(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int):
+        """
+        Stores the list of files selected by the user and loads the initial one.
+        Navigation between files is handled by _next_file_folder / _prev_file_folder.
+        """
+        # CHANGE: Log using the clearer argument name
+        log.info(f"ExplorerTab received file list (count: {len(file_list)}). Initial file to display: {initial_filepath_to_load.name} (Index {current_index})")
+        # Store the full list and the starting index provided by MainWindow
         self.file_list = file_list
         self.current_file_index = current_index
-        self._load_and_display_file(filepath)
+        # Load and display the specific file requested initially
+        self._load_and_display_file(initial_filepath_to_load)
 
     def get_current_recording(self) -> Optional[Recording]:
         return self.current_recording
@@ -457,6 +524,7 @@ class ExplorerTab(QtWidgets.QWidget):
     # =========================================================================
     def _reset_ui_and_state_for_new_file(self):
         log.info("Resetting ExplorerTab UI and state for new file...")
+        # --- Keep existing resets for plot items, selections, checkboxes, plots, sliders, scrollbars --- 
         self._remove_selected_average_plots()
         self.selected_trial_indices.clear()
         self._update_selected_trials_display()
@@ -500,7 +568,9 @@ class ExplorerTab(QtWidgets.QWidget):
             while self.individual_y_scrollbars_layout.count():
                  item = self.individual_y_scrollbars_layout.takeAt(0); widget = item.widget(); widget.deleteLater() if widget else None
         self.individual_y_scrollbars.clear()
+        # --- END standard resets --- 
 
+        # --- Reset view/state variables --- 
         self.current_recording = None; self.max_trials_current_recording = 0; self.current_trial_index = 0
         self.base_x_range = None; self.base_y_ranges.clear()
         if self.x_zoom_slider: self.x_zoom_slider.blockSignals(True); self.x_zoom_slider.setValue(self.SLIDER_DEFAULT_VALUE); self.x_zoom_slider.blockSignals(False)
@@ -509,14 +579,35 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.y_lock_checkbox: self.y_lock_checkbox.blockSignals(True); self.y_lock_checkbox.setChecked(self.y_axes_locked); self.y_lock_checkbox.blockSignals(False)
         self._reset_scrollbar(self.x_scrollbar); self._reset_scrollbar(self.global_y_scrollbar)
 
-        if hasattr(self, '_analysis_items'): self._analysis_items = []
-        self._update_analysis_set_display()
-        self.analysis_set_changed.emit(self._analysis_items)
+        # --- UPDATED: Clear dynamic manual limits UI and state ---
+        # Clear Y limits layout
+        if self.y_limits_vbox:
+            while self.y_limits_vbox.count():
+                item = self.y_limits_vbox.takeAt(0)
+                if item and item.widget(): 
+                    item.widget().deleteLater()
+        # Clear X limits edits
+        if self.xmin_edit: self.xmin_edit.clear()
+        if self.xmax_edit: self.xmax_edit.clear()
+        # Clear state variables
+        self.manual_limit_edits.clear() # Holds Y edits per channel
+        self.manual_channel_limits.clear() # Holds Y limits per channel
+        self.manual_x_limits = None # Holds shared X limits
+        # Reset the global enable checkbox
+        self.manual_limits_enabled = False
+        if self.enable_manual_limits_checkbox:
+             self.enable_manual_limits_checkbox.blockSignals(True)
+             self.enable_manual_limits_checkbox.setChecked(False)
+             self.enable_manual_limits_checkbox.blockSignals(False)
+        # Ensure X edits are enabled if limits are off (will be disabled if ON later)
+        if self.xmin_edit: self.xmin_edit.setEnabled(True) 
+        if self.xmax_edit: self.xmax_edit.setEnabled(True)
+        # --- END UPDATE ---
 
+        # --- Reset remaining UI elements --- 
         self._update_y_controls_visibility(); self._clear_metadata_display(); self._update_trial_label()
         self._update_limit_fields(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
         log.info("ExplorerTab UI and state reset complete.")
-
 
     def _reset_scrollbar(self, scrollbar: Optional[QtWidgets.QScrollBar]):
         if not scrollbar: return
@@ -545,6 +636,116 @@ class ExplorerTab(QtWidgets.QWidget):
         if last_plot_item: last_plot_item.setLabel('bottom', "Time", units='s'); last_plot_item.showAxis('bottom')
         log.info("Channel UI creation complete.")
 
+        # --- This now happens AFTER channel UI is created --- 
+        self._update_manual_limits_ui()
+        # --- END --- 
+
+    # --- REVISED Method: Channel labels above rows, larger edits --- 
+    def _update_manual_limits_ui(self):
+        """Dynamically populates the per-channel Y limits scroll area.""" # Updated docstring
+        if not self.y_limits_vbox or not self.manual_limits_group or not self.y_limits_widget:
+             log.error("Manual Y limits layout/widget not initialized.")
+             return
+
+        log.debug("Updating manual Y limits UI layout (grid per channel).") # Updated log
+        # Clear existing Y limit channel rows first
+        while self.y_limits_vbox.count():
+            item = self.y_limits_vbox.takeAt(0)
+            if item and item.widget():
+                widget = item.widget()
+                widget.deleteLater()
+            # Also handle potential leftover layouts (less likely but safer)
+            elif item and item.layout():
+                 layout_to_clear = item.layout()
+                 while layout_to_clear.count():
+                     sub_item = layout_to_clear.takeAt(0)
+                     if sub_item and sub_item.widget(): sub_item.widget().deleteLater()
+
+        self.manual_limit_edits.clear() # Clear Y edits references
+
+        if not self.current_recording or not self.current_recording.channels:
+            self.manual_limits_group.setEnabled(False)
+            placeholder = QtWidgets.QLabel("Load data...")
+            placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            self.y_limits_vbox.addWidget(placeholder)
+            # Need stretch even for placeholder to keep it centered/top
+            self.y_limits_vbox.addStretch()
+            return
+
+        self.manual_limits_group.setEnabled(True)
+
+        sorted_channel_items = sorted(self.current_recording.channels.items(), key=lambda item: str(item[0]))
+
+        self.manual_limit_edits = {} # Reinitialize Y edit dict
+        first_channel = True
+        for chan_id, channel in sorted_channel_items:
+            # Add separator between channels (optional)
+            if not first_channel:
+                sep = QtWidgets.QFrame()
+                sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+                sep.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+                self.y_limits_vbox.addWidget(sep)
+            first_channel = False
+
+            # Add Channel Name Label directly to VBox
+            chan_header_label = QtWidgets.QLabel(f"{channel.name or chan_id}:")
+            chan_header_label.setToolTip(f"Channel ID: {chan_id}")
+            # font = chan_header_label.font(); font.setBold(True); chan_header_label.setFont(font)
+            self.y_limits_vbox.addWidget(chan_header_label)
+
+            # Create a widget and grid layout for labels and inputs
+            grid_widget = QtWidgets.QWidget()
+            channel_grid = QtWidgets.QGridLayout(grid_widget)
+            channel_grid.setContentsMargins(5, 2, 5, 2) # Add some margin
+            channel_grid.setSpacing(5)
+
+            # Create and add Y limit QLineEdit widgets and labels to the Grid
+            edit_map = {}
+            ymin_label = QtWidgets.QLabel("Y Min:")
+            channel_grid.addWidget(ymin_label, 0, 0) # Row 0, Col 0
+            
+            ymax_label = QtWidgets.QLabel("Y Max:")
+            channel_grid.addWidget(ymax_label, 0, 1) # Row 0, Col 1
+
+            ymin_edit = QtWidgets.QLineEdit()
+            ymin_edit.setPlaceholderText("Auto")
+            ymin_edit.setToolTip(f"Y Min for {channel.name or chan_id}")
+            ymin_edit.setMinimumWidth(70) # Keep minimum width
+            channel_grid.addWidget(ymin_edit, 1, 0) # Row 1, Col 0
+            edit_map['ymin'] = ymin_edit
+
+            ymax_edit = QtWidgets.QLineEdit()
+            ymax_edit.setPlaceholderText("Auto")
+            ymax_edit.setToolTip(f"Y Max for {channel.name or chan_id}")
+            ymax_edit.setMinimumWidth(70) # Keep minimum width
+            channel_grid.addWidget(ymax_edit, 1, 1) # Row 1, Col 1
+            edit_map['ymax'] = ymax_edit
+            
+            # Optional: Align columns if needed (e.g., make inputs expand)
+            # channel_grid.setColumnStretch(0, 1)
+            # channel_grid.setColumnStretch(1, 1)
+            
+            self.manual_limit_edits[chan_id] = edit_map
+            # Add the grid widget (containing the grid layout) to the main VBox
+            self.y_limits_vbox.addWidget(grid_widget)
+        
+        # Add stretch at the end of the VBox to keep rows packed top
+        self.y_limits_vbox.addStretch()
+
+        self._update_limit_fields()
+        self._set_limit_edits_enabled(self.manual_limits_enabled)
+
+    # --- UPDATED Helper --- 
+    def _set_limit_edits_enabled(self, enabled: bool):
+        """Enable/disable limit QLineEdit widgets based on manual mode state."""
+        # Enable/disable shared X edits
+        if self.xmin_edit: self.xmin_edit.setEnabled(enabled)
+        if self.xmax_edit: self.xmax_edit.setEnabled(enabled)
+        # Enable/disable per-channel Y edits
+        if hasattr(self, 'manual_limit_edits'):
+            for chan_map in self.manual_limit_edits.values():
+                if 'ymin' in chan_map: chan_map['ymin'].setEnabled(enabled)
+                if 'ymax' in chan_map: chan_map['ymax'].setEnabled(enabled)
 
     # =========================================================================
     # File Loading & Display Options
@@ -749,6 +950,7 @@ class ExplorerTab(QtWidgets.QWidget):
     def _update_ui_state(self):
         if not hasattr(self, 'plot_mode_combobox'): return
         has_data=self.current_recording is not None; has_vis=any(p.isVisible() for p in self.channel_plots.values()); is_folder=len(self.file_list)>1; is_cycle=has_data and self.current_plot_mode==self.PlotMode.CYCLE_SINGLE; has_trials=has_data and self.max_trials_current_recording>0; has_avg_selection=bool(self.selected_trial_indices); is_avg_overlay_plotted=bool(self.selected_average_plot_items)
+        has_file_list = bool(self.file_list) # Check if any files were loaded via File > Open
 
         self.plot_mode_combobox.setEnabled(has_data)
         if self.downsample_checkbox: self.downsample_checkbox.setEnabled(has_data)
@@ -797,6 +999,12 @@ class ExplorerTab(QtWidgets.QWidget):
             self.add_analysis_button.setEnabled(add_enabled)
         if self.clear_analysis_button: self.clear_analysis_button.setEnabled(bool(self._analysis_items))
 
+        # --- UPDATE: Enable/disable RENAMED button --- 
+        if hasattr(self, 'add_all_loaded_button') and self.add_all_loaded_button:
+             # Enable only if a recording is currently loaded
+             self.add_all_loaded_button.setEnabled(has_data) 
+        # --- END UPDATE ---
+
     def _update_trial_label(self):
         if not hasattr(self, 'trial_index_label') or not self.trial_index_label: return
         if (self.current_recording and self.current_plot_mode == self.PlotMode.CYCLE_SINGLE and self.max_trials_current_recording > 0):
@@ -809,13 +1017,21 @@ class ExplorerTab(QtWidgets.QWidget):
     # =========================================================================
     def _update_analysis_set_display(self):
         if not self.analysis_set_label: return
-        count = len(self._analysis_items); self.analysis_set_label.setText(f"Analysis Set: {count} item{'s' if count != 1 else ''}")
+        count = len(self._analysis_items);
+        self.analysis_set_label.setText(f"Analysis Set: {count} item{'s' if count != 1 else ''}")
         if count > 0:
-            tooltip_text = "Analysis Set Items:\n"; items_to_show = 10
+            tooltip_text = "Analysis Set Items:\n"; items_to_show = 15
             for i, item in enumerate(self._analysis_items):
                 if i >= items_to_show: tooltip_text += f"... ({count - items_to_show} more)"; break
-                path_name = item['path'].name; target = item['target_type']; trial_info = f" (Trial {item['trial_index'] + 1})" if item['target_type'] == "Current Trial" else ""
-                tooltip_text += f"- {path_name} [{target}{trial_info}]\n"
+                path_name = item['path'].name
+                target = item['target_type']
+                if target == 'Recording':
+                    tooltip_text += f"- File: {path_name}\n"
+                elif target == 'Current Trial':
+                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get('trial_index') is not None else ""
+                    tooltip_text += f"- {path_name} [{target}{trial_info}]\n"
+                else:
+                    tooltip_text += f"- {path_name} [{target}]\n"
             self.analysis_set_label.setToolTip(tooltip_text.strip())
         else: self.analysis_set_label.setToolTip("Analysis set is empty.")
 
@@ -824,16 +1040,40 @@ class ExplorerTab(QtWidgets.QWidget):
         target_type = self.analysis_target_combo.currentText(); file_path = self.current_recording.source_file; trial_index = None
         if target_type == "Current Trial":
             if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE and 0 <= self.current_trial_index < self.max_trials_current_recording: trial_index = self.current_trial_index
-            else: QtWidgets.QMessageBox.warning(self, "Invalid Target", "Switch to 'Cycle Single Trial' mode."); return
+            else: QtWidgets.QMessageBox.warning(self, "Invalid Target", "Switch to 'Cycle Single Trial' mode and select a valid trial."); return
         elif target_type == "Average Trace" and self.max_trials_current_recording <= 0: QtWidgets.QMessageBox.warning(self, "Invalid Target", "No trials to average."); return
         elif target_type == "All Trials" and self.max_trials_current_recording <= 0: QtWidgets.QMessageBox.warning(self, "Invalid Target", "No trials available."); return
         analysis_item = {'path': file_path, 'target_type': target_type, 'trial_index': trial_index}
         self._analysis_items.append(analysis_item); log.info(f"Added to analysis set: {analysis_item}")
         self._update_analysis_set_display(); self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
 
+    # --- UPDATED: Method renamed and logic changed to add *current* file --- 
+    def _add_current_file_to_set(self):
+        if not self.current_recording:
+            log.warning("Cannot add current file: No file loaded.")
+            self.status_bar.showMessage("No file loaded to add.", 3000)
+            return
+
+        file_path = self.current_recording.source_file
+        # Check if this specific file is already in the set as a 'Recording'
+        is_duplicate = any(item.get('path') == file_path and item.get('target_type') == 'Recording' for item in self._analysis_items)
+        
+        if not is_duplicate:
+            analysis_item = {'path': file_path, 'target_type': 'Recording', 'trial_index': None}
+            self._analysis_items.append(analysis_item)
+            log.info(f"Added file to analysis set: {file_path.name}")
+            self.status_bar.showMessage(f"Added file '{file_path.name}' to the analysis set.", 3000)
+            self._update_analysis_set_display()
+            self.analysis_set_changed.emit(self._analysis_items)
+            self._update_ui_state()
+        else:
+            log.debug(f"Skipping duplicate file: {file_path.name}")
+            self.status_bar.showMessage(f"File '{file_path.name}' is already in the analysis set.", 3000)
+    # --- END UPDATE ---
+
     def _clear_analysis_set(self):
         if not self._analysis_items: return
-        confirm = QtWidgets.QMessageBox.question(self, "Confirm Clear", f"Clear all {len(self._analysis_items)} items?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
+        confirm = QtWidgets.QMessageBox.question(self, "Confirm Clear", f"Clear all {len(self._analysis_items)} items from the analysis set?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
         if confirm == QtWidgets.QMessageBox.StandardButton.Yes:
             self._analysis_items = []; log.info("Analysis set cleared."); self._update_analysis_set_display(); self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
 
@@ -872,10 +1112,15 @@ class ExplorerTab(QtWidgets.QWidget):
         finally: self._updating_viewranges=False
 
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
-        if self.manual_limits_enabled and self.manual_x_limits and not self._updating_viewranges:
-            self._updating_viewranges=True; vb.setXRange(self.manual_x_limits[0], self.manual_x_limits[1], padding=0); self._updating_viewranges=False; return
+        # --- UPDATED: Check shared X limits --- 
+        is_manual_enabled = self.manual_limits_enabled
+        manual_x = self.manual_x_limits if is_manual_enabled else None
+        # --- END UPDATE ---
+        if is_manual_enabled and manual_x and not self._updating_viewranges:
+            self._updating_viewranges=True; vb.setXRange(manual_x[0], manual_x[1], padding=0); self._updating_viewranges=False; return
         if self._updating_viewranges or self.base_x_range is None: return
         self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
+        if not is_manual_enabled: self._trigger_limit_field_update()
 
     def _on_y_lock_changed(self, state: int):
         self.y_axes_locked = bool(state == QtCore.Qt.CheckState.Checked.value)
@@ -924,26 +1169,57 @@ class ExplorerTab(QtWidgets.QWidget):
         self._apply_global_y_scroll(value)
 
     def _apply_global_y_scroll(self, value: int):
-        if self.manual_limits_enabled: return
-        plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-        if not plot: return
-        self._updating_viewranges=True
+        if self.manual_limits_enabled or not self.y_axes_locked: return # Added lock check here too
+
+        # Find the first visible plot to act as a reference for calculating the offset
+        ref_plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
+        if not ref_plot: return
+
+        ref_vb = ref_plot.getViewBox()
+        ref_cid = getattr(ref_vb, '_synaptipy_chan_id', None)
+        ref_base_range = self.base_y_ranges.get(ref_cid)
+
+        # Ensure we have a valid base range for the reference plot
+        if ref_base_range is None or ref_base_range[0] is None or ref_base_range[1] is None:
+            log.warning(f"Cannot apply global scroll: Missing base Y range for reference channel {ref_cid}")
+            return
+
+        self._updating_viewranges = True
         try:
-            vb_ref=plot.getViewBox(); ref_cid=getattr(vb_ref,'_synaptipy_chan_id',None)
-            ref_b=self.base_y_ranges.get(ref_cid)
-            if ref_b is None or ref_b[0] is None or ref_b[1] is None: return
-            curr_y=vb_ref.viewRange()[1]; curr_s=max(abs(curr_y[1]-curr_y[0]), 1e-12)
-            ref_bs=max(abs(ref_b[1]-ref_b[0]), 1e-12)
-            f=float(value)/max(1, self.global_y_scrollbar.maximum())
-            for cid, p in self.channel_plots.items():
-                if p.isVisible() and p.getViewBox():
-                    b=self.base_y_ranges.get(cid)
-                    if b is None or b[0] is None or b[1] is None: continue
-                    bs=max(abs(b[1]-b[0]), 1e-12); sr=max(0, bs-curr_s)
-                    nm=b[0]+f*sr; nM=nm+curr_s
-                    p.getViewBox().setYRange(nm, nM, padding=0)
-        except Exception as e: log.error(f"Error applying global Y scroll: {e}")
-        finally: self._updating_viewranges=False
+            current_ref_y_range = ref_vb.viewRange()[1]
+            current_ref_span = max(abs(current_ref_y_range[1] - current_ref_y_range[0]), 1e-12)
+            base_ref_span = max(abs(ref_base_range[1] - ref_base_range[0]), 1e-12)
+            
+            # Calculate the total scrollable distance in plot coordinates
+            scrollable_range = max(0, base_ref_span - current_ref_span)
+            
+            # Calculate the scroll fraction (0.0 to 1.0)
+            scroll_fraction = float(value) / max(1, self.global_y_scrollbar.maximum())
+            
+            # Calculate the desired new minimum Y value for the reference plot
+            target_ref_min_y = ref_base_range[0] + scroll_fraction * scrollable_range
+            
+            # Calculate the offset needed to reach that target minimum from the current minimum
+            y_offset = target_ref_min_y - current_ref_y_range[0]
+            
+            log.debug(f"Global Y scroll: value={value}, fraction={scroll_fraction:.3f}, target_ref_min={target_ref_min_y:.4g}, offset={y_offset:.4g}")
+
+            # Apply the calculated offset to ALL visible plots
+            for cid, plot_item in self.channel_plots.items():
+                if plot_item.isVisible() and plot_item.getViewBox():
+                    vb = plot_item.getViewBox()
+                    current_plot_y_range = vb.viewRange()[1]
+                    new_min_y = current_plot_y_range[0] + y_offset
+                    new_max_y = current_plot_y_range[1] + y_offset
+                    # Apply the new range by shifting the current range
+                    vb.setYRange(new_min_y, new_max_y, padding=0)
+                    log.debug(f"  Applied offset to {cid}: new range=({new_min_y:.4g}, {new_max_y:.4g})")
+
+        except Exception as e:
+            log.error(f"Error applying global Y scroll: {e}", exc_info=True)
+        finally:
+            self._updating_viewranges = False
+            # We don't need to update the scrollbar here, as it triggered this action
 
     def _on_individual_y_zoom_changed(self, chan_id: str, value: int):
         if self.manual_limits_enabled or self.y_axes_locked or self._updating_viewranges: return
@@ -975,8 +1251,13 @@ class ExplorerTab(QtWidgets.QWidget):
     def _handle_vb_yrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
         cid = getattr(vb,'_synaptipy_chan_id',None)
         if cid is None: return
-        if self.manual_limits_enabled and self.manual_y_limits and not self._updating_viewranges:
-            self._updating_viewranges=True; vb.setYRange(self.manual_y_limits[0], self.manual_y_limits[1], padding=0); self._updating_viewranges=False; return
+        # --- UPDATED: Check per-channel Y limits --- 
+        is_manual_enabled = self.manual_limits_enabled
+        channel_limits = self.manual_channel_limits.get(cid, {})
+        manual_y = channel_limits.get('y') if is_manual_enabled else None
+        # --- END UPDATE --- 
+        if is_manual_enabled and manual_y and not self._updating_viewranges:
+            self._updating_viewranges=True; vb.setYRange(manual_y[0], manual_y[1], padding=0); self._updating_viewranges=False; return
         b=self.base_y_ranges.get(cid)
         if self._updating_viewranges or b is None: return
         if self.y_axes_locked:
@@ -985,6 +1266,7 @@ class ExplorerTab(QtWidgets.QWidget):
         else:
              s=self.individual_y_scrollbars.get(cid)
              if s: self._update_scrollbar_from_view(s, b, new_range)
+        if not is_manual_enabled: self._trigger_limit_field_update()
 
     def _update_scrollbar_from_view(self, scrollbar: QtWidgets.QScrollBar, base_range: Optional[Tuple[float,float]], view_range: Optional[Tuple[float, float]]):
         if self._updating_scrollbars or scrollbar is None: return
@@ -1086,42 +1368,39 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_limit_fields(); self._update_y_controls_visibility()
 
     def _next_trial(self):
-        if self.current_plot_mode==self.PlotMode.CYCLE_SINGLE and self.max_trials_current_recording>0:
-            if self.current_trial_index < self.max_trials_current_recording - 1:
-                self.current_trial_index+=1; self._update_plot()
-                if self.manual_limits_enabled: self._apply_manual_limits()
-                self._update_ui_state()
-            else: self.status_bar.showMessage("Last trial.", 2000)
+        if not self.current_recording or self.max_trials_current_recording <= 1: return
+        self.current_trial_index = (self.current_trial_index + 1) % self.max_trials_current_recording
+        self._update_plot() # Update plot only
+        self._update_trial_label()
 
     def _prev_trial(self):
-        if self.current_plot_mode==self.PlotMode.CYCLE_SINGLE and self.max_trials_current_recording>0:
-            if self.current_trial_index > 0:
-                self.current_trial_index-=1; self._update_plot()
-                if self.manual_limits_enabled: self._apply_manual_limits()
-                self._update_ui_state()
-            else: self.status_bar.showMessage("First trial.", 2000)
+        if not self.current_recording or self.max_trials_current_recording <= 1: return
+        self.current_trial_index = (self.current_trial_index - 1 + self.max_trials_current_recording) % self.max_trials_current_recording
+        self._update_plot() # Update plot only
+        self._update_trial_label()
 
     def _next_file_folder(self):
-        if self.file_list and self.current_file_index < len(self.file_list) - 1:
-            self.current_file_index+=1
-            self._load_and_display_file(self.file_list[self.current_file_index])
-        else:
-            self.status_bar.showMessage("Last file.", 2000)
+        if len(self.file_list) <= 1: return
+        self.current_file_index = (self.current_file_index + 1) % len(self.file_list)
+        filepath_to_load = self.file_list[self.current_file_index]
+        log.info(f"Navigating to next file: {filepath_to_load.name} (Index {self.current_file_index})")
+        # CHANGE: Call _load_and_display_file to load the new file from the list
+        self._load_and_display_file(filepath_to_load)
 
     def _prev_file_folder(self):
-        if self.file_list and self.current_file_index > 0:
-            self.current_file_index-=1
-            self._load_and_display_file(self.file_list[self.current_file_index])
-        else:
-            self.status_bar.showMessage("First file.", 2000)
+        if len(self.file_list) <= 1: return
+        self.current_file_index = (self.current_file_index - 1 + len(self.file_list)) % len(self.file_list)
+        filepath_to_load = self.file_list[self.current_file_index]
+        log.info(f"Navigating to previous file: {filepath_to_load.name} (Index {self.current_file_index})")
+        # CHANGE: Call _load_and_display_file to load the new file from the list
+        self._load_and_display_file(filepath_to_load)
 
     def _update_selected_trials_display(self): # Manual Avg Overlay
-        if not hasattr(self,'selected_trials_display') or not self.selected_trials_display: return
-        if not self.selected_trial_indices: self.selected_trials_display.setText("Selected: None")
-        else:
-             idxs=sorted([i+1 for i in self.selected_trial_indices])
-             txt="Selected: "+", ".join(map(str,idxs))
-             self.selected_trials_display.setText(txt); self.selected_trials_display.setToolTip(txt)
+        if self.selected_trials_display:
+            count = len(self.selected_trial_indices)
+            self.selected_trials_display.setText(f"Selected Trials: {count}")
+            indices_str = ", ".join(map(str, sorted(self.selected_trial_indices)))
+            self.selected_trials_display.setToolTip(f"Indices: {indices_str}" if indices_str else "No trials selected")
 
     def _toggle_select_current_trial(self): # Manual Avg Overlay
         if not self.current_recording or self.current_plot_mode!=self.PlotMode.CYCLE_SINGLE or not (0<=self.current_trial_index<self.max_trials_current_recording): return
@@ -1204,60 +1483,157 @@ class ExplorerTab(QtWidgets.QWidget):
         except ValueError: return None
 
     def _on_set_limits_clicked(self):
-        if not all(hasattr(self,w) and getattr(self,w) for w in ['manual_limit_x_min_edit','manual_limit_x_max_edit','manual_limit_y_min_edit','manual_limit_y_max_edit']): return
-        xm=self._parse_limit_value(self.manual_limit_x_min_edit.text()); xM=self._parse_limit_value(self.manual_limit_x_max_edit.text()); ym=self._parse_limit_value(self.manual_limit_y_min_edit.text()); yM=self._parse_limit_value(self.manual_limit_y_max_edit.text())
-        vx,vy=False,False
-        if xm is not None and xM is not None:
-            if xm<xM: self.manual_x_limits=(xm,xM); vx=True
-            else: QtWidgets.QMessageBox.warning(self, "Input Error", "X Min < X Max."); self.manual_x_limits=None
-        elif xm is not None or xM is not None: QtWidgets.QMessageBox.warning(self, "Input Error", "Both X needed."); self.manual_x_limits=None
-        else: self.manual_x_limits=None
-        if ym is not None and yM is not None:
-            if ym<yM: self.manual_y_limits=(ym,yM); vy=True
-            else: QtWidgets.QMessageBox.warning(self, "Input Error", "Y Min < Y Max."); self.manual_y_limits=None
-        elif ym is not None or yM is not None: QtWidgets.QMessageBox.warning(self, "Input Error", "Both Y needed."); self.manual_y_limits=None
-        else: self.manual_y_limits=None
+        """Stores the manually entered shared X and per-channel Y limits.""" # Docstring update
+        # --- UPDATED: Get shared X edits ---
+        if not hasattr(self, 'xmin_edit') or not self.xmin_edit or \
+           not hasattr(self, 'xmax_edit') or not self.xmax_edit:
+            log.error("Shared X limit edits not initialized.")
+            return
+        # --- END UPDATE ---
+        if not hasattr(self, 'manual_limit_edits'): # Check Y edits dict
+            log.warning("Y Limit edits dictionary not initialized.")
+            # Allow setting only X if Y edits aren't ready?
+            # return 
+            pass # Continue to try setting X
 
-        if vx or vy:
+        log.debug("Storing manual limits from fields.")
+        # --- UPDATED: Parse and store shared X --- 
+        self.manual_x_limits = None # Reset shared X
+        xm_str = self.xmin_edit.text(); xM_str = self.xmax_edit.text()
+        xm = self._parse_limit_value(xm_str); xM = self._parse_limit_value(xM_str)
+        x_limits_set = False
+        x_limit_valid = False
+        if xm is not None and xM is not None:
+            x_limits_set = True
+            if xm < xM: self.manual_x_limits = (xm, xM); x_limit_valid = True
+            else: QtWidgets.QMessageBox.warning(self, "Input Error", f"Shared X Min must be less than Shared X Max.")
+        elif xm is not None or xM is not None: 
+             x_limits_set = True
+             QtWidgets.QMessageBox.warning(self, "Input Error", f"Both Shared X Min and X Max must be numbers or 'Auto'.")
+        # else: Both are Auto, self.manual_x_limits remains None
+        # --- END X UPDATE ---
+
+        # --- UPDATED: Iterate through per-channel Y edits --- 
+        self.manual_channel_limits.clear() # Clear previous stored Y limits
+        y_limits_set = False # Track if any Y limits were attempted
+        valid_y_limits_stored = False # Track if any valid Y limits were stored
+        all_y_auto = True
+        
+        if hasattr(self, 'manual_limit_edits'): # Only process Y if dict exists
+            for chan_id, edit_map in self.manual_limit_edits.items():
+                chan_y_limits = None # Store only Y limit tuple for this channel
+                
+                ym_str = edit_map.get('ymin', QtWidgets.QLineEdit()).text() # Safe access
+                yM_str = edit_map.get('ymax', QtWidgets.QLineEdit()).text() # Safe access
+                ym = self._parse_limit_value(ym_str); yM = self._parse_limit_value(yM_str)
+                
+                if ym is not None and yM is not None:
+                    y_limits_set = True
+                    all_y_auto = False
+                    if ym < yM: chan_y_limits = (ym, yM); valid_y_limits_stored = True
+                    else: QtWidgets.QMessageBox.warning(self, "Input Error", f"Channel {chan_id}: Y Min must be less than Y Max.")
+                elif ym is not None or yM is not None: 
+                    y_limits_set = True
+                    all_y_auto = False
+                    QtWidgets.QMessageBox.warning(self, "Input Error", f"Channel {chan_id}: Both Y Min and Y Max must be numbers or 'Auto'.")
+                # else: Both are Auto, chan_y_limits remains None
+
+                if chan_y_limits is not None:
+                    self.manual_channel_limits[chan_id] = {'y': chan_y_limits}
+            # --- END Y UPDATE ---
+        
+        limits_were_validly_set = x_limit_valid or valid_y_limits_stored
+        all_limits_are_auto = (self.manual_x_limits is None) and all_y_auto
+
+        if limits_were_validly_set:
             self.status_bar.showMessage("Manual limits stored.", 3000)
             if self.manual_limits_enabled: self._apply_manual_limits()
-        elif self.manual_x_limits is None and self.manual_y_limits is None and all(v is None for v in [xm,xM,ym,yM]):
-            self.status_bar.showMessage("Manual limits set to Auto.", 3000)
+        elif all_limits_are_auto:
+            self.status_bar.showMessage("All limits set to Auto.", 3000)
             if self.manual_limits_enabled and self.enable_manual_limits_checkbox: self.enable_manual_limits_checkbox.setChecked(False)
-        else: self.status_bar.showMessage("Invalid limits.", 3000)
+        else:
+             self.status_bar.showMessage("No valid limits stored. Check inputs.", 3000)
 
+    # --- Need to update _on_manual_limits_toggled to call the new helper --- 
     def _on_manual_limits_toggled(self, checked: bool):
         self.manual_limits_enabled=checked; log.info(f"Manual limits {'ON' if checked else 'OFF'}"); self.status_bar.showMessage(f"Manual limits {'ON' if checked else 'OFF'}.", 2000)
+        # --- UPDATED: Call helper to enable/disable *all* edits --- 
+        self._set_limit_edits_enabled(checked) 
+        # --- END UPDATE ---
         if checked:
-            if self.manual_x_limits is None and self.manual_y_limits is None: self._on_set_limits_clicked()
-            if self.manual_x_limits is None and self.manual_y_limits is None:
-                QtWidgets.QMessageBox.warning(self, "Enable Failed", "No valid limits set.");
-                if self.enable_manual_limits_checkbox: self.enable_manual_limits_checkbox.blockSignals(True); self.enable_manual_limits_checkbox.setChecked(False); self.enable_manual_limits_checkbox.blockSignals(False)
-                self.manual_limits_enabled=False; return
+            # If enabling, ensure some limits are actually stored. If not, try storing from fields.
+            # --- UPDATED: Check combined X and Y limits --- 
+            valid_x_limit_exists = self.manual_x_limits is not None
+            valid_y_limit_exists = any(lim is not None for chan_lims in self.manual_channel_limits.values() for lim_key, lim in chan_lims.items() if lim_key == 'y' and lim is not None)
+            if not (valid_x_limit_exists or valid_y_limit_exists):
+            # --- END UPDATE ---
+                self._on_set_limits_clicked() # Try to store current field values
+                # Re-check if storing succeeded
+                valid_x_limit_exists = self.manual_x_limits is not None
+                valid_y_limit_exists = any(lim is not None for chan_lims in self.manual_channel_limits.values() for lim_key, lim in chan_lims.items() if lim_key == 'y' and lim is not None)
+                if not (valid_x_limit_exists or valid_y_limit_exists):
+                    QtWidgets.QMessageBox.warning(self, "Enable Failed", "No valid manual limits stored. Set values first.");
+                    if self.enable_manual_limits_checkbox: self.enable_manual_limits_checkbox.blockSignals(True); self.enable_manual_limits_checkbox.setChecked(False); self.enable_manual_limits_checkbox.blockSignals(False)
+                    self.manual_limits_enabled=False;
+                    self._set_limit_edits_enabled(False) # Ensure edits are disabled again
+                    return
             self._apply_manual_limits()
         else:
+            # If disabling, re-enable zoom/scroll and auto-range
             self._update_zoom_scroll_enable_state(); self._reset_view()
-        self._update_ui_state()
+        self._update_ui_state() # Update other UI elements if needed
 
     def _apply_manual_limits(self):
-        if not self.manual_limits_enabled or (self.manual_x_limits is None and self.manual_y_limits is None): return
-        log.debug(f"Applying limits - X:{self.manual_x_limits}, Y:{self.manual_y_limits}"); ax,ay=False,False
+        # --- UPDATED: Check shared X and per-channel Y limits --- 
+        if not self.manual_limits_enabled or (self.manual_x_limits is None and not self.manual_channel_limits):
+             log.debug("Apply manual limits skipped: Not enabled or no X/Y limits stored.")
+             return
+        # --- END UPDATE ---
+
+        log.debug(f"Applying stored manual limits to visible channels.");
+        applied_any = False
         self._updating_viewranges=True
         try:
-            for p in self.channel_plots.values():
-                if p.isVisible() and p.getViewBox():
-                    vb=p.getViewBox(); vb.disableAutoRange()
-                    if self.manual_x_limits: vb.setXRange(self.manual_x_limits[0], self.manual_x_limits[1], padding=0); ax=True
-                    if self.manual_y_limits: vb.setYRange(self.manual_y_limits[0], self.manual_y_limits[1], padding=0); ay=True
+            # --- UPDATED: Apply shared X first, then per-channel Y --- 
+            manual_x = self.manual_x_limits # Get shared X limit
+            for chan_id, plot in self.channel_plots.items(): # Iterate plots
+                if plot and plot.isVisible() and plot.getViewBox():
+                    vb=plot.getViewBox(); vb.disableAutoRange()
+                    # Apply shared X limit
+                    if manual_x: 
+                        vb.setXRange(manual_x[0], manual_x[1], padding=0); applied_any=True
+                        # Log only once if applied
+                        if chan_id == next(iter(self.channel_plots.keys())): 
+                             log.debug(f"Applied shared X limits {manual_x}")
+                    else:
+                         vb.enableAutoRange(axis=pg.ViewBox.XAxis) # Auto-range X if no manual X
+                    
+                    # Apply per-channel Y limit
+                    channel_y_limits = self.manual_channel_limits.get(chan_id, {}).get('y')
+                    if channel_y_limits:
+                        vb.setYRange(channel_y_limits[0], channel_y_limits[1], padding=0); applied_any=True
+                        log.debug(f"Applied Y limits {channel_y_limits} to {chan_id}")
+                    else:
+                        vb.enableAutoRange(axis=pg.ViewBox.YAxis) # Auto-range Y if no manual Y for this channel
+            # --- END UPDATE ---
         finally:
              self._updating_viewranges=False
-        if ax or ay:
-            self._update_limit_fields()
-            if ax and self.manual_x_limits: self._update_scrollbar_from_view(self.x_scrollbar, self.manual_x_limits, self.manual_x_limits)
-            if ay and self.manual_y_limits:
-                self._update_scrollbar_from_view(self.global_y_scrollbar, self.manual_y_limits, self.manual_y_limits)
-                for s in self.individual_y_scrollbars.values(): self._update_scrollbar_from_view(s, self.manual_y_limits, self.manual_y_limits)
-        self._update_zoom_scroll_enable_state()
+
+        if applied_any:
+            self._update_limit_fields() # Update fields to show applied limits
+            # --- UPDATED: Reset scrolls/sliders --- 
+            self._update_zoom_scroll_enable_state()
+            self._reset_all_sliders()
+            # Reset X scrollbar based on whether X limits were actually applied
+            if manual_x: self._update_scrollbar_from_view(self.x_scrollbar, manual_x, manual_x)
+            else: self._reset_scrollbar(self.x_scrollbar)
+            # Reset Y scrollbars - always reset global, reset individual based on applied Y
+            self._reset_scrollbar(self.global_y_scrollbar)
+            for cid, sb in self.individual_y_scrollbars.items():
+                 chan_y_lim = self.manual_channel_limits.get(cid, {}).get('y')
+                 if chan_y_lim: self._update_scrollbar_from_view(sb, chan_y_lim, chan_y_lim)
+                 else: self._reset_scrollbar(sb)
+            # --- END UPDATE ---
 
     def _update_zoom_scroll_enable_state(self):
         if not all(hasattr(self,w) for w in ['x_zoom_slider','global_y_slider','reset_view_button']): return
@@ -1274,25 +1650,64 @@ class ExplorerTab(QtWidgets.QWidget):
         self.reset_view_button.setEnabled(has_vis and en)
 
     def _update_limit_fields(self):
-        if self._updating_limit_fields or not all(hasattr(self,w) and getattr(self,w) for w in ['manual_limit_x_min_edit','manual_limit_x_max_edit','manual_limit_y_min_edit','manual_limit_y_max_edit']): return
-        xm,xM,ym,yM="Auto","Auto","Auto","Auto"
-        if self.manual_limits_enabled:
-            if self.manual_x_limits: xm,xM=f"{self.manual_x_limits[0]:.4g}", f"{self.manual_x_limits[1]:.4g}"
-            if self.manual_y_limits: ym,yM=f"{self.manual_y_limits[0]:.4g}", f"{self.manual_y_limits[1]:.4g}"
-        else:
-            plot=next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-            if plot:
-                try:
-                    vb=plot.getViewBox(); xr,yr=vb.viewRange()
-                    xm,xM=f"{xr[0]:.4g}",f"{xr[1]:.4g}"
-                    ym,yM=f"{yr[0]:.4g}",f"{yr[1]:.4g}"
-                except Exception: xm,xM,ym,yM="Err","Err","Err","Err"
+        if self._updating_limit_fields: return 
+        # --- Check required widgets exist --- 
+        if not hasattr(self, 'xmin_edit') or not self.xmin_edit or \
+           not hasattr(self, 'xmax_edit') or not self.xmax_edit or \
+           not hasattr(self, 'manual_limit_edits'): 
+            return
+        # --- End Check --- 
+            
         self._updating_limit_fields=True
         try:
-            self.manual_limit_x_min_edit.setText(xm)
-            self.manual_limit_x_max_edit.setText(xM)
-            self.manual_limit_y_min_edit.setText(ym)
-            self.manual_limit_y_max_edit.setText(yM)
+            # --- UPDATED: Handle shared X fields --- 
+            xmin_text, xmax_text = "Auto", "Auto"
+            first_visible_plot = next((p for p in self.channel_plots.values() if p and p.isVisible() and p.getViewBox()), None)
+            if self.manual_limits_enabled and self.manual_x_limits:
+                # Show stored shared X limits
+                xmin_text, xmax_text = f"{self.manual_x_limits[0]:.4g}", f"{self.manual_x_limits[1]:.4g}"
+            elif first_visible_plot and not self.manual_limits_enabled:
+                # Show current X view range from first visible plot
+                 try:
+                     vb = first_visible_plot.getViewBox()
+                     xr, _ = vb.viewRange()
+                     xmin_text, xmax_text = f"{xr[0]:.4g}", f"{xr[1]:.4g}"
+                 except Exception: xmin_text, xmax_text = "Err", "Err"
+            elif not first_visible_plot:
+                 xmin_text, xmax_text = "N/A", "N/A"
+                 
+            self.xmin_edit.setText(xmin_text)
+            self.xmax_edit.setText(xmax_text)
+            # --- END X UPDATE ---
+
+            # --- UPDATED: Iterate through channel Y edits --- 
+            for chan_id, edit_map in self.manual_limit_edits.items():
+                plot = self.channel_plots.get(chan_id)
+                ymin_text, ymax_text = "Auto", "Auto"
+                ymin_edit = edit_map.get('ymin')
+                ymax_edit = edit_map.get('ymax')
+                
+                if not ymin_edit or not ymax_edit: continue # Skip if edits don't exist
+
+                if self.manual_limits_enabled:
+                    # Show stored per-channel Y limits
+                    channel_limits = self.manual_channel_limits.get(chan_id, {})
+                    manual_y = channel_limits.get('y')
+                    if manual_y: ymin_text, ymax_text = f"{manual_y[0]:.4g}", f"{manual_y[1]:.4g}"
+                elif plot and plot.isVisible() and plot.getViewBox():
+                    # Show current Y view range for this channel
+                    try:
+                        vb=plot.getViewBox(); _,yr=vb.viewRange()
+                        ymin_text, ymax_text = f"{yr[0]:.4g}",f"{yr[1]:.4g}"
+                    except Exception: ymin_text, ymax_text="Err","Err"
+                else:
+                    # Plot not visible or available
+                    ymin_text, ymax_text="N/A","N/A"
+
+                # Update the QLineEdit widgets for this channel's Y limits
+                ymin_edit.setText(ymin_text)
+                ymax_edit.setText(ymax_text)
+            # --- END Y UPDATE --- 
         finally:
              self._updating_limit_fields=False
 

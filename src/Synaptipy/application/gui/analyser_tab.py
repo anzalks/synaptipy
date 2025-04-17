@@ -11,6 +11,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from .analysis_tabs.base import BaseAnalysisTab
 from .explorer_tab import ExplorerTab
 from Synaptipy.core.data_model import Recording
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
 
@@ -21,8 +22,7 @@ class AnalyserTab(QtWidgets.QWidget):
         super().__init__(parent)
         log.debug("Initializing Main AnalyserTab (dynamic loading)")
         self._explorer_tab = explorer_tab_ref
-        self._current_recording_for_ui: Optional[Recording] = None # Recording used to populate UI (e.g., channels)
-        self._analysis_items: List[Dict[str, Any]] = [] # The list of selected items from ExplorerTab
+        self._analysis_items: List[Dict[str, Any]] = []
         self._loaded_analysis_tabs: List[BaseAnalysisTab] = []
 
         # --- UI References ---
@@ -34,7 +34,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self._load_analysis_tabs()
         # Connect the signal from ExplorerTab *after* UI is set up
         self._connect_explorer_signals()
-        self.update_state([]) # Initial empty state
+        self.update_analysis_sources([]) # Initial empty state call
 
     def _setup_ui(self):
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -45,7 +45,7 @@ class AnalyserTab(QtWidgets.QWidget):
         source_layout = QtWidgets.QVBoxLayout(source_group)
         self.source_list_widget = QtWidgets.QListWidget()
         self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
-        self.source_list_widget.setFixedHeight(100) # Limit height
+        self.source_list_widget.setMaximumHeight(100) # Limit height
         source_layout.addWidget(self.source_list_widget)
         main_layout.addWidget(source_group)
 
@@ -67,27 +67,44 @@ class AnalyserTab(QtWidgets.QWidget):
         self._loaded_analysis_tabs = []
         analysis_pkg_path = ["Synaptipy", "application", "gui", "analysis_tabs"]
         analysis_module_prefix = ".".join(analysis_pkg_path) + "."
+        # --- Get NeoAdapter instance --- 
+        neo_adapter_instance = self._explorer_tab.neo_adapter
+        if neo_adapter_instance is None:
+             log.error("Cannot load analysis tabs: NeoAdapter not available from ExplorerTab.")
+             # Show error in tab area
+             placeholder = QtWidgets.QLabel("Error: Core NeoAdapter missing."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Error")
+             return 
+        # --- END Get NeoAdapter --- 
         try:
             pkg = importlib.import_module(".".join(analysis_pkg_path))
             if not hasattr(pkg, '__path__') or not pkg.__path__: log.error(f"No path for analysis pkg: {'.'.join(analysis_pkg_path)}"); return
             pkg_dir = Path(pkg.__path__[0]); log.debug(f"Scanning analysis modules in: {pkg_dir}")
-            for finder, name, ispkg in pkgutil.iter_modules([str(pkg_dir)]):
+            modules_found = list(pkgutil.iter_modules([str(pkg_dir)])) # Get list first
+            log.debug(f"Modules found by pkgutil: {[m.name for m in modules_found]}")
+            
+            for finder, name, ispkg in modules_found:
+                 log.debug(f"Processing module: name='{name}', ispkg={ispkg}") # Log each module attempt
                  if not ispkg and name != 'base':
-                     module_name = f"{analysis_module_prefix}{name}"; log.debug(f"Loading module: {module_name}")
+                     module_name = f"{analysis_module_prefix}{name}"; 
+                     log.debug(f"Attempting to import module: {module_name}") # Log before import
                      try:
-                         module = importlib.import_module(module_name); found_tab = False
-                         for item_name in dir(module):
-                             item = getattr(module, item_name)
-                             if isinstance(item, type) and item.__module__ == module_name and issubclass(item, BaseAnalysisTab):
-                                 log.debug(f"Found analysis tab class: {item.__name__}")
-                                 try:
-                                     tab_instance = item(explorer_tab_ref=self._explorer_tab, parent=self) # Pass explorer ref
-                                     tab_name = tab_instance.get_display_name()
-                                     self.sub_tab_widget.addTab(tab_instance, tab_name)
-                                     self._loaded_analysis_tabs.append(tab_instance); log.info(f"Loaded analysis tab: '{tab_name}'"); found_tab = True; break
-                                 except NotImplementedError as nie: log.error(f"{item.__name__} missing method: {nie}")
-                                 except Exception as e_inst: log.error(f"Failed instantiate/add tab {item.__name__}: {e_inst}", exc_info=True)
-                         if not found_tab: log.warning(f"No BaseAnalysisTab subclass found in: {module_name}")
+                         module = importlib.import_module(module_name); 
+                         log.debug(f"Successfully imported module: {module_name}") # Log after import
+                         found_tab = False
+                         # --- UPDATED: Look for ANALYSIS_TAB_CLASS --- 
+                         tab_class = getattr(module, 'ANALYSIS_TAB_CLASS', None)
+                         if tab_class and isinstance(tab_class, type) and issubclass(tab_class, BaseAnalysisTab):
+                             log.debug(f"Found analysis tab class via ANALYSIS_TAB_CLASS: {tab_class.__name__}")
+                             try:
+                                 # --- UPDATED: Pass neo_adapter directly --- 
+                                 tab_instance = tab_class(neo_adapter=neo_adapter_instance, parent=self)
+                                 tab_name = tab_instance.get_display_name()
+                                 self.sub_tab_widget.addTab(tab_instance, tab_name)
+                                 self._loaded_analysis_tabs.append(tab_instance); log.info(f"Loaded analysis tab: '{tab_name}'"); found_tab = True
+                             except NotImplementedError as nie: log.error(f"{tab_class.__name__} missing method: {nie}")
+                             except Exception as e_inst: log.error(f"Failed instantiate/add tab {tab_class.__name__}: {e_inst}", exc_info=True)
+                         # --- END UPDATE ---
+                         if not found_tab: log.warning(f"No ANALYSIS_TAB_CLASS constant found or it's not a BaseAnalysisTab subclass in: {module_name}")
                      except ImportError as e_imp: log.error(f"Failed import module '{module_name}': {e_imp}", exc_info=True)
                      except Exception as e_load: log.error(f"Failed load/process module '{module_name}': {e_load}", exc_info=True)
         except ModuleNotFoundError: log.error(f"Could not find analysis pkg path: {'.'.join(analysis_pkg_path)}")
@@ -116,8 +133,9 @@ class AnalyserTab(QtWidgets.QWidget):
             for item in analysis_items:
                 path_name = item['path'].name
                 target = item['target_type']
-                trial_info = f" (Trial {item['trial_index'] + 1})" if item['target_type'] == "Current Trial" else ""
-                display_text = f"{path_name} [{target}{trial_info}]"
+                if target == 'Recording': display_text = f"File: {path_name}"
+                elif target == 'Current Trial': trial_info = f" (Trial {item['trial_index'] + 1})" if item.get('trial_index') is not None else ""; display_text = f"{path_name} [{target}{trial_info}]"
+                else: display_text = f"{path_name} [{target}]"
                 list_item = QtWidgets.QListWidgetItem(display_text)
                 list_item.setToolTip(str(item['path'])) # Show full path on hover
                 self.source_list_widget.addItem(list_item)
@@ -128,29 +146,12 @@ class AnalyserTab(QtWidgets.QWidget):
     # --- Update State Method ---
     def update_state(self, _=None): # Can ignore argument if called directly or by simple signals
         """Updates the state of all loaded sub-tabs based on the current analysis list."""
-        # Determine the 'representative' recording for UI population (e.g., channel lists)
-        # Use the first item in the list if available, otherwise None
-        self._current_recording_for_ui = None
-        if self._analysis_items:
-            try:
-                # Attempt to read the first file to get channel info etc.
-                # This re-reads, which might be slow. Alternative: get from explorer if guaranteed sync.
-                first_item_path = self._analysis_items[0]['path']
-                # Need access to the adapter - assuming _explorer_tab has it
-                self._current_recording_for_ui = self._explorer_tab.neo_adapter.read_recording(first_item_path)
-                log.debug(f"Using recording from {first_item_path.name} to populate Analyser UI.")
-            except Exception as e:
-                log.error(f"Failed to read first file for Analyser UI setup: {e}")
-                self._current_recording_for_ui = None # Ensure it's None on error
-
-        # Update all loaded sub-tabs, passing the representative recording (if any)
-        # and the list of items they actually need to analyze
-        log.debug(f"Updating state for {len(self._loaded_analysis_tabs)} sub-tabs.")
+        # Update all loaded sub-tabs, passing only the list of analysis items
+        log.debug(f"Updating state for {len(self._loaded_analysis_tabs)} sub-tabs with {len(self._analysis_items)} analysis items.")
         for tab in self._loaded_analysis_tabs:
              try:
-                 # Pass both the potentially loaded recording (for UI setup)
-                 # and the list of analysis items
-                 tab.update_state(self._current_recording_for_ui, self._analysis_items)
+                 # Pass only the analysis items list
+                 tab.update_state(self._analysis_items)
              except Exception as e_update:
                  log.error(f"Error updating state for tab '{tab.get_display_name()}': {e_update}", exc_info=True)
 

@@ -2,44 +2,94 @@
 # -*- coding: utf-8 -*-
 """
 Analysis sub-tab for calculating Resting Membrane Potential (RMP).
+Allows interactive or manual selection of the baseline period.
 """
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 
 from PySide6 import QtCore, QtGui, QtWidgets
+import pyqtgraph as pg # <<< Make sure this is imported
 
 # Import base class using relative path within analysis_tabs package
 from .base import BaseAnalysisTab
 # Import needed core components using absolute paths
 from Synaptipy.core.data_model import Recording, Channel
-from Synaptipy.core.analysis import basic_features # Import the analysis function
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+# from Synaptipy.core.analysis import basic_features # We might create our own here
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rmp_tab')
 
-class RmpAnalysisTab(BaseAnalysisTab):
-    """QWidget for RMP analysis."""
+# --- RMP Calculation Function ---
+def calculate_rmp(time: np.ndarray, voltage: np.ndarray, start_time: float, end_time: float) -> Optional[Tuple[float, float]]:
+    """
+    Calculates the Resting Membrane Potential (RMP) and its standard deviation
+    over a specified time window.
 
-    def __init__(self, explorer_tab_ref, parent=None):
-        super().__init__(explorer_tab_ref, parent)
+    Args:
+        time: 1D numpy array of time values.
+        voltage: 1D numpy array of voltage values.
+        start_time: Start time for the baseline window.
+        end_time: End time for the baseline window.
+
+    Returns:
+        A tuple containing (mean_voltage, std_dev_voltage) or None if the window
+        is invalid or no data points are found.
+    """
+    if time is None or voltage is None or start_time >= end_time:
+        return None
+    try:
+        # Find indices corresponding to the time window
+        indices = np.where((time >= start_time) & (time <= end_time))[0]
+        if len(indices) == 0:
+            log.warning(f"No data points found between {start_time}s and {end_time}s.")
+            return None
+        # Calculate the mean and standard deviation voltage within the window
+        baseline_voltage = voltage[indices]
+        rmp_mean = np.mean(baseline_voltage)
+        rmp_sd = np.std(baseline_voltage)
+        return rmp_mean, rmp_sd # Return both values
+    except Exception as e:
+        log.error(f"Error calculating RMP/SD between {start_time}s and {end_time}s: {e}", exc_info=True)
+        return None
+
+# --- RMP Analysis Tab Class ---
+class RmpAnalysisTab(BaseAnalysisTab):
+    """QWidget for RMP analysis with interactive plotting."""
+
+    # Define constants for analysis modes
+    MODE_INTERACTIVE = 0
+    MODE_MANUAL = 1
+
+    def __init__(self, neo_adapter: NeoAdapter, parent=None): # Corrected signature
+        # Pass neo_adapter to superclass constructor
+        super().__init__(neo_adapter=neo_adapter, parent=parent)
 
         # --- UI References specific to RMP ---
-        self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
-        self.channel_scroll_area: Optional[QtWidgets.QScrollArea] = None
-        self.channel_checkbox_layout: Optional[QtWidgets.QVBoxLayout] = None
-        # Trial selection UI is removed from this sub-tab directly
+        self.channel_combobox: Optional[QtWidgets.QComboBox] = None # Single channel selection for plot interaction
+        # --- ADDED: Data Source Selection ---
+        self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
+        # --- END ADDED ---
+        # Mode Selection
+        self.analysis_mode_group: Optional[QtWidgets.QGroupBox] = None
+        self.mode_button_group: Optional[QtWidgets.QButtonGroup] = None
+        self.interactive_radio: Optional[QtWidgets.QRadioButton] = None
+        self.manual_radio: Optional[QtWidgets.QRadioButton] = None
+        # Manual Inputs
+        self.manual_time_group: Optional[QtWidgets.QGroupBox] = None
         self.start_time_edit: Optional[QtWidgets.QLineEdit] = None
         self.end_time_edit: Optional[QtWidgets.QLineEdit] = None
-        self.run_button: Optional[QtWidgets.QPushButton] = None
-        self.results_textedit: Optional[QtWidgets.QTextEdit] = None
-        # Keep internal list of items to analyse, updated by parent
-        self._analysis_items_for_rmp: List[Dict[str, Any]] = []
-        # Store the representative recording used for UI population
-        self._current_recording_for_ui: Optional[Recording] = None
+        # Results Display
+        self.results_label: Optional[QtWidgets.QLabel] = None # To display the calculated RMP
+        # Plotting Interaction
+        self.baseline_region_item: Optional[pg.LinearRegionItem] = None
+        # Store currently plotted data for analysis
+        self._current_plot_data: Optional[Dict[str, np.ndarray]] = None # {'time':..., 'voltage':...}
+
 
         self._setup_ui()
         self._connect_signals()
-        # Initial state set by parent AnalyserTab calling update_state()
+        self._on_mode_changed() # Set initial UI state based on default mode
 
     def get_display_name(self) -> str:
         """Returns the name for the sub-tab."""
@@ -47,245 +97,434 @@ class RmpAnalysisTab(BaseAnalysisTab):
 
     def _setup_ui(self):
         """Create UI elements for the RMP analysis tab."""
-        rmp_main_layout = QtWidgets.QHBoxLayout(self) # Controls | Results
+        main_layout = QtWidgets.QVBoxLayout(self) # Use Vertical layout
 
-        # --- Controls ---
-        controls_widget = QtWidgets.QWidget()
-        controls_layout = QtWidgets.QVBoxLayout(controls_widget)
+        # --- Top Controls Area ---
+        controls_group = QtWidgets.QGroupBox("Configuration")
+        controls_layout = QtWidgets.QVBoxLayout(controls_group)
         controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        rmp_config_group = QtWidgets.QGroupBox("RMP Configuration")
-        rmp_config_layout = QtWidgets.QVBoxLayout(rmp_config_group)
 
-        # Channel Selection
-        rmp_chan_label = QtWidgets.QLabel("Channel(s) for RMP:")
-        rmp_config_layout.addWidget(rmp_chan_label)
-        self.channel_scroll_area = QtWidgets.QScrollArea()
-        self.channel_scroll_area.setWidgetResizable(True)
-        self.channel_scroll_area.setFixedHeight(150) # Limit height
-        rmp_chan_widget = QtWidgets.QWidget()
-        self.channel_checkbox_layout = QtWidgets.QVBoxLayout(rmp_chan_widget)
-        self.channel_checkbox_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.channel_scroll_area.setWidget(rmp_chan_widget)
-        rmp_config_layout.addWidget(self.channel_scroll_area)
+        # 1. Analysis Item Selector (Inherited)
+        item_selector_layout = QtWidgets.QFormLayout() # Use Form layout for this part
+        self._setup_analysis_item_selector(item_selector_layout) # Add combo box
+        controls_layout.addLayout(item_selector_layout)
 
-        # RMP Parameters
-        rmp_param_layout = QtWidgets.QFormLayout()
-        rmp_param_layout.setContentsMargins(5, 5, 5, 5)
+        # 2. Channel Selector (Single Channel for Plotting)
+        channel_select_layout = QtWidgets.QHBoxLayout()
+        channel_select_layout.addWidget(QtWidgets.QLabel("Plot Channel:"))
+        self.channel_combobox = QtWidgets.QComboBox()
+        self.channel_combobox.setToolTip("Select the channel to plot and interact with.")
+        self.channel_combobox.setEnabled(False)
+        channel_select_layout.addWidget(self.channel_combobox, stretch=1)
+        controls_layout.addLayout(channel_select_layout)
+
+        # --- ADDED: Data Source Selector ---
+        data_source_layout = QtWidgets.QHBoxLayout()
+        data_source_layout.addWidget(QtWidgets.QLabel("Data Source:"))
+        self.data_source_combobox = QtWidgets.QComboBox()
+        self.data_source_combobox.setToolTip("Select the specific trial or average trace to analyze.")
+        self.data_source_combobox.setEnabled(False)
+        data_source_layout.addWidget(self.data_source_combobox, stretch=1)
+        controls_layout.addLayout(data_source_layout)
+        # --- END ADDED ---
+
+        # 3. Analysis Mode Selection
+        self.analysis_mode_group = QtWidgets.QGroupBox("Analysis Mode")
+        mode_layout = QtWidgets.QHBoxLayout(self.analysis_mode_group)
+        self.interactive_radio = QtWidgets.QRadioButton("Interactive Baseline")
+        self.manual_radio = QtWidgets.QRadioButton("Manual Time Entry")
+        self.mode_button_group = QtWidgets.QButtonGroup(self)
+        self.mode_button_group.addButton(self.interactive_radio, self.MODE_INTERACTIVE)
+        self.mode_button_group.addButton(self.manual_radio, self.MODE_MANUAL)
+        mode_layout.addWidget(self.interactive_radio)
+        mode_layout.addWidget(self.manual_radio)
+        self.interactive_radio.setChecked(True) # Default to interactive
+        self.analysis_mode_group.setEnabled(False)
+        controls_layout.addWidget(self.analysis_mode_group)
+
+        # 4. Manual Time Inputs (Initially grouped and potentially disabled)
+        self.manual_time_group = QtWidgets.QGroupBox("Manual Time Window")
+        manual_layout = QtWidgets.QFormLayout(self.manual_time_group)
         self.start_time_edit = QtWidgets.QLineEdit("0.0")
-        self.start_time_edit.setValidator(QtGui.QDoubleValidator())
-        self.start_time_edit.setToolTip("Baseline Start (s)")
-        rmp_param_layout.addRow("Baseline Start (s):", self.start_time_edit)
+        self.start_time_edit.setValidator(QtGui.QDoubleValidator(0, 1e6, 4, self)) # Min 0, high max, 4 decimals
+        self.start_time_edit.setToolTip("Start time (s) for baseline calculation.")
+        manual_layout.addRow("Start Time (s):", self.start_time_edit)
         self.end_time_edit = QtWidgets.QLineEdit("0.1")
-        self.end_time_edit.setValidator(QtGui.QDoubleValidator())
-        self.end_time_edit.setToolTip("Baseline End (s)")
-        rmp_param_layout.addRow("Baseline End (s):", self.end_time_edit)
-        rmp_config_layout.addLayout(rmp_param_layout)
+        self.end_time_edit.setValidator(QtGui.QDoubleValidator(0, 1e6, 4, self))
+        self.end_time_edit.setToolTip("End time (s) for baseline calculation.")
+        manual_layout.addRow("End Time (s):", self.end_time_edit)
+        self.manual_time_group.setEnabled(False) # Disabled initially
+        controls_layout.addWidget(self.manual_time_group)
 
-        rmp_config_layout.addStretch(1)
-        self.run_button = QtWidgets.QPushButton("Calculate RMP")
-        self.run_button.setEnabled(False)
-        rmp_config_layout.addWidget(self.run_button, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        controls_layout.addWidget(rmp_config_group)
-        controls_widget.setFixedWidth(400) # Keep consistent width
-        rmp_main_layout.addWidget(controls_widget)
+        # 5. Results Display
+        results_layout = QtWidgets.QHBoxLayout()
+        results_layout.addWidget(QtWidgets.QLabel("Calculated RMP:"))
+        self.results_label = QtWidgets.QLabel("N/A")
+        font = self.results_label.font(); font.setBold(True); self.results_label.setFont(font)
+        results_layout.addWidget(self.results_label, stretch=1)
+        controls_layout.addLayout(results_layout)
 
-        # --- Results ---
-        rmp_results_group = QtWidgets.QGroupBox("RMP Results")
-        rmp_results_layout = QtWidgets.QVBoxLayout(rmp_results_group)
-        self.results_textedit = QtWidgets.QTextEdit()
-        self.results_textedit.setReadOnly(True)
-        self.results_textedit.setPlaceholderText("Select channels and run analysis...")
-        rmp_results_layout.addWidget(self.results_textedit)
-        rmp_main_layout.addWidget(rmp_results_group, stretch=1)
+        # --- UPDATED: Use base class method for Save Button --- 
+        # self.save_button = QtWidgets.QPushButton("Save RMP Result")
+        # ... (manual button creation removed) ...
+        # controls_layout.addWidget(self.save_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._setup_save_button(controls_layout) # Call base class helper
+        # --- END UPDATE ---
 
-        self.setLayout(rmp_main_layout)
+        controls_layout.addStretch()
+        main_layout.addWidget(controls_group)
+
+        # --- Bottom Plot Area (Inherited) ---
+        # Use stretch factor > 0 to allow plot to expand vertically
+        self._setup_plot_area(main_layout, stretch_factor=1)
+
+        # Add the interactive region item (initially hidden/disabled)
+        self.baseline_region_item = pg.LinearRegionItem(values=[0.0, 0.1], orientation='vertical', brush=(0, 255, 0, 50), movable=True, bounds=None)
+        self.baseline_region_item.setZValue(-10) # Ensure it's behind plot lines
+        self.plot_widget.addItem(self.baseline_region_item)
+        self.baseline_region_item.setVisible(True) # Visible but might be disabled by mode
+
+        self.setLayout(main_layout)
+        log.debug("RMP Analysis Tab UI setup complete.")
 
     def _connect_signals(self):
         """Connect signals specific to RMP tab widgets."""
-        self.start_time_edit.textChanged.connect(self._update_run_button_state)
-        self.end_time_edit.textChanged.connect(self._update_run_button_state)
-        self.run_button.clicked.connect(self._run_rmp_analysis)
-        # Channel checkboxes are connected in _update_channel_list
+        # Inherited combo box signal handled by BaseAnalysisTab (_on_analysis_item_selected)
+
+        # Connect channel selector
+        self.channel_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
+
+        # --- ADDED: Connect Data Source Selector ---
+        self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
+        # --- END ADDED ---
+
+        # Connect analysis mode change
+        self.mode_button_group.buttonClicked.connect(self._on_mode_changed)
+
+        # Connect manual time edits
+        self.start_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
+        self.end_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
+
+        # Connect interactive region change
+        # Use sigRegionChangeFinished to avoid triggering on every small drag movement
+        self.baseline_region_item.sigRegionChangeFinished.connect(self._trigger_rmp_analysis_from_region)
+
+        # --- REMOVED: Save button connection (handled by base) ---
+        # self.save_button.clicked.connect(self._on_save_result_clicked)
+        # --- END REMOVED ---
 
     # --- Overridden Methods from Base ---
-    def update_state(self, current_recording_for_ui: Optional[Recording], analysis_items: List[Dict[str, Any]]):
-        """Update state specific to the RMP tab."""
-        # No need to call super().update_state() as it raises NotImplementedError
-        self._current_recording_for_ui = current_recording_for_ui
-        self._analysis_items_for_rmp = analysis_items
-        has_items = bool(self._analysis_items_for_rmp)
+    def _update_ui_for_selected_item(self):
+        """
+        Update the RMP tab UI when a new analysis item is selected.
+        Populates channel list, plots data, and enables/disables controls.
+        """
+        log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
+        self._current_plot_data = None # Clear previous plot data
+        self.results_label.setText("N/A") # Clear previous results
+        if self.save_button: self.save_button.setEnabled(False) # Disable save on selection change
 
-        # Populate channel list based on the representative recording
-        self._update_channel_list()
-
-        # Enable/Disable controls
-        # Channel list is enabled if we can display *any* channels
-        self.channel_scroll_area.setEnabled(self._current_recording_for_ui is not None)
-        # Params and run button enabled only if there are items to analyze
-        self.start_time_edit.setEnabled(has_items)
-        self.end_time_edit.setEnabled(has_items)
-        self._update_run_button_state()
-
-    # --- Private Helper Methods specific to RMP Tab ---
-    def _update_channel_list(self):
-        """Populate RMP channel list based on _current_recording_for_ui."""
-        layout = self.channel_checkbox_layout
-        checkboxes_dict = self.channel_checkboxes
-
-        # Clear existing widgets and disconnect signals
-        for checkbox in checkboxes_dict.values():
-            try: checkbox.stateChanged.disconnect(self._update_run_button_state)
-            except RuntimeError: pass
-            checkbox.deleteLater()
-        checkboxes_dict.clear()
-        while layout.count():
-            item = layout.takeAt(0); widget = item.widget()
-            if widget: widget.deleteLater()
-
-        # Populate with new channels if a representative recording exists
-        if self._current_recording_for_ui and self._current_recording_for_ui.channels:
-            sorted_channels = sorted(self._current_recording_for_ui.channels.items(), key=lambda item: item[0])
-            for chan_id, channel in sorted_channels:
-                # Filter for voltage channels
+        # --- Populate Channel ComboBox ---
+        self.channel_combobox.blockSignals(True)
+        self.channel_combobox.clear()
+        can_enable_ui = False
+        voltage_channels_found = False # Track if any suitable channels exist
+        if self._selected_item_recording and self._selected_item_recording.channels:
+            valid_channels = []
+            # Populate with voltage channels
+            for chan_id, channel in sorted(self._selected_item_recording.channels.items(), key=lambda item: item[0]):
                 units_lower = getattr(channel, 'units', '').lower()
-                if 'v' in units_lower or units_lower == 'unknown':
-                    checkbox = QtWidgets.QCheckBox(f"{channel.name} ({chan_id}) [{channel.units}]")
-                    checkbox.stateChanged.connect(self._update_run_button_state) # Connect run button update
-                    layout.addWidget(checkbox)
-                    checkboxes_dict[chan_id] = checkbox
+                # RMP needs voltage traces
+                if 'v' in units_lower:
+                    display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
+                    self.channel_combobox.addItem(display_name, userData=chan_id)
+                    valid_channels.append(chan_id)
 
-    def _validate_params(self) -> bool:
-        """Validates RMP parameters."""
+            if valid_channels:
+                self.channel_combobox.setCurrentIndex(0) # Select first valid channel
+                voltage_channels_found = True # Mark that we found channels
+                # can_enable_ui = True # Enable UI is determined later
+            else:
+                self.channel_combobox.addItem("No Voltage Channels Found")
+        else:
+            self.channel_combobox.addItem("Load Data Item...")
+
+        self.channel_combobox.setEnabled(voltage_channels_found) # Enable only if voltage channels exist
+        self.channel_combobox.blockSignals(False)
+
+        # --- Populate Data Source ComboBox --- 
+        self.data_source_combobox.blockSignals(True)
+        self.data_source_combobox.clear()
+        self.data_source_combobox.setEnabled(False) # Default to disabled
+        can_analyze = False # Can we actually run analysis?
+
+        if voltage_channels_found and self._selected_item_recording: # Need channels and loaded recording
+            selected_item_details = self._analysis_items[self._selected_item_index]
+            item_type = selected_item_details.get('target_type')
+            item_trial_index = selected_item_details.get('trial_index') # 0-based
+
+            # --- Get num_trials and has_average from the first available channel --- 
+            num_trials = 0
+            has_average = False
+            first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+            if first_channel:
+                 num_trials = getattr(first_channel, 'num_trials', 0)
+                 # Check for average data availability (adjust if method name is different)
+                 if hasattr(first_channel, 'get_averaged_data') and first_channel.get_averaged_data() is not None:
+                     has_average = True 
+                 elif hasattr(first_channel, 'has_average_data') and first_channel.has_average_data(): # Alternative check
+                     has_average = True
+            log.debug(f"Determined from first channel: num_trials={num_trials}, has_average={has_average}")
+            # --- End checks --- 
+
+            if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
+                self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index)
+            elif item_type == "Average Trace" and has_average:
+                self.data_source_combobox.addItem("Average Trace", userData="average")
+            elif item_type == "Recording" or item_type == "All Trials":
+                if has_average:
+                    self.data_source_combobox.addItem("Average Trace", userData="average")
+                if num_trials > 0:
+                    for i in range(num_trials):
+                        self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
+                # Enable only if there are options to choose from
+                if self.data_source_combobox.count() > 0:
+                    self.data_source_combobox.setEnabled(True)
+                    can_analyze = True # Can analyze if there's at least one source
+                else:
+                    self.data_source_combobox.addItem("No Trials/Average")
+            else: # Unknown item type or missing info
+                self.data_source_combobox.addItem("Invalid Source Item")
+
+        else: # No recording loaded or no voltage channels
+             self.data_source_combobox.addItem("N/A")
+
+        self.data_source_combobox.blockSignals(False)
+
+        # --- Enable/Disable Remaining Controls --- 
+        self.analysis_mode_group.setEnabled(can_analyze)
+        self._on_mode_changed() # Update manual/interactive state based on loaded data availability
+
+        # --- Plot Initial Trace --- 
+        if can_analyze:
+            self._plot_selected_channel_trace() # Plot the trace for the initially selected channel
+        else:
+            self.plot_widget.clear() # Ensure plot is clear if no data/channels
+
+    # --- Plotting and Interaction ---
+    def _plot_selected_channel_trace(self):
+        """Plots the voltage trace for the currently selected channel and data source.""" # Updated docstring
+        if not self.plot_widget or not self.channel_combobox or not self.data_source_combobox or not self._selected_item_recording:
+            self._current_plot_data = None
+            if self.plot_widget:
+                self.plot_widget.clear()
+                # Re-add region if cleared
+                if self.baseline_region_item not in self.plot_widget.items:
+                    self.plot_widget.addItem(self.baseline_region_item)
+            return
+
+        chan_id = self.channel_combobox.currentData()
+        source_data = self.data_source_combobox.currentData() # Trial index (int) or "average" (str)
+
+        if not chan_id or source_data is None:
+            self._current_plot_data = None
+            self.plot_widget.clear()
+            if self.baseline_region_item not in self.plot_widget.items:
+                 self.plot_widget.addItem(self.baseline_region_item)
+            return
+
+        channel = self._selected_item_recording.channels.get(chan_id)
+        # selected_item_details = self._analysis_items[self._selected_item_index] # Don't need item type here
+        # target_type = selected_item_details.get('target_type')
+        # trial_index = selected_item_details.get('trial_index') # 0-based or None
+
+        log.debug(f"Plotting RMP trace for Ch {chan_id}, Data Source: {source_data}")
+
+        time_vec, voltage_vec = None, None
+        data_label = "Trace Error"
+
         try:
-            s = float(self.start_time_edit.text())
-            e = float(self.end_time_edit.text())
-            return e > s >= 0 # Basic check: end > start >= 0
-        except (ValueError, TypeError):
-            return False
+            if channel:
+                # --- Select data based on DATA SOURCE COMBOBOX --- 
+                if source_data == "average":
+                    voltage_vec = channel.get_averaged_data()
+                    time_vec = channel.get_relative_averaged_time_vector()
+                    data_label = f"{channel.name or chan_id} (Average)"
+                elif isinstance(source_data, int):
+                    trial_index = source_data # 0-based index from userData
+                    if 0 <= trial_index < channel.num_trials:
+                        voltage_vec = channel.get_data(trial_index)
+                        time_vec = channel.get_relative_time_vector(trial_index)
+                        data_label = f"{channel.name or chan_id} (Trial {trial_index + 1})"
+                    else:
+                        log.warning(f"Invalid trial index {trial_index} requested for Ch {chan_id}")
+                else:
+                     log.warning(f"Unknown data source selected: {source_data}")
+                # --- END data selection --- 
 
-    def _update_run_button_state(self):
-        """Enables/disables the RMP Run button."""
-        if not self.run_button: return
-        have_items = bool(self._analysis_items_for_rmp)
-        channels_selected = any(cb.isChecked() for cb in self.channel_checkboxes.values())
-        params_valid = self._validate_params()
-        self.run_button.setEnabled(have_items and channels_selected and params_valid)
+            # --- Plotting --- 
+            self.plot_widget.clear() # Clear previous plots
+            if time_vec is not None and voltage_vec is not None:
+                self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
+                self.plot_widget.setLabel('left', 'Voltage', units=channel.units or 'V')
+                self.plot_widget.setLabel('bottom', 'Time', units='s')
+                self._current_plot_data = {'time': time_vec, 'voltage': voltage_vec}
+                # Set initial region/bounds based on plotted data
+                min_t, max_t = time_vec[0], time_vec[-1]
+                self.baseline_region_item.setBounds([min_t, max_t])
+                # Keep current region if valid, otherwise reset
+                rgn_start, rgn_end = self.baseline_region_item.getRegion()
+                if rgn_start < min_t or rgn_end > max_t or rgn_start >= rgn_end:
+                     # Set default region (e.g., first 100ms or 10% of trace)
+                     default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
+                     self.baseline_region_item.setRegion([min_t, default_end])
+                     log.debug(f"Resetting region to default: [{min_t}, {default_end}]")
+            else:
+                self._current_plot_data = None
+                log.warning(f"No valid data found to plot for channel {chan_id}")
 
-    def _get_analysis_data_for_item(self, item: Dict[str, Any]) -> Optional[Dict[str, Dict[str, Any]]]:
-        """Reads a single file and extracts data for selected channels based on item info."""
-        filepath = item['path']
-        target_type = item['target_type']
-        trial_index = item['trial_index'] # 0-based or None
-        # Get channels selected *in this tab*
-        selected_chan_ids = [cid for cid, cb in self.channel_checkboxes.items() if cb.isChecked()]
-        item_results = {}
-        if not selected_chan_ids: return None
-
-        try:
-            # Use the adapter stored in the explorer tab reference
-            # Ensure adapter exists before calling
-            if not hasattr(self._explorer_tab, 'neo_adapter') or not self._explorer_tab.neo_adapter:
-                 log.error("NeoAdapter reference not found in ExplorerTab.")
-                 return None
-            recording = self._explorer_tab.neo_adapter.read_recording(filepath)
-            if not recording or not recording.channels:
-                 log.warning(f"Could not read or find channels in {filepath.name} for RMP analysis.")
-                 return None
-
-            for chan_id in selected_chan_ids:
-                 ch = recording.channels.get(chan_id)
-                 if not ch:
-                     log.warning(f"Channel {chan_id} not found in {filepath.name}")
-                     continue
-
-                 data: Optional[np.ndarray] = None
-                 time: Optional[np.ndarray] = None
-                 units = ch.units
-                 rate = ch.sampling_rate
-
-                 # Select data based on the target type stored in the item
-                 if target_type == "Current Trial":
-                     if trial_index is not None and 0 <= trial_index < ch.num_trials:
-                         data = ch.get_data(trial_index)
-                         time = ch.get_relative_time_vector(trial_index)
-                     else: log.warning(f"Invalid trial index {trial_index} for Ch {chan_id} in {filepath.name}")
-                 elif target_type == "Average Trace":
-                     data = ch.get_averaged_data()
-                     time = ch.get_relative_averaged_time_vector()
-                 elif target_type == "All Trials":
-                     # For RMP, analyze average of all trials
-                     data = ch.get_averaged_data()
-                     time = ch.get_relative_averaged_time_vector()
-
-                 if data is not None and time is not None:
-                     item_results[chan_id] = {'data': data, 'time': time, 'units': units, 'rate': rate}
-                 else:
-                     log.warning(f"RMP: Could not get valid data/time for Ch {chan_id}, Item: {item}")
-
-            return item_results if item_results else None
+            # Always re-add region item as clear() removes it
+            self.plot_widget.addItem(self.baseline_region_item)
+            self.plot_widget.setTitle(data_label) # Set title for clarity
 
         except Exception as e:
-            log.error(f"RMP: Error reading/processing file {filepath.name}: {e}", exc_info=True)
+            log.error(f"Error plotting trace for channel {chan_id}: {e}", exc_info=True)
+            self.plot_widget.clear()
+            self.plot_widget.addItem(self.baseline_region_item) # Re-add region on error
+            self._current_plot_data = None
+
+        # Trigger analysis after plotting new trace
+        self._trigger_rmp_analysis()
+
+    # --- Analysis Logic ---
+    @QtCore.Slot()
+    def _on_mode_changed(self):
+        """Handles switching between interactive and manual modes."""
+        is_manual = self.mode_button_group.checkedId() == self.MODE_MANUAL
+        self.manual_time_group.setEnabled(is_manual)
+        self.baseline_region_item.setVisible(not is_manual)
+        self.baseline_region_item.setMovable(not is_manual)
+
+        log.debug(f"Analysis mode changed. Manual Mode: {is_manual}")
+        # Trigger analysis immediately when mode changes
+        self._trigger_rmp_analysis()
+
+
+    @QtCore.Slot()
+    def _trigger_rmp_analysis_from_manual(self):
+        """Slot specifically for manual time edit changes."""
+        if self.mode_button_group.checkedId() == self.MODE_MANUAL:
+            log.debug("Manual time edit finished, triggering analysis.")
+            self._trigger_rmp_analysis()
+
+    @QtCore.Slot()
+    def _trigger_rmp_analysis_from_region(self):
+        """Slot specifically for region changes."""
+        if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
+            log.debug("Interactive region change finished, triggering analysis.")
+            self._trigger_rmp_analysis()
+
+    def _trigger_rmp_analysis(self):
+        """Central method to get parameters and run RMP calculation."""
+        if not self._current_plot_data:
+             log.debug("Skipping RMP analysis: No data plotted.")
+             self.results_label.setText("N/A")
+             if self.save_button: self.save_button.setEnabled(False)
+             return
+
+        time_vec = self._current_plot_data['time']
+        voltage_vec = self._current_plot_data['voltage']
+        start_t, end_t = None, None
+
+        if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
+            start_t, end_t = self.baseline_region_item.getRegion()
+            # Update manual fields to reflect region (optional, for user feedback)
+            self.start_time_edit.setText(f"{start_t:.4f}")
+            self.end_time_edit.setText(f"{end_t:.4f}")
+            log.debug(f"Running RMP in Interactive mode. Region: [{start_t:.4f}, {end_t:.4f}]")
+        else: # Manual mode
+            try:
+                start_t = float(self.start_time_edit.text())
+                end_t = float(self.end_time_edit.text())
+                if start_t >= end_t:
+                    log.warning("Manual time validation failed: Start >= End")
+                    self.results_label.setText("Invalid Time")
+                    if self.save_button: self.save_button.setEnabled(False)
+                    return
+                # Optionally update region to match manual input
+                self.baseline_region_item.setRegion([start_t, end_t])
+                log.debug(f"Running RMP in Manual mode. Times: [{start_t:.4f}, {end_t:.4f}]")
+            except (ValueError, TypeError):
+                log.warning("Manual time validation failed: Invalid number")
+                self.results_label.setText("Invalid Time")
+                if self.save_button: self.save_button.setEnabled(False)
+                return
+
+        # --- Perform Calculation ---
+        rmp_value, rmp_sd = calculate_rmp(time_vec, voltage_vec, start_t, end_t)
+
+        # --- Display Result ---
+        if rmp_value is not None:
+            units = self._selected_item_recording.channels.get(self.channel_combobox.currentData()).units or "V"
+            self.results_label.setText(f"{rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
+            log.info(f"Calculated RMP = {rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
+            if self.save_button: self.save_button.setEnabled(True) # Enable save button
+        else:
+            self.results_label.setText("Error")
+            log.warning("RMP calculation returned None.")
+            if self.save_button: self.save_button.setEnabled(False) # Disable save button
+
+    # --- ADDED: Implementation of BaseAnalysisTab method --- 
+    def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
+        """Gathers the specific RMP result details for saving."""
+        if not self.results_label or self.results_label.text() in ["N/A", "Error", "Invalid Time"]:
+            log.debug("_get_specific_result_data: No valid RMP result available.")
+            return None
+        
+        # Parse result from label
+        result_text = self.results_label.text()
+        try:
+            parts = result_text.split() # e.g., "-65.123 V ± 0.567 V"
+            if len(parts) < 4 or parts[2] != '±': # Basic check for expected format
+                 raise ValueError("Result string format unexpected.")
+            value = float(parts[0])
+            sd = float(parts[3]) # SD is at index 3
+            units = parts[1]     # Units are at index 1 (or 4)
+        except (ValueError, IndexError) as e:
+            log.error(f"Could not parse result from label '{result_text}' for saving: {e}")
+            return None # Cannot save if result can't be parsed
+        
+        # Get channel and data source info
+        channel_id = self.channel_combobox.currentData()
+        channel_name = self.channel_combobox.currentText().split(' (')[0] # Extract name before ID
+        data_source = self.data_source_combobox.currentData() # "average" or trial index (int)
+
+        if channel_id is None or data_source is None:
+            log.warning("Cannot get specific RMP data: Missing channel or data source selection.")
             return None
 
-    def _run_rmp_analysis(self):
-        """Runs RMP analysis on all selected items/channels and displays results."""
-        log.debug("Run RMP Analysis clicked.")
-        self.results_textedit.clear()
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
-        results_str = f"--- Analysis Results: Resting Potential (RMP) ---\n\n"
-        run_successful = False
-        try:
-            if not self._analysis_items_for_rmp:
-                self.results_textedit.setText("No analysis items selected from Explorer Tab."); return
+        specific_data = {
+            'result_value': value,
+            'result_sd': sd,
+            'result_units': units,
+            'channel_id': channel_id,
+            'channel_name': channel_name,
+            'data_source': data_source, # Crucial for base class to interpret
+            # Add analysis-specific parameters used
+            'baseline_start_s': self.baseline_region_item.getRegion()[0],
+            'baseline_end_s': self.baseline_region_item.getRegion()[1],
+            'analysis_mode': "Interactive" if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE else "Manual"
+        }
+        log.debug(f"_get_specific_result_data returning: {specific_data}")
+        return specific_data
+    # --- END ADDED ---
 
-            start_t = float(self.start_time_edit.text())
-            end_t = float(self.end_time_edit.text())
-            baseline_window = (start_t, end_t)
-            if start_t >= end_t: raise ValueError("Baseline start time must be less than end time.")
+    def cleanup(self):
+        # Clean up plot items if necessary
+        if self.plot_widget:
+             self.plot_widget.clear() # Ensure plot is cleared
+        # Call superclass cleanup if it does anything useful
+        super().cleanup()
 
-            for item_idx, item in enumerate(self._analysis_items_for_rmp):
-                 path_name = item['path'].name
-                 target = item['target_type']
-                 trial_info = f" (Trial {item['trial_index'] + 1})" if target == "Current Trial" else ""
-                 item_label = f"{path_name} [{target}{trial_info}]"
-                 results_str += f"===== Item {item_idx+1}: {item_label} =====\n"
-
-                 item_channel_data = self._get_analysis_data_for_item(item)
-
-                 if not item_channel_data:
-                      results_str += "  (Could not retrieve data for this item)\n\n"
-                      continue
-
-                 item_processed = False
-                 for chan_id, data_dict in item_channel_data.items():
-                     # Get channel name from the representative recording loaded for UI, if possible
-                     channel_name = chan_id # Default
-                     if self._current_recording_for_ui and chan_id in self._current_recording_for_ui.channels:
-                         channel_name = self._current_recording_for_ui.channels[chan_id].name
-
-                     data = data_dict['data']; time = data_dict['time']; units = data_dict['units']
-                     results_str += f"  Channel: {channel_name} ({chan_id})\n"
-                     rmp = basic_features.calculate_rmp(data, time, baseline_window) # Call core function
-                     if rmp is not None:
-                         results_str += f"    RMP ({start_t:.3f}-{end_t:.3f}s): {rmp:.3f} {units}\n"
-                         item_processed = True
-                     else:
-                         results_str += f"    RMP calculation failed.\n"
-                 results_str += "\n" # Space between items
-                 if item_processed: run_successful = True
-
-            if not run_successful:
-                 results_str += "\nNo channels successfully analyzed across all items."
-
-            self.results_textedit.setText(results_str)
-        except ValueError as ve: # Catch specific param errors
-             log.warning(f"Invalid RMP parameters: {ve}")
-             self.results_textedit.setText(f"*** Parameter Error: {ve} ***")
-             QtWidgets.QMessageBox.warning(self, "Parameter Error", str(ve))
-        except Exception as e:
-             log.error(f"Error during RMP analysis: {e}", exc_info=True)
-             self.results_textedit.setText(f"{results_str}\n\n*** ERROR: {e} ***")
-             QtWidgets.QMessageBox.critical(self, "Analysis Error", f"Error:\n{e}")
-        finally:
-            QtWidgets.QApplication.restoreOverrideCursor()
+# This constant is used by AnalyserTab to dynamically load the analysis tabs
+ANALYSIS_TAB_CLASS = RmpAnalysisTab
