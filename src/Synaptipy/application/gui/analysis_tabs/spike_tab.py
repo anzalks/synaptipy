@@ -116,6 +116,9 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         button_layout.addStretch()
         controls_layout.addLayout(button_layout)
         
+        # --- ADDED: Call base class method to add the Save button --- 
+        self._setup_save_button(controls_layout) # Use the same layout as controls
+        
         # 6. Results Display Area
         results_group = QtWidgets.QGroupBox("Results")
         results_layout = QtWidgets.QVBoxLayout(results_group)
