@@ -1,9 +1,7 @@
 # src/Synaptipy/application/gui/analysis_tabs/rmp_tab.py
 # -*- coding: utf-8 -*-
-"""
-Analysis sub-tab for calculating Resting Membrane Potential (RMP).
-Allows interactive or manual selection of the baseline period.
-"""
+# Analysis sub-tab for calculating Resting Membrane Potential (RMP).
+# Allows interactive or manual selection of the baseline period.
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
@@ -22,20 +20,16 @@ log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rmp_tab')
 
 # --- RMP Calculation Function ---
 def calculate_rmp(time: np.ndarray, voltage: np.ndarray, start_time: float, end_time: float) -> Optional[Tuple[float, float]]:
-    """
-    Calculates the Resting Membrane Potential (RMP) and its standard deviation
-    over a specified time window.
-
-    Args:
-        time: 1D numpy array of time values.
-        voltage: 1D numpy array of voltage values.
-        start_time: Start time for the baseline window.
-        end_time: End time for the baseline window.
-
-    Returns:
-        A tuple containing (mean_voltage, std_dev_voltage) or None if the window
-        is invalid or no data points are found.
-    """
+    # Calculates the Resting Membrane Potential (RMP) and its standard deviation
+    # over a specified time window.
+    # Args:
+    #     time: 1D numpy array of time values.
+    #     voltage: 1D numpy array of voltage values.
+    #     start_time: Start time for the baseline window.
+    #     end_time: End time for the baseline window.
+    # Returns:
+    #     A tuple containing (mean_voltage, std_dev_voltage) or None if the window
+    #     is invalid or no data points are found.
     if time is None or voltage is None or start_time >= end_time:
         return None
     try:
@@ -55,7 +49,7 @@ def calculate_rmp(time: np.ndarray, voltage: np.ndarray, start_time: float, end_
 
 # --- RMP Analysis Tab Class ---
 class RmpAnalysisTab(BaseAnalysisTab):
-    """QWidget for RMP analysis with interactive plotting."""
+    # QWidget for RMP analysis with interactive plotting.
 
     # Define constants for analysis modes
     MODE_INTERACTIVE = 0
@@ -92,11 +86,11 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self._on_mode_changed() # Set initial UI state based on default mode
 
     def get_display_name(self) -> str:
-        """Returns the name for the sub-tab."""
+        # Returns the name for the sub-tab.
         return "Resting Potential (RMP)"
 
     def _setup_ui(self):
-        """Create UI elements for the RMP analysis tab."""
+        # Create UI elements for the RMP analysis tab.
         main_layout = QtWidgets.QVBoxLayout(self) # Use Vertical layout
 
         # --- Top Controls Area ---
@@ -188,7 +182,7 @@ class RmpAnalysisTab(BaseAnalysisTab):
         log.debug("RMP Analysis Tab UI setup complete.")
 
     def _connect_signals(self):
-        """Connect signals specific to RMP tab widgets."""
+        # Connect signals specific to RMP tab widgets.
         # Inherited combo box signal handled by BaseAnalysisTab (_on_analysis_item_selected)
 
         # Connect channel selector
@@ -215,10 +209,8 @@ class RmpAnalysisTab(BaseAnalysisTab):
 
     # --- Overridden Methods from Base ---
     def _update_ui_for_selected_item(self):
-        """
-        Update the RMP tab UI when a new analysis item is selected.
-        Populates channel list, plots data, and enables/disables controls.
-        """
+        # Update the RMP tab UI when a new analysis item is selected.
+        # Populates channel list, plots data, and enables/disables controls.
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
         self._current_plot_data = None # Clear previous plot data
         self.results_label.setText("N/A") # Clear previous results
@@ -349,12 +341,16 @@ class RmpAnalysisTab(BaseAnalysisTab):
                 if source_data == "average":
                     voltage_vec = channel.get_averaged_data()
                     time_vec = channel.get_relative_averaged_time_vector()
+                    # ADDED: Log values immediately after retrieval
+                    log.debug(f"Retrieved average data: voltage_vec is None = {voltage_vec is None}, time_vec is None = {time_vec is None}")
                     data_label = f"{channel.name or chan_id} (Average)"
                 elif isinstance(source_data, int):
                     trial_index = source_data # 0-based index from userData
                     if 0 <= trial_index < channel.num_trials:
                         voltage_vec = channel.get_data(trial_index)
                         time_vec = channel.get_relative_time_vector(trial_index)
+                        # ADDED: Log values immediately after retrieval
+                        log.debug(f"Retrieved trial {trial_index} data: voltage_vec is None = {voltage_vec is None}, time_vec is None = {time_vec is None}")
                         data_label = f"{channel.name or chan_id} (Trial {trial_index + 1})"
                     else:
                         log.warning(f"Invalid trial index {trial_index} requested for Ch {chan_id}")
@@ -379,7 +375,12 @@ class RmpAnalysisTab(BaseAnalysisTab):
                      default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
                      self.baseline_region_item.setRegion([min_t, default_end])
                      log.debug(f"Resetting region to default: [{min_t}, {default_end}]")
-            else:
+                else:
+                    # This else corresponds to the region check
+                    # The region is valid, so do nothing or log success (optional)
+                    log.debug("Region is within bounds and valid.")
+            else: # This else corresponds to `if time_vec is not None and voltage_vec is not None:`
+                # --- MOVED MISPLACED LINES HERE --- 
                 self._current_plot_data = None
                 log.warning(f"No valid data found to plot for channel {chan_id}")
 
@@ -474,13 +475,14 @@ class RmpAnalysisTab(BaseAnalysisTab):
             log.warning("RMP calculation returned None.")
             if self.save_button: self.save_button.setEnabled(False) # Disable save button
 
-    # --- ADDED: Implementation of BaseAnalysisTab method --- 
+    # --- Implementation of BaseAnalysisTab method --- 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         """Gathers the specific RMP result details for saving."""
         if not self.results_label or self.results_label.text() in ["N/A", "Error", "Invalid Time"]:
             log.debug("_get_specific_result_data: No valid RMP result available.")
             return None
         
+        value, sd, units = None, None, None # Initialize
         # Parse result from label
         result_text = self.results_label.text()
         try:
@@ -494,7 +496,7 @@ class RmpAnalysisTab(BaseAnalysisTab):
             log.error(f"Could not parse result from label '{result_text}' for saving: {e}")
             return None # Cannot save if result can't be parsed
         
-        # Get channel and data source info
+        # If parsing succeeded, proceed to get other details
         channel_id = self.channel_combobox.currentData()
         channel_name = self.channel_combobox.currentText().split(' (')[0] # Extract name before ID
         data_source = self.data_source_combobox.currentData() # "average" or trial index (int)
@@ -517,7 +519,7 @@ class RmpAnalysisTab(BaseAnalysisTab):
         }
         log.debug(f"_get_specific_result_data returning: {specific_data}")
         return specific_data
-    # --- END ADDED ---
+    # --- END Implementation ---
 
     def cleanup(self):
         # Clean up plot items if necessary

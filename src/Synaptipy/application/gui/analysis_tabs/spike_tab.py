@@ -14,14 +14,15 @@ from .base import BaseAnalysisTab
 # Import needed core components using absolute paths
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.core.analysis import spike_analysis # Import the analysis function
+from Synaptipy.infrastructure.file_readers import NeoAdapter # <<< ADDED
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.spike_tab')
 
 class SpikeAnalysisTab(BaseAnalysisTab):
     """QWidget for Threshold-based Spike Detection."""
 
-    def __init__(self, explorer_tab_ref, parent=None):
-        super().__init__(explorer_tab_ref, parent)
+    def __init__(self, neo_adapter: NeoAdapter, parent=None):
+        super().__init__(neo_adapter=neo_adapter, parent=parent)
 
         # --- UI References specific to Spike ---
         self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
@@ -109,11 +110,25 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         # Channel checkboxes are connected in _update_channel_list
 
     # --- Overridden Methods from Base ---
-    def update_state(self, current_recording_for_ui: Optional[Recording], analysis_items: List[Dict[str, Any]]):
+    def update_state(self, analysis_items: List[Dict[str, Any]]):
         """Update state specific to the Spike tab."""
-        self._current_recording_for_ui = current_recording_for_ui
+        # Store the analysis items
         self._analysis_items_for_spike = analysis_items
         has_items = bool(self._analysis_items_for_spike)
+
+        # Determine a representative recording for UI population (e.g., from the first item)
+        self._current_recording_for_ui = None
+        if analysis_items:
+            first_item = analysis_items[0]
+            first_item_path = first_item.get('path')
+            if first_item_path:
+                try:
+                    # Use the adapter passed during initialization
+                    self._current_recording_for_ui = self.neo_adapter.read_recording(first_item_path)
+                except Exception as e:
+                    log.error(f"SpikeTab: Failed to load representative recording {first_item_path.name} for UI: {e}")
+                    # Optionally show a warning to the user
+        
         has_data_for_ui = self._current_recording_for_ui is not None
 
         self._update_channel_list() # Use representative recording
