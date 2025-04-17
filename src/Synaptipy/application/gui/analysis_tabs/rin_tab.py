@@ -120,6 +120,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.response_start_edit: Optional[QtWidgets.QLineEdit] = None
         self.response_end_edit: Optional[QtWidgets.QLineEdit] = None
         self.manual_delta_i_edit: Optional[QtWidgets.QLineEdit] = None # ADDED
+        # ADDED: Calculate Button
+        self.calculate_button: Optional[QtWidgets.QPushButton] = None
         # Results
         self.result_label: Optional[QtWidgets.QLabel] = None # Shows Rin value
         # Plotting
@@ -209,6 +211,18 @@ class RinAnalysisTab(BaseAnalysisTab):
         controls_layout.addLayout(manual_current_layout) # Add below time group
         # --- END ADDED --- 
 
+        # --- ADDED: Calculate Button --- 
+        self.calculate_button = QtWidgets.QPushButton("Calculate Rin")
+        self.calculate_button.setEnabled(False) # Initially disabled
+        self.calculate_button.setToolTip("Click to calculate Rin using the current settings, plot, and Manual ΔI.")
+        # Add button centered below Manual ΔI
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.calculate_button)
+        button_layout.addStretch()
+        controls_layout.addLayout(button_layout)
+        # --- END ADDED ---
+
         # Results Display
         results_layout = QtWidgets.QHBoxLayout()
         results_layout.addWidget(QtWidgets.QLabel("Input Resistance (Rin):"))
@@ -244,13 +258,18 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_trace)
         self.mode_button_group.buttonClicked.connect(self._on_mode_changed)
         # Manual Edits
-        self.baseline_start_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        self.baseline_end_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        self.response_start_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        self.response_end_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
+        # REMOVED: self.baseline_start_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
+        # REMOVED: self.baseline_end_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
+        # REMOVED: self.response_start_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
+        # REMOVED: self.response_end_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
+        # Connect manual delta_i edit? Maybe not, require button press.
         # Region Edits
-        self.baseline_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_from_region)
-        self.response_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_from_region)
+        # REMOVED: self.baseline_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_from_region)
+        # REMOVED: self.response_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_from_region)
+        
+        # ADDED: Connect Calculate Button
+        self.calculate_button.clicked.connect(self._trigger_rin_analysis)
+        
         # Save button handled by base class
 
     def _update_ui_for_selected_item(self):
@@ -510,7 +529,14 @@ class RinAnalysisTab(BaseAnalysisTab):
                 log.error(f"Error re-adding regions after plot error: {add_err}")
             self._current_plot_data = None
 
-        self._trigger_rin_analysis()
+        # INSTEAD: Enable calculate button if voltage plot succeeded
+        if voltage is not None:
+             self.calculate_button.setEnabled(True)
+        else:
+             self.calculate_button.setEnabled(False)
+             # Ensure result is cleared if plot failed
+             self.result_label.setText("N/A")
+             if self.save_button: self.save_button.setEnabled(False)
 
     # --- Analysis Logic ---
     @QtCore.Slot()
@@ -525,17 +551,6 @@ class RinAnalysisTab(BaseAnalysisTab):
         self._trigger_rin_analysis()
 
     @QtCore.Slot()
-    def _trigger_rin_analysis_from_manual(self):
-        if self.mode_button_group.checkedId() == self.MODE_MANUAL:
-            log.debug("Rin manual time edit finished, triggering analysis.")
-            self._trigger_rin_analysis()
-
-    @QtCore.Slot()
-    def _trigger_rin_analysis_from_region(self):
-        if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
-            log.debug("Rin interactive region change finished, triggering analysis.")
-            self._trigger_rin_analysis()
-
     def _trigger_rin_analysis(self):
         # Get parameters and run Rin calculation using manual Delta I input.
         # Check if basic voltage data is available
