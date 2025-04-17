@@ -268,3 +268,8 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         except ValueError as ve: log.warning(f"Invalid Spike params: {ve}"); self.results_textedit.setText(f"*** Param Error: {ve} ***"); QtWidgets.QMessageBox.warning(self, "Param Error", str(ve))
         except Exception as e: log.error(f"Error during Spike analysis: {e}", exc_info=True); self.results_textedit.setText(f"{results_str}\n\n*** ERROR: {e} ***"); QtWidgets.QMessageBox.critical(self, "Analysis Error", f"Error:\n{e}")
         finally: QtWidgets.QApplication.restoreOverrideCursor()
+
+# --- END CLASS SpikeAnalysisTab ---
+
+# This constant is used by AnalyserTab to dynamically load the analysis tabs
+ANALYSIS_TAB_CLASS = SpikeAnalysisTab

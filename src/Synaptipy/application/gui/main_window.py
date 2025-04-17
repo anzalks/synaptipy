@@ -42,8 +42,20 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         log.info("Initializing MainWindow...")
         self.setWindowTitle("Synaptipy Viewer")
-        # Default geometry, will be overridden by restore_window_state if settings exist
-        self.setGeometry(50, 50, 1700, 950)
+
+        # --- Calculate initial size based on screen (75%) --- # Updated comment
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen:
+            available_geometry = screen.availableGeometry()
+            initial_width = int(available_geometry.width() * 0.75) # <<< CHANGED to 0.75
+            initial_height = int(available_geometry.height() * 0.75) # <<< CHANGED to 0.75
+            self.resize(initial_width, initial_height) # Use resize instead of setGeometry
+            log.info(f"Set initial size based on screen (75%): {initial_width}x{initial_height}")
+        else:
+            log.warning("Could not get screen geometry, using default size.")
+            # Fallback default geometry (smaller than before)
+            self.resize(1200, 800)
+            # self.setGeometry(50, 50, 1700, 950) # <<< REMOVED
 
         # --- Instantiate Adapters/Exporters ---
         # These come from dummy_classes (which imports real ones if available)
@@ -63,7 +75,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings = QtCore.QSettings("Synaptipy", "Viewer") # Org name, App name
 
         # --- Initialize State Variables (Specific to MainWindow) ---
-        # None needed currently
+        self.saved_analysis_results: List[Dict[str, Any]] = []
 
         # --- Setup Core UI Components ---
         self._setup_menu_and_status_bar()
@@ -147,124 +159,114 @@ class MainWindow(QtWidgets.QMainWindow):
     # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same as previous answer ---
     # V V V (Keep methods from previous answer here) V V V
     def _open_file_dialog(self):
-        """Shows the file open dialog and initiates loading in the Explorer tab."""
+        """Shows the file open dialog (single file), scans for siblings, and initiates loading."""
         log.debug("Open file dialog requested.")
         try:
-            # neo_adapter is already instantiated and available via self
             file_filter = self.neo_adapter.get_supported_file_filter()
         except Exception as e:
             log.error(f"Failed to get file filter from NeoAdapter: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Adapter Error", f"Could not get file types from adapter:\n{e}")
             file_filter = "All Files (*)" # Fallback
 
-        # Use QSettings to get/set last directory
         last_dir = self.settings.value("lastDirectory", "", type=str)
 
+        # --- REVERTED: Use getOpenFileName --- 
         filepath_str, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
             self, "Open Recording File", dir=last_dir, filter=file_filter
         )
+        # --- END REVERT ---
 
+        # --- REVERTED: Check single filepath_str --- 
         if not filepath_str:
             log.info("File open dialog cancelled.")
             self.status_bar.showMessage("File open cancelled.", 3000)
             return
+        # --- END REVERT ---
 
+        # --- REVERTED: Process single selected file path --- 
         selected_filepath = Path(filepath_str)
         folder_path = selected_filepath.parent
-        # Save the directory for next time
         self.settings.setValue("lastDirectory", str(folder_path))
 
         selected_extension = selected_filepath.suffix.lower()
         log.info(f"File selected: {selected_filepath.name}. Scanning folder '{folder_path}' for files with extension '{selected_extension}'.")
+        # --- END REVERT ---
 
-        # Find sibling files (same logic as original)
+        # --- REINSTATED: Sibling file scanning logic --- 
         try:
-            # Use glob which is generally safe
             sibling_files_all = list(folder_path.glob(f"*{selected_filepath.suffix}"))
-            # Robustly filter by lower case suffix after glob
-            sibling_files = sorted([p for p in sibling_files_all if p.suffix.lower() == selected_extension])
+            # Filter by lower case suffix after glob, ensure it's a file
+            sibling_files = sorted([p for p in sibling_files_all if p.is_file() and p.suffix.lower() == selected_extension])
         except Exception as e:
             log.error(f"Error scanning folder {folder_path} for sibling files: {e}", exc_info=True)
             QtWidgets.QMessageBox.warning(self, "Folder Scan Error", f"Could not scan folder for similar files:\n{e}\nLoading selected file only.")
+            # Fallback: Load only the selected file if scan fails
             file_list = [selected_filepath]
             current_index = 0
             self._load_in_explorer(selected_filepath, file_list, current_index)
             return
+        # --- END REINSTATED SCAN ---
 
+        # --- REINSTATED: Logic to handle found siblings --- 
         if not sibling_files:
-            log.warning(f"No other files with extension '{selected_extension}' found in the folder. Loading selected file only.")
+            log.warning(f"No files with extension '{selected_extension}' found in the folder. Loading selected file only.")
             file_list = [selected_filepath]
             current_index = 0
         else:
             file_list = sibling_files
             try:
+                # Find the index of the originally selected file within the sibling list
                 current_index = file_list.index(selected_filepath)
                 log.info(f"Found {len(file_list)} file(s) with extension '{selected_extension}'. Selected file is at index {current_index}.")
             except ValueError:
                 log.error(f"Selected file '{selected_filepath.name}' not found in the scanned list? Defaulting to index 0.")
                 current_index = 0 # Fallback
+        # --- END REINSTATED SIBLING LOGIC ---
 
-        # Load the file at the determined index
+        # --- Load the file at the determined index from the sibling list --- 
         if file_list:
-            # Check if the index is valid before accessing
             if 0 <= current_index < len(file_list):
                  self._load_in_explorer(file_list[current_index], file_list, current_index)
             else:
                  log.error(f"Determined index {current_index} is out of bounds for file list (size {len(file_list)}). Cannot load.")
                  QtWidgets.QMessageBox.critical(self, "Loading Error", "Internal error: Could not determine correct file index.")
-                 self._update_menu_state() # Update menu state even on error
+                 self._update_menu_state()
         else:
-            # This case should ideally not be reached if a file was selected
             log.error("File list is unexpectedly empty after selection and processing.")
             QtWidgets.QMessageBox.critical(self, "Loading Error", "Failed to identify the file to load.")
-            self._update_menu_state() # Update menu state even on error
+            self._update_menu_state()
 
-    def _load_in_explorer(self, filepath: Path, file_list: List[Path], current_index: int):
-        """Instructs the Explorer tab to load the file and updates dependent UI."""
-        log.info(f"Requesting ExplorerTab to load: {filepath.name}")
+    # CHANGE: Signature updated to reflect the arguments passed from the modified _open_file_dialog
+    def _load_in_explorer(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int):
+        """Instructs the Explorer tab to load the initial file and provide the full list."""
+        # CHANGE: Log using the clearer argument name
+        log.info(f"Requesting ExplorerTab to load initial file: {initial_filepath_to_load.name} (from list of {len(file_list)} siblings)")
         if not (hasattr(self, 'explorer_tab') and self.explorer_tab):
             log.error("Cannot load file: Explorer tab not found or not initialized yet.")
             QtWidgets.QMessageBox.critical(self, "Internal Error", "Explorer tab is missing. Cannot load file.")
-            # Attempt to update other tabs even if explorer is missing
             self._update_menu_state()
             if hasattr(self, 'exporter_tab') and self.exporter_tab: self.exporter_tab.update_state()
             if hasattr(self, 'analyser_tab') and self.analyser_tab: self.analyser_tab.update_state()
-            return  # Stop if explorer tab is missing
+            return
 
         try:
-            # Call the explorer tab's loading method
-            self.explorer_tab.load_recording_data(filepath, file_list, current_index)
-            # If successful (no immediate exception), switch focus
+            # CHANGE: Call the explorer tab's loading method with the initial file, full list, and index
+            self.explorer_tab.load_recording_data(initial_filepath_to_load, file_list, current_index)
             self.tab_widget.setCurrentWidget(self.explorer_tab)
         except Exception as e:
-            # Catch errors happening *during the call* to load_recording_data,
-            # although most file reading errors should be handled inside it now.
             log.error(f"Error occurred trying to initiate load in ExplorerTab: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred initiating the file load:\n{e}")
-            # State update will happen in finally block
         finally:
-            # --- UPDATE UI STATES AFTER LOAD ATTEMPT ---
-            # This block executes whether the try block succeeded or failed.
             log.debug("Updating menu, exporter, and analyser states after load attempt.")
-            # 1. Update menu based on whether explorer *now* has data
             self._update_menu_state()
-            # 2. Update exporter tab state
             if hasattr(self, 'exporter_tab') and self.exporter_tab:
-                try:
-                    self.exporter_tab.update_state()
-                except Exception as e_export_update:
-                    log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
-            else:
-                log.warning("Cannot update exporter tab state: Exporter tab not found.")
-            # 3. Update analyser tab state
+                try: self.exporter_tab.update_state()
+                except Exception as e_export_update: log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
+            else: log.warning("Cannot update exporter tab state: Exporter tab not found.")
             if hasattr(self, 'analyser_tab') and self.analyser_tab:
-                try:
-                    self.analyser_tab.update_state()  # *** Ensure this runs ***
-                except Exception as e_analyse_update:
-                    log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
-            else:
-                log.warning("Cannot update analyser tab state: Analyser tab not found.")
-            # --- End State Updates ---
+                try: self.analyser_tab.update_state(self.explorer_tab._analysis_items) # Pass analysis items explicitly
+                except Exception as e_analyse_update: log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+            else: log.warning("Cannot update analyser tab state: Analyser tab not found.")
 
 
     def _export_to_nwb(self):
@@ -360,27 +362,50 @@ class MainWindow(QtWidgets.QMainWindow):
     # =========================================================================
 
     def _restore_window_state(self):
-        """Restores window geometry and state from QSettings."""
+        """Restores window geometry and state from QSettings, checking validity."""
         log.debug("Restoring window state from settings...")
+        screen = QtWidgets.QApplication.primaryScreen()
+        available_geometry = screen.availableGeometry() if screen else None
+
         try:
             geom_value = self.settings.value("geometry") # Get value without type hint first
             if geom_value is not None:
                 # Check if it's QByteArray or bytes and decode if necessary
                 if isinstance(geom_value, QtCore.QByteArray):
-                    geom = geom_value
+                    geom_bytes = geom_value
                 elif isinstance(geom_value, bytes):
-                     geom = QtCore.QByteArray(geom_value)
+                     geom_bytes = QtCore.QByteArray(geom_value)
                 else:
                     log.warning(f"Saved geometry is not QByteArray or bytes: {type(geom_value)}. Skipping restore.")
-                    geom = None
+                    geom_bytes = None
 
-                if geom is not None and self.restoreGeometry(geom):
-                    log.debug("Restored window geometry.")
-                elif geom is not None:
-                     log.warning("Failed to restore geometry from saved value.")
+                if geom_bytes is not None:
+                    # --- Check if saved geometry fits on screen --- 
+                    temp_window = QtWidgets.QMainWindow() # Use a temporary object to parse geometry
+                    if temp_window.restoreGeometry(geom_bytes):
+                        restored_rect = temp_window.geometry()
+                        fits_on_screen = True
+                        if available_geometry:
+                             # Check if width/height are smaller than available screen space
+                             if restored_rect.width() > available_geometry.width() or \
+                                restored_rect.height() > available_geometry.height():
+                                 fits_on_screen = False
+                                 log.warning(f"Saved geometry ({restored_rect.width()}x{restored_rect.height()}) exceeds available screen size ({available_geometry.width()}x{available_geometry.height()}). Ignoring saved geometry.")
+                        # --- End Check ---
+                        
+                        if fits_on_screen:
+                            if self.restoreGeometry(geom_bytes):
+                                log.debug("Restored window geometry.")
+                            else:
+                                log.warning("Failed to restore geometry from saved value.")
+                        # If !fits_on_screen, we do nothing, keeping the calculated default size
+                    else:
+                        log.warning("Could not parse saved geometry bytes.")
+                    del temp_window # Clean up temporary window
             else:
                  log.debug("No saved geometry found.")
 
+            # Restore state (like maximized) usually doesn't cause off-screen issues
             state_value = self.settings.value("windowState")
             if state_value is not None:
                 if isinstance(state_value, QtCore.QByteArray):
@@ -425,3 +450,21 @@ class MainWindow(QtWidgets.QMainWindow):
             log.warning(f"Could not save settings on close: {e}")
         log.info("Accepting close event.")
         event.accept()
+
+    # --- ADDED: Method to store analysis results ---
+    def add_saved_result(self, result_data: Dict[str, Any]):
+        """Appends a dictionary containing analysis results to the central list."""
+        if not isinstance(result_data, dict):
+            log.error(f"Attempted to add non-dict result: {type(result_data)}")
+            return
+        
+        # Add a timestamp for when the result was saved
+        result_data['timestamp_saved'] = datetime.now(timezone.utc).isoformat()
+        
+        self.saved_analysis_results.append(result_data)
+        log.info(f"Saved analysis result ({result_data.get('analysis_type', '?')} from {result_data.get('source_file_name', '?')}). Total saved: {len(self.saved_analysis_results)}")
+        # Optional: Update status bar or emit signal
+        self.status_bar.showMessage(f"Result saved ({result_data.get('analysis_type', '?')}). Total: {len(self.saved_analysis_results)}", 3000)
+        # Example signal (define in class header if needed):
+        # self.analysis_results_updated.emit(self.saved_analysis_results)
+    # --- END ADDED ---
