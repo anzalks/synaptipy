@@ -54,6 +54,11 @@ class Channel:
              # Ensure arrays within the list are ndarrays (already checked but belt-and-suspenders)
              self.data_trials: List[np.ndarray] = [np.asarray(t) for t in data_trials]
 
+        # --- ADDED: Attributes for Associated Current Data --- 
+        self.current_data_trials: List[np.ndarray] = [] # Populated by adapter if current signal found
+        self.current_units: Optional[str] = None # Populated by adapter
+        # --- END ADDED ---
+
         # --- Optional Electrode Metadata (Populated by NeoAdapter) ---
         self.electrode_description: Optional[str] = None
         self.electrode_location: Optional[str] = None
@@ -255,6 +260,65 @@ class Channel:
          except ZeroDivisionError: log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate relative averaged time vector."); return None
 
          return np.linspace(0.0, duration_avg, num_samples_avg, endpoint=False)
+
+    # --- ADDED: Methods for Associated Current Data --- 
+    def get_current_data(self, trial_index: int = 0) -> Optional[np.ndarray]:
+        # Returns the associated current data array (1D NumPy array) for the specified trial index.
+        # Assumes current_data_trials is populated by the adapter.
+        # Returns None if the trial index is invalid or data is not valid.
+        if not hasattr(self, 'current_data_trials') or not isinstance(self.current_data_trials, list):
+            log.debug(f"Channel '{self.name}' has no 'current_data_trials' attribute or it's not a list.")
+            return None
+        if not (0 <= trial_index < len(self.current_data_trials)):
+            log.debug(f"Invalid current trial index {trial_index} requested for channel '{self.name}' (has {len(self.current_data_trials)} current trials).")
+            return None
+        
+        current_trial_data = self.current_data_trials[trial_index]
+        if not isinstance(current_trial_data, np.ndarray):
+            log.warning(f"Current data for trial {trial_index} in channel '{self.name}' is not a NumPy array (type: {type(current_trial_data)}).")
+            return None
+        return current_trial_data
+
+    def get_averaged_current_data(self) -> Optional[np.ndarray]:
+        # Calculates the average associated current trace across all trials.
+        # Assumes current_data_trials is populated and trials have same length.
+        if not hasattr(self, 'current_data_trials') or not self.current_data_trials:
+            log.debug(f"Cannot average current for channel '{self.name}': No current trials available.")
+            return None
+        
+        num_current_trials = len(self.current_data_trials)
+        if num_current_trials == 1:
+            single_trial = self.get_current_data(0)
+            if single_trial is not None and np.issubdtype(single_trial.dtype, np.number):
+                log.debug(f"Only one current trial for channel '{self.name}'. Returning it as 'average'.")
+                return single_trial.copy()
+            else:
+                log.warning(f"Cannot use single current trial as average for channel '{self.name}': Invalid data.")
+                return None
+
+        try:
+            valid_trials = [t for t in self.current_data_trials if isinstance(t, np.ndarray) and np.issubdtype(t.dtype, np.number)]
+            if len(valid_trials) != num_current_trials:
+                 log.error(f"Cannot average current for channel '{self.name}': Contains non-numeric or invalid trial data.")
+                 return None
+            if not valid_trials: return None
+
+            first_trial_len = valid_trials[0].shape[0]
+            if not all(arr.shape[0] == first_trial_len for arr in valid_trials):
+                lengths = {arr.shape[0] for arr in valid_trials}
+                log.error(f"Cannot average current for channel '{self.name}': Trials have different lengths: {lengths}.")
+                return None
+
+            stacked_trials = np.stack(valid_trials)
+            averaged_data = np.mean(stacked_trials, axis=0)
+            return averaged_data
+        except ValueError as ve:
+             log.error(f"ValueError during current averaging stack for channel '{self.name}': {ve}. Check trial shapes.")
+             return None
+        except Exception as e:
+            log.error(f"Unexpected error calculating average current for channel '{self.name}': {e}", exc_info=True)
+            return None
+    # --- END ADDED ---
 
 
 class Recording:

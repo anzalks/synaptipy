@@ -77,6 +77,8 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.results_label: Optional[QtWidgets.QLabel] = None # To display the calculated RMP
         # Plotting Interaction
         self.baseline_region_item: Optional[pg.LinearRegionItem] = None
+        # ADDED: Calculate Button
+        self.calculate_button: Optional[QtWidgets.QPushButton] = None
         # Store currently plotted data for analysis
         self._current_plot_data: Optional[Dict[str, np.ndarray]] = None # {'time':..., 'voltage':...}
 
@@ -158,6 +160,18 @@ class RmpAnalysisTab(BaseAnalysisTab):
         results_layout.addWidget(self.results_label, stretch=1)
         controls_layout.addLayout(results_layout)
 
+        # --- ADDED: Calculate Button --- 
+        self.calculate_button = QtWidgets.QPushButton("Calculate RMP")
+        self.calculate_button.setEnabled(False) # Initially disabled
+        self.calculate_button.setToolTip("Click to calculate RMP using the current settings and plot.")
+        # Add button centered below results
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.calculate_button)
+        button_layout.addStretch()
+        controls_layout.addLayout(button_layout)
+        # --- END ADDED ---
+
         # --- UPDATED: Use base class method for Save Button --- 
         # self.save_button = QtWidgets.QPushButton("Save RMP Result")
         # ... (manual button creation removed) ...
@@ -196,12 +210,14 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.mode_button_group.buttonClicked.connect(self._on_mode_changed)
 
         # Connect manual time edits
-        self.start_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
-        self.end_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
+        # REMOVED: self.start_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
+        # REMOVED: self.end_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
 
         # Connect interactive region change
-        # Use sigRegionChangeFinished to avoid triggering on every small drag movement
-        self.baseline_region_item.sigRegionChangeFinished.connect(self._trigger_rmp_analysis_from_region)
+        # REMOVED: self.baseline_region_item.sigRegionChangeFinished.connect(self._trigger_rmp_analysis_from_region)
+
+        # ADDED: Connect Calculate Button
+        self.calculate_button.clicked.connect(self._trigger_rmp_analysis)
 
         # --- REMOVED: Save button connection (handled by base) ---
         # self.save_button.clicked.connect(self._on_save_result_clicked)
@@ -375,12 +391,11 @@ class RmpAnalysisTab(BaseAnalysisTab):
                      default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
                      self.baseline_region_item.setRegion([min_t, default_end])
                      log.debug(f"Resetting region to default: [{min_t}, {default_end}]")
+                # This else corresponds to the region check
                 else:
-                    # This else corresponds to the region check
-                    # The region is valid, so do nothing or log success (optional)
                     log.debug("Region is within bounds and valid.")
-            else: # This else corresponds to `if time_vec is not None and voltage_vec is not None:`
-                # --- MOVED MISPLACED LINES HERE --- 
+            # This else corresponds to `if time_vec is not None and voltage_vec is not None:`
+            else: 
                 self._current_plot_data = None
                 log.warning(f"No valid data found to plot for channel {chan_id}")
 
@@ -395,7 +410,15 @@ class RmpAnalysisTab(BaseAnalysisTab):
             self._current_plot_data = None
 
         # Trigger analysis after plotting new trace
-        self._trigger_rmp_analysis()
+        # REMOVED: self._trigger_rmp_analysis() 
+        # INSTEAD: Enable calculate button if plot succeeded
+        if self._current_plot_data:
+             self.calculate_button.setEnabled(True)
+        else:
+             self.calculate_button.setEnabled(False)
+             # Ensure result is cleared if plot failed
+             self.results_label.setText("N/A")
+             if self.save_button: self.save_button.setEnabled(False)
 
     # --- Analysis Logic ---
     @QtCore.Slot()
@@ -481,7 +504,7 @@ class RmpAnalysisTab(BaseAnalysisTab):
         if not self.results_label or self.results_label.text() in ["N/A", "Error", "Invalid Time"]:
             log.debug("_get_specific_result_data: No valid RMP result available.")
             return None
-        
+
         value, sd, units = None, None, None # Initialize
         # Parse result from label
         result_text = self.results_label.text()

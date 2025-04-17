@@ -288,77 +288,178 @@ class NeoAdapter:
             recording.metadata['axon_protocol_name'] = protocol_name; recording.metadata['axon_estimated_current_range'] = injected_current
 
         num_segments = len(block.segments); log.info(f"Processing {num_segments} segment(s)...")
-        channel_data_map: Dict[str, List[np.ndarray]] = {}; channel_metadata_map: Dict[str, Dict[str, Any]] = {}
-
+        
+        # --- MODIFIED: Data Aggregation Strategy --- 
+        # Step 1: Collect voltage/current signal pairs per segment
+        segment_signal_pairs: List[Dict[str, Optional[neo.AnalogSignal]]] = [] 
+        
         for seg_index, segment in enumerate(block.segments):
             log.debug(f"Processing Segment {seg_index + 1}/{num_segments}")
+            segment_voltages: Dict[Any, neo.AnalogSignal] = {} # Keyed by channel index or similar
+            segment_currents: Dict[Any, neo.AnalogSignal] = {} # Keyed by channel index or similar
+            
             if not segment.analogsignals: log.debug(f"Segment {seg_index+1} has no analogsignals."); continue
+            
             for sig_index_in_segment, anasig in enumerate(segment.analogsignals):
-                if not hasattr(anasig, 'shape') or len(anasig.shape) < 1 or anasig.shape[1] != 1 or anasig.size == 0: log.warning(f"Skipping invalid signal. Seg={seg_index}, Idx={sig_index_in_segment}"); continue
+                if not hasattr(anasig, 'shape') or anasig.ndim < 1 or anasig.size == 0:
+                    log.warning(f"Skipping invalid/empty signal. Seg={seg_index}, NeoIdx={sig_index_in_segment}")
+                    continue
+                
+                # Try to get a consistent physical channel index/ID
+                # This needs refinement based on how neo presents multi-channel signals
+                phys_chan_id = getattr(anasig, 'channel_index', sig_index_in_segment) # Use neo index as fallback key
+                signal_units = str(getattr(anasig, 'units', '')).lower()
+                
+                if 'v' in signal_units: # Identify as potential voltage
+                    if phys_chan_id in segment_voltages:
+                        log.warning(f"Seg {seg_index}: Multiple voltage signals found for physical channel ID {phys_chan_id}. Keeping first.")
+                    else:
+                        segment_voltages[phys_chan_id] = anasig
+                        log.debug(f"Seg {seg_index}: Found Voltage Signal for PhysChanID {phys_chan_id}, Units: {anasig.units}")
+                elif 'a' in signal_units: # Identify as potential current
+                    if phys_chan_id in segment_currents:
+                         log.warning(f"Seg {seg_index}: Multiple current signals found for physical channel ID {phys_chan_id}. Keeping first.")
+                    else:
+                        segment_currents[phys_chan_id] = anasig
+                        log.debug(f"Seg {seg_index}: Found Current Signal for PhysChanID {phys_chan_id}, Units: {anasig.units}")
+                else:
+                    log.warning(f"Seg {seg_index}, PhysChanID {phys_chan_id}: Signal units '{anasig.units}' not recognized as V or A. Skipping.")
+            
+            # Pair up signals for this segment based on physical channel ID
+            # Assuming V and I for the same electrode have the same phys_chan_id
+            paired_signals_in_segment = {}
+            for phys_chan_id, voltage_sig in segment_voltages.items():
+                current_sig = segment_currents.get(phys_chan_id)
+                if current_sig is None:
+                    log.warning(f"Seg {seg_index}: Found voltage for PhysChanID {phys_chan_id} but no matching current signal.")
+                else:
+                     log.debug(f"Seg {seg_index}: Paired V and I for PhysChanID {phys_chan_id}")
+                # Store pair, even if current is missing, keyed by voltage channel ID for grouping later
+                paired_signals_in_segment[phys_chan_id] = {'voltage': voltage_sig, 'current': current_sig} 
+            
+            segment_signal_pairs.append(paired_signals_in_segment)
 
-                header_info = header_channel_info.get(sig_index_in_segment)
-                domain_chan_id: str; channel_name: str; original_neo_chan_id: Optional[str] = str(anasig.channel_index) if hasattr(anasig, 'channel_index') else str(sig_index_in_segment)
+        # Step 2: Group data by Voltage Channel ID across segments
+        voltage_trials_map: Dict[str, List[np.ndarray]] = {}
+        current_trials_map: Dict[str, List[np.ndarray]] = {}
+        channel_metadata_map: Dict[str, Dict[str, Any]] = {}
+        current_units_map: Dict[str, str] = {}
+        processed_voltage_ids = set()
+
+        for seg_index, paired_signals_in_segment in enumerate(segment_signal_pairs):
+            for voltage_phys_id, signals in paired_signals_in_segment.items():
+                voltage_sig = signals.get('voltage')
+                current_sig = signals.get('current')
+                
+                if voltage_sig is None: continue # Should not happen if keyed correctly, but safety check
+
+                # Determine the Domain Channel ID (using header/annotations if available, fallback)
+                # This reuses part of the previous logic but applies it here
+                header_info = header_channel_info.get(voltage_phys_id) # Use physical ID for header lookup?
+                domain_chan_id: str; channel_name: str
+                original_neo_chan_id = str(getattr(voltage_sig, 'channel_index', voltage_phys_id))
                 if header_info:
                     domain_chan_id = header_info['id']; channel_name = header_info['name']
-                    log.debug(f"Seg {seg_index}, Sig Idx {sig_index_in_segment}: Using header -> ID='{domain_chan_id}', Name='{channel_name}'")
-                else:
-                    annotations = getattr(anasig, 'annotations', {}); ann_id = annotations.get('channel_id', None); ann_name = annotations.get('channel_name', None)
-                    if ann_id is not None: domain_chan_id = str(ann_id); channel_name = str(ann_name) if ann_name else f"AnnCh_{domain_chan_id}"; log.debug(f"Seg {seg_index}, Sig Idx {sig_index_in_segment}: Using annotation ID -> ID='{domain_chan_id}', Name='{channel_name}'")
-                    elif ann_name is not None: domain_chan_id = str(ann_name); channel_name = str(ann_name); log.warning(f"Seg {seg_index}, Sig Idx {sig_index_in_segment}: No channel_id, using Ann Name '{channel_name}' as ID.")
-                    else: domain_chan_id = f"PhysicalChannel_{original_neo_chan_id}"; channel_name = domain_chan_id; log.warning(f"Seg {seg_index}, Sig Idx {sig_index_in_segment}: No usable ID/Name. Using Fallback ID '{domain_chan_id}'.")
+                else: # Fallback using annotations or physical ID (simplified)
+                    annotations = getattr(voltage_sig, 'annotations', {})
+                    ann_id = annotations.get('channel_id')
+                    ann_name = annotations.get('channel_name')
+                    if ann_id is not None: domain_chan_id = str(ann_id); channel_name = str(ann_name) if ann_name else f"AnnCh_{domain_chan_id}"
+                    elif ann_name is not None: domain_chan_id = str(ann_name); channel_name = str(ann_name)
+                    else: domain_chan_id = f"PhysicalChannel_{original_neo_chan_id}"; channel_name = domain_chan_id
 
+                # Store metadata ONCE per domain_chan_id
+                if domain_chan_id not in processed_voltage_ids:
+                    try:
+                        units_obj = voltage_sig.units
+                        units = str(units_obj.dimensionality) if hasattr(units_obj, 'dimensionality') else 'unknown'
+                        units = 'unknown' if 'dimensionless' in units.lower() else units
+                        sampling_rate = float(voltage_sig.sampling_rate.magnitude)
+                        t_start_segment = float(voltage_sig.t_start.magnitude)
+                        
+                        # Extract other metadata (gain, offset etc.) from voltage signal
+                        annotations = getattr(voltage_sig, 'annotations', {})
+                        electrode_description=annotations.get('description', annotations.get('comment', None)); electrode_location=annotations.get('location', None)
+                        electrode_filtering=annotations.get('filtering', None); electrode_gain=float(getattr(voltage_sig, 'gain', np.nan)); electrode_gain=annotations.get('gain', electrode_gain) if np.isnan(electrode_gain) else electrode_gain
+                        electrode_offset=float(getattr(voltage_sig, 'offset', np.nan)); electrode_offset=annotations.get('offset', electrode_offset) if np.isnan(electrode_offset) else electrode_offset
+                        electrode_resistance=annotations.get('resistance', None); electrode_seal=annotations.get('seal', None)
+                        
+                        channel_metadata_map[domain_chan_id] = { 'name': channel_name, 'units': units, 'sampling_rate': sampling_rate, 't_start': t_start_segment, 'original_neo_id': original_neo_chan_id, 'electrode_description': electrode_description, 'electrode_location': electrode_location, 'electrode_filtering': electrode_filtering, 'electrode_gain': electrode_gain, 'electrode_offset': electrode_offset, 'electrode_resistance': electrode_resistance, 'electrode_seal': electrode_seal }
+                        voltage_trials_map[domain_chan_id] = []
+                        current_trials_map[domain_chan_id] = [] # Initialize current list too
+                        processed_voltage_ids.add(domain_chan_id)
+                        log.debug(f"Initialized group for Domain Channel ID='{domain_chan_id}', Name='{channel_name}' based on Seg {seg_index}")
+
+                        # Set recording-level properties from the very first valid voltage signal
+                        if recording.sampling_rate is None:
+                            recording.sampling_rate = sampling_rate
+                            recording.t_start = t_start_segment
+                            log.info(f"Set recording props: Rate={recording.sampling_rate:.2f} Hz, t0={recording.t_start:.4f} s")
+                    except Exception as e_meta:
+                        log.error(f"Error extracting metadata for DomainID '{domain_chan_id}' from Seg {seg_index}: {e_meta}")
+                        continue # Skip processing this channel ID if metadata failed
+                
+                # Append data for this segment/trial
                 try:
-                    data = np.ravel(anasig.magnitude); units_obj = anasig.units
-                    if hasattr(units_obj, 'dimensionality'): units = str(units_obj.dimensionality); units = 'unknown' if 'dimensionless' in units.lower() else units
-                    else: units = 'unknown'
-                    sampling_rate = float(anasig.sampling_rate.magnitude); t_start_segment = float(anasig.t_start.magnitude)
-                except Exception as e: log.error(f"Error extracting core data/meta for ChID='{domain_chan_id}', Seg={seg_index}: {e}"); continue
+                    voltage_data = np.ravel(voltage_sig.magnitude)
+                    voltage_trials_map[domain_chan_id].append(voltage_data)
+                    
+                    if current_sig is not None:
+                        current_data = np.ravel(current_sig.magnitude)
+                        current_trials_map[domain_chan_id].append(current_data)
+                        # Store current units if not already stored for this domain_chan_id
+                        if domain_chan_id not in current_units_map:
+                             curr_units_obj = current_sig.units
+                             curr_units_str = str(curr_units_obj.dimensionality) if hasattr(curr_units_obj, 'dimensionality') else 'unknown'
+                             current_units_map[domain_chan_id] = 'unknown' if 'dimensionless' in curr_units_str.lower() else curr_units_str
+                    else:
+                        # If current is missing for this trial, append placeholder? Or handle downstream?
+                        # Appending None might complicate averaging. Appending zeros or NaNs? Or skip?
+                        # Let's skip appending to current_trials_map if current_sig is None for this trial.
+                        # Downstream averaging needs to handle potentially shorter current_data_trials list.
+                        log.debug(f"Skipping current data for DomainID '{domain_chan_id}' in Seg {seg_index} as it was not found/paired.")
+                        pass 
 
-                annotations = getattr(anasig, 'annotations', {})
-                electrode_description=annotations.get('description', annotations.get('comment', None)); electrode_location=annotations.get('location', None)
-                electrode_filtering=annotations.get('filtering', None); electrode_gain=float(getattr(anasig, 'gain', np.nan)); electrode_gain=annotations.get('gain', electrode_gain) if np.isnan(electrode_gain) else electrode_gain
-                electrode_offset=float(getattr(anasig, 'offset', np.nan)); electrode_offset=annotations.get('offset', electrode_offset) if np.isnan(electrode_offset) else electrode_offset
-                electrode_resistance=annotations.get('resistance', None); electrode_seal=annotations.get('seal', None)
-                map_key = domain_chan_id
+                except Exception as e_data:
+                    log.error(f"Error extracting data for DomainID '{domain_chan_id}' from Seg {seg_index}: {e_data}")
 
-                if map_key not in channel_metadata_map:
-                    channel_metadata_map[map_key] = { 'name': channel_name, 'units': units, 'sampling_rate': sampling_rate, 't_start': t_start_segment, 'original_neo_id': original_neo_chan_id, 'electrode_description': electrode_description, 'electrode_location': electrode_location, 'electrode_filtering': electrode_filtering, 'electrode_gain': electrode_gain, 'electrode_offset': electrode_offset, 'electrode_resistance': electrode_resistance, 'electrode_seal': electrode_seal }
-                    channel_data_map[map_key] = []
-                    log.debug(f"Initialized group for Channel ID='{map_key}', Name='{channel_name}'")
-                else:
-                    existing_meta = channel_metadata_map[map_key]
-                    if not np.isclose(existing_meta['sampling_rate'], sampling_rate, rtol=1e-5, atol=1e-8): log.warning(f"Inconsistent Rate! Ch='{map_key}' Existing={existing_meta['sampling_rate']:.2f} New={sampling_rate:.2f}. Using first.")
-                    if existing_meta['units'].lower() != units.lower(): log.warning(f"Inconsistent Units! Ch='{map_key}' Existing='{existing_meta['units']}' New='{units}'. Using first.")
-
-                channel_data_map[map_key].append(data)
-
-                if recording.sampling_rate is None:
-                    recording.sampling_rate = sampling_rate; recording.t_start = t_start_segment if recording.t_start is None else recording.t_start
-                    if recording.duration is None: recording.duration = data.size / sampling_rate if sampling_rate > 0 else 0.0
-                    log.info(f"Set recording props from first signal: Rate={recording.sampling_rate:.2f} Hz, t0={recording.t_start:.4f} s, Est Dur={recording.duration:.3f} s")
-
-        if not channel_data_map: log.warning(f"No valid channel data extracted from '{filepath.name}'."); return recording
-        log.info(f"Creating domain Channel objects for {len(channel_data_map)} unique channel IDs.")
-        for map_key, data_trials_list in channel_data_map.items():
-            meta = channel_metadata_map[map_key]
-            if not data_trials_list: log.warning(f"Skipping Channel ID='{map_key}': No data appended."); continue
+        # Step 3: Create Domain Channel objects
+        if not voltage_trials_map: log.warning(f"No valid channel data extracted from '{filepath.name}'."); return recording
+        log.info(f"Creating domain Channel objects for {len(voltage_trials_map)} unique voltage channel IDs.")
+        
+        for domain_chan_id, voltage_trials_list in voltage_trials_map.items():
+            meta = channel_metadata_map[domain_chan_id]
+            current_trials_list = current_trials_map.get(domain_chan_id, []) # Get corresponding current trials
+            current_units = current_units_map.get(domain_chan_id)
+            
+            if not voltage_trials_list: log.warning(f"Skipping Channel ID='{domain_chan_id}': No voltage data appended."); continue
+            
             try:
-                channel = Channel(id=map_key, name=meta['name'], units=meta['units'], sampling_rate=meta['sampling_rate'], data_trials=data_trials_list)
+                # Create the Channel object using voltage data first
+                channel = Channel(id=domain_chan_id, name=meta['name'], units=meta['units'], sampling_rate=meta['sampling_rate'], data_trials=voltage_trials_list)
+                
+                # Assign voltage-related metadata
                 channel.t_start = meta['t_start']; channel.electrode_description = meta['electrode_description']; channel.electrode_location = meta['electrode_location']
                 channel.electrode_filtering = meta['electrode_filtering']; channel.electrode_gain = meta['electrode_gain']; channel.electrode_offset = meta['electrode_offset']
                 channel.electrode_resistance = meta['electrode_resistance']; channel.electrode_seal = meta['electrode_seal']
+                
+                # Assign associated current data
+                channel.current_data_trials = current_trials_list
+                channel.current_units = current_units
+                
+                # Add channel to recording
                 recording.channels[channel.id] = channel
-                log.debug(f"Created Domain Ch: ID='{channel.id}', Name='{channel.name}', Units='{channel.units}', Rate={channel.sampling_rate:.2f}, Trials={len(data_trials_list)}, t0={channel.t_start:.4f}")
-            except Exception as e_channel: log.error(f"Failed to create Channel object for ID='{map_key}': {e_channel}", exc_info=True)
+                log.debug(f"Created Domain Ch: ID='{channel.id}', Name='{channel.name}', Units='{channel.units}', Rate={channel.sampling_rate:.2f}, V_Trials={len(voltage_trials_list)}, I_Trials={len(current_trials_list)}, I_Units={current_units}, t0={channel.t_start:.4f}")
+            except Exception as e_channel: 
+                log.error(f"Failed to create Channel object for ID='{domain_chan_id}': {e_channel}", exc_info=True)
 
-        if recording.sampling_rate is None and recording.channels:
-             log.warning("Rec rate fallback: Using first channel."); first_channel = next(iter(recording.channels.values()))
-             recording.sampling_rate = first_channel.sampling_rate;
-             if recording.t_start is None: recording.t_start = first_channel.t_start
-             if recording.duration is None:
-                 if first_channel.data_trials and first_channel.sampling_rate and first_channel.sampling_rate > 0:
-                      try: recording.duration = first_channel.data_trials[0].shape[0] / first_channel.sampling_rate
-                      except Exception: pass
+        # --- Final Checks/Adjustments (e.g., duration) ---
+        if recording.sampling_rate and recording.t_start is not None and not recording.duration:
+            # Estimate duration from the first channel with data
+            first_channel_with_data = next((ch for ch in recording.channels.values() if ch.data_trials), None)
+            if first_channel_with_data and first_channel_with_data.data_trials:
+                try: recording.duration = first_channel_with_data.data_trials[0].shape[0] / recording.sampling_rate
+                except Exception: pass
         if recording.duration is not None and recording.duration < 0: log.warning(f"Negative duration ({recording.duration:.3f}s). Setting None."); recording.duration = None
         log.info(f"Translation complete for '{filepath.name}'. Recording has {len(recording.channels)} channels.")
         return recording
