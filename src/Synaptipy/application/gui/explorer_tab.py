@@ -310,32 +310,35 @@ class ExplorerTab(QtWidgets.QWidget):
         analysis_group = QtWidgets.QGroupBox("Analysis Selection")
         analysis_layout = QtWidgets.QVBoxLayout(analysis_group)
         analysis_layout.setSpacing(5)
-        target_layout = QtWidgets.QHBoxLayout()
-        target_layout.addWidget(QtWidgets.QLabel("Add:"))
-        self.analysis_target_combo = QtWidgets.QComboBox()
-        self.analysis_target_combo.addItems(["Current Trial", "Average Trace", "All Trials"])
-        self.analysis_target_combo.setToolTip("Select data from current file for analysis set.")
-        target_layout.addWidget(self.analysis_target_combo, stretch=1)
-        analysis_layout.addLayout(target_layout)
-        self.add_analysis_button = QtWidgets.QPushButton("Add Target to Analysis Set")
-        self.add_analysis_button.setIcon(QtGui.QIcon.fromTheme("list-add"))
-        self.add_analysis_button.setToolTip("Add selected target from the currently displayed file to the analysis set.")
-        analysis_layout.addWidget(self.add_analysis_button)
+        # --- REMOVE Target Selection Layout ---
+        # target_layout = QtWidgets.QHBoxLayout()
+        # target_layout.addWidget(QtWidgets.QLabel("Add:"))
+        # self.analysis_target_combo = QtWidgets.QComboBox()
+        # self.analysis_target_combo.addItems(["Current Trial", "Average Trace", "All Trials"])
+        # self.analysis_target_combo.setToolTip("Select data from current file for analysis set.")
+        # target_layout.addWidget(self.analysis_target_combo, stretch=1)
+        # analysis_layout.addLayout(target_layout)
+        # --- END REMOVE ---
 
-        # --- UPDATED: Rename button and tooltip --- 
-        self.add_all_loaded_button = QtWidgets.QPushButton("Add Current File to Set") # Renamed
-        self.add_all_loaded_button.setIcon(QtGui.QIcon.fromTheme("document-add"))
-        self.add_all_loaded_button.setToolTip("Add the currently displayed file to the analysis set.") # Updated tooltip
-        analysis_layout.addWidget(self.add_all_loaded_button)
-        # --- END UPDATE ---
+        # Buttons
+        analysis_buttons_layout = QtWidgets.QHBoxLayout()
+        # Rename button to reflect fixed action
+        self.add_analysis_button = QtWidgets.QPushButton("Add Recording to Set")
+        self.add_analysis_button.setToolTip("Add the entire currently loaded recording to the analysis set.")
+        self.add_analysis_button.setEnabled(False)
+        analysis_buttons_layout.addWidget(self.add_analysis_button)
+
+        # --- ADD: Add Clear button to this layout ---
+        self.clear_analysis_button = QtWidgets.QPushButton("Clear Analysis Set")
+        self.clear_analysis_button.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
+        self.clear_analysis_button.setToolTip("Remove all items from analysis set.")
+        analysis_buttons_layout.addWidget(self.clear_analysis_button) # Add it here
+        # --- END ADD ---
 
         self.analysis_set_label = QtWidgets.QLabel("Analysis Set: 0 items")
         self.analysis_set_label.setWordWrap(True)
         analysis_layout.addWidget(self.analysis_set_label)
-        self.clear_analysis_button = QtWidgets.QPushButton("Clear Analysis Set")
-        self.clear_analysis_button.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
-        self.clear_analysis_button.setToolTip("Remove all items from analysis set.")
-        analysis_layout.addWidget(self.clear_analysis_button)
+        analysis_layout.addLayout(analysis_buttons_layout)
         left_panel_layout.addWidget(analysis_group)
 
         left_panel_layout.addStretch()
@@ -485,11 +488,13 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.add_analysis_button: self.add_analysis_button.clicked.connect(self._add_current_to_analysis_set)
         if self.clear_analysis_button: self.clear_analysis_button.clicked.connect(self._clear_analysis_set)
         self.plot_mode_combobox.currentIndexChanged.connect(self._update_ui_state)
-        if self.analysis_target_combo: self.analysis_target_combo.currentIndexChanged.connect(self._update_ui_state)
-        # --- UPDATED: Rename method called by the renamed button --- 
-        if hasattr(self, 'add_all_loaded_button') and self.add_all_loaded_button:
-            self.add_all_loaded_button.clicked.connect(self._add_current_file_to_set) # Renamed method
-        # --- END UPDATE ---
+        # --- REMOVE Combo Box Connection --- 
+        # if self.analysis_target_combo: self.analysis_target_combo.currentIndexChanged.connect(self._update_ui_state)
+        # --- END REMOVE --- 
+        # --- REMOVE Connection for removed button --- 
+        # if hasattr(self, 'add_all_loaded_button') and self.add_all_loaded_button:
+        #     self.add_all_loaded_button.clicked.connect(self._add_current_file_to_set) # Renamed method
+        # --- END REMOVE ---
         log.debug("ExplorerTab signal connections complete.")
 
 
@@ -982,21 +987,15 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.next_trial_button: self.next_trial_button.setEnabled(trial_nav_en and self.current_trial_index < self.max_trials_current_recording - 1)
         if self.trial_index_label: self.trial_index_label.setVisible(is_cycle and has_trials)
 
-        if self.analysis_target_combo:
-            self.analysis_target_combo.setEnabled(has_data)
-            current_trial_option_index = self.analysis_target_combo.findText("Current Trial")
-            if current_trial_option_index != -1:
-                model = self.analysis_target_combo.model(); item = model.item(current_trial_option_index)
-                if item:
-                    can_select_current = is_cycle and has_trials; item.setEnabled(can_select_current)
-                    if not can_select_current and self.analysis_target_combo.currentIndex() == current_trial_option_index:
-                        avg_index = self.analysis_target_combo.findText("Average Trace"); all_idx = self.analysis_target_combo.findText("All Trials"); new_idx = avg_index if avg_index != -1 else (all_idx if all_idx != -1 else 0); self.analysis_target_combo.setCurrentIndex(new_idx)
         if self.add_analysis_button:
-            target_type = self.analysis_target_combo.currentText() if self.analysis_target_combo else ""; add_enabled = has_data
-            if target_type == "Current Trial": add_enabled = add_enabled and is_cycle and has_trials
-            elif target_type == "Average Trace": add_enabled = add_enabled and has_trials
-            elif target_type == "All Trials": add_enabled = add_enabled and has_trials
+            # --- UPDATE: Enable button based only on whether data is loaded --- 
+            # target_type = self.analysis_target_combo.currentText() if self.analysis_target_combo else ""; 
+            add_enabled = has_data
+            # if target_type == "Current Trial": add_enabled = add_enabled and is_cycle and has_trials
+            # elif target_type == "Average Trace": add_enabled = add_enabled and has_trials
+            # elif target_type == "All Trials": add_enabled = add_enabled and has_trials
             self.add_analysis_button.setEnabled(add_enabled)
+            # --- END UPDATE --- 
         if self.clear_analysis_button: self.clear_analysis_button.setEnabled(bool(self._analysis_items))
 
         # --- UPDATE: Enable/disable RENAMED button --- 
@@ -1036,42 +1035,33 @@ class ExplorerTab(QtWidgets.QWidget):
         else: self.analysis_set_label.setToolTip("Analysis set is empty.")
 
     def _add_current_to_analysis_set(self):
-        if not self.current_recording: log.warning("Cannot add: No recording."); return
-        target_type = self.analysis_target_combo.currentText(); file_path = self.current_recording.source_file; trial_index = None
-        if target_type == "Current Trial":
-            if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE and 0 <= self.current_trial_index < self.max_trials_current_recording: trial_index = self.current_trial_index
-            else: QtWidgets.QMessageBox.warning(self, "Invalid Target", "Switch to 'Cycle Single Trial' mode and select a valid trial."); return
-        elif target_type == "Average Trace" and self.max_trials_current_recording <= 0: QtWidgets.QMessageBox.warning(self, "Invalid Target", "No trials to average."); return
-        elif target_type == "All Trials" and self.max_trials_current_recording <= 0: QtWidgets.QMessageBox.warning(self, "Invalid Target", "No trials available."); return
+        # --- UPDATE: Always add the current recording --- 
+        if not self.current_recording or not self.current_recording.source_file:
+            log.warning("Cannot add recording to analysis set: No recording loaded.")
+            return False
+            
+        file_path = self.current_recording.source_file
+        target_type = 'Recording' # Fixed target type
+        trial_index = None
+        
+        # --- ADD: Define analysis_item here ---
         analysis_item = {'path': file_path, 'target_type': target_type, 'trial_index': trial_index}
+        # --- END ADD ---
+        
+        # Prevent adding exact duplicate (same path and type)
+        is_duplicate = any(item.get('path') == file_path and item.get('target_type') == target_type for item in self._analysis_items)
+        if is_duplicate:
+             log.debug(f"Recording already in analysis set: {file_path.name}")
+             self.status_bar.showMessage(f"Recording '{file_path.name}' is already in the analysis set.", 3000)
+             return False
+             
         self._analysis_items.append(analysis_item); log.info(f"Added to analysis set: {analysis_item}")
+        self.status_bar.showMessage(f"Added Recording '{file_path.name}' to the analysis set.", 3000)
+        # --- END UPDATE --- 
         self._update_analysis_set_display(); self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
 
-    # --- UPDATED: Method renamed and logic changed to add *current* file --- 
-    def _add_current_file_to_set(self):
-        if not self.current_recording:
-            log.warning("Cannot add current file: No file loaded.")
-            self.status_bar.showMessage("No file loaded to add.", 3000)
-            return
-
-        file_path = self.current_recording.source_file
-        # Check if this specific file is already in the set as a 'Recording'
-        is_duplicate = any(item.get('path') == file_path and item.get('target_type') == 'Recording' for item in self._analysis_items)
-        
-        if not is_duplicate:
-            analysis_item = {'path': file_path, 'target_type': 'Recording', 'trial_index': None}
-            self._analysis_items.append(analysis_item)
-            log.info(f"Added file to analysis set: {file_path.name}")
-            self.status_bar.showMessage(f"Added file '{file_path.name}' to the analysis set.", 3000)
-            self._update_analysis_set_display()
-            self.analysis_set_changed.emit(self._analysis_items)
-            self._update_ui_state()
-        else:
-            log.debug(f"Skipping duplicate file: {file_path.name}")
-            self.status_bar.showMessage(f"File '{file_path.name}' is already in the analysis set.", 3000)
-    # --- END UPDATE ---
-
     def _clear_analysis_set(self):
+        """Clears the analysis set."""
         if not self._analysis_items: return
         confirm = QtWidgets.QMessageBox.question(self, "Confirm Clear", f"Clear all {len(self._analysis_items)} items from the analysis set?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
         if confirm == QtWidgets.QMessageBox.StandardButton.Yes:
