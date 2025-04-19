@@ -79,8 +79,17 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.baseline_region_item: Optional[pg.LinearRegionItem] = None
         # ADDED: Calculate Button
         self.calculate_button: Optional[QtWidgets.QPushButton] = None
+        # ADDED: Auto Calculate Button
+        self.auto_calculate_button: Optional[QtWidgets.QPushButton] = None
+        # ADDED: Plot item for RMP line
+        self.rmp_line_item: Optional[pg.InfiniteLine] = None
         # Store currently plotted data for analysis
         self._current_plot_data: Optional[Dict[str, np.ndarray]] = None # {'time':..., 'voltage':...}
+        # ADDED: Store last calculated RMP result
+        self._last_rmp_result: Optional[Dict[str, Any]] = None # {value, sd, method}
+        # ADDED: Plot items for SD lines
+        self.rmp_sd_upper_line_item: Optional[pg.InfiniteLine] = None
+        self.rmp_sd_lower_line_item: Optional[pg.InfiniteLine] = None
 
 
         self._setup_ui()
@@ -160,17 +169,24 @@ class RmpAnalysisTab(BaseAnalysisTab):
         results_layout.addWidget(self.results_label, stretch=1)
         controls_layout.addLayout(results_layout)
 
-        # --- ADDED: Calculate Button --- 
-        self.calculate_button = QtWidgets.QPushButton("Calculate RMP")
-        self.calculate_button.setEnabled(False) # Initially disabled
-        self.calculate_button.setToolTip("Click to calculate RMP using the current settings and plot.")
-        # Add button centered below results
-        button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.calculate_button)
-        button_layout.addStretch()
-        controls_layout.addLayout(button_layout)
-        # --- END ADDED ---
+        # --- Calculate and Auto Calculate Buttons Side-by-Side ---
+        self.calculate_button = QtWidgets.QPushButton("Calculate RMP (Window)") # Clarify name
+        self.calculate_button.setEnabled(False)
+        self.calculate_button.setToolTip("Calculate RMP using the interactive region or manual time window.")
+        
+        # Update text and tooltip for 0.5 SD
+        self.auto_calculate_button = QtWidgets.QPushButton("Auto Calculate RMP (±0.5SD)")
+        self.auto_calculate_button.setEnabled(False)
+        self.auto_calculate_button.setToolTip("Calculate RMP using mean ± 0.5SD of the entire trace.")
+        
+        # Add both buttons to the same horizontal layout
+        buttons_layout = QtWidgets.QHBoxLayout()
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.calculate_button)
+        buttons_layout.addWidget(self.auto_calculate_button)
+        buttons_layout.addStretch()
+        controls_layout.addLayout(buttons_layout)
+        # --- END MODIFIED ---
 
         # --- UPDATED: Use base class method for Save Button --- 
         # self.save_button = QtWidgets.QPushButton("Save RMP Result")
@@ -218,6 +234,9 @@ class RmpAnalysisTab(BaseAnalysisTab):
 
         # ADDED: Connect Calculate Button
         self.calculate_button.clicked.connect(self._trigger_rmp_analysis)
+
+        # ADDED: Connect Auto Calculate Button
+        self.auto_calculate_button.clicked.connect(self._run_auto_rmp_analysis)
 
         # --- REMOVED: Save button connection (handled by base) ---
         # self.save_button.clicked.connect(self._on_save_result_clicked)
@@ -318,6 +337,9 @@ class RmpAnalysisTab(BaseAnalysisTab):
             self._plot_selected_channel_trace() # Plot the trace for the initially selected channel
         else:
             self.plot_widget.clear() # Ensure plot is clear if no data/channels
+        
+        # Move this call AFTER plotting to ensure _current_plot_data is set
+        self._on_mode_changed() # Update manual/interactive state
 
     # --- Plotting and Interaction ---
     def _plot_selected_channel_trace(self):
@@ -330,6 +352,11 @@ class RmpAnalysisTab(BaseAnalysisTab):
                 if self.baseline_region_item not in self.plot_widget.items:
                     self.plot_widget.addItem(self.baseline_region_item)
             return
+
+        # Clear previous data
+        self.plot_widget.clear()
+        self._current_plot_data = None
+        self._clear_rmp_visualization_lines() # <<< ADDED: Clear RMP/SD lines
 
         chan_id = self.channel_combobox.currentData()
         source_data = self.data_source_combobox.currentData() # Trial index (int) or "average" (str)
@@ -403,6 +430,26 @@ class RmpAnalysisTab(BaseAnalysisTab):
             self.plot_widget.addItem(self.baseline_region_item)
             self.plot_widget.setTitle(data_label) # Set title for clarity
 
+            # Auto-range the plot initially
+            self.plot_widget.autoRange()
+
+            # --- REMOVED: Errant vertical RMP line creation ---
+            # if self._current_plot_data:
+            #     self.rmp_line_item = pg.InfiniteLine(pos=self._current_plot_data['time'][len(self._current_plot_data['time']) // 2],
+            #                                           pen=pg.mkPen(color=(255, 0, 0), width=2),
+            #                                           movable=False)
+            #     self.plot_widget.addItem(self.rmp_line_item)
+            # --- END REMOVED ---
+
+            # --- ADDED: Plot RMP and SD lines if available ---
+            self._plot_rmp_visualization_lines()
+            # --- END ADDED ---
+
+            # Update UI state (enable/disable buttons etc.)
+            self._update_analysis_controls_state()
+            # Trigger analysis automatically if in interactive mode initially?
+            # self._trigger_rmp_analysis() # Maybe do this explicitly
+
         except Exception as e:
             log.error(f"Error plotting trace for channel {chan_id}: {e}", exc_info=True)
             self.plot_widget.clear()
@@ -414,11 +461,96 @@ class RmpAnalysisTab(BaseAnalysisTab):
         # INSTEAD: Enable calculate button if plot succeeded
         if self._current_plot_data:
              self.calculate_button.setEnabled(True)
+             self.auto_calculate_button.setEnabled(True) # Also enable auto button
         else:
              self.calculate_button.setEnabled(False)
+             self.auto_calculate_button.setEnabled(False) # Also disable auto button
              # Ensure result is cleared if plot failed
              self.results_label.setText("N/A")
              if self.save_button: self.save_button.setEnabled(False)
+
+    # --- ADDED: Helper to clear RMP/SD lines ---
+    def _clear_rmp_visualization_lines(self):
+        """Removes RMP mean and SD lines from the plot."""
+        items_to_remove = []
+        if hasattr(self, 'rmp_line_item') and self.rmp_line_item is not None:
+            items_to_remove.append(self.rmp_line_item)
+            self.rmp_line_item = None # Prevent dangling reference
+        if hasattr(self, 'rmp_sd_upper_line_item') and self.rmp_sd_upper_line_item is not None:
+            items_to_remove.append(self.rmp_sd_upper_line_item)
+            self.rmp_sd_upper_line_item = None
+        if hasattr(self, 'rmp_sd_lower_line_item') and self.rmp_sd_lower_line_item is not None:
+            items_to_remove.append(self.rmp_sd_lower_line_item)
+            self.rmp_sd_lower_line_item = None
+
+        for item in items_to_remove:
+            if item.scene() is not None: # Check if item is actually in the plot
+                try:
+                    self.plot_widget.removeItem(item)
+                    # log.debug(f"Removed item: {type(item)}")
+                except Exception as e:
+                    log.warning(f"Could not remove item {item}: {e}")
+
+    # --- ADDED: Helper to plot RMP/SD lines ---
+    def _plot_rmp_visualization_lines(self):
+        """Plots the RMP mean line and optionally SD lines based on _last_rmp_result."""
+        log.debug("_plot_rmp_visualization_lines called.")
+
+        # --- Start: Always clear previous lines first ---
+        self._clear_rmp_visualization_lines()
+        # --- End: Always clear previous lines first ---
+
+        if not hasattr(self, '_last_rmp_result') or self._last_rmp_result is None:
+            log.debug("  Skipping RMP line plotting: No last result.")
+            return
+
+        rmp_value = self._last_rmp_result.get('result_value')
+        rmp_sd = self._last_rmp_result.get('result_sd')
+        units = self._last_rmp_result.get('result_units', 'mV')
+
+        if rmp_value is not None and np.isfinite(rmp_value):
+            log.debug("Preparing to plot RMP visualization lines.")
+            # Plot Mean RMP Line
+            mean_pen = pg.mkPen('r', width=2)
+            # Use InfLineLabel for hover effect
+            mean_label_opts = {'position': 0.5, 'color': 'r', 'movable': False, 'anchor': (0.5, 1)} # Removed offset
+            self.rmp_line_item = pg.InfiniteLine(
+                pos=rmp_value, angle=0, pen=mean_pen, movable=False,
+                label=f"RMP = {rmp_value:.2f} {units}", labelOpts=mean_label_opts
+            )
+            self.rmp_line_item.label.setPos(0, 5) # Offset label 5 pixels down
+            self.plot_widget.addItem(self.rmp_line_item)
+            log.debug(f"  Added RMP mean line at {rmp_value:.2f} {units}")
+
+            # Plot SD Lines (if SD is valid)
+            if rmp_sd is not None and np.isfinite(rmp_sd) and rmp_sd > 0:
+                sd_pen = pg.mkPen('r', width=1, style=QtCore.Qt.PenStyle.DashLine)
+                upper_sd_val = rmp_value + rmp_sd
+                lower_sd_val = rmp_value - rmp_sd
+
+                # Upper SD Line
+                upper_label_opts = {'position': 0.8, 'color': 'k', 'movable': False, 'anchor': (0.5, 0)} # Removed offset
+                self.rmp_sd_upper_line_item = pg.InfiniteLine(
+                    pos=upper_sd_val, angle=0, pen=sd_pen, movable=False,
+                    label=f"+SD = {upper_sd_val:.2f}", labelOpts=upper_label_opts
+                )
+                self.rmp_sd_upper_line_item.label.setPos(0, -5) # Offset label 5 pixels up
+                self.plot_widget.addItem(self.rmp_sd_upper_line_item)
+                log.debug(f"  Added RMP +SD line at {upper_sd_val:.2f}")
+
+                # Lower SD Line
+                lower_label_opts = {'position': 0.2, 'color': 'k', 'movable': False, 'anchor': (0.5, 1)} # Removed offset
+                self.rmp_sd_lower_line_item = pg.InfiniteLine(
+                    pos=lower_sd_val, angle=0, pen=sd_pen, movable=False,
+                    label=f"-SD = {lower_sd_val:.2f}", labelOpts=lower_label_opts
+                )
+                self.rmp_sd_lower_line_item.label.setPos(0, 5) # Offset label 5 pixels down
+                self.plot_widget.addItem(self.rmp_sd_lower_line_item)
+                log.debug(f"  Added RMP -SD line at {lower_sd_val:.2f}")
+            else:
+                log.debug(f"  Skipping SD lines: SD is None, zero, or non-finite ({rmp_sd}).")
+        else:
+            log.debug(f"  Skipping RMP line plotting: RMP value is None or non-finite ({rmp_value}).")
 
     # --- Analysis Logic ---
     @QtCore.Slot()
@@ -486,43 +618,232 @@ class RmpAnalysisTab(BaseAnalysisTab):
 
         # --- Perform Calculation ---
         rmp_value, rmp_sd = calculate_rmp(time_vec, voltage_vec, start_t, end_t)
+        self._last_rmp_result = None # Clear previous result before storing new one
 
-        # --- Display Result ---
+        # --- Store Result and Update UI ---
         if rmp_value is not None:
-            units = self._selected_item_recording.channels.get(self.channel_combobox.currentData()).units or "V"
+            units = "V" # Default
+            chan_id = self.channel_combobox.currentData()
+            if self._selected_item_recording and chan_id:
+                channel = self._selected_item_recording.channels.get(chan_id)
+                if channel: units = channel.units or "V"
+
             self.results_label.setText(f"{rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
             log.info(f"Calculated RMP = {rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
-            if self.save_button: self.save_button.setEnabled(True) # Enable save button
-        else:
+
+            # --- Store result for saving ---
+            self._last_rmp_result = {
+                'result_value': rmp_value,
+                'result_sd': rmp_sd,
+                'result_units': units,
+                'calculation_method': 'window' # Indicate the method used
+            }
+
+            # --- REMOVED: Manual plot line handling and save button enable ---
+            # (Code related to manually adding/removing items and setting button state removed)
+
+        else: # Calculation failed
             self.results_label.setText("Error")
             log.warning("RMP calculation returned None.")
-            if self.save_button: self.save_button.setEnabled(False) # Disable save button
+            # --- REMOVED: Manual save button disable and SD line removal ---
+            # (Code related to manually disabling button and removing items removed)
+
+        # --- ADDED: Centralized UI Update --- 
+        self._clear_rmp_visualization_lines()
+        self._plot_rmp_visualization_lines() # Update plot lines based on _last_rmp_result
+        self._update_save_button_state() # Update save button based on _last_rmp_result
+        # --- END ADDED ---
+
+    # --- ADDED: Auto RMP Calculation Logic --- 
+    @QtCore.Slot()
+    def _run_auto_rmp_analysis(self):
+        """Calculates RMP using mean ± 0.5SD of the entire trace."""
+        if not self._current_plot_data:
+            log.warning("Skipping Auto RMP analysis: No data plotted.")
+            self.results_label.setText("N/A")
+            self._last_rmp_result = None # Ensure result is cleared
+            self._clear_rmp_visualization_lines() # Clear any lines
+            self._update_save_button_state() # Update button state
+            return
+
+        voltage_vec = self._current_plot_data.get('voltage')
+        time_vec = self._current_plot_data.get('time')
+        if voltage_vec is None or len(voltage_vec) == 0 or time_vec is None or len(time_vec) == 0:
+            log.warning("Skipping Auto RMP analysis: Voltage or time data is empty/missing.")
+            self.results_label.setText("N/A")
+            self._last_rmp_result = None
+            self._clear_rmp_visualization_lines()
+            self._update_save_button_state()
+            return
+
+        log.debug("Running Auto RMP Calculation (Mean ± 0.5SD method)")
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        self._last_rmp_result = None # Clear previous result
+        calculation_succeeded = False # Flag to track success
+        # --- REMOVED: Variables for temporary visualization lines ---
+        # temp_sd_upper_line = None
+        # temp_sd_lower_line = None
+        # --- END REMOVED ---
+
+        try:
+            full_mean = np.mean(voltage_vec)
+            full_sd = np.std(voltage_vec)
+            threshold_sd = 0.5 # Use 0.5 SD
+            upper_bound = full_mean + threshold_sd * full_sd
+            lower_bound = full_mean - threshold_sd * full_sd
+
+            # Find indices within ±0.5 SD
+            indices = np.where((voltage_vec >= lower_bound) & (voltage_vec <= upper_bound))[0]
+            num_indices = len(indices)
+            # --- REMOVED: Percentage calculation and related logging ---
+            # percentage_in_range = (num_indices / len(voltage_vec)) * 100
+            # log.debug(f"Auto RMP: {percentage_in_range:.1f}% of data points are within {threshold_sd} SD.")
+
+            # --- REMOVED: Plotting of temporary ±0.5 SD lines ---
+            # sd_pen = pg.mkPen(color=(100, 100, 100), style=QtCore.Qt.PenStyle.DashLine)
+            # temp_sd_upper_line = pg.InfiniteLine(pos=upper_bound, angle=0, pen=sd_pen, movable=False)
+            # self.plot_widget.addItem(temp_sd_upper_line)
+            # log.debug(f"  Added temporary upper SD line at {upper_bound:.3f}")
+            # temp_sd_lower_line = pg.InfiniteLine(pos=lower_bound, angle=0, pen=sd_pen, movable=False)
+            # self.plot_widget.addItem(temp_sd_lower_line)
+            # log.debug(f"  Added temporary lower SD line at {lower_bound:.3f}")
+
+            # --- REVISED: Condition is now simply num_indices > 0 ---
+            # is_close_or_greater = np.isclose(percentage_in_range, 80.0, atol=0.02) or percentage_in_range > 80.0
+            log.debug(f"Condition Check: num_indices={num_indices}")
+
+            if num_indices > 0:
+                log.debug("  Proceeding with calculation (num_indices > 0).")
+                # Proceed with calculation
+                selected_voltage = voltage_vec[indices]
+                auto_rmp_mean = np.mean(selected_voltage)
+                auto_rmp_sd = np.std(selected_voltage)
+
+                # Get units
+                units = "V"
+                chan_id = self.channel_combobox.currentData()
+                if self._selected_item_recording and chan_id:
+                    channel = self._selected_item_recording.channels.get(chan_id)
+                    if channel: units = channel.units or "V"
+
+                self.results_label.setText(f"{auto_rmp_mean:.3f} {units} ± {auto_rmp_sd:.3f} {units}")
+                log.info(f"Auto Calculated RMP = {auto_rmp_mean:.3f} {units} ± {auto_rmp_sd:.3f} {units}")
+
+                # --- Store result for saving ---
+                self._last_rmp_result = {
+                    'result_value': auto_rmp_mean,
+                    'result_sd': auto_rmp_sd,
+                    'result_units': units,
+                    'calculation_method': f'auto_{threshold_sd}sd' # Indicate method used
+                }
+                calculation_succeeded = True # Mark calculation as successful
+
+            else: # num_indices == 0
+                 # --- UPDATED: Log/UI message for num_indices == 0 --- 
+                 log.warning(f"Auto RMP failed: No data points found within ±{threshold_sd} SD range.")
+                 self.results_label.setText(f"Error: No data in ±{threshold_sd}SD")
+                 # --- END UPDATED --- 
+                 # calculation_succeeded remains False
+                 # _last_rmp_result remains None
+            # --- END REVISED ---
+
+        except Exception as e:
+            log.error(f"Error during auto RMP calculation: {e}", exc_info=True)
+            self.results_label.setText("Error")
+            calculation_succeeded = False # Ensure failure on exception
+            self._last_rmp_result = None
+
+        finally:
+            # --- MODIFIED: Simplified final block --- 
+            # 1. Always clear persistent lines from previous calculations
+            self._clear_rmp_visualization_lines()
+
+            # 2. Plot final result ONLY if calculation succeeded (num_indices > 0)
+            if calculation_succeeded:
+                log.debug("  Auto RMP succeeded (num_indices > 0). Plotting final results.")
+                # Plot the final, persistent result lines (red)
+                self._plot_rmp_visualization_lines()
+            # else: # Calculation failed (num_indices == 0 or exception)
+            #     log.debug("  Auto RMP failed (num_indices == 0 or exception). No final lines plotted.")
+            #     # No lines to leave visible, as temporary lines were removed
+
+            # 3. Update save button state based on whether _last_rmp_result was set
+            self._update_save_button_state()
+            # 4. Restore cursor
+            QtWidgets.QApplication.restoreOverrideCursor()
+            # 5. Explicitly update plot range
+            self.plot_widget.autoRange()
+            log.debug("  Called plot_widget.autoRange()")
+            # --- END MODIFIED ---
+
+    def cleanup(self):
+        # Clean up plot items if necessary
+        if self.plot_widget:
+             # Remove RMP line if it exists
+             if self.rmp_line_item is not None and self.rmp_line_item.scene():
+                 self.plot_widget.removeItem(self.rmp_line_item)
+             self.plot_widget.clear() # Ensure plot is cleared
+        # Call superclass cleanup if it does anything useful
+        super().cleanup()
+
+    # --- ADDED BACK: Method to update control enabled states ---
+    def _update_analysis_controls_state(self):
+        # Enable/disable analysis controls based on whether data is plotted.
+        has_data = (self._current_plot_data is not None)
+        # Check if a valid analysis item is actually selected
+        has_valid_selection = (self._selected_item_index >= 0 and self._selected_item_recording is not None)
+        
+        # Enable channel and data source selection only if an item is selected
+        self.channel_combobox.setEnabled(has_valid_selection)
+        self.data_source_combobox.setEnabled(has_valid_selection and self.data_source_combobox.count() > 0 and self.data_source_combobox.currentData() is not None)
+
+        # Enable the rest only if data is actually plotted (implies valid selection AND successful plot)
+        self.analysis_mode_group.setEnabled(has_data)
+        
+        current_mode = self.mode_button_group.checkedId()
+        is_interactive = (current_mode == self.MODE_INTERACTIVE)
+        self.manual_time_group.setEnabled(has_data and not is_interactive)
+        self.baseline_region_item.setVisible(has_data and is_interactive)
+        self.baseline_region_item.setMovable(has_data and is_interactive)
+
+        # Enable Calculate buttons only if data is present
+        self.calculate_button.setEnabled(has_data)
+        self.auto_calculate_button.setEnabled(has_data)
+
+        # Base class handles save button state based on self._last_result
+        self._update_save_button_state() # Call the specific save button updater
+    # --- END ADDED BACK ---
+
+    def _update_save_button_state(self):
+        # Override if RMP requires specific conditions
+        # Enable save button only if a valid RMP result is stored.
+        can_save = hasattr(self, '_last_rmp_result') and self._last_rmp_result is not None
+        # Directly enable/disable the save button
+        if self.save_button:
+            self.save_button.setEnabled(can_save)
 
     # --- Implementation of BaseAnalysisTab method --- 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         """Gathers the specific RMP result details for saving."""
-        if not self.results_label or self.results_label.text() in ["N/A", "Error", "Invalid Time"]:
-            log.debug("_get_specific_result_data: No valid RMP result available.")
-            return None
+        # UPDATED: Use stored result instead of parsing label
+        if not hasattr(self, '_last_rmp_result') or self._last_rmp_result is None:
+             log.debug("_get_specific_result_data: No calculated RMP result stored.")
+             return None
 
-        value, sd, units = None, None, None # Initialize
-        # Parse result from label
-        result_text = self.results_label.text()
-        try:
-            parts = result_text.split() # e.g., "-65.123 V ± 0.567 V"
-            if len(parts) < 4 or parts[2] != '±': # Basic check for expected format
-                 raise ValueError("Result string format unexpected.")
-            value = float(parts[0])
-            sd = float(parts[3]) # SD is at index 3
-            units = parts[1]     # Units are at index 1 (or 4)
-        except (ValueError, IndexError) as e:
-            log.error(f"Could not parse result from label '{result_text}' for saving: {e}")
-            return None # Cannot save if result can't be parsed
-        
-        # If parsing succeeded, proceed to get other details
+        value = self._last_rmp_result.get('result_value')
+        sd = self._last_rmp_result.get('result_sd')
+        units = self._last_rmp_result.get('result_units', 'V') # Default units
+        method = self._last_rmp_result.get('calculation_method')
+
+        if value is None or sd is None or method is None:
+             log.error(f"_get_specific_result_data: Stored RMP result is incomplete: {self._last_rmp_result}")
+             return None
+
+        # Get source info
         channel_id = self.channel_combobox.currentData()
         channel_name = self.channel_combobox.currentText().split(' (')[0] # Extract name before ID
         data_source = self.data_source_combobox.currentData() # "average" or trial index (int)
+        data_source_text = self.data_source_combobox.currentText()
 
         if channel_id is None or data_source is None:
             log.warning("Cannot get specific RMP data: Missing channel or data source selection.")
@@ -534,22 +855,30 @@ class RmpAnalysisTab(BaseAnalysisTab):
             'result_units': units,
             'channel_id': channel_id,
             'channel_name': channel_name,
-            'data_source': data_source, # Crucial for base class to interpret
+            'data_source': data_source,
+            'data_source_label': data_source_text, # Add readable label
             # Add analysis-specific parameters used
-            'baseline_start_s': self.baseline_region_item.getRegion()[0],
-            'baseline_end_s': self.baseline_region_item.getRegion()[1],
-            'analysis_mode': "Interactive" if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE else "Manual"
+            'calculation_method': method # Store 'auto_Xsd' or 'window'
         }
+
+        # Add window parameters only if window method was used
+        if method == 'window':
+            start_s, end_s = self.baseline_region_item.getRegion()
+            specific_data['baseline_start_s'] = start_s
+            specific_data['baseline_end_s'] = end_s
+            # Determine if mode was Interactive or Manual when window was used
+            mode_id = self.mode_button_group.checkedId()
+            if mode_id == self.MODE_INTERACTIVE:
+                specific_data['analysis_mode'] = "Interactive"
+            elif mode_id == self.MODE_MANUAL:
+                specific_data['analysis_mode'] = "Manual"
+            else:
+                specific_data['analysis_mode'] = "Unknown" # Should not happen
+
         log.debug(f"_get_specific_result_data returning: {specific_data}")
         return specific_data
     # --- END Implementation ---
 
-    def cleanup(self):
-        # Clean up plot items if necessary
-        if self.plot_widget:
-             self.plot_widget.clear() # Ensure plot is cleared
-        # Call superclass cleanup if it does anything useful
-        super().cleanup()
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
 ANALYSIS_TAB_CLASS = RmpAnalysisTab
