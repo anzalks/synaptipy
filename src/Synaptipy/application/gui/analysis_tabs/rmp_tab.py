@@ -65,7 +65,7 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
         # --- END ADDED ---
         # Mode Selection
-        self.analysis_mode_group: Optional[QtWidgets.QGroupBox] = None
+        self.analysis_params_group: Optional[QtWidgets.QGroupBox] = None
         self.mode_button_group: Optional[QtWidgets.QButtonGroup] = None
         self.interactive_radio: Optional[QtWidgets.QRadioButton] = None
         self.manual_radio: Optional[QtWidgets.QRadioButton] = None
@@ -74,9 +74,9 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.start_time_edit: Optional[QtWidgets.QLineEdit] = None
         self.end_time_edit: Optional[QtWidgets.QLineEdit] = None
         # Results Display
-        self.results_label: Optional[QtWidgets.QLabel] = None # To display the calculated RMP
+        self.rmp_result_label: Optional[QtWidgets.QLabel] = None # To display the calculated RMP
         # Plotting Interaction
-        self.baseline_region_item: Optional[pg.LinearRegionItem] = None
+        self.interactive_region: Optional[pg.LinearRegionItem] = None
         # ADDED: Calculate Button
         self.calculate_button: Optional[QtWidgets.QPushButton] = None
         # ADDED: Auto Calculate Button
@@ -91,7 +91,6 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.rmp_sd_upper_line_item: Optional[pg.InfiniteLine] = None
         self.rmp_sd_lower_line_item: Optional[pg.InfiniteLine] = None
 
-
         self._setup_ui()
         self._connect_signals()
         self._on_mode_changed() # Set initial UI state based on default mode
@@ -101,145 +100,188 @@ class RmpAnalysisTab(BaseAnalysisTab):
         return "Resting Potential (RMP)"
 
     def _setup_ui(self):
-        # Create UI elements for the RMP analysis tab.
-        main_layout = QtWidgets.QVBoxLayout(self) # Use Vertical layout
+        """Recreate RMP analysis UI with a 3-column top layout."""
+        main_layout = QtWidgets.QVBoxLayout(self) # Main layout is Vertical
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(10)
 
-        # --- Top Controls Area ---
-        controls_group = QtWidgets.QGroupBox("Configuration")
-        controls_layout = QtWidgets.QVBoxLayout(controls_group)
-        controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        # --- Top Controls Area (3 Columns) ---
+        top_controls_widget = QtWidgets.QWidget()
+        top_controls_layout = QtWidgets.QHBoxLayout(top_controls_widget)
+        top_controls_layout.setContentsMargins(0,0,0,0)
+        top_controls_layout.setSpacing(8)
+        top_controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        # 1. Analysis Item Selector (Inherited)
-        item_selector_layout = QtWidgets.QFormLayout() # Use Form layout for this part
-        self._setup_analysis_item_selector(item_selector_layout) # Add combo box
-        controls_layout.addLayout(item_selector_layout)
-
-        # 2. Channel Selector (Single Channel for Plotting)
-        channel_select_layout = QtWidgets.QHBoxLayout()
-        channel_select_layout.addWidget(QtWidgets.QLabel("Plot Channel:"))
-        self.channel_combobox = QtWidgets.QComboBox()
-        self.channel_combobox.setToolTip("Select the channel to plot and interact with.")
-        self.channel_combobox.setEnabled(False)
-        channel_select_layout.addWidget(self.channel_combobox, stretch=1)
-        controls_layout.addLayout(channel_select_layout)
-
-        # --- ADDED: Data Source Selector ---
-        data_source_layout = QtWidgets.QHBoxLayout()
-        data_source_layout.addWidget(QtWidgets.QLabel("Data Source:"))
+        # --- Column 1: Data Selection ---
+        data_selection_group = QtWidgets.QGroupBox("Data Selection")
+        data_selection_layout = QtWidgets.QFormLayout(data_selection_group)
+        data_selection_layout.setContentsMargins(5, 10, 5, 5)
+        data_selection_layout.setSpacing(5)
+        data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        # 1a. Analysis Item Selector (inherited)
+        self._setup_analysis_item_selector(data_selection_layout)
+        # 1b. Voltage Channel
+        self.voltage_channel_combobox = QtWidgets.QComboBox()
+        self.voltage_channel_combobox.setToolTip("Select the voltage channel to analyze.")
+        self.voltage_channel_combobox.setEnabled(False)
+        data_selection_layout.addRow("Voltage Channel:", self.voltage_channel_combobox)
+        # 1c. Data Source
         self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select the specific trial or average trace to analyze.")
+        self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
         self.data_source_combobox.setEnabled(False)
-        data_source_layout.addWidget(self.data_source_combobox, stretch=1)
-        controls_layout.addLayout(data_source_layout)
-        # --- END ADDED ---
+        data_selection_layout.addRow("Data Source:", self.data_source_combobox)
+        # Set size policy for Col 1
+        data_selection_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
+        top_controls_layout.addWidget(data_selection_group)
 
-        # 3. Analysis Mode Selection
-        self.analysis_mode_group = QtWidgets.QGroupBox("Analysis Mode")
-        mode_layout = QtWidgets.QHBoxLayout(self.analysis_mode_group)
-        self.interactive_radio = QtWidgets.QRadioButton("Interactive Baseline")
-        self.manual_radio = QtWidgets.QRadioButton("Manual Time Entry")
-        self.mode_button_group = QtWidgets.QButtonGroup(self)
-        self.mode_button_group.addButton(self.interactive_radio, self.MODE_INTERACTIVE)
-        self.mode_button_group.addButton(self.manual_radio, self.MODE_MANUAL)
-        mode_layout.addWidget(self.interactive_radio)
-        mode_layout.addWidget(self.manual_radio)
-        self.interactive_radio.setChecked(True) # Default to interactive
-        self.analysis_mode_group.setEnabled(False)
-        controls_layout.addWidget(self.analysis_mode_group)
+        # --- Column 2: Analysis Mode & Parameters ---
+        analysis_params_group = QtWidgets.QGroupBox("Analysis Mode & Parameters")
+        analysis_params_layout = QtWidgets.QVBoxLayout(analysis_params_group)
+        analysis_params_layout.setContentsMargins(5, 10, 5, 5)
+        analysis_params_layout.setSpacing(5)
+        analysis_params_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        # 2a. Analysis Mode
+        mode_layout = QtWidgets.QHBoxLayout()
+        mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
+        self.mode_combobox = QtWidgets.QComboBox()
+        self.mode_combobox.addItems(["Interactive", "Automatic", "Manual"])
+        self.mode_combobox.setToolTip(
+            "Interactive: Use region selector on plot.\n"
+            "Automatic: Attempt calculation based on criteria.\n"
+            "Manual: Enter specific time window.")
+        mode_layout.addWidget(self.mode_combobox, stretch=1)
+        analysis_params_layout.addLayout(mode_layout)
+        # 2b. Manual Time Window Group (nested)
+        self.manual_time_group = QtWidgets.QGroupBox("Manual Time Window (s)")
+        manual_layout = QtWidgets.QHBoxLayout(self.manual_time_group)
+        self.manual_start_time_spinbox = QtWidgets.QDoubleSpinBox()
+        self.manual_end_time_spinbox = QtWidgets.QDoubleSpinBox()
+        for spinbox in [self.manual_start_time_spinbox, self.manual_end_time_spinbox]:
+            spinbox.setDecimals(4); spinbox.setRange(0.0, 1e6); spinbox.setSingleStep(0.01); spinbox.setSuffix(" s")
+        manual_layout.addWidget(QtWidgets.QLabel("Start:"))
+        manual_layout.addWidget(self.manual_start_time_spinbox)
+        manual_layout.addWidget(QtWidgets.QLabel("End:"))
+        manual_layout.addWidget(self.manual_end_time_spinbox)
+        self.manual_time_group.setVisible(False)
+        analysis_params_layout.addWidget(self.manual_time_group)
+        # 2c. Automatic Threshold Group (nested)
+        self.auto_threshold_group = QtWidgets.QGroupBox("Auto - Baseline SD Threshold")
+        auto_thresh_layout = QtWidgets.QHBoxLayout(self.auto_threshold_group)
+        self.auto_sd_threshold_spinbox = QtWidgets.QDoubleSpinBox()
+        self.auto_sd_threshold_spinbox.setDecimals(2); self.auto_sd_threshold_spinbox.setRange(0.1, 5.0); self.auto_sd_threshold_spinbox.setValue(0.5); self.auto_sd_threshold_spinbox.setSingleStep(0.1); self.auto_sd_threshold_spinbox.setSuffix(" x Initial SD")
+        self.auto_sd_threshold_spinbox.setToolTip("Max allowed standard deviation within the baseline window for auto-calculation (relative to initial trace noise estimate).")
+        auto_thresh_layout.addWidget(self.auto_sd_threshold_spinbox)
+        self.auto_threshold_group.setVisible(False)
+        analysis_params_layout.addWidget(self.auto_threshold_group)
+        # 2d. Run Button
+        self.run_button = QtWidgets.QPushButton("Run Manual/Auto Analysis")
+        self.run_button.setVisible(False)
+        self.run_button.setEnabled(False)
+        analysis_params_layout.addWidget(self.run_button)
+        analysis_params_layout.addStretch(1)
+        # Set size policy for Col 2
+        self.analysis_params_group = analysis_params_group # Assign to self
+        analysis_params_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
+        top_controls_layout.addWidget(analysis_params_group)
 
-        # 4. Manual Time Inputs (Initially grouped and potentially disabled)
-        self.manual_time_group = QtWidgets.QGroupBox("Manual Time Window")
-        manual_layout = QtWidgets.QFormLayout(self.manual_time_group)
-        self.start_time_edit = QtWidgets.QLineEdit("0.0")
-        self.start_time_edit.setValidator(QtGui.QDoubleValidator(0, 1e6, 4, self)) # Min 0, high max, 4 decimals
-        self.start_time_edit.setToolTip("Start time (s) for baseline calculation.")
-        manual_layout.addRow("Start Time (s):", self.start_time_edit)
-        self.end_time_edit = QtWidgets.QLineEdit("0.1")
-        self.end_time_edit.setValidator(QtGui.QDoubleValidator(0, 1e6, 4, self))
-        self.end_time_edit.setToolTip("End time (s) for baseline calculation.")
-        manual_layout.addRow("End Time (s):", self.end_time_edit)
-        self.manual_time_group.setEnabled(False) # Disabled initially
-        controls_layout.addWidget(self.manual_time_group)
+        # --- Column 3: Results ---
+        self.results_group = QtWidgets.QGroupBox("Results")
+        results_layout = QtWidgets.QVBoxLayout(self.results_group)
+        results_layout.setContentsMargins(5, 10, 5, 5)
+        results_layout.setSpacing(5)
+        results_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        self.rmp_result_label = QtWidgets.QLabel("RMP: --")
+        self.rmp_result_label.setToolTip("Calculated Resting Membrane Potential (Mean ± SD)")
+        results_layout.addWidget(self.rmp_result_label)
+        self.status_label = QtWidgets.QLabel("Status: Idle")
+        self.status_label.setWordWrap(True)
+        results_layout.addWidget(self.status_label)
+        self._setup_save_button(results_layout)
+        results_layout.addStretch(1)
+        # Set size policy for Col 3
+        self.results_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+        top_controls_layout.addWidget(self.results_group)
 
-        # 5. Results Display
-        results_layout = QtWidgets.QHBoxLayout()
-        results_layout.addWidget(QtWidgets.QLabel("Calculated RMP:"))
-        self.results_label = QtWidgets.QLabel("N/A")
-        font = self.results_label.font(); font.setBold(True); self.results_label.setFont(font)
-        results_layout.addWidget(self.results_label, stretch=1)
-        controls_layout.addLayout(results_layout)
+        # Add top controls area to main layout
+        main_layout.addWidget(top_controls_widget)
 
-        # --- Calculate and Auto Calculate Buttons Side-by-Side ---
-        self.calculate_button = QtWidgets.QPushButton("Calculate RMP (Window)") # Clarify name
-        self.calculate_button.setEnabled(False)
-        self.calculate_button.setToolTip("Calculate RMP using the interactive region or manual time window.")
-        
-        # Update text and tooltip for 0.5 SD
-        self.auto_calculate_button = QtWidgets.QPushButton("Auto Calculate RMP (±0.5SD)")
-        self.auto_calculate_button.setEnabled(False)
-        self.auto_calculate_button.setToolTip("Calculate RMP using mean ± 0.5SD of the entire trace.")
-        
-        # Add both buttons to the same horizontal layout
-        buttons_layout = QtWidgets.QHBoxLayout()
-        buttons_layout.addStretch()
-        buttons_layout.addWidget(self.calculate_button)
-        buttons_layout.addWidget(self.auto_calculate_button)
-        buttons_layout.addStretch()
-        controls_layout.addLayout(buttons_layout)
-        # --- END MODIFIED ---
+        # --- Bottom Plot Area --- 
+        plot_container = QtWidgets.QWidget()
+        plot_layout = QtWidgets.QVBoxLayout(plot_container)
+        plot_layout.setContentsMargins(0,0,0,0)
+        self._setup_plot_area(plot_layout)
+        main_layout.addWidget(plot_container, stretch=1) # Plot stretches vertically
 
-        # --- UPDATED: Use base class method for Save Button --- 
-        # self.save_button = QtWidgets.QPushButton("Save RMP Result")
-        # ... (manual button creation removed) ...
-        # controls_layout.addWidget(self.save_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._setup_save_button(controls_layout) # Call base class helper
-        # --- END UPDATE ---
+        # --- Plot items specific to RMP ---
+        if self.plot_widget:
+            self.interactive_region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, 1], movable=True)
+            self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 30)))
+            self.plot_widget.addItem(self.interactive_region)
+            self.interactive_region.setVisible(True) # Default visibility handled by _on_mode_changed
 
-        controls_layout.addStretch()
-        main_layout.addWidget(controls_group)
+            self.rmp_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))
+            self.rmp_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+            self.rmp_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+            self.plot_widget.addItem(self.rmp_mean_line); self.plot_widget.addItem(self.rmp_plus_sd_line); self.plot_widget.addItem(self.rmp_minus_sd_line)
+            self._clear_rmp_visualization_lines() # Hide initially
 
-        # --- Bottom Plot Area (Inherited) ---
-        # Use stretch factor > 0 to allow plot to expand vertically
-        self._setup_plot_area(main_layout, stretch_factor=1)
+            self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
+            self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
+            self.plot_widget.addItem(self.auto_plus_sd_line); self.plot_widget.addItem(self.auto_minus_sd_line)
+            self._clear_auto_rmp_visualization_lines() # Hide initially
+        else:
+             log.error("Plot widget not created by base class setup.")
 
-        # Add the interactive region item (initially hidden/disabled)
-        self.baseline_region_item = pg.LinearRegionItem(values=[0.0, 0.1], orientation='vertical', brush=(0, 255, 0, 50), movable=True, bounds=None)
-        self.baseline_region_item.setZValue(-10) # Ensure it's behind plot lines
-        self.plot_widget.addItem(self.baseline_region_item)
-        self.baseline_region_item.setVisible(True) # Visible but might be disabled by mode
+        log.debug("RMP Analysis Tab UI setup complete (3-Column Top Layout).")
+        self._on_mode_changed(initial_call=True)
 
-        self.setLayout(main_layout)
-        log.debug("RMP Analysis Tab UI setup complete.")
+    # --- ADDED: Method to clear auto-calculation visualization lines ---
+    def _clear_auto_rmp_visualization_lines(self):
+        """Removes the temporary grey dashed lines used for auto-RMP visualization."""
+        # Check and remove items safely
+        if self.auto_plus_sd_line is not None and self.auto_plus_sd_line.scene() is not None:
+            try:
+                self.plot_widget.removeItem(self.auto_plus_sd_line)
+                self.auto_plus_sd_line = None # Clear reference after removal
+            except Exception as e:
+                log.warning(f"Could not remove auto-RMP visualization line (+SD): {e}")
+        if self.auto_minus_sd_line is not None and self.auto_minus_sd_line.scene() is not None:
+            try:
+                self.plot_widget.removeItem(self.auto_minus_sd_line)
+                self.auto_minus_sd_line = None # Clear reference after removal
+            except Exception as e:
+                log.warning(f"Could not remove auto-RMP visualization line (-SD): {e}")
+        # log.debug("Cleared auto-RMP visualization lines.")
+    # --- END ADDED ---
 
     def _connect_signals(self):
         # Connect signals specific to RMP tab widgets.
         # Inherited combo box signal handled by BaseAnalysisTab (_on_analysis_item_selected)
 
         # Connect channel selector
-        self.channel_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
+        self.voltage_channel_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
 
         # --- ADDED: Connect Data Source Selector ---
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
         # --- END ADDED ---
 
         # Connect analysis mode change
-        self.mode_button_group.buttonClicked.connect(self._on_mode_changed)
+        # self.mode_button_group.buttonClicked.connect(self._on_mode_changed) <-- Old
+        self.mode_combobox.currentIndexChanged.connect(self._on_mode_changed) # Use combobox
 
-        # Connect manual time edits
-        # REMOVED: self.start_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
-        # REMOVED: self.end_time_edit.editingFinished.connect(self._trigger_rmp_analysis_from_manual)
+        # Connect manual time edits (trigger analysis only in manual mode)
+        self.manual_start_time_spinbox.editingFinished.connect(self._trigger_rmp_analysis_if_manual)
+        self.manual_end_time_spinbox.editingFinished.connect(self._trigger_rmp_analysis_if_manual)
 
-        # Connect interactive region change
-        # REMOVED: self.baseline_region_item.sigRegionChangeFinished.connect(self._trigger_rmp_analysis_from_region)
+        # Connect interactive region change (trigger analysis only in interactive mode)
+        self.interactive_region.sigRegionChangeFinished.connect(self._trigger_rmp_analysis_if_interactive)
 
-        # ADDED: Connect Calculate Button
-        self.calculate_button.clicked.connect(self._trigger_rmp_analysis)
+        # Connect Run Button (for Auto/Manual modes)
+        self.run_button.clicked.connect(self._trigger_analysis_from_button)
 
-        # ADDED: Connect Auto Calculate Button
-        self.auto_calculate_button.clicked.connect(self._run_auto_rmp_analysis)
-
-        # --- REMOVED: Save button connection (handled by base) ---
-        # self.save_button.clicked.connect(self._on_save_result_clicked)
+        # --- REMOVED: Connections for non-existent calculate buttons ---
+        # self.calculate_button.clicked.connect(self._trigger_rmp_analysis)
+        # self.auto_calculate_button.clicked.connect(self._run_auto_rmp_analysis)
         # --- END REMOVED ---
 
     # --- Overridden Methods from Base ---
@@ -248,12 +290,16 @@ class RmpAnalysisTab(BaseAnalysisTab):
         # Populates channel list, plots data, and enables/disables controls.
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
         self._current_plot_data = None # Clear previous plot data
-        self.results_label.setText("N/A") # Clear previous results
+        if self.rmp_result_label: 
+             self.rmp_result_label.setText("RMP: --") # Reset to default text
+        else:
+             # This case should ideally not happen if setup is correct
+             log.warning("rmp_result_label is None during _update_ui_for_selected_item")
         if self.save_button: self.save_button.setEnabled(False) # Disable save on selection change
 
         # --- Populate Channel ComboBox ---
-        self.channel_combobox.blockSignals(True)
-        self.channel_combobox.clear()
+        self.voltage_channel_combobox.blockSignals(True)
+        self.voltage_channel_combobox.clear()
         can_enable_ui = False
         voltage_channels_found = False # Track if any suitable channels exist
         if self._selected_item_recording and self._selected_item_recording.channels:
@@ -264,20 +310,20 @@ class RmpAnalysisTab(BaseAnalysisTab):
                 # RMP needs voltage traces
                 if 'v' in units_lower:
                     display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
-                    self.channel_combobox.addItem(display_name, userData=chan_id)
+                    self.voltage_channel_combobox.addItem(display_name, userData=chan_id)
                     valid_channels.append(chan_id)
 
             if valid_channels:
-                self.channel_combobox.setCurrentIndex(0) # Select first valid channel
+                self.voltage_channel_combobox.setCurrentIndex(0) # Select first valid channel
                 voltage_channels_found = True # Mark that we found channels
                 # can_enable_ui = True # Enable UI is determined later
             else:
-                self.channel_combobox.addItem("No Voltage Channels Found")
+                self.voltage_channel_combobox.addItem("No Voltage Channels Found")
         else:
-            self.channel_combobox.addItem("Load Data Item...")
+            self.voltage_channel_combobox.addItem("Load Data Item...")
 
-        self.channel_combobox.setEnabled(voltage_channels_found) # Enable only if voltage channels exist
-        self.channel_combobox.blockSignals(False)
+        self.voltage_channel_combobox.setEnabled(voltage_channels_found) # Enable only if voltage channels exist
+        self.voltage_channel_combobox.blockSignals(False)
 
         # --- Populate Data Source ComboBox --- 
         self.data_source_combobox.blockSignals(True)
@@ -329,7 +375,7 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self.data_source_combobox.blockSignals(False)
 
         # --- Enable/Disable Remaining Controls --- 
-        self.analysis_mode_group.setEnabled(can_analyze)
+        self.analysis_params_group.setEnabled(can_analyze)
         self._on_mode_changed() # Update manual/interactive state based on loaded data availability
 
         # --- Plot Initial Trace --- 
@@ -344,13 +390,13 @@ class RmpAnalysisTab(BaseAnalysisTab):
     # --- Plotting and Interaction ---
     def _plot_selected_channel_trace(self):
         """Plots the voltage trace for the currently selected channel and data source.""" # Updated docstring
-        if not self.plot_widget or not self.channel_combobox or not self.data_source_combobox or not self._selected_item_recording:
+        if not self.plot_widget or not self.voltage_channel_combobox or not self.data_source_combobox or not self._selected_item_recording:
             self._current_plot_data = None
             if self.plot_widget:
                 self.plot_widget.clear()
                 # Re-add region if cleared
-                if self.baseline_region_item not in self.plot_widget.items:
-                    self.plot_widget.addItem(self.baseline_region_item)
+                if self.interactive_region and self.interactive_region not in self.plot_widget.items:
+                    self.plot_widget.addItem(self.interactive_region)
             return
 
         # Clear previous data
@@ -358,14 +404,14 @@ class RmpAnalysisTab(BaseAnalysisTab):
         self._current_plot_data = None
         self._clear_rmp_visualization_lines() # <<< ADDED: Clear RMP/SD lines
 
-        chan_id = self.channel_combobox.currentData()
+        chan_id = self.voltage_channel_combobox.currentData()
         source_data = self.data_source_combobox.currentData() # Trial index (int) or "average" (str)
 
         if not chan_id or source_data is None:
             self._current_plot_data = None
             self.plot_widget.clear()
-            if self.baseline_region_item not in self.plot_widget.items:
-                 self.plot_widget.addItem(self.baseline_region_item)
+            if self.interactive_region and self.interactive_region not in self.plot_widget.items:
+                 self.plot_widget.addItem(self.interactive_region)
             return
 
         channel = self._selected_item_recording.channels.get(chan_id)
@@ -410,23 +456,22 @@ class RmpAnalysisTab(BaseAnalysisTab):
                 self._current_plot_data = {'time': time_vec, 'voltage': voltage_vec}
                 # Set initial region/bounds based on plotted data
                 min_t, max_t = time_vec[0], time_vec[-1]
-                self.baseline_region_item.setBounds([min_t, max_t])
+                self.interactive_region.setBounds([min_t, max_t])
                 # Keep current region if valid, otherwise reset
-                rgn_start, rgn_end = self.baseline_region_item.getRegion()
+                rgn_start, rgn_end = self.interactive_region.getRegion()
                 if rgn_start < min_t or rgn_end > max_t or rgn_start >= rgn_end:
                      # Set default region (e.g., first 100ms or 10% of trace)
                      default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
-                     self.baseline_region_item.setRegion([min_t, default_end])
+                     self.interactive_region.setRegion([min_t, default_end])
                      log.debug(f"Resetting region to default: [{min_t}, {default_end}]")
                 else:
                     log.debug("Region is within bounds and valid.")
-            # This else corresponds to `if time_vec is not None and voltage_vec is not None:`
             else:
                 self._current_plot_data = None
                 log.warning(f"No valid data found to plot for channel {chan_id}")
 
             # Always re-add region item as clear() removes it
-            self.plot_widget.addItem(self.baseline_region_item)
+            self.plot_widget.addItem(self.interactive_region)
             self.plot_widget.setTitle(data_label) # Set title for clarity
 
             # Auto-range the plot initially
@@ -452,21 +497,13 @@ class RmpAnalysisTab(BaseAnalysisTab):
         except Exception as e:
             log.error(f"Error plotting trace for channel {chan_id}: {e}", exc_info=True)
             self.plot_widget.clear()
-            self.plot_widget.addItem(self.baseline_region_item) # Re-add region on error
+            self.plot_widget.addItem(self.interactive_region) # Re-add region on error
             self._current_plot_data = None
 
         # Trigger analysis after plotting new trace
         # REMOVED: self._trigger_rmp_analysis() 
-        # INSTEAD: Enable calculate button if plot succeeded
-        if self._current_plot_data:
-             self.calculate_button.setEnabled(True)
-             self.auto_calculate_button.setEnabled(True) # Also enable auto button
-        else:
-             self.calculate_button.setEnabled(False)
-             self.auto_calculate_button.setEnabled(False) # Also disable auto button
-             # Ensure result is cleared if plot failed
-             self.results_label.setText("N/A")
-             if self.save_button: self.save_button.setEnabled(False)
+        # INSTEAD: Let _update_analysis_controls_state handle button states
+        self._update_analysis_controls_state() # Update controls based on plot success/failure
 
     # --- ADDED: Helper to clear RMP/SD lines ---
     def _clear_rmp_visualization_lines(self):
@@ -553,235 +590,352 @@ class RmpAnalysisTab(BaseAnalysisTab):
 
     # --- Analysis Logic ---
     @QtCore.Slot()
-    def _on_mode_changed(self):
-        """Handles switching between interactive and manual modes."""
-        is_manual = self.mode_button_group.checkedId() == self.MODE_MANUAL
-        self.manual_time_group.setEnabled(is_manual)
-        self.baseline_region_item.setVisible(not is_manual)
-        self.baseline_region_item.setMovable(not is_manual)
+    def _on_mode_changed(self, initial_call=False): # Add initial_call flag
+        """Handles switching between interactive, automatic, and manual modes based on ComboBox."""
+        # --- ADDED: Guard clause ---
+        if not self.mode_combobox:
+            log.warning("_on_mode_changed called before mode_combobox was initialized.")
+            return
+        # --- END ADDED ---
 
-        log.debug(f"Analysis mode changed. Manual Mode: {is_manual}")
-        # Trigger analysis immediately when mode changes
-        self._trigger_rmp_analysis()
+        current_mode_text = self.mode_combobox.currentText()
+        is_interactive = (current_mode_text == "Interactive")
+        is_automatic = (current_mode_text == "Automatic")
+        is_manual = (current_mode_text == "Manual")
 
+        # --- UI Element Visibility/State ---
+        # Interactive Region
+        if self.interactive_region:
+            self.interactive_region.setVisible(is_interactive)
+            self.interactive_region.setMovable(is_interactive)
+        
+        # Manual Time Group
+        if self.manual_time_group:
+            self.manual_time_group.setVisible(is_manual)
+            # Enable spinboxes only in manual mode (and if data exists)
+            has_data = self._current_plot_data is not None
+            self.manual_time_group.setEnabled(is_manual and has_data)
+        
+        # Auto Threshold Group
+        if self.auto_threshold_group:
+            self.auto_threshold_group.setVisible(is_automatic)
+            # Enable threshold spinbox only in auto mode (and if data exists)
+            has_data = self._current_plot_data is not None
+            self.auto_threshold_group.setEnabled(is_automatic and has_data)
+
+        # Run Button (Visible for Auto and Manual)
+        if self.run_button:
+            self.run_button.setVisible(is_automatic or is_manual)
+            # Enable button only if data is plotted in Auto/Manual mode
+            has_data = self._current_plot_data is not None
+            self.run_button.setEnabled(has_data and (is_automatic or is_manual))
+
+        log.debug(f"RMP analysis mode changed to: {current_mode_text}. Interactive={is_interactive}, Auto={is_automatic}, Manual={is_manual}")
+
+        # --- Trigger Analysis ---
+        # MODIFIED: Trigger analysis immediately only if interactive, data loaded, AND NOT the initial call
+        if is_interactive and self._current_plot_data and not initial_call:
+            self._trigger_rmp_analysis()
+        else:
+            # In Auto/Manual, analysis waits for the Run button or specific input edits
+            # Optionally clear results or set status message
+            self.status_label.setText(f"Status: {current_mode_text} mode - Ready.")
+            # Don't automatically clear the result/lines when switching to Auto/Manual
+            # Keep the previous result visible until Run is clicked.
+            if initial_call:
+                log.debug("_on_mode_changed: Initial call from setup, skipping analysis trigger.")
 
     @QtCore.Slot()
-    def _trigger_rmp_analysis_from_manual(self):
+    def _trigger_rmp_analysis_if_manual(self):
         """Slot specifically for manual time edit changes."""
-        if self.mode_button_group.checkedId() == self.MODE_MANUAL:
+        if self.mode_combobox and self.mode_combobox.currentText() == "Manual":
             log.debug("Manual time edit finished, triggering analysis.")
-            self._trigger_rmp_analysis()
+            self._trigger_rmp_analysis() # Trigger standard window-based analysis
 
     @QtCore.Slot()
-    def _trigger_rmp_analysis_from_region(self):
+    def _trigger_rmp_analysis_if_interactive(self):
         """Slot specifically for region changes."""
-        if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
+        if self.mode_combobox and self.mode_combobox.currentText() == "Interactive":
             log.debug("Interactive region change finished, triggering analysis.")
-            self._trigger_rmp_analysis()
+            self._trigger_rmp_analysis() # Trigger standard window-based analysis
+
+    # --- ADDED: Slot for Run button (Auto/Manual modes) ---
+    @QtCore.Slot()
+    def _trigger_analysis_from_button(self):
+        """Triggers the appropriate analysis when the Run button is clicked."""
+        if not self.mode_combobox: return
+        
+        current_mode_text = self.mode_combobox.currentText()
+        if current_mode_text == "Automatic":
+            log.debug("Run button clicked in Automatic mode.")
+            self._run_auto_rmp_analysis() # Run the specific auto-analysis method
+        elif current_mode_text == "Manual":
+            log.debug("Run button clicked in Manual mode.")
+            self._trigger_rmp_analysis() # Run the standard window-based analysis
+        else:
+             log.warning(f"Run button clicked in unexpected mode: {current_mode_text}")
+    # --- END ADDED ---
 
     def _trigger_rmp_analysis(self):
-        """Central method to get parameters and run RMP calculation."""
-        if not self._current_plot_data:
-             log.debug("Skipping RMP analysis: No data plotted.")
-             self.results_label.setText("N/A")
-             if self.save_button: self.save_button.setEnabled(False)
-             return
-
+        """Central method to get parameters and run RMP calculation (Window-based: Interactive/Manual)."""
+        # --- ADDED: Check for plot data FIRST --- 
+        if not self._current_plot_data or \
+           'time' not in self._current_plot_data or \
+           'voltage' not in self._current_plot_data:
+            log.warning("_trigger_rmp_analysis: Skipping - Plot data missing.")
+            self.rmp_result_label.setText("RMP: No Data")
+            self._last_rmp_result = None
+            self._clear_rmp_visualization_lines()
+            self._update_save_button_state()
+            self.status_label.setText("Status: Error - No data plotted.")
+            return
+        # Retrieve data from stored dict
         time_vec = self._current_plot_data['time']
         voltage_vec = self._current_plot_data['voltage']
-        start_t, end_t = None, None
+        # --- END ADDED ---
 
-        if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
-            start_t, end_t = self.baseline_region_item.getRegion()
-            # Update manual fields to reflect region (optional, for user feedback)
-            self.start_time_edit.setText(f"{start_t:.4f}")
-            self.end_time_edit.setText(f"{end_t:.4f}")
-            log.debug(f"Running RMP in Interactive mode. Region: [{start_t:.4f}, {end_t:.4f}]")
-        else: # Manual mode
-            try:
-                start_t = float(self.start_time_edit.text())
-                end_t = float(self.end_time_edit.text())
-                if start_t >= end_t:
-                    log.warning("Manual time validation failed: Start >= End")
-                    self.results_label.setText("Invalid Time")
-                    if self.save_button: self.save_button.setEnabled(False)
-                    return
-                # Optionally update region to match manual input
-                self.baseline_region_item.setRegion([start_t, end_t])
-                log.debug(f"Running RMP in Manual mode. Times: [{start_t:.4f}, {end_t:.4f}]")
-            except (ValueError, TypeError):
-                log.warning("Manual time validation failed: Invalid number")
-                self.results_label.setText("Invalid Time")
-                if self.save_button: self.save_button.setEnabled(False)
+        # --- NEW: Get windows based on current mode (Interactive or Manual) ---
+        start_t, end_t = None, None
+        current_mode_text = self.mode_combobox.currentText()
+
+        if current_mode_text == "Interactive":
+            if not self.interactive_region:
+                log.error("Interactive mode selected but region item is missing.")
+                self.status_label.setText("Status: Error - Interactive region missing.")
                 return
+            start_t, end_t = self.interactive_region.getRegion()
+            # Update manual spinboxes to reflect region for user feedback
+            if self.manual_start_time_spinbox: self.manual_start_time_spinbox.setValue(start_t)
+            if self.manual_end_time_spinbox: self.manual_end_time_spinbox.setValue(end_t)
+            log.debug(f"Running RMP (Window-based) in Interactive mode. Region: [{start_t:.4f}, {end_t:.4f}]")
+        elif current_mode_text == "Manual":
+            if not self.manual_start_time_spinbox or not self.manual_end_time_spinbox:
+                log.error("Manual mode selected but spinboxes are missing.")
+                self.status_label.setText("Status: Error - Manual time inputs missing.")
+                return
+            try:
+                start_t = self.manual_start_time_spinbox.value()
+                end_t = self.manual_end_time_spinbox.value()
+                if start_t >= end_t:
+                    raise ValueError("Start time must be less than end time.")
+                # Update interactive region to match manual input (visual feedback)
+                if self.interactive_region: self.interactive_region.setRegion([start_t, end_t])
+                log.debug(f"Running RMP (Window-based) in Manual mode. Times: [{start_t:.4f}, {end_t:.4f}]")
+            except ValueError as e:
+                log.warning(f"Manual time validation failed: {e}")
+                self.status_label.setText(f"Status: Invalid Time ({e})")
+                if self.save_button: self.save_button.setEnabled(False)
+                self._last_rmp_result = None # Ensure result is cleared on error
+                self._clear_rmp_visualization_lines() # Clear lines on error
+                return
+        else:
+            log.warning(f"_trigger_rmp_analysis called in unexpected mode: {current_mode_text}")
+            return # Should only be called for Interactive or Manual via respective triggers
+        # --- END NEW ---
 
         # --- Perform Calculation ---
-        rmp_value, rmp_sd = calculate_rmp(time_vec, voltage_vec, start_t, end_t)
+        rmp_result = calculate_rmp(time_vec, voltage_vec, start_t, end_t)
         self._last_rmp_result = None # Clear previous result before storing new one
 
         # --- Store Result and Update UI ---
-        if rmp_value is not None:
+        if rmp_result is not None:
+            rmp_value, rmp_sd = rmp_result
             units = "V" # Default
-            chan_id = self.channel_combobox.currentData()
+            chan_id = self.voltage_channel_combobox.currentData() # Use the correct combobox
             if self._selected_item_recording and chan_id:
                 channel = self._selected_item_recording.channels.get(chan_id)
                 if channel: units = channel.units or "V"
 
-            self.results_label.setText(f"{rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
-            log.info(f"Calculated RMP = {rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
+            self.rmp_result_label.setText(f"{rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}") # Use correct label
+            log.info(f"Calculated RMP (Window) = {rmp_value:.3f} {units} ± {rmp_sd:.3f} {units}")
 
             # --- Store result for saving ---
             self._last_rmp_result = {
                 'result_value': rmp_value,
                 'result_sd': rmp_sd,
                 'result_units': units,
-                'calculation_method': 'window' # Indicate the method used
+                # Use the actual mode text from the combobox
+                'calculation_method': f'window_{current_mode_text.lower()}'
             }
 
             # --- REMOVED: Manual plot line handling and save button enable ---
-            # (Code related to manually adding/removing items and setting button state removed)
 
         else: # Calculation failed
-            self.results_label.setText("Error")
-            log.warning("RMP calculation returned None.")
+            self.rmp_result_label.setText("Calculation Error") # Use correct label
+            log.warning("RMP (Window) calculation returned None.")
             # --- REMOVED: Manual save button disable and SD line removal ---
-            # (Code related to manually disabling button and removing items removed)
 
         # --- ADDED: Centralized UI Update --- 
         self._clear_rmp_visualization_lines()
         self._plot_rmp_visualization_lines() # Update plot lines based on _last_rmp_result
         self._update_save_button_state() # Update save button based on _last_rmp_result
+        self.status_label.setText(f"Status: Calculation complete ({current_mode_text}).") # Update status
         # --- END ADDED ---
 
     # --- ADDED: Auto RMP Calculation Logic --- 
     @QtCore.Slot()
     def _run_auto_rmp_analysis(self):
-        """Calculates RMP using mean ± 0.5SD of the entire trace."""
+        """Calculates RMP using a stable window identification method (replaces mean ± SD)."""
         if not self._current_plot_data:
             log.warning("Skipping Auto RMP analysis: No data plotted.")
-            self.results_label.setText("N/A")
-            self._last_rmp_result = None # Ensure result is cleared
-            self._clear_rmp_visualization_lines() # Clear any lines
-            self._update_save_button_state() # Update button state
+            self.rmp_result_label.setText("N/A") # Use correct label
+            self._last_rmp_result = None
+            self._clear_rmp_visualization_lines()
+            self._update_save_button_state()
+            self.status_label.setText("Status: Auto - No data.")
             return
 
         voltage_vec = self._current_plot_data.get('voltage')
         time_vec = self._current_plot_data.get('time')
-        if voltage_vec is None or len(voltage_vec) == 0 or time_vec is None or len(time_vec) == 0:
-            log.warning("Skipping Auto RMP analysis: Voltage or time data is empty/missing.")
-            self.results_label.setText("N/A")
+        if voltage_vec is None or len(voltage_vec) < 2 or time_vec is None or len(time_vec) < 2:
+            log.warning("Skipping Auto RMP analysis: Voltage or time data is empty/missing or too short.")
+            self.rmp_result_label.setText("N/A") # Use correct label
             self._last_rmp_result = None
             self._clear_rmp_visualization_lines()
             self._update_save_button_state()
+            self.status_label.setText("Status: Auto - Data invalid.")
             return
-
-        log.debug("Running Auto RMP Calculation (Mean ± 0.5SD method)")
+            
+        sd_threshold = self.auto_sd_threshold_spinbox.value() if self.auto_sd_threshold_spinbox else 0.5
+        log.debug(f"Running Auto RMP Calculation (Stable Window Method, SD Threshold: {sd_threshold})")
+        self.status_label.setText("Status: Auto - Running...")
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         self._last_rmp_result = None # Clear previous result
-        calculation_succeeded = False # Flag to track success
-        # --- REMOVED: Variables for temporary visualization lines ---
-        # temp_sd_upper_line = None
-        # temp_sd_lower_line = None
-        # --- END REMOVED ---
+        calculation_succeeded = False
+
+        # --- Visualization lines for auto method ---
+        self._clear_auto_rmp_visualization_lines() # Clear any previous grey lines
+        auto_sd_upper_line = None
+        auto_sd_lower_line = None
 
         try:
-            full_mean = np.mean(voltage_vec)
-            full_sd = np.std(voltage_vec)
-            threshold_sd = 0.5 # Use 0.5 SD
-            upper_bound = full_mean + threshold_sd * full_sd
-            lower_bound = full_mean - threshold_sd * full_sd
+            # --- Mode-based RMP Calculation ---
+            # 1. Estimate initial noise (optional, can be used for tolerance)
+            end_idx_noise = min(int(0.1 * len(time_vec)), len(time_vec)) # Use up to 10% for noise estimate
+            if end_idx_noise > 1 and time_vec[end_idx_noise] - time_vec[0] > 0.1: # Or up to 100ms
+                 end_idx_noise = np.searchsorted(time_vec, time_vec[0] + 0.1)
+            if end_idx_noise < 2: end_idx_noise = min(10, len(voltage_vec)) # Fallback
+            initial_sd = np.std(voltage_vec[:end_idx_noise]) if end_idx_noise > 0 else np.std(voltage_vec)
+            log.debug(f"  Initial SD estimate (first {end_idx_noise} points): {initial_sd:.4f} mV (assuming mV)")
 
-            # Find indices within ±0.5 SD
-            indices = np.where((voltage_vec >= lower_bound) & (voltage_vec <= upper_bound))[0]
-            num_indices = len(indices)
-            # --- REMOVED: Percentage calculation and related logging ---
-            # percentage_in_range = (num_indices / len(voltage_vec)) * 100
-            # log.debug(f"Auto RMP: {percentage_in_range:.1f}% of data points are within {threshold_sd} SD.")
+            # 2. Round voltage data and find the mode
+            rounded_voltage = np.round(voltage_vec, 1) # Round to 1 decimal place
+            values, counts = np.unique(rounded_voltage, return_counts=True)
+            if len(values) == 0:
+                raise ValueError("No unique voltage values found after rounding.")
+            mode_voltage_rounded = values[np.argmax(counts)]
+            log.debug(f"  Mode of rounded voltage (1 decimal): {mode_voltage_rounded:.1f} mV")
 
-            # --- REMOVED: Plotting of temporary ±0.5 SD lines ---
-            # sd_pen = pg.mkPen(color=(100, 100, 100), style=QtCore.Qt.PenStyle.DashLine)
-            # temp_sd_upper_line = pg.InfiniteLine(pos=upper_bound, angle=0, pen=sd_pen, movable=False)
-            # self.plot_widget.addItem(temp_sd_upper_line)
-            # log.debug(f"  Added temporary upper SD line at {upper_bound:.3f}")
-            # temp_sd_lower_line = pg.InfiniteLine(pos=lower_bound, angle=0, pen=sd_pen, movable=False)
-            # self.plot_widget.addItem(temp_sd_lower_line)
-            # log.debug(f"  Added temporary lower SD line at {lower_bound:.3f}")
+            # 3. Define tolerance band around the mode
+            #    Let's use a fixed tolerance for now, e.g., +/- 1 mV
+            #    Alternatively, could use +/- N * initial_sd
+            tolerance_mv = 1.0 
+            lower_bound = mode_voltage_rounded - tolerance_mv
+            upper_bound = mode_voltage_rounded + tolerance_mv
+            log.debug(f"  Using tolerance band: {lower_bound:.2f} mV to {upper_bound:.2f} mV")
 
-            # --- REVISED: Condition is now simply num_indices > 0 ---
-            # is_close_or_greater = np.isclose(percentage_in_range, 80.0, atol=0.02) or percentage_in_range > 80.0
-            log.debug(f"Condition Check: num_indices={num_indices}")
+            # 4. Find indices where ORIGINAL voltage falls within the band
+            mode_indices = np.where((voltage_vec >= lower_bound) & (voltage_vec <= upper_bound))[0]
+            
+            if len(mode_indices) < 10: # Require a minimum number of points
+                 log.warning(f"Auto RMP failed: Found only {len(mode_indices)} points within the voltage band [{lower_bound:.2f}, {upper_bound:.2f}] mV around the mode. Not enough data.")
+                 self.rmp_result_label.setText("Error: Insufficient data near mode")
+                 calculation_succeeded = False
+            else:
+                log.debug(f"  Found {len(mode_indices)} points within the tolerance band.")
+                # 5. Calculate Mean and SD of ORIGINAL voltage at these indices
+                voltage_at_mode = voltage_vec[mode_indices]
+                auto_rmp_mean = np.mean(voltage_at_mode)
+                auto_rmp_sd = np.std(voltage_at_mode)
 
-            if num_indices > 0:
-                log.debug("  Proceeding with calculation (num_indices > 0).")
-                # Proceed with calculation
-                selected_voltage = voltage_vec[indices]
-                auto_rmp_mean = np.mean(selected_voltage)
-                auto_rmp_sd = np.std(selected_voltage)
+                # 6. Determine the time window for visualization (using min/max time of found indices)
+                start_idx = mode_indices[0]
+                end_idx = mode_indices[-1]
+                start_time = time_vec[start_idx]
+                end_time = time_vec[end_idx]
+                log.debug(f"  Calculated RMP based on mode: Mean={auto_rmp_mean:.3f}, SD={auto_rmp_sd:.3f} mV")
+                log.debug(f"  Corresponding time window (min/max index): [{start_time:.4f}s, {end_time:.4f}s]")
 
-                # Get units
-                units = "V"
-                chan_id = self.channel_combobox.currentData()
+                # --- Visualization ---
+                # Grey lines are optional for mode method, maybe remove? Let's keep for now.
+                vis_pen = pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine)
+                auto_sd_upper_line = pg.InfiniteLine(pos=auto_rmp_mean + auto_rmp_sd, angle=0, pen=vis_pen)
+                auto_sd_lower_line = pg.InfiniteLine(pos=auto_rmp_mean - auto_rmp_sd, angle=0, pen=vis_pen)
+                self.plot_widget.addItem(auto_sd_upper_line)
+                self.plot_widget.addItem(auto_sd_lower_line)
+                
+                # Highlight the region used for auto-calc
+                if self.interactive_region:
+                    # Adjust end time slightly if end_idx points to last element to avoid issues
+                    safe_end_time = time_vec[min(end_idx, len(time_vec) - 1)]
+                    self.interactive_region.setRegion([start_time, safe_end_time])
+                    self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(128, 128, 128, 50))) # Grey brush
+                
+                # --- Store Result ---
+                units = "mV" # Assume mV for now, get from channel later if possible
+                chan_id = self.voltage_channel_combobox.currentData()
                 if self._selected_item_recording and chan_id:
                     channel = self._selected_item_recording.channels.get(chan_id)
-                    if channel: units = channel.units or "V"
+                    # Attempt to get units, default to mV if not found or not voltage-like
+                    if channel and hasattr(channel, 'units') and channel.units and 'V' in channel.units.upper():
+                        # Convert mean/sd if units are V instead of mV? Assume input is mV for now.
+                        units = channel.units 
+                    else:
+                         log.warning(f"Could not determine units for channel {chan_id}, assuming mV.")
+                         units = "mV"
 
-                self.results_label.setText(f"{auto_rmp_mean:.3f} {units} ± {auto_rmp_sd:.3f} {units}")
-                log.info(f"Auto Calculated RMP = {auto_rmp_mean:.3f} {units} ± {auto_rmp_sd:.3f} {units}")
+                self.rmp_result_label.setText(f"{auto_rmp_mean:.3f} {units} ± {auto_rmp_sd:.3f} {units}")
+                log.info(f"Auto Calculated RMP (Mode Based) = {auto_rmp_mean:.3f} {units} ± {auto_rmp_sd:.3f} {units}")
 
-                # --- Store result for saving ---
                 self._last_rmp_result = {
                     'result_value': auto_rmp_mean,
                     'result_sd': auto_rmp_sd,
                     'result_units': units,
-                    'calculation_method': f'auto_{threshold_sd}sd' # Indicate method used
+                    'calculation_method': f'auto_mode_tolerance={tolerance_mv:.1f}mV'
                 }
-                calculation_succeeded = True # Mark calculation as successful
-
-            else: # num_indices == 0
-                 # --- UPDATED: Log/UI message for num_indices == 0 --- 
-                 log.warning(f"Auto RMP failed: No data points found within ±{threshold_sd} SD range.")
-                 self.results_label.setText(f"Error: No data in ±{threshold_sd}SD")
-                 # --- END UPDATED --- 
-                 # calculation_succeeded remains False
-                 # _last_rmp_result remains None
-            # --- END REVISED ---
+                calculation_succeeded = True
 
         except Exception as e:
-            log.error(f"Error during auto RMP calculation: {e}", exc_info=True)
-            self.results_label.setText("Error")
-            calculation_succeeded = False # Ensure failure on exception
-            self._last_rmp_result = None
+            log.error(f"Error during auto RMP calculation (mode-based): {e}", exc_info=True)
 
         finally:
-            # --- MODIFIED: Simplified final block --- 
-            # 1. Always clear persistent lines from previous calculations
+            # 1. Clear the main (red) RMP lines from any previous calculation
             self._clear_rmp_visualization_lines()
-
-            # 2. Plot final result ONLY if calculation succeeded (num_indices > 0)
+            
+            # 2. Plot the final (red) lines ONLY if this auto-calculation succeeded
             if calculation_succeeded:
-                log.debug("  Auto RMP succeeded (num_indices > 0). Plotting final results.")
-                # Plot the final, persistent result lines (red)
-                self._plot_rmp_visualization_lines()
-            # else: # Calculation failed (num_indices == 0 or exception)
-            #     log.debug("  Auto RMP failed (num_indices == 0 or exception). No final lines plotted.")
-            #     # No lines to leave visible, as temporary lines were removed
+                log.debug("  Auto RMP succeeded. Plotting final (red) result lines.")
+                self._plot_rmp_visualization_lines() # Plot based on _last_rmp_result
+                self.status_label.setText("Status: Auto - Calculation complete.")
+            else:
+                log.debug("  Auto RMP failed. No final lines plotted.")
+                self.status_label.setText("Status: Auto - Calculation failed.")
+                # Reset region brush if it was changed
+                if self.interactive_region:
+                     self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 30))) # Reset to green
 
-            # 3. Update save button state based on whether _last_rmp_result was set
+            # 3. Remove the temporary grey visualization lines *after* potential plotting of red lines
+            #    Need to store references outside the try block if needed here.
+            #    Let's modify _clear_auto_rmp_visualization_lines to handle this.
+            self._clear_auto_rmp_visualization_lines() # Call the dedicated clearer
+
+            # 4. Update save button state
             self._update_save_button_state()
-            # 4. Restore cursor
+            # 5. Restore cursor
             QtWidgets.QApplication.restoreOverrideCursor()
-            # 5. Explicitly update plot range
+            # 6. Auto-range
             self.plot_widget.autoRange()
-            log.debug("  Called plot_widget.autoRange()")
-            # --- END MODIFIED ---
+            log.debug("  Auto RMP final block finished.")
 
     def cleanup(self):
         # Clean up plot items if necessary
         if self.plot_widget:
-             # Remove RMP line if it exists
-             if self.rmp_line_item is not None and self.rmp_line_item.scene():
-                 self.plot_widget.removeItem(self.rmp_line_item)
-             self.plot_widget.clear() # Ensure plot is cleared
+            self._clear_rmp_visualization_lines() # Clear final RMP lines
+            self._clear_auto_rmp_visualization_lines() # Clear auto-calc temp lines
+            # Remove interactive region
+            if self.interactive_region and self.interactive_region.scene():
+                self.plot_widget.removeItem(self.interactive_region)
+            self.plot_widget.clear() # Ensure plot is cleared
         # Call superclass cleanup if it does anything useful
         super().cleanup()
 
@@ -793,21 +947,21 @@ class RmpAnalysisTab(BaseAnalysisTab):
         has_valid_selection = (self._selected_item_index >= 0 and self._selected_item_recording is not None)
         
         # Enable channel and data source selection only if an item is selected
-        self.channel_combobox.setEnabled(has_valid_selection)
+        self.voltage_channel_combobox.setEnabled(has_valid_selection) # Use correct combobox
         self.data_source_combobox.setEnabled(has_valid_selection and self.data_source_combobox.count() > 0 and self.data_source_combobox.currentData() is not None)
 
         # Enable the rest only if data is actually plotted (implies valid selection AND successful plot)
-        self.analysis_mode_group.setEnabled(has_data)
+        if self.mode_combobox: self.mode_combobox.setEnabled(has_data) # Use correct mode control
         
-        current_mode = self.mode_button_group.checkedId()
-        is_interactive = (current_mode == self.MODE_INTERACTIVE)
-        self.manual_time_group.setEnabled(has_data and not is_interactive)
-        self.baseline_region_item.setVisible(has_data and is_interactive)
-        self.baseline_region_item.setMovable(has_data and is_interactive)
-
-        # Enable Calculate buttons only if data is present
-        self.calculate_button.setEnabled(has_data)
-        self.auto_calculate_button.setEnabled(has_data)
+        # Delegate mode-specific enables/visibility to _on_mode_changed
+        if has_data:
+             self._on_mode_changed() # Let this handle visibility/enabled state of regions, groups, run button
+        else:
+            # Explicitly disable mode-specific groups if no data
+            if self.manual_time_group: self.manual_time_group.setEnabled(False)
+            if self.auto_threshold_group: self.auto_threshold_group.setEnabled(False)
+            if self.run_button: self.run_button.setEnabled(False)
+            if self.interactive_region: self.interactive_region.setVisible(False)
 
         # Base class handles save button state based on self._last_result
         self._update_save_button_state() # Call the specific save button updater
@@ -839,8 +993,8 @@ class RmpAnalysisTab(BaseAnalysisTab):
              return None
 
         # Get source info
-        channel_id = self.channel_combobox.currentData()
-        channel_name = self.channel_combobox.currentText().split(' (')[0] # Extract name before ID
+        channel_id = self.voltage_channel_combobox.currentData() # Use correct combobox
+        channel_name = self.voltage_channel_combobox.currentText().split(' (')[0] # Extract name before ID
         data_source = self.data_source_combobox.currentData() # "average" or trial index (int)
         data_source_text = self.data_source_combobox.currentText()
 
@@ -857,22 +1011,24 @@ class RmpAnalysisTab(BaseAnalysisTab):
             'data_source': data_source,
             'data_source_label': data_source_text, # Add readable label
             # Add analysis-specific parameters used
-            'calculation_method': method # Store 'auto_Xsd' or 'window'
+            'calculation_method': method # Store 'auto_...' or 'window_...'
         }
 
-        # Add window parameters only if window method was used
-        if method == 'window':
-            start_s, end_s = self.baseline_region_item.getRegion()
-            specific_data['baseline_start_s'] = start_s
-            specific_data['baseline_end_s'] = end_s
-            # Determine if mode was Interactive or Manual when window was used
-            mode_id = self.mode_button_group.checkedId()
-            if mode_id == self.MODE_INTERACTIVE:
-                specific_data['analysis_mode'] = "Interactive"
-            elif mode_id == self.MODE_MANUAL:
-                specific_data['analysis_mode'] = "Manual"
-            else:
-                specific_data['analysis_mode'] = "Unknown" # Should not happen
+        # Add window parameters only if a window method was used
+        if 'window' in method:
+             current_mode_text = self.mode_combobox.currentText() # Get mode from combobox
+             # Get window from the region item (updated by both modes)
+             if self.interactive_region:
+                 start_s, end_s = self.interactive_region.getRegion()
+                 specific_data['baseline_start_s'] = start_s
+                 specific_data['baseline_end_s'] = end_s
+             specific_data['analysis_mode'] = current_mode_text # Save the mode text
+        
+        # Add threshold parameter only if auto method was used
+        if 'auto_stable_window' in method:
+            threshold_val = self.auto_sd_threshold_spinbox.value() if self.auto_sd_threshold_spinbox else None
+            specific_data['auto_sd_threshold'] = threshold_val
+            specific_data['analysis_mode'] = "Automatic" # Explicitly set mode
 
         log.debug(f"_get_specific_result_data returning: {specific_data}")
         return specific_data

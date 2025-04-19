@@ -97,182 +97,220 @@ class RinAnalysisTab(BaseAnalysisTab):
         super().__init__(neo_adapter=neo_adapter, parent=parent)
 
         # --- UI References ---
-        self.rin_channel_combo: Optional[QtWidgets.QComboBox] = None
+        self.voltage_channel_combobox: Optional[QtWidgets.QComboBox] = None
+        self.current_channel_combobox: Optional[QtWidgets.QComboBox] = None
         self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
-        # Mode
-        self.analysis_mode_group: Optional[QtWidgets.QGroupBox] = None
-        self.mode_button_group: Optional[QtWidgets.QButtonGroup] = None
-        self.interactive_radio: Optional[QtWidgets.QRadioButton] = None
-        self.manual_radio: Optional[QtWidgets.QRadioButton] = None
-        # Manual Inputs
+        self.mode_combobox: Optional[QtWidgets.QComboBox] = None
         self.manual_time_group: Optional[QtWidgets.QGroupBox] = None
-        self.baseline_start_edit: Optional[QtWidgets.QLineEdit] = None
-        self.baseline_end_edit: Optional[QtWidgets.QLineEdit] = None
-        self.response_start_edit: Optional[QtWidgets.QLineEdit] = None
-        self.response_end_edit: Optional[QtWidgets.QLineEdit] = None
-        self.manual_delta_i_edit: Optional[QtWidgets.QLineEdit] = None # RE-ADDED
-        # ADDED: Calculate Button
-        self.calculate_button: Optional[QtWidgets.QPushButton] = None
-        # Results
-        self.result_label: Optional[QtWidgets.QLabel] = None # Shows Rin value
-        # Plotting
+        self.manual_baseline_start_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
+        self.manual_baseline_end_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
+        self.manual_response_start_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
+        self.manual_response_end_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
+        self.manual_delta_i_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
+        self.run_button: Optional[QtWidgets.QPushButton] = None
+        self.rin_result_label: Optional[QtWidgets.QLabel] = None
+        self.delta_i_label: Optional[QtWidgets.QLabel] = None
+        self.delta_v_label: Optional[QtWidgets.QLabel] = None
+        self.status_label: Optional[QtWidgets.QLabel] = None
         self.baseline_region: Optional[pg.LinearRegionItem] = None
         self.response_region: Optional[pg.LinearRegionItem] = None
-        self.current_plot_item: Optional[pg.PlotDataItem] = None # To store ref to current plot
-        self._current_plot_data: Optional[Dict[str, np.ndarray]] = None # Store all traces
-        # REVISED: Store result as (rin, dV, dI, source) tuple
-        self._last_rin_result: Optional[Tuple[float, float, float, str]] = None 
-
+        self.baseline_line: Optional[pg.InfiniteLine] = None
+        self.response_line: Optional[pg.InfiniteLine] = None
+        self.voltage_plot_item: Optional[pg.PlotDataItem] = None
+        self.current_plot_item: Optional[pg.PlotDataItem] = None
+        self._current_plot_data: Optional[Dict[str, Any]] = None
+        self._last_rin_result: Optional[Dict[str, Any]] = None
 
         self._setup_ui()
         self._connect_signals()
-        self._on_mode_changed() # Set initial state
 
     def get_display_name(self) -> str:
         return "Input Resistance (Rin)"
 
     def _setup_ui(self):
+        """Recreate UI elements for Rin analysis with a 3-column layout."""
         main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(10) # Increased spacing for groups
 
-        # --- Controls ---
-        controls_group = QtWidgets.QGroupBox("Configuration")
-        controls_layout = QtWidgets.QVBoxLayout(controls_group)
-        controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        # --- Top Controls Area (3 Columns) ---
+        top_controls_widget = QtWidgets.QWidget()
+        top_controls_layout = QtWidgets.QHBoxLayout(top_controls_widget)
+        top_controls_layout.setContentsMargins(0,0,0,0)
+        top_controls_layout.setSpacing(8)
+        top_controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        # Item Selector (from base)
+        # --- Column 1: Data Selection --- 
+        # Renamed group box and moved items here
+        self.data_selection_group = QtWidgets.QGroupBox("Data Selection") # <<< RENAMED TITLE
+        self.data_selection_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
+        data_selection_layout = QtWidgets.QVBoxLayout(self.data_selection_group)
+        data_selection_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+
+        # Analysis Item Selector (inherited)
         item_selector_layout = QtWidgets.QFormLayout()
         self._setup_analysis_item_selector(item_selector_layout)
-        controls_layout.addLayout(item_selector_layout)
+        data_selection_layout.addLayout(item_selector_layout)
 
-        # Channel Selector
-        channel_select_layout = QtWidgets.QHBoxLayout()
-        channel_select_layout.addWidget(QtWidgets.QLabel("Target Channel:"))
-        self.rin_channel_combo = QtWidgets.QComboBox()
-        self.rin_channel_combo.setToolTip("Select the voltage channel containing the response.")
-        self.rin_channel_combo.setEnabled(False)
-        channel_select_layout.addWidget(self.rin_channel_combo, stretch=1)
-        controls_layout.addLayout(channel_select_layout)
+        # Channel/Data Source
+        channel_layout = QtWidgets.QFormLayout()
+        self.voltage_channel_combobox = QtWidgets.QComboBox()
+        self.voltage_channel_combobox.setToolTip("Select the voltage channel to analyze.")
+        self.voltage_channel_combobox.setEnabled(False)
+        channel_layout.addRow("Voltage Channel:", self.voltage_channel_combobox)
 
-        # Data Source Selector
-        data_source_layout = QtWidgets.QHBoxLayout()
-        data_source_layout.addWidget(QtWidgets.QLabel("Data Source:"))
+        self.current_channel_combobox = QtWidgets.QComboBox()
+        self.current_channel_combobox.setToolTip("Select the corresponding current channel (used for auto ΔI). Optional if Manual ΔI is provided.")
+        self.current_channel_combobox.setEnabled(False)
+        channel_layout.addRow("Current Channel:", self.current_channel_combobox)
+
         self.data_source_combobox = QtWidgets.QComboBox()
         self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
         self.data_source_combobox.setEnabled(False)
-        data_source_layout.addWidget(self.data_source_combobox, stretch=1)
-        controls_layout.addLayout(data_source_layout)
+        channel_layout.addRow("Data Source:", self.data_source_combobox)
+        data_selection_layout.addLayout(channel_layout)
+
+        # Manual Delta I (Always visible within this group)
+        delta_i_layout = QtWidgets.QFormLayout()
+        self.manual_delta_i_spinbox = QtWidgets.QDoubleSpinBox()
+        self.manual_delta_i_spinbox.setDecimals(3)
+        self.manual_delta_i_spinbox.setRange(-1e6, 1e6)
+        self.manual_delta_i_spinbox.setSingleStep(10)
+        self.manual_delta_i_spinbox.setSuffix(" pA")
+        self.manual_delta_i_spinbox.setValue(0.0)
+        self.manual_delta_i_spinbox.setToolTip("Manually enter the injected current step amplitude (ΔI, in pA). Overrides calculation from trace if non-zero.")
+        delta_i_layout.addRow("Manual ΔI (pA):", self.manual_delta_i_spinbox)
+        data_selection_layout.addLayout(delta_i_layout)
+
+        data_selection_layout.addStretch(1) # Add stretch at the end of the column
+        top_controls_layout.addWidget(self.data_selection_group) # Add Col 1 to top layout
+
+        # --- Column 2: Analysis Mode & Parameters ---
+        self.analysis_params_group = QtWidgets.QGroupBox("Analysis Mode & Parameters")
+        self.analysis_params_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
+        analysis_params_layout = QtWidgets.QVBoxLayout(self.analysis_params_group)
+        analysis_params_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         # Analysis Mode
-        self.analysis_mode_group = QtWidgets.QGroupBox("Analysis Mode")
-        mode_layout = QtWidgets.QHBoxLayout(self.analysis_mode_group)
-        self.interactive_radio = QtWidgets.QRadioButton("Interactive Windows")
-        self.manual_radio = QtWidgets.QRadioButton("Manual Time Entry")
-        self.mode_button_group = QtWidgets.QButtonGroup(self)
-        self.mode_button_group.addButton(self.interactive_radio, self.MODE_INTERACTIVE)
-        self.mode_button_group.addButton(self.manual_radio, self.MODE_MANUAL)
-        mode_layout.addWidget(self.interactive_radio)
-        mode_layout.addWidget(self.manual_radio)
-        self.interactive_radio.setChecked(True)
-        self.analysis_mode_group.setEnabled(False)
-        controls_layout.addWidget(self.analysis_mode_group)
+        mode_layout = QtWidgets.QHBoxLayout()
+        mode_layout.addWidget(QtWidgets.QLabel("Window Mode:")) # Changed label for clarity
+        self.mode_combobox = QtWidgets.QComboBox()
+        self.mode_combobox.addItems(["Interactive", "Manual"])
+        self.mode_combobox.setToolTip(
+            "Interactive: Use region selectors on plot.\n"
+            "Manual: Enter specific time windows below.")
+        mode_layout.addWidget(self.mode_combobox)
+        analysis_params_layout.addLayout(mode_layout)
 
-        # Manual Time Inputs
-        self.manual_time_group = QtWidgets.QGroupBox("Manual Time Windows")
+        # Manual Time Window Group (Only visible in Manual Mode)
+        self.manual_time_group = QtWidgets.QGroupBox("Manual Time Windows (s)")
         manual_layout = QtWidgets.QFormLayout(self.manual_time_group)
-        # Use QLineEdit for flexibility, add validators later if needed
-        self.baseline_start_edit = QtWidgets.QLineEdit("0.0")
-        self.baseline_end_edit = QtWidgets.QLineEdit("0.1")
-        self.response_start_edit = QtWidgets.QLineEdit("0.2")
-        self.response_end_edit = QtWidgets.QLineEdit("0.3")
-        manual_layout.addRow("Baseline Start (s):", self.baseline_start_edit)
-        manual_layout.addRow("Baseline End (s):", self.baseline_end_edit)
-        manual_layout.addRow("Response Start (s):", self.response_start_edit)
-        manual_layout.addRow("Response End (s):", self.response_end_edit)
-        self.manual_time_group.setEnabled(False)
-        controls_layout.addWidget(self.manual_time_group)
+        self.manual_baseline_start_spinbox = QtWidgets.QDoubleSpinBox()
+        self.manual_baseline_end_spinbox = QtWidgets.QDoubleSpinBox()
+        self.manual_response_start_spinbox = QtWidgets.QDoubleSpinBox()
+        self.manual_response_end_spinbox = QtWidgets.QDoubleSpinBox()
+        for spinbox in [self.manual_baseline_start_spinbox, self.manual_baseline_end_spinbox,
+                        self.manual_response_start_spinbox, self.manual_response_end_spinbox]:
+            spinbox.setDecimals(4); spinbox.setRange(0.0, 1e6); spinbox.setSingleStep(0.01); spinbox.setSuffix(" s")
+        manual_layout.addRow("Baseline Start:", self.manual_baseline_start_spinbox)
+        manual_layout.addRow("Baseline End:", self.manual_baseline_end_spinbox)
+        manual_layout.addRow("Response Start:", self.manual_response_start_spinbox)
+        manual_layout.addRow("Response End:", self.manual_response_end_spinbox)
+        self.manual_time_group.setVisible(False) # Initially hidden
+        analysis_params_layout.addWidget(self.manual_time_group)
 
-        # --- RE-ADDED: Manual Delta I Input --- 
-        manual_current_layout = QtWidgets.QFormLayout()
-        self.manual_delta_i_edit = QtWidgets.QLineEdit()
-        self.manual_delta_i_edit.setPlaceholderText("e.g., -100.0 (optional)")
-        self.manual_delta_i_edit.setToolTip("Optionally enter current step ΔI (pA). If blank, ΔI will be calculated from current trace.")
-        # Add validator for floating point numbers
-        double_validator = QtGui.QDoubleValidator(-np.inf, np.inf, 4, self) # Allow negative/positive, 4 decimals
-        double_validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
-        self.manual_delta_i_edit.setValidator(double_validator)
-        self.manual_delta_i_edit.setEnabled(False) # Initialize as disabled
-        manual_current_layout.addRow("Manual ΔI (pA):", self.manual_delta_i_edit)
-        controls_layout.addLayout(manual_current_layout) # Add below time group
-        # --- END RE-ADDED ---
+        # Run Button (Only visible & enabled in Manual mode)
+        self.run_button = QtWidgets.QPushButton("Calculate Rin (Manual Times)") # Reverted text
+        self.run_button.setToolTip("Calculate Rin using the manually entered time windows above.")
+        self.run_button.setVisible(False) # <<< VISIBLE FALSE BY DEFAULT
+        self.run_button.setEnabled(False) # Initially disabled
+        analysis_params_layout.addWidget(self.run_button)
 
-        # --- Calculate Button --- 
-        self.calculate_button = QtWidgets.QPushButton("Calculate Rin")
-        self.calculate_button.setEnabled(False) # Initially disabled
-        # UPDATED tooltip to reflect new logic
-        self.calculate_button.setToolTip("Calculate Rin using Manual ΔI (if provided) or Current trace.")
+        analysis_params_layout.addStretch(1)
+        top_controls_layout.addWidget(self.analysis_params_group) # Add Col 2 to top layout
 
-        # Add button centered below Manual Delta I group
-        button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.calculate_button)
-        button_layout.addStretch()
-        controls_layout.addLayout(button_layout)
+        # --- Column 3: Results --- 
+        self.results_group = QtWidgets.QGroupBox("Results")
+        self.results_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred) # Expand horizontally
+        results_layout = QtWidgets.QVBoxLayout(self.results_group)
+        results_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        self.rin_result_label = QtWidgets.QLabel("Input Resistance (Rin): --")
+        results_layout.addWidget(self.rin_result_label)
+        self.delta_v_label = QtWidgets.QLabel("Voltage Change (ΔV): --")
+        results_layout.addWidget(self.delta_v_label)
+        self.delta_i_label = QtWidgets.QLabel("Current Step (ΔI): --") # Show the ΔI used
+        results_layout.addWidget(self.delta_i_label)
+        self.status_label = QtWidgets.QLabel("Status: Idle")
+        self.status_label.setWordWrap(True)
+        results_layout.addWidget(self.status_label)
+        self._setup_save_button(results_layout)
+        results_layout.addStretch(1)
+        top_controls_layout.addWidget(self.results_group) # Add Col 3 to top layout
 
-        # Results Display
-        results_layout = QtWidgets.QHBoxLayout()
-        results_layout.addWidget(QtWidgets.QLabel("Input Resistance (Rin):"))
-        self.result_label = QtWidgets.QLabel("N/A")
-        font = self.result_label.font(); font.setBold(True); self.result_label.setFont(font)
-        results_layout.addWidget(self.result_label, stretch=1)
-        controls_layout.addLayout(results_layout)
+        # Add top controls area widget to main layout
+        main_layout.addWidget(top_controls_widget)
 
-        # Save Button (from base)
-        self._setup_save_button(controls_layout)
+        # --- Bottom: Plot Area --- 
+        plot_container = QtWidgets.QWidget()
+        plot_layout = QtWidgets.QVBoxLayout(plot_container)
+        plot_layout.setContentsMargins(0, 0, 0, 0)
+        self._setup_plot_area(plot_layout)
+        main_layout.addWidget(plot_container, stretch=1) # Plot takes remaining vertical space
 
-        controls_layout.addStretch()
-        main_layout.addWidget(controls_group)
+        # --- Plot items specific to Rin --- 
+        # Check if plot_widget exists before adding items
+        if self.plot_widget:
+            # Region Selectors (Interactive Mode)
+            self.baseline_region = pg.LinearRegionItem(values=[0.0, 0.1], brush=(0, 0, 255, 30), movable=True, bounds=[0, 1])
+            self.response_region = pg.LinearRegionItem(values=[0.2, 0.3], brush=(255, 0, 0, 30), movable=True, bounds=[0, 1])
+            self.plot_widget.addItem(self.baseline_region)
+            self.plot_widget.addItem(self.response_region)
 
-        # --- Plot Area ---
-        self._setup_plot_area(main_layout, stretch_factor=1)
-        # Setup second plot axis for current (will be done in plotting method)
-
-        # Add region items
-        self.baseline_region = pg.LinearRegionItem(values=[0.0, 0.1], orientation='vertical', brush=(0, 255, 0, 40), movable=True, bounds=None)
-        self.response_region = pg.LinearRegionItem(values=[0.2, 0.3], orientation='vertical', brush=(0, 0, 255, 40), movable=True, bounds=None)
-        self.baseline_region.setZValue(-10)
-        self.response_region.setZValue(-10)
-        self.plot_widget.addItem(self.baseline_region)
-        self.plot_widget.addItem(self.response_region)
+            # Lines for visualization (added dynamically)
+            self.baseline_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(0, 0, 255), style=QtCore.Qt.PenStyle.DashLine))
+            self.response_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(255, 0, 0), style=QtCore.Qt.PenStyle.DashLine))
+            self.plot_widget.addItem(self.baseline_line)
+            self.plot_widget.addItem(self.response_line)
+            self.baseline_line.setVisible(False)
+            self.response_line.setVisible(False)
+        else:
+            log.error("Plot widget not initialized before adding Rin-specific items.")
 
         self.setLayout(main_layout)
-        log.debug("Rin Analysis Tab UI setup complete.")
+        log.debug("Rin Analysis Tab UI setup complete (3-Column Layout).")
+        self._on_mode_changed() # Set initial state based on mode
 
     def _connect_signals(self):
         # Item selection handled by base class
-        self.rin_channel_combo.currentIndexChanged.connect(self._plot_selected_trace)
-        self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_trace)
-        self.mode_button_group.buttonClicked.connect(self._on_mode_changed)
-        # Manual Time Edits (trigger only in manual mode)
-        self.baseline_start_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
-        self.baseline_end_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
-        self.response_start_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
-        self.response_end_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
-        # Manual Delta I Edit (trigger always)
-        self.manual_delta_i_edit.editingFinished.connect(self._trigger_rin_analysis)
-        # Region Edits (trigger only in interactive mode)
-        self.baseline_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_if_interactive)
-        self.response_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_if_interactive)
+        if self.voltage_channel_combobox: self.voltage_channel_combobox.currentIndexChanged.connect(self._plot_selected_trace)
+        if self.current_channel_combobox: self.current_channel_combobox.currentIndexChanged.connect(self._plot_selected_trace)
+        if self.data_source_combobox: self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_trace)
+        # Use ComboBox signal for mode changes
+        if self.mode_combobox: self.mode_combobox.currentIndexChanged.connect(self._on_mode_changed)
         
-        # Connect Calculate Button
-        self.calculate_button.clicked.connect(self._trigger_rin_analysis)
-        
+        # --- RE-ADDED Auto-triggers for Interactive Mode --- 
+        # Manual Time Edits (trigger analysis only in manual mode)
+        if self.manual_baseline_start_spinbox: self.manual_baseline_start_spinbox.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        if self.manual_baseline_end_spinbox: self.manual_baseline_end_spinbox.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        if self.manual_response_start_spinbox: self.manual_response_start_spinbox.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        if self.manual_response_end_spinbox: self.manual_response_end_spinbox.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        # Manual Delta I edit does NOT trigger analysis on its own
+        # Region Edits (trigger analysis in interactive mode)
+        if self.baseline_region: self.baseline_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_if_interactive)
+        if self.response_region: self.response_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_if_interactive)
+        # --- END RE-ADDED ---
+
+        # Connect Run Button (ONLY for manual mode trigger via helper slot)
+        if self.run_button: self.run_button.clicked.connect(self._trigger_rin_analysis_if_manual)
         # Save button handled by base class
 
     def _update_ui_for_selected_item(self):
         """Update Rin tab UI for new analysis item."""
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
         self._current_plot_data = None
-        self.result_label.setText("N/A")
+        self.rin_result_label.setText("Rin: --")
+        self.delta_v_label.setText("ΔV: --")
+        self.delta_i_label.setText("ΔI: --")
         if self.save_button: self.save_button.setEnabled(False)
 
         # --- ADDED: Log available channels --- 
@@ -287,24 +325,24 @@ class RinAnalysisTab(BaseAnalysisTab):
         # --- END ADDED --- 
 
         # --- Populate Channel ComboBox ---
-        self.rin_channel_combo.blockSignals(True)
-        self.rin_channel_combo.clear()
+        self.voltage_channel_combobox.blockSignals(True)
+        self.voltage_channel_combobox.clear()
         voltage_channels_found = False
         if self._selected_item_recording and self._selected_item_recording.channels:
             for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
                  units_lower = getattr(channel, 'units', '').lower()
                  if 'v' in units_lower: # Look for voltage channels
                       display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
-                      self.rin_channel_combo.addItem(display_name, userData=chan_id)
+                      self.voltage_channel_combobox.addItem(display_name, userData=chan_id)
                       voltage_channels_found = True
             if voltage_channels_found:
-                self.rin_channel_combo.setCurrentIndex(0)
+                self.voltage_channel_combobox.setCurrentIndex(0)
             else:
-                self.rin_channel_combo.addItem("No Voltage Channels")
+                self.voltage_channel_combobox.addItem("No Voltage Channels")
         else:
-            self.rin_channel_combo.addItem("Load Data Item")
-        self.rin_channel_combo.setEnabled(voltage_channels_found)
-        self.rin_channel_combo.blockSignals(False)
+            self.voltage_channel_combobox.addItem("Load Data Item")
+        self.voltage_channel_combobox.setEnabled(voltage_channels_found)
+        self.voltage_channel_combobox.blockSignals(False)
 
         # --- Populate Data Source ComboBox ---
         # (Identical logic to rmp_tab.py - could be moved to base class if desired)
@@ -338,34 +376,61 @@ class RinAnalysisTab(BaseAnalysisTab):
         else: self.data_source_combobox.addItem("N/A")
         self.data_source_combobox.blockSignals(False)
 
-        # --- Enable/Disable Remaining Controls ---
-        self.analysis_mode_group.setEnabled(can_analyze)
-        self._on_mode_changed() # Update manual/interactive state
+        # --- Enable/Disable Controls --- 
+        has_valid_selection = (self._selected_item_index >= 0 and self._selected_item_recording is not None)
+        can_analyze = False # Determine if we can find data to plot
+        if has_valid_selection: 
+            # Check if channels/data sources were successfully populated
+            volt_chans = self.voltage_channel_combobox.count() > 0 and self.voltage_channel_combobox.currentData() is not None
+            data_sources = self.data_source_combobox.count() > 0 and self.data_source_combobox.currentData() is not None
+            can_analyze = volt_chans and data_sources
 
-        # --- Plot Initial Trace ---
+        # Enable groups based on whether analysis is possible
+        self.data_selection_group.setEnabled(can_analyze)
+        self.analysis_params_group.setEnabled(can_analyze)
+        self.results_group.setEnabled(can_analyze)
+
+        self._on_mode_changed() # Update mode-specific controls
+
+        # --- Plot Initial Trace --- 
         if can_analyze:
             self._plot_selected_trace()
         else:
             if self.plot_widget: self.plot_widget.clear()
+            self._clear_rin_visualization_lines()
+            # Ensure results are cleared if no data
+            self.rin_result_label.setText("Rin: --")
+            self.delta_v_label.setText("ΔV: --")
+            self.delta_i_label.setText("ΔI: --")
+            self.status_label.setText("Status: Select valid data.")
+            if self.run_button: self.run_button.setEnabled(False) # <<< Disable button if no data
 
     def _plot_selected_trace(self):
         """Plots voltage and current for the selected channel/source."""
         # --- Reset UI State & Data --- 
         if self.plot_widget: self.plot_widget.clear()
-        self.manual_delta_i_edit.setEnabled(False)
-        self.calculate_button.setEnabled(False)
-        self.result_label.setText("N/A")
+        # Disable button initially during plot update
+        if self.run_button: self.run_button.setEnabled(False) 
+        self.rin_result_label.setText("Rin: --")
+        self.delta_v_label.setText("ΔV: --")
+        self.delta_i_label.setText("ΔI: --")
         if self.save_button: self.save_button.setEnabled(False)
-        self._current_plot_data = None # *** Start with None ***
+        self._current_plot_data = None
+        self._clear_rin_visualization_lines()
         
         # --- Check prerequisites --- 
-        if not self.plot_widget or not self.rin_channel_combo or not self.data_source_combobox or not self._selected_item_recording:
+        if not self.plot_widget or not self.voltage_channel_combobox or not self.data_source_combobox or not self._selected_item_recording:
+            # Ensure button remains disabled if basic setup fails
+            if self.run_button: self.run_button.setEnabled(False)
             return
 
-        chan_id = self.rin_channel_combo.currentData()
+        chan_id = self.voltage_channel_combobox.currentData()
         source_data = self.data_source_combobox.currentData()
         if not chan_id or source_data is None:
-             self._current_plot_data = None; self.plot_widget.clear(); return
+             self._current_plot_data = None; self.plot_widget.clear();
+             self._clear_rin_visualization_lines()
+             if self.run_button: self.run_button.setEnabled(False) # <<< Disable button
+             return
 
         channel = self._selected_item_recording.channels.get(chan_id)
         log.debug(f"Plotting Rin trace for Ch {chan_id}, Data Source: {source_data}")
@@ -412,16 +477,17 @@ class RinAnalysisTab(BaseAnalysisTab):
                     time_i = None # Ensure time_i is None if current is None
 
                 # --- REVISED: Store data conditionally --- 
-                # 1. Store voltage data if valid
+                plot_succeeded = False # Flag to track if voltage plotted
                 if time_v is not None and voltage is not None:
                      self._current_plot_data = {'time_v': time_v, 'voltage': voltage}
                      log.debug(f"Stored voltage data. Keys: {list(self._current_plot_data.keys())}")
+                     plot_succeeded = True # Mark voltage plot as successful
                 else:
                      log.warning(f"Failed to fetch valid voltage data for Ch {chan_id}, Source: {source_data}. Plotting and analysis aborted.")
                      # Ensure plot is clear and controls disabled if voltage fetch fails
                      self.plot_widget.clear()
-                     self.manual_delta_i_edit.setEnabled(False)
-                     self.calculate_button.setEnabled(False)
+                     self._clear_rin_visualization_lines()
+                     if self.run_button: self.run_button.setEnabled(False) # <<< Disable button
                      return # Cannot proceed without voltage
                 
                 # 2. Add current data if valid AND voltage was stored
@@ -472,8 +538,8 @@ class RinAnalysisTab(BaseAnalysisTab):
                     self.plot_widget.setLabel('bottom', 'Time', units='s')
                     # self._current_plot_data = {'time_v': time_v, 'voltage': voltage} # MOVED storage earlier
 
-                    # Enable manual input now that voltage is plotted
-                    self.manual_delta_i_edit.setEnabled(True)
+                    # Enable calculate button now that voltage is successfully plotted
+                    if self.run_button: self.run_button.setEnabled(True) # <<< ENABLE BUTTON HERE
 
                     # Add current trace if available (check stored data)
                     if self._current_plot_data and 'current' in self._current_plot_data:
@@ -539,9 +605,10 @@ class RinAnalysisTab(BaseAnalysisTab):
                               log.debug(f"Resetting region {region.name} to default.")
                 else: 
                     log.warning(f"No valid voltage data found to plot for channel {chan_id}")
-                    # Ensure plot is empty if voltage failed
                     self.plot_widget.clearPlots()
+                    self._clear_rin_visualization_lines()
                     self._current_plot_data = None 
+                    if self.run_button: self.run_button.setEnabled(False) # <<< Keep button disabled
 
                 # Re-add regions after potential clearing and plotting
                 # Check if they are already added (e.g., if voltage plotted but current failed)
@@ -555,6 +622,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         except Exception as e:
             log.error(f"Error plotting trace for channel {chan_id}: {e}", exc_info=True)
             self.plot_widget.clear()
+            self._clear_rin_visualization_lines()
             # Attempt to re-add regions even on error
             try:
                 if self.baseline_region.scene() is None: self.plot_widget.addItem(self.baseline_region)
@@ -562,196 +630,266 @@ class RinAnalysisTab(BaseAnalysisTab):
             except Exception as add_err:
                 log.error(f"Error re-adding regions after plot error: {add_err}")
             self._current_plot_data = None
+            if self.run_button: self.run_button.setEnabled(False) # <<< Disable button on error
 
         # INSTEAD: Enable calculate button if voltage plot succeeded
         # Manual dI also enabled based on voltage success
         if voltage is not None:
-             self.calculate_button.setEnabled(True)
-             # self.manual_delta_i_edit.setEnabled(True) # Moved earlier, enable right after voltage plots
+             self.run_button.setEnabled(True)
         else:
-             self.calculate_button.setEnabled(False)
-             self.manual_delta_i_edit.setEnabled(False) # Ensure disabled if voltage fails
-             # Ensure result is cleared if plot failed
-             self.result_label.setText("N/A")
+             self.run_button.setEnabled(False)
+             self.rin_result_label.setText("Rin: --")
+             self.delta_v_label.setText("ΔV: --")
+             self.delta_i_label.setText("ΔI: --")
              if self.save_button: self.save_button.setEnabled(False)
 
-    # --- Analysis Logic ---
     @QtCore.Slot()
     def _on_mode_changed(self):
-        is_manual = self.mode_button_group.checkedId() == self.MODE_MANUAL
-        self.manual_time_group.setEnabled(is_manual)
-        self.baseline_region.setVisible(not is_manual)
-        self.baseline_region.setMovable(not is_manual)
-        self.response_region.setVisible(not is_manual)
-        self.response_region.setMovable(not is_manual)
-        log.debug(f"Rin analysis mode changed. Manual Mode: {is_manual}")
-        self._trigger_rin_analysis()
+        """Update UI elements based on the selected mode (ComboBox)."""
+        if not self.mode_combobox: return
+        
+        current_mode_text = self.mode_combobox.currentText()
+        is_manual = (current_mode_text == "Manual")
+        is_interactive = (current_mode_text == "Interactive")
 
-    # Helper slots to trigger analysis only in the correct mode
+        # Show/hide manual time group and run button
+        if self.manual_time_group: self.manual_time_group.setVisible(is_manual)
+        if self.run_button: self.run_button.setVisible(is_manual) # <<< Visibility depends on mode
+        
+        # Enable run button only if manual mode is active AND data is plotted
+        has_data = self._current_plot_data is not None
+        if self.run_button: self.run_button.setEnabled(is_manual and has_data)
+
+        # Show/hide interactive regions
+        if self.baseline_region: self.baseline_region.setVisible(is_interactive)
+        if self.response_region: self.response_region.setVisible(is_interactive)
+        # Enable/disable moving regions
+        if self.baseline_region: self.baseline_region.setMovable(is_interactive)
+        if self.response_region: self.response_region.setMovable(is_interactive)
+
+        log.debug(f"Rin analysis mode changed to: {current_mode_text}. Manual Time Group Visible: {is_manual}, Run Button Visible: {is_manual}, Interactive Regions Visible: {is_interactive}")
+        
+        # Trigger analysis immediately only if in interactive mode AND data exists
+        if is_interactive and has_data:
+            self._trigger_rin_analysis() # <<< Re-added trigger for interactive mode
+        else:
+            # Clear results or wait for explicit trigger in manual mode
+            self.status_label.setText(f"Status: {current_mode_text} mode - Ready.")
+            # Consider clearing results/visualization when switching TO manual?
+            # self._clear_rin_visualization_lines() # Optional
+            # self.rin_result_label.setText("Rin: --") # Optional
+
+    # --- RE-ADDED: Helper slots to trigger analysis only in the correct mode ---
     @QtCore.Slot()
     def _trigger_rin_analysis_if_manual(self):
-        if self.mode_button_group.checkedId() == self.MODE_MANUAL:
+        """Trigger analysis only if the current mode is Manual."""
+        if self.mode_combobox and self.mode_combobox.currentText() == "Manual":
+            log.debug("Triggering Rin analysis from manual input (button/spinbox).")
             self._trigger_rin_analysis()
             
     @QtCore.Slot()
     def _trigger_rin_analysis_if_interactive(self):
-         if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
+        """Trigger analysis only if the current mode is Interactive."""
+        if self.mode_combobox and self.mode_combobox.currentText() == "Interactive":
+            log.debug("Triggering Rin analysis from interactive region change.")
             self._trigger_rin_analysis()
+    # --- END RE-ADDED ---
 
     @QtCore.Slot()
     def _trigger_rin_analysis(self):
-        # --- Log entry state ---
+        """Central method to perform Rin calculation based on current mode and inputs."""
         log.debug(f"_trigger_rin_analysis called. self._current_plot_data keys: {list(self._current_plot_data.keys()) if self._current_plot_data else 'None'}")
-        has_v_data = self._current_plot_data and 'voltage' in self._current_plot_data
-        has_t_data = self._current_plot_data and 'time_v' in self._current_plot_data
-        log.debug(f"  >> Has voltage key: {has_v_data}, Has time_v key: {has_t_data}")
-        
+
         # --- Reset state ---
-        self._last_rin_result = None 
-        self.result_label.setText("Calculating...")
+        self._last_rin_result = None
+        self.rin_result_label.setText("Rin: Calculating...")
+        self.delta_v_label.setText("ΔV: --")
+        self.delta_i_label.setText("ΔI: --")
         if self.save_button: self.save_button.setEnabled(False)
 
-        # --- 1. Check for Voltage Data --- 
+        # --- 1. Check for Voltage Data ---
         if not self._current_plot_data or \
            'voltage' not in self._current_plot_data or \
            'time_v' not in self._current_plot_data:
             log.debug("Skipping Rin analysis: Voltage data missing.")
-            self.result_label.setText("Voltage Data Missing")
+            self.rin_result_label.setText("Rin: Voltage Data Missing")
             return
-            
+
         time_v = self._current_plot_data['time_v']
         voltage = self._current_plot_data['voltage']
 
-        # --- 2. Determine Delta I --- 
-        delta_i_to_use: Optional[float] = None
-        delta_i_source: Optional[str] = None
+        # --- Get Delta I (in pA) ---
+        final_delta_i_pa = 0.0 # Initialize to zero, holds the final value in pA
+        delta_i_source = "N/A" # N/A, Manual, Calculated
 
-        # 2a. Try Manual Delta I
-        manual_delta_i_text = self.manual_delta_i_edit.text().strip()
-        if manual_delta_i_text:
-            try:
-                manual_delta_i_pa = float(manual_delta_i_text)
-                if not np.isclose(manual_delta_i_pa, 0.0):
-                    delta_i_to_use = manual_delta_i_pa
-                    delta_i_source = 'manual'
-                    log.debug(f"Using Manual ΔI = {delta_i_to_use:.3f} pA")
-                else:
-                    log.warning("Manual ΔI is zero or close to zero, ignoring.")
-            except ValueError:
-                log.warning(f"Invalid Manual ΔI value: '{manual_delta_i_text}'. Ignoring.")
-                # Optionally display a temporary warning in result_label?
-                # self.result_label.setText("Invalid Manual ΔI") 
-                # return # Or just ignore and try calculated?
-
-        # 2b. Try Calculated Delta I (if manual wasn't used)
-        if delta_i_to_use is None:
-            log.debug("Manual ΔI not provided or invalid, attempting to calculate from current trace.")
-            if 'current' in self._current_plot_data and 'time_i' in self._current_plot_data:
-                time_i = self._current_plot_data['time_i']
-                current = self._current_plot_data['current']
-                
-                # Need to get windows *before* calculating dI
-                temp_baseline_win, temp_response_win = self._get_analysis_windows()
-                if temp_baseline_win is None or temp_response_win is None: 
-                     # Error getting windows, already handled in _get_analysis_windows
-                     return # Stop calculation
-                
-                try:
-                    # Calculate Mean Baseline Current
-                    bl_indices_i = np.where((time_i >= temp_baseline_win[0]) & (time_i <= temp_baseline_win[1]))[0]
-                    if len(bl_indices_i) == 0: raise ValueError("No current data in baseline window")
-                    mean_baseline_i = np.mean(current[bl_indices_i])
-
-                    # Calculate Mean Response Current
-                    resp_indices_i = np.where((time_i >= temp_response_win[0]) & (time_i <= temp_response_win[1]))[0]
-                    if len(resp_indices_i) == 0: raise ValueError("No current data in response window")
-                    mean_response_i = np.mean(current[resp_indices_i])
-                    
-                    calculated_delta_i = mean_response_i - mean_baseline_i
-                    log.debug(f"Calculated ΔI: Mean Baseline I={mean_baseline_i:.3f} pA, Mean Response I={mean_response_i:.3f} pA => ΔI={calculated_delta_i:.3f} pA")
-
-                    if not np.isclose(calculated_delta_i, 0.0):
-                        delta_i_to_use = calculated_delta_i
-                        delta_i_source = 'calculated'
-                        log.debug(f"Using Calculated ΔI = {delta_i_to_use:.3f} pA")
-                    else:
-                         log.warning("Calculated ΔI is zero or close to zero. Cannot use for Rin.")
-                         # Keep delta_i_to_use as None
-                except ValueError as e:
-                    log.warning(f"Could not calculate ΔI from current trace: {e}")
-                    # Keep delta_i_to_use as None
-                except Exception as e:
-                     log.error(f"Unexpected error calculating ΔI: {e}", exc_info=True)
-                     # Keep delta_i_to_use as None
+        # 1. Try Manual Delta I
+        manual_delta_i_value_pa = 0.0 # Store the raw input just for logging/errors
+        has_manual_spinbox = hasattr(self, 'manual_delta_i_spinbox') and self.manual_delta_i_spinbox is not None
+        if has_manual_spinbox:
+            manual_delta_i_value_pa = self.manual_delta_i_spinbox.value()
+            # Use the manual value ONLY if it's significantly different from zero
+            if not np.isclose(manual_delta_i_value_pa, 0.0):
+                final_delta_i_pa = manual_delta_i_value_pa
+                delta_i_source = "Manual"
+                log.debug(f"Using Manual Delta I: {final_delta_i_pa:.3f} pA")
             else:
-                log.debug("Current trace data not available for calculating ΔI.")
+                log.debug("Manual Delta I is zero, will attempt calculation.")
+        else:
+            log.debug("Manual Delta I spinbox not found, attempting calculation.")
 
-        # --- 3. Check if ΔI was determined --- 
-        if delta_i_to_use is None:
-            log.warning("Failed to determine a valid ΔI from manual input or current trace.")
-            self.result_label.setText("Valid ΔI Required")
-            # self.save_button remains disabled
-            return
+        # 2. Try Calculate Delta I (only if Manual was zero or unavailable)
+        if np.isclose(final_delta_i_pa, 0.0):
+            log.debug("Attempting to calculate Delta I from trace.")
+            current_trace = self._current_plot_data.get('current')
+            time_c = self._current_plot_data.get('time_i')
+            calculation_attempted = False
+            calculation_succeeded_non_zero = False
 
-        # --- 4. Get Analysis Windows --- 
+            if current_trace is not None and time_c is not None:
+                log.debug("Current trace and time vector found.")
+                baseline_window, response_window = self._get_analysis_windows()
+                if baseline_window is not None and response_window is not None:
+                    log.debug(f"Analysis windows obtained: BL={baseline_window}, Resp={response_window}")
+                    calculation_attempted = True # We have data and windows
+                    try:
+                        if baseline_window[0] < baseline_window[1] and response_window[0] < response_window[1]:
+                            mask_baseline_c = (time_c >= baseline_window[0]) & (time_c <= baseline_window[1])
+                            mask_response_c = (time_c >= response_window[0]) & (time_c <= response_window[1])
+
+                            if np.any(mask_baseline_c) and np.any(mask_response_c):
+                                baseline_current = np.mean(current_trace[mask_baseline_c]) # Amps
+                                response_current = np.mean(current_trace[mask_response_c]) # Amps
+                                delta_i_calculated_a = response_current - baseline_current # Amps
+                                delta_i_calculated_pa = delta_i_calculated_a * 1e12 # Convert to pA
+                                log.debug(f"Calculated Delta I raw value: {delta_i_calculated_pa:.4f} pA")
+
+                                # Assign ONLY if significantly non-zero
+                                if not np.isclose(delta_i_calculated_pa, 0.0):
+                                    final_delta_i_pa = delta_i_calculated_pa
+                                    delta_i_source = "Calculated"
+                                    calculation_succeeded_non_zero = True
+                                    log.debug(f"Using Calculated Delta I: {final_delta_i_pa:.3f} pA")
+                                else:
+                                    log.warning("Calculated Delta I from trace is zero or close to zero.")
+                            else:
+                                 log.warning("Could not calculate Delta I: No data points found within window(s) in current trace.")
+                        else:
+                            log.warning("Could not calculate Delta I: Baseline or response windows are invalid.")
+                    except Exception as e:
+                        log.error(f"Error during Delta I calculation from current trace: {e}", exc_info=True)
+                else: # Windows were None
+                    log.warning("Could not calculate Delta I: Failed to get valid analysis windows.")
+                    # Status message should be set by _get_analysis_windows
+            else:
+                log.warning("Cannot calculate Delta I: Current trace data ('current', 'time_i') not found.")
+
+            # Update source if calculation failed after being attempted
+            if calculation_attempted and not calculation_succeeded_non_zero and delta_i_source != "Manual":
+                 delta_i_source = "Calculation Failed/Zero"
+
+        # 3. Validate Final Delta I (must be non-zero)
+        if delta_i_source == "N/A" or delta_i_source == "Calculation Failed/Zero":
+            # Failure: Manual was zero/missing AND calculation failed/was zero
+            error_msg = "Could not determine a non-zero ΔI. "
+            if not has_manual_spinbox:
+                 error_msg += "Manual input missing. "
+            elif np.isclose(manual_delta_i_value_pa, 0.0):
+                 error_msg += f"Manual input was zero. "
+                 
+            if 'current' not in self._current_plot_data:
+                 error_msg += "Current trace missing for calculation. "
+            elif delta_i_source == "Calculation Failed/Zero":
+                 error_msg += "Calculation from trace failed or yielded zero. "
+                 
+            error_msg += "Check windows or provide non-zero Manual ΔI."
+            log.error(error_msg)
+            self.status_label.setText(f"Status: Error - {error_msg}")
+            self._clear_rin_visualization_lines()
+            self.delta_i_label.setText("ΔI: -- Error --")
+            if self.save_button: self.save_button.setEnabled(False)
+            return # Stop processing
+        
+        # --- If we reach here, final_delta_i_pa holds a valid non-zero value in pA ---
+        self.delta_i_label.setText(f"ΔI: {final_delta_i_pa:.2f} pA ({delta_i_source})")
+
+        # --- Calculate Rin ---
+        # Get windows again just before calculation (might have changed in manual mode)
         baseline_win, response_win = self._get_analysis_windows()
         if baseline_win is None or response_win is None:
-            # Error should have been displayed by _get_analysis_windows
-            return
+             log.error("Failed to get valid analysis windows just before Rin calculation.")
+             # Status should be set by _get_analysis_windows
+             return # Stop if windows invalid
 
-        # --- 5. Perform Calculation --- 
-        log.debug(f"Running calculate_rin with dI={delta_i_to_use:.3f} pA (Source: {delta_i_source})")
-        calc_result = calculate_rin(time_v, voltage, baseline_win, response_win, delta_i_to_use)
+        # Pass the non-zero pA value to the calculation function
+        log.debug(f"Running calculate_rin with dI = {final_delta_i_pa:.3f} pA")
+        calc_result = calculate_rin(time_v, voltage, baseline_win, response_win, final_delta_i_pa)
 
-        # --- 6. Display Result --- 
+        # --- Display Result ---
         if calc_result is not None:
             rin_mohm, dV_mv = calc_result
-            # Store the full result including the dI used and its source
-            self._last_rin_result = (rin_mohm, dV_mv, delta_i_to_use, delta_i_source)
-            # Update label to show source of ΔI
-            source_tag = "Man." if delta_i_source == 'manual' else "Calc."
-            self.result_label.setText(f"{rin_mohm:.2f} MΩ (ΔV={dV_mv:.2f}mV, {source_tag} ΔI={delta_i_to_use:.1f}pA)")
-            log.info(f"Rin = {rin_mohm:.2f} MΩ (dV={dV_mv:.2f}mV, Source: {delta_i_source}, dI={delta_i_to_use:.1f}pA)")
+            # Store the final pA value used and the determined source
+            self._last_rin_result = (rin_mohm, dV_mv, final_delta_i_pa, delta_i_source)
+            self.rin_result_label.setText(f"Rin: {rin_mohm:.2f} MΩ")
+            self.delta_v_label.setText(f"ΔV: {dV_mv:.2f} mV")
+            # delta_i_label already set above
+            self.status_label.setText(f"Status: Calculation complete ({delta_i_source} ΔI). Mode: {self.mode_combobox.currentText()}")
+            log.info(f"Rin = {rin_mohm:.2f} MΩ (dV={dV_mv:.2f}mV, ΔI={final_delta_i_pa:.2f}pA ({delta_i_source}))")
             if self.save_button: self.save_button.setEnabled(True)
+            self._update_rin_visualization_lines(baseline_win, response_win, voltage)
         else:
-            # calculate_rin logs specific errors
-            self.result_label.setText("Calculation Error") 
-            log.warning("calculate_rin returned None.")
-            # self.save_button remains disabled
+            # calculate_rin returned None
+            self.rin_result_label.setText("Rin: Calculation Error")
+            self.delta_v_label.setText("ΔV: --")
+            # Keep the delta_i label showing the value that was passed
+            self.status_label.setText("Status: Error during Rin calculation (check windows/data validity).")
+            log.warning(f"calculate_rin returned None. Input delta_i was {final_delta_i_pa:.3f} pA.")
+            self._clear_rin_visualization_lines()
 
     def _get_analysis_windows(self) -> Tuple[Optional[Tuple[float, float]], Optional[Tuple[float, float]]]:
         """Gets baseline and response windows based on current mode.
-           Updates UI elements (manual fields or regions) accordingly.
-           Returns (None, None) if validation fails, setting result_label.
+           Updates UI elements (regions or reflects spinbox values).
+           Returns (None, None) if validation fails, setting status_label.
         """
         baseline_win, response_win = None, None
-        if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
+        current_mode_text = self.mode_combobox.currentText()
+
+        if current_mode_text == "Interactive":
+            if not self.baseline_region or not self.response_region:
+                log.error("Interactive mode selected but region items are missing.")
+                self.status_label.setText("Status: Error - Interactive regions missing.")
+                return None, None
             baseline_win = self.baseline_region.getRegion()
             response_win = self.response_region.getRegion()
-            # Update manual fields from regions
-            self.baseline_start_edit.setText(f"{baseline_win[0]:.4f}")
-            self.baseline_end_edit.setText(f"{baseline_win[1]:.4f}")
-            self.response_start_edit.setText(f"{response_win[0]:.4f}")
-            self.response_end_edit.setText(f"{response_win[1]:.4f}")
             log.debug(f"Using Interactive Windows. BL: {baseline_win}, Resp: {response_win}")
-        else: # Manual mode
+        
+        elif current_mode_text == "Manual":
+            if not self.manual_baseline_start_spinbox or not self.manual_baseline_end_spinbox or \
+               not self.manual_response_start_spinbox or not self.manual_response_end_spinbox:
+               log.error("Manual mode selected but spinboxes are missing.")
+               self.status_label.setText("Status: Error - Manual time inputs missing.")
+               return None, None
             try:
-                bl_s = float(self.baseline_start_edit.text())
-                bl_e = float(self.baseline_end_edit.text())
-                r_s = float(self.response_start_edit.text())
-                r_e = float(self.response_end_edit.text())
-                if bl_s >= bl_e or r_s >= r_e: raise ValueError("Start time must be less than end time.")
+                bl_s = self.manual_baseline_start_spinbox.value()
+                bl_e = self.manual_baseline_end_spinbox.value()
+                r_s = self.manual_response_start_spinbox.value()
+                r_e = self.manual_response_end_spinbox.value()
+                if bl_s >= bl_e or r_s >= r_e:
+                    raise ValueError("Start time must be less than end time for windows.")
                 baseline_win = (bl_s, bl_e)
                 response_win = (r_s, r_e)
-                # Update regions from manual fields
-                self.baseline_region.setRegion(baseline_win)
-                self.response_region.setRegion(response_win)
+                # Update regions from manual fields if they exist
+                if self.baseline_region: self.baseline_region.setRegion(baseline_win)
+                if self.response_region: self.response_region.setRegion(response_win)
                 log.debug(f"Using Manual Windows. BL: {baseline_win}, Resp: {response_win}")
-            except (ValueError, TypeError) as e:
+            except ValueError as e:
                 log.warning(f"Manual time validation failed: {e}")
-                self.result_label.setText("Invalid Time")
-                if self.save_button: self.save_button.setEnabled(False)
-                return None, None # Indicate failure
+                self.status_label.setText(f"Status: Invalid Time ({e})")
+                return None, None
+        else:
+             log.error(f"Unknown analysis mode selected: {current_mode_text}")
+             self.status_label.setText(f"Status: Error - Unknown mode.")
+             return None, None
+             
         return baseline_win, response_win
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
@@ -770,9 +908,9 @@ class RinAnalysisTab(BaseAnalysisTab):
              log.error(f"Could not unpack stored Rin result: {self._last_rin_result}. Error: {e}")
              return None
 
-        channel_id = self.rin_channel_combo.currentData()
+        channel_id = self.voltage_channel_combobox.currentData()
         # Robust way to get channel name without crashing if format changes
-        current_text = self.rin_channel_combo.currentText()
+        current_text = self.voltage_channel_combobox.currentText()
         channel_name = current_text.split(' (')[0] if ' (' in current_text else current_text
         
         data_source = self.data_source_combobox.currentData()
@@ -782,11 +920,14 @@ class RinAnalysisTab(BaseAnalysisTab):
             return None
 
         # Get windows used for the calculation (read from current UI state)
-        baseline_win, response_win = self._get_analysis_windows() 
+        baseline_win, response_win = self._get_analysis_windows()
         if baseline_win is None or response_win is None:
              log.warning("_get_specific_result_data: Could not retrieve valid analysis windows.")
              # Should we still save without windows? Probably not.
              return None 
+
+        # Get current mode from combobox
+        analysis_mode = self.mode_combobox.currentText() if self.mode_combobox else "Unknown"
 
         specific_data = {
             'result_value': rin_value,
@@ -801,7 +942,8 @@ class RinAnalysisTab(BaseAnalysisTab):
             'baseline_end_s': baseline_win[1],
             'response_start_s': response_win[0],
             'response_end_s': response_win[1],
-            'analysis_mode': "Interactive" if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE else "Manual"
+            'analysis_mode': analysis_mode, # Use text from combobox
+            'manual_delta_i_pa': di_val if not np.isclose(di_val or 0.0, 0.0) else None, # Include manual value if set
         }
         log.debug(f"_get_specific_result_data (Rin) returning: {specific_data}")
         return specific_data
@@ -809,6 +951,33 @@ class RinAnalysisTab(BaseAnalysisTab):
     def cleanup(self):
         if self.plot_widget: self.plot_widget.clear()
         super().cleanup()
+
+    # --- ADDED: Helper to update visualization lines --- 
+    def _update_rin_visualization_lines(self, baseline_win, response_win, voltage_trace):
+        """Update the position and visibility of baseline/response lines."""
+        if not self.baseline_line or not self.response_line or not self._current_plot_data:
+            return
+        time_v = self._current_plot_data['time_v']
+        try:
+            bl_indices = np.where((time_v >= baseline_win[0]) & (time_v <= baseline_win[1]))[0]
+            resp_indices = np.where((time_v >= response_win[0]) & (time_v <= response_win[1]))[0]
+            if len(bl_indices) > 0 and len(resp_indices) > 0:
+                mean_baseline_v = np.mean(voltage_trace[bl_indices])
+                mean_response_v = np.mean(voltage_trace[resp_indices])
+                self.baseline_line.setPos(mean_baseline_v)
+                self.response_line.setPos(mean_response_v)
+                self.baseline_line.setVisible(True)
+                self.response_line.setVisible(True)
+            else:
+                self._clear_rin_visualization_lines()
+        except Exception as e:
+            log.warning(f"Error updating Rin visualization lines: {e}")
+            self._clear_rin_visualization_lines()
+
+    # --- ADDED: Helper to clear visualization lines --- 
+    def _clear_rin_visualization_lines(self):
+        if self.baseline_line: self.baseline_line.setVisible(False)
+        if self.response_line: self.response_line.setVisible(False)
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
 ANALYSIS_TAB_CLASS = RinAnalysisTab 
