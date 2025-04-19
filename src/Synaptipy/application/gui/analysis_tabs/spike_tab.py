@@ -57,96 +57,90 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         return "Spike Detection (Threshold)"
 
     def _setup_ui(self):
-        """Create UI elements for the Spike analysis tab."""
-        # Create UI elements for the Spike analysis tab.
-        # Use main vertical layout
-        main_layout = QtWidgets.QVBoxLayout(self) 
-        
-        # --- Top Controls Area --- 
-        controls_group = QtWidgets.QGroupBox("Configuration")
-        controls_layout = QtWidgets.QVBoxLayout(controls_group)
+        """Create UI elements for Spike analysis."""
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(5)
+
+        # --- Top Horizontal Section ---
+        top_section_layout = QtWidgets.QHBoxLayout()
+        top_section_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+
+        # --- Left: Controls Group ---
+        self.controls_group = QtWidgets.QGroupBox("Configuration")
+        # Limit width and vertical expansion
+        self.controls_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
+        controls_layout = QtWidgets.QVBoxLayout(self.controls_group)
         controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        # 1. Analysis Item Selector (Inherited)
-        item_selector_layout = QtWidgets.QFormLayout() 
-        self._setup_analysis_item_selector(item_selector_layout) 
+        # Analysis Item Selector (inherited)
+        item_selector_layout = QtWidgets.QFormLayout()
+        self._setup_analysis_item_selector(item_selector_layout)
         controls_layout.addLayout(item_selector_layout)
 
-        # 2. Channel Selector (Single Channel for Plotting)
-        channel_select_layout = QtWidgets.QHBoxLayout()
-        channel_select_layout.addWidget(QtWidgets.QLabel("Plot Channel:"))
+        # Channel/Data Source
+        channel_layout = QtWidgets.QFormLayout()
         self.channel_combobox = QtWidgets.QComboBox()
-        self.channel_combobox.setToolTip("Select the channel to plot and detect spikes on.")
+        self.channel_combobox.setToolTip("Select the voltage channel to analyze.")
         self.channel_combobox.setEnabled(False)
-        channel_select_layout.addWidget(self.channel_combobox, stretch=1)
-        controls_layout.addLayout(channel_select_layout)
+        channel_layout.addRow("Voltage Channel:", self.channel_combobox)
 
-        # 3. Data Source Selector
-        data_source_layout = QtWidgets.QHBoxLayout()
-        data_source_layout.addWidget(QtWidgets.QLabel("Data Source:"))
         self.data_source_combobox = QtWidgets.QComboBox()
         self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
         self.data_source_combobox.setEnabled(False)
-        data_source_layout.addWidget(self.data_source_combobox, stretch=1)
-        controls_layout.addLayout(data_source_layout)
+        channel_layout.addRow("Data Source:", self.data_source_combobox)
+        controls_layout.addLayout(channel_layout)
 
-        # 4. Spike Parameters
-        param_group = QtWidgets.QGroupBox("Detection Parameters")
-        param_layout = QtWidgets.QFormLayout(param_group)
-        # Threshold Input - Consider making this interactive on the plot later?
+        # Threshold Input
+        threshold_layout = QtWidgets.QFormLayout()
         self.threshold_edit = QtWidgets.QLineEdit("0.0")
-        self.threshold_edit.setValidator(QtGui.QDoubleValidator()) # Allow negative/positive
-        self.threshold_edit.setToolTip("Voltage threshold (in same units as plotted trace)")
-        param_layout.addRow("Threshold:", self.threshold_edit)
-        # Refractory Period Input
-        self.refractory_edit = QtWidgets.QLineEdit("2.0")
-        self.refractory_edit.setValidator(QtGui.QDoubleValidator(0, 1000, 3)) # 0-1000 ms, 3 decimals
-        self.refractory_edit.setToolTip("Refractory Period (ms) after peak")
-        param_layout.addRow("Refractory (ms):", self.refractory_edit)
-        controls_layout.addWidget(param_group)
+        self.threshold_edit.setValidator(QtGui.QDoubleValidator())
+        self.threshold_edit.setToolTip("Voltage threshold for spike detection.")
+        self.threshold_edit.setEnabled(False)
+        threshold_layout.addRow("Threshold (mV):", self.threshold_edit)
+        controls_layout.addLayout(threshold_layout)
 
-        # 5. Action Button
-        self.detect_button = QtWidgets.QPushButton("Detect Spikes") # Renamed
+        # Run Button
+        self.detect_button = QtWidgets.QPushButton("Detect Spikes")
         self.detect_button.setEnabled(False)
         self.detect_button.setToolTip("Detect spikes on the currently plotted trace using specified parameters.")
-        # Add button centered
-        button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addStretch()
-        button_layout.addWidget(self.detect_button)
-        button_layout.addStretch()
-        controls_layout.addLayout(button_layout)
-        
-        # --- ADDED: Call base class method to add the Save button --- 
-        self._setup_save_button(controls_layout) # Use the same layout as controls
-        
-        # 6. Results Display Area
-        results_group = QtWidgets.QGroupBox("Results")
-        results_layout = QtWidgets.QVBoxLayout(results_group)
+        controls_layout.addWidget(self.detect_button)
+
+        controls_layout.addStretch(1)
+        top_section_layout.addWidget(self.controls_group) # Add controls to left
+
+        # --- Right: Results Group ---
+        self.results_group = QtWidgets.QGroupBox("Results")
+        self.results_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
+        results_layout = QtWidgets.QVBoxLayout(self.results_group)
         self.results_textedit = QtWidgets.QTextEdit()
         self.results_textedit.setReadOnly(True)
         self.results_textedit.setFixedHeight(80) # Make it smaller
         self.results_textedit.setPlaceholderText("Spike counts and rates will appear here...")
         results_layout.addWidget(self.results_textedit)
-        controls_layout.addWidget(results_group)
+        self._setup_save_button(results_layout) # Add save button here
+        results_layout.addStretch(1)
+        top_section_layout.addWidget(self.results_group) # Add results to right
 
-        controls_layout.addStretch(1) # Push controls up
-        main_layout.addWidget(controls_group) # Add controls group to main layout
+        # Add top section to main layout
+        main_layout.addLayout(top_section_layout)
 
-        # --- Plot Area --- 
-        # Use base class method to setup plot area
-        plot_container = QtWidgets.QWidget() # Container for the plot
+        # --- Bottom: Plot Area ---
+        plot_container = QtWidgets.QWidget()
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
-        plot_layout.setContentsMargins(0,0,0,0)
-        self._setup_plot_area(plot_layout) # Base method adds self.plot_widget
-        # Add scatter plot item for spike markers (initially hidden/empty)
-        self.spike_markers_item = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150))
-        self.plot_widget.addItem(self.spike_markers_item)
-        self.spike_markers_item.setVisible(False)
-        
-        # Add plot container to main layout, allow it to stretch
-        main_layout.addWidget(plot_container, stretch=1) 
+        plot_layout.setContentsMargins(0, 0, 0, 0)
+        self._setup_plot_area(plot_layout)
+        main_layout.addWidget(plot_container, stretch=1)
 
-        self.setLayout(main_layout) # Set the main layout for the tab widget
+        # --- Plot items specific to Spikes ---
+        self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)) # Red markers
+        self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+        self.plot_widget.addItem(self.spike_markers_item)
+        self.plot_widget.addItem(self.threshold_line)
+        self.spike_markers_item.setVisible(False) # Initially hidden
+        self.threshold_line.setVisible(False)   # Initially hidden
+
+        self.setLayout(main_layout)
 
     def _connect_signals(self):
         """Connect signals specific to Spike tab widgets."""
@@ -224,8 +218,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
 
         # --- Enable/Disable Remaining Controls ---
         self.threshold_edit.setEnabled(can_analyze)
-        self.refractory_edit.setEnabled(can_analyze)
-        # Detect button enabled by plotting
+        self.detect_button.setEnabled(can_analyze)
 
         # --- Plot Initial Trace --- 
         if can_analyze:
@@ -233,7 +226,6 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         else:
             if self.plot_widget: self.plot_widget.clear() # Ensure plot is clear
             self.threshold_edit.setEnabled(False)
-            self.refractory_edit.setEnabled(False)
             self.detect_button.setEnabled(False)
 
     # --- Plotting Method --- 
@@ -266,6 +258,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self._current_plot_data = None
         self.spike_markers_item.setData([]) # Clear spike markers
         self.spike_markers_item.setVisible(False)
+        self.threshold_line.setVisible(False)
 
         try:
             if channel:
@@ -365,6 +358,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.results_textedit.clear()
         self.spike_markers_item.setData([]) # Clear previous markers
         self.spike_markers_item.setVisible(False)
+        self.threshold_line.setVisible(True)
         run_successful = False
         spike_indices = None
         spike_times = None
