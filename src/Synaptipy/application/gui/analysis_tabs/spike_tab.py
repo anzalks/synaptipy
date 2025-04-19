@@ -94,12 +94,12 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         param_group = QtWidgets.QGroupBox("Detection Parameters")
         param_layout = QtWidgets.QFormLayout(param_group)
         # Threshold Input - Consider making this interactive on the plot later?
-        self.threshold_edit = QtWidgets.QLineEdit("0.0") 
+        self.threshold_edit = QtWidgets.QLineEdit("0.0")
         self.threshold_edit.setValidator(QtGui.QDoubleValidator()) # Allow negative/positive
         self.threshold_edit.setToolTip("Voltage threshold (in same units as plotted trace)")
         param_layout.addRow("Threshold:", self.threshold_edit)
         # Refractory Period Input
-        self.refractory_edit = QtWidgets.QLineEdit("2.0") 
+        self.refractory_edit = QtWidgets.QLineEdit("2.0")
         self.refractory_edit.setValidator(QtGui.QDoubleValidator(0, 1000, 3)) # 0-1000 ms, 3 decimals
         self.refractory_edit.setToolTip("Refractory Period (ms) after peak")
         param_layout.addRow("Refractory (ms):", self.refractory_edit)
