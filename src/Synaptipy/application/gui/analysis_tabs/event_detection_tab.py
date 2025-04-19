@@ -33,7 +33,6 @@ class EventDetectionTab(BaseAnalysisTab):
 
         # Miniature Event Controls
         self.mini_threshold_edit: Optional[QtWidgets.QLineEdit] = None
-        self.mini_direction_combobox: Optional[QtWidgets.QComboBox] = None
         self.mini_detect_button: Optional[QtWidgets.QPushButton] = None
         self.mini_results_textedit: Optional[QtWidgets.QTextEdit] = None
         self.mini_method_combobox: Optional[QtWidgets.QComboBox] = None
@@ -115,15 +114,11 @@ class EventDetectionTab(BaseAnalysisTab):
         # Threshold Input (Now conditionally visible)
         self.mini_threshold_label = QtWidgets.QLabel("Threshold:")
         self.mini_threshold_edit = QtWidgets.QLineEdit("5.0")
-        self.mini_threshold_edit.setValidator(QtGui.QDoubleValidator(0, 10000, 3))
-        self.mini_threshold_edit.setToolTip("Detection threshold (absolute value, in trace units like pA)")
+        self.mini_threshold_edit.setToolTip(
+            "Detection threshold (sign indicates direction, e.g., -5 for negative deflections, +5 for positive)."
+        )
         mini_param_layout.addRow(self.mini_threshold_label, self.mini_threshold_edit)
         
-        # Direction Input
-        self.mini_direction_combobox = QtWidgets.QComboBox()
-        self.mini_direction_combobox.addItems(["Negative (IPSCs/EPSPs)", "Positive (EPSCs/IPSPs)"])
-        self.mini_direction_combobox.setToolTip("Direction of events relative to baseline")
-        mini_param_layout.addRow("Direction:", self.mini_direction_combobox)
         # Add more params later (e.g., min duration, rise time filter)
         miniature_layout.addWidget(mini_param_group)
 
@@ -201,33 +196,55 @@ class EventDetectionTab(BaseAnalysisTab):
         if self.mini_detect_button: self.mini_detect_button.setEnabled(False)
         if self.save_button: self.save_button.setEnabled(False)
 
-        # --- Populate Channel ComboBox (Focus on Current Channels) ---
+        # --- Populate Channel ComboBox (Look for Current OR Voltage) ---
         self.channel_combobox.blockSignals(True)
         self.channel_combobox.clear()
-        current_channels_found = False
+        voltage_channels = {}
+        current_channels = {}
         if self._selected_item_recording and self._selected_item_recording.channels:
             for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
-                 units_lower = getattr(channel, 'units', '').lower()
-                 # Look for current channels (units contain 'a' or 'amp')
+                 units = getattr(channel, 'units', '')
+                 units_lower = units.lower()
+                 log.debug(f"  Checking Ch {chan_id} ({channel.name}): Units='{units}'") 
+                 display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{units}]"
+                 
+                 # Check for Current
                  if 'a' in units_lower or 'amp' in units_lower:
-                      display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
-                      self.channel_combobox.addItem(display_name, userData=chan_id)
-                      current_channels_found = True
-            if current_channels_found:
-                self.channel_combobox.setCurrentIndex(0)
-            else:
-                self.channel_combobox.addItem("No Current Channels")
+                      current_channels[chan_id] = display_name
+                      log.debug(f"    >> Found current channel.") 
+                 # Check for Voltage (only if not already current)
+                 elif 'v' in units_lower:
+                      voltage_channels[chan_id] = display_name
+                      log.debug(f"    >> Found voltage channel.")
+
+        suitable_channels_found = False
+        # Prioritize Current Channels
+        if current_channels:
+            log.debug(f"Populating combobox with {len(current_channels)} current channels.")
+            for chan_id, display_name in current_channels.items():
+                self.channel_combobox.addItem(display_name, userData=chan_id)
+            suitable_channels_found = True
+        # Fallback to Voltage Channels
+        elif voltage_channels:
+            log.debug(f"No current channels found. Populating combobox with {len(voltage_channels)} voltage channels.")
+            for chan_id, display_name in voltage_channels.items():
+                self.channel_combobox.addItem(display_name, userData=chan_id)
+            suitable_channels_found = True
+        # No suitable channels
         else:
-            self.channel_combobox.addItem("Load Data Item")
-        self.channel_combobox.setEnabled(current_channels_found) # Enable channel selector if current channels exist
+            self.channel_combobox.addItem("No Current/Voltage Channels")
+            log.debug("No suitable current or voltage channels found.")
+
+        self.channel_combobox.setEnabled(suitable_channels_found) # Enable channel selector if suitable channels exist
         self.channel_combobox.blockSignals(False)
 
-        # --- Populate Data Source ComboBox --- (Identical logic to previous versions)
+        # --- Populate Data Source ComboBox --- 
         self.data_source_combobox.blockSignals(True)
         self.data_source_combobox.clear()
         self.data_source_combobox.setEnabled(False)
         can_analyze = False
-        if current_channels_found and self._selected_item_recording:
+        # Enable data source ONLY if suitable channels were found
+        if suitable_channels_found and self._selected_item_recording:
             selected_item_details = self._analysis_items[self._selected_item_index]
             item_type = selected_item_details.get('target_type')
             item_trial_index = selected_item_details.get('trial_index')
@@ -253,13 +270,10 @@ class EventDetectionTab(BaseAnalysisTab):
         else: self.data_source_combobox.addItem("N/A")
         self.data_source_combobox.blockSignals(False)
 
-        # --- Enable/Disable Miniature Controls ---
-        # Enable only if a valid current channel source can be analyzed
-        mini_controls_enabled = can_analyze and current_channels_found
-        if self.mini_direction_combobox: self.mini_direction_combobox.setEnabled(mini_controls_enabled)
-        # Detect button is enabled *after* successful plotting in _plot_selected_trace
-        if self.mini_detect_button: self.mini_detect_button.setEnabled(False) # Ensure disabled initially
-        if self.mini_method_combobox: self.mini_method_combobox.setEnabled(mini_controls_enabled) # Enable method selector
+        # --- Enable/Disable Miniature Controls --- 
+        # Enable only if a valid source can be analyzed (implies suitable channel found)
+        mini_controls_enabled = can_analyze 
+        if self.mini_method_combobox: self.mini_method_combobox.setEnabled(mini_controls_enabled)
         
         # Update threshold visibility based on current method selection
         self._on_mini_method_changed()
@@ -307,7 +321,7 @@ class EventDetectionTab(BaseAnalysisTab):
         # Clear previous plot items
         if self.plot_widget: self.plot_widget.clearPlots()
         # Re-add markers item after clearing plots
-        if self.plot_widget and self.event_markers_item not in self.plot_widget.items:
+        if self.plot_widget and self.event_markers_item not in self.plot_widget.items():
              self.plot_widget.addItem(self.event_markers_item)
              self.event_markers_item.setVisible(False) # Keep hidden initially
 
@@ -344,6 +358,8 @@ class EventDetectionTab(BaseAnalysisTab):
                     'units': units,
                     'sampling_rate': channel.sampling_rate if channel else None
                 }
+                # ADDED: Log keys to verify data storage
+                log.debug(f"Stored keys in _current_plot_data: {list(self._current_plot_data.keys())}")
                 plot_succeeded = True
                 log.debug("Event Detection Plotting: Success")
                 self.plot_widget.autoRange() # Auto-range after successful plot
@@ -358,7 +374,7 @@ class EventDetectionTab(BaseAnalysisTab):
             if self.plot_widget:
                 self.plot_widget.clear()
                 # Re-add markers item if needed after clear
-                if self.event_markers_item not in self.plot_widget.items:
+                if self.event_markers_item not in self.plot_widget.items():
                     self.plot_widget.addItem(self.event_markers_item)
                     self.event_markers_item.setVisible(False)
                 self.plot_widget.setTitle("Plot Error")
@@ -392,20 +408,18 @@ class EventDetectionTab(BaseAnalysisTab):
         # 2. Validate parameters
         try:
             threshold = float(self.mini_threshold_edit.text())
-            direction_text = self.mini_direction_combobox.currentText()
-            is_negative_going = "Negative" in direction_text
-            if threshold <= 0: raise ValueError("Threshold must be positive")
+            if threshold == 0: raise ValueError("Threshold cannot be zero")
         except (ValueError, TypeError):
             log.warning("Invalid event detection parameters.")
             # More specific error based on method?
-            err_msg = "Threshold must be a positive number." if "Threshold" in method else "Invalid parameters."
+            err_msg = "Threshold must be a non-zero number." if "Threshold" in method else "Invalid parameters."
             QtWidgets.QMessageBox.warning(self, "Invalid Parameters", err_msg)
             return
 
         data = self._current_plot_data.get('data')
         time = self._current_plot_data.get('time')
-        rate = self._current_plot_data.get('rate')
-        units = self._current_plot_data.get('units', 'pA')
+        rate = self._current_plot_data.get('sampling_rate')
+        units = self._current_plot_data.get('units', '?') # Default to '?'
 
         if data is None or time is None or rate is None or rate <= 0:
             log.error("Cannot run event detection: Missing data, time, or valid rate.")
@@ -423,7 +437,6 @@ class EventDetectionTab(BaseAnalysisTab):
         event_amplitudes = np.array([]) # Store amplitudes
         results_str = f"""--- Event Detection Results ---
 Threshold: {threshold:.3f} {units}
-Direction: {'Negative' if is_negative_going else 'Positive'}
 
 """
 
@@ -432,15 +445,18 @@ Direction: {'Negative' if is_negative_going else 'Positive'}
             # This is a very basic threshold crossing detector.
             # A real implementation would need filtering, baseline subtraction,
             # event shape analysis (rise/decay), etc.
-            log.info(f"Running placeholder event detection: Threshold={threshold:.3f}, Negative={is_negative_going}")
+            log.info(f"Running placeholder event detection: Threshold={threshold:.3f}")
 
-            if is_negative_going:
-                crossings = np.where(data < -threshold)[0]
-            else:
+            crossings = None
+            if threshold < 0:
+                log.info(f"Running placeholder event detection: Threshold={threshold:.3f} (Negative)")
+                crossings = np.where(data < threshold)[0]
+            else: # threshold > 0
+                log.info(f"Running placeholder event detection: Threshold={threshold:.3f} (Positive)")
                 crossings = np.where(data > threshold)[0]
 
             # Very simple: mark the first point of each crossing sequence
-            if len(crossings) > 0:
+            if crossings is not None and len(crossings) > 0:
                 diffs = np.diff(crossings)
                 event_start_indices = crossings[np.concatenate(([True], diffs > 1))] # Find where diff > 1 sample
                 event_indices = event_start_indices # Use start index for now
@@ -538,8 +554,6 @@ Direction: {'Negative' if is_negative_going else 'Positive'}
         # 2. Get parameters used
         try:
             threshold = float(self.mini_threshold_edit.text())
-            direction_text = self.mini_direction_combobox.currentText()
-            is_negative_going = "Negative" in direction_text
         except (ValueError, TypeError):
             log.error("_get_specific_result_data (EventDetection): Could not read parameters from UI.")
             return None
@@ -573,7 +587,6 @@ Direction: {'Negative' if is_negative_going else 'Positive'}
             # Analysis Parameters
             'threshold': threshold,
             'threshold_units': self._current_plot_data.get('units', 'unknown'),
-            'detection_direction': 'negative' if is_negative_going else 'positive',
             # Results
             'event_count': num_events,
             'frequency_hz': frequency,
