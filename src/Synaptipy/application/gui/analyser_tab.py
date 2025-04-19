@@ -14,19 +14,11 @@ from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from .analysis_tabs.rmp_tab import RmpAnalysisTab
 from .analysis_tabs.rin_tab import RinAnalysisTab
+from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
-from .analysis_tabs.mini_event_tab import MiniEventAnalysisTab
+# from .analysis_tabs.mini_event_tab import MiniEventAnalysisTab # REMOVED incorrect import
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
-
-# Dynamically discoverable Analysis Tabs
-ANALYSIS_TABS = [
-    RmpAnalysisTab,
-    RinAnalysisTab,
-    SpikeAnalysisTab,
-    MiniEventAnalysisTab,
-    # Add new analysis tab classes here
-]
 
 class AnalyserTab(QtWidgets.QWidget):
     """Main Analyser Widget containing dynamically loaded sub-tabs."""

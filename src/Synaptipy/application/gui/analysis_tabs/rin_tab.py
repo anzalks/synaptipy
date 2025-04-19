@@ -19,80 +19,71 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rin_tab')
 
-# --- Rin Calculation Function (MODIFIED) ---
+# --- Rin Calculation Function (REVERTED to use manual delta_i) ---
 def calculate_rin(
     time_v: np.ndarray, voltage: np.ndarray,
     baseline_window: Tuple[float, float],
     response_window: Tuple[float, float],
-    delta_i_pa: float # ADDED: Manual delta I in pA
+    delta_i_pa: float # RE-ADDED manual delta I
 ) -> Optional[Tuple[float, float]]: # Return Rin, dV (dI is now input)
     """
-    Calculates Input Resistance (Rin) from voltage trace and a manually provided delta_I.
+    Calculates Input Resistance (Rin) based on voltage trace within defined windows
+    and a provided current step amplitude (delta_i).
 
     Args:
-        time_v: Time vector for voltage trace.
-        voltage: Voltage trace.
-        baseline_window: (start_time, end_time) for baseline measurement.
-        response_window: (start_time, end_time) for steady-state response measurement.
-        delta_i_pa: The change in current (steady_state - baseline) in picoAmps (pA).
+        time_v: 1D numpy array of time values for voltage trace.
+        voltage: 1D numpy array of voltage values.
+        baseline_window: Tuple (start_time, end_time) for baseline measurement.
+        response_window: Tuple (start_time, end_time) for response measurement.
+        delta_i_pa: The change in current amplitude (I_response - I_baseline) in picoamps (pA).
 
     Returns:
-        Tuple of (Rin in MOhms, delta_V in mV) or None on error.
+        A tuple containing (rin_megaohms, delta_v_millivolts) 
+        or None if calculation fails (e.g., invalid windows, no data, zero delta_i).
     """
-    if time_v is None or voltage is None:
-        log.warning("Rin calc: Missing voltage data.")
+    # Basic validations
+    if time_v is None or voltage is None or \
+       baseline_window is None or response_window is None or \
+       baseline_window[0] >= baseline_window[1] or response_window[0] >= response_window[1]:
+        log.error("Calculate Rin: Invalid input arrays or window times.")
         return None
-    # --- ADDED: Log assumed voltage units --- 
-    voltage_units = getattr(voltage, 'units', None) # Try to get units attribute if it exists on ndarray via neo?
-    log.debug(f"Calculating Rin. Assuming input voltage units based on calculation: mV. Actual units attribute: {voltage_units}")
-    # --- END ADDED ---
-    if not baseline_window or baseline_window[0] >= baseline_window[1]:
-        log.warning("Rin calc: Invalid baseline window.")
-        return None
-    if not response_window or response_window[0] >= response_window[1]:
-        log.warning("Rin calc: Invalid response window.")
-        return None
-    if abs(delta_i_pa) < 1e-9: # Check if delta_i is extremely close to zero (using pA value)
-        log.warning(f"Rin calc: Provided delta_i_pa ({delta_i_pa}) is too small.")
+    
+    # Validate delta_i
+    if np.isclose(delta_i_pa, 0.0):
+        log.warning(f"Provided Delta I is zero or close to zero ({delta_i_pa:.4f} pA). Cannot calculate Rin.")
         return None
 
     try:
-        # Find indices for baseline window (use voltage time vector)
-        bl_indices = np.where((time_v >= baseline_window[0]) & (time_v <= baseline_window[1]))[0]
-        if len(bl_indices) == 0:
-            log.warning(f"Rin calc: No baseline data points found in window {baseline_window}")
+        # --- Calculate Mean Baseline Voltage ---
+        bl_indices_v = np.where((time_v >= baseline_window[0]) & (time_v <= baseline_window[1]))[0]
+        if len(bl_indices_v) == 0:
+            log.warning(f"No voltage data points found in baseline window: {baseline_window}")
             return None
-        # Find indices for response window (use voltage time vector)
-        resp_indices = np.where((time_v >= response_window[0]) & (time_v <= response_window[1]))[0]
-        if len(resp_indices) == 0:
-            log.warning(f"Rin calc: No response data points found in window {response_window}")
+        mean_baseline_v = np.mean(voltage[bl_indices_v])
+
+        # --- Calculate Mean Response Voltage ---
+        resp_indices_v = np.where((time_v >= response_window[0]) & (time_v <= response_window[1]))[0]
+        if len(resp_indices_v) == 0:
+            log.warning(f"No voltage data points found in response window: {response_window}")
             return None
+        mean_response_v = np.mean(voltage[resp_indices_v])
 
-        # Calculate means for voltage only
-        baseline_v_mean = np.mean(voltage[bl_indices])
-        response_v_mean = np.mean(voltage[resp_indices])
-        delta_v = response_v_mean - baseline_v_mean
+        # --- Calculate Delta V ---
+        delta_v = mean_response_v - mean_baseline_v # mV (assuming input V is mV)
 
-        # --- REMOVED: Erroneous unit conversion --- 
-        # delta_v_mv = delta_v * 1000.0 
-        # Assuming input voltage is already in mV, so delta_v IS delta_v_mv
-        delta_v_mv = delta_v 
+        log.debug(f"Rin Calc: Mean Baseline V={mean_baseline_v:.3f} mV, Mean Response V={mean_response_v:.3f} mV => dV={delta_v:.3f} mV")
+        log.debug(f"Rin Calc: Using provided dI = {delta_i_pa:.3f} pA")
 
-        # Calculate Rin using provided delta_i_pa
-        # Rin = dV (mV) / dI (pA) => requires dI in nA (pA * 1e-3)
-        # Result of mV / nA is directly MΩ
-        rin_calculated_in_mohm = delta_v_mv / (delta_i_pa * 1e-3)
-        # --- REMOVED: Erroneous multiplication by 1000 --- 
-        # rin_gohm = delta_v_mv / (delta_i_pa * 1e-3) 
-        # rin_mohm = rin_gohm * 1000.0
-        
-        # Assign the correctly calculated MΩ value
-        rin_mohm = rin_calculated_in_mohm
+        # --- Calculate Rin using provided delta_i --- 
+        # Rin (MΩ) = Delta V (mV) / Delta I (nA)
+        # Convert delta_i from pA to nA by dividing by 1000
+        rin_megaohms = delta_v / (delta_i_pa / 1000.0)
 
-        return rin_mohm, delta_v_mv # Return only Rin and dV
+        log.info(f"Calculated Rin = {rin_megaohms:.2f} MΩ (dV={delta_v:.3f}mV, using provided dI={delta_i_pa:.3f}pA)")
+        return rin_megaohms, delta_v # Return Rin and the calculated dV
 
     except Exception as e:
-        log.error(f"Error during Rin calculation: {e}", exc_info=True)
+        log.error(f"Error calculating Rin: {e}", exc_info=True)
         return None
 
 # --- Rin Analysis Tab Class ---
@@ -119,7 +110,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.baseline_end_edit: Optional[QtWidgets.QLineEdit] = None
         self.response_start_edit: Optional[QtWidgets.QLineEdit] = None
         self.response_end_edit: Optional[QtWidgets.QLineEdit] = None
-        self.manual_delta_i_edit: Optional[QtWidgets.QLineEdit] = None # ADDED
+        self.manual_delta_i_edit: Optional[QtWidgets.QLineEdit] = None # RE-ADDED
         # ADDED: Calculate Button
         self.calculate_button: Optional[QtWidgets.QPushButton] = None
         # Results
@@ -129,6 +120,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.response_region: Optional[pg.LinearRegionItem] = None
         self.current_plot_item: Optional[pg.PlotDataItem] = None # To store ref to current plot
         self._current_plot_data: Optional[Dict[str, np.ndarray]] = None # Store all traces
+        # REVISED: Store result as (rin, dV, dI, source) tuple
+        self._last_rin_result: Optional[Tuple[float, float, float, str]] = None 
 
 
         self._setup_ui()
@@ -198,30 +191,32 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.manual_time_group.setEnabled(False)
         controls_layout.addWidget(self.manual_time_group)
 
-        # --- ADDED: Manual Delta I Input --- 
+        # --- RE-ADDED: Manual Delta I Input --- 
         manual_current_layout = QtWidgets.QFormLayout()
         self.manual_delta_i_edit = QtWidgets.QLineEdit()
-        self.manual_delta_i_edit.setPlaceholderText("e.g., -100.0")
-        self.manual_delta_i_edit.setToolTip("Manually enter the current step amplitude (ΔI = I_response - I_baseline) in pA.")
+        self.manual_delta_i_edit.setPlaceholderText("e.g., -100.0 (optional)")
+        self.manual_delta_i_edit.setToolTip("Optionally enter current step ΔI (pA). If blank, ΔI will be calculated from current trace.")
         # Add validator for floating point numbers
         double_validator = QtGui.QDoubleValidator(-np.inf, np.inf, 4, self) # Allow negative/positive, 4 decimals
         double_validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
         self.manual_delta_i_edit.setValidator(double_validator)
+        self.manual_delta_i_edit.setEnabled(False) # Initialize as disabled
         manual_current_layout.addRow("Manual ΔI (pA):", self.manual_delta_i_edit)
         controls_layout.addLayout(manual_current_layout) # Add below time group
-        # --- END ADDED --- 
+        # --- END RE-ADDED ---
 
-        # --- ADDED: Calculate Button --- 
+        # --- Calculate Button --- 
         self.calculate_button = QtWidgets.QPushButton("Calculate Rin")
         self.calculate_button.setEnabled(False) # Initially disabled
-        self.calculate_button.setToolTip("Click to calculate Rin using the current settings, plot, and Manual ΔI.")
-        # Add button centered below Manual ΔI
+        # UPDATED tooltip to reflect new logic
+        self.calculate_button.setToolTip("Calculate Rin using Manual ΔI (if provided) or Current trace.")
+
+        # Add button centered below Manual Delta I group
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.calculate_button)
         button_layout.addStretch()
         controls_layout.addLayout(button_layout)
-        # --- END ADDED ---
 
         # Results Display
         results_layout = QtWidgets.QHBoxLayout()
@@ -257,17 +252,18 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.rin_channel_combo.currentIndexChanged.connect(self._plot_selected_trace)
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_trace)
         self.mode_button_group.buttonClicked.connect(self._on_mode_changed)
-        # Manual Edits
-        # REMOVED: self.baseline_start_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        # REMOVED: self.baseline_end_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        # REMOVED: self.response_start_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        # REMOVED: self.response_end_edit.editingFinished.connect(self._trigger_rin_analysis_from_manual)
-        # Connect manual delta_i edit? Maybe not, require button press.
-        # Region Edits
-        # REMOVED: self.baseline_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_from_region)
-        # REMOVED: self.response_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_from_region)
+        # Manual Time Edits (trigger only in manual mode)
+        self.baseline_start_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        self.baseline_end_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        self.response_start_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        self.response_end_edit.editingFinished.connect(self._trigger_rin_analysis_if_manual)
+        # Manual Delta I Edit (trigger always)
+        self.manual_delta_i_edit.editingFinished.connect(self._trigger_rin_analysis)
+        # Region Edits (trigger only in interactive mode)
+        self.baseline_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_if_interactive)
+        self.response_region.sigRegionChangeFinished.connect(self._trigger_rin_analysis_if_interactive)
         
-        # ADDED: Connect Calculate Button
+        # Connect Calculate Button
         self.calculate_button.clicked.connect(self._trigger_rin_analysis)
         
         # Save button handled by base class
@@ -354,9 +350,16 @@ class RinAnalysisTab(BaseAnalysisTab):
 
     def _plot_selected_trace(self):
         """Plots voltage and current for the selected channel/source."""
+        # --- Reset UI State & Data --- 
+        if self.plot_widget: self.plot_widget.clear()
+        self.manual_delta_i_edit.setEnabled(False)
+        self.calculate_button.setEnabled(False)
+        self.result_label.setText("N/A")
+        if self.save_button: self.save_button.setEnabled(False)
+        self._current_plot_data = None # *** Start with None ***
+        
+        # --- Check prerequisites --- 
         if not self.plot_widget or not self.rin_channel_combo or not self.data_source_combobox or not self._selected_item_recording:
-            self._current_plot_data = None
-            if self.plot_widget: self.plot_widget.clear()
             return
 
         chan_id = self.rin_channel_combo.currentData()
@@ -408,13 +411,42 @@ class RinAnalysisTab(BaseAnalysisTab):
                     i_label = "Current N/A"
                     time_i = None # Ensure time_i is None if current is None
 
-                # --- Plotting ---
-                self.plot_widget.clearPlots() # Use clearPlots to keep axes, regions etc.
-                # Detach regions before clearing viewboxes in case they are linked internally
-                if self.baseline_region.getViewBox(): self.baseline_region.getViewBox().removeItem(self.baseline_region)
-                if self.response_region.getViewBox(): self.response_region.getViewBox().removeItem(self.response_region)
+                # --- REVISED: Store data conditionally --- 
+                # 1. Store voltage data if valid
+                if time_v is not None and voltage is not None:
+                     self._current_plot_data = {'time_v': time_v, 'voltage': voltage}
+                     log.debug(f"Stored voltage data. Keys: {list(self._current_plot_data.keys())}")
+                else:
+                     log.warning(f"Failed to fetch valid voltage data for Ch {chan_id}, Source: {source_data}. Plotting and analysis aborted.")
+                     # Ensure plot is clear and controls disabled if voltage fetch fails
+                     self.plot_widget.clear()
+                     self.manual_delta_i_edit.setEnabled(False)
+                     self.calculate_button.setEnabled(False)
+                     return # Cannot proceed without voltage
+                
+                # 2. Add current data if valid AND voltage was stored
+                if self._current_plot_data and time_i is not None and current is not None:
+                    self._current_plot_data['time_i'] = time_i
+                    self._current_plot_data['current'] = current
+                    log.debug(f"Added current data. Keys: {list(self._current_plot_data.keys())}")
+                elif self._current_plot_data: # Voltage exists, but current failed/missing
+                    log.warning(f"Valid voltage stored, but current trace is missing/invalid for Ch {chan_id}, Source: {source_data}. Will rely on manual ΔI.")
+                    # Remove any potential old keys just in case, but keep the dict
+                    self._current_plot_data.pop('time_i', None) 
+                    self._current_plot_data.pop('current', None)
+                    i_label = "Current N/A"
+                else:
+                    # This case should ideally not be reached due to the return above if voltage failed
+                    log.error("Internal logic error: Attempted to handle current data when voltage data failed.")
+                    i_label = "Current N/A"
+                # --- END REVISED DATA STORAGE ---
 
-                self._current_plot_data = None # Reset stored data
+                # --- Plotting --- 
+                # Use clearPlots which keeps axes/regions, vs clear() which removes everything
+                self.plot_widget.clearPlots() 
+                # Detach regions FIRST before potential viewbox manipulation/clearing
+                if self.baseline_region and self.baseline_region.getViewBox(): self.baseline_region.getViewBox().removeItem(self.baseline_region)
+                if self.response_region and self.response_region.getViewBox(): self.response_region.getViewBox().removeItem(self.response_region)
 
                 # Remove previous current plot item if it exists
                 if self.current_plot_item and self.current_plot_item.scene():
@@ -438,13 +470,15 @@ class RinAnalysisTab(BaseAnalysisTab):
                     voltage_plot_item = self.plot_widget.plot(time_v, voltage, pen='k', name=v_label)
                     self.plot_widget.setLabel('left', 'Voltage', units=channel.units or 'V')
                     self.plot_widget.setLabel('bottom', 'Time', units='s')
-                    self._current_plot_data = {'time_v': time_v, 'voltage': voltage}
+                    # self._current_plot_data = {'time_v': time_v, 'voltage': voltage} # MOVED storage earlier
 
-                    # Add current trace if available
-                    if time_i is not None and current is not None:
-                        self._current_plot_data['time_i'] = time_i
-                        self._current_plot_data['current'] = current
+                    # Enable manual input now that voltage is plotted
+                    self.manual_delta_i_edit.setEnabled(True)
 
+                    # Add current trace if available (check stored data)
+                    if self._current_plot_data and 'current' in self._current_plot_data:
+                        time_i_stored = self._current_plot_data['time_i']
+                        current_stored = self._current_plot_data['current']
                         # Create secondary Y axis for current
                         p1 = self.plot_widget.getPlotItem()
                         p1.showAxis('right')
@@ -483,7 +517,7 @@ class RinAnalysisTab(BaseAnalysisTab):
 
                         # Ensure vb2 exists before adding item
                         if vb2:
-                            self.current_plot_item = pg.PlotDataItem(time_i, current, pen='r', name=i_label)
+                            self.current_plot_item = pg.PlotDataItem(time_i_stored, current_stored, pen='r', name=i_label)
                             vb2.addItem(self.current_plot_item)
                             current_units = channel.current_units if channel.current_units else 'A' # Use stored units or default
                             p1.getAxis('right').setLabel('Current', units=current_units)
@@ -530,10 +564,13 @@ class RinAnalysisTab(BaseAnalysisTab):
             self._current_plot_data = None
 
         # INSTEAD: Enable calculate button if voltage plot succeeded
+        # Manual dI also enabled based on voltage success
         if voltage is not None:
              self.calculate_button.setEnabled(True)
+             # self.manual_delta_i_edit.setEnabled(True) # Moved earlier, enable right after voltage plots
         else:
              self.calculate_button.setEnabled(False)
+             self.manual_delta_i_edit.setEnabled(False) # Ensure disabled if voltage fails
              # Ensure result is cleared if plot failed
              self.result_label.setText("N/A")
              if self.save_button: self.save_button.setEnabled(False)
@@ -550,66 +587,153 @@ class RinAnalysisTab(BaseAnalysisTab):
         log.debug(f"Rin analysis mode changed. Manual Mode: {is_manual}")
         self._trigger_rin_analysis()
 
+    # Helper slots to trigger analysis only in the correct mode
+    @QtCore.Slot()
+    def _trigger_rin_analysis_if_manual(self):
+        if self.mode_button_group.checkedId() == self.MODE_MANUAL:
+            self._trigger_rin_analysis()
+            
+    @QtCore.Slot()
+    def _trigger_rin_analysis_if_interactive(self):
+         if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
+            self._trigger_rin_analysis()
+
     @QtCore.Slot()
     def _trigger_rin_analysis(self):
-        # Get parameters and run Rin calculation using manual Delta I input.
-        # Check if basic voltage data is available
-        if not self._current_plot_data or 'voltage' not in self._current_plot_data:
-             log.debug("Skipping Rin analysis: No voltage data plotted.")
-             self.result_label.setText("N/A")
-             if self.save_button: self.save_button.setEnabled(False)
-             return
+        # --- Log entry state ---
+        log.debug(f"_trigger_rin_analysis called. self._current_plot_data keys: {list(self._current_plot_data.keys()) if self._current_plot_data else 'None'}")
+        has_v_data = self._current_plot_data and 'voltage' in self._current_plot_data
+        has_t_data = self._current_plot_data and 'time_v' in self._current_plot_data
+        log.debug(f"  >> Has voltage key: {has_v_data}, Has time_v key: {has_t_data}")
+        
+        # --- Reset state ---
+        self._last_rin_result = None 
+        self.result_label.setText("Calculating...")
+        if self.save_button: self.save_button.setEnabled(False)
 
-        # --- Get Manual Delta I --- 
-        manual_delta_i_pa: Optional[float] = None
-        try:
-            manual_delta_i_text = self.manual_delta_i_edit.text().strip()
-            if manual_delta_i_text:
-                manual_delta_i_pa = float(manual_delta_i_text)
-                # Optional: Add check for zero? calculate_rin already checks.
-                # if abs(manual_delta_i_pa) < 1e-9:
-                #      log.warning("Manual ΔI is too close to zero.")
-                #      manual_delta_i_pa = None # Treat as invalid
-            else:
-                 log.debug("Manual ΔI field is empty.")
-        except ValueError:
-            log.warning(f"Invalid input in Manual ΔI field: '{manual_delta_i_text}'. Must be a number.")
-            self.result_label.setText("Invalid ΔI")
-            if self.save_button: self.save_button.setEnabled(False)
+        # --- 1. Check for Voltage Data --- 
+        if not self._current_plot_data or \
+           'voltage' not in self._current_plot_data or \
+           'time_v' not in self._current_plot_data:
+            log.debug("Skipping Rin analysis: Voltage data missing.")
+            self.result_label.setText("Voltage Data Missing")
             return
-        except Exception as e:
-             log.error(f"Error reading Manual ΔI field: {e}")
-             self.result_label.setText("Error reading ΔI")
-             if self.save_button: self.save_button.setEnabled(False)
-             return
-             
-        if manual_delta_i_pa is None:
-            log.debug("Manual ΔI not provided or invalid, skipping Rin calculation.")
-            # Check if current trace *was* actually available - maybe warn user to clear manual field?
-            if 'current' in self._current_plot_data and self._current_plot_data['current'] is not None:
-                log.warning("Actual current trace data exists, but Manual ΔI field is empty/invalid. Calculation requires manual ΔI.")
-                self.result_label.setText("Enter Manual ΔI")
-            else:
-                self.result_label.setText("N/A (Enter ΔI)")
-            if self.save_button: self.save_button.setEnabled(False)
-            return
-        # --- END Get Manual Delta I --- 
-
-        # If we reach here, voltage data and manual delta_i_pa are available
+            
         time_v = self._current_plot_data['time_v']
         voltage = self._current_plot_data['voltage']
-        baseline_win, response_win = None, None
 
-        # Get time windows (same logic as before)
+        # --- 2. Determine Delta I --- 
+        delta_i_to_use: Optional[float] = None
+        delta_i_source: Optional[str] = None
+
+        # 2a. Try Manual Delta I
+        manual_delta_i_text = self.manual_delta_i_edit.text().strip()
+        if manual_delta_i_text:
+            try:
+                manual_delta_i_pa = float(manual_delta_i_text)
+                if not np.isclose(manual_delta_i_pa, 0.0):
+                    delta_i_to_use = manual_delta_i_pa
+                    delta_i_source = 'manual'
+                    log.debug(f"Using Manual ΔI = {delta_i_to_use:.3f} pA")
+                else:
+                    log.warning("Manual ΔI is zero or close to zero, ignoring.")
+            except ValueError:
+                log.warning(f"Invalid Manual ΔI value: '{manual_delta_i_text}'. Ignoring.")
+                # Optionally display a temporary warning in result_label?
+                # self.result_label.setText("Invalid Manual ΔI") 
+                # return # Or just ignore and try calculated?
+
+        # 2b. Try Calculated Delta I (if manual wasn't used)
+        if delta_i_to_use is None:
+            log.debug("Manual ΔI not provided or invalid, attempting to calculate from current trace.")
+            if 'current' in self._current_plot_data and 'time_i' in self._current_plot_data:
+                time_i = self._current_plot_data['time_i']
+                current = self._current_plot_data['current']
+                
+                # Need to get windows *before* calculating dI
+                temp_baseline_win, temp_response_win = self._get_analysis_windows()
+                if temp_baseline_win is None or temp_response_win is None: 
+                     # Error getting windows, already handled in _get_analysis_windows
+                     return # Stop calculation
+                
+                try:
+                    # Calculate Mean Baseline Current
+                    bl_indices_i = np.where((time_i >= temp_baseline_win[0]) & (time_i <= temp_baseline_win[1]))[0]
+                    if len(bl_indices_i) == 0: raise ValueError("No current data in baseline window")
+                    mean_baseline_i = np.mean(current[bl_indices_i])
+
+                    # Calculate Mean Response Current
+                    resp_indices_i = np.where((time_i >= temp_response_win[0]) & (time_i <= temp_response_win[1]))[0]
+                    if len(resp_indices_i) == 0: raise ValueError("No current data in response window")
+                    mean_response_i = np.mean(current[resp_indices_i])
+                    
+                    calculated_delta_i = mean_response_i - mean_baseline_i
+                    log.debug(f"Calculated ΔI: Mean Baseline I={mean_baseline_i:.3f} pA, Mean Response I={mean_response_i:.3f} pA => ΔI={calculated_delta_i:.3f} pA")
+
+                    if not np.isclose(calculated_delta_i, 0.0):
+                        delta_i_to_use = calculated_delta_i
+                        delta_i_source = 'calculated'
+                        log.debug(f"Using Calculated ΔI = {delta_i_to_use:.3f} pA")
+                    else:
+                         log.warning("Calculated ΔI is zero or close to zero. Cannot use for Rin.")
+                         # Keep delta_i_to_use as None
+                except ValueError as e:
+                    log.warning(f"Could not calculate ΔI from current trace: {e}")
+                    # Keep delta_i_to_use as None
+                except Exception as e:
+                     log.error(f"Unexpected error calculating ΔI: {e}", exc_info=True)
+                     # Keep delta_i_to_use as None
+            else:
+                log.debug("Current trace data not available for calculating ΔI.")
+
+        # --- 3. Check if ΔI was determined --- 
+        if delta_i_to_use is None:
+            log.warning("Failed to determine a valid ΔI from manual input or current trace.")
+            self.result_label.setText("Valid ΔI Required")
+            # self.save_button remains disabled
+            return
+
+        # --- 4. Get Analysis Windows --- 
+        baseline_win, response_win = self._get_analysis_windows()
+        if baseline_win is None or response_win is None:
+            # Error should have been displayed by _get_analysis_windows
+            return
+
+        # --- 5. Perform Calculation --- 
+        log.debug(f"Running calculate_rin with dI={delta_i_to_use:.3f} pA (Source: {delta_i_source})")
+        calc_result = calculate_rin(time_v, voltage, baseline_win, response_win, delta_i_to_use)
+
+        # --- 6. Display Result --- 
+        if calc_result is not None:
+            rin_mohm, dV_mv = calc_result
+            # Store the full result including the dI used and its source
+            self._last_rin_result = (rin_mohm, dV_mv, delta_i_to_use, delta_i_source)
+            # Update label to show source of ΔI
+            source_tag = "Man." if delta_i_source == 'manual' else "Calc."
+            self.result_label.setText(f"{rin_mohm:.2f} MΩ (ΔV={dV_mv:.2f}mV, {source_tag} ΔI={delta_i_to_use:.1f}pA)")
+            log.info(f"Rin = {rin_mohm:.2f} MΩ (dV={dV_mv:.2f}mV, Source: {delta_i_source}, dI={delta_i_to_use:.1f}pA)")
+            if self.save_button: self.save_button.setEnabled(True)
+        else:
+            # calculate_rin logs specific errors
+            self.result_label.setText("Calculation Error") 
+            log.warning("calculate_rin returned None.")
+            # self.save_button remains disabled
+
+    def _get_analysis_windows(self) -> Tuple[Optional[Tuple[float, float]], Optional[Tuple[float, float]]]:
+        """Gets baseline and response windows based on current mode.
+           Updates UI elements (manual fields or regions) accordingly.
+           Returns (None, None) if validation fails, setting result_label.
+        """
+        baseline_win, response_win = None, None
         if self.mode_button_group.checkedId() == self.MODE_INTERACTIVE:
             baseline_win = self.baseline_region.getRegion()
             response_win = self.response_region.getRegion()
-            # Update manual fields
+            # Update manual fields from regions
             self.baseline_start_edit.setText(f"{baseline_win[0]:.4f}")
             self.baseline_end_edit.setText(f"{baseline_win[1]:.4f}")
             self.response_start_edit.setText(f"{response_win[0]:.4f}")
             self.response_end_edit.setText(f"{response_win[1]:.4f}")
-            log.debug(f"Running Rin (Interactive). BL: {baseline_win}, Resp: {response_win}")
+            log.debug(f"Using Interactive Windows. BL: {baseline_win}, Resp: {response_win}")
         else: # Manual mode
             try:
                 bl_s = float(self.baseline_start_edit.text())
@@ -619,81 +743,57 @@ class RinAnalysisTab(BaseAnalysisTab):
                 if bl_s >= bl_e or r_s >= r_e: raise ValueError("Start time must be less than end time.")
                 baseline_win = (bl_s, bl_e)
                 response_win = (r_s, r_e)
-                # Update regions
+                # Update regions from manual fields
                 self.baseline_region.setRegion(baseline_win)
                 self.response_region.setRegion(response_win)
-                log.debug(f"Running Rin (Manual). BL: {baseline_win}, Resp: {response_win}")
+                log.debug(f"Using Manual Windows. BL: {baseline_win}, Resp: {response_win}")
             except (ValueError, TypeError) as e:
                 log.warning(f"Manual time validation failed: {e}")
                 self.result_label.setText("Invalid Time")
                 if self.save_button: self.save_button.setEnabled(False)
-                return
-
-        # --- Perform Calculation (using manual delta I) --- 
-        log.debug(f"Attempting Rin calculation with Manual ΔI = {manual_delta_i_pa} pA")
-        calc_result = calculate_rin(time_v, voltage, baseline_win, response_win, delta_i_pa=manual_delta_i_pa)
-
-        # --- Display Result ---
-        if calc_result is not None:
-            rin_mohm, dV_mv = calc_result
-            # Update label to show manual ΔI was used
-            self.result_label.setText(f"{rin_mohm:.2f} MΩ (ΔV={dV_mv:.2f}mV, Man. ΔI={manual_delta_i_pa:.1f}pA)")
-            log.info(f"Calculated Rin = {rin_mohm:.2f} MΩ using Manual ΔI={manual_delta_i_pa:.1f}pA")
-            if self.save_button: self.save_button.setEnabled(True)
-        else:
-            self.result_label.setText("Error")
-            log.warning("Rin calculation returned None (using manual ΔI).")
-            if self.save_button: self.save_button.setEnabled(False)
+                return None, None # Indicate failure
+        return baseline_win, response_win
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         # Gather the specific Rin result details for saving.
-        # IMPORTANT: Needs update to store manual delta_i if used
-        if not self.result_label or self.result_label.text() in ["N/A", "Error", "Invalid Time", "Invalid ΔI", "Error reading ΔI", "Enter Manual ΔI", "N/A (Enter ΔI)"]:
-            log.debug("_get_specific_result_data: No valid Rin result available.")
-            return None
-
-        result_text = self.result_label.text()
-        manual_delta_i_pa: Optional[float] = None # Try to parse from result or re-read from field
-        rin_value: Optional[float] = None
-        dv_val: Optional[float] = None
+        # Uses the stored _last_rin_result from _trigger_rin_analysis.
         
-        try:
-            # Parse Rin value
-            rin_part = result_text.split(" MΩ")[0]
-            rin_value = float(rin_part)
-            
-            # Parse dV
-            if "(ΔV=" in result_text and "mV" in result_text:
-                dv_str_part = result_text.split("(ΔV=")[1]
-                dv_val = float(dv_str_part.split("mV")[0])
-            
-            # Parse Manual dI if present
-            if ", Man. ΔI=" in result_text and "pA)" in result_text:
-                 di_str = result_text.split(", Man. ΔI=")[1].split("pA)")[0]
-                 manual_delta_i_pa = float(di_str)
-            else: # Fallback: Try reading directly from the input field if parsing label fails
-                 try: manual_delta_i_pa = float(self.manual_delta_i_edit.text().strip())
-                 except (ValueError, TypeError): pass # Ignore if field is empty/invalid
-
-        except Exception as e:
-            log.error(f"Could not parse Rin result from label '{result_text}': {e}")
+        # Check if a valid result was calculated and stored
+        if not self._last_rin_result:
+            log.debug("_get_specific_result_data: No valid Rin calculation result available.")
             return None
+            
+        try:
+            # Unpack all stored components
+            rin_value, dv_val, di_val, di_source = self._last_rin_result
+        except (TypeError, ValueError) as e:
+             log.error(f"Could not unpack stored Rin result: {self._last_rin_result}. Error: {e}")
+             return None
 
         channel_id = self.rin_channel_combo.currentData()
-        channel_name = self.rin_channel_combo.currentText().split(' (')[0]
+        # Robust way to get channel name without crashing if format changes
+        current_text = self.rin_channel_combo.currentText()
+        channel_name = current_text.split(' (')[0] if ' (' in current_text else current_text
+        
         data_source = self.data_source_combobox.currentData()
 
-        if channel_id is None or data_source is None: return None
+        if channel_id is None or data_source is None:
+            log.warning("_get_specific_result_data: Missing channel_id or data_source.") 
+            return None
 
-        baseline_win = self.baseline_region.getRegion()
-        response_win = self.response_region.getRegion()
+        # Get windows used for the calculation (read from current UI state)
+        baseline_win, response_win = self._get_analysis_windows() 
+        if baseline_win is None or response_win is None:
+             log.warning("_get_specific_result_data: Could not retrieve valid analysis windows.")
+             # Should we still save without windows? Probably not.
+             return None 
 
         specific_data = {
             'result_value': rin_value,
             'result_units': "MΩ",
             'delta_V_mV': dv_val,
-            'delta_I_pA': manual_delta_i_pa, # Store the manual delta I used
-            'delta_I_source': 'manual' if manual_delta_i_pa is not None else 'unknown', # Indicate source
+            'delta_I_pA': di_val, # Use the delta I value that was actually used
+            'delta_I_source': di_source, # Indicate source (manual or calculated)
             'channel_id': channel_id,
             'channel_name': channel_name,
             'data_source': data_source,
