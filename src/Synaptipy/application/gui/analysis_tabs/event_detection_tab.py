@@ -36,6 +36,9 @@ class EventDetectionTab(BaseAnalysisTab):
         self.mini_direction_combobox: Optional[QtWidgets.QComboBox] = None
         self.mini_detect_button: Optional[QtWidgets.QPushButton] = None
         self.mini_results_textedit: Optional[QtWidgets.QTextEdit] = None
+        self.mini_method_combobox: Optional[QtWidgets.QComboBox] = None
+        self.mini_threshold_widget: Optional[QtWidgets.QWidget] = None
+        self.mini_threshold_label: Optional[QtWidgets.QLabel] = None
 
         # Evoked Event Controls (Placeholder for now)
         # ... (add references if needed later)
@@ -102,11 +105,20 @@ class EventDetectionTab(BaseAnalysisTab):
         # 4. Miniature Detection Parameters
         mini_param_group = QtWidgets.QGroupBox("Detection Parameters")
         mini_param_layout = QtWidgets.QFormLayout(mini_param_group)
-        # Threshold Input
-        self.mini_threshold_edit = QtWidgets.QLineEdit("5.0") # Default threshold (e.g., pA)
-        self.mini_threshold_edit.setValidator(QtGui.QDoubleValidator(0, 10000, 3)) # Only positive thresholds
+        
+        # Method Selection
+        self.mini_method_combobox = QtWidgets.QComboBox()
+        self.mini_method_combobox.addItems(["Threshold Based", "Automatic (MAD)"])
+        self.mini_method_combobox.setToolTip("Choose detection method.")
+        mini_param_layout.addRow("Method:", self.mini_method_combobox)
+        
+        # Threshold Input (Now conditionally visible)
+        self.mini_threshold_label = QtWidgets.QLabel("Threshold:")
+        self.mini_threshold_edit = QtWidgets.QLineEdit("5.0")
+        self.mini_threshold_edit.setValidator(QtGui.QDoubleValidator(0, 10000, 3))
         self.mini_threshold_edit.setToolTip("Detection threshold (absolute value, in trace units like pA)")
-        mini_param_layout.addRow("Threshold:", self.mini_threshold_edit)
+        mini_param_layout.addRow(self.mini_threshold_label, self.mini_threshold_edit)
+        
         # Direction Input
         self.mini_direction_combobox = QtWidgets.QComboBox()
         self.mini_direction_combobox.addItems(["Negative (IPSCs/EPSPs)", "Positive (EPSCs/IPSPs)"])
@@ -176,6 +188,9 @@ class EventDetectionTab(BaseAnalysisTab):
         # Connect detect button
         self.mini_detect_button.clicked.connect(self._run_event_detection) # Changed method name
         # Parameters don't need explicit connection if read on click
+        
+        # ADDED: Connect method combobox
+        self.mini_method_combobox.currentIndexChanged.connect(self._on_mini_method_changed)
 
     # --- Overridden Methods from Base ---
     def _update_ui_for_selected_item(self):
@@ -241,10 +256,13 @@ class EventDetectionTab(BaseAnalysisTab):
         # --- Enable/Disable Miniature Controls ---
         # Enable only if a valid current channel source can be analyzed
         mini_controls_enabled = can_analyze and current_channels_found
-        if self.mini_threshold_edit: self.mini_threshold_edit.setEnabled(mini_controls_enabled)
         if self.mini_direction_combobox: self.mini_direction_combobox.setEnabled(mini_controls_enabled)
         # Detect button is enabled *after* successful plotting in _plot_selected_trace
         if self.mini_detect_button: self.mini_detect_button.setEnabled(False) # Ensure disabled initially
+        if self.mini_method_combobox: self.mini_method_combobox.setEnabled(mini_controls_enabled) # Enable method selector
+        
+        # Update threshold visibility based on current method selection
+        self._on_mini_method_changed()
 
         # --- Plot Initial Trace ---
         if mini_controls_enabled: # If we can potentially analyze
@@ -254,11 +272,8 @@ class EventDetectionTab(BaseAnalysisTab):
             # Ensure all controls are disabled if no suitable data/channel
             if self.channel_combobox: self.channel_combobox.setEnabled(False)
             if self.data_source_combobox: self.data_source_combobox.setEnabled(False)
-            if self.mini_threshold_edit: self.mini_threshold_edit.setEnabled(False)
-            if self.mini_direction_combobox: self.mini_direction_combobox.setEnabled(False)
             if self.mini_detect_button: self.mini_detect_button.setEnabled(False)
             if self.save_button: self.save_button.setEnabled(False)
-
 
     # --- Plotting Method ---
     def _plot_selected_trace(self):
@@ -353,8 +368,7 @@ class EventDetectionTab(BaseAnalysisTab):
         # --- Final UI State Update --- 
         # Enable miniature detection button and parameters ONLY if plot succeeded
         if self.mini_detect_button: self.mini_detect_button.setEnabled(plot_succeeded)
-        if self.mini_threshold_edit: self.mini_threshold_edit.setEnabled(plot_succeeded)
-        if self.mini_direction_combobox: self.mini_direction_combobox.setEnabled(plot_succeeded)
+        if self.mini_method_combobox: self.mini_method_combobox.setEnabled(plot_succeeded)
         # Clear results and disable save button regardless, as analysis needs to be re-run
         if self.mini_results_textedit: self.mini_results_textedit.clear()
         if self.save_button: self.save_button.setEnabled(False)
@@ -362,8 +376,12 @@ class EventDetectionTab(BaseAnalysisTab):
     # --- Placeholder Analysis Method ---
     @QtCore.Slot()
     def _run_event_detection(self):
-        """(Placeholder) Runs Event Detection analysis."""
+        """Runs Event Detection analysis based on selected method."""
         log.debug("Run Event Detection clicked.")
+        
+        # Determine selected method
+        method = self.mini_method_combobox.currentText()
+        log.debug(f"Detection method selected: {method}")
 
         # 1. Check if data is plotted
         if not self._current_plot_data:
@@ -379,7 +397,9 @@ class EventDetectionTab(BaseAnalysisTab):
             if threshold <= 0: raise ValueError("Threshold must be positive")
         except (ValueError, TypeError):
             log.warning("Invalid event detection parameters.")
-            QtWidgets.QMessageBox.warning(self, "Invalid Parameters", "Threshold must be a positive number.")
+            # More specific error based on method?
+            err_msg = "Threshold must be a positive number." if "Threshold" in method else "Invalid parameters."
+            QtWidgets.QMessageBox.warning(self, "Invalid Parameters", err_msg)
             return
 
         data = self._current_plot_data.get('data')
@@ -478,6 +498,25 @@ Direction: {'Negative' if is_negative_going else 'Positive'}
             if self.mini_results_textedit: self.mini_results_textedit.setText(results_str)
             QtWidgets.QApplication.restoreOverrideCursor()
             if self.save_button: self.save_button.setEnabled(run_successful)
+
+    # --- Helper Slot --- 
+    @QtCore.Slot()
+    def _on_mini_method_changed(self):
+        """Handles changes in the miniature detection method combobox."""
+        # Check if analysis is possible overall (reflected by method combobox enabled state)
+        overall_enabled = self.mini_method_combobox.isEnabled() if self.mini_method_combobox else False
+        
+        is_threshold_method = self.mini_method_combobox.currentText() == "Threshold Based"
+        
+        # Enable threshold field only if overall analysis is possible AND threshold method is selected
+        threshold_field_enabled = overall_enabled and is_threshold_method
+        
+        if self.mini_threshold_edit:
+            self.mini_threshold_edit.setEnabled(threshold_field_enabled)
+        if self.mini_threshold_label:
+             self.mini_threshold_label.setEnabled(threshold_field_enabled)
+             
+        log.debug(f"Mini detection method changed. Overall enabled: {overall_enabled}, Is Threshold Method: {is_threshold_method} => Threshold input enabled: {threshold_field_enabled}")
 
     # --- Base Class Method Implementation ---
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:

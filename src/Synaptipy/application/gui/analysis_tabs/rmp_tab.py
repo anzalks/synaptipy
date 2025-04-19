@@ -418,11 +418,10 @@ class RmpAnalysisTab(BaseAnalysisTab):
                      default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
                      self.baseline_region_item.setRegion([min_t, default_end])
                      log.debug(f"Resetting region to default: [{min_t}, {default_end}]")
-                # This else corresponds to the region check
                 else:
                     log.debug("Region is within bounds and valid.")
             # This else corresponds to `if time_vec is not None and voltage_vec is not None:`
-            else: 
+            else:
                 self._current_plot_data = None
                 log.warning(f"No valid data found to plot for channel {chan_id}")
 
