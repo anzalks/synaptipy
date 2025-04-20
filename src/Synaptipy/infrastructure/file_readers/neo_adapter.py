@@ -367,15 +367,29 @@ class NeoAdapter:
                      else:
                           # Fallback: Use signal index within segment as key (ASSUMES consistent order across segments)
                           map_key = f"Signal_{sig_index}"
-                          ch_name = f"Signal {sig_index}" # Default name based on signal index
+                          # Try getting name from header info based on sig_index
+                          header_name_info = header_channel_info.get(sig_index)
+                          if header_name_info and 'name' in header_name_info:
+                               ch_name = header_name_info['name']
+                               log.debug(f"        Using header name '{ch_name}' for fallback key '{map_key}'.")
+                          else:
+                              ch_name = f"Signal {sig_index}" # Default name based on signal index
+                              log.warning(f"        No usable annotations or header name found. Using placeholder name '{ch_name}' based on signal index {sig_index}.")
                           original_neo_id = map_key # Use the generated key as the original ID placeholder
-                          log.warning(f"        No usable annotations found. Using placeholder key '{map_key}' based on signal index {sig_index}.")
+                          log.warning(f"        Using placeholder key '{map_key}' based on signal index {sig_index}.")
                 else:
                      # Fallback: No channel_index and no annotations. Use signal index.
                      map_key = f"Signal_{sig_index}"
-                     ch_name = f"Signal {sig_index}" # Default name based on signal index
+                     # Try getting name from header info based on sig_index
+                     header_name_info = header_channel_info.get(sig_index)
+                     if header_name_info and 'name' in header_name_info:
+                          ch_name = header_name_info['name']
+                          log.debug(f"        Using header name '{ch_name}' for fallback key '{map_key}'.")
+                     else:
+                         ch_name = f"Signal {sig_index}" # Default name based on signal index
+                         log.warning(f"        No channel_index, annotations, or header name found. Using placeholder name '{ch_name}' based on signal index {sig_index}.")
                      original_neo_id = map_key # Use the generated key as the original ID placeholder
-                     log.warning(f"        No channel_index or annotations found. Using placeholder key '{map_key}' based on signal index {sig_index}.")
+                     log.warning(f"        Using placeholder key '{map_key}' based on signal index {sig_index}.")
                 # --- End Channel ID Logic ---
 
                 # --- Extract data and metadata ---
