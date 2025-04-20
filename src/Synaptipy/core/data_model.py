@@ -107,218 +107,102 @@ class Channel:
         # Return length of first valid trial if lengths are consistent or vary
         return first_trial_len if lengths else 0
 
+    # --- Data Retrieval Methods ---
+    def get_data(self, trial_index: int) -> Optional[np.ndarray]:
+        # Returns the raw data for a specific trial.
+        if self.data_trials and 0 <= trial_index < len(self.data_trials):
+            return self.data_trials[trial_index]
+        return None
 
-    def get_data(self, trial_index: int = 0) -> Optional[np.ndarray]:
-        """
-        Returns the data array (1D NumPy array) for the specified trial index.
-        Returns None if the trial index is invalid or data is not valid.
-        """
-        if not isinstance(trial_index, int) or not (0 <= trial_index < self.num_trials):
-            log.debug(f"Invalid trial index {trial_index} requested for channel '{self.name}' (has {self.num_trials} trials).")
-            return None
-        # Check if the specific trial data is valid
-        trial_data = self.data_trials[trial_index]
-        if not isinstance(trial_data, np.ndarray):
-            log.warning(f"Data for trial {trial_index} in channel '{self.name}' is not a NumPy array (type: {type(trial_data)}).")
-            return None
-        return trial_data
-
-    def get_time_vector(self, trial_index: int = 0) -> Optional[np.ndarray]:
-        """
-        Returns an absolute time vector (relative to recording start) for the
-        specified trial index. Vector length matches the data length for that trial.
-        Returns None if index is invalid or sampling rate is invalid.
-        """
+    def get_time_vector(self, trial_index: int) -> Optional[np.ndarray]:
+        # Returns the absolute time vector for a specific trial.
         data = self.get_data(trial_index)
-        if data is None:
-            return None # Invalid index or data handled by get_data
+        if data is not None and self.sampling_rate and self.sampling_rate > 0:
+            num_samples = len(data)
+            duration = num_samples / self.sampling_rate
+            trial_t_start = self.t_start + trial_index * duration # Approximate start time
+            return np.linspace(trial_t_start, trial_t_start + duration, num_samples, endpoint=False)
+        return None
 
-        num_samples_trial = data.shape[0]
-        if num_samples_trial == 0:
-             log.warning(f"Cannot generate time vector for empty trial {trial_index} in channel '{self.name}'.")
-             return None # Cannot generate time for empty data
-
-        if not isinstance(self.sampling_rate, (int, float)) or self.sampling_rate <= 0:
-             log.error(f"Invalid sampling rate ({self.sampling_rate}) for channel '{self.name}'. Cannot calculate time vector.")
-             return None
-
-        # Prevent division by zero if sampling rate is somehow zero despite check
-        try:
-            duration_trial = num_samples_trial / self.sampling_rate
-        except ZeroDivisionError:
-            log.error(f"Zero sampling rate encountered for channel '{self.name}'. Cannot calculate time vector.")
-            return None
-
-        # Absolute time based on the channel's t_start (relative to recording)
-        return np.linspace(self.t_start, self.t_start + duration_trial, num_samples_trial, endpoint=False)
-
-    def get_relative_time_vector(self, trial_index: int = 0) -> Optional[np.ndarray]:
-        """
-        Returns a relative time vector (starting from 0) for the specified trial index.
-        Useful for overlaying trials or aligning events.
-        Returns None if index is invalid or sampling rate is invalid.
-        """
+    def get_relative_time_vector(self, trial_index: int) -> Optional[np.ndarray]:
+        # Returns the time vector relative to the start of the trial (starts at 0).
         data = self.get_data(trial_index)
-        if data is None:
-            return None
-
-        num_samples_trial = data.shape[0]
-        if num_samples_trial == 0:
-             log.warning(f"Cannot generate relative time vector for empty trial {trial_index} in channel '{self.name}'.")
-             return None
-
-        if not isinstance(self.sampling_rate, (int, float)) or self.sampling_rate <= 0:
-             log.error(f"Invalid sampling rate ({self.sampling_rate}) for channel '{self.name}'. Cannot calculate relative time vector.")
-             return None
-
-        try:
-            duration_trial = num_samples_trial / self.sampling_rate
-        except ZeroDivisionError:
-             log.error(f"Zero sampling rate encountered for channel '{self.name}'. Cannot calculate relative time vector.")
-             return None
-
-        # Relative time, starting from 0
-        return np.linspace(0.0, duration_trial, num_samples_trial, endpoint=False)
+        if data is not None and self.sampling_rate and self.sampling_rate > 0:
+            num_samples = len(data)
+            duration = num_samples / self.sampling_rate
+            return np.linspace(0, duration, num_samples, endpoint=False)
+        return None
 
     def get_averaged_data(self) -> Optional[np.ndarray]:
-        """
-        Calculates the average trace across all trials for this channel. Trials
-        must have the same length and numeric data type.
-
-        Returns:
-            A 1D NumPy array containing the averaged data, or None if averaging
-            is not possible.
-        """
-        if self.num_trials == 0:
-            log.debug(f"Cannot average channel '{self.name}': No trials available.")
-            return None
-        if self.num_trials == 1:
-            single_trial = self.get_data(0)
-            if single_trial is not None and np.issubdtype(single_trial.dtype, np.number):
-                 log.debug(f"Only one trial for channel '{self.name}'. Returning it as 'average'.")
-                 return single_trial.copy()
-            else:
-                 log.warning(f"Cannot use single trial as average for channel '{self.name}': Invalid data.")
-                 return None
-
-        try:
-            valid_trials = [t for t in self.data_trials if isinstance(t, np.ndarray) and np.issubdtype(t.dtype, np.number)]
-            if len(valid_trials) != self.num_trials:
-                 log.error(f"Cannot average channel '{self.name}': Contains non-numeric or invalid trial data.")
-                 return None
-            if not valid_trials: return None
-
-            first_trial_len = valid_trials[0].shape[0]
-            if not all(arr.shape[0] == first_trial_len for arr in valid_trials):
-                lengths = {arr.shape[0] for arr in valid_trials}
-                log.error(f"Cannot average channel '{self.name}': Trials have different lengths: {lengths}.")
+        # Returns the averaged data across all trials.
+        if self.data_trials:
+            try:
+                # Ensure all trials have the same length for simple averaging
+                first_len = len(self.data_trials[0])
+                if all(len(trial) == first_len for trial in self.data_trials):
+                    return np.mean(np.array(self.data_trials), axis=0)
+                else:
+                    # Handle differing lengths (e.g., pad or error)
+                    log.warning(f"Channel {self.id}: Trials have different lengths, cannot average directly.")
+                    return None
+            except Exception as e:
+                log.error(f"Channel {self.id}: Error averaging trials: {e}")
                 return None
-
-            stacked_trials = np.stack(valid_trials)
-            averaged_data = np.mean(stacked_trials, axis=0)
-            return averaged_data
-        except ValueError as ve:
-             log.error(f"ValueError during averaging stack for channel '{self.name}': {ve}. Check trial shapes.")
-             return None
-        except Exception as e:
-            log.error(f"Unexpected error calculating average for channel '{self.name}': {e}", exc_info=True)
-            return None
+        return None
 
     def get_averaged_time_vector(self) -> Optional[np.ndarray]:
-         """
-         Returns an absolute time vector (relative to recording start) suitable
-         for the averaged data. Returns None if averaging is not possible or
-         sampling rate is invalid.
-         """
-         avg_data = self.get_averaged_data()
-         if avg_data is None: return None
-
-         num_samples_avg = avg_data.shape[0]
-         if not isinstance(self.sampling_rate, (int, float)) or self.sampling_rate <= 0:
-             log.error(f"Invalid sampling rate ({self.sampling_rate}) for channel '{self.name}'. Cannot calculate averaged time vector.")
-             return None
-
-         try: duration_avg = num_samples_avg / self.sampling_rate
-         except ZeroDivisionError: log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate averaged time vector."); return None
-
-         return np.linspace(self.t_start, self.t_start + duration_avg, num_samples_avg, endpoint=False)
+        # Returns the absolute time vector for the averaged data (assumes first trial time base).
+        avg_data = self.get_averaged_data()
+        if avg_data is not None and self.sampling_rate and self.sampling_rate > 0:
+            num_samples = len(avg_data)
+            duration = num_samples / self.sampling_rate
+            return np.linspace(self.t_start, self.t_start + duration, num_samples, endpoint=False)
+        return None
 
     def get_relative_averaged_time_vector(self) -> Optional[np.ndarray]:
-         """
-         Returns a relative time vector (starting at 0) suitable for the averaged data.
-         Returns None if averaging is not possible or sampling rate is invalid.
-         """
-         avg_data = self.get_averaged_data()
-         if avg_data is None: return None
+        # Returns the time vector relative to the start of the averaged data (starts at 0).
+        avg_data = self.get_averaged_data()
+        if avg_data is not None and self.sampling_rate and self.sampling_rate > 0:
+            num_samples = len(avg_data)
+            duration = num_samples / self.sampling_rate
+            return np.linspace(0, duration, num_samples, endpoint=False)
+        return None
 
-         num_samples_avg = avg_data.shape[0]
-         if not isinstance(self.sampling_rate, (int, float)) or self.sampling_rate <= 0:
-             log.error(f"Invalid sampling rate ({self.sampling_rate}) for channel '{self.name}'. Cannot calculate relative averaged time vector.")
-             return None
-
-         try: duration_avg = num_samples_avg / self.sampling_rate
-         except ZeroDivisionError: log.error(f"Zero sampling rate for channel '{self.name}'. Cannot calculate relative averaged time vector."); return None
-
-         return np.linspace(0.0, duration_avg, num_samples_avg, endpoint=False)
-
-    # --- ADDED: Methods for Associated Current Data --- 
-    def get_current_data(self, trial_index: int = 0) -> Optional[np.ndarray]:
-        # Returns the associated current data array (1D NumPy array) for the specified trial index.
-        # Assumes current_data_trials is populated by the adapter.
-        # Returns None if the trial index is invalid or data is not valid.
-        if not hasattr(self, 'current_data_trials') or not isinstance(self.current_data_trials, list):
-            log.debug(f"Channel '{self.name}' has no 'current_data_trials' attribute or it's not a list.")
-            return None
-        if not (0 <= trial_index < len(self.current_data_trials)):
-            log.debug(f"Invalid current trial index {trial_index} requested for channel '{self.name}' (has {len(self.current_data_trials)} current trials).")
-            return None
-        
-        current_trial_data = self.current_data_trials[trial_index]
-        if not isinstance(current_trial_data, np.ndarray):
-            log.warning(f"Current data for trial {trial_index} in channel '{self.name}' is not a NumPy array (type: {type(current_trial_data)}).")
-            return None
-        return current_trial_data
+    def get_current_data(self, trial_index: int) -> Optional[np.ndarray]:
+        # Returns the current data for a specific trial, if available.
+        if self.current_data_trials and 0 <= trial_index < len(self.current_data_trials):
+            return self.current_data_trials[trial_index]
+        return None
 
     def get_averaged_current_data(self) -> Optional[np.ndarray]:
-        # Calculates the average associated current trace across all trials.
-        # Assumes current_data_trials is populated and trials have same length.
-        if not hasattr(self, 'current_data_trials') or not self.current_data_trials:
-            log.debug(f"Cannot average current for channel '{self.name}': No current trials available.")
-            return None
-        
-        num_current_trials = len(self.current_data_trials)
-        if num_current_trials == 1:
-            single_trial = self.get_current_data(0)
-            if single_trial is not None and np.issubdtype(single_trial.dtype, np.number):
-                log.debug(f"Only one current trial for channel '{self.name}'. Returning it as 'average'.")
-                return single_trial.copy()
-            else:
-                log.warning(f"Cannot use single current trial as average for channel '{self.name}': Invalid data.")
+        # Returns the averaged current data across all trials, if available.
+        if self.current_data_trials:
+            try:
+                first_len = len(self.current_data_trials[0])
+                if all(len(trial) == first_len for trial in self.current_data_trials):
+                    return np.mean(np.array(self.current_data_trials), axis=0)
+                else:
+                    log.warning(f"Channel {self.id}: Current trials have different lengths, cannot average.")
+                    return None
+            except Exception as e:
+                log.error(f"Channel {self.id}: Error averaging current trials: {e}")
                 return None
+        return None
 
-        try:
-            valid_trials = [t for t in self.current_data_trials if isinstance(t, np.ndarray) and np.issubdtype(t.dtype, np.number)]
-            if len(valid_trials) != num_current_trials:
-                 log.error(f"Cannot average current for channel '{self.name}': Contains non-numeric or invalid trial data.")
-                 return None
-            if not valid_trials: return None
+    # --- ADDED HELPER FOR PLOT LABELS ---
+    def get_primary_data_label(self) -> str:
+        """Determines a suitable label ('Voltage', 'Current', 'Signal') based on units."""
+        if self.units:
+            units_lower = self.units.lower()
+            if 'v' in units_lower:
+                return 'Voltage'
+            elif 'a' in units_lower: # Check for 'amp' or 'a'
+                return 'Current'
+        return 'Signal' # Default if no units or not recognized
+    # --- END ADDED HELPER ---
 
-            first_trial_len = valid_trials[0].shape[0]
-            if not all(arr.shape[0] == first_trial_len for arr in valid_trials):
-                lengths = {arr.shape[0] for arr in valid_trials}
-                log.error(f"Cannot average current for channel '{self.name}': Trials have different lengths: {lengths}.")
-                return None
-
-            stacked_trials = np.stack(valid_trials)
-            averaged_data = np.mean(stacked_trials, axis=0)
-            return averaged_data
-        except ValueError as ve:
-             log.error(f"ValueError during current averaging stack for channel '{self.name}': {ve}. Check trial shapes.")
-             return None
-        except Exception as e:
-            log.error(f"Unexpected error calculating average current for channel '{self.name}': {e}", exc_info=True)
-            return None
-    # --- END ADDED ---
+    def __repr__(self):
+        return f"Channel(id='{self.id}', name='{self.name}', units='{self.units}', trials={self.num_trials})"
 
 
 class Recording:

@@ -534,7 +534,11 @@ class RinAnalysisTab(BaseAnalysisTab):
                 if time_v is not None and voltage is not None:
                     # Plot Voltage first
                     voltage_plot_item = self.plot_widget.plot(time_v, voltage, pen='k', name=v_label)
-                    self.plot_widget.setLabel('left', 'Voltage', units=channel.units or 'V')
+                    # --- Get Label from Data Model (Voltage) ---
+                    v_units = channel.units or '?'
+                    v_base_label = channel.get_primary_data_label() # Use the new method
+                    self.plot_widget.setLabel('left', v_base_label, units=v_units)
+                    # --- End Get Label from Data Model (Voltage) ---
                     self.plot_widget.setLabel('bottom', 'Time', units='s')
                     # self._current_plot_data = {'time_v': time_v, 'voltage': voltage} # MOVED storage earlier
 
@@ -585,8 +589,16 @@ class RinAnalysisTab(BaseAnalysisTab):
                         if vb2:
                             self.current_plot_item = pg.PlotDataItem(time_i_stored, current_stored, pen='r', name=i_label)
                             vb2.addItem(self.current_plot_item)
-                            current_units = channel.current_units if channel.current_units else 'A' # Use stored units or default
-                            p1.getAxis('right').setLabel('Current', units=current_units)
+                            # --- Dynamic Right Y-axis Label (Current - using direct logic) ---
+                            current_units = channel.current_units if hasattr(channel, 'current_units') and channel.current_units else 'A'
+                            i_units_lower = current_units.lower()
+                            i_base_label = 'Signal' # Default
+                            if 'v' in i_units_lower:
+                                 i_base_label = 'Voltage' # Should be unlikely
+                            elif 'a' in i_units_lower:
+                                 i_base_label = 'Current'
+                            p1.getAxis('right').setLabel(i_base_label, units=current_units)
+                            # --- End Dynamic Right Y-axis Label ---
                         else:
                             log.error("Secondary ViewBox (vb2) not found, cannot plot current trace.")
 
