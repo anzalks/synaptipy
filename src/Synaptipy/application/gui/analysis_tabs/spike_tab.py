@@ -81,9 +81,9 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         # Channel/Data Source
         channel_layout = QtWidgets.QFormLayout()
         self.channel_combobox = QtWidgets.QComboBox()
-        self.channel_combobox.setToolTip("Select the voltage channel to analyze.")
+        self.channel_combobox.setToolTip("Select the signal channel to analyze.")
         self.channel_combobox.setEnabled(False)
-        channel_layout.addRow("Voltage Channel:", self.channel_combobox)
+        channel_layout.addRow("Signal Channel:", self.channel_combobox)
 
         self.data_source_combobox = QtWidgets.QComboBox()
         self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
@@ -95,9 +95,11 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         threshold_layout = QtWidgets.QFormLayout()
         self.threshold_edit = QtWidgets.QLineEdit("0.0")
         self.threshold_edit.setValidator(QtGui.QDoubleValidator())
-        self.threshold_edit.setToolTip("Voltage threshold for spike detection.")
+        self.threshold_edit.setToolTip("Signal threshold for spike/event detection.")
         self.threshold_edit.setEnabled(False)
-        threshold_layout.addRow("Threshold (mV):", self.threshold_edit)
+        # Store the label widget itself to update its text later
+        self.threshold_label = QtWidgets.QLabel("Threshold (?):")
+        threshold_layout.addRow(self.threshold_label, self.threshold_edit)
         # ADDED: Refractory Period Input
         self.refractory_edit = QtWidgets.QLineEdit("2.0") # Default 2 ms
         self.refractory_edit.setValidator(QtGui.QDoubleValidator(0.1, 1000.0, 2)) # Min 0.1ms, Max 1s
@@ -175,21 +177,28 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         # --- Populate Channel ComboBox --- (Similar to rmp_tab)
         self.channel_combobox.blockSignals(True)
         self.channel_combobox.clear()
-        voltage_channels_found = False
+        any_channel_found = False # Use generalized flag
         if self._selected_item_recording and self._selected_item_recording.channels:
             for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
-                 units_lower = getattr(channel, 'units', '').lower()
-                 if 'v' in units_lower: # Look for voltage channels
-                      display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
-                      self.channel_combobox.addItem(display_name, userData=chan_id)
-                      voltage_channels_found = True
-            if voltage_channels_found:
+                 display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
+                 self.channel_combobox.addItem(display_name, userData=chan_id)
+                 any_channel_found = True # Mark that we found at least one channel
+
+            if any_channel_found:
                 self.channel_combobox.setCurrentIndex(0)
+                # Get the first added channel to update label initially
+                first_chan_id = self.channel_combobox.currentData()
+                selected_channel = self._selected_item_recording.channels.get(first_chan_id)
+
+                if self.threshold_label and selected_channel:
+                    units = selected_channel.units or '' # Use empty string if None
+                    self.threshold_label.setText(f"Threshold ({units}):")
             else:
-                self.channel_combobox.addItem("No Voltage Channels")
+                self.channel_combobox.addItem("No Channels Found")
+                if self.threshold_label: self.threshold_label.setText("Threshold (?):") # Reset if no channels
         else:
             self.channel_combobox.addItem("Load Data Item")
-        self.channel_combobox.setEnabled(voltage_channels_found)
+        self.channel_combobox.setEnabled(any_channel_found)
         self.channel_combobox.blockSignals(False)
 
         # --- Populate Data Source ComboBox --- (Similar to rmp_tab)
@@ -197,7 +206,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.data_source_combobox.clear()
         self.data_source_combobox.setEnabled(False)
         can_analyze = False
-        if voltage_channels_found and self._selected_item_recording:
+        if any_channel_found and self._selected_item_recording:
             selected_item_details = self._analysis_items[self._selected_item_index]
             item_type = selected_item_details.get('target_type')
             item_trial_index = selected_item_details.get('trial_index')
@@ -235,6 +244,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             if self.plot_widget: self.plot_widget.clear() # Ensure plot is clear
             self.threshold_edit.setEnabled(False)
             self.detect_button.setEnabled(False)
+            if self.threshold_label: self.threshold_label.setText("Threshold (?):") # Reset if no data
 
     # --- Plotting Method --- 
     def _plot_selected_trace(self):

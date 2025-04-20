@@ -171,7 +171,9 @@ class EventDetectionTab(BaseAnalysisTab):
         thresh_layout = QtWidgets.QFormLayout(self.mini_threshold_group)
         self.mini_threshold_edit = QtWidgets.QLineEdit("-5.0") # Default negative
         self.mini_threshold_edit.setToolTip("Amplitude threshold value. Units match plot.")
-        thresh_layout.addRow("Threshold Value:", self.mini_threshold_edit)
+        # Store the label widget itself to update its text later
+        self.mini_threshold_label = QtWidgets.QLabel("Threshold Value (?):") 
+        thresh_layout.addRow(self.mini_threshold_label, self.mini_threshold_edit) # Use stored label widget
         thresh_layout.addRow(QtWidgets.QLabel("(Direction set in Method group)")) # Clarify direction location
         self.mini_params_stack.addWidget(self.mini_threshold_group)
         self._mini_params_group_map[method_threshold] = self.mini_threshold_group
@@ -326,34 +328,21 @@ class EventDetectionTab(BaseAnalysisTab):
         # Populate Channel ComboBox
         self.channel_combobox.blockSignals(True)
         self.channel_combobox.clear()
-        voltage_channels = {}
-        current_channels = {}
+        all_channels_found = False # Use a single flag
         if self._selected_item_recording and self._selected_item_recording.channels:
+            # Iterate once and add all channels
             for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
                  units = getattr(channel, 'units', '')
-                 units_lower = units.lower()
                  display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{units}]"
-                 if 'a' in units_lower or 'amp' in units_lower:
-                      current_channels[chan_id] = display_name
-                 elif 'v' in units_lower:
-                      voltage_channels[chan_id] = display_name
+                 self.channel_combobox.addItem(display_name, userData=chan_id)
+                 all_channels_found = True # Mark if we add at least one
 
-        suitable_channels_found = False
-        # Prefer current, then voltage
-        if current_channels:
-            log.debug(f"Populating combobox with {len(current_channels)} current channels.")
-            for chan_id, display_name in current_channels.items():
-                self.channel_combobox.addItem(display_name, userData=chan_id)
-            suitable_channels_found = True
-        elif voltage_channels:
-            log.debug(f"No current channels. Populating with {len(voltage_channels)} voltage channels.")
-            for chan_id, display_name in voltage_channels.items():
-                      self.channel_combobox.addItem(display_name, userData=chan_id)
-            suitable_channels_found = True
+        if not all_channels_found:
+            self.channel_combobox.addItem("No Channels Found")
         else:
-            self.channel_combobox.addItem("No Current/Voltage Channels")
+            self.channel_combobox.setCurrentIndex(0) # Select first channel if found
 
-        self.channel_combobox.setEnabled(suitable_channels_found)
+        self.channel_combobox.setEnabled(all_channels_found)
         self.channel_combobox.blockSignals(False)
 
         # Populate Data Source ComboBox
@@ -361,7 +350,7 @@ class EventDetectionTab(BaseAnalysisTab):
         self.data_source_combobox.clear()
         self.data_source_combobox.setEnabled(False)
         can_analyze = False
-        if suitable_channels_found and self._selected_item_recording:
+        if all_channels_found and self._selected_item_recording:
             selected_item_details = self._analysis_items[self._selected_item_index]
             item_type = selected_item_details.get('target_type')
             item_trial_index = selected_item_details.get('trial_index')
@@ -397,6 +386,21 @@ class EventDetectionTab(BaseAnalysisTab):
         else:
              self.data_source_combobox.addItem("N/A")
         self.data_source_combobox.blockSignals(False)
+
+        # <<< ADDED: Update dynamic labels >>>
+        if all_channels_found and self._selected_item_recording:
+            first_chan_id = self.channel_combobox.currentData()
+            first_channel = self._selected_item_recording.channels.get(first_chan_id)
+            if first_channel:
+                units = first_channel.units or '?'
+                # Update Threshold Label
+                if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label: # Check attribute exists
+                    self.mini_threshold_label.setText(f"Threshold Value ({units}):")
+        else:
+            # Reset labels if no suitable channel
+            if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label: # Check attribute exists
+                 self.mini_threshold_label.setText("Threshold Value (?):")
+        # <<< END ADDED >>>
 
         # Enable/Disable Miniature Controls
         mini_controls_enabled = can_analyze
@@ -441,6 +445,12 @@ class EventDetectionTab(BaseAnalysisTab):
 
         channel = self._selected_item_recording.channels.get(chan_id)
         log.debug(f"Event Plotting: Ch {chan_id}, Source Key: {source_data_key}")
+
+        # <<< ADDED: Update dynamic labels on plot >>>
+        if channel and hasattr(self, 'mini_threshold_label') and self.mini_threshold_label: # Check attribute exists
+            units = channel.units or '?'
+            self.mini_threshold_label.setText(f"Threshold Value ({units}):")
+        # <<< END ADDED >>>
 
         time_vec, data_vec = None, None
         data_label = "Plot Error"

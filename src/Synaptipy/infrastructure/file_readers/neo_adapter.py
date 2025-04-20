@@ -21,6 +21,7 @@ import neo # Added missing import
 import neo.io as nIO # Keep original import style
 import numpy as np
 import quantities as pq
+from quantities import Quantity, s, ms, V, mV, A, pA, nA # Import base quantities
 
 # Import from our package structure
 from Synaptipy.core.data_model import Recording, Channel # Removed RecordingHeader

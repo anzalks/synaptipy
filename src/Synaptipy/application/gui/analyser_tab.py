@@ -12,7 +12,7 @@ from .analysis_tabs.base import BaseAnalysisTab
 from .explorer_tab import ExplorerTab
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from .analysis_tabs.rmp_tab import RmpAnalysisTab
+from .analysis_tabs.rmp_tab import BaselineAnalysisTab
 from .analysis_tabs.rin_tab import RinAnalysisTab
 from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
