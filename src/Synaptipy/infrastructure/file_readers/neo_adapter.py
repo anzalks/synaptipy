@@ -339,6 +339,10 @@ class NeoAdapter:
             
             segment_signal_pairs.append(paired_signals_in_segment)
 
+        # ---> ADDED DEBUG LOG <-----
+        log.debug(f"Collected segment_signal_pairs structure: {segment_signal_pairs}")
+        # ---> END ADDED DEBUG LOG <-----
+        
         # Step 2: Group data by Voltage Channel ID across segments
         voltage_trials_map: Dict[str, List[np.ndarray]] = {}
         current_trials_map: Dict[str, List[np.ndarray]] = {}
