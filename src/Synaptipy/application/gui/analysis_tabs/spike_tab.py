@@ -98,6 +98,13 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.threshold_edit.setToolTip("Voltage threshold for spike detection.")
         self.threshold_edit.setEnabled(False)
         threshold_layout.addRow("Threshold (mV):", self.threshold_edit)
+        # ADDED: Refractory Period Input
+        self.refractory_edit = QtWidgets.QLineEdit("2.0") # Default 2 ms
+        self.refractory_edit.setValidator(QtGui.QDoubleValidator(0.1, 1000.0, 2)) # Min 0.1ms, Max 1s
+        self.refractory_edit.setToolTip("Minimum time between detected spikes (refractory period in ms).")
+        self.refractory_edit.setEnabled(False)
+        threshold_layout.addRow("Refractory (ms):", self.refractory_edit)
+        # END ADDED
         controls_layout.addLayout(threshold_layout)
 
         # Run Button
@@ -218,6 +225,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
 
         # --- Enable/Disable Remaining Controls ---
         self.threshold_edit.setEnabled(can_analyze)
+        self.refractory_edit.setEnabled(can_analyze)
         self.detect_button.setEnabled(can_analyze)
 
         # --- Plot Initial Trace --- 
