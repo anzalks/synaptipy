@@ -450,10 +450,20 @@ class RmpAnalysisTab(BaseAnalysisTab):
             # --- Plotting --- 
             self.plot_widget.clear() # Clear previous plots
             if time_vec is not None and voltage_vec is not None:
-                self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
-                self.plot_widget.setLabel('left', 'Voltage', units=channel.units or 'V')
+                self.data_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
+
+                # --- Get Label from Data Model --- 
+                units = channel.units or '?' # Use '?' if units are None/empty
+                base_label = channel.get_primary_data_label()
+                self.plot_widget.setLabel('left', base_label, units=units)
+                # --- End Get Label from Data Model --- 
+
                 self.plot_widget.setLabel('bottom', 'Time', units='s')
-                self._current_plot_data = {'time': time_vec, 'voltage': voltage_vec}
+                self.plot_widget.setTitle(data_label)
+                self._current_plot_data = { # Store data for analysis
+                    'time': time_vec,
+                    'voltage': voltage_vec
+                }
                 # Set initial region/bounds based on plotted data
                 min_t, max_t = time_vec[0], time_vec[-1]
                 self.interactive_region.setBounds([min_t, max_t])

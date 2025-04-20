@@ -472,8 +472,11 @@ class EventDetectionTab(BaseAnalysisTab):
 
             if time_vec is not None and data_vec is not None:
                 self.data_plot_item = self.plot_widget.plot(time_vec, data_vec, pen='k', name=data_label)
-                plot_units_label = f"{'Current' if 'a' in units.lower() else 'Voltage' if 'v' in units.lower() else 'Signal'}"
-                self.plot_widget.setLabel('left', plot_units_label, units=units)
+                # --- Get Label from Data Model --- 
+                units = channel.units or "?"
+                base_label = channel.get_primary_data_label()
+                self.plot_widget.setLabel('left', base_label, units=units)
+                # --- End Get Label from Data Model --- 
                 self.plot_widget.setLabel('bottom', 'Time', units='s')
                 self.plot_widget.setTitle(data_label)
                 self._current_plot_data = {
