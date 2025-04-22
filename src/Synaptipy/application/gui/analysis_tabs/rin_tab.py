@@ -168,7 +168,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         top_controls_layout.setContentsMargins(0, 0, 0, 0)
         top_controls_layout.setSpacing(5)
 
-        # --- Column 1: Data Selection ---
+        # --- Column 1: Data Selection --- 
         self.data_selection_group = QtWidgets.QGroupBox("Data Selection")
         data_selection_layout = QtWidgets.QFormLayout(self.data_selection_group)
         data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
@@ -509,12 +509,14 @@ class RinAnalysisTab(BaseAnalysisTab):
             if spinbox: spinbox.setVisible(show_delta_v)
             # log.debug(f"Manual Delta V Group: Set visibility to {show_delta_v}")
         # Ensure the parent group box is visible only if one of its inputs is
-        if self.delta_input_group: self.delta_input_group.setVisible(show_delta_i or show_delta_v)
+        if self.delta_input_group: 
+            # self.delta_input_group.setVisible(show_delta_i or show_delta_v) # <<< OLD LOGIC
+            self.delta_input_group.setVisible(is_manual) # <<< FIX: Show group in manual mode
 
         # Enable/Disable Run button (only relevant for Manual mode)
         if self.run_button: 
             self.run_button.setVisible(is_manual) # Show only in manual mode
-            self.run_button.setEnabled(is_manual) # Enable only in manual mode
+            # self.run_button.setEnabled(is_manual) # <<< REMOVE: Let _update_run_button_state handle this
         # log.debug(f"Run Button: Set enabled to {is_manual}. NEW enabled={self.run_button.isEnabled() if self.run_button else 'N/A'}")
 
         # Update info label based on mode (moved from _on_mode_changed)
@@ -523,11 +525,10 @@ class RinAnalysisTab(BaseAnalysisTab):
                 info = "Interactive Mode: Drag the Baseline and Response regions on the plot."
             elif is_manual:
                 info = "Manual Mode: Set time windows and ΔI/ΔV manually, then press Run."
-            else:
-                info = "Select a mode."
+        else:
+            info = "Select a mode."
             self.info_label.setText(info)
-            # log.debug(f"Info Label: Set text to '{info}'")
-            
+
         # Force layout update after visibility changes
         self.layout().activate()
         # Force repaint might still be needed sometimes
@@ -630,13 +631,13 @@ class RinAnalysisTab(BaseAnalysisTab):
             log.debug("Data is valid, attempting to plot initial trace.")
             self._plot_selected_trace()
         else:
-             log.debug("Data is invalid or unavailable, clearing plot and disabling UI.")
-             if self.plot_widget: self.plot_widget.clear()
-             # Ensure regions/lines are hidden if no data
-             if self.baseline_region: self.baseline_region.setVisible(False)
-             if self.response_region: self.response_region.setVisible(False)
-             if self.baseline_line: self.baseline_line.setVisible(False)
-             if self.response_line: self.response_line.setVisible(False)
+            log.debug("Data is invalid or unavailable, clearing plot and disabling UI.")
+            if self.plot_widget: self.plot_widget.clear()
+            # Ensure regions/lines are hidden if no data
+            if self.baseline_region: self.baseline_region.setVisible(False)
+            if self.response_region: self.response_region.setVisible(False)
+            if self.baseline_line: self.baseline_line.setVisible(False)
+            if self.response_line: self.response_line.setVisible(False)
 
     # --- ADDED: Helper to get plot data (Adapted from Baseline Tab) ---
     def _get_data_for_plotting(self, channel_name: str, data_source_key: str) -> Optional[Dict[str, Any]]:
