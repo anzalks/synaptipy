@@ -11,6 +11,28 @@ A multi-channel electrophysiology visualization and analysis toolkit built with 
 *   Plot individual trials or the average trace.
 *   Load single files or navigate through files in a folder.
 
+## Supported File Formats
+
+Synaptipy uses the [neo](https://neo.readthedocs.io/) library under the hood, enabling it to read a wide variety of electrophysiology file formats. Some of the commonly supported formats include:
+
+*   Axon Instruments / Molecular Devices (pCLAMP) (`.abf`)
+*   NeuroExplorer (`.nex`)
+*   CED (Spike2) (`.smr`, `.smrx`)
+*   Plexon (`.plx`, `.pl2`)
+*   Blackrock Microsystems (`.nsX`, `.nev`)
+*   Neuralynx (`.ncs`, `.nev`, `.nse`, `.ntt`)
+*   Tucker-Davis Technologies (TDT) (`.sev`, `.tev`, etc.)
+*   Intan Technologies (`.rhd`, `.rhs`)
+*   Open Ephys (`.continuous`, `.spikes`, `.oebin`)
+*   BrainVision (`.vhdr`)
+*   European Data Format (`.edf`)
+*   Alpha Omega (`.mpx`)
+*   MATLAB (`.mat`)
+*   HDF5 (generic, NIX, NWB) (`.h5`, `.nix`, `.nwb`)
+*   ASCII-based formats (`.txt`, `.csv`, `.asc`)
+
+For a complete and up-to-date list, please refer to the [neo documentation](https://neo.readthedocs.io/en/latest/iolist.html).
+
 ## Installation
 
 1.  **Clone the repository (or download the code):**
