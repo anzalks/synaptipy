@@ -20,13 +20,14 @@ try:
     from Synaptipy.infrastructure.exporters import NWBExporter
     from Synaptipy.shared import constants as VisConstants # Use alias
     from Synaptipy.shared.error_handling import (
-        FileReadError, UnsupportedFormatError, ExportError, SynaptipyError)
+        FileReadError, UnsupportedFormatError, ExportError, SynaptipyError, 
+        SynaptipyFileNotFoundError)
     SYNAPTIPY_AVAILABLE = True
     log.info("Successfully imported real Synaptipy modules.")
 
-except ImportError as import_err:
+except Exception as e_import:
     # --- Synaptipy not found, set up dummy environment ---
-    log.warning(f"Synaptipy modules not found (Error: {import_err}). Using dummy implementations.")
+    log.warning(f"Failed to import Synaptipy modules: {e_import}. Using dummy implementations.")
     SYNAPTIPY_AVAILABLE = False
 
     # --- Define Dummy Classes (Keep definitions as before) ---
@@ -100,13 +101,14 @@ except ImportError as import_err:
         class FileReadError(SynaptipyError): pass
         class UnsupportedFormatError(SynaptipyError): pass
         class ExportError(SynaptipyError): pass
-        return SynaptipyError, FileReadError, UnsupportedFormatError, ExportError
+        class SynaptipyFileNotFoundError(SynaptipyError): pass
+        return SynaptipyError, FileReadError, UnsupportedFormatError, ExportError, SynaptipyFileNotFoundError
 
     # --- Assign dummy classes/values ---
     Recording, Channel = DummyRecording, DummyChannel
     NeoAdapter, NWBExporter = DummyNeoAdapter, DummyNWBExporter
     VisConstants = DummyVisConstants()
-    SynaptipyError, FileReadError, UnsupportedFormatError, ExportError = DummyErrors()
+    SynaptipyError, FileReadError, UnsupportedFormatError, ExportError, SynaptipyFileNotFoundError = DummyErrors()
     # ^ ^ ^ End of Dummy Class definitions ^ ^ ^
 
 # --- Define constants if VisConstants is None ---
@@ -120,4 +122,4 @@ if 'VisConstants' not in locals() or VisConstants is None:
 if 'NeoAdapter' not in locals(): NeoAdapter = DummyNeoAdapter # Ensure NeoAdapter exists even if only dummies defined
 if 'NWBExporter' not in locals(): NWBExporter = DummyNWBExporter
 if 'Recording' not in locals(): Recording = DummyRecording
-if 'SynaptipyError' not in locals(): SynaptipyError, FileReadError, UnsupportedFormatError, ExportError = DummyErrors()
+if 'SynaptipyError' not in locals(): SynaptipyError, FileReadError, UnsupportedFormatError, ExportError, SynaptipyFileNotFoundError = DummyErrors()

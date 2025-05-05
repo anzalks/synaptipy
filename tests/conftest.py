@@ -1,13 +1,13 @@
 import pytest
 from PySide6 import QtWidgets
 import sys
+from pathlib import Path
 
 # Make sure src directory is included for imports if running pytest from root
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.application.gui.main_window import MainWindow
-from pathlib import Path
 
 
 @pytest.fixture(scope="session")
@@ -48,11 +48,29 @@ def test_data_dir():
 @pytest.fixture(scope="session")
 def sample_abf_path(test_data_dir):
     """Provides the path to a sample ABF file for testing."""
-    # !! Replace with the actual name of your small test ABF file !!
-    # !! Ensure this file exists in tests/data/ !!
+    # Try to find the real file first
     file_path = test_data_dir / "sample_axon.abf"
+    
+    # If the file doesn't exist, try to use a synthetic alternative
     if not file_path.exists():
-         pytest.skip(f"Test data file not found: {file_path}") # Skip test if data is missing
+        try:
+            # First try a NIX file (easier to create with Neo)
+            nix_path = test_data_dir / "sample_synthetic.nix"
+            if nix_path.exists():
+                return nix_path
+                
+            # If no synthetic file exists, try to create one
+            from tests.shared.test_data_generation import create_dummy_abf_file
+            synthetic_path = test_data_dir / "sample_synthetic.nix"
+            if create_dummy_abf_file(synthetic_path):
+                return synthetic_path
+        except Exception as e:
+            pytest.skip(f"Cannot create synthetic test data: {e}")
+    
+    # If we get here and the file still doesn't exist, skip the test
+    if not file_path.exists():
+        pytest.skip(f"Test data file not found: {file_path} and could not create synthetic alternative")
+    
     return file_path
 
 # Add fixtures for other file types (.smr, .nex etc.) if you have test data for them

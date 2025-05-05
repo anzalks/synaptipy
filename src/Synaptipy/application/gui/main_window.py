@@ -41,7 +41,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         log.info("Initializing MainWindow...")
-        self.setWindowTitle("Synaptipy Viewer")
+        self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
 
         # --- Calculate initial size based on screen (70%) ---
         screen = QtWidgets.QApplication.primaryScreen()

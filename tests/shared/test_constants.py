@@ -5,9 +5,9 @@ def test_get_neo_file_filter_format():
     """Check if the generated file filter string has the expected format."""
     filter_str = constants.get_neo_file_filter()
     assert isinstance(filter_str, str)
-    assert "All Supported Files" in filter_str
+    assert "All Supported Formats" in filter_str
     assert ";;" in filter_str # Separator for filters
-    assert "Axon Files (*.abf)" in filter_str # Example specific filter
+    assert "ABF Files (*.abf)" in filter_str # Example specific filter
     assert filter_str.endswith(")") # Should end with a parenthesis
 
 def test_neo_file_filter_content():

@@ -5,7 +5,7 @@ import numpy as np
 # Assuming neo_adapter_instance fixture is in conftest.py
 # Assuming sample_abf_path fixture is in conftest.py providing a valid Path object
 from Synaptipy.core.data_model import Recording, Channel
-from Synaptipy.shared.error_handling import UnsupportedFormatError, FileNotFoundError, FileReadError
+from Synaptipy.shared.error_handling import UnsupportedFormatError, SynaptipyFileNotFoundError, FileReadError
 
 
 # --- Test _get_neo_io_class ---
@@ -24,9 +24,9 @@ def test_get_io_class_unsupported(neo_adapter_instance, tmp_path):
         neo_adapter_instance._get_neo_io_class(unsupported_file)
 
 def test_get_io_class_not_found(neo_adapter_instance):
-    """Test if it raises FileNotFoundError for a non-existent file."""
+    """Test if it raises SynaptipyFileNotFoundError for a non-existent file."""
     non_existent_file = Path("./surely_this_does_not_exist.abf")
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(SynaptipyFileNotFoundError):
         neo_adapter_instance._get_neo_io_class(non_existent_file)
 
 # --- Test read_recording ---
@@ -62,9 +62,9 @@ def test_read_recording_abf_success(neo_adapter_instance, sample_abf_path):
 
 
 def test_read_recording_not_found(neo_adapter_instance):
-    """Test read_recording raises FileNotFoundError."""
+    """Test read_recording raises SynaptipyFileNotFoundError."""
     non_existent_file = Path("./surely_this_does_not_exist_either.abf")
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(SynaptipyFileNotFoundError):
         neo_adapter_instance.read_recording(non_existent_file)
 
 def test_read_recording_unsupported(neo_adapter_instance, tmp_path):

@@ -2,53 +2,94 @@
 # -*- coding: utf-8 -*-
 """
 Main entry point for the Synaptipy Viewer GUI application.
-Initializes logging, QApplication, styles, MainWindow, and starts the event loop.
-This file defines the `run_gui` function called by the entry point script.
+
+This module is responsible for:
+1. Processing command line arguments
+2. Setting up the logging system with dev mode support
+3. Initializing the Qt application and UI styling
+4. Creating and displaying the main application window
+5. Running the event loop
+
+The module defines the `run_gui` function called by the entry point script
+defined in pyproject.toml.
 """
 import sys
 import logging
+import argparse
+import os
+from pathlib import Path
 from PySide6 import QtWidgets, QtCore
 
 # --- Import Core Components ---
-# Use absolute imports from the Synaptipy package root
 from Synaptipy.application.gui.main_window import MainWindow
 from Synaptipy.application.gui.dummy_classes import SYNAPTIPY_AVAILABLE
+from Synaptipy.shared.logging_config import setup_logging
 
-# --- Configure Logging ---
-log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-log = logging.getLogger('Synaptipy.application') # Use a specific logger name
-log.setLevel(logging.DEBUG) # Set desired level
-# Avoid adding handlers if root logger already has them
-if not log.hasHandlers() and not logging.getLogger().hasHandlers():
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter(log_format)
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
+# Log instance to be initialized after setting up logging
+log = logging.getLogger('Synaptipy.application')
 
-# This function will be called by the entry point script (e.g., Synaptipy-gui)
+def parse_arguments():
+    """
+    Parse command line arguments for the application.
+    
+    Returns:
+        argparse.Namespace: Parsed command line arguments
+    """
+    parser = argparse.ArgumentParser(description="Synaptipy - Electrophysiology Visualization Suite")
+    parser.add_argument('--dev', action='store_true', help='Enable development mode with verbose logging')
+    parser.add_argument('--log-dir', type=str, help='Custom directory for log files')
+    parser.add_argument('--log-file', type=str, help='Custom log filename')
+    return parser.parse_args()
+
 def run_gui():
-    """Sets up and runs the Synaptipy GUI application."""
+    """
+    Set up and run the Synaptipy GUI application.
+    
+    This function:
+    1. Parses command line arguments
+    2. Configures the logging system
+    3. Initializes the Qt application
+    4. Creates and displays the main window
+    5. Runs the Qt event loop
+    
+    Returns:
+        int: The application exit code
+    """
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Check for dev mode environment variable
+    env_dev_mode = os.environ.get('SYNAPTIPY_DEV_MODE')
+    if env_dev_mode and env_dev_mode.lower() in ('1', 'true', 'yes'):
+        dev_mode = True
+    else:
+        dev_mode = args.dev
+    
+    # Setup logging with the appropriate mode
+    setup_logging(
+        dev_mode=dev_mode,
+        log_dir=args.log_dir,
+        log_filename=args.log_file
+    )
+    
     log.info(f"Application starting via run_gui... Synaptipy Library Available: {SYNAPTIPY_AVAILABLE}")
+    if dev_mode:
+        log.info("Running in DEVELOPMENT mode with verbose logging")
+    
     if not SYNAPTIPY_AVAILABLE:
         log.warning("*"*30 + "\n Running with DUMMY Synaptipy classes! \n" + "*"*30)
 
     # Create Qt Application
-    # High DPI scaling attributes
-    # QtWidgets.QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-    # QtWidgets.QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
-    # Use QApplication.instance() to avoid creating multiple QApplications if already exists
-    # Or handle potential existing instance in a more robust way if necessary
     app = QtWidgets.QApplication.instance()
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
 
-    # Apply Dark Theme (Optional) - using qdarkstyle
-    style = None
+    # Apply Dark Theme using qdarkstyle if available
     try:
         import qdarkstyle
-        if hasattr(qdarkstyle, 'load_stylesheet'): # Generic loader
+        if hasattr(qdarkstyle, 'load_stylesheet'):
             style = qdarkstyle.load_stylesheet(qt_api='pyside6')
-        elif hasattr(qdarkstyle, 'load_stylesheet_pyside6'): # Specific loader
+        elif hasattr(qdarkstyle, 'load_stylesheet_pyside6'):
              style = qdarkstyle.load_stylesheet_pyside6()
 
         if style:
@@ -61,30 +102,27 @@ def run_gui():
     except Exception as e:
         log.warning(f"Could not apply qdarkstyle theme: {e}")
 
-
     # Create and Show Main Window
     try:
-        window = MainWindow() # MainWindow handles its own QSettings
+        window = MainWindow()
         window.show()
         log.info("Main window created and shown.")
     except Exception as e:
         log.critical(f"Failed to initialize or show the MainWindow: {e}", exc_info=True)
-        try: QtWidgets.QMessageBox.critical(None, "Application Startup Error", f"Failed to create main window:\n{e}\n\nSee logs.")
-        except Exception: pass
+        try: 
+            QtWidgets.QMessageBox.critical(None, "Application Startup Error", 
+                                         f"Failed to create main window:\n{e}\n\nSee logs.")
+        except Exception:
+            pass
         # Exit if window creation fails critically
-        sys.exit(1) # Consider exiting here or letting exec return non-zero
+        sys.exit(1)
 
     # Start Qt Event Loop
     log.info("Starting Qt event loop...")
-    # sys.exit(app.exec()) # sys.exit might be too aggressive if called from library code
     exit_code = app.exec()
     log.info(f"Qt event loop finished with exit code {exit_code}.")
-    return exit_code # Return the exit code
+    return exit_code
 
-# The if __name__ == '__main__': block is typically NOT needed
-# when the functionality is meant to be called via an entry point function.
-# Keeping it allows running this script directly for testing, but it's
-# redundant if only using the entry point.
-# If you want to allow direct execution:
-# if __name__ == '__main__':
-#     run_gui()
+# Allow direct execution for development and testing
+if __name__ == '__main__':
+    run_gui()
