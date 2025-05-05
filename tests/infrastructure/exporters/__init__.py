@@ -1,9 +1,10 @@
 """
-Exporters Submodule for Infrastructure Layer.
+Tests for Exporters in the Infrastructure Layer.
 
-Contains classes to export data to various formats (CSV, NWB, etc.).
+This package contains test modules for testing the exporter functionality,
+including NWB and CSV exporters.
 """
-from .nwb_exporter import NWBExporter
-# from .csv_exporter import CSVExporter # If you create one later
 
-__all__ = ['NWBExporter'] # , 'CSVExporter']
+# No imports needed here - each test file should import what it needs
+
+__all__ = []

@@ -24,15 +24,28 @@ synaptipy-gui = "Synaptipy.application.__main__:run_gui"
 requires = ["setuptools>=61.0.0"]
 build-backend = "setuptools.build_meta"
 
-# Optional: Add development dependencies (linters, formatters, testing tools)
-# [project.optional-dependencies]
-# dev = [
-#     "pytest",
-#     "pytest-qt",
-#     "pytest-mock",
-#     "flake8",
-#     "black",
-#     "isort",
-#     "build",
-#     "twine",
-# ]
+# Development dependencies
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.0.0",
+    "pytest-qt>=4.0.0",
+    "pytest-mock",
+    "pytest-cov",
+    
+    # Linting & Formatting
+    "flake8",
+    "black",
+    "isort",
+    
+    # Building & Distribution
+    "build",
+    "twine",
+    
+    # Documentation
+    "sphinx",
+    "sphinx-rtd-theme",
+    
+    # Optional UI styling
+    "qdarkstyle",
+]

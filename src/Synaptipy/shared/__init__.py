@@ -13,6 +13,7 @@ Synaptipy package.
 from .error_handling import (
     SynaptipyError,
     FileReadError,
+    SynaptipyFileNotFoundError,
     UnsupportedFormatError,
     ProcessingError,
     PlottingError,
@@ -28,6 +29,7 @@ __all__ = [
     # Exceptions are correctly listed here
     'SynaptipyError',
     'FileReadError',
+    'SynaptipyFileNotFoundError',
     'UnsupportedFormatError',
     'ProcessingError',
     'PlottingError',

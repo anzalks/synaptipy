@@ -21,6 +21,75 @@ TRIAL_ALPHA = 100              # Alpha for overlaid trials (0-255)
 # Downsampling Constants
 DOWNSAMPLING_THRESHOLD = 100000 # Apply auto-downsampling if samples > this
 
-# --- REMOVED NEO_READER_EXTENSIONS dictionary ---
-# --- REMOVED get_neo_file_filter function ---
-# --- REMOVED NEO_FILE_FILTER constant ---
+# Neo File Constants
+NEO_READER_EXTENSIONS = {
+    'ABF': ['abf'],
+    'AsciiSignal': ['txt', 'asc', 'csv'],
+    'Axon': ['abf', 'dat'],
+    'BlackRock': ['nev', 'ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'],
+    'Brainware': ['f32', 'stim'],
+    'CED': ['smr', 'son'],
+    'EEGLAB': ['set', 'fdt'],
+    'EDF': ['edf', 'bdf'],
+    'IGOR': ['ibw'],
+    'IntanRHD': ['rhd'],
+    'MatrixMarket': ['mtx'],
+    'Matlab': ['mat'],
+    'MEF': ['mef'],
+    'NeoMatlab': ['mat'],
+    'NEX': ['nex', 'nex5'],
+    'NI': ['nev'],
+    'NWB': ['nwb', 'h5'],
+    'OpenEphys': ['continuous', 'spikes', 'events'],
+    'OpenEphysBinary': ['dat'],
+    'Plexon': ['plx', 'pl2'],
+    'RawBinary': ['raw', 'bin'],
+    'Spike2': ['smr'],
+    'SpikegadgetsIO': ['rec'],
+    'Tdt': ['tbk', 'tev', 'tsq'],
+    'WinEdr': ['wcp', 'EDR'],
+    'WinWcp': ['wcp']
+}
+
+def get_neo_file_filter():
+    """
+    Generate a file filter string for QFileDialog based on Neo supported formats.
+    
+    Returns:
+        str: A formatted string for use in file dialogs
+    """
+    filter_parts = []
+    all_extensions = []
+    
+    # Add individual format entries
+    for format_name, extensions in NEO_READER_EXTENSIONS.items():
+        ext_list = [f"*.{ext}" for ext in extensions]
+        all_extensions.extend(ext_list)
+        filter_parts.append(f"{format_name} Files ({' '.join(ext_list)})")
+    
+    # Add 'All Supported' entry at the beginning
+    if all_extensions:
+        all_extensions = sorted(set(all_extensions))  # Remove duplicates and sort
+        filter_parts.insert(0, f"All Supported Formats ({' '.join(all_extensions)})")
+    
+    # Add 'All Files' entry at the end
+    filter_parts.append("All Files (*)")
+    
+    # Join with ;; separator for Qt
+    return ";;".join(filter_parts)
+
+# Pre-compute the file filter for reuse
+NEO_FILE_FILTER = get_neo_file_filter()
+
+# Make all constants available at the module level
+__all__ = [
+    'DEFAULT_PLOT_PEN_WIDTH',
+    'PLOT_COLORS',
+    'TRIAL_COLOR',
+    'AVERAGE_COLOR',
+    'TRIAL_ALPHA',
+    'DOWNSAMPLING_THRESHOLD',
+    'NEO_READER_EXTENSIONS',
+    'get_neo_file_filter',
+    'NEO_FILE_FILTER',
+]

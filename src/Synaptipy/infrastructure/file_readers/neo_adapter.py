@@ -16,6 +16,8 @@ __email__ = "anzalks@ncbs.res.in"
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Tuple, Any # Added Type
+import os
+import re
 
 import neo # Added missing import
 import neo.io as nIO # Keep original import style
@@ -25,7 +27,7 @@ from quantities import Quantity, s, ms, V, mV, A, pA, nA # Import base quantitie
 
 # Import from our package structure
 from Synaptipy.core.data_model import Recording, Channel # Removed RecordingHeader
-from Synaptipy.shared.error_handling import FileReadError, UnsupportedFormatError
+from Synaptipy.shared.error_handling import FileReadError, UnsupportedFormatError, SynaptipyFileNotFoundError
 
 log = logging.getLogger('Synaptipy.infrastructure.file_readers.neo_adapter')
 
@@ -91,7 +93,7 @@ class NeoAdapter:
     def _get_neo_io_class(self, filepath: Path) -> Type: # Use generic Type hint
         """Determines appropriate neo IO class using the predefined IODict."""
         if not filepath.is_file():
-            raise FileNotFoundError(f"File not found: {filepath}")
+            raise SynaptipyFileNotFoundError(f"File not found: {filepath}")
 
         extension = filepath.suffix.lower().lstrip('.')
         log.debug(f"Attempting to find IO for extension: '{extension}'")
@@ -258,7 +260,7 @@ class NeoAdapter:
             block = reader.read_block(lazy=False, signal_group_mode='split-all')
             log.info(f"Successfully read neo Block using {io_class_name}.")
 
-        except (FileNotFoundError, UnsupportedFormatError) as e: log.error(f"File pre-read error: {e}"); raise e
+        except (SynaptipyFileNotFoundError, UnsupportedFormatError) as e: log.error(f"File pre-read error: {e}"); raise e
         except neo.io.NeoReadWriteError as ne: log.error(f"Neo failed to read file '{filepath.name}' with {io_class_name}: {ne}", exc_info=True); raise FileReadError(f"Neo error reading {filepath.name}: {ne}") from ne
         except IOError as ioe: log.error(f"IOError obtaining reader or reading '{filepath.name}': {ioe}", exc_info=True); raise UnsupportedFormatError(f"Cannot read file {filepath.name}. Check format/permissions.") from ioe
         except Exception as e: log.error(f"Unexpected error reading file '{filepath.name}' using {io_class_name}: {e}", exc_info=True); raise FileReadError(f"Unexpected error reading {filepath.name} with {io_class_name}: {e}") from e
