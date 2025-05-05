@@ -755,8 +755,8 @@ class ExplorerTab(QtWidgets.QWidget):
             checkbox.toggled.connect(self._trigger_plot_update)
             checkbox.toggled.connect(lambda checked, k=chan_key: self._update_channel_visibility(k, checked))
         
-        # Create synchronized view checkboxes for X and Y axes
-        # (Existing code for this would follow...)
+        # Create Y control sliders and scrollbars for each channel
+        self._create_y_controls_for_channels()
         
         # Ensure all plots are properly sized and laid out
         self.graphics_layout_widget.ci.setSpacing(10)  # Add spacing between plots
@@ -768,6 +768,108 @@ class ExplorerTab(QtWidgets.QWidget):
         
         # Complete initial UI update
         self._update_ui_state()
+
+    def _create_y_controls_for_channels(self):
+        """Creates and connects individual Y sliders and scrollbars for each channel."""
+        log.debug("Creating individual Y controls for channels")
+        
+        # Clear existing individual Y controls
+        for slider in self.individual_y_sliders.values():
+            try:
+                slider.valueChanged.disconnect()
+            except RuntimeError:
+                pass
+                
+        for scrollbar in self.individual_y_scrollbars.values():
+            try:
+                scrollbar.valueChanged.disconnect()
+            except RuntimeError:
+                pass
+                
+        # Clear the layouts
+        if hasattr(self, 'individual_y_sliders_layout') and self.individual_y_sliders_layout:
+            while self.individual_y_sliders_layout.count():
+                item = self.individual_y_sliders_layout.takeAt(0)
+                if item and item.widget():
+                    item.widget().deleteLater()
+                    
+        if hasattr(self, 'individual_y_scrollbars_layout') and self.individual_y_scrollbars_layout:
+            while self.individual_y_scrollbars_layout.count():
+                item = self.individual_y_scrollbars_layout.takeAt(0)
+                if item and item.widget():
+                    item.widget().deleteLater()
+                    
+        # Clear the dictionaries
+        self.individual_y_sliders.clear()
+        self.individual_y_scrollbars.clear()
+        self.individual_y_slider_labels.clear()
+        self.individual_y_slider_values.clear()
+        self.individual_y_scrollbar_values.clear()
+        
+        # Create new controls for each channel
+        for chan_id, channel in self.current_recording.channels.items():
+            # Prefer channel's name attribute, fall back to its key
+            display_name = f"{channel.name}" if hasattr(channel, 'name') and channel.name else f"Ch {chan_id}"
+            
+            # Create Y slider container
+            slider_container = QtWidgets.QWidget()
+            slider_layout = QtWidgets.QVBoxLayout(slider_container)
+            slider_layout.setContentsMargins(0, 0, 0, 0)
+            slider_layout.setSpacing(2)
+            
+            # Create slider label
+            slider_label = QtWidgets.QLabel(display_name)
+            slider_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            slider_layout.addWidget(slider_label)
+            
+            # Create Y slider
+            y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Vertical)
+            y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)
+            y_slider.setValue(self.SLIDER_DEFAULT_VALUE)
+            y_slider.setToolTip(f"Y zoom for {display_name}")
+            slider_layout.addWidget(y_slider, 1)
+            
+            # Add to container
+            self.individual_y_sliders_layout.addWidget(slider_container)
+            
+            # Store references
+            self.individual_y_sliders[chan_id] = y_slider
+            self.individual_y_slider_labels[chan_id] = slider_label
+            self.individual_y_slider_values[chan_id] = self.SLIDER_DEFAULT_VALUE
+            
+            # Connect signals
+            y_slider.valueChanged.connect(lambda value, cid=chan_id: self._on_individual_y_zoom_changed(cid, value))
+            
+            # Create Y scrollbar container
+            scrollbar_container = QtWidgets.QWidget()
+            scrollbar_layout = QtWidgets.QVBoxLayout(scrollbar_container)
+            scrollbar_layout.setContentsMargins(0, 0, 0, 0)
+            scrollbar_layout.setSpacing(2)
+            
+            # Create scrollbar label (reuse same text)
+            scrollbar_label = QtWidgets.QLabel(display_name)
+            scrollbar_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            scrollbar_layout.addWidget(scrollbar_label)
+            
+            # Create Y scrollbar
+            y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Vertical)
+            y_scrollbar.setRange(0, self.SCROLLBAR_MAX_RANGE)
+            y_scrollbar.setValue(self.SCROLLBAR_MAX_RANGE // 2)
+            y_scrollbar.setToolTip(f"Y pan for {display_name}")
+            scrollbar_layout.addWidget(y_scrollbar, 1)
+            
+            # Add to container
+            self.individual_y_scrollbars_layout.addWidget(scrollbar_container)
+            
+            # Store references
+            self.individual_y_scrollbars[chan_id] = y_scrollbar
+            self.individual_y_scrollbar_values[chan_id] = self.SCROLLBAR_MAX_RANGE // 2
+            
+            # Connect signals
+            y_scrollbar.valueChanged.connect(lambda value, cid=chan_id: self._on_individual_y_scrollbar_changed(cid, value))
+            
+        # Update visibility based on current lock state
+        self._update_y_controls_visibility()
 
     # --- REVISED Method: Channel labels above rows, larger edits --- 
     def _update_manual_limits_ui(self):
@@ -1329,8 +1431,14 @@ class ExplorerTab(QtWidgets.QWidget):
         if not all(hasattr(self, w) for w in ['global_y_slider_widget','global_y_scrollbar_widget','individual_y_sliders_container','individual_y_scrollbars_container']):
             return
         
-        lock = self.y_lock_enabled
+        # Get current lock state
+        lock = self.y_lock_enabled  # Use primary attribute
+        
+        # Check if any plots are visible
         any_vis = any(p.isVisible() for p in self.channel_plots.values())
+        
+        # Log current state for debugging
+        log.debug(f"Updating Y controls visibility. Y lock: {lock}, Any visible plots: {any_vis}")
         
         # Set visibility of main containers based on lock state
         self.global_y_slider_widget.setVisible(lock and any_vis)
@@ -1347,31 +1455,64 @@ class ExplorerTab(QtWidgets.QWidget):
         vis_cids.discard(None)
         
         # Check if manual limits are enabled to determine control enabled state
-        en = not self.manual_limits_enabled
+        controls_enabled = not self.manual_limits_enabled
+        
+        # Update visibility status message
+        status_msg = f"Y Controls: {'Individual' if not lock else 'Global'}, Manual Limits: {'ON' if self.manual_limits_enabled else 'OFF'}"
+        log.debug(status_msg)
         
         if not lock:
-            # Individual controls mode
+            # Individual controls mode - show controls only for visible channels
             for cid, slider in self.individual_y_sliders.items():
-                cont = slider.parentWidget()
-                vis = cid in vis_cids
-                base = self.base_y_ranges.get(cid) is not None
-                cont.setVisible(vis)
-                slider.setEnabled(vis and base and en)
+                # Get the parent container widget
+                container = slider.parent()
+                while container and not isinstance(container, QtWidgets.QWidget):
+                    container = container.parent()
+                
+                # Check if channel is visible and has base range defined
+                is_visible = cid in vis_cids
+                has_base_range = self.base_y_ranges.get(cid) is not None
+                
+                # Update container visibility
+                if container:
+                    container.setVisible(is_visible)
+                
+                # Update slider enabled state
+                slider.setEnabled(is_visible and has_base_range and controls_enabled)
+                
+                if is_visible:
+                    log.debug(f"Channel {cid}: visible={is_visible}, has_range={has_base_range}, enabled={is_visible and has_base_range and controls_enabled}")
             
-            for cid, scroll in self.individual_y_scrollbars.items():
-                vis = cid in vis_cids
-                base = self.base_y_ranges.get(cid) is not None
-                scroll.setVisible(vis)
-                can = scroll.maximum() > scroll.minimum()
-                scroll.setEnabled(vis and base and en and can)
+            # Handle scrollbars similarly
+            for cid, scrollbar in self.individual_y_scrollbars.items():
+                # Get the parent container
+                container = scrollbar.parent()
+                while container and not isinstance(container, QtWidgets.QWidget):
+                    container = container.parent()
+                
+                # Check visibility and range
+                is_visible = cid in vis_cids
+                has_base_range = self.base_y_ranges.get(cid) is not None
+                has_scrollable_range = scrollbar.maximum() > scrollbar.minimum()
+                
+                # Update container visibility
+                if container:
+                    container.setVisible(is_visible)
+                
+                # Update scrollbar enabled state (enable only if there's a scrollable range)
+                scrollbar.setEnabled(is_visible and has_base_range and controls_enabled and has_scrollable_range)
         else:
             # Global controls mode
-            can_en = any(self.base_y_ranges.get(cid) is not None for cid in vis_cids)
+            can_enable = any(self.base_y_ranges.get(cid) is not None for cid in vis_cids)
+            
+            # Global slider
             if self.global_y_slider:
-                self.global_y_slider.setEnabled(can_en and en)
+                self.global_y_slider.setEnabled(can_enable and controls_enabled)
+            
+            # Global scrollbar - enable only if there's a scrollable range
             if self.global_y_scrollbar:
-                can = self.global_y_scrollbar.maximum() > self.global_y_scrollbar.minimum()
-                self.global_y_scrollbar.setEnabled(can_en and en and can)
+                has_scrollable_range = self.global_y_scrollbar.maximum() > self.global_y_scrollbar.minimum()
+                self.global_y_scrollbar.setEnabled(can_enable and controls_enabled and has_scrollable_range)
 
     def _on_global_y_zoom_changed(self, value: int):
         if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
@@ -1454,30 +1595,62 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _on_individual_y_zoom_changed(self, chan_id: str, value: int):
         if self.manual_limits_enabled or self.y_axes_locked or self._updating_viewranges: return
-        p=self.channel_plots.get(chan_id); b=self.base_y_ranges.get(chan_id)
+        p=self.channel_plots.get(chan_id)
+        b=self.base_y_ranges.get(chan_id)
         s=self.individual_y_scrollbars.get(chan_id)
         if not p or not p.isVisible() or not p.getViewBox() or b is None or s is None: return
+        
+        # Calculate new Y range based on slider value
         new_y = self._calculate_new_range(b, value)
         if new_y:
+            # Store the slider value
+            self.individual_y_slider_values[chan_id] = value
+            log.debug(f"Individual Y zoom for channel {chan_id}: value={value}, new range={new_y}")
+            
+            # Apply the zoom
             self._updating_viewranges=True
-            try: p.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
-            except Exception as e: log.error(f"Error set indiv Y zoom {chan_id}: {e}")
-            finally: self._updating_viewranges=False; self._update_scrollbar_from_view(s, b, new_y)
+            try: 
+                p.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
+            except Exception as e: 
+                log.error(f"Error setting individual Y zoom {chan_id}: {e}")
+            finally: 
+                self._updating_viewranges=False
+                # Update the scrollbar position
+                self._update_scrollbar_from_view(s, b, new_y)
 
     def _on_individual_y_scrollbar_changed(self, chan_id: str, value: int):
         if self.manual_limits_enabled or self.y_axes_locked or self._updating_scrollbars: return
-        p=self.channel_plots.get(chan_id); b=self.base_y_ranges.get(chan_id)
+        p=self.channel_plots.get(chan_id)
+        b=self.base_y_ranges.get(chan_id)
         s=self.individual_y_scrollbars.get(chan_id)
         if not p or not p.isVisible() or not p.getViewBox() or b is None or s is None: return
-        vb=p.getViewBox(); self._updating_viewranges=True
+        
+        # Store the scrollbar value
+        self.individual_y_scrollbar_values[chan_id] = value
+        
+        # Apply the pan
+        vb=p.getViewBox()
+        self._updating_viewranges=True
         try:
-            cy=vb.viewRange()[1]; cs=max(abs(cy[1]-cy[0]), 1e-12)
-            bs=max(abs(b[1]-b[0]), 1e-12)
-            sr=max(0, bs-cs); f=float(value)/max(1, s.maximum())
-            nm=b[0]+f*sr; nM=nm+cs
-            vb.setYRange(nm, nM, padding=0)
-        except Exception as e: log.error(f"Error handle indiv Y scroll {chan_id}: {e}")
-        finally: self._updating_viewranges=False
+            # Calculate new range based on scrollbar position
+            current_y_range = vb.viewRange()[1]
+            current_span = max(abs(current_y_range[1] - current_y_range[0]), 1e-12)
+            base_span = max(abs(b[1] - b[0]), 1e-12)
+            scrollable_range = max(0, base_span - current_span)
+            scroll_fraction = float(value) / max(1, s.maximum())
+            
+            # Calculate new min/max Y values
+            new_min_y = b[0] + scroll_fraction * scrollable_range
+            new_max_y = new_min_y + current_span
+            
+            log.debug(f"Individual Y scroll for channel {chan_id}: value={value}, fraction={scroll_fraction:.3f}, new range=({new_min_y:.4g}, {new_max_y:.4g})")
+            
+            # Set the new range
+            vb.setYRange(new_min_y, new_max_y, padding=0)
+        except Exception as e: 
+            log.error(f"Error handling individual Y scroll {chan_id}: {e}")
+        finally: 
+            self._updating_viewranges=False
 
     def _handle_vb_yrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
         cid = getattr(vb,'_synaptipy_chan_id',None)
