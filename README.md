@@ -46,7 +46,7 @@ For a complete and up-to-date list, please refer to the [neo documentation](http
 
 1.  **Clone the repository (or download the code):**
     ```bash
-    git clone git clone https://github.com/anzalks/synaptipy.git
+    git clone https://github.com/anzalks/synaptipy.git
     cd PATH_TO/Synaptipy/
     ```
 2.  **Create a virtual environment (Recommended):**
