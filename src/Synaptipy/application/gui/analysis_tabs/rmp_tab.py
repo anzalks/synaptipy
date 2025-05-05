@@ -220,9 +220,14 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self.plot_widget.addItem(self.interactive_region)
             self.interactive_region.setVisible(True) # Default visibility handled by _on_mode_changed
 
-            self.baseline_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))
-            self.baseline_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
-            self.baseline_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+            # Create InfiniteLine objects for showing baseline statistics
+            self.baseline_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))  # Original red color
+            self.baseline_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red dashed
+            self.baseline_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red dashed
+            
+            # Automatic and manual mode lines (gray dashed)
+            self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))  # Original gray
+            self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))  # Original gray
             self.plot_widget.addItem(self.baseline_mean_line); self.plot_widget.addItem(self.baseline_plus_sd_line); self.plot_widget.addItem(self.baseline_minus_sd_line)
             self._clear_baseline_visualization_lines() # Hide initially
 
@@ -454,6 +459,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self.plot_widget.clear() # Clear previous plots
             if time_vec is not None and voltage_vec is not None:
                 self.data_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
+                
+                # Ensure grid lines are always visible
+                self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
                 # --- Get Label from Data Model --- 
                 units = channel.units or '?' # Use '?' if units are None/empty

@@ -16,6 +16,7 @@ from .base import BaseAnalysisTab
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.core.analysis import spike_analysis # Import the analysis function
 from Synaptipy.infrastructure.file_readers import NeoAdapter # <<< ADDED
+from Synaptipy.shared.styling import style_button, configure_plot_widget  # Import styling functions
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.spike_tab')
 
@@ -113,7 +114,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.detect_button = QtWidgets.QPushButton("Detect Spikes")
         self.detect_button.setEnabled(False)
         self.detect_button.setToolTip("Detect spikes on the currently plotted trace using specified parameters.")
-        self.detect_button.setMinimumHeight(30)
+        style_button(self.detect_button, 'primary')  # Apply consistent styling directly
         controls_layout.addWidget(self.detect_button)
 
         controls_layout.addStretch(1)
@@ -143,8 +144,8 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         main_layout.addWidget(plot_container, stretch=1)
 
         # --- Plot items specific to Spikes ---
-        self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)) # Red markers
-        self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+        self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)) # Original red markers
+        self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red threshold line
         self.plot_widget.addItem(self.spike_markers_item)
         self.plot_widget.addItem(self.threshold_line)
         self.spike_markers_item.setVisible(False) # Initially hidden
@@ -296,6 +297,10 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             # Plotting
             if time_vec is not None and voltage_vec is not None:
                 self.voltage_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
+                
+                # Configure plot with grid lines
+                self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+                
                 # --- Get Label from Data Model --- 
                 units = channel.units or 'V' # Default to V if missing
                 base_label = channel.get_primary_data_label()
