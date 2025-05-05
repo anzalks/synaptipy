@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 
 # Set up logging before importing the rest of the package
-from Synaptipy.shared.logging_config import configure_logging
+from Synaptipy.shared.logging_config import setup_logging
 
 
 def parse_args():
@@ -74,7 +74,7 @@ def main():
     
     # Configure logging
     log_level = logging.DEBUG if args.verbose or args.dev else logging.INFO
-    configure_logging(level=log_level, log_dir=args.log_dir)
+    setup_logging(dev_mode=args.dev, log_dir=args.log_dir)
     logger = logging.getLogger(__name__)
     
     logger.info("Starting Synaptipy...")

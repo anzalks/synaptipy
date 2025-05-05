@@ -5,6 +5,9 @@ Shared Kernel for Synaptipy.
 Contains utilities, constants, custom exceptions, and other common code
 used across different layers (Core, Infrastructure, Application) of the
 Synaptipy package.
+
+This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
+See the LICENSE file in the root of the repository for full license details.
 """
 
 # Expose custom exception classes for easier catching elsewhere
@@ -20,13 +23,32 @@ from .error_handling import (
     ExportError
 )
 
-# Expose key constants or utilities if frequently needed directly
-# Example: from .constants import PLOT_COLORS
-# Example: from .utils import some_utility_function
+# Expose key constants and utilities for easier imports
+from .constants import (
+    PLOT_COLORS,
+    TRIAL_COLOR,
+    AVERAGE_COLOR,
+    TRIAL_ALPHA,
+    DEFAULT_PLOT_PEN_WIDTH,
+    NEO_FILE_FILTER
+)
+
+# Import styling module components for easier access
+from .styling import (
+    apply_stylesheet,
+    configure_plot_widget,
+    get_trial_pen,
+    get_average_pen,
+    get_plot_pen,
+    style_button,
+    style_label,
+    style_result_display,
+    THEME
+)
 
 # Define the public API for this subpackage
 __all__ = [
-    # Exceptions are correctly listed here
+    # Exceptions
     'SynaptipyError',
     'FileReadError',
     'SynaptipyFileNotFoundError',
@@ -34,5 +56,23 @@ __all__ = [
     'ProcessingError',
     'PlottingError',
     'ExportError',
-    # Add constants/utils here if explicitly exposed
+    
+    # Constants
+    'PLOT_COLORS',
+    'TRIAL_COLOR',
+    'AVERAGE_COLOR',
+    'TRIAL_ALPHA', 
+    'DEFAULT_PLOT_PEN_WIDTH',
+    'NEO_FILE_FILTER',
+    
+    # Styling utilities
+    'apply_stylesheet',
+    'configure_plot_widget',
+    'get_trial_pen',
+    'get_average_pen',
+    'get_plot_pen',
+    'style_button',
+    'style_label',
+    'style_result_display',
+    'THEME'
 ]

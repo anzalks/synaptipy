@@ -16,6 +16,17 @@ from .base import BaseAnalysisTab
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 # from Synaptipy.core.analysis.intrinsic_properties import calculate_rin # Or define below
+from Synaptipy.shared.styling import (
+    style_button, 
+    style_label, 
+    style_info_label, 
+    style_result_display,
+    get_baseline_pen,
+    get_response_pen,
+    get_baseline_brush,
+    get_response_brush,
+    configure_plot_widget
+)
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rin_tab')
 
@@ -302,18 +313,18 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         analysis_params_layout.addWidget(self.delta_input_group)
 
-        # Run Button (for Manual Mode)
-        self.run_button = QtWidgets.QPushButton("Calculate Input Resistance")
-        self.run_button.setToolTip("Calculate Rin/G using the manually entered parameters.")
-        self.run_button.setMinimumHeight(30)
-        # Use standard button styling to match the rest of the application
+        # Run button to manually execute analysis
+        self.run_button = QtWidgets.QPushButton("Calculate Rin")
+        self.run_button.setToolTip("Use current window settings to calculate input resistance")
+        style_button(self.run_button, 'primary')  # Apply consistent styling directly
         self.run_button.setVisible(False) # Initially hidden
         analysis_params_layout.addWidget(self.run_button)
 
         # Info label for guidance
         self.info_label = QtWidgets.QLabel("Info will appear here.")
         self.info_label.setWordWrap(True)
-        self.info_label.setStyleSheet("QLabel { font-style: italic; }")
+        # Use styling module instead of inline style
+        style_info_label(self.info_label)
         analysis_params_layout.addWidget(self.info_label)
 
         analysis_params_layout.addStretch(1)
@@ -332,7 +343,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         
         self.rin_result_label = QtWidgets.QLabel("Resistance (Rin) / Conductance (G): --")
         self.rin_result_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.rin_result_label.setStyleSheet("font-weight: bold;")
+        # Use styling module instead of inline style
+        style_result_display(self.rin_result_label)
         results_layout.addWidget(self.rin_result_label)
         
         self.delta_v_label = QtWidgets.QLabel("Voltage Change (ΔV): --")
@@ -375,14 +387,38 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # --- Plot items specific to Rin --- 
         if self.plot_widget:
+            # Configure the plot widget with consistent styling
+            configure_plot_widget(self.plot_widget)
+            
+            # Ensure grid lines are always visible
+            self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
             # Get the plot item from the plot widget
             plot_item = self.plot_widget.getPlotItem()
             if plot_item:
-                # Create regions and lines
-                self.baseline_region = pg.LinearRegionItem(values=[0.0, 0.1], brush=(0, 0, 255, 30), movable=True, bounds=[0, 1])
-                self.response_region = pg.LinearRegionItem(values=[0.2, 0.3], brush=(255, 0, 0, 30), movable=True, bounds=[0, 1])
-                self.baseline_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(0, 0, 255), style=QtCore.Qt.PenStyle.DashLine))
-                self.response_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(255, 0, 0), style=QtCore.Qt.PenStyle.DashLine))
+                # Create regions and lines with consistent styling
+                self.baseline_region = pg.LinearRegionItem(
+                    values=[0.0, 0.1], 
+                    brush=get_baseline_brush(), 
+                    movable=True, 
+                    bounds=[0, 1]
+                )
+                self.response_region = pg.LinearRegionItem(
+                    values=[0.2, 0.3], 
+                    brush=get_response_brush(), 
+                    movable=True, 
+                    bounds=[0, 1]
+                )
+                self.baseline_line = pg.InfiniteLine(
+                    angle=0, 
+                    movable=False, 
+                    pen=get_baseline_pen()
+                )
+                self.response_line = pg.InfiniteLine(
+                    angle=0, 
+                    movable=False, 
+                    pen=get_response_pen()
+                )
                 
                 # Add items to the PLOT ITEM
                 plot_item.addItem(self.baseline_region)
@@ -952,13 +988,15 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         channel = self._selected_item_recording.channels[channel_name]
         time_vec, data_vec = None, None
-        pen = pg.mkPen(color=(55, 126, 184)) # Default pen (blueish)
+        
+        # Use original blue color (55, 126, 184) instead of styling module
+        pen = pg.mkPen(color=(55, 126, 184)) # Original pen color (blueish)
 
         try:
             if data_source_key == "average":
                 data_vec = channel.get_averaged_data()
                 time_vec = channel.get_relative_averaged_time_vector() # Use relative time
-                pen = pg.mkPen(color=(55, 126, 184)) 
+                pen = pg.mkPen(color=(55, 126, 184)) # Original blue color
                 if data_vec is None or time_vec is None:
                     log.warning(f"Could not get averaged data/time for channel {channel_name}.")
                     return None
@@ -1077,8 +1115,8 @@ class RinAnalysisTab(BaseAnalysisTab):
             response_end = response_start + 0.2 * time_range
             self.response_region.setRegion([response_start, response_end])
 
-        # Plot the main data trace
-        pen = pg.mkPen(color=(0, 0, 0), width=1)  # Ensure the trace is black
+        # Plot the main data trace - keep the original black color
+        pen = pg.mkPen(color=(0, 0, 0), width=1)  # Original black pen
         self.plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen)
         log.debug(f"Successfully plotted {ch_label} trace for Rin/G analysis.")
 

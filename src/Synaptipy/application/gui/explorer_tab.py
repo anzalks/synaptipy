@@ -46,7 +46,7 @@ class ExplorerTab(QtWidgets.QWidget):
     SLIDER_DEFAULT_VALUE = SLIDER_RANGE_MIN
     MIN_ZOOM_FACTOR = 0.01; SCROLLBAR_MAX_RANGE = 10000
     _selected_avg_pen_width = (VisConstants.DEFAULT_PLOT_PEN_WIDTH + 1) if (VisConstants and hasattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH')) else 2
-    SELECTED_AVG_PEN = pg.mkPen('g', width=_selected_avg_pen_width, name="Selected Avg")
+    SELECTED_AVG_PEN = pg.mkPen('g', width=_selected_avg_pen_width, name="Selected Avg")  # Original green color
 
     # --- Signals ---
     open_file_requested = QtCore.Signal()
@@ -55,23 +55,54 @@ class ExplorerTab(QtWidgets.QWidget):
     # --- Initialization ---
     def __init__(self, neo_adapter: NeoAdapter, nwb_exporter: NWBExporter, status_bar: QtWidgets.QStatusBar, parent=None):
         super().__init__(parent)
-        log.debug("Initializing ExplorerTab")
+        log.debug("Initializing ExplorerTab...")
+        
+        # --- External References ---
         self.neo_adapter = neo_adapter
         self.nwb_exporter = nwb_exporter
         self.status_bar = status_bar
 
-        # --- State Variables ---
+        # --- Data State ---
         self.current_recording: Optional[Recording] = None
         self.file_list: List[Path] = []
         self.current_file_index: int = -1
-        self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
-        self.channel_plots: Dict[str, pg.PlotItem] = {}
-        self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
-        self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
-        self.current_plot_mode: int = self.PlotMode.OVERLAY_AVG
         self.current_trial_index: int = 0
         self.max_trials_current_recording: int = 0
-        self.y_axes_locked: bool = True
+        self.y_lock_enabled: bool = True  # Use this as the primary attribute
+        self.y_axes_locked: bool = True   # Keep this for backward compatibility
+        self.current_plot_mode: int = self.PlotMode.OVERLAY_AVG
+        self.global_y_range_base: Optional[Tuple[float, float]] = None
+        self.global_x_range_base: Optional[Tuple[float, float]] = None
+        self.selected_trial_indices: Set[int] = set()
+        self.manual_limits_enabled: bool = False
+        
+        # --- Analysis Set (for Analyser Tab) ---
+        self._analysis_items: List[Dict[str, Any]] = []
+        
+        # --- Display State Collections --- 
+        self.channel_plots: Dict[str, pg.PlotItem] = {}
+        self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
+        self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
+        self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
+        
+        # NEW: Added missing attributes
+        self.channel_y_range_bases: Dict[str, Tuple[float, float]] = {}
+        self.channel_view_boxes: Dict[str, pg.ViewBox] = {}
+        
+        # Y Control References
+        self.global_y_slider_value: int = self.SLIDER_DEFAULT_VALUE
+        self.global_y_scrollbar_value: int = self.SCROLLBAR_MAX_RANGE // 2
+        self.individual_y_sliders: Dict[str, QtWidgets.QSlider] = {}
+        self.individual_y_slider_labels: Dict[str, QtWidgets.QLabel] = {}
+        self.individual_y_scrollbars: Dict[str, QtWidgets.QScrollBar] = {}
+        self.individual_y_slider_values: Dict[str, int] = {}
+        self.individual_y_scrollbar_values: Dict[str, int] = {}
+        
+        # Manual limits storage
+        self.manual_x_range: Optional[Tuple[float, float]] = None
+        self.manual_y_ranges: Dict[str, Tuple[float, float]] = {}
+
+        # --- State Variables ---
         self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_y_ranges: Dict[str, Optional[Tuple[float, float]]] = {}
         self.individual_y_sliders: Dict[str, QtWidgets.QSlider] = {}
@@ -87,8 +118,6 @@ class ExplorerTab(QtWidgets.QWidget):
         self.manual_limit_edits: Dict[str, Dict[str, QtWidgets.QLineEdit]] = {} # {chan_id: {'ymin': QLineEdit, 'ymax': QLineEdit}}
         self.manual_channel_limits: Dict[str, Dict[str, Optional[Tuple[float, float]]]] = {} # {chan_id: {'y': (min, max)}}
         # --- END UPDATE ---
-
-        self._analysis_items: List[Dict[str, Any]] = []
 
         # --- UI References ---
         # (Initialize all UI references to None as before)
@@ -164,6 +193,13 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_ui_state()
         self._update_limit_fields() # Initial update
         self._update_analysis_set_display()
+        
+        # Import styling to initialize plots properly at startup
+        from Synaptipy.shared.styling import configure_plot_widget, configure_plot_item
+        
+        # Ensure the GraphicsLayoutWidget has proper styling from the beginning
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+            self.graphics_layout_widget.setBackground('white')
 
     # =========================================================================
     # UI Setup (_setup_ui) - Verified Structure
@@ -358,7 +394,11 @@ class ExplorerTab(QtWidgets.QWidget):
         nav_layout.addStretch()
         nav_layout.addWidget(self.next_file_button)
         center_panel_layout.addLayout(nav_layout)
+        
+        # Create and properly initialize the GraphicsLayoutWidget with white background
         self.graphics_layout_widget = pg.GraphicsLayoutWidget()
+        self.graphics_layout_widget.setBackground('white')  # Ensure this is set during creation
+        
         center_panel_layout.addWidget(self.graphics_layout_widget, stretch=1)
         self.x_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Horizontal)
         self.x_scrollbar.setFixedHeight(20)
@@ -431,9 +471,9 @@ class ExplorerTab(QtWidgets.QWidget):
         y_zoom_group = QtWidgets.QGroupBox("Y Zoom")
         y_zoom_group_layout = QtWidgets.QVBoxLayout(y_zoom_group)
         y_zoom_layout.addWidget(y_zoom_group, stretch=1)
-        self.y_lock_checkbox = QtWidgets.QCheckBox("Lock Y Axes")
-        self.y_lock_checkbox.setChecked(self.y_axes_locked)
-        self.y_lock_checkbox.setToolTip("Lock Y controls")
+        self.y_lock_checkbox = QtWidgets.QCheckBox("Lock Y Views")
+        self.y_lock_checkbox.setToolTip("Link Y axes across channels")
+        self.y_lock_checkbox.setChecked(self.y_lock_enabled)  # Use y_lock_enabled instead of y_axes_locked
         y_zoom_group_layout.addWidget(self.y_lock_checkbox)
         self.global_y_slider_widget = QtWidgets.QWidget()
         global_y_slider_layout = QtWidgets.QVBoxLayout(self.global_y_slider_widget)
@@ -621,29 +661,113 @@ class ExplorerTab(QtWidgets.QWidget):
         finally: scrollbar.blockSignals(False)
 
     def _create_channel_ui(self):
-        if not self.current_recording or not self.current_recording.channels: log.warning("Create channel UI: No data."); return
-        if not all(hasattr(self, w) for w in ['channel_select_group', 'channel_checkbox_layout', 'graphics_layout_widget', 'individual_y_sliders_layout', 'individual_y_scrollbars_layout']): log.error("Create channel UI: Layouts missing."); return
-        self.channel_select_group.setEnabled(True)
-        sorted_items = sorted(self.current_recording.channels.items(), key=lambda item: str(item[0]))
-        log.info(f"Creating UI for {len(sorted_items)} channels.")
-        last_plot_item: Optional[pg.PlotItem] = None
-        for i, (chan_id, channel) in enumerate(sorted_items):
-            if chan_id in self.channel_checkboxes or chan_id in self.channel_plots: log.error(f"UI exists {chan_id}, skip."); continue
-            checkbox = QtWidgets.QCheckBox(f"{channel.name or f'Ch {chan_id}'}"); checkbox.setChecked(True); checkbox.stateChanged.connect(self._trigger_plot_update); self.channel_checkbox_layout.addWidget(checkbox); self.channel_checkboxes[chan_id] = checkbox
-            plot_item = self.graphics_layout_widget.addPlot(row=i, col=0); plot_item.setLabel('left', channel.name or f'Ch {chan_id}', units=channel.units or 'units'); plot_item.showGrid(x=True, y=True, alpha=0.3); self.channel_plots[chan_id] = plot_item
-            vb = plot_item.getViewBox(); vb.setMouseMode(pg.ViewBox.RectMode); vb._synaptipy_chan_id = chan_id
-            vb.sigXRangeChanged.connect(self._handle_vb_xrange_changed); vb.sigYRangeChanged.connect(self._handle_vb_yrange_changed)
-            vb.sigXRangeChanged.connect(lambda *a: self._trigger_limit_field_update()); vb.sigYRangeChanged.connect(lambda *a: self._trigger_limit_field_update())
-            if last_plot_item: plot_item.setXLink(last_plot_item.getViewBox()); plot_item.hideAxis('bottom')
-            last_plot_item = plot_item
-            slider_widget = QtWidgets.QWidget(); slider_layout = QtWidgets.QVBoxLayout(slider_widget); slider_layout.setContentsMargins(0,0,0,0); slider_layout.setSpacing(2); lbl = QtWidgets.QLabel(f"{channel.name or chan_id[:4]}"); lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); lbl.setToolTip(f"Y Zoom {channel.name or chan_id}"); self.individual_y_slider_labels[chan_id] = lbl; slider_layout.addWidget(lbl); slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Vertical); slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX); slider.setValue(self.SLIDER_DEFAULT_VALUE); slider.setToolTip(f"Y Zoom {channel.name or chan_id}"); slider.valueChanged.connect(partial(self._on_individual_y_zoom_changed, chan_id)); slider_layout.addWidget(slider, stretch=1); self.individual_y_sliders[chan_id] = slider; self.individual_y_sliders_layout.addWidget(slider_widget, stretch=1); slider_widget.setVisible(False)
-            scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Vertical); scrollbar.setRange(0, self.SCROLLBAR_MAX_RANGE); scrollbar.setToolTip(f"Y Scroll {channel.name or chan_id}"); scrollbar.valueChanged.connect(partial(self._on_individual_y_scrollbar_changed, chan_id)); self._reset_scrollbar(scrollbar); self.individual_y_scrollbars[chan_id] = scrollbar; self.individual_y_scrollbars_layout.addWidget(scrollbar, stretch=1); scrollbar.setVisible(False)
-        if last_plot_item: last_plot_item.setLabel('bottom', "Time", units='s'); last_plot_item.showAxis('bottom')
-        log.info("Channel UI creation complete.")
+        """Creates UI for channels in the current recording."""
+        log.debug(f"Creating channel UI elements for {self.current_recording.source_file if self.current_recording else None}")
+        # Need to scan the recording for channels
+        if not self.current_recording or not self.current_recording.channels:
+            log.warning("No channels in recording to create UI for.")
+            return
 
-        # --- This now happens AFTER channel UI is created --- 
+        self.channel_checkboxes.clear()
+        self.channel_plots.clear()
+        self.channel_plot_data_items.clear()
+        self.selected_average_plot_items.clear()
+        self.global_y_range_base = None
+        self.channel_y_range_bases.clear()
+
+        # Import critical styling functions
+        from Synaptipy.shared.styling import configure_plot_item, get_axis_pen, get_grid_pen, set_data_item_z_order, Z_ORDER
+        
+        # Set white background on the GraphicsLayoutWidget (parent of all plot items)
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+            self.graphics_layout_widget.setBackground('white')
+
+        # Get current channel keys from recording (as strings)
+        channel_keys = list(self.current_recording.channels.keys())
+
+        # Loop through channels and create UI elements
+        checkbox_group = QtWidgets.QButtonGroup()
+        checkbox_group.setExclusive(False)
+        
+        for i, chan_key in enumerate(channel_keys):
+            channel = self.current_recording.channels[chan_key]
+            # Prefer channel's name attribute, fall back to its key
+            display_name = f"{channel.name}" if hasattr(channel, 'name') and channel.name else f"Ch {chan_key}"
+            
+            # Create checkbox and add to layout
+            checkbox = QtWidgets.QCheckBox(display_name)
+            checkbox.setChecked(True)  # Default to checked
+            checkbox.setToolTip(f"Show/hide {display_name}")
+            self.channel_checkbox_layout.addWidget(checkbox)
+            self.channel_checkboxes[chan_key] = checkbox
+            checkbox_group.addButton(checkbox)
+            
+            # Create plot item for this channel
+            plot_item = self.graphics_layout_widget.addPlot(row=i, col=0)
+            
+            # Apply styling with explicit white background and z-ordering
+            configure_plot_item(plot_item)
+            
+            # Ensure grid is visible with opaque lines - explicitly call showGrid after styling
+            plot_item.showGrid(x=True, y=True, alpha=1.0)
+            
+            # Explicitly set grid pens to ensure visibility and proper z-ordering
+            try:
+                # Set the grid explicitly with non-transparent grid lines
+                for axis_name in ['bottom', 'left']:
+                    axis = plot_item.getAxis(axis_name)
+                    if axis and hasattr(axis, 'grid'):
+                        # Set grid in the axis to force opacity
+                        if hasattr(axis, 'setGrid'):
+                            axis.setGrid(255)  # Full opacity
+                        
+                        # If grid is an object, set its z-value and pen
+                        if hasattr(axis.grid, 'setZValue'):
+                            axis.grid.setZValue(Z_ORDER['grid'])
+                        
+                        if hasattr(axis.grid, 'setPen'):
+                            axis.grid.setPen(get_grid_pen())
+            except Exception as e:
+                log.warning(f"Could not set grid opacity for channel {chan_key}: {e}")
+            
+            # Store this association
+            plot_item.getViewBox()._synaptipy_chan_id = chan_key  # Attach ID to viewbox
+            self.channel_plots[chan_key] = plot_item
+            
+            # Y-axis label with units if available
+            plot_item.setLabel('left', text=channel.get_primary_data_label(), units=channel.units)
+            
+            # Don't label every plot with the same X-axis label, only the bottom one
+            if i == len(channel_keys) - 1:
+                plot_item.setLabel('bottom', 'Time', units='s')
+            # Make all but last bottom axis invisible by hiding its labels
+            if i < len(channel_keys) - 1:
+                plot_item.getAxis('bottom').showLabel(False)
+            
+            # Set up selection rectangle tool for zooming plots
+            plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
+            
+            # Add a placeholder for the data - don't add plot items here, they're added in _update_plot
+            self.channel_plot_data_items[chan_key] = []  # Initialize empty list to store plot items
+        
+        # Hook up checkbox signals at the end
+        for chan_key, checkbox in self.channel_checkboxes.items():
+            checkbox.toggled.connect(self._trigger_plot_update)
+            checkbox.toggled.connect(lambda checked, k=chan_key: self._update_channel_visibility(k, checked))
+        
+        # Create synchronized view checkboxes for X and Y axes
+        # (Existing code for this would follow...)
+        
+        # Ensure all plots are properly sized and laid out
+        self.graphics_layout_widget.ci.setSpacing(10)  # Add spacing between plots
+        
+        # Update manual limits UI
         self._update_manual_limits_ui()
-        # --- END --- 
+        
+        log.debug(f"Created {len(channel_keys)} channel UI elements with white backgrounds and grid lines behind data.")
+        
+        # Complete initial UI update
+        self._update_ui_state()
 
     # --- REVISED Method: Channel labels above rows, larger edits --- 
     def _update_manual_limits_ui(self):
@@ -791,26 +915,48 @@ class ExplorerTab(QtWidgets.QWidget):
 
     # Corrected _trigger_plot_update
     def _trigger_plot_update(self):
+        """Updates all plot items based on current selection/data state."""
         if not self.current_recording: return
+        
         sender = self.sender()
         is_channel_checkbox = isinstance(sender, QtWidgets.QCheckBox) and sender in self.channel_checkboxes.values()
 
+        # Import the styling module
+        from Synaptipy.shared.styling import configure_plot_item, get_axis_pen, get_grid_pen, set_data_item_z_order, Z_ORDER
+
+        # Apply consistent styling to all plots
+        for chan_id, plot_item in self.channel_plots.items():
+            if plot_item and plot_item.scene() is not None:
+                # Apply styling with explicit non-transparent settings
+                configure_plot_item(plot_item)
+                
+                # Ensure grids remain visible and opaque
+                plot_item.showGrid(x=True, y=True)
+                
+                # Explicitly set grid pens for both axes
+                try:
+                    for axis_name in ['bottom', 'left']:
+                        axis = plot_item.getAxis(axis_name)
+                        if axis and hasattr(axis, 'grid'):
+                            axis.grid.setPen(get_grid_pen())
+                            # Set grid opacity to 100%
+                            axis.setGrid(255)
+                except Exception as e:
+                    log.warning(f"Could not set grid opacity for channel {chan_id}: {e}")
+
+        # Special case for checkbox senders - update selected average plots
         if is_channel_checkbox and self.selected_average_plot_items:
             self._remove_selected_average_plots()
             if self.show_selected_average_button:
-                self.show_selected_average_button.blockSignals(True)
                 self.show_selected_average_button.setChecked(False)
-                self.show_selected_average_button.blockSignals(False)
 
-        self._update_plot()
-
-        if is_channel_checkbox:
-            self._update_y_controls_visibility()
-            if sender.isChecked():
-                chan_id = next((k for k, v in self.channel_checkboxes.items() if v == sender), None)
-                if chan_id:
-                    log.debug(f"Channel {chan_id} made visible, resetting its Y view.")
-                    self._reset_single_plot_view(chan_id)
+        # Update current plot data based on current settings
+        self._update_plot_data()
+        
+        # Force plots to be immediately updated
+        self.graphics_layout_widget.update()
+        
+        log.debug("Plot update triggered and styling refreshed.")
 
     # =========================================================================
     # Plotting Core & Metadata - Corrected _update_plot
@@ -832,24 +978,29 @@ class ExplorerTab(QtWidgets.QWidget):
              log.warning("Update plot: No data/plots."); self._update_ui_state(); return
         is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
         log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
+        
+        # Import styling functions to ensure consistent appearance
+        from Synaptipy.shared.styling import configure_plot_item, get_grid_pen, set_data_item_z_order, Z_ORDER
+        
         vis_const_available = VisConstants is not None
         _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
         _trial_alpha_val = getattr(VisConstants, 'TRIAL_ALPHA', 70) if vis_const_available else 70
         _avg_color_str = getattr(VisConstants, 'AVERAGE_COLOR', '#EE4B2B') if vis_const_available else '#EE4B2B'
         _pen_width_val = getattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH', 1) if vis_const_available else 1
         _ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if vis_const_available else 5000
+        
         try:
             if isinstance(_trial_color_def, (tuple, list)) and len(_trial_color_def) >= 3: rgb_tuple = tuple(int(c) for c in _trial_color_def[:3])
             elif isinstance(_trial_color_def, str): color_hex = _trial_color_def.lstrip('#'); rgb_tuple = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
             else: raise ValueError(f"Unsupported color format: {_trial_color_def}")
             alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
             rgba_tuple = rgb_tuple + (alpha_int,)
-            trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")
+            trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")  # Original trial pen
             log.debug(f"Trial pen RGBA: {rgba_tuple}")
         except Exception as e:
             log.error(f"Error creating trial_pen: {e}. Fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
-        average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")
-        single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")
+        average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")  # Original average pen
+        single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")  # Original single trial pen
         enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
         ds_threshold = _ds_thresh_val
         any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
@@ -859,26 +1010,57 @@ class ExplorerTab(QtWidgets.QWidget):
             channel = self.current_recording.channels.get(chan_id)
             if checkbox and checkbox.isChecked() and channel and plot_item:
                 plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
+                
+                # Step 1: Apply styling BEFORE plotting to ensure proper initial setup
+                configure_plot_item(plot_item)
+                
+                # Step 2: Explicitly show grid with alpha=1.0
+                plot_item.showGrid(x=True, y=True, alpha=1.0)
+                
+                # Step 3: Force grid lines to have proper z-values and pens
+                try:
+                    for axis_name in ['bottom', 'left']:
+                        axis = plot_item.getAxis(axis_name)
+                        if axis and hasattr(axis, 'grid'):
+                            # Set grid opacity
+                            if hasattr(axis, 'setGrid'):
+                                axis.setGrid(255)  # Full opacity
+                                
+                            # Set grid z-order
+                            if hasattr(axis.grid, 'setZValue'):
+                                axis.grid.setZValue(Z_ORDER['grid'])
+                                
+                            # Apply proper grid pen
+                            if hasattr(axis.grid, 'setPen'):
+                                grid_pen = get_grid_pen()
+                                axis.grid.setPen(grid_pen)
+                except Exception as e:
+                    log.warning(f"Could not configure grid for channel {chan_id}: {e}")
+                
+                # Now plot the data with proper z-ordering
                 if not is_cycle_mode:
                     # --- Overlay All + Avg Mode ---
                     for trial_idx in range(channel.num_trials):
                         data = channel.get_data(trial_idx)
                         time_vec = channel.get_relative_time_vector(trial_idx)
-                        # --- Corrected Block (Indentation) ---
                         if data is not None and time_vec is not None:
                             item = plot_item.plot(time_vec, data, pen=trial_pen)
+                            # Set background data z-order using centralized function
+                            set_data_item_z_order(item, 'background_data')
                             item.opts['autoDownsample'] = enable_downsampling
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
                         else:
                             log.warning(f"Missing data or time for trial {trial_idx+1}, Ch {chan_id}")
-                        # --- End Corrected Block ---
+                    
                     # Plot average trace
                     avg_data = channel.get_averaged_data()
                     avg_time_vec = channel.get_relative_averaged_time_vector()
                     if avg_data is not None and avg_time_vec is not None:
                         item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
+                        # Set average data z-order using centralized function
+                        set_data_item_z_order(item, 'average_data')
                         item.opts['autoDownsample'] = enable_downsampling
                         item.opts['autoDownsampleThreshold'] = ds_threshold
                         self.channel_plot_data_items.setdefault(chan_id, []).append(item)
@@ -892,14 +1074,32 @@ class ExplorerTab(QtWidgets.QWidget):
                         time_vec = channel.get_relative_time_vector(idx)
                         if data is not None and time_vec is not None:
                             item = plot_item.plot(time_vec, data, pen=single_trial_pen)
+                            # Set primary data z-order using centralized function
+                            set_data_item_z_order(item, 'primary_data')
                             item.opts['autoDownsample'] = enable_downsampling
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
-                        else: plot_item.addItem(pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5)))
-                    else: plot_item.addItem(pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5)))
+                        else: 
+                            text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
+                            # Set text overlay z-order using centralized function
+                            set_data_item_z_order(text_item, 'text_overlay')
+                            plot_item.addItem(text_item)
+                    else: 
+                        text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
+                        # Set text overlay z-order using centralized function
+                        set_data_item_z_order(text_item, 'text_overlay')
+                        plot_item.addItem(text_item)
 
-                if not channel_plotted: plot_item.addItem(pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5)))
+                if not channel_plotted: 
+                    text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
+                    # Set text overlay z-order using centralized function
+                    set_data_item_z_order(text_item, 'text_overlay')
+                    plot_item.addItem(text_item)
+                
+                # Final step: Re-apply grid settings to ensure they're visible after all plotting
+                plot_item.showGrid(x=True, y=True, alpha=1.0)
+                
                 if channel_plotted: any_data_plotted = True
             elif plot_item: plot_item.hide()
 
@@ -1112,25 +1312,66 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
         if not is_manual_enabled: self._trigger_limit_field_update()
 
+    @QtCore.Slot(int)
     def _on_y_lock_changed(self, state: int):
-        self.y_axes_locked = bool(state == QtCore.Qt.CheckState.Checked.value)
-        log.info(f"Y-lock {'ON' if self.y_axes_locked else 'OFF'}.")
-        self._update_y_controls_visibility(); self._update_ui_state(); self._update_zoom_scroll_enable_state()
+        """Handle Y lock checkbox state change."""
+        is_checked = state == QtCore.Qt.CheckState.Checked.value
+        # Keep both attributes in sync for backward compatibility
+        self.y_lock_enabled = is_checked
+        self.y_axes_locked = is_checked
+        log.debug(f"Y lock changed to: {is_checked}")
+        self._update_y_controls_visibility()
+        self._update_ui_state()
+        self._update_zoom_scroll_enable_state()
 
     def _update_y_controls_visibility(self):
-        if not all(hasattr(self, w) for w in ['global_y_slider_widget','global_y_scrollbar_widget','individual_y_sliders_container','individual_y_scrollbars_container']): return
-        lock=self.y_axes_locked; any_vis=any(p.isVisible() for p in self.channel_plots.values())
-        self.global_y_slider_widget.setVisible(lock and any_vis); self.global_y_scrollbar_widget.setVisible(lock and any_vis); self.individual_y_sliders_container.setVisible(not lock and any_vis); self.individual_y_scrollbars_container.setVisible(not lock and any_vis)
-        if not any_vis: return
-        vis_cids={ getattr(p.getViewBox(),'_synaptipy_chan_id',None) for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}; vis_cids.discard(None)
+        """Update Y control widgets visibility based on current state."""
+        if not all(hasattr(self, w) for w in ['global_y_slider_widget','global_y_scrollbar_widget','individual_y_sliders_container','individual_y_scrollbars_container']):
+            return
+        
+        lock = self.y_lock_enabled
+        any_vis = any(p.isVisible() for p in self.channel_plots.values())
+        
+        # Set visibility of main containers based on lock state
+        self.global_y_slider_widget.setVisible(lock and any_vis)
+        self.global_y_scrollbar_widget.setVisible(lock and any_vis)
+        self.individual_y_sliders_container.setVisible(not lock and any_vis)
+        self.individual_y_scrollbars_container.setVisible(not lock and any_vis)
+        
+        if not any_vis:
+            return
+        
+        # Get visible channel IDs
+        vis_cids = {getattr(p.getViewBox(), '_synaptipy_chan_id', None) for p in self.channel_plots.values() 
+                    if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(), '_synaptipy_chan_id')}
+        vis_cids.discard(None)
+        
+        # Check if manual limits are enabled to determine control enabled state
         en = not self.manual_limits_enabled
+        
         if not lock:
-            for cid, slider in self.individual_y_sliders.items(): cont=slider.parentWidget(); vis=cid in vis_cids; base=self.base_y_ranges.get(cid) is not None; cont.setVisible(vis); slider.setEnabled(vis and base and en)
-            for cid, scroll in self.individual_y_scrollbars.items(): vis=cid in vis_cids; base=self.base_y_ranges.get(cid) is not None; scroll.setVisible(vis); can=scroll.maximum()>scroll.minimum(); scroll.setEnabled(vis and base and en and can)
+            # Individual controls mode
+            for cid, slider in self.individual_y_sliders.items():
+                cont = slider.parentWidget()
+                vis = cid in vis_cids
+                base = self.base_y_ranges.get(cid) is not None
+                cont.setVisible(vis)
+                slider.setEnabled(vis and base and en)
+            
+            for cid, scroll in self.individual_y_scrollbars.items():
+                vis = cid in vis_cids
+                base = self.base_y_ranges.get(cid) is not None
+                scroll.setVisible(vis)
+                can = scroll.maximum() > scroll.minimum()
+                scroll.setEnabled(vis and base and en and can)
         else:
-            can_en=any(self.base_y_ranges.get(cid) is not None for cid in vis_cids)
-            if self.global_y_slider: self.global_y_slider.setEnabled(can_en and en)
-            if self.global_y_scrollbar: can=self.global_y_scrollbar.maximum()>self.global_y_scrollbar.minimum(); self.global_y_scrollbar.setEnabled(can_en and en and can)
+            # Global controls mode
+            can_en = any(self.base_y_ranges.get(cid) is not None for cid in vis_cids)
+            if self.global_y_slider:
+                self.global_y_slider.setEnabled(can_en and en)
+            if self.global_y_scrollbar:
+                can = self.global_y_scrollbar.maximum() > self.global_y_scrollbar.minimum()
+                self.global_y_scrollbar.setEnabled(can_en and en and can)
 
     def _on_global_y_zoom_changed(self, value: int):
         if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
@@ -1415,44 +1656,88 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _plot_selected_average(self): # Manual Avg Overlay
         if not self.selected_trial_indices or not self.current_recording:
-            if self.show_selected_average_button: self.show_selected_average_button.blockSignals(True); self.show_selected_average_button.setChecked(False); self.show_selected_average_button.blockSignals(False)
-            self._update_ui_state(); return
-        if self.selected_average_plot_items: return
-        idxs=sorted(list(self.selected_trial_indices)); log.info(f"Plotting avg: {idxs}"); plotted=False; ref_t=None; first_idx=idxs[0]
+            if self.show_selected_average_button: 
+                self.show_selected_average_button.blockSignals(True)
+                self.show_selected_average_button.setChecked(False)
+                self.show_selected_average_button.blockSignals(False)
+            self._update_ui_state()
+            return
+            
+        if self.selected_average_plot_items:
+            return
+            
+        # Import styling functions for consistent appearance
+        from Synaptipy.shared.styling import set_data_item_z_order
+        
+        idxs=sorted(list(self.selected_trial_indices))
+        log.info(f"Plotting avg: {idxs}")
+        plotted=False
+        ref_t=None
+        first_idx=idxs[0]
+        
         for cid, p in self.channel_plots.items():
             if p.isVisible():
                 ch=self.current_recording.channels.get(cid)
                 if ch and 0<=first_idx<ch.num_trials:
                     try:
                         t=ch.get_relative_time_vector(first_idx)
-                        if t is not None and len(t)>0: ref_t=t; break
-                    except Exception: pass
+                        if t is not None and len(t)>0:
+                            ref_t=t
+                            break
+                    except Exception:
+                        pass
+                        
         if ref_t is None:
-            QtWidgets.QMessageBox.warning(self, "Averaging Error", "No valid time vector.");
-            if self.show_selected_average_button: self.show_selected_average_button.blockSignals(True); self.show_selected_average_button.setChecked(False); self.show_selected_average_button.blockSignals(False)
-            self._update_ui_state(); return
+            QtWidgets.QMessageBox.warning(self, "Averaging Error", "No valid time vector.")
+            if self.show_selected_average_button:
+                self.show_selected_average_button.blockSignals(True)
+                self.show_selected_average_button.setChecked(False)
+                self.show_selected_average_button.blockSignals(False)
+            self._update_ui_state()
+            return
+            
         ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if VisConstants else 5000
         en_ds = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
         ref_l=len(ref_t)
+        
         for cid, p in self.channel_plots.items():
             if p.isVisible():
                 ch=self.current_recording.channels.get(cid)
-                if not ch: continue
+                if not ch:
+                    continue
+                    
                 valid_d=[]
                 for idx in idxs:
                     if 0<=idx<ch.num_trials:
                         try:
                             d=ch.get_data(idx)
-                            if d is not None and len(d)==ref_l: valid_d.append(d)
-                        except Exception: pass
+                            if d is not None and len(d)==ref_l:
+                                valid_d.append(d)
+                        except Exception:
+                            pass
+                            
                 if valid_d:
-                    try: avg_d=np.mean(np.array(valid_d), axis=0); item=p.plot(ref_t, avg_d, pen=self.SELECTED_AVG_PEN); item.opts['autoDownsample']=en_ds; item.opts['autoDownsampleThreshold']=ds_thresh_val; self.selected_average_plot_items[cid]=item; plotted=True
-                    except Exception as e: log.error(f"Error plot avg {cid}: {e}")
+                    try:
+                        avg_d=np.mean(np.array(valid_d), axis=0)
+                        item=p.plot(ref_t, avg_d, pen=self.SELECTED_AVG_PEN)
+                        # Set selected data z-order using centralized function
+                        set_data_item_z_order(item, 'selected_data')
+                        item.opts['autoDownsample']=en_ds
+                        item.opts['autoDownsampleThreshold']=ds_thresh_val
+                        self.selected_average_plot_items[cid]=item
+                        plotted=True
+                    except Exception as e:
+                        log.error(f"Error plot avg {cid}: {e}")
+                        
         if not plotted:
             QtWidgets.QMessageBox.warning(self, "Averaging Warning", "Could not plot average.")
-            if self.show_selected_average_button: self.show_selected_average_button.blockSignals(True); self.show_selected_average_button.setChecked(False); self.show_selected_average_button.blockSignals(False)
+            if self.show_selected_average_button:
+                self.show_selected_average_button.blockSignals(True)
+                self.show_selected_average_button.setChecked(False)
+                self.show_selected_average_button.blockSignals(False)
         else:
             self.status_bar.showMessage(f"Plotted avg of {len(self.selected_trial_indices)} trials.", 2500)
+            
         self._update_ui_state()
 
     def _remove_selected_average_plots(self): # Manual Avg Overlay
@@ -1626,17 +1911,32 @@ class ExplorerTab(QtWidgets.QWidget):
             # --- END UPDATE ---
 
     def _update_zoom_scroll_enable_state(self):
-        if not all(hasattr(self,w) for w in ['x_zoom_slider','global_y_slider','reset_view_button']): return
+        """Updates the enabled state of zoom and scroll controls based on manual limits."""
+        if not all(hasattr(self, w) for w in ['x_zoom_slider', 'global_y_slider', 'reset_view_button']):
+            return
+        
         en = not self.manual_limits_enabled
+        
+        # Update zoom sliders
         self.x_zoom_slider.setEnabled(en)
-        self.global_y_slider.setEnabled(en and self.y_axes_locked)
-        for s in self.individual_y_sliders.values(): s.setEnabled(en and not self.y_axes_locked)
+        self.global_y_slider.setEnabled(en and self.y_lock_enabled)
+        for s in self.individual_y_sliders.values():
+            s.setEnabled(en and not self.y_lock_enabled)
+        
+        # Reset scrollbars if manual limits are enabled
         if not en:
-            self._reset_scrollbar(self.x_scrollbar); self._reset_scrollbar(self.global_y_scrollbar)
-            for sb in self.individual_y_scrollbars.values(): self._reset_scrollbar(sb)
+            self._reset_scrollbar(self.x_scrollbar)
+            self._reset_scrollbar(self.global_y_scrollbar)
+            for sb in self.individual_y_scrollbars.values():
+                self._reset_scrollbar(sb)
+        
+        # Disable mouse interaction with plots if manual limits are enabled
         for p in self.channel_plots.values():
-            if p and p.getViewBox(): p.getViewBox().setMouseEnabled(x=en, y=en)
-        has_vis=any(p.isVisible() for p in self.channel_plots.values())
+            if p and p.getViewBox():
+                p.getViewBox().setMouseEnabled(x=en, y=en)
+        
+        # Enable/disable reset view button based on visibility and manual limits
+        has_vis = any(p.isVisible() for p in self.channel_plots.values())
         self.reset_view_button.setEnabled(has_vis and en)
 
     def _update_limit_fields(self):

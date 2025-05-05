@@ -3,6 +3,9 @@
 """
 Base class for individual analysis tab widgets. Defines the expected interface
 and provides common functionality like selecting the analysis target item.
+
+This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
+See the LICENSE file in the root of the repository for full license details.
 """
 import logging
 from typing import Optional, List, Dict, Any
@@ -15,6 +18,13 @@ import pyqtgraph as pg
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.shared.error_handling import SynaptipyError, FileReadError
+from Synaptipy.shared.styling import (
+    style_button, 
+    configure_plot_widget,
+    get_grid_pen,
+    set_data_item_z_order,
+    Z_ORDER
+)
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.base')
 
@@ -72,11 +82,34 @@ class BaseAnalysisTab(QtWidgets.QWidget):
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
         """Adds a PlotWidget to the provided layout."""
         self.plot_widget = pg.PlotWidget()
-        # Basic plot configuration (subclasses can customize further)
-        self.plot_widget.setBackground('w')
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Set white background explicitly regardless of theme mode
+        self.plot_widget.setBackground('white')
+        
+        # Configure plot using our styling module right after creation
+        # This ensures that axes are set correctly from the start
+        configure_plot_widget(self.plot_widget)
+        
+        # Explicitly force grid to be visible and opaque
+        self.plot_widget.showGrid(x=True, y=True, alpha=1.0)
+        
+        # Add a double click event handler for auto-ranging
+        self.plot_widget.plotItem.vb.sigStateChanged.connect(self._on_viewbox_changed)
+        self.plot_widget.plotItem.vb.sigXRangeChanged.connect(self._on_viewbox_changed)
+        self.plot_widget.plotItem.vb.sigYRangeChanged.connect(self._on_viewbox_changed)
+        
+        # Use the same mouse mode settings as explorer tab
+        viewbox = self.plot_widget.getViewBox()
+        if viewbox:
+            viewbox.setMouseMode(pg.ViewBox.RectMode)
+            viewbox.mouseEnabled = True
+        
+        # Add the plot widget to the provided layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
-        log.debug(f"{self.__class__.__name__}: Plot area setup.")
+        
+        # Apply standard plot styling (ensure grid is correctly configured)
+        self._apply_standard_plot_styling()
+
     # --- END ADDED ---
 
     # --- ADDED: Method to setup save button --- 
@@ -86,9 +119,8 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         self.save_button.setIcon(QtGui.QIcon.fromTheme("document-save")) # Optional icon
         self.save_button.setToolTip(f"Save the currently calculated {self.get_display_name()} result to the main results list.")
         
-        # Use standard button styling that matches the application's default style
-        # Remove explicit styling to use the app's native style
-        self.save_button.setMinimumHeight(30)
+        # Use our styling module for consistent appearance
+        style_button(self.save_button, 'primary')
         
         self.save_button.setEnabled(False) # Disabled until a valid result is calculated
         self.save_button.clicked.connect(self._on_save_button_clicked_base)
@@ -112,28 +144,65 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
     # --- ADDED: Standard method for plotting area setup with consistent styling ---
     def _apply_standard_plot_styling(self):
-        """Applies consistent styling to the plot widget."""
-        if not hasattr(self, 'plot_widget') or not self.plot_widget:
-            log.warning(f"{self.__class__.__name__}: No plot widget to style")
+        """Apply standard plot styling including consistent grids and opaque backgrounds.
+        Called from _setup_plot_area and when the plot view changes."""
+        if not hasattr(self, 'plot_widget') or self.plot_widget is None:
             return
             
-        # Set white background
-        self.plot_widget.setBackground('w')
+        # Use our styling module with explicit opacity settings
+        # This is called when refreshing plot appearance
+        configure_plot_widget(self.plot_widget)
         
-        # Configure axis colors and width
-        plot_item = self.plot_widget.getPlotItem()
-        if plot_item:
-            # Configure axes
-            axes = {'left': plot_item.getAxis('left'), 'bottom': plot_item.getAxis('bottom')}
-            for axis_name, axis in axes.items():
-                axis.setPen(pg.mkPen(color='k', width=1))
-                axis.setTextPen(pg.mkPen(color='k'))
-                
-            # Add grid for better readability
-            self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-            
-        log.debug(f"{self.__class__.__name__}: Applied standard plot styling")
-    # --- END ADDED ---
+        # Ensure grid is always visible with opaque lines (alpha=1.0)
+        self.plot_widget.showGrid(x=True, y=True, alpha=1.0)
+        
+        # Try to access grid objects directly and set their opacity
+        try:
+            plot_item = self.plot_widget.getPlotItem()
+            if plot_item:
+                # Clear any existing grid items and recreate
+                for axis_name in ['bottom', 'left']:
+                    axis = plot_item.getAxis(axis_name)
+                    if axis and hasattr(axis, 'grid'):
+                        # Apply grid settings through the styling module's constants
+                        if hasattr(axis.grid, 'setZValue'):
+                            # Set grid z-value to ensure it stays behind data
+                            axis.grid.setZValue(Z_ORDER['grid'])
+                            # Apply fully opaque grid pen
+                            if hasattr(axis.grid, 'setPen'):
+                                axis.grid.setPen(get_grid_pen())
+                        # Handle grid integer value (sets opacity)
+                        elif axis.grid is None or isinstance(axis.grid, int):
+                            # Set opacity to 255 (100%)
+                            axis.grid = 255
+        except Exception:
+            pass
+
+    # ViewBox state change handler
+    def _on_viewbox_changed(self):
+        """Handles view box state changes (like zoom/pan)"""
+        # Opportunity to update grid visibility after zoom, etc.
+        if hasattr(self, 'plot_widget') and self.plot_widget:
+            try:
+                # Re-apply standard styling to ensure grid stays visible
+                self._apply_standard_plot_styling()
+            except Exception:
+                # Just silently continue, logging could cause recursion
+                pass
+
+    # Add stub method for mouse click handling
+    def _handle_mouse_click(self, ev):
+        """Default handler for mouse clicks on the plot."""
+        # By default, just pass the event to the original handler
+        if hasattr(self, 'plot_widget') and self.plot_widget and self.plot_widget.getViewBox():
+            # Auto-range on double-click
+            if ev.double():
+                self.plot_widget.getViewBox().autoRange()
+                # Prevent further processing
+                ev.accept()
+            else:
+                # Ensure original mouse behavior is preserved
+                pg.ViewBox.mouseClickEvent(self.plot_widget.getViewBox(), ev)
 
     # --- Method called by AnalyserTab when the analysis set changes ---
     def update_state(self, analysis_items: List[Dict[str, Any]]):

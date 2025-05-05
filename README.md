@@ -18,6 +18,10 @@ Synaptipy is a multi-channel electrophysiology visualization and analysis toolki
 - **Export Capabilities**:
   - NWB (Neurodata Without Borders) export for standardized data sharing
   - CSV export of analysis results
+- **Consistent UI & Styling**:
+  - Centralized styling system for visual consistency
+  - Dark mode support with PyQtGraph integration
+  - Theme-based customization
 - **Extensible Architecture**: Easy to add new analysis methods or file format support
 
 ## Installation
@@ -94,6 +98,7 @@ See the [examples](examples/) directory for more detailed examples.
 
 - [User Guide](docs/user_guide.md) - Detailed instructions for using Synaptipy
 - [API Reference](docs/api_reference.md) - Documentation for developers
+- [Styling Guide](docs/development/styling_guide.md) - Guide for UI styling and theming
 - [Examples](examples/) - Example scripts demonstrating usage
 
 ## Testing
@@ -120,6 +125,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+When contributing UI components, please follow the [Styling Guide](docs/development/styling_guide.md) to maintain visual consistency.
+
 ## License
 
 This project is licensed under the GNU Affero General Public License Version 3 - see the [LICENSE](LICENSE) file for details. This license ensures that modifications to the software, even when run as a network service, must be made available to users.
@@ -130,6 +137,7 @@ This project is licensed under the GNU Affero General Public License Version 3 -
 - [PySide6](https://wiki.qt.io/Qt_for_Python) - For the GUI framework
 - [pyqtgraph](https://pyqtgraph.readthedocs.io/) - For fast plotting capabilities
 - [pynwb](https://pynwb.readthedocs.io/) - For NWB file format support
+- [qdarkstyle](https://github.com/ColinDuquesnoy/QDarkStyleSheet) - For dark theme styling
 
 ## Supported File Formats
 

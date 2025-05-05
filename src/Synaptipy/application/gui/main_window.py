@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime, timezone
 
 from PySide6 import QtCore, QtGui, QtWidgets
+import pyqtgraph as pg  # Add import for pyqtgraph
 
 # --- Synaptipy Imports / Dummies ---
 # Use RELATIVE import for dummy_classes within the same gui package
@@ -31,6 +32,11 @@ try:
 except ImportError:
     tzlocal = None
 
+# Import styling module for theme handling
+from Synaptipy.shared.styling import (
+    toggle_theme_mode, get_current_theme_mode, apply_stylesheet,
+    set_theme_mode, get_grid_pen
+)
 
 # Use a specific logger for this module
 log = logging.getLogger('Synaptipy.application.gui.main_window')
@@ -128,6 +134,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quit_action = file_menu.addAction("&Quit")
         self.quit_action.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
         self.quit_action.triggered.connect(self.close)
+        
+        # --- View Menu for Theme Toggling ---
+        view_menu = menu_bar.addMenu("&View")
+        # Theme Toggle Action
+        self.toggle_theme_action = QtGui.QAction("Switch to &Light Theme", self)
+        self.toggle_theme_action.setCheckable(True)
+        self.toggle_theme_action.setChecked(False)  # Dark theme is default
+        self.toggle_theme_action.triggered.connect(self._toggle_theme)
+        view_menu.addAction(self.toggle_theme_action)
+        
+        # Update theme action text based on current theme
+        self._update_theme_action_text()
+        
         log.debug("Menu bar and status bar setup complete.")
 
     def _setup_tabs(self):
@@ -376,69 +395,28 @@ class MainWindow(QtWidgets.QMainWindow):
     # =========================================================================
 
     def _restore_window_state(self):
-        """Restores window geometry and state from QSettings, checking validity."""
-        log.debug("Restoring window state from settings...")
-        screen = QtWidgets.QApplication.primaryScreen()
-        available_geometry = screen.availableGeometry() if screen else None
-
-        try:
-            geom_value = self.settings.value("geometry") # Get value without type hint first
-            if geom_value is not None:
-                # Check if it's QByteArray or bytes and decode if necessary
-                if isinstance(geom_value, QtCore.QByteArray):
-                    geom_bytes = geom_value
-                elif isinstance(geom_value, bytes):
-                     geom_bytes = QtCore.QByteArray(geom_value)
-                else:
-                    log.warning(f"Saved geometry is not QByteArray or bytes: {type(geom_value)}. Skipping restore.")
-                    geom_bytes = None
-
-                if geom_bytes is not None:
-                    # --- Check if saved geometry fits on screen --- 
-                    temp_window = QtWidgets.QMainWindow() # Use a temporary object to parse geometry
-                    if temp_window.restoreGeometry(geom_bytes):
-                        restored_rect = temp_window.geometry()
-                        fits_on_screen = True
-                        if available_geometry:
-                             # Check if width/height are smaller than available screen space
-                             if restored_rect.width() > available_geometry.width() or \
-                                restored_rect.height() > available_geometry.height():
-                                 fits_on_screen = False
-                                 log.warning(f"Saved geometry ({restored_rect.width()}x{restored_rect.height()}) exceeds available screen size ({available_geometry.width()}x{available_geometry.height()}). Ignoring saved geometry.")
-                        # --- End Check ---
-                        
-                        if fits_on_screen:
-                            if self.restoreGeometry(geom_bytes):
-                                log.debug("Restored window geometry.")
-                            else:
-                                log.warning("Failed to restore geometry from saved value.")
-                        # If !fits_on_screen, we do nothing, keeping the calculated default size
-                    else:
-                        log.warning("Could not parse saved geometry bytes.")
-                    del temp_window # Clean up temporary window
-            else:
-                 log.debug("No saved geometry found.")
-
-            # Restore state (like maximized) usually doesn't cause off-screen issues
-            state_value = self.settings.value("windowState")
-            if state_value is not None:
-                if isinstance(state_value, QtCore.QByteArray):
-                    state = state_value
-                elif isinstance(state_value, bytes):
-                    state = QtCore.QByteArray(state_value)
-                else:
-                    log.warning(f"Saved windowState is not QByteArray or bytes: {type(state_value)}. Skipping restore.")
-                    state = None
-
-                if state is not None and self.restoreState(state):
-                     log.debug("Restored window state.")
-                elif state is not None:
-                     log.warning("Failed to restore state from saved value.")
-            else:
-                 log.debug("No saved window state found.")
-
-        except Exception as e:
-            log.warning(f"Could not restore window state: {e}", exc_info=True)
+        """Restore window geometry, state, and user preferences."""
+        log.debug("Restoring window state and preferences...")
+        
+        # Restore window geometry if available
+        if self.settings.contains("geometry"):
+            self.restoreGeometry(self.settings.value("geometry"))
+            log.debug("Restored window geometry.")
+        
+        # Restore window state if available
+        if self.settings.contains("windowState"):
+            self.restoreState(self.settings.value("windowState"))
+            log.debug("Restored window state.")
+        
+        # Restore theme preference if available
+        if self.settings.contains("theme_mode"):
+            theme_mode = self.settings.value("theme_mode", "dark", type=str)
+            # Set the theme mode
+            set_theme_mode(theme_mode)
+            # Update UI to match the restored theme
+            self._update_theme_action_text()
+            self.toggle_theme_action.setChecked(theme_mode == "light")
+            log.debug(f"Restored theme preference: {theme_mode}")
 
 
     def closeEvent(self, event: QtGui.QCloseEvent):
@@ -482,3 +460,138 @@ class MainWindow(QtWidgets.QMainWindow):
         # Example signal (define in class header if needed):
         # self.analysis_results_updated.emit(self.saved_analysis_results)
     # --- END ADDED ---
+
+    def _toggle_theme(self):
+        """Toggle between light and dark themes."""
+        # Toggle the theme mode
+        new_mode = toggle_theme_mode()
+        
+        # Re-apply the stylesheet to the entire application
+        app = QtWidgets.QApplication.instance()
+        apply_stylesheet(app)
+        
+        # Update action text
+        self._update_theme_action_text()
+        
+        # Save theme preference
+        self.settings.setValue("theme_mode", new_mode)
+        
+        # Refresh all plots
+        self._refresh_all_plots()
+        
+        # Log the change
+        log.info(f"Theme switched to {new_mode} mode.")
+        self.status_bar.showMessage(f"Theme switched to {new_mode} mode.", 3000)
+
+    def _update_theme_action_text(self):
+        """Update the theme toggle action text based on current theme."""
+        current_mode = get_current_theme_mode()
+        if current_mode == "dark":
+            self.toggle_theme_action.setText("Switch to &Light Theme")
+        else:
+            self.toggle_theme_action.setText("Switch to &Dark Theme")
+
+    def _refresh_all_plots(self):
+        """Refresh all plots to reflect the new theme."""
+        # Import needed styling functions
+        from Synaptipy.shared.styling import configure_plot_widget, configure_plot_item, get_grid_pen
+        
+        log.info("Refreshing all plots with new theme settings...")
+        
+        # ===== 1. Handle PlotItems in explorer tab (GraphicsLayoutWidget) =====
+        if hasattr(self, 'explorer_tab') and self.explorer_tab:
+            log.debug("Refreshing explorer tab plots")
+            if hasattr(self.explorer_tab, 'channel_plots'):
+                for chan_id, plot_item in self.explorer_tab.channel_plots.items():
+                    if plot_item and plot_item.scene() is not None:
+                        # Apply styling with explicit non-transparent settings
+                        configure_plot_item(plot_item)
+                        
+                        # Ensure grid is always visible with opaque lines
+                        plot_item.showGrid(x=True, y=True, alpha=1.0)
+                        
+                        # Explicitly set grid pens for both axes with maximum opacity
+                        try:
+                            for axis_name in ['bottom', 'left']:
+                                axis = plot_item.getAxis(axis_name)
+                                if axis and hasattr(axis, 'grid'):
+                                    axis.grid.setPen(get_grid_pen())
+                                    # Set grid opacity to 100%
+                                    if hasattr(axis, 'setGrid'):
+                                        axis.setGrid(255)
+                        except Exception as e:
+                            log.warning(f"Could not set grid opacity for channel {chan_id}: {e}")
+                        
+                        log.debug(f"Refreshed explorer tab PlotItem for channel {chan_id}")
+            
+                # Use explorer tab's own update mechanism to ensure consistent styling
+                if hasattr(self.explorer_tab, '_trigger_plot_update'):
+                    self.explorer_tab._trigger_plot_update()
+        
+        # ===== 2. Find all direct PlotWidget instances =====
+        all_plot_widgets = []
+        
+        # Find in all tabs
+        for tab in [self.explorer_tab, self.analyser_tab, self.exporter_tab]:
+            if tab:
+                # Find plot widgets recursively
+                plot_widgets = tab.findChildren(pg.PlotWidget)
+                all_plot_widgets.extend(plot_widgets)
+                log.debug(f"Found {len(plot_widgets)} plot widgets in {tab.__class__.__name__}")
+        
+        # Apply styling to each PlotWidget
+        for pw in all_plot_widgets:
+            if pw.parent():
+                parent_name = pw.parent().__class__.__name__
+                log.debug(f"Refreshing PlotWidget in {parent_name}")
+                configure_plot_widget(pw)
+                
+                # Explicitly force grid visibility with alpha=1.0
+                pw.showGrid(x=True, y=True, alpha=1.0)
+                
+                # Try to set grid pens directly on the plot item
+                try:
+                    plot_item = pw.getPlotItem()
+                    if plot_item:
+                        for axis_name in ['bottom', 'left']:
+                            axis = plot_item.getAxis(axis_name)
+                            if axis and hasattr(axis, 'grid'):
+                                # Get a fully opaque grid pen
+                                grid_pen = get_grid_pen()
+                                if hasattr(axis.grid, 'setPen'):
+                                    axis.grid.setPen(grid_pen)
+                                # Set grid opacity to maximum
+                                if hasattr(axis, 'setGrid'):
+                                    axis.setGrid(255)
+                except Exception as e:
+                    log.debug(f"Error setting grid pens for {parent_name}: {e}")
+                
+                # Force immediate update
+                pw.update()
+        
+        # ===== 3. Handle Analysis Tabs Directly =====
+        if hasattr(self, 'analyser_tab') and self.analyser_tab:
+            # The analyser tab has sub-tabs that might not be found by findChildren
+            log.debug("Checking analyser tab for sub-tabs with plots")
+            for child in self.analyser_tab.children():
+                # Look for specific analysis tab classes with plot_widget attribute
+                if hasattr(child, 'plot_widget') and isinstance(child.plot_widget, pg.PlotWidget):
+                    log.debug(f"Direct styling for {child.__class__.__name__} plot_widget")
+                    configure_plot_widget(child.plot_widget)
+                    
+                    # Call the tab's own styling method if available
+                    if hasattr(child, '_apply_standard_plot_styling'):
+                        try:
+                            child._apply_standard_plot_styling()
+                            log.debug(f"Applied standard plot styling for {child.__class__.__name__}")
+                        except Exception as e:
+                            log.warning(f"Error applying standard plot styling for {child.__class__.__name__}: {e}")
+                    
+                    child.plot_widget.update()
+        
+        # ===== 4. Force update all visible PlotWidgets =====
+        for pw in QtWidgets.QApplication.instance().allWidgets():
+            if isinstance(pw, pg.PlotWidget) and pw.isVisible():
+                pw.update()
+        
+        log.info("Plot refresh complete")

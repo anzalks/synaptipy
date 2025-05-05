@@ -12,6 +12,9 @@ This module is responsible for:
 
 The module defines the `run_gui` function called by the entry point script
 defined in pyproject.toml.
+
+This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
+See the LICENSE file in the root of the repository for full license details.
 """
 import sys
 import logging
@@ -24,6 +27,7 @@ from PySide6 import QtWidgets, QtCore
 from Synaptipy.application.gui.main_window import MainWindow
 from Synaptipy.application.gui.dummy_classes import SYNAPTIPY_AVAILABLE
 from Synaptipy.shared.logging_config import setup_logging
+from Synaptipy.shared.styling import apply_stylesheet
 
 # Log instance to be initialized after setting up logging
 log = logging.getLogger('Synaptipy.application')
@@ -84,23 +88,12 @@ def run_gui():
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
 
-    # Apply Dark Theme using qdarkstyle if available
+    # Apply application styling using our centralized styling module
     try:
-        import qdarkstyle
-        if hasattr(qdarkstyle, 'load_stylesheet'):
-            style = qdarkstyle.load_stylesheet(qt_api='pyside6')
-        elif hasattr(qdarkstyle, 'load_stylesheet_pyside6'):
-             style = qdarkstyle.load_stylesheet_pyside6()
-
-        if style:
-            app.setStyleSheet(style)
-            log.info("Applied qdarkstyle theme.")
-        else:
-             log.warning("qdarkstyle found but no suitable load_stylesheet function.")
-    except ImportError:
-        log.info("qdarkstyle not found, using default system style.")
+        app = apply_stylesheet(app)
+        log.info("Applied application styling from styling module.")
     except Exception as e:
-        log.warning(f"Could not apply qdarkstyle theme: {e}")
+        log.warning(f"Could not apply application styling: {e}")
 
     # Create and Show Main Window
     try:
