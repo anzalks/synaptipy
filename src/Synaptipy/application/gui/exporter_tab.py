@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 import uuid
 from datetime import datetime, timezone
+import csv
 
 import numpy as np # Needed for CSV export
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -87,10 +88,13 @@ class ExporterTab(QtWidgets.QWidget):
 
         csv_sub_tab_widget = self._create_csv_sub_tab() # Create CSV tab
         self.sub_tab_widget.addTab(csv_sub_tab_widget, "Export to CSV") # Add CSV tab
+        
+        analysis_results_tab_widget = self._create_analysis_results_sub_tab() # Create Analysis Results export tab
+        self.sub_tab_widget.addTab(analysis_results_tab_widget, "Export Analysis Results") # Add Analysis Results tab
 
         main_layout.addStretch()
         self.setLayout(main_layout)
-        log.debug("ExporterTab UI setup complete with NWB and CSV sub-tabs.")
+        log.debug("ExporterTab UI setup complete with NWB, CSV, and Analysis Results sub-tabs.")
 
     def _create_nwb_sub_tab(self) -> QtWidgets.QWidget:
         """Creates the QWidget containing the UI for the NWB export sub-tab."""
@@ -162,6 +166,84 @@ class ExporterTab(QtWidgets.QWidget):
         csv_widget.setLayout(csv_layout)
         return csv_widget
 
+    def _create_analysis_results_sub_tab(self) -> QtWidgets.QWidget:
+        """Creates the QWidget containing the UI for exporting analysis results to CSV."""
+        tab_widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab_widget)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        
+        # Group for output file selection
+        file_group = QtWidgets.QGroupBox("Output CSV File")
+        file_layout = QtWidgets.QHBoxLayout(file_group)
+        
+        self.analysis_results_path_edit = QtWidgets.QLineEdit()
+        self.analysis_results_path_edit.setPlaceholderText("Select CSV file path for analysis results...")
+        self.analysis_results_path_edit.setClearButtonEnabled(True)
+        file_layout.addWidget(self.analysis_results_path_edit, stretch=1)
+        
+        self.analysis_results_browse_button = QtWidgets.QPushButton("Browse...")
+        self.analysis_results_browse_button.setToolTip("Choose where to save the analysis results CSV file")
+        file_layout.addWidget(self.analysis_results_browse_button)
+        
+        layout.addWidget(file_group)
+        
+        # Group for results table and selection
+        results_group = QtWidgets.QGroupBox("Available Analysis Results")
+        results_layout = QtWidgets.QVBoxLayout(results_group)
+        
+        # Button row for refresh and select/deselect all
+        button_layout = QtWidgets.QHBoxLayout()
+        
+        self.analysis_results_refresh_button = QtWidgets.QPushButton("Refresh Results")
+        self.analysis_results_refresh_button.setToolTip("Refresh the list of available analysis results")
+        button_layout.addWidget(self.analysis_results_refresh_button)
+        
+        button_layout.addStretch(1)
+        
+        self.analysis_results_select_all_button = QtWidgets.QPushButton("Select All")
+        self.analysis_results_select_all_button.setToolTip("Select all analysis results")
+        button_layout.addWidget(self.analysis_results_select_all_button)
+        
+        self.analysis_results_deselect_all_button = QtWidgets.QPushButton("Deselect All")
+        self.analysis_results_deselect_all_button.setToolTip("Deselect all analysis results")
+        button_layout.addWidget(self.analysis_results_deselect_all_button)
+        
+        results_layout.addLayout(button_layout)
+        
+        # Table for showing results
+        self.analysis_results_table = QtWidgets.QTableWidget()
+        self.analysis_results_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.analysis_results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.MultiSelection)
+        self.analysis_results_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.analysis_results_table.setColumnCount(6)
+        self.analysis_results_table.setHorizontalHeaderLabels([
+            "Analysis Type", "Source File", "Data Source", "Value", "Timestamp", "Details"
+        ])
+        self.analysis_results_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.analysis_results_table.horizontalHeader().setStretchLastSection(True)
+        self.analysis_results_table.setAlternatingRowColors(True)
+        results_layout.addWidget(self.analysis_results_table)
+        
+        layout.addWidget(results_group, stretch=1)
+        
+        # Export button
+        export_layout = QtWidgets.QHBoxLayout()
+        export_layout.addStretch(1)
+        
+        self.analysis_results_export_button = QtWidgets.QPushButton("Export Selected Results to CSV")
+        self.analysis_results_export_button.setIcon(QtGui.QIcon.fromTheme("document-save"))
+        self.analysis_results_export_button.setToolTip("Export the selected analysis results to a CSV file")
+        self.analysis_results_export_button.setEnabled(False)  # Disabled initially
+        export_layout.addWidget(self.analysis_results_export_button)
+        
+        export_layout.addStretch(1)
+        layout.addLayout(export_layout)
+        
+        # Call refresh to populate the table initially
+        QtCore.QTimer.singleShot(100, self._refresh_analysis_results)
+        
+        return tab_widget
+
     def _connect_signals(self):
         """Connect signals for widgets within the Exporter Tab and its sub-tabs."""
         # NWB signals
@@ -173,6 +255,14 @@ class ExporterTab(QtWidgets.QWidget):
         if self.csv_browse_dir_button: self.csv_browse_dir_button.clicked.connect(self._browse_csv_output_dir)
         if self.csv_export_button: self.csv_export_button.clicked.connect(self._do_export_csv)
         if self.csv_output_dir_edit: self.csv_output_dir_edit.textChanged.connect(self.update_state)
+        
+        # Analysis Results export signals
+        if self.analysis_results_browse_button: self.analysis_results_browse_button.clicked.connect(self._browse_analysis_results_output_path)
+        if self.analysis_results_export_button: self.analysis_results_export_button.clicked.connect(self._do_export_analysis_results)
+        if self.analysis_results_path_edit: self.analysis_results_path_edit.textChanged.connect(self.update_state)
+        if self.analysis_results_refresh_button: self.analysis_results_refresh_button.clicked.connect(self._refresh_analysis_results)
+        if self.analysis_results_select_all_button: self.analysis_results_select_all_button.clicked.connect(self._select_all_results)
+        if self.analysis_results_deselect_all_button: self.analysis_results_deselect_all_button.clicked.connect(self._deselect_all_results)
 
     # --- Public Method for MainWindow to Call ---
     def update_state(self):
@@ -201,6 +291,14 @@ class ExporterTab(QtWidgets.QWidget):
         csv_output_dir_ok = bool(self.csv_output_dir_edit.text().strip()) if self.csv_output_dir_edit else False
         if self.csv_export_button:
             self.csv_export_button.setEnabled(has_data and csv_output_dir_ok)
+            
+        # Update Analysis Results Export Button
+        analysis_results_path_ok = bool(self.analysis_results_path_edit.text().strip()) if self.analysis_results_path_edit else False
+        has_selected_results = (hasattr(self, 'analysis_results_table') and 
+                               self.analysis_results_table and 
+                               len(self._get_selected_results_indices()) > 0)
+        if self.analysis_results_export_button:
+            self.analysis_results_export_button.setEnabled(analysis_results_path_ok and has_selected_results)
 
     # --- Handlers ---
 
@@ -389,3 +487,527 @@ class ExporterTab(QtWidgets.QWidget):
             export_errors +=1 # Indicate failure
         finally:
             self.update_state() # Re-enable buttons etc.
+
+    # Add methods for the analysis results export functionality
+    def _browse_analysis_results_output_path(self):
+        """Shows file dialog to select CSV output path for analysis results."""
+        default_dir = self._settings.value("lastExportDirectory", "", type=str)
+        default_filename = "analysis_results.csv"
+        default_path = os.path.join(default_dir, default_filename)
+        
+        filepath_str, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save Analysis Results CSV File", 
+            dir=default_path, 
+            filter="CSV Files (*.csv)"
+        )
+        
+        if filepath_str:
+            # Ensure the file has .csv extension
+            if not filepath_str.lower().endswith('.csv'):
+                filepath_str += '.csv'
+                
+            self.analysis_results_path_edit.setText(filepath_str)
+            self._settings.setValue("lastExportDirectory", str(Path(filepath_str).parent))
+            log.info(f"Selected analysis results output path: {filepath_str}")
+            self.update_state()
+    
+    def _refresh_analysis_results(self):
+        """Refreshes the table of available analysis results."""
+        # Access the main window to get the saved analysis results
+        main_window = self.window()
+        
+        if not hasattr(main_window, 'saved_analysis_results'):
+            log.warning("MainWindow does not have saved_analysis_results attribute")
+            return
+            
+        results = main_window.saved_analysis_results
+        log.debug(f"Refreshing analysis results table with {len(results)} results")
+        
+        # Clear and setup the table
+        self.analysis_results_table.setRowCount(0)
+        self.analysis_results_table.setRowCount(len(results))
+        
+        for i, result in enumerate(results):
+            # Extract key information for columns
+            analysis_type = result.get('analysis_type', 'Unknown')
+            source_file = result.get('source_file_name', 'Unknown')
+            
+            # Determine data source string
+            data_source_type = result.get('data_source_used', 'Unknown')
+            trial_index = result.get('trial_index_used')
+            if data_source_type == "Trial" and trial_index is not None:
+                data_source = f"Trial {trial_index + 1}"
+            else:
+                data_source = data_source_type
+                
+            # Determine value string based on analysis type
+            value_str = "N/A"
+            
+            try:
+                if analysis_type == "Input Resistance" or analysis_type == "Input Resistance/Conductance":
+                    # Try different possible keys for the resistance value
+                    for key in ['Input Resistance (kOhm)', 'Rin (MΩ)']:
+                        value = result.get(key)
+                        if value is not None:
+                            if isinstance(value, (int, float)) or hasattr(value, 'item'):
+                                try:
+                                    value_float = float(value if isinstance(value, (int, float)) else value.item())
+                                    if key == 'Input Resistance (kOhm)':
+                                        value_str = f"{value_float:.2f} kOhm"
+                                    else:
+                                        value_str = f"{value_float:.2f} MΩ"
+                                    break
+                                except (ValueError, TypeError, AttributeError):
+                                    continue
+                    
+                elif analysis_type == "Baseline Analysis":
+                    # Extract baseline mean and SD
+                    mean = result.get('baseline_mean')
+                    sd = result.get('baseline_sd')
+                    units = result.get('baseline_units', '')
+                    
+                    # Extract the calculation method for display in the value string
+                    method = result.get('calculation_method', '')
+                    method_display = ""
+                    if method:
+                        if method.startswith("auto_"):
+                            method_display = " (Auto)"
+                        elif method.startswith("manual_"):
+                            method_display = " (Manual)"
+                        elif method.startswith("interactive_"):
+                            method_display = " (Interactive)"
+                    
+                    if mean is not None and sd is not None:
+                        try:
+                            mean_float = float(mean if isinstance(mean, (int, float)) else mean.item() if hasattr(mean, 'item') else mean)
+                            sd_float = float(sd if isinstance(sd, (int, float)) else sd.item() if hasattr(sd, 'item') else sd)
+                            value_str = f"{mean_float:.3f} ± {sd_float:.3f} {units}{method_display}"
+                        except (ValueError, TypeError, AttributeError):
+                            value_str = f"Mean: {mean}, SD: {sd} {units}{method_display}"
+                    
+                elif analysis_type == "Spike Detection (Threshold)":
+                    # Extract spike count
+                    spike_count = result.get('spike_count')
+                    if spike_count is not None:
+                        try:
+                            count = int(spike_count if isinstance(spike_count, (int, float)) else 
+                                      spike_count.item() if hasattr(spike_count, 'item') else spike_count)
+                            value_str = f"{count} spikes"
+                            
+                            # Add frequency if available
+                            rate = result.get('average_firing_rate_hz')
+                            if rate is not None:
+                                try:
+                                    rate_float = float(rate if isinstance(rate, (int, float)) else 
+                                                    rate.item() if hasattr(rate, 'item') else rate)
+                                    value_str += f" ({rate_float:.2f} Hz)"
+                                except (ValueError, TypeError, AttributeError):
+                                    pass
+                        except (ValueError, TypeError, AttributeError):
+                            value_str = f"{spike_count} spikes"
+                    
+                elif analysis_type == "Event Detection":
+                    # Access summary_stats if it exists
+                    summary_stats = result.get('summary_stats', {})
+                    if not isinstance(summary_stats, dict):
+                        summary_stats = {}
+                    
+                    event_count = summary_stats.get('count')
+                    if event_count is not None:
+                        try:
+                            count = int(event_count if isinstance(event_count, (int, float)) else 
+                                       event_count.item() if hasattr(event_count, 'item') else event_count)
+                            value_str = f"{count} events"
+                            
+                            # Add frequency if available
+                            freq = summary_stats.get('frequency_hz')
+                            if freq is not None:
+                                try:
+                                    freq_float = float(freq if isinstance(freq, (int, float)) else 
+                                                    freq.item() if hasattr(freq, 'item') else freq)
+                                    value_str += f" ({freq_float:.2f} Hz)"
+                                except (ValueError, TypeError, AttributeError):
+                                    pass
+                        except (ValueError, TypeError, AttributeError):
+                            value_str = f"{event_count} events"
+                    
+            except Exception as e:
+                log.warning(f"Error formatting value for {analysis_type}: {e}")
+                # Keep default "N/A" value string
+                    
+            # Format timestamp
+            timestamp = "Unknown"
+            if 'timestamp_saved' in result:
+                try:
+                    dt = datetime.fromisoformat(result['timestamp_saved'])
+                    timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except (ValueError, TypeError):
+                    timestamp = str(result['timestamp_saved'])
+                    
+            # Create a summary of details for the last column
+            details = []
+            
+            try:
+                if analysis_type == "Input Resistance" or analysis_type == "Input Resistance/Conductance":
+                    # Add mode if available
+                    mode = result.get('mode', '')
+                    if mode:
+                        details.append(f"Mode: {mode}")
+                    
+                    # Add delta values if available
+                    delta_v = result.get('delta_mV') if 'delta_mV' in result else result.get('ΔV (mV)')
+                    delta_i = result.get('delta_pA') if 'delta_pA' in result else result.get('ΔI (pA)')
+                    
+                    if delta_v is not None:
+                        try:
+                            dv_float = float(delta_v if isinstance(delta_v, (int, float)) else 
+                                           delta_v.item() if hasattr(delta_v, 'item') else delta_v)
+                            details.append(f"ΔV: {dv_float:.2f} mV")
+                        except (ValueError, TypeError, AttributeError):
+                            details.append(f"ΔV: {delta_v} mV")
+                    
+                    if delta_i is not None:
+                        try:
+                            di_float = float(delta_i if isinstance(delta_i, (int, float)) else 
+                                           delta_i.item() if hasattr(delta_i, 'item') else delta_i)
+                            details.append(f"ΔI: {di_float:.2f} pA")
+                        except (ValueError, TypeError, AttributeError):
+                            details.append(f"ΔI: {delta_i} pA")
+                
+                elif analysis_type == "Baseline Analysis":
+                    # Format calculation method in user-friendly format
+                    method = result.get('calculation_method', '')
+                    if method:
+                        # Parse the calculation method to make it more human-readable
+                        if method.startswith('auto_mode_tolerance='):
+                            # Extract tolerance value from string
+                            try:
+                                tolerance = method.split('=')[1].rstrip('mV')
+                                details.append(f"Method: Auto (Mode-based, Tolerance: {tolerance} mV)")
+                            except (IndexError, ValueError):
+                                details.append(f"Method: Auto (Mode-based)")
+                        elif method.startswith('auto_'):
+                            details.append(f"Method: Automatic")
+                        elif method.startswith('manual_'):
+                            details.append(f"Method: Manual Time Window")
+                        elif method.startswith('interactive_'):
+                            details.append(f"Method: Interactive Region")
+                        else:
+                            details.append(f"Method: {method}")
+                    
+                    # Add channel info if available    
+                    channel = result.get('channel_name', '')
+                    if channel:
+                        details.append(f"Channel: {channel}")
+                
+                elif analysis_type == "Spike Detection (Threshold)":
+                    # Add threshold and refractory period
+                    threshold = result.get('threshold')
+                    units = result.get('threshold_units', '')
+                    
+                    if threshold is not None:
+                        try:
+                            threshold_float = float(threshold if isinstance(threshold, (int, float)) else 
+                                                  threshold.item() if hasattr(threshold, 'item') else threshold)
+                            details.append(f"Threshold: {threshold_float} {units}")
+                        except (ValueError, TypeError, AttributeError):
+                            details.append(f"Threshold: {threshold} {units}")
+                    
+                    refractory = result.get('refractory_period_ms')
+                    if refractory is not None:
+                        try:
+                            refractory_float = float(refractory if isinstance(refractory, (int, float)) else 
+                                                   refractory.item() if hasattr(refractory, 'item') else refractory)
+                            details.append(f"Refractory: {refractory_float} ms")
+                        except (ValueError, TypeError, AttributeError):
+                            details.append(f"Refractory: {refractory} ms")
+                    
+                    # Add channel info if available
+                    channel = result.get('channel_name', '')
+                    if channel:
+                        details.append(f"Channel: {channel}")
+                
+                elif analysis_type == "Event Detection":
+                    # Add method
+                    method = result.get('method', '')
+                    if method:
+                        details.append(f"Method: {method}")
+                    
+                    # Add parameters from the parameters dict if it exists
+                    params = result.get('parameters', {})
+                    if isinstance(params, dict):
+                        direction = params.get('direction')
+                        if direction:
+                            details.append(f"Direction: {direction}")
+                        
+                        filter_val = params.get('filter')
+                        if filter_val is not None:
+                            try:
+                                filter_float = float(filter_val if isinstance(filter_val, (int, float)) else 
+                                                   filter_val.item() if hasattr(filter_val, 'item') else filter_val)
+                                details.append(f"Filter: {filter_float} Hz")
+                            except (ValueError, TypeError, AttributeError):
+                                details.append(f"Filter: {filter_val} Hz")
+                    
+                    # Add key metrics from summary_stats if they exist
+                    summary_stats = result.get('summary_stats', {})
+                    if isinstance(summary_stats, dict):
+                        # Mean amplitude if available
+                        mean_amp = summary_stats.get('mean_amplitude')
+                        amp_units = result.get('units', '')
+                        
+                        if mean_amp is not None:
+                            try:
+                                amp_float = float(mean_amp if isinstance(mean_amp, (int, float)) else 
+                                                mean_amp.item() if hasattr(mean_amp, 'item') else mean_amp)
+                                details.append(f"Mean Amplitude: {amp_float:.2f} {amp_units}")
+                            except (ValueError, TypeError, AttributeError):
+                                details.append(f"Mean Amplitude: {mean_amp} {amp_units}")
+                    
+                    # Add channel info if available
+                    channel = result.get('channel_name', '')
+                    if channel:
+                        details.append(f"Channel: {channel}")
+            
+            except Exception as e:
+                log.warning(f"Error formatting details for {analysis_type}: {e}")
+                    
+            details_str = ", ".join(details) if details else "No additional details"
+            
+            # Add items to the table
+            self.analysis_results_table.setItem(i, 0, QtWidgets.QTableWidgetItem(analysis_type))
+            self.analysis_results_table.setItem(i, 1, QtWidgets.QTableWidgetItem(source_file))
+            self.analysis_results_table.setItem(i, 2, QtWidgets.QTableWidgetItem(data_source))
+            self.analysis_results_table.setItem(i, 3, QtWidgets.QTableWidgetItem(value_str))
+            self.analysis_results_table.setItem(i, 4, QtWidgets.QTableWidgetItem(timestamp))
+            self.analysis_results_table.setItem(i, 5, QtWidgets.QTableWidgetItem(details_str))
+            
+        # Update export button state
+        self.update_state()
+        
+    def _select_all_results(self):
+        """Selects all rows in the analysis results table."""
+        if not self.analysis_results_table:
+            return
+            
+        self.analysis_results_table.selectAll()
+        self.update_state()
+        
+    def _deselect_all_results(self):
+        """Deselects all rows in the analysis results table."""
+        if not self.analysis_results_table:
+            return
+            
+        self.analysis_results_table.clearSelection()
+        self.update_state()
+        
+    def _get_selected_results_indices(self):
+        """Returns a list of indices for the selected results."""
+        if not self.analysis_results_table:
+            return []
+            
+        return [index.row() for index in self.analysis_results_table.selectedIndexes() 
+                if index.column() == 0]  # Only count one selection per row
+        
+    def _do_export_analysis_results(self):
+        """Exports the selected analysis results to a CSV file."""
+        # Get the output file path
+        output_path = self.analysis_results_path_edit.text().strip()
+        if not output_path:
+            QtWidgets.QMessageBox.warning(self, "Export Error", "Please select an output file path.")
+            return
+            
+        # Get selected indices
+        selected_indices = set(self._get_selected_results_indices())
+        if not selected_indices:
+            QtWidgets.QMessageBox.warning(self, "Export Error", "Please select at least one result to export.")
+            return
+            
+        # Access the main window to get the saved analysis results
+        main_window = self.window()
+        if not hasattr(main_window, 'saved_analysis_results'):
+            QtWidgets.QMessageBox.critical(self, "Export Error", "Cannot access analysis results.")
+            return
+            
+        all_results = main_window.saved_analysis_results
+        
+        # Filter for selected results
+        results_to_export = [all_results[i] for i in sorted(selected_indices) if i < len(all_results)]
+        
+        if not results_to_export:
+            QtWidgets.QMessageBox.warning(self, "Export Error", "No valid results selected for export.")
+            return
+            
+        try:
+            # Write to CSV
+            self._write_results_to_csv(results_to_export, output_path)
+            
+            # Show success message
+            QtWidgets.QMessageBox.information(
+                self, 
+                "Export Successful", 
+                f"Successfully exported {len(results_to_export)} analysis results to:\n{output_path}"
+            )
+            
+            self._status_bar.showMessage(f"Exported {len(results_to_export)} analysis results to {Path(output_path).name}", 5000)
+            
+        except Exception as e:
+            log.error(f"Error exporting analysis results to CSV: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(
+                self, 
+                "Export Error", 
+                f"Failed to export analysis results to CSV:\n{e}"
+            )
+            
+    def _write_results_to_csv(self, results, output_path):
+        """Writes the list of result dictionaries to a CSV file."""
+        log.info(f"Writing {len(results)} analysis results to CSV: {output_path}")
+        
+        # Determine all possible fields across all results
+        all_fields = set()
+        
+        # First pass to identify all fields, including nested ones
+        for result in results:
+            for key, value in result.items():
+                if isinstance(value, dict):
+                    # For nested dictionaries, add flattened keys
+                    for nested_key in value.keys():
+                        flat_key = f"{key}.{nested_key}"
+                        all_fields.add(flat_key)
+                else:
+                    all_fields.add(key)
+            
+        # Sort fields in a logical order
+        # First, specify key fields that should appear first
+        priority_fields = [
+            'analysis_type', 
+            'source_file_name', 
+            'source_file_path',
+            'data_source_used', 
+            'trial_index_used', 
+            'channel_id',
+            'channel_name',
+            'timestamp_saved'
+        ]
+        
+        # Then add analysis-specific fields by type
+        rin_fields = [
+            'Input Resistance (kOhm)', 
+            'Rin (MΩ)',
+            'Input Conductance (nS)', 
+            'delta_mV', 
+            'ΔV (mV)',
+            'delta_pA', 
+            'ΔI (pA)',
+            'baseline_mean', 
+            'response_mean', 
+            'mode'
+        ]
+        
+        baseline_fields = [
+            'baseline_mean', 
+            'baseline_sd', 
+            'baseline_units', 
+            'calculation_method'
+        ]
+        
+        spike_fields = [
+            'spike_count', 
+            'average_firing_rate_hz', 
+            'threshold', 
+            'threshold_units',
+            'refractory_period_ms',
+            'spike_times',
+            'spike_amplitudes'
+        ]
+        
+        event_fields = [
+            'method', 
+            'parameters.direction',
+            'parameters.filter',
+            'parameters.prominence',
+            'parameters.sampling_rate_hz',
+            'summary_stats.count', 
+            'summary_stats.frequency_hz',
+            'summary_stats.baseline_mean',
+            'summary_stats.baseline_sd',
+            'summary_stats.threshold',
+            'summary_stats.mean_amplitude',
+            'summary_stats.amplitude_sd',
+            'summary_stats.mean_rise_time_ms',
+            'summary_stats.rise_time_sd_ms',
+            'summary_stats.mean_decay_half_time_ms',
+            'summary_stats.decay_half_time_sd_ms'
+        ]
+        
+        # Create ordered list of fields
+        ordered_fields = priority_fields.copy()
+        
+        # Add analysis-specific fields from each type
+        for field_list in [rin_fields, baseline_fields, spike_fields, event_fields]:
+            for field in field_list:
+                if field in all_fields and field not in ordered_fields:
+                    ordered_fields.append(field)
+        
+        # Add any remaining fields not already included
+        for field in sorted(all_fields):
+            if field not in ordered_fields:
+                ordered_fields.append(field)
+        
+        # Helper function to convert numpy values to Python native types
+        def convert_value(val):
+            """Convert numpy types to Python native types for CSV compatibility."""
+            if val is None:
+                return ""
+            
+            # Convert numpy arrays to lists
+            if hasattr(val, 'tolist') and callable(getattr(val, 'tolist')):
+                try:
+                    return str(val.tolist())
+                except (ValueError, AttributeError):
+                    return str(val)
+                    
+            # Convert numpy scalar types to native Python types
+            if hasattr(val, 'item') and callable(getattr(val, 'item')):
+                try:
+                    return val.item()
+                except (ValueError, AttributeError):
+                    return str(val)
+            
+            # Handle other types
+            if isinstance(val, (list, tuple)):
+                return str(val)
+            
+            return val
+                
+        # Create the CSV file
+        with open(output_path, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=ordered_fields)
+            writer.writeheader()
+            
+            # Process each result to handle nested dictionaries
+            for result in results:
+                # Create a flattened copy of the result
+                flat_result = {}
+                
+                # Process each key-value pair in the result dictionary
+                for key, value in result.items():
+                    if isinstance(value, dict):
+                        # For nested dictionaries (like summary_stats or parameters)
+                        for nested_key, nested_value in value.items():
+                            flat_key = f"{key}.{nested_key}"
+                            if flat_key in ordered_fields:
+                                flat_result[flat_key] = convert_value(nested_value)
+                    else:
+                        if key in ordered_fields:
+                            flat_result[key] = convert_value(value)
+                
+                # Fill in missing fields with empty strings
+                for field in ordered_fields:
+                    if field not in flat_result:
+                        flat_result[field] = ""
+                            
+                # Write the flattened result
+                writer.writerow(flat_result)
+                
+        log.info(f"Successfully wrote analysis results to CSV: {output_path}")
