@@ -403,17 +403,219 @@ class RinAnalysisTab(BaseAnalysisTab):
             log.debug("Interactive region changed, but mode is not Interactive. Skipping analysis.")
 
     def _trigger_analysis_if_manual(self):
-        """Placeholder method to trigger analysis if in manual mode."""
-        # TODO: Check mode and implement logic
-        log.debug("Manual input changed, potential trigger for manual analysis (stub).")
-        # Placeholder: Add check for manual mode before calling _run_analysis
-        # if self.mode_combobox and self.mode_combobox.currentText() == self._MODE_MANUAL:
-        #     self._run_analysis()
+        """Trigger analysis only if the current mode is Manual."""
+        if self.mode_combobox and self.mode_combobox.currentText() == self._MODE_MANUAL:
+            log.debug("Manual input changed, triggering analysis.")
+            self._run_analysis()
+        else:
+            log.debug("Manual input changed, but mode is not Manual. Skipping analysis.")
 
     def _run_analysis(self):
         """Main method to perform Rin/G analysis based on current settings."""
-        # ... existing code ...
-
+        log.debug("Running Rin/G analysis...")
+        
+        # Check if we have valid data to operate on
+        if not self._current_plot_data or "time_vec" not in self._current_plot_data or "data_vec" not in self._current_plot_data:
+            log.warning("No valid data available for Rin/G analysis.")
+            self.status_label.setText("Status: No valid data for analysis.")
+            return
+        
+        # Get the current mode
+        is_interactive = (self.mode_combobox and self.mode_combobox.currentText() == self._MODE_INTERACTIVE)
+        is_manual = not is_interactive
+        
+        # Get data vectors from current data
+        time_vec = self._current_plot_data["time_vec"]
+        data_vec = self._current_plot_data["data_vec"]
+        units = self._current_plot_data.get("units", "unknown")
+        
+        # Determine if we're dealing with voltage or current signal
+        is_voltage = 'mv' in units.lower() if units else False
+        is_current = 'pa' in units.lower() or 'na' in units.lower() if units else False
+        
+        # Get baseline and response windows based on mode
+        baseline_window = None
+        response_window = None
+        delta_i_pa = None
+        delta_v_mv = None
+        
+        # --- Get windows and delta values based on mode ---
+        if is_interactive:
+            # Get regions from interactive regions
+            if not self.baseline_region or not self.response_region:
+                log.warning("Interactive regions not available.")
+                self.status_label.setText("Status: Interactive regions not available.")
+                return
+                
+            # Get window boundaries from regions
+            baseline_window = self.baseline_region.getRegion()
+            response_window = self.response_region.getRegion()
+            
+            # For interactive mode, we need to calculate delta_v from the signal
+            # and we might need a manual delta_i if we're analyzing a voltage trace
+            if is_voltage:
+                # We're analyzing voltage, so we need delta_i input
+                delta_i_pa = self.manual_delta_i_spinbox.value() if self.manual_delta_i_spinbox else 0.0
+                if np.isclose(delta_i_pa, 0.0):
+                    log.warning("Cannot calculate Rin: Missing or zero delta I value.")
+                    self.status_label.setText("Status: Please provide a non-zero ΔI value.")
+                    return
+            elif is_current:
+                # We're analyzing current, so we need delta_v input
+                delta_v_mv = self.manual_delta_v_spinbox.value() if self.manual_delta_v_spinbox else 0.0
+                if np.isclose(delta_v_mv, 0.0):
+                    log.warning("Cannot calculate conductance: Missing or zero delta V value.")
+                    self.status_label.setText("Status: Please provide a non-zero ΔV value.")
+                    return
+            
+        elif is_manual:
+            # Get windows from manual spinboxes
+            if not all([self.manual_baseline_start_spinbox, self.manual_baseline_end_spinbox,
+                        self.manual_response_start_spinbox, self.manual_response_end_spinbox]):
+                log.warning("Manual spinboxes not available.")
+                self.status_label.setText("Status: Manual time input fields not available.")
+                return
+                
+            baseline_window = (self.manual_baseline_start_spinbox.value(), self.manual_baseline_end_spinbox.value())
+            response_window = (self.manual_response_start_spinbox.value(), self.manual_response_end_spinbox.value())
+            
+            # Get delta values from manual spinboxes
+            if is_voltage:
+                delta_i_pa = self.manual_delta_i_spinbox.value() if self.manual_delta_i_spinbox else 0.0
+                if np.isclose(delta_i_pa, 0.0):
+                    log.warning("Cannot calculate Rin: Missing or zero delta I value.")
+                    self.status_label.setText("Status: Please provide a non-zero ΔI value.")
+                    return
+            elif is_current:
+                delta_v_mv = self.manual_delta_v_spinbox.value() if self.manual_delta_v_spinbox else 0.0
+                if np.isclose(delta_v_mv, 0.0):
+                    log.warning("Cannot calculate conductance: Missing or zero delta V value.")
+                    self.status_label.setText("Status: Please provide a non-zero ΔV value.")
+                    return
+        
+        # Validate windows
+        if not baseline_window or not response_window:
+            log.warning("Invalid baseline/response windows for analysis.")
+            self.status_label.setText("Status: Invalid baseline/response windows.")
+            return
+            
+        # --- Perform the actual calculation ---
+        try:
+            if is_voltage:  # Voltage clamp mode - calculate Rin
+                # Call the calculate_rin function with appropriate parameters
+                result = calculate_rin(
+                    time_v=time_vec,
+                    voltage=data_vec,
+                    baseline_window=baseline_window,
+                    response_window=response_window,
+                    delta_i_pa=delta_i_pa
+                )
+                
+                if result is not None:
+                    rin_megaohms, delta_v = result
+                    
+                    # Display results
+                    self.rin_result_label.setText(f"Input Resistance (Rin): {rin_megaohms:.2f} MΩ | Conductance: {1000/rin_megaohms:.4f} μS")
+                    self.delta_v_label.setText(f"Voltage Change (ΔV): {delta_v:.2f} mV")
+                    self.delta_i_label.setText(f"Current Change (ΔI): {delta_i_pa:.2f} pA")
+                    self.status_label.setText("Status: Rin calculation successful")
+                    
+                    # Store result for potential saving
+                    self._last_rin_result = {
+                        "Rin (MΩ)": rin_megaohms,
+                        "Conductance (μS)": 1000/rin_megaohms,
+                        "ΔV (mV)": delta_v,
+                        "ΔI (pA)": delta_i_pa,
+                        "Baseline Window (s)": baseline_window,
+                        "Response Window (s)": response_window
+                    }
+                    
+                    # Update lines showing the mean levels
+                    bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
+                    resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
+                    
+                    if len(bl_indices) > 0 and len(resp_indices) > 0:
+                        mean_baseline = np.mean(data_vec[bl_indices])
+                        mean_response = np.mean(data_vec[resp_indices])
+                        
+                        # Update lines
+                        if self.baseline_line:
+                            self.baseline_line.setValue(mean_baseline)
+                            self.baseline_line.setVisible(True)
+                        if self.response_line:
+                            self.response_line.setValue(mean_response)
+                            self.response_line.setVisible(True)
+                    
+                    # Enable save button via the base class method
+                    if hasattr(self, '_set_save_button_enabled'):
+                        self._set_save_button_enabled(True)
+                    
+                else:
+                    self.status_label.setText("Status: Rin calculation failed. Check input values.")
+                    log.warning("Rin calculation returned None.")
+                
+            elif is_current:  # Current clamp mode - calculate conductance instead
+                # Here we are analyzing a current trace, so we calculate conductance
+                # from the current changes
+                # Need to re-use similar calculations but swap V/I directions
+                
+                # Calculate mean baseline and response current
+                bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
+                resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
+                
+                if len(bl_indices) == 0 or len(resp_indices) == 0:
+                    self.status_label.setText("Status: No data points found in baseline/response windows.")
+                    return
+                
+                mean_baseline_i = np.mean(data_vec[bl_indices])
+                mean_response_i = np.mean(data_vec[resp_indices])
+                
+                # Calculate delta I (in pA)
+                delta_i = mean_response_i - mean_baseline_i
+                
+                # Calculate conductance: G = ΔI/ΔV
+                # If ΔV is in mV and ΔI is in pA, G will be in μS (micro-Siemens)
+                conductance_us = delta_i / delta_v_mv
+                
+                # Calculate resistance (in MΩ)
+                resistance_mohm = 1000 / conductance_us  # 1000 is to convert from μS to nS
+                
+                # Display results
+                self.rin_result_label.setText(f"Input Resistance (Rin): {resistance_mohm:.2f} MΩ | Conductance: {conductance_us:.4f} μS")
+                self.delta_v_label.setText(f"Voltage Change (ΔV): {delta_v_mv:.2f} mV")
+                self.delta_i_label.setText(f"Current Change (ΔI): {delta_i:.2f} pA")
+                self.status_label.setText("Status: Conductance calculation successful")
+                
+                # Store result for potential saving
+                self._last_rin_result = {
+                    "Rin (MΩ)": resistance_mohm,
+                    "Conductance (μS)": conductance_us,
+                    "ΔV (mV)": delta_v_mv,
+                    "ΔI (pA)": delta_i,
+                    "Baseline Window (s)": baseline_window,
+                    "Response Window (s)": response_window
+                }
+                
+                # Update lines showing the mean levels
+                if self.baseline_line:
+                    self.baseline_line.setValue(mean_baseline_i)
+                    self.baseline_line.setVisible(True)
+                if self.response_line:
+                    self.response_line.setValue(mean_response_i)
+                    self.response_line.setVisible(True)
+                
+                # Enable save button via the base class method
+                if hasattr(self, '_set_save_button_enabled'):
+                    self._set_save_button_enabled(True)
+                
+            else:
+                self.status_label.setText(f"Status: Unknown units '{units}'. Cannot determine analysis type.")
+                log.warning(f"Unknown units '{units}' - cannot determine if voltage or current clamp.")
+        
+        except Exception as e:
+            self.status_label.setText(f"Status: Error during analysis: {str(e)}")
+            log.error(f"Error running Rin/G analysis: {e}", exc_info=True)
+            
         # Force layout update - IMPORTANT for visibility changes
         self.layout().activate()
         # Force repaint of plot widget and the tab itself
@@ -422,7 +624,16 @@ class RinAnalysisTab(BaseAnalysisTab):
 
     def _clear_results_display(self):
         """Clears only the text results labels."""
-        # ... existing code ...
+        if self.rin_result_label: self.rin_result_label.setText("Resistance (Rin) / Conductance (G): --")
+        if self.delta_v_label: self.delta_v_label.setText("Voltage Change (ΔV): --") 
+        if self.delta_i_label: self.delta_i_label.setText("Current Change (ΔI): --")
+        if self.status_label: self.status_label.setText("Status: Idle")
+        # Hide lines
+        if self.baseline_line: self.baseline_line.setVisible(False)
+        if self.response_line: self.response_line.setVisible(False)
+        # Use correct base class method for save button
+        if hasattr(self, '_set_save_button_enabled'):
+            self._set_save_button_enabled(False)
 
     def _on_mode_changed(self, mode_text=None):
         """Handles changes in the analysis mode combobox.
@@ -461,10 +672,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         visibility_interactive = is_interactive and has_data_plotted
         if self.baseline_region:
             self.baseline_region.setVisible(visibility_interactive)
-            # log.debug(f"Baseline Region: Set visibility to {visibility_interactive}. NEW visibility={self.baseline_region.isVisible()}")
         if self.response_region:
             self.response_region.setVisible(visibility_interactive)
-            # log.debug(f"Response Region: Set visibility to {visibility_interactive}. NEW visibility={self.response_region.isVisible()}")
         # Also hide/show associated lines
         if self.baseline_line: self.baseline_line.setVisible(visibility_interactive and self._last_rin_result is not None)
         if self.response_line: self.response_line.setVisible(visibility_interactive and self._last_rin_result is not None)
@@ -474,59 +683,58 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # Visibility for manual time input group (Only if Manual)
         if self.manual_time_group: self.manual_time_group.setVisible(is_manual)
-        # log.debug(f"Manual Time Group: Set visibility to {is_manual}. NEW visibility={self.manual_time_group.isVisible() if self.manual_time_group else 'N/A'}")
 
-        # Visibility for manual delta I/V inputs (Only if Manual AND data plotted)
+        # Determine channel type based on units for ALL modes
         units_str = None
         if has_data_plotted and self._selected_item_recording and self.signal_channel_combobox and self.signal_channel_combobox.currentIndex() >= 0:
-            # ch_name = self.signal_channel_combobox.currentText() # OLD: Used display text
-            ch_key = self.signal_channel_combobox.currentData() # NEW: Use stored key
-            # if ch_name: # Ensure channel name is valid # OLD
-            if ch_key: # NEW
-                # CORRECT ACCESS: Use dictionary lookup
-                # channel = self._selected_item_recording.channels.get(ch_name) # OLD
-                channel = self._selected_item_recording.channels.get(ch_key) # NEW
+            ch_key = self.signal_channel_combobox.currentData()
+            if ch_key:
+                channel = self._selected_item_recording.channels.get(ch_key)
                 if channel and channel.units:
-                    # units = channel.units.dimensionality.string # <<< ERROR: channel.units is just a string
-                    # <<< FIX: Directly check the unit string >>>
-                    units_str = channel.units.lower() # Use lower case for robust checking
+                    units_str = channel.units.lower()
         
-        # show_delta_i = is_manual and units == 'mV' # <<< ERROR: units was the dimensionality object
-        # <<< FIX: Check the units_str >>>
-        show_delta_i = is_manual and 'mv' in units_str 
+        # Determine which delta input field to show based on the channel units
+        show_delta_i = has_data_plotted and 'mv' in units_str if units_str else False
+        show_delta_v = has_data_plotted and ('pa' in units_str or 'na' in units_str) if units_str else False 
+        
+        # Make delta inputs visible for BOTH interactive and manual modes
         if self.delta_i_input_row_widgets:
             label, spinbox = self.delta_i_input_row_widgets
             if label: label.setVisible(show_delta_i)
             if spinbox: spinbox.setVisible(show_delta_i)
-            # log.debug(f"Manual Delta I Group: Set visibility to {show_delta_i}")
 
-        # show_delta_v = is_manual and units in ['pA', 'nA'] # <<< ERROR: units was the dimensionality object
-        # <<< FIX: Check the units_str >>>
-        show_delta_v = is_manual and ('pa' in units_str or 'na' in units_str) 
         if self.delta_v_input_row_widgets:
             label, spinbox = self.delta_v_input_row_widgets
             if label: label.setVisible(show_delta_v)
             if spinbox: spinbox.setVisible(show_delta_v)
-            # log.debug(f"Manual Delta V Group: Set visibility to {show_delta_v}")
-        # Ensure the parent group box is visible only if one of its inputs is
-        if self.delta_input_group: 
-            # self.delta_input_group.setVisible(show_delta_i or show_delta_v) # <<< OLD LOGIC
-            self.delta_input_group.setVisible(is_manual) # <<< FIX: Show group in manual mode
+ 
+        # Always show the delta input group if any inputs are shown
+        if self.delta_input_group:
+            self.delta_input_group.setVisible(show_delta_i or show_delta_v)
 
         # Enable/Disable Run button (only relevant for Manual mode)
         if self.run_button: 
-            self.run_button.setVisible(is_manual) # Show only in manual mode
-            # self.run_button.setEnabled(is_manual) # <<< REMOVE: Let _update_run_button_state handle this
-        # log.debug(f"Run Button: Set enabled to {is_manual}. NEW enabled={self.run_button.isEnabled() if self.run_button else 'N/A'}")
+            self.run_button.setVisible(is_manual)
 
-        # Update info label based on mode (moved from _on_mode_changed)
+        # Update info label based on mode
         if self.info_label:
             if is_interactive:
                 info = "Interactive Mode: Drag the Baseline and Response regions on the plot."
+                # Add info about entering delta values
+                if show_delta_i:
+                    info += " Enter the step current (ΔI) in the field above."
+                elif show_delta_v:
+                    info += " Enter the step voltage (ΔV) in the field above."
             elif is_manual:
-                info = "Manual Mode: Set time windows and ΔI/ΔV manually, then press Run."
-        else:
-            info = "Select a mode."
+                info = "Manual Mode: Set time windows and "
+                if show_delta_i:
+                    info += "ΔI manually, then press Run."
+                elif show_delta_v:
+                    info += "ΔV manually, then press Run."
+                else:
+                    info += "parameters manually, then press Run."
+            else:
+                info = "Select a mode."
             self.info_label.setText(info)
 
         # Force layout update after visibility changes
