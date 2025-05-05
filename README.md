@@ -10,6 +10,11 @@ A multi-channel electrophysiology visualization and analysis toolkit built with 
 *   Optional downsampling for large datasets.
 *   Plot individual trials or the average trace.
 *   Load single files or navigate through files in a folder.
+*   Interactive analysis tools:
+    *   Input Resistance / Conductance calculation (works in both voltage and current clamp)
+    *   Baseline / RMP analysis
+    *   Spike detection with customizable thresholds
+    *   Event detection for spontaneous and evoked signals
 
 ## Supported File Formats
 
