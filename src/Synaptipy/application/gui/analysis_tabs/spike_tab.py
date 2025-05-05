@@ -113,6 +113,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.detect_button = QtWidgets.QPushButton("Detect Spikes")
         self.detect_button.setEnabled(False)
         self.detect_button.setToolTip("Detect spikes on the currently plotted trace using specified parameters.")
+        self.detect_button.setMinimumHeight(30)
         controls_layout.addWidget(self.detect_button)
 
         controls_layout.addStretch(1)

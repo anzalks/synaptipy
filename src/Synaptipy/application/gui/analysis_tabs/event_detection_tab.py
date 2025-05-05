@@ -222,6 +222,7 @@ class EventDetectionTab(BaseAnalysisTab):
         self.mini_detect_button = QtWidgets.QPushButton("Detect Miniature Events")
         self.mini_detect_button.setEnabled(False)
         self.mini_detect_button.setToolTip("Detect miniature events using the selected method and parameters.")
+        self.mini_detect_button.setMinimumHeight(30)
         mini_button_layout = QtWidgets.QHBoxLayout()
         mini_button_layout.addStretch()
         mini_button_layout.addWidget(self.mini_detect_button)
