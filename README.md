@@ -15,6 +15,10 @@ A multi-channel electrophysiology visualization and analysis toolkit built with 
     *   Baseline / RMP analysis
     *   Spike detection with customizable thresholds
     *   Event detection for spontaneous and evoked signals
+*   Export capabilities:
+    *   Export raw data to CSV format
+    *   Export to NWB (Neurodata Without Borders) format
+    *   Export analysis results to CSV with customizable field selection
 
 ## Supported File Formats
 
