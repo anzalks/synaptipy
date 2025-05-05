@@ -92,7 +92,7 @@ class RinAnalysisTab(BaseAnalysisTab):
 
     # Class constants for modes (Should match combobox text exactly)
     _MODE_INTERACTIVE = "Interactive (Regions)"
-    _MODE_MANUAL = "Manual (Time/Delta)"
+    _MODE_MANUAL = "Manual (Time Windows)"
 
     # Class constants for results keys
     _RESULT_RIN_KOHM = "Input Resistance (kOhm)"
@@ -162,16 +162,32 @@ class RinAnalysisTab(BaseAnalysisTab):
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
+        # Create a scroll area for the controls to handle overflow
+        controls_scroll_area = QtWidgets.QScrollArea()
+        controls_scroll_area.setWidgetResizable(True)
+        controls_scroll_area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        controls_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        controls_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Create a widget to hold the controls
+        controls_container = QtWidgets.QWidget()
+        controls_scroll_area.setWidget(controls_container)
+        
         # --- Top: Controls Area ---
-        top_controls_widget = QtWidgets.QWidget()
-        top_controls_layout = QtWidgets.QHBoxLayout(top_controls_widget)
-        top_controls_layout.setContentsMargins(0, 0, 0, 0)
-        top_controls_layout.setSpacing(5)
+        top_controls_layout = QtWidgets.QHBoxLayout(controls_container)
+        top_controls_layout.setContentsMargins(5, 5, 5, 5)
+        top_controls_layout.setSpacing(10)
 
         # --- Column 1: Data Selection --- 
         self.data_selection_group = QtWidgets.QGroupBox("Data Selection")
+        self.data_selection_group.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Maximum
+        )
         data_selection_layout = QtWidgets.QFormLayout(self.data_selection_group)
         data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        data_selection_layout.setContentsMargins(10, 10, 10, 10)
+        data_selection_layout.setVerticalSpacing(8)
 
         # Use Base Class Item Combobox
         self._setup_analysis_item_selector(data_selection_layout)
@@ -192,12 +208,25 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # --- Column 2: Analysis Parameters ---
         self.analysis_params_group = QtWidgets.QGroupBox("Analysis Parameters")
+        self.analysis_params_group.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred, 
+            QtWidgets.QSizePolicy.Policy.Maximum
+        )
         analysis_params_layout = QtWidgets.QVBoxLayout(self.analysis_params_group)
         analysis_params_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        analysis_params_layout.setContentsMargins(10, 10, 10, 10)
+        analysis_params_layout.setSpacing(8)
 
         # Mode Selection (Interactive/Manual)
         mode_layout = QtWidgets.QHBoxLayout()
-        mode_layout.addWidget(QtWidgets.QLabel("Analysis Mode:"))
+        mode_layout.setSpacing(10)
+        mode_label = QtWidgets.QLabel("Analysis Mode:")
+        mode_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Maximum,
+            QtWidgets.QSizePolicy.Policy.Preferred
+        )
+        mode_layout.addWidget(mode_label)
+        
         self.mode_combobox = QtWidgets.QComboBox()
         self.mode_combobox.addItem("Interactive (Regions)", userData=self._MODE_INTERACTIVE)
         self.mode_combobox.addItem("Manual (Time Windows)", userData=self._MODE_MANUAL)
@@ -216,6 +245,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.manual_time_group.setVisible(False) # Initially hidden
         manual_time_layout = QtWidgets.QFormLayout(self.manual_time_group)
         manual_time_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        manual_time_layout.setContentsMargins(10, 10, 10, 10)
+        manual_time_layout.setVerticalSpacing(8)
 
         self.manual_baseline_start_spinbox = QtWidgets.QDoubleSpinBox()
         self.manual_baseline_end_spinbox = QtWidgets.QDoubleSpinBox()
@@ -227,6 +258,7 @@ class RinAnalysisTab(BaseAnalysisTab):
             spinbox.setDecimals(3)
             spinbox.setSingleStep(0.01)
             spinbox.setRange(0, 9999.999) # Arbitrarily large range
+            spinbox.setMinimumWidth(100)
         manual_time_layout.addRow("Baseline Start (s):", self.manual_baseline_start_spinbox)
         manual_time_layout.addRow("Baseline End (s):", self.manual_baseline_end_spinbox)
         manual_time_layout.addRow("Response Start (s):", self.manual_response_start_spinbox)
@@ -235,9 +267,12 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # --- Manual Delta Input Group ---
         # Contains either Delta I or Delta V input depending on channel type
-        self.delta_input_group = QtWidgets.QGroupBox("Manual Delta Input")
-        self.delta_i_form_layout = QtWidgets.QFormLayout(self.delta_input_group) # Use a single layout
+        self.delta_input_group = QtWidgets.QGroupBox("Step Amplitude Input")
+        self.delta_input_group.setToolTip("Enter the amplitude of the current or voltage step")
+        self.delta_i_form_layout = QtWidgets.QFormLayout(self.delta_input_group)
         self.delta_i_form_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.delta_i_form_layout.setContentsMargins(10, 10, 10, 10)
+        self.delta_i_form_layout.setVerticalSpacing(8)
 
         # Manual Delta I (for Voltage Clamp primary signal)
         self.manual_delta_i_label = QtWidgets.QLabel("Manual ΔI (pA):")
@@ -246,6 +281,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.manual_delta_i_spinbox.setDecimals(1)
         self.manual_delta_i_spinbox.setRange(-1e6, 1e6) # Large range
         self.manual_delta_i_spinbox.setValue(0.0)
+        self.manual_delta_i_spinbox.setMinimumWidth(100)
         self.delta_i_input_row_widgets = (self.manual_delta_i_label, self.manual_delta_i_spinbox) # Store widgets
         self.delta_i_form_layout.addRow(self.manual_delta_i_label, self.manual_delta_i_spinbox)
         self.manual_delta_i_label.setVisible(False) # Initially hidden
@@ -258,6 +294,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.manual_delta_v_spinbox.setDecimals(1)
         self.manual_delta_v_spinbox.setRange(-1000, 1000) # Large range
         self.manual_delta_v_spinbox.setValue(0.0)
+        self.manual_delta_v_spinbox.setMinimumWidth(100)
         self.delta_v_input_row_widgets = (self.manual_delta_v_label, self.manual_delta_v_spinbox) # Store widgets
         self.delta_i_form_layout.addRow(self.manual_delta_v_label, self.manual_delta_v_spinbox)
         self.manual_delta_v_label.setVisible(False) # Initially hidden
@@ -266,41 +303,75 @@ class RinAnalysisTab(BaseAnalysisTab):
         analysis_params_layout.addWidget(self.delta_input_group)
 
         # Run Button (for Manual Mode)
-        self.run_button = QtWidgets.QPushButton("Run Analysis")
+        self.run_button = QtWidgets.QPushButton("Calculate Input Resistance")
         self.run_button.setToolTip("Calculate Rin/G using the manually entered parameters.")
+        self.run_button.setMinimumHeight(30)
+        # Use standard button styling to match the rest of the application
         self.run_button.setVisible(False) # Initially hidden
         analysis_params_layout.addWidget(self.run_button)
+
+        # Info label for guidance
+        self.info_label = QtWidgets.QLabel("Info will appear here.")
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet("QLabel { font-style: italic; }")
+        analysis_params_layout.addWidget(self.info_label)
 
         analysis_params_layout.addStretch(1)
         top_controls_layout.addWidget(self.analysis_params_group)
 
         # --- Column 3: Results (Add Conductance) ---
         self.results_group = QtWidgets.QGroupBox("Results")
-        self.results_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+        self.results_group.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, 
+            QtWidgets.QSizePolicy.Policy.Maximum
+        )
         results_layout = QtWidgets.QVBoxLayout(self.results_group)
         results_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.rin_result_label = QtWidgets.QLabel("Resistance (Rin) / Conductance (G): --") # <<< UPDATED LABEL
+        results_layout.setContentsMargins(10, 10, 10, 10)
+        results_layout.setSpacing(8)
+        
+        self.rin_result_label = QtWidgets.QLabel("Resistance (Rin) / Conductance (G): --")
+        self.rin_result_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.rin_result_label.setStyleSheet("font-weight: bold;")
         results_layout.addWidget(self.rin_result_label)
+        
         self.delta_v_label = QtWidgets.QLabel("Voltage Change (ΔV): --")
+        self.delta_v_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         results_layout.addWidget(self.delta_v_label)
-        self.delta_i_label = QtWidgets.QLabel("Current Change (ΔI): --") # <<< UPDATED LABEL
+        
+        self.delta_i_label = QtWidgets.QLabel("Current Change (ΔI): --")
+        self.delta_i_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         results_layout.addWidget(self.delta_i_label)
+        
         self.status_label = QtWidgets.QLabel("Status: Idle")
         self.status_label.setWordWrap(True)
         results_layout.addWidget(self.status_label)
+        
+        # Add a horizontal separator line
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        results_layout.addWidget(line)
+        
+        # Call the base class method to set up the save button
         self._setup_save_button(results_layout)
+        
         results_layout.addStretch(1)
         top_controls_layout.addWidget(self.results_group)
 
-        # Add top controls area widget to main layout
-        main_layout.addWidget(top_controls_widget)
+        # Add the scroll area to the main layout
+        main_layout.addWidget(controls_scroll_area, 0)
 
         # --- Bottom: Plot Area (Unchanged) ---
         plot_container = QtWidgets.QWidget()
+        plot_container.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding
+        )
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0, 0, 0, 0)
         self._setup_plot_area(plot_layout) # This creates self.plot_widget
-        main_layout.addWidget(plot_container, stretch=1)
+        main_layout.addWidget(plot_container, 1)
 
         # --- Plot items specific to Rin --- 
         if self.plot_widget:
@@ -320,7 +391,7 @@ class RinAnalysisTab(BaseAnalysisTab):
                 plot_item.addItem(self.response_line)
                 
                 # Set initial visibility
-                self.baseline_region.setVisible(False) # Initially hidden until data is plotted
+                self.baseline_region.setVisible(False)
                 self.response_region.setVisible(False)
                 self.baseline_line.setVisible(False)
                 self.response_line.setVisible(False)
@@ -331,11 +402,9 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         self.setLayout(main_layout)
         log.debug("Rin/G Analysis Tab UI setup complete (Generalized).")
-        self.info_label = QtWidgets.QLabel("Info will appear here.") # Manually added
-        # TODO: Add info_label to layout if needed, or just use it for updates.
-        # For now, just ensure it exists before _on_mode_changed is called.
-
-        # --- Final UI Setup ---\n        self._on_mode_changed() # Set initial state <<< ADD HERE, ensures all widgets exist\
+        
+        # Set initial UI state
+        self._on_mode_changed()  # Ensure proper initial UI setup
 
     def _connect_signals(self):
         # Connect signals for widgets common to all tabs
@@ -348,20 +417,25 @@ class RinAnalysisTab(BaseAnalysisTab):
         if self.signal_channel_combobox: self.signal_channel_combobox.currentIndexChanged.connect(self._on_signal_channel_changed)
         if self.data_source_combobox: self.data_source_combobox.currentIndexChanged.connect(self._on_data_source_changed)
 
-        # Manual time window inputs - Connect to trigger manual analysis
-        # Use the new method name
-        if self.manual_baseline_start_spinbox: self.manual_baseline_start_spinbox.editingFinished.connect(self._trigger_analysis_if_manual)
-        if self.manual_baseline_end_spinbox: self.manual_baseline_end_spinbox.editingFinished.connect(self._trigger_analysis_if_manual)
-        if self.manual_response_start_spinbox: self.manual_response_start_spinbox.editingFinished.connect(self._trigger_analysis_if_manual)
-        if self.manual_response_end_spinbox: self.manual_response_end_spinbox.editingFinished.connect(self._trigger_analysis_if_manual)
-
-        # Manual delta inputs - Connect to trigger manual analysis
-        # Use the new method name
-        if self.manual_delta_i_spinbox: self.manual_delta_i_spinbox.editingFinished.connect(self._trigger_analysis_if_manual)
-        if self.manual_delta_v_spinbox: self.manual_delta_v_spinbox.editingFinished.connect(self._trigger_analysis_if_manual)
-
-        # Run button
-        if self.run_button: self.run_button.clicked.connect(self._run_analysis)
+        # Manual time window inputs - Connect with valueChanged instead of editingFinished
+        if self.manual_baseline_start_spinbox: 
+            self.manual_baseline_start_spinbox.valueChanged.connect(self._trigger_analysis_if_manual)
+        if self.manual_baseline_end_spinbox: 
+            self.manual_baseline_end_spinbox.valueChanged.connect(self._trigger_analysis_if_manual)
+        if self.manual_response_start_spinbox: 
+            self.manual_response_start_spinbox.valueChanged.connect(self._trigger_analysis_if_manual)
+        if self.manual_response_end_spinbox: 
+            self.manual_response_end_spinbox.valueChanged.connect(self._trigger_analysis_if_manual)
+        
+        # Connect delta input spinboxes with valueChanged for immediate feedback
+        if self.manual_delta_i_spinbox: 
+            self.manual_delta_i_spinbox.valueChanged.connect(self._trigger_analysis_if_manual)
+        if self.manual_delta_v_spinbox: 
+            self.manual_delta_v_spinbox.valueChanged.connect(self._trigger_analysis_if_manual)
+        
+        # Connect Run button
+        if self.run_button: 
+            self.run_button.clicked.connect(self._run_analysis)
 
         # Ensure plot regions update triggers analysis in interactive mode
         if self.baseline_region: self.baseline_region.sigRegionChanged.connect(self._trigger_analysis_if_interactive)
@@ -403,12 +477,17 @@ class RinAnalysisTab(BaseAnalysisTab):
             log.debug("Interactive region changed, but mode is not Interactive. Skipping analysis.")
 
     def _trigger_analysis_if_manual(self):
-        """Trigger analysis only if the current mode is Manual."""
+        """Update Run button state when manual inputs change."""
         if self.mode_combobox and self.mode_combobox.currentText() == self._MODE_MANUAL:
-            log.debug("Manual input changed, triggering analysis.")
-            self._run_analysis()
+            log.debug("Manual input changed, updating run button state.")
+            # Don't auto-run when inputs change, just update the button state
+            self._update_run_button_state()
+            
+            # Force button to be visible if we're in manual mode with data
+            if self.run_button and self._current_plot_data:
+                self.run_button.setVisible(True)
         else:
-            log.debug("Manual input changed, but mode is not Manual. Skipping analysis.")
+            log.debug("Manual input changed, but mode is not Manual. Skipping update.")
 
     def _run_analysis(self):
         """Main method to perform Rin/G analysis based on current settings."""
@@ -527,7 +606,9 @@ class RinAnalysisTab(BaseAnalysisTab):
                         "ΔV (mV)": delta_v,
                         "ΔI (pA)": delta_i_pa,
                         "Baseline Window (s)": baseline_window,
-                        "Response Window (s)": response_window
+                        "Response Window (s)": response_window,
+                        "analysis_type": "Input Resistance",  # Add analysis type for better reporting
+                        "source_file_name": self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
                     }
                     
                     # Update lines showing the mean levels
@@ -546,9 +627,10 @@ class RinAnalysisTab(BaseAnalysisTab):
                             self.response_line.setValue(mean_response)
                             self.response_line.setVisible(True)
                     
-                    # Enable save button via the base class method
+                    # Enable save button - make sure this line is executed
                     if hasattr(self, '_set_save_button_enabled'):
                         self._set_save_button_enabled(True)
+                        log.debug("Save button enabled after successful calculation")
                     
                 else:
                     self.status_label.setText("Status: Rin calculation failed. Check input values.")
@@ -593,7 +675,9 @@ class RinAnalysisTab(BaseAnalysisTab):
                     "ΔV (mV)": delta_v_mv,
                     "ΔI (pA)": delta_i,
                     "Baseline Window (s)": baseline_window,
-                    "Response Window (s)": response_window
+                    "Response Window (s)": response_window,
+                    "analysis_type": "Conductance",  # Add analysis type for better reporting
+                    "source_file_name": self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
                 }
                 
                 # Update lines showing the mean levels
@@ -604,9 +688,10 @@ class RinAnalysisTab(BaseAnalysisTab):
                     self.response_line.setValue(mean_response_i)
                     self.response_line.setVisible(True)
                 
-                # Enable save button via the base class method
+                # Enable save button - make sure this line is executed
                 if hasattr(self, '_set_save_button_enabled'):
                     self._set_save_button_enabled(True)
+                    log.debug("Save button enabled after successful calculation")
                 
             else:
                 self.status_label.setText(f"Status: Unknown units '{units}'. Cannot determine analysis type.")
@@ -634,6 +719,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Use correct base class method for save button
         if hasattr(self, '_set_save_button_enabled'):
             self._set_save_button_enabled(False)
+            log.debug("Save button disabled during results clear")
 
     def _on_mode_changed(self, mode_text=None):
         """Handles changes in the analysis mode combobox.
@@ -662,6 +748,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         mode_text = self.mode_combobox.currentText()
         is_interactive = (mode_text == self._MODE_INTERACTIVE)
         is_manual = (mode_text == self._MODE_MANUAL)
+        
+        log.debug(f"Updating mode dependent UI: Mode text='{mode_text}', _MODE_MANUAL='{self._MODE_MANUAL}', is_manual={is_manual}")
 
         # Determine if we have data plotted (use plot_item as indicator)
         has_data_plotted = self.plot_item is not None
@@ -679,10 +767,12 @@ class RinAnalysisTab(BaseAnalysisTab):
         if self.response_line: self.response_line.setVisible(visibility_interactive and self._last_rin_result is not None)
             
         # Visibility for interactive mode info label
-        if self.interactive_info_label: self.interactive_info_label.setVisible(is_interactive)
+        if self.interactive_info_label: 
+            self.interactive_info_label.setVisible(is_interactive)
 
         # Visibility for manual time input group (Only if Manual)
-        if self.manual_time_group: self.manual_time_group.setVisible(is_manual)
+        if self.manual_time_group: 
+            self.manual_time_group.setVisible(is_manual)
 
         # Determine channel type based on units for ALL modes
         units_str = None
@@ -694,8 +784,10 @@ class RinAnalysisTab(BaseAnalysisTab):
                     units_str = channel.units.lower()
         
         # Determine which delta input field to show based on the channel units
-        show_delta_i = has_data_plotted and 'mv' in units_str if units_str else False
-        show_delta_v = has_data_plotted and ('pa' in units_str or 'na' in units_str) if units_str else False 
+        show_delta_i = has_data_plotted and units_str and 'mv' in units_str
+        show_delta_v = has_data_plotted and units_str and ('pa' in units_str or 'na' in units_str)
+        
+        log.debug(f"Unit detection: units_str={units_str}, show_delta_i={show_delta_i}, show_delta_v={show_delta_v}")
         
         # Make delta inputs visible for BOTH interactive and manual modes
         if self.delta_i_input_row_widgets:
@@ -710,11 +802,13 @@ class RinAnalysisTab(BaseAnalysisTab):
  
         # Always show the delta input group if any inputs are shown
         if self.delta_input_group:
-            self.delta_input_group.setVisible(show_delta_i or show_delta_v)
+            self.delta_input_group.setVisible(has_data_plotted and (show_delta_i or show_delta_v))
 
         # Enable/Disable Run button (only relevant for Manual mode)
         if self.run_button: 
-            self.run_button.setVisible(is_manual)
+            # Always show the run button in manual mode with data
+            self.run_button.setVisible(is_manual and has_data_plotted)
+            self._update_run_button_state()  # Update enabled state based on input values
 
         # Update info label based on mode
         if self.info_label:
@@ -728,11 +822,11 @@ class RinAnalysisTab(BaseAnalysisTab):
             elif is_manual:
                 info = "Manual Mode: Set time windows and "
                 if show_delta_i:
-                    info += "ΔI manually, then press Run."
+                    info += "ΔI manually, then press the Calculate button."
                 elif show_delta_v:
-                    info += "ΔV manually, then press Run."
+                    info += "ΔV manually, then press the Calculate button."
                 else:
-                    info += "parameters manually, then press Run."
+                    info += "parameters manually, then press the Calculate button."
             else:
                 info = "Select a mode."
             self.info_label.setText(info)
@@ -970,14 +1064,18 @@ class RinAnalysisTab(BaseAnalysisTab):
         min_time, max_time = time_vec.min(), time_vec.max()
         if self.baseline_region: self.baseline_region.setBounds([min_time, max_time])
         if self.response_region: self.response_region.setBounds([min_time, max_time])
-        # Ensure initial region positions are within the new bounds if needed
-        # e.g., self.baseline_region.setRegion([min_time, min_time + 0.1 * (max_time - min_time)])
-
-        # # Force layout update - IMPORTANT for visibility changes
-        # self.layout().activate()
-        # # Force repaint of plot widget and the tab itself
-        # self.plot_widget.update()
-        # self.update()
+        
+        # Set default regions
+        time_range = max_time - min_time
+        if self.baseline_region:
+            baseline_start = min_time
+            baseline_end = min_time + 0.2 * time_range
+            self.baseline_region.setRegion([baseline_start, baseline_end])
+            
+        if self.response_region:
+            response_start = baseline_end
+            response_end = response_start + 0.2 * time_range
+            self.response_region.setRegion([response_start, response_end])
 
         # Plot the main data trace
         pen = pg.mkPen(color=(0, 0, 0), width=1)  # Ensure the trace is black
@@ -986,8 +1084,11 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # --- Update UI based on new plot ---
         self._update_mode_dependent_ui() # Ensure regions/manual controls are visible/hidden correctly
-        self._update_run_button_state()
-        # <<< FIX: Call specific run button update and let base handle save button >>>
+        
+        # Set default values for manual time windows
+        self._set_default_time_windows()
+        
+        # Update button states
         self._update_run_button_state()
 
         # Auto-range view AFTER setting data and potentially adding regions
@@ -996,22 +1097,144 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Force repaint of the plot widget
         self.plot_widget.update()
 
-    # --- ADDED AGAIN: Specific method to update Run button state ---
+    # --- ADDED: Method to initialize spinbox values from time vector ---
+    def _set_default_time_windows(self):
+        """Set default time windows based on the current plot data."""
+        if not self._current_plot_data or "time_vec" not in self._current_plot_data:
+            return
+            
+        # Get the time vector
+        time_vec = self._current_plot_data["time_vec"]
+        if time_vec is None or len(time_vec) == 0:
+            return
+            
+        # Calculate reasonable default time windows
+        time_min = time_vec.min()
+        time_max = time_vec.max()
+        time_range = time_max - time_min
+        
+        # Set baseline to first 20% of the trace
+        baseline_start = time_min
+        baseline_end = time_min + 0.2 * time_range
+        
+        # Set response to next 20% after baseline
+        response_start = baseline_end
+        response_end = response_start + 0.2 * time_range
+        
+        # Update spinboxes with these values
+        if self.manual_baseline_start_spinbox:
+            self.manual_baseline_start_spinbox.setValue(baseline_start)
+        if self.manual_baseline_end_spinbox:
+            self.manual_baseline_end_spinbox.setValue(baseline_end)
+        if self.manual_response_start_spinbox:
+            self.manual_response_start_spinbox.setValue(response_start)
+        if self.manual_response_end_spinbox:
+            self.manual_response_end_spinbox.setValue(response_end)
+            
+        log.debug(f"Set default time windows: baseline=[{baseline_start:.3f}, {baseline_end:.3f}], response=[{response_start:.3f}, {response_end:.3f}]")
+        
+        # Update the run button state
+        self._update_run_button_state()
+
     def _update_run_button_state(self):
-        """Enables/disables the Run Analysis button based on mode and data."""
+        """Updates the enabled state of the Run button based on input validity."""
         if not self.run_button or not self.mode_combobox:
-            log.debug("_update_run_button_state: Widgets not ready")
-            return # Widgets not ready
+            return
+            
+        # Only enable Run button in Manual mode with valid inputs
+        is_manual = (self.mode_combobox.currentText() == self._MODE_MANUAL)
+        has_valid_inputs = False
+        
+        # Check if we have valid data to operate on
+        if is_manual and self._current_plot_data and "time_vec" in self._current_plot_data and "data_vec" in self._current_plot_data:
+            units = self._current_plot_data.get("units", "unknown")
+            is_voltage = units and 'mv' in units.lower()
+            is_current = units and ('pa' in units.lower() or 'na' in units.lower())
+            
+            # Check delta values
+            delta_i_valid = False
+            delta_v_valid = False
+            
+            if is_voltage and self.manual_delta_i_spinbox:
+                delta_i_pa = self.manual_delta_i_spinbox.value()
+                delta_i_valid = not np.isclose(delta_i_pa, 0.0)
+                log.debug(f"Delta I validation: {delta_i_pa} pA, valid={delta_i_valid}")
+                
+            if is_current and self.manual_delta_v_spinbox:
+                delta_v_mv = self.manual_delta_v_spinbox.value()
+                delta_v_valid = not np.isclose(delta_v_mv, 0.0)
+                log.debug(f"Delta V validation: {delta_v_mv} mV, valid={delta_v_valid}")
+                
+            # Check time windows
+            time_windows_valid = (
+                self.manual_baseline_start_spinbox and
+                self.manual_baseline_end_spinbox and
+                self.manual_response_start_spinbox and
+                self.manual_response_end_spinbox and
+                self.manual_baseline_start_spinbox.value() < self.manual_baseline_end_spinbox.value() and
+                self.manual_response_start_spinbox.value() < self.manual_response_end_spinbox.value()
+            )
+            
+            # Combine all conditions
+            has_valid_inputs = time_windows_valid and ((is_voltage and delta_i_valid) or (is_current and delta_v_valid))
+            
+            log.debug(f"Run button validation: time_windows_valid={time_windows_valid}, is_voltage={is_voltage}, is_current={is_current}, delta_i_valid={delta_i_valid}, delta_v_valid={delta_v_valid}, has_valid_inputs={has_valid_inputs}")
+        
+        # Update button state
+        # Ensure the button is visible and enabled when appropriate
+        should_enable = is_manual and has_valid_inputs
+        was_enabled = self.run_button.isEnabled()
+        self.run_button.setEnabled(should_enable)
+        
+        # Log any state change
+        if should_enable != was_enabled:
+            log.debug(f"Run button enabled state changed: {was_enabled} -> {should_enable}")
 
-        is_manual_mode = (self.mode_combobox.currentText() == self._MODE_MANUAL)
-        has_data_plotted = self._current_plot_data is not None
+    # Implement the required method to enable saving
+    def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
+        """
+        Returns the current calculation results for saving.
+        Required by the BaseAnalysisTab save mechanism.
+        """
+        if not self._last_rin_result:
+            log.warning("_get_specific_result_data called but no results available")
+            return None
+            
+        # Return a copy of the result data to avoid modifying the original
+        # Note: This is now called by the base class save mechanism
+        return self._last_rin_result.copy()
 
-        # Run button should be enabled only in manual mode IF data is plotted
-        self.run_button.setEnabled(is_manual_mode and has_data_plotted)
-        log.debug(f"_update_run_button_state: ManualMode={is_manual_mode}, HasData={has_data_plotted}. Run Button Enabled={self.run_button.isEnabled()}")
-
-
-    # --- END of RinAnalysisTab class --- # Add comment for clarity
+    # Override the base class save button method to customize behavior
+    def _on_save_button_clicked(self):
+        """Handles save button clicks by preparing data and passing to parent."""
+        if not self._last_rin_result:
+            log.warning("Save button clicked but no results available.")
+            return
+            
+        # Make a copy of the result data to avoid modifying the original
+        result_to_save = self._last_rin_result.copy()
+        
+        # Add additional context information
+        result_to_save["analysis_type"] = "Input Resistance/Conductance Analysis"
+        if self._selected_item_recording and hasattr(self._selected_item_recording, "source_file"):
+            result_to_save["source_file"] = str(self._selected_item_recording.source_file)
+        
+        # Get a reference to the parent MainWindow through parent chain
+        parent = self.parent()
+        while parent and not hasattr(parent, "add_saved_result"):
+            parent = parent.parent()
+            
+        if parent and hasattr(parent, "add_saved_result"):
+            try:
+                parent.add_saved_result(result_to_save)
+                self.status_label.setText("Status: Results saved successfully")
+                log.info("Input Resistance/Conductance results saved successfully")
+            except Exception as e:
+                log.error(f"Error saving results: {e}", exc_info=True)
+                self.status_label.setText(f"Status: Error saving results: {e}")
+        else:
+            log.error("Could not find parent with add_saved_result method")
+            self.status_label.setText("Status: Error - could not find save handler")
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
 ANALYSIS_TAB_CLASS = RinAnalysisTab 

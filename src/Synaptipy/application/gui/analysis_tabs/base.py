@@ -85,6 +85,11 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         self.save_button = QtWidgets.QPushButton(f"Save {self.get_display_name()} Result")
         self.save_button.setIcon(QtGui.QIcon.fromTheme("document-save")) # Optional icon
         self.save_button.setToolTip(f"Save the currently calculated {self.get_display_name()} result to the main results list.")
+        
+        # Use standard button styling that matches the application's default style
+        # Remove explicit styling to use the app's native style
+        self.save_button.setMinimumHeight(30)
+        
         self.save_button.setEnabled(False) # Disabled until a valid result is calculated
         self.save_button.clicked.connect(self._on_save_button_clicked_base)
         # Add button to layout
@@ -93,6 +98,41 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         else:
             layout.addWidget(self.save_button)
         log.debug(f"{self.__class__.__name__}: Save button setup.")
+    # --- END ADDED ---
+
+    # --- ADDED: Helper method to enable/disable save button ---
+    def _set_save_button_enabled(self, enabled: bool):
+        """Helper method to enable or disable the save button."""
+        if hasattr(self, 'save_button') and self.save_button:
+            was_enabled = self.save_button.isEnabled()
+            self.save_button.setEnabled(enabled)
+            if was_enabled != enabled:
+                log.debug(f"{self.__class__.__name__}: Save button enabled changed from {was_enabled} to {enabled}")
+    # --- END ADDED ---
+
+    # --- ADDED: Standard method for plotting area setup with consistent styling ---
+    def _apply_standard_plot_styling(self):
+        """Applies consistent styling to the plot widget."""
+        if not hasattr(self, 'plot_widget') or not self.plot_widget:
+            log.warning(f"{self.__class__.__name__}: No plot widget to style")
+            return
+            
+        # Set white background
+        self.plot_widget.setBackground('w')
+        
+        # Configure axis colors and width
+        plot_item = self.plot_widget.getPlotItem()
+        if plot_item:
+            # Configure axes
+            axes = {'left': plot_item.getAxis('left'), 'bottom': plot_item.getAxis('bottom')}
+            for axis_name, axis in axes.items():
+                axis.setPen(pg.mkPen(color='k', width=1))
+                axis.setTextPen(pg.mkPen(color='k'))
+                
+            # Add grid for better readability
+            self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
+        log.debug(f"{self.__class__.__name__}: Applied standard plot styling")
     # --- END ADDED ---
 
     # --- Method called by AnalyserTab when the analysis set changes ---
@@ -213,9 +253,15 @@ class BaseAnalysisTab(QtWidgets.QWidget):
             specific_data = self._get_specific_result_data()
             if specific_data is not None:
                 self._request_save_result(specific_data)
+                # Provide visual feedback to the user
+                if hasattr(self, 'status_label') and self.status_label:
+                    self.status_label.setText("Status: Results saved successfully")
             else:
                 log.warning("Save requested, but _get_specific_result_data returned None.")
                 QtWidgets.QMessageBox.warning(self, "Save Error", "No valid result available to save.")
+                
+                # Disable the save button as a precaution
+                self._set_save_button_enabled(False)
         except NotImplementedError:
             log.error(f"Subclass {self.__class__.__name__} must implement _get_specific_result_data() to enable saving.")
             QtWidgets.QMessageBox.critical(self, "Save Error", "Save functionality not implemented for this tab.")

@@ -177,6 +177,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         self.run_button = QtWidgets.QPushButton("Run Manual/Auto Analysis")
         self.run_button.setVisible(False)
         self.run_button.setEnabled(False)
+        self.run_button.setMinimumHeight(30)
         analysis_params_layout.addWidget(self.run_button)
         analysis_params_layout.addStretch(1)
         # Set size policy for Col 2

@@ -43,20 +43,43 @@ class AnalyserTab(QtWidgets.QWidget):
 
     def _setup_ui(self):
         main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
 
         # --- Source Selection Display ---
         source_group = QtWidgets.QGroupBox("Analysis Input Set")
+        source_group.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Maximum
+        )
         source_layout = QtWidgets.QVBoxLayout(source_group)
+        source_layout.setContentsMargins(10, 10, 10, 10)
+        source_layout.setSpacing(5)
+        
         self.source_list_widget = QtWidgets.QListWidget()
         self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
+        self.source_list_widget.setMinimumHeight(50)
         self.source_list_widget.setMaximumHeight(100) # Limit height
+        self.source_list_widget.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred
+        )
         source_layout.addWidget(self.source_list_widget)
         main_layout.addWidget(source_group)
 
         # --- Sub-Tab Widget ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
-        main_layout.addWidget(self.sub_tab_widget, stretch=1)
+        self.sub_tab_widget.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding
+        )
+        # Set tab position to north (top)
+        self.sub_tab_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
+        # Make tabs movable
+        self.sub_tab_widget.setMovable(True)
+        # Remove custom styling to use native OS style that matches the main tabs
+        
+        main_layout.addWidget(self.sub_tab_widget, 1)  # Give it a stretch factor of 1
 
         self.setLayout(main_layout)
         log.debug("Main AnalyserTab UI setup complete.")

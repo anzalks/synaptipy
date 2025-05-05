@@ -43,19 +43,33 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("Initializing MainWindow...")
         self.setWindowTitle("Synaptipy Viewer")
 
-        # --- Calculate initial size based on screen (75%) --- # Updated comment
+        # --- Calculate initial size based on screen (70%) ---
         screen = QtWidgets.QApplication.primaryScreen()
         if screen:
             available_geometry = screen.availableGeometry()
-            initial_width = int(available_geometry.width() * 0.75) # <<< CHANGED to 0.75
-            initial_height = int(available_geometry.height() * 0.75) # <<< CHANGED to 0.75
-            self.resize(initial_width, initial_height) # Use resize instead of setGeometry
-            log.info(f"Set initial size based on screen (75%): {initial_width}x{initial_height}")
+            # Reduce to 70% of available screen size
+            initial_width = int(available_geometry.width() * 0.7)
+            initial_height = int(available_geometry.height() * 0.7)
+            
+            # Set maximum dimensions to prevent too large windows on big monitors
+            max_width = min(1600, available_geometry.width() - 100)
+            max_height = min(1000, available_geometry.height() - 100)
+            
+            # Apply constraints
+            initial_width = min(initial_width, max_width)
+            initial_height = min(initial_height, max_height)
+            
+            self.resize(initial_width, initial_height)
+            # Center the window on screen
+            self.move(
+                available_geometry.left() + (available_geometry.width() - initial_width) // 2,
+                available_geometry.top() + (available_geometry.height() - initial_height) // 2
+            )
+            log.info(f"Set initial size based on screen (70%): {initial_width}x{initial_height}")
         else:
             log.warning("Could not get screen geometry, using default size.")
-            # Fallback default geometry (smaller than before)
-            self.resize(1200, 800)
-            # self.setGeometry(50, 50, 1700, 950) # <<< REMOVED
+            # Fallback default geometry (smaller size)
+            self.resize(1000, 700)
 
         # --- Instantiate Adapters/Exporters ---
         # These come from dummy_classes (which imports real ones if available)
