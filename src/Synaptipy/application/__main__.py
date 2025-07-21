@@ -88,6 +88,14 @@ def run_gui():
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
 
+    # Configure PyQtGraph globally for consistent plot behavior
+    try:
+        from Synaptipy.shared.styling import configure_pyqtgraph_globally
+        configure_pyqtgraph_globally()
+        log.info("Applied global PyQtGraph configuration for consistent plot styling.")
+    except Exception as e:
+        log.warning(f"Could not configure PyQtGraph globally: {e}")
+
     # Apply application styling using our centralized styling module
     try:
         app = apply_stylesheet(app)

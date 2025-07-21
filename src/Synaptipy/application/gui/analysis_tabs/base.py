@@ -21,9 +21,7 @@ from Synaptipy.shared.error_handling import SynaptipyError, FileReadError
 from Synaptipy.shared.styling import (
     style_button, 
     configure_plot_widget,
-    get_grid_pen,
-    set_data_item_z_order,
-    Z_ORDER
+    get_grid_pen
 )
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.base')
@@ -80,20 +78,19 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
     # --- ADDED: Method to setup plot area --- 
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
-        """Adds a PlotWidget to the provided layout."""
+        """Adds a PlotWidget to the provided layout with exact explorer tab styling."""
         self.plot_widget = pg.PlotWidget()
         
-        # Set white background explicitly regardless of theme mode
+        # Set white background exactly like explorer tab
         self.plot_widget.setBackground('white')
         
-        # Configure plot using our styling module right after creation
-        # This ensures that axes are set correctly from the start
-        configure_plot_widget(self.plot_widget)
+        # Get the plot item (this is what explorer tab configures)
+        plot_item = self.plot_widget.getPlotItem()
         
-        # Explicitly force grid to be visible and opaque
-        self.plot_widget.showGrid(x=True, y=True, alpha=1.0)
+        # Apply explorer tab's exact grid configuration
+        self._configure_plot_item_like_explorer_tab(plot_item)
         
-        # Add a double click event handler for auto-ranging
+        # Add event handlers
         self.plot_widget.plotItem.vb.sigStateChanged.connect(self._on_viewbox_changed)
         self.plot_widget.plotItem.vb.sigXRangeChanged.connect(self._on_viewbox_changed)
         self.plot_widget.plotItem.vb.sigYRangeChanged.connect(self._on_viewbox_changed)
@@ -106,9 +103,40 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         
         # Add the plot widget to the provided layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
+
+    def _configure_plot_item_like_explorer_tab(self, plot_item):
+        """Apply the exact same grid configuration as explorer tab."""
+        from Synaptipy.shared.styling import get_grid_pen
         
-        # Apply standard plot styling (ensure grid is correctly configured)
-        self._apply_standard_plot_styling()
+        # Set background via the view box for PlotItem (like explorer tab)
+        try:
+            vb = plot_item.getViewBox()
+            if vb:
+                vb.setBackgroundColor('white')
+        except:
+            pass  # Fallback if background setting fails
+        
+        # Call showGrid on plot_item (NOT plot_widget) with alpha=1.0 like explorer tab
+        plot_item.showGrid(x=True, y=True, alpha=1.0)
+        
+        # Apply exact explorer tab grid configuration
+        try:
+            for axis_name in ['bottom', 'left']:
+                axis = plot_item.getAxis(axis_name)
+                if axis and hasattr(axis, 'grid'):
+                    # Set grid opacity to full (like explorer tab)
+                    if hasattr(axis, 'setGrid'):
+                        axis.setGrid(255)  # Full opacity
+                    
+                    # Set grid z-value to be behind data (use negative value)
+                    if hasattr(axis.grid, 'setZValue'):
+                        axis.grid.setZValue(-1000)  # Negative z-value = behind data
+                    
+                    # Apply black grid pen (like explorer tab)
+                    if hasattr(axis.grid, 'setPen'):
+                        axis.grid.setPen(get_grid_pen())
+        except Exception as e:
+            pass  # Silently handle any grid configuration errors
 
     # --- END ADDED ---
 
@@ -142,41 +170,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
                 log.debug(f"{self.__class__.__name__}: Save button enabled changed from {was_enabled} to {enabled}")
     # --- END ADDED ---
 
-    # --- ADDED: Standard method for plotting area setup with consistent styling ---
-    def _apply_standard_plot_styling(self):
-        """Apply standard plot styling including consistent grids and opaque backgrounds.
-        Called from _setup_plot_area and when the plot view changes."""
-        if not hasattr(self, 'plot_widget') or self.plot_widget is None:
-            return
-            
-        # Use our styling module with explicit opacity settings
-        # This is called when refreshing plot appearance
-        configure_plot_widget(self.plot_widget)
-        
-        # Ensure grid is always visible with opaque lines (alpha=1.0)
-        self.plot_widget.showGrid(x=True, y=True, alpha=1.0)
-        
-        # Try to access grid objects directly and set their opacity
-        try:
-            plot_item = self.plot_widget.getPlotItem()
-            if plot_item:
-                # Clear any existing grid items and recreate
-                for axis_name in ['bottom', 'left']:
-                    axis = plot_item.getAxis(axis_name)
-                    if axis and hasattr(axis, 'grid'):
-                        # Apply grid settings through the styling module's constants
-                        if hasattr(axis.grid, 'setZValue'):
-                            # Set grid z-value to ensure it stays behind data
-                            axis.grid.setZValue(Z_ORDER['grid'])
-                            # Apply fully opaque grid pen
-                            if hasattr(axis.grid, 'setPen'):
-                                axis.grid.setPen(get_grid_pen())
-                        # Handle grid integer value (sets opacity)
-                        elif axis.grid is None or isinstance(axis.grid, int):
-                            # Set opacity to 255 (100%)
-                            axis.grid = 255
-        except Exception:
-            pass
+
 
     # ViewBox state change handler
     def _on_viewbox_changed(self):

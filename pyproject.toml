@@ -45,7 +45,4 @@ dev = [
     # Documentation
     "sphinx",
     "sphinx-rtd-theme",
-    
-    # Optional UI styling
-    "qdarkstyle",
 ]

@@ -195,7 +195,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_analysis_set_display()
         
         # Import styling to initialize plots properly at startup
-        from Synaptipy.shared.styling import configure_plot_widget, configure_plot_item
+        from Synaptipy.shared.styling import configure_plot_widget
         
         # Ensure the GraphicsLayoutWidget has proper styling from the beginning
         if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
@@ -676,7 +676,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.channel_y_range_bases.clear()
 
         # Import critical styling functions
-        from Synaptipy.shared.styling import configure_plot_item, get_axis_pen, get_grid_pen, set_data_item_z_order, Z_ORDER
+        from Synaptipy.shared.styling import configure_plot_widget, get_grid_pen
         
         # Set white background on the GraphicsLayoutWidget (parent of all plot items)
         if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
@@ -705,8 +705,14 @@ class ExplorerTab(QtWidgets.QWidget):
             # Create plot item for this channel
             plot_item = self.graphics_layout_widget.addPlot(row=i, col=0)
             
-            # Apply styling with explicit white background and z-ordering
-            configure_plot_item(plot_item)
+            # Apply basic plot styling
+            try:
+                # Set background via the view box for PlotItem
+                vb = plot_item.getViewBox()
+                if vb:
+                    vb.setBackgroundColor('white')
+            except:
+                pass  # Fallback if background setting fails
             
             # Ensure grid is visible with opaque lines - explicitly call showGrid after styling
             plot_item.showGrid(x=True, y=True, alpha=1.0)
@@ -1024,13 +1030,19 @@ class ExplorerTab(QtWidgets.QWidget):
         is_channel_checkbox = isinstance(sender, QtWidgets.QCheckBox) and sender in self.channel_checkboxes.values()
 
         # Import the styling module
-        from Synaptipy.shared.styling import configure_plot_item, get_axis_pen, get_grid_pen, set_data_item_z_order, Z_ORDER
+        from Synaptipy.shared.styling import get_grid_pen
 
         # Apply consistent styling to all plots
         for chan_id, plot_item in self.channel_plots.items():
             if plot_item and plot_item.scene() is not None:
-                # Apply styling with explicit non-transparent settings
-                configure_plot_item(plot_item)
+                # Apply basic styling
+                try:
+                    # Set background via the view box for PlotItem
+                    vb = plot_item.getViewBox()
+                    if vb:
+                        vb.setBackgroundColor('white')
+                except:
+                    pass  # Fallback if background setting fails
                 
                 # Ensure grids remain visible and opaque
                 plot_item.showGrid(x=True, y=True)
@@ -1082,7 +1094,7 @@ class ExplorerTab(QtWidgets.QWidget):
         log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
         
         # Import styling functions to ensure consistent appearance
-        from Synaptipy.shared.styling import configure_plot_item, get_grid_pen, set_data_item_z_order, Z_ORDER
+        from Synaptipy.shared.styling import get_grid_pen
         
         vis_const_available = VisConstants is not None
         _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
@@ -1113,8 +1125,14 @@ class ExplorerTab(QtWidgets.QWidget):
             if checkbox and checkbox.isChecked() and channel and plot_item:
                 plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
                 
-                # Step 1: Apply styling BEFORE plotting to ensure proper initial setup
-                configure_plot_item(plot_item)
+                # Step 1: Apply basic styling BEFORE plotting
+                try:
+                    # Set background via the view box for PlotItem
+                    vb = plot_item.getViewBox()
+                    if vb:
+                        vb.setBackgroundColor('white')
+                except:
+                    pass  # Fallback if background setting fails
                 
                 # Step 2: Explicitly show grid with alpha=1.0
                 plot_item.showGrid(x=True, y=True, alpha=1.0)
@@ -1147,8 +1165,9 @@ class ExplorerTab(QtWidgets.QWidget):
                         time_vec = channel.get_relative_time_vector(trial_idx)
                         if data is not None and time_vec is not None:
                             item = plot_item.plot(time_vec, data, pen=trial_pen)
-                            # Set background data z-order using centralized function
-                            set_data_item_z_order(item, 'background_data')
+                            # Set z-order for proper layering
+                            if hasattr(item, 'setZValue'):
+                                item.setZValue(1)
                             item.opts['autoDownsample'] = enable_downsampling
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
@@ -1161,8 +1180,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     avg_time_vec = channel.get_relative_averaged_time_vector()
                     if avg_data is not None and avg_time_vec is not None:
                         item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
-                        # Set average data z-order using centralized function
-                        set_data_item_z_order(item, 'average_data')
+                        # Set average data z-order
+                        if hasattr(item, 'setZValue'):
+                            item.setZValue(2)
                         item.opts['autoDownsample'] = enable_downsampling
                         item.opts['autoDownsampleThreshold'] = ds_threshold
                         self.channel_plot_data_items.setdefault(chan_id, []).append(item)
@@ -1176,27 +1196,31 @@ class ExplorerTab(QtWidgets.QWidget):
                         time_vec = channel.get_relative_time_vector(idx)
                         if data is not None and time_vec is not None:
                             item = plot_item.plot(time_vec, data, pen=single_trial_pen)
-                            # Set primary data z-order using centralized function
-                            set_data_item_z_order(item, 'primary_data')
+                            # Set primary data z-order
+                            if hasattr(item, 'setZValue'):
+                                item.setZValue(3)
                             item.opts['autoDownsample'] = enable_downsampling
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
                         else: 
                             text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
-                            # Set text overlay z-order using centralized function
-                            set_data_item_z_order(text_item, 'text_overlay')
+                            # Set text overlay z-order
+                            if hasattr(text_item, 'setZValue'):
+                                text_item.setZValue(10)
                             plot_item.addItem(text_item)
                     else: 
                         text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
-                        # Set text overlay z-order using centralized function
-                        set_data_item_z_order(text_item, 'text_overlay')
+                        # Set text overlay z-order
+                        if hasattr(text_item, 'setZValue'):
+                            text_item.setZValue(10)
                         plot_item.addItem(text_item)
 
                 if not channel_plotted: 
                     text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
-                    # Set text overlay z-order using centralized function
-                    set_data_item_z_order(text_item, 'text_overlay')
+                    # Set text overlay z-order
+                    if hasattr(text_item, 'setZValue'):
+                        text_item.setZValue(10)
                     plot_item.addItem(text_item)
                 
                 # Final step: Re-apply grid settings to ensure they're visible after all plotting
@@ -1839,8 +1863,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.selected_average_plot_items:
             return
             
-        # Import styling functions for consistent appearance
-        from Synaptipy.shared.styling import set_data_item_z_order
+        # Plot selected trial averages
         
         idxs=sorted(list(self.selected_trial_indices))
         log.info(f"Plotting avg: {idxs}")
@@ -1893,8 +1916,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     try:
                         avg_d=np.mean(np.array(valid_d), axis=0)
                         item=p.plot(ref_t, avg_d, pen=self.SELECTED_AVG_PEN)
-                        # Set selected data z-order using centralized function
-                        set_data_item_z_order(item, 'selected_data')
+                        # Set selected data z-order
+                        if hasattr(item, 'setZValue'):
+                            item.setZValue(5)
                         item.opts['autoDownsample']=en_ds
                         item.opts['autoDownsampleThreshold']=ds_thresh_val
                         self.selected_average_plot_items[cid]=item

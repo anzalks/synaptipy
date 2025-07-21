@@ -137,7 +137,6 @@ This project is licensed under the GNU Affero General Public License Version 3 -
 - [PySide6](https://wiki.qt.io/Qt_for_Python) - For the GUI framework
 - [pyqtgraph](https://pyqtgraph.readthedocs.io/) - For fast plotting capabilities
 - [pynwb](https://pynwb.readthedocs.io/) - For NWB file format support
-- [qdarkstyle](https://github.com/ColinDuquesnoy/QDarkStyleSheet) - For dark theme styling
 
 ## Supported File Formats
 

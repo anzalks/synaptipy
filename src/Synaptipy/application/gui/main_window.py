@@ -35,7 +35,7 @@ except ImportError:
 # Import styling module for theme handling
 from Synaptipy.shared.styling import (
     toggle_theme_mode, get_current_theme_mode, apply_stylesheet,
-    set_theme_mode, get_grid_pen
+    set_theme_mode
 )
 
 # Use a specific logger for this module
@@ -493,105 +493,38 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_all_plots(self):
         """Refresh all plots to reflect the new theme."""
-        # Import needed styling functions
-        from Synaptipy.shared.styling import configure_plot_widget, configure_plot_item, get_grid_pen
+        from Synaptipy.shared.styling import configure_plot_widget
         
         log.info("Refreshing all plots with new theme settings...")
         
-        # ===== 1. Handle PlotItems in explorer tab (GraphicsLayoutWidget) =====
-        if hasattr(self, 'explorer_tab') and self.explorer_tab:
-            log.debug("Refreshing explorer tab plots")
-            if hasattr(self.explorer_tab, 'channel_plots'):
-                for chan_id, plot_item in self.explorer_tab.channel_plots.items():
-                    if plot_item and plot_item.scene() is not None:
-                        # Apply styling with explicit non-transparent settings
-                        configure_plot_item(plot_item)
-                        
-                        # Ensure grid is always visible with opaque lines
-                        plot_item.showGrid(x=True, y=True, alpha=1.0)
-                        
-                        # Explicitly set grid pens for both axes with maximum opacity
-                        try:
-                            for axis_name in ['bottom', 'left']:
-                                axis = plot_item.getAxis(axis_name)
-                                if axis and hasattr(axis, 'grid'):
-                                    axis.grid.setPen(get_grid_pen())
-                                    # Set grid opacity to 100%
-                                    if hasattr(axis, 'setGrid'):
-                                        axis.setGrid(255)
-                        except Exception as e:
-                            log.warning(f"Could not set grid opacity for channel {chan_id}: {e}")
-                        
-                        log.debug(f"Refreshed explorer tab PlotItem for channel {chan_id}")
-            
-                # Use explorer tab's own update mechanism to ensure consistent styling
-                if hasattr(self.explorer_tab, '_trigger_plot_update'):
-                    self.explorer_tab._trigger_plot_update()
-        
-        # ===== 2. Find all direct PlotWidget instances =====
+        # Find all PlotWidget instances in the application
         all_plot_widgets = []
         
         # Find in all tabs
         for tab in [self.explorer_tab, self.analyser_tab, self.exporter_tab]:
             if tab:
-                # Find plot widgets recursively
                 plot_widgets = tab.findChildren(pg.PlotWidget)
                 all_plot_widgets.extend(plot_widgets)
                 log.debug(f"Found {len(plot_widgets)} plot widgets in {tab.__class__.__name__}")
         
         # Apply styling to each PlotWidget
         for pw in all_plot_widgets:
-            if pw.parent():
-                parent_name = pw.parent().__class__.__name__
-                log.debug(f"Refreshing PlotWidget in {parent_name}")
+            try:
                 configure_plot_widget(pw)
-                
-                # Explicitly force grid visibility with alpha=1.0
-                pw.showGrid(x=True, y=True, alpha=1.0)
-                
-                # Try to set grid pens directly on the plot item
-                try:
-                    plot_item = pw.getPlotItem()
-                    if plot_item:
-                        for axis_name in ['bottom', 'left']:
-                            axis = plot_item.getAxis(axis_name)
-                            if axis and hasattr(axis, 'grid'):
-                                # Get a fully opaque grid pen
-                                grid_pen = get_grid_pen()
-                                if hasattr(axis.grid, 'setPen'):
-                                    axis.grid.setPen(grid_pen)
-                                # Set grid opacity to maximum
-                                if hasattr(axis, 'setGrid'):
-                                    axis.setGrid(255)
-                except Exception as e:
-                    log.debug(f"Error setting grid pens for {parent_name}: {e}")
-                
-                # Force immediate update
                 pw.update()
+                log.debug(f"Refreshed PlotWidget")
+            except Exception as e:
+                log.warning(f"Error refreshing plot widget: {e}")
         
-        # ===== 3. Handle Analysis Tabs Directly =====
+        # Handle analysis tabs with plot_widget attribute
         if hasattr(self, 'analyser_tab') and self.analyser_tab:
-            # The analyser tab has sub-tabs that might not be found by findChildren
-            log.debug("Checking analyser tab for sub-tabs with plots")
             for child in self.analyser_tab.children():
-                # Look for specific analysis tab classes with plot_widget attribute
                 if hasattr(child, 'plot_widget') and isinstance(child.plot_widget, pg.PlotWidget):
-                    log.debug(f"Direct styling for {child.__class__.__name__} plot_widget")
-                    configure_plot_widget(child.plot_widget)
-                    
-                    # Call the tab's own styling method if available
-                    if hasattr(child, '_apply_standard_plot_styling'):
-                        try:
-                            child._apply_standard_plot_styling()
-                            log.debug(f"Applied standard plot styling for {child.__class__.__name__}")
-                        except Exception as e:
-                            log.warning(f"Error applying standard plot styling for {child.__class__.__name__}: {e}")
-                    
-                    child.plot_widget.update()
-        
-        # ===== 4. Force update all visible PlotWidgets =====
-        for pw in QtWidgets.QApplication.instance().allWidgets():
-            if isinstance(pw, pg.PlotWidget) and pw.isVisible():
-                pw.update()
+                    try:
+                        configure_plot_widget(child.plot_widget)
+                        child.plot_widget.update()
+                        log.debug(f"Refreshed {child.__class__.__name__} plot_widget")
+                    except Exception as e:
+                        log.warning(f"Error refreshing {child.__class__.__name__} plot: {e}")
         
         log.info("Plot refresh complete")

@@ -23,8 +23,6 @@ from Synaptipy.shared.styling import (
     style_result_display,
     get_baseline_pen,
     get_response_pen,
-    get_baseline_brush,
-    get_response_brush,
     configure_plot_widget
 )
 
@@ -387,25 +385,23 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # --- Plot items specific to Rin --- 
         if self.plot_widget:
-            # Configure the plot widget with consistent styling
-            configure_plot_widget(self.plot_widget)
-            
-            # Ensure grid lines are always visible
-            self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-            
-            # Get the plot item from the plot widget
+            # Base class already configured the plot properly, just get the plot item
             plot_item = self.plot_widget.getPlotItem()
             if plot_item:
                 # Create regions and lines with consistent styling
+                from PySide6 import QtGui
+                baseline_brush = QtGui.QBrush(QtGui.QColor(46, 204, 113, 50))  # Green with alpha
+                response_brush = QtGui.QBrush(QtGui.QColor(243, 156, 18, 50))  # Orange with alpha
+                
                 self.baseline_region = pg.LinearRegionItem(
                     values=[0.0, 0.1], 
-                    brush=get_baseline_brush(), 
+                    brush=baseline_brush, 
                     movable=True, 
                     bounds=[0, 1]
                 )
                 self.response_region = pg.LinearRegionItem(
                     values=[0.2, 0.3], 
-                    brush=get_response_brush(), 
+                    brush=response_brush, 
                     movable=True, 
                     bounds=[0, 1]
                 )
