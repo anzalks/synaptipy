@@ -39,11 +39,15 @@ from .styling import (
     configure_plot_widget,
     get_trial_pen,
     get_average_pen,
-    get_plot_pen,
+    get_baseline_pen,
+    get_response_pen,
     style_button,
     style_label,
     style_result_display,
-    THEME
+    THEME,
+    get_current_theme_mode,
+    set_theme_mode,
+    toggle_theme_mode
 )
 
 # Define the public API for this subpackage
@@ -70,9 +74,13 @@ __all__ = [
     'configure_plot_widget',
     'get_trial_pen',
     'get_average_pen',
-    'get_plot_pen',
+    'get_baseline_pen',
+    'get_response_pen',
     'style_button',
     'style_label',
     'style_result_display',
-    'THEME'
+    'THEME',
+    'get_current_theme_mode',
+    'set_theme_mode',
+    'toggle_theme_mode'
 ]

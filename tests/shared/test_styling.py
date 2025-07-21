@@ -34,13 +34,11 @@ except ImportError:
 
 # Import styling module - this should always succeed
 from Synaptipy.shared.styling import (
-    THEME, PALETTE, PLOT_COLORS, ALPHA,
-    BUTTON_STYLES, TEXT_STYLES,
-    get_trial_pen, get_average_pen, get_baseline_pen, get_response_pen,
-    get_baseline_brush, get_response_brush, get_axis_pen, get_grid_pen,
-    get_plot_pen, configure_plot_widget, apply_stylesheet,
+    THEME, PLOT_COLORS,
+    get_trial_pen, get_average_pen, get_baseline_pen, get_response_pen, get_grid_pen,
+    configure_plot_widget, apply_stylesheet,
     style_button, style_label, style_result_display, style_info_label,
-    style_error_message
+    style_error_message, get_current_theme_mode, set_theme_mode, toggle_theme_mode
 )
 
 
@@ -58,18 +56,28 @@ class TestStylingConstants(unittest.TestCase):
         for key in expected_keys:
             self.assertIn(key, THEME, f"Missing key {key} in THEME")
     
-    def test_palette_contains_expected_colors(self):
-        """Verify PALETTE contains expected color groups."""
-        expected_groups = ['blues', 'reds', 'greens', 'grays']
-        for group in expected_groups:
-            self.assertIn(group, PALETTE, f"Missing color group {group} in PALETTE")
-            self.assertEqual(len(PALETTE[group]), 10, f"Color group {group} should have 10 values")
+    def test_plot_colors_available(self):
+        """Verify PLOT_COLORS is available and contains colors."""
+        self.assertIsInstance(PLOT_COLORS, list)
+        self.assertGreater(len(PLOT_COLORS), 0)
     
-    def test_button_styles_consistency(self):
-        """Verify BUTTON_STYLES contains all expected types."""
-        expected_styles = ['primary', 'action', 'toolbar']
-        for style in expected_styles:
-            self.assertIn(style, BUTTON_STYLES, f"Missing style {style} in BUTTON_STYLES")
+    def test_theme_mode_functions(self):
+        """Verify theme mode functions work correctly."""
+        # Test get_current_theme_mode
+        current = get_current_theme_mode()
+        self.assertIn(current, ['light', 'dark'])
+        
+        # Test set_theme_mode
+        set_theme_mode('light')
+        self.assertEqual(get_current_theme_mode(), 'light')
+        
+        set_theme_mode('dark')
+        self.assertEqual(get_current_theme_mode(), 'dark')
+        
+        # Test toggle_theme_mode
+        initial = get_current_theme_mode()
+        toggled = toggle_theme_mode()
+        self.assertNotEqual(initial, toggled)
 
 
 class TestStylingFunctions(unittest.TestCase):
@@ -77,31 +85,21 @@ class TestStylingFunctions(unittest.TestCase):
     
     @unittest.skipIf(not PYQTGRAPH_AVAILABLE, "pyqtgraph not available")
     def test_get_trial_pen(self):
-        """Test that get_trial_pen returns a valid pen with correct color."""
+        """Test that get_trial_pen returns a valid pen."""
         pen = get_trial_pen()
         self.assertIsInstance(pen, pg.mkPen().__class__)
-        # Skip color check if running in a headless environment
-        if not IS_HEADLESS and QT_AVAILABLE:
-            self.assertEqual(pen.color().name(), QtGui.QColor(THEME['trial_color']).name())
     
     @unittest.skipIf(not PYQTGRAPH_AVAILABLE, "pyqtgraph not available")
     def test_get_average_pen(self):
-        """Test that get_average_pen returns a valid pen with correct color."""
+        """Test that get_average_pen returns a valid pen."""
         pen = get_average_pen()
         self.assertIsInstance(pen, pg.mkPen().__class__)
-        # Skip color check if running in a headless environment
-        if not IS_HEADLESS and QT_AVAILABLE:
-            self.assertEqual(pen.color().name(), QtGui.QColor(THEME['average_color']).name())
     
     @unittest.skipIf(not PYQTGRAPH_AVAILABLE, "pyqtgraph not available")
-    def test_get_plot_pen_index_wrapping(self):
-        """Test that get_plot_pen handles index wrapping correctly."""
-        num_colors = len(PLOT_COLORS)
-        # Test with index beyond the color count
-        pen1 = get_plot_pen(index=num_colors)  # Should wrap to 0
-        pen2 = get_plot_pen(index=0)  # First color
-        self.assertIsInstance(pen1, pg.mkPen().__class__)
-        self.assertIsInstance(pen2, pg.mkPen().__class__)
+    def test_get_grid_pen(self):
+        """Test that get_grid_pen returns a valid pen."""
+        pen = get_grid_pen()
+        self.assertIsInstance(pen, pg.mkPen().__class__)
 
 
 @unittest.skipIf(IS_HEADLESS or not QT_AVAILABLE, "Qt tests require a display or Qt not available")

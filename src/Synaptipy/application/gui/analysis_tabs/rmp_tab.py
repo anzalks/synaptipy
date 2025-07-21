@@ -460,8 +460,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             if time_vec is not None and voltage_vec is not None:
                 self.data_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
                 
-                # Ensure grid lines are always visible
-                self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+                # Base class already configured grids properly - no need to override
 
                 # --- Get Label from Data Model --- 
                 units = channel.units or '?' # Use '?' if units are None/empty
