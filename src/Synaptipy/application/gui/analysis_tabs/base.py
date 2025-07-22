@@ -8,7 +8,7 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
 from PySide6 import QtWidgets, QtCore, QtGui
@@ -23,6 +23,7 @@ from Synaptipy.shared.styling import (
     configure_plot_widget,
     get_grid_pen
 )
+from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.base')
 
@@ -52,6 +53,12 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # --- END ADDED --- 
         # --- ADDED: Save Button --- 
         self.save_button: Optional[QtWidgets.QPushButton] = None
+        # --- END ADDED ---
+        # --- ADDED: Zoom Sync Manager ---
+        self.zoom_sync: Optional[PlotZoomSyncManager] = None
+        # --- END ADDED ---
+        # --- ADDED: Reset View Button ---
+        self.reset_view_button: Optional[QtWidgets.QPushButton] = None
         # --- END ADDED ---
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
@@ -90,11 +97,6 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Apply explorer tab's exact grid configuration
         self._configure_plot_item_like_explorer_tab(plot_item)
         
-        # Add event handlers
-        self.plot_widget.plotItem.vb.sigStateChanged.connect(self._on_viewbox_changed)
-        self.plot_widget.plotItem.vb.sigXRangeChanged.connect(self._on_viewbox_changed)
-        self.plot_widget.plotItem.vb.sigYRangeChanged.connect(self._on_viewbox_changed)
-        
         # Use the same mouse mode settings as explorer tab
         viewbox = self.plot_widget.getViewBox()
         if viewbox:
@@ -103,6 +105,14 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         
         # Add the plot widget to the provided layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
+        
+        # Add reset view button below plot
+        self._setup_reset_view_button(layout)
+        
+        # Initialize zoom synchronization manager (for reset functionality only)
+        self._setup_zoom_sync()
+        
+        log.debug(f"Plot area setup for {self.__class__.__name__} - analysis mode (reset only)")
 
     def _configure_plot_item_like_explorer_tab(self, plot_item):
         """Apply the exact same grid configuration as explorer tab."""
@@ -170,19 +180,78 @@ class BaseAnalysisTab(QtWidgets.QWidget):
                 log.debug(f"{self.__class__.__name__}: Save button enabled changed from {was_enabled} to {enabled}")
     # --- END ADDED ---
 
+    def _setup_reset_view_button(self, layout: QtWidgets.QLayout):
+        """Setup reset view button for the plot area."""
+        # Create horizontal layout for reset button
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()  # Push button to center
+        
+        # Create reset view button with consistent styling
+        self.reset_view_button = QtWidgets.QPushButton("Reset View")
+        self.reset_view_button.setToolTip("Reset plot zoom and pan to fit all data")
+        
+        # Apply consistent button styling
+        style_button(self.reset_view_button)
+        
+        # Connect to auto-range functionality
+        self.reset_view_button.clicked.connect(self._on_reset_view_clicked)
+        
+        button_layout.addWidget(self.reset_view_button)
+        button_layout.addStretch()  # Push button to center
+        
+        # Add button layout to main layout
+        layout.addLayout(button_layout)
+        
+        log.debug(f"Reset view button setup for {self.__class__.__name__}")
 
+    def _on_reset_view_clicked(self):
+        """Handle reset view button click."""
+        self.auto_range_plot()
+        log.debug(f"Reset view triggered for {self.__class__.__name__}")
+
+    def _setup_zoom_sync(self):
+        """Initialize the zoom synchronization manager for reset functionality only."""
+        if not self.plot_widget:
+            return
+            
+        self.zoom_sync = PlotZoomSyncManager(self)
+        self.zoom_sync.setup_plot_widget(self.plot_widget)
+        
+        # Set callback for range changes
+        self.zoom_sync.on_range_changed = self._on_plot_range_changed
+        
+        log.debug(f"Zoom sync manager initialized for {self.__class__.__name__} (reset functionality only)")
+        
+    def setup_zoom_controls(self, **kwargs):
+        """Deprecated method - analysis tabs no longer use zoom controls, only reset view."""
+        log.warning(f"setup_zoom_controls called on {self.__class__.__name__} - analysis tabs only use reset view")
+        pass
+    
+    def set_data_ranges(self, x_range: Tuple[float, float], y_range: Tuple[float, float]):
+        """Set the base data ranges for zoom/scroll calculations. Call this when plotting new data."""
+        if self.zoom_sync:
+            self.zoom_sync.set_base_ranges(x_range, y_range)
+            log.debug(f"Data ranges set: X={x_range}, Y={y_range}")
+    
+    def auto_range_plot(self):
+        """Auto-range the plot to fit all data."""
+        if self.zoom_sync:
+            self.zoom_sync.auto_range()
+        elif self.plot_widget:
+            self.plot_widget.autoRange()
+
+    def _on_plot_range_changed(self, axis: str, new_range: Tuple[float, float]):
+        """Called when plot range changes from any source (zoom, scroll, manual)."""
+        # Subclasses can override this to handle range changes
+        # For example, to update analysis regions or recalculate results
+        pass
 
     # ViewBox state change handler
     def _on_viewbox_changed(self):
-        """Handles view box state changes (like zoom/pan)"""
-        # Opportunity to update grid visibility after zoom, etc.
-        if hasattr(self, 'plot_widget') and self.plot_widget:
-            try:
-                # Re-apply standard styling to ensure grid stays visible
-                self._apply_standard_plot_styling()
-            except Exception:
-                # Just silently continue, logging could cause recursion
-                pass
+        """Handles view box state changes (like zoom/pan) - now handled by zoom sync manager."""
+        # The zoom sync manager now handles all range synchronization
+        # This method is kept for backward compatibility
+        pass
 
     # Add stub method for mouse click handling
     def _handle_mouse_click(self, ev):

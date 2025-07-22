@@ -260,6 +260,7 @@ class EventDetectionTab(BaseAnalysisTab):
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
+        
         self.event_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(0, 0, 255, 150))
         self.plot_widget.addItem(self.event_markers_item)
         self.event_markers_item.setVisible(False)
@@ -496,6 +497,12 @@ class EventDetectionTab(BaseAnalysisTab):
                     'units': units,
                     'sampling_rate': sample_rate
                 }
+                
+                # Set data ranges for zoom synchronization
+                x_range = (time_vec.min(), time_vec.max())
+                y_range = (data_vec.min(), data_vec.max())
+                self.set_data_ranges(x_range, y_range)
+                
                 plot_succeeded = True
                 log.debug(f"Event Detection Plotting Success. Rate: {sample_rate}")
                 self.plot_widget.autoRange()

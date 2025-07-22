@@ -139,10 +139,11 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         # --- Bottom: Plot Area ---
         plot_container = QtWidgets.QWidget()
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
-        plot_layout.setContentsMargins(0, 0, 0, 0)
+        plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
+        
         main_layout.addWidget(plot_container, stretch=1)
-
+        
         # --- Plot items specific to Spikes ---
         self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)) # Original red markers
         self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red threshold line
@@ -314,6 +315,12 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                     'rate': channel.sampling_rate,
                     'units': channel.units or 'V'
                 }
+                
+                # Set data ranges for zoom synchronization
+                x_range = (time_vec.min(), time_vec.max())
+                y_range = (voltage_vec.min(), voltage_vec.max())
+                self.set_data_ranges(x_range, y_range)
+                
                 plot_succeeded = True
                 log.debug("Spike Plotting: Success")
             else:

@@ -211,6 +211,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
+        
         main_layout.addWidget(plot_container, stretch=1) # Plot stretches vertically
 
         # --- Plot items specific to Baseline ---
@@ -474,6 +475,12 @@ class BaselineAnalysisTab(BaseAnalysisTab):
                     'time': time_vec,
                     'voltage': voltage_vec
                 }
+                
+                # Set data ranges for zoom synchronization
+                x_range = (time_vec.min(), time_vec.max())
+                y_range = (voltage_vec.min(), voltage_vec.max())
+                self.set_data_ranges(x_range, y_range)
+                
                 # Set initial region/bounds based on plotted data
                 min_t, max_t = time_vec[0], time_vec[-1]
                 self.interactive_region.setBounds([min_t, max_t])
