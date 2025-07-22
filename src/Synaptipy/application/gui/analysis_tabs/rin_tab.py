@@ -374,13 +374,10 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # --- Bottom: Plot Area (Unchanged) ---
         plot_container = QtWidgets.QWidget()
-        plot_container.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding
-        )
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
-        plot_layout.setContentsMargins(0, 0, 0, 0)
-        self._setup_plot_area(plot_layout) # This creates self.plot_widget
+        plot_layout.setContentsMargins(0,0,0,0)
+        self._setup_plot_area(plot_layout)
+        
         main_layout.addWidget(plot_container, 1)
 
         # --- Plot items specific to Rin --- 
@@ -1114,6 +1111,12 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Plot the main data trace - keep the original black color
         pen = pg.mkPen(color=(0, 0, 0), width=1)  # Original black pen
         self.plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen)
+        
+        # Set data ranges for zoom synchronization
+        x_range = (time_vec.min(), time_vec.max())
+        y_range = (data_vec.min(), data_vec.max())
+        self.set_data_ranges(x_range, y_range)
+        
         log.debug(f"Successfully plotted {ch_label} trace for Rin/G analysis.")
 
         # --- Update UI based on new plot ---

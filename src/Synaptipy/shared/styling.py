@@ -42,7 +42,7 @@ def set_theme_mode(mode: str) -> str:
         log.warning(f"Invalid theme mode '{mode}'. Using 'dark' instead.")
         mode = "dark"
     
-    CURRENT_THEME_MODE = mode
+        CURRENT_THEME_MODE = mode
     # Update THEME dictionary with current colors
     THEME.update(_get_theme_dict())
     log.info(f"Theme mode set to: {mode}")

@@ -31,12 +31,6 @@ Synaptipy is a multi-channel electrophysiology visualization and analysis toolki
 - Python 3.9 or later
 - pip or conda package manager
 
-### Installing from PyPI
-
-```bash
-pip install synaptipy
-```
-
 ### Installing from Source
 
 ```bash
