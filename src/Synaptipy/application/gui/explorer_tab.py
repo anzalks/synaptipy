@@ -1885,25 +1885,28 @@ class ExplorerTab(QtWidgets.QWidget):
                         first_plot.getViewBox().setXRange(*x_range, padding=0)
                         log.info(f"[EXPLORER-RESET] Set Windows X range from data: {x_range}")
                 
-                # Calculate Y range from actual data for each plot
+                # Calculate Y range from ONLY main signal data (not grid/axes)
                 for plot_id, plot in vis_map.items():
                     data_items = plot.listDataItems()
                     if data_items and len(data_items) > 0:
-                        # Get Y data from all plot items and find global range
-                        all_y_data = []
+                        # Get Y data from MAIN signal items only (filter out grid/axes)
+                        main_y_data = []
                         for item in data_items:
                             if hasattr(item, 'yData') and item.yData is not None:
-                                all_y_data.extend(item.yData)
+                                # Filter: Only include items with reasonable data size (exclude grid/axes)
+                                if len(item.yData) > 100:  # Main signals have many points
+                                    main_y_data.extend(item.yData)
+                                    log.info(f"[EXPLORER-RESET] Including data item with {len(item.yData)} points, range: [{float(np.min(item.yData)):.2f}, {float(np.max(item.yData)):.2f}]")
                         
-                        if all_y_data:
-                            y_min, y_max = float(np.min(all_y_data)), float(np.max(all_y_data))
-                            y_padding = (y_max - y_min) * 0.02
+                        if main_y_data:
+                            y_min, y_max = float(np.min(main_y_data)), float(np.max(main_y_data))
+                            y_padding = (y_max - y_min) * 0.05  # 5% padding for better visibility
                             y_range = [y_min - y_padding, y_max + y_padding]
                             plot.getViewBox().setYRange(*y_range, padding=0)
                             plot.update()  # Force immediate update
-                            log.info(f"[EXPLORER-RESET] Set Windows Y range from data for {plot_id}: {y_range}")
+                            log.info(f"[EXPLORER-RESET] Set Windows Y range from MAIN signal data for {plot_id}: {y_range}")
                         else:
-                            log.warning(f"[EXPLORER-RESET] No Y data found for {plot_id}")
+                            log.warning(f"[EXPLORER-RESET] No main signal data found for {plot_id}")
                     else:
                         log.warning(f"[EXPLORER-RESET] No data items found for {plot_id}")
                         
