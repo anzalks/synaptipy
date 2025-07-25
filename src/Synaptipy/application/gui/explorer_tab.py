@@ -1847,79 +1847,9 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET] Blocking range signals during manual calculation")
             self._disconnect_viewbox_signals_temporarily()
             
-            try:
-                # Manual X range calculation for Windows
-                log.info(f"[EXPLORER-RESET] Calculating manual X range for {first_cid}")
-                x_bounds = first_plot.getViewBox().childrenBounds()[0]
-                log.info(f"[EXPLORER-RESET] X bounds from childrenBounds: {x_bounds}")
-                if x_bounds and len(x_bounds) == 2 and x_bounds[0] != x_bounds[1]:
-                    x_padding = (x_bounds[1] - x_bounds[0]) * 0.02  # 2% padding
-                    manual_x_range = [x_bounds[0] - x_padding, x_bounds[1] + x_padding]
-                    first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
-                    log.info(f"[EXPLORER-RESET] Set manual X range: {manual_x_range}")
-                else:
-                    log.warning(f"[EXPLORER-RESET] Invalid X bounds for {first_cid}: {x_bounds}, using fallback")
-                    # Fallback: Get current data range directly from plot data
-                    plot_data_items = first_plot.listDataItems()
-                    if plot_data_items:
-                        # Get X data from the first plot item
-                        data_item = plot_data_items[0]
-                        if hasattr(data_item, 'xData') and data_item.xData is not None:
-                            x_data = data_item.xData
-                            if len(x_data) > 0:
-                                x_min, x_max = float(np.min(x_data)), float(np.max(x_data))
-                                x_padding = (x_max - x_min) * 0.02
-                                manual_x_range = [x_min - x_padding, x_max + x_padding]
-                                first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
-                                log.info(f"[EXPLORER-RESET] Set manual X range from data: {manual_x_range}")
-                            else:
-                                log.warning(f"[EXPLORER-RESET] No X data points found")
-                        else:
-                            log.warning(f"[EXPLORER-RESET] No xData attribute found in plot item")
-                    else:
-                        log.warning(f"[EXPLORER-RESET] No plot data items found for X range calculation")
-                
-                # Manual Y range calculation for all plots
-                log.info(f"[EXPLORER-RESET] Calculating manual Y ranges for all plots")
-                for plot_id, plot in vis_map.items():
-                    y_bounds = plot.getViewBox().childrenBounds()[1]
-                    log.info(f"[EXPLORER-RESET] Y bounds for {plot_id}: {y_bounds}")
-                    if y_bounds and len(y_bounds) == 2 and y_bounds[0] != y_bounds[1]:
-                        y_padding = (y_bounds[1] - y_bounds[0]) * 0.02  # 2% padding
-                        manual_y_range = [y_bounds[0] - y_padding, y_bounds[1] + y_padding]
-                        plot.getViewBox().setYRange(*manual_y_range, padding=0)
-                        log.info(f"[EXPLORER-RESET] Set manual Y range for {plot_id}: {manual_y_range}")
-                    else:
-                        log.warning(f"[EXPLORER-RESET] Invalid Y bounds for {plot_id}: {y_bounds}, using data fallback")
-                        # Fallback: Get current data range directly from plot data
-                        plot_data_items = plot.listDataItems()
-                        if plot_data_items:
-                            data_item = plot_data_items[0]
-                            if hasattr(data_item, 'yData') and data_item.yData is not None:
-                                y_data = data_item.yData
-                                if len(y_data) > 0:
-                                    y_min, y_max = float(np.min(y_data)), float(np.max(y_data))
-                                    y_padding = (y_max - y_min) * 0.02
-                                    manual_y_range = [y_min - y_padding, y_max + y_padding]
-                                    plot.getViewBox().setYRange(*manual_y_range, padding=0)
-                                    log.info(f"[EXPLORER-RESET] Set manual Y range from data for {plot_id}: {manual_y_range}")
-                                else:
-                                    log.warning(f"[EXPLORER-RESET] No Y data points found for {plot_id}")
-                            else:
-                                log.warning(f"[EXPLORER-RESET] No yData attribute found for {plot_id}")
-                        else:
-                            log.warning(f"[EXPLORER-RESET] No plot data items found for Y range calculation for {plot_id}")
-            except Exception as e:
-                log.error(f"[EXPLORER-RESET] Manual range calculation failed: {e}")
-                # Fallback to enableAutoRange if manual calculation fails
-                log.info(f"[EXPLORER-RESET] Falling back to enableAutoRange")
-                first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-                for plot_id, plot in vis_map.items():
-                    plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-            finally:
-                # Reconnect signals after a delay to allow manual ranges to stabilize (Windows fix)
-                log.info(f"[EXPLORER-RESET] Scheduling signal reconnection in 100ms to allow ranges to stabilize")
-                QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
+            # CRITICAL: Delay manual range calculation to allow PyQtGraph to process plot data
+            log.info(f"[EXPLORER-RESET] Scheduling delayed manual range calculation in 50ms")
+            QtCore.QTimer.singleShot(50, lambda: self._perform_delayed_manual_range_calculation(vis_map, first_cid, first_plot))
         else:
             # Mac/Linux: Use normal enableAutoRange (fast and reliable)
             log.info(f"[EXPLORER-RESET] Using enableAutoRange on Mac/Linux")
@@ -2545,5 +2475,83 @@ class ExplorerTab(QtWidgets.QWidget):
                     log.info(f"[EXPLORER-SIGNALS] Successfully reconnected signals for {chan_id}")
                 except Exception as e:
                     log.error(f"[EXPLORER-SIGNALS] Failed to reconnect signals for {chan_id}: {e}")
+
+    def _perform_delayed_manual_range_calculation(self, vis_map, first_cid, first_plot):
+        """Perform manual range calculation after PyQtGraph has processed plot data (Windows fix)"""
+        log.info(f"[EXPLORER-RESET-DELAYED] Starting delayed manual range calculation")
+        
+        try:
+            # Manual X range calculation for Windows (after delay)
+            log.info(f"[EXPLORER-RESET-DELAYED] Calculating manual X range for {first_cid}")
+            x_bounds = first_plot.getViewBox().childrenBounds()[0]
+            log.info(f"[EXPLORER-RESET-DELAYED] X bounds from childrenBounds: {x_bounds}")
+            if x_bounds and len(x_bounds) == 2 and abs(x_bounds[1] - x_bounds[0]) > 1e-10:
+                x_padding = (x_bounds[1] - x_bounds[0]) * 0.02  # 2% padding
+                manual_x_range = [x_bounds[0] - x_padding, x_bounds[1] + x_padding]
+                first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
+                log.info(f"[EXPLORER-RESET-DELAYED] Set manual X range: {manual_x_range}")
+            else:
+                log.warning(f"[EXPLORER-RESET-DELAYED] Invalid X bounds for {first_cid}: {x_bounds}, using data fallback")
+                # Fallback: Get current data range directly from plot data
+                plot_data_items = first_plot.listDataItems()
+                if plot_data_items:
+                    # Get X data from the first plot item
+                    data_item = plot_data_items[0]
+                    if hasattr(data_item, 'xData') and data_item.xData is not None:
+                        x_data = data_item.xData
+                        if len(x_data) > 0:
+                            x_min, x_max = float(np.min(x_data)), float(np.max(x_data))
+                            x_padding = (x_max - x_min) * 0.02
+                            manual_x_range = [x_min - x_padding, x_max + x_padding]
+                            first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
+                            log.info(f"[EXPLORER-RESET-DELAYED] Set manual X range from data: {manual_x_range}")
+                        else:
+                            log.warning(f"[EXPLORER-RESET-DELAYED] No X data points found")
+                    else:
+                        log.warning(f"[EXPLORER-RESET-DELAYED] No xData attribute found in plot item")
+                else:
+                    log.warning(f"[EXPLORER-RESET-DELAYED] No plot data items found for X range calculation")
+            
+            # Manual Y range calculation for all plots (after delay)
+            log.info(f"[EXPLORER-RESET-DELAYED] Calculating manual Y ranges for all plots")
+            for plot_id, plot in vis_map.items():
+                y_bounds = plot.getViewBox().childrenBounds()[1]
+                log.info(f"[EXPLORER-RESET-DELAYED] Y bounds for {plot_id}: {y_bounds}")
+                if y_bounds and len(y_bounds) == 2 and abs(y_bounds[1] - y_bounds[0]) > 1e-10:
+                    y_padding = (y_bounds[1] - y_bounds[0]) * 0.02  # 2% padding
+                    manual_y_range = [y_bounds[0] - y_padding, y_bounds[1] + y_padding]
+                    plot.getViewBox().setYRange(*manual_y_range, padding=0)
+                    log.info(f"[EXPLORER-RESET-DELAYED] Set manual Y range for {plot_id}: {manual_y_range}")
+                else:
+                    log.warning(f"[EXPLORER-RESET-DELAYED] Invalid Y bounds for {plot_id}: {y_bounds}, using data fallback")
+                    # Fallback: Get current data range directly from plot data
+                    plot_data_items = plot.listDataItems()
+                    if plot_data_items:
+                        data_item = plot_data_items[0]
+                        if hasattr(data_item, 'yData') and data_item.yData is not None:
+                            y_data = data_item.yData
+                            if len(y_data) > 0:
+                                y_min, y_max = float(np.min(y_data)), float(np.max(y_data))
+                                y_padding = (y_max - y_min) * 0.02
+                                manual_y_range = [y_min - y_padding, y_max + y_padding]
+                                plot.getViewBox().setYRange(*manual_y_range, padding=0)
+                                log.info(f"[EXPLORER-RESET-DELAYED] Set manual Y range from data for {plot_id}: {manual_y_range}")
+                            else:
+                                log.warning(f"[EXPLORER-RESET-DELAYED] No Y data points found for {plot_id}")
+                        else:
+                            log.warning(f"[EXPLORER-RESET-DELAYED] No yData attribute found for {plot_id}")
+                    else:
+                        log.warning(f"[EXPLORER-RESET-DELAYED] No plot data items found for Y range calculation for {plot_id}")
+        except Exception as e:
+            log.error(f"[EXPLORER-RESET-DELAYED] Manual range calculation failed: {e}")
+            # Fallback to enableAutoRange if manual calculation fails
+            log.info(f"[EXPLORER-RESET-DELAYED] Falling back to enableAutoRange")
+            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+            for plot_id, plot in vis_map.items():
+                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        finally:
+            # Reconnect signals after a delay to allow manual ranges to stabilize (Windows fix)
+            log.info(f"[EXPLORER-RESET-DELAYED] Scheduling signal reconnection in 100ms to allow ranges to stabilize")
+            QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
 
     # --- End of Methods ---
