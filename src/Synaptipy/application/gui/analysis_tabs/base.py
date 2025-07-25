@@ -85,30 +85,30 @@ class BaseAnalysisTab(QtWidgets.QWidget):
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
         """Adds a PlotWidget to the provided layout with simple Windows-safe configuration."""
         self.plot_widget = pg.PlotWidget()
-        
+
         # Set white background
         self.plot_widget.setBackground('white')
-        
+
         # Configure mouse mode
         viewbox = self.plot_widget.getViewBox()
         if viewbox:
             viewbox.setMouseMode(pg.ViewBox.RectMode)
             viewbox.mouseEnabled = True
-        
+
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
-        
+
         # Apply Windows-safe grid configuration after a delay
         from PySide6.QtCore import QTimer
         QTimer.singleShot(100, lambda: self._apply_safe_grid())
-        
+
         # Add reset view button below plot
         self._setup_reset_view_button(layout)
-        
+
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
-        
-                log.debug(f"Plot area setup for {self.__class__.__name__} - simple approach")
+
+        log.debug(f"Plot area setup for {self.__class__.__name__} - simple approach")
 
     def _apply_safe_grid(self):
         """Safely apply grid configuration to analysis plot."""
@@ -132,7 +132,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # --- END ADDED ---
 
     # --- ADDED: Method to setup save button --- 
-    def _setup_save_button(self, layout: QtWidgets.QLayout, alignment = QtCore.Qt.AlignmentFlag.AlignCenter):
+    def _setup_save_button(self, layout: QtWidgets.QLayout, alignment=QtCore.Qt.AlignmentFlag.AlignCenter):
         """Adds a standard 'Save Result' button to the layout and connects it."""
         self.save_button = QtWidgets.QPushButton(f"Save {self.get_display_name()} Result")
         self.save_button.setIcon(QtGui.QIcon.fromTheme("document-save")) # Optional icon
