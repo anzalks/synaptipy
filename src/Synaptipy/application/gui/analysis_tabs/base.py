@@ -85,31 +85,22 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
     # --- ADDED: Method to setup plot area --- 
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
-        """Adds a PlotWidget to the provided layout with exact explorer tab styling."""
-        self.plot_widget = pg.PlotWidget()
+        """Adds a PlotWidget to the provided layout using unified plot factory."""
+        # Instead of creating the plot immediately, add a placeholder and defer creation
+        self._plot_layout = layout
+        self._plot_stretch_factor = stretch_factor
         
-        # Set white background exactly like explorer tab
-        self.plot_widget.setBackground('white')
+        # Create a placeholder widget that will be replaced with the actual plot
+        self._plot_placeholder = QtWidgets.QLabel("Loading plot...")
+        self._plot_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._plot_placeholder.setStyleSheet("border: 1px dashed gray; background-color: #f0f0f0;")
+        self._plot_placeholder.setMinimumHeight(300)
         
-        # Get the plot item (this is what explorer tab configures)
-        plot_item = self.plot_widget.getPlotItem()
+        layout.addWidget(self._plot_placeholder, stretch=stretch_factor)
         
-        # Defer grid configuration to prevent Windows null pointer errors
-        def configure_plot_deferred():
-            self._configure_plot_item_like_explorer_tab(plot_item)
-        
-        # Use Qt's QTimer to defer grid configuration (Windows compatibility)
+        # Defer plot creation to prevent Windows null pointer errors
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(10, configure_plot_deferred)  # 10ms delay for Windows
-        
-        # Use the same mouse mode settings as explorer tab
-        viewbox = self.plot_widget.getViewBox()
-        if viewbox:
-            viewbox.setMouseMode(pg.ViewBox.RectMode)
-            viewbox.mouseEnabled = True
-        
-        # Add the plot widget to the provided layout
-        layout.addWidget(self.plot_widget, stretch=stretch_factor)
+        QTimer.singleShot(100, self._create_deferred_plot)  # 100ms delay for Windows
         
         # Add reset view button below plot
         self._setup_reset_view_button(layout)
@@ -117,80 +108,47 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
         
-        log.debug(f"Plot area setup for {self.__class__.__name__} - analysis mode (reset only)")
+        log.debug(f"Plot area setup deferred for {self.__class__.__name__} to prevent Windows errors")
+
+    def _create_deferred_plot(self):
+        """Create the actual plot widget after a delay to prevent Windows issues."""
+        try:
+            from Synaptipy.shared.plot_factory import create_analysis_plot
+            
+            # Create the actual plot widget
+            self.plot_widget = create_analysis_plot(parent=self)
+            
+            # Replace the placeholder with the actual plot
+            if hasattr(self, '_plot_placeholder') and self._plot_placeholder:
+                # Remove the placeholder
+                self._plot_layout.removeWidget(self._plot_placeholder)
+                self._plot_placeholder.deleteLater()
+                
+                # Add the real plot widget
+                self._plot_layout.insertWidget(0, self.plot_widget, stretch=self._plot_stretch_factor)
+                
+                # Trigger any additional plot setup that subclasses might need
+                self._on_plot_widget_ready()
+                
+            log.debug(f"Deferred plot creation completed for {self.__class__.__name__}")
+            
+        except Exception as e:
+            log.error(f"Failed to create deferred plot for {self.__class__.__name__}: {e}")
+            # Keep the placeholder with error message
+            if hasattr(self, '_plot_placeholder') and self._plot_placeholder:
+                self._plot_placeholder.setText(f"Plot creation failed: {e}")
+                
+    def _on_plot_widget_ready(self):
+        """Called when the plot widget is ready. Subclasses can override for additional setup."""
+        # Default implementation does nothing
+        pass
 
     def _configure_plot_item_like_explorer_tab(self, plot_item):
-        """Apply the exact same grid configuration as explorer tab (Windows-safe)."""
-        from Synaptipy.shared.styling import get_grid_pen
-        
-        # Import Z_ORDER with fallback
-        try:
-            from Synaptipy.shared.constants import Z_ORDER
-            grid_z_value = Z_ORDER['grid']
-        except (ImportError, KeyError):
-            # Fallback to hardcoded value if constants not available
-            grid_z_value = -1000
-        
-        # Check if plot_item is valid and ready for configuration
-        if not plot_item:
-            log.debug("Plot item is None, skipping grid configuration")
-            return
-            
-        # Set background via the view box for PlotItem (like explorer tab)
-        try:
-            vb = plot_item.getViewBox()
-            if vb:
-                vb.setBackgroundColor('white')
-        except Exception as e:
-            log.debug(f"Could not set background color: {e}")
-        
-        # Call showGrid on plot_item (NOT plot_widget) with alpha=1.0 like explorer tab
-        try:
-            plot_item.showGrid(x=True, y=True, alpha=1.0)
-        except Exception as e:
-            log.debug(f"Could not show grid: {e}")
-            return  # If showGrid fails, don't continue with grid config
-        
-        # Apply exact explorer tab grid configuration with better error handling
-        try:
-            for axis_name in ['bottom', 'left']:
-                try:
-                    axis = plot_item.getAxis(axis_name)
-                    if not axis:
-                        continue
-                        
-                    # Check if grid exists and is properly initialized
-                    if not hasattr(axis, 'grid') or axis.grid is None:
-                        continue
-                    
-                    # Additional Windows safety check - ensure graphics item is valid
-                    if hasattr(axis.grid, 'isVisible') and not axis.grid.isVisible():
-                        continue
-                    
-                    # Set grid opacity to full (like explorer tab)
-                    if hasattr(axis, 'setGrid'):
-                        axis.setGrid(255)  # Full opacity
-                    
-                    # Set grid z-value only if grid item has a valid scene and parentItem
-                    if (hasattr(axis.grid, 'setZValue') and 
-                        hasattr(axis.grid, 'scene') and
-                        hasattr(axis.grid, 'parentItem')):
-                        
-                        if (axis.grid.scene() is not None and 
-                            axis.grid.parentItem() is not None):  # Both scene and parent must be valid
-                            axis.grid.setZValue(grid_z_value)
-                    
-                    # Apply black grid pen (like explorer tab)
-                    if hasattr(axis.grid, 'setPen'):
-                        axis.grid.setPen(get_grid_pen())
-                        
-                except Exception as e:
-                    # Log individual axis errors for debugging but continue
-                    log.debug(f"Could not configure grid for axis '{axis_name}': {e}")
-                    continue
-                    
-        except Exception as e:
-            log.debug(f"Grid configuration failed: {e}")  # Log but don't crash
+        """Legacy method - now handled by unified plot factory."""
+        # This method is kept for backward compatibility but does nothing
+        # All plot configuration is now handled by the unified plot factory
+        log.debug("Plot configuration delegated to unified plot factory")
+        pass
 
     # --- END ADDED ---
 
