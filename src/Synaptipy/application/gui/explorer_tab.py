@@ -1903,7 +1903,25 @@ class ExplorerTab(QtWidgets.QWidget):
                             y_padding = (y_max - y_min) * 0.05  # 5% padding for better visibility
                             y_range = [y_min - y_padding, y_max + y_padding]
                             plot.getViewBox().setYRange(*y_range, padding=0)
-                            plot.update()  # Force immediate update
+                            
+                            # WINDOWS VISIBILITY FIX: Force aggressive redraw and check visibility
+                            plot.update()
+                            plot.getViewBox().update()
+                            plot.repaint()  # Force immediate repaint
+                            
+                            # Debug visibility of plot items
+                            for i, item in enumerate(data_items):
+                                if hasattr(item, 'yData') and item.yData is not None and len(item.yData) > 100:
+                                    visible = item.isVisible()
+                                    alpha = getattr(item.opts.get('pen', {}), 'color', lambda: None)() if hasattr(item.opts.get('pen', {}), 'color') else 'unknown'
+                                    log.info(f"[EXPLORER-VISIBILITY] Item {i}: visible={visible}, pen_alpha={alpha}, data_points={len(item.yData)}")
+                                    
+                                    # Force visibility and opaque pen
+                                    item.setVisible(True)
+                                    if hasattr(item, 'setPen'):
+                                        item.setPen(pg.mkPen(color='white', width=1))  # Force visible white pen
+                                        log.info(f"[EXPLORER-VISIBILITY] Forced white pen for item {i}")
+                            
                             log.info(f"[EXPLORER-RESET] Set Windows Y range from MAIN signal data for {plot_id}: {y_range}")
                         else:
                             log.warning(f"[EXPLORER-RESET] No main signal data found for {plot_id}")
