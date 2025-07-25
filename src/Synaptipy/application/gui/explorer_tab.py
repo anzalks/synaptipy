@@ -1837,70 +1837,89 @@ class ExplorerTab(QtWidgets.QWidget):
         first_cid, first_plot = next(iter(vis_map.items()))
         log.info(f"[EXPLORER-RESET] Found {len(vis_map)} visible plots, first: {first_cid}")
         
-        # Auto-range operations - now safe from feedback loops
-        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
-        first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on Y for all plots")
-        for plot_id, plot in vis_map.items():
-            log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
-            plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        # CRITICAL: Disconnect signals during auto-range operations to prevent Windows cascade
+        log.info(f"[EXPLORER-RESET] Temporarily disconnecting signals during auto-range operations")
+        self._disconnect_viewbox_signals_temporarily()
         
-        # Range capture happens AFTER auto-range operations
+        try:
+            # Auto-range operations - now protected from signal cascade
+            log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
+            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+            log.info(f"[EXPLORER-RESET] Calling enableAutoRange on Y for all plots")
+            for plot_id, plot in vis_map.items():
+                log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
+                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        finally:
+            # Reconnect signals after auto-range operations
+            log.info(f"[EXPLORER-RESET] Reconnecting signals after auto-range operations")
+            self._reconnect_viewbox_signals_after_plotting()
+        
+        # Range capture happens AFTER auto-range operations and signal reconnection
         log.info(f"[EXPLORER-RESET] Scheduling base range capture in 50ms")
         QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
         log.info(f"[EXPLORER-CAPTURE] Capturing base ranges...")
-        vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
-        vis_map={k:v for k,v in vis_map.items() if k is not None}
-        if not vis_map: 
-            log.warning(f"[EXPLORER-CAPTURE] No visible plots for base range capture")
-            return
-        first_cid, first_plot = next(iter(vis_map.items()))
-        log.info(f"[EXPLORER-CAPTURE] Capturing X base range from {first_cid}")
+        
+        # CRITICAL: Disconnect signals during base range capture to prevent Windows cascade
+        log.info(f"[EXPLORER-CAPTURE] Temporarily disconnecting signals during base range capture")
+        self._disconnect_viewbox_signals_temporarily()
+        
         try:
-             current_x_range = first_plot.getViewBox().viewRange()[0]
-             log.info(f"[EXPLORER-CAPTURE] Current X range: {current_x_range}")
-             self.base_x_range=current_x_range
-             if self.base_x_range: 
-                 log.info(f"[EXPLORER-CAPTURE] Setting X scrollbar from base range")
-                 self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, self.base_x_range)
-             else: 
-                 log.warning(f"[EXPLORER-CAPTURE] X base range is None, resetting scrollbar")
-                 self._reset_scrollbar(self.x_scrollbar)
-        except Exception as e: 
-            log.error(f"[EXPLORER-CAPTURE] Error capture base X: {e}"); 
-            self.base_x_range=None; self._reset_scrollbar(self.x_scrollbar)
-        self.base_y_ranges.clear()
-        log.info(f"[EXPLORER-CAPTURE] Capturing Y base ranges for {len(vis_map)} plots")
-        for cid, p in vis_map.items():
+            vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
+            vis_map={k:v for k,v in vis_map.items() if k is not None}
+            if not vis_map: 
+                log.warning(f"[EXPLORER-CAPTURE] No visible plots for base range capture")
+                return
+            first_cid, first_plot = next(iter(vis_map.items()))
+            log.info(f"[EXPLORER-CAPTURE] Capturing X base range from {first_cid}")
             try:
-                 current_y_range = p.getViewBox().viewRange()[1]
-                 log.info(f"[EXPLORER-CAPTURE] Captured Y range for {cid}: {current_y_range}")
-                 self.base_y_ranges[cid]=current_y_range
-                 if not self.y_axes_locked:
-                     s=self.individual_y_scrollbars.get(cid)
-                     if s: 
-                         log.info(f"[EXPLORER-CAPTURE] Setting individual Y scrollbar for {cid}")
-                         self._update_scrollbar_from_view(s, current_y_range, current_y_range)
-            except Exception as e:
-                 log.error(f"[EXPLORER-CAPTURE] Error capture base Y {cid}: {e}")
-                 if cid in self.base_y_ranges: del self.base_y_ranges[cid]
-                 s=self.individual_y_scrollbars.get(cid);
-                 if s: self._reset_scrollbar(s)
-        if self.y_axes_locked:
-            b_ref=self.base_y_ranges.get(first_cid)
-            if b_ref: 
-                log.info(f"[EXPLORER-CAPTURE] Setting global Y scrollbar from {first_cid}: {b_ref}")
-                self._update_scrollbar_from_view(self.global_y_scrollbar, b_ref, b_ref)
-            else: 
-                log.warning(f"[EXPLORER-CAPTURE] No Y base range for global scrollbar")
-                self._reset_scrollbar(self.global_y_scrollbar)
-            for s in self.individual_y_scrollbars.values(): self._reset_scrollbar(s)
-        else: self._reset_scrollbar(self.global_y_scrollbar)
-        log.info(f"[EXPLORER-CAPTURE] Base range capture complete")
-        self._update_limit_fields(); self._update_y_controls_visibility()
+                 current_x_range = first_plot.getViewBox().viewRange()[0]
+                 log.info(f"[EXPLORER-CAPTURE] Current X range: {current_x_range}")
+                 self.base_x_range=current_x_range
+                 if self.base_x_range: 
+                     log.info(f"[EXPLORER-CAPTURE] Setting X scrollbar from base range")
+                     self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, self.base_x_range)
+                 else: 
+                     log.warning(f"[EXPLORER-CAPTURE] X base range is None, resetting scrollbar")
+                     self._reset_scrollbar(self.x_scrollbar)
+            except Exception as e: 
+                log.error(f"[EXPLORER-CAPTURE] Error capture base X: {e}"); 
+                self.base_x_range=None; self._reset_scrollbar(self.x_scrollbar)
+            self.base_y_ranges.clear()
+            log.info(f"[EXPLORER-CAPTURE] Capturing Y base ranges for {len(vis_map)} plots")
+            for cid, p in vis_map.items():
+                try:
+                     current_y_range = p.getViewBox().viewRange()[1]
+                     log.info(f"[EXPLORER-CAPTURE] Captured Y range for {cid}: {current_y_range}")
+                     self.base_y_ranges[cid]=current_y_range
+                     if not self.y_axes_locked:
+                         s=self.individual_y_scrollbars.get(cid)
+                         if s: 
+                             log.info(f"[EXPLORER-CAPTURE] Setting individual Y scrollbar for {cid}")
+                             self._update_scrollbar_from_view(s, current_y_range, current_y_range)
+                except Exception as e:
+                     log.error(f"[EXPLORER-CAPTURE] Error capture base Y {cid}: {e}")
+                     if cid in self.base_y_ranges: del self.base_y_ranges[cid]
+                     s=self.individual_y_scrollbars.get(cid);
+                     if s: self._reset_scrollbar(s)
+            if self.y_axes_locked:
+                b_ref=self.base_y_ranges.get(first_cid)
+                if b_ref: 
+                    log.info(f"[EXPLORER-CAPTURE] Setting global Y scrollbar from {first_cid}: {b_ref}")
+                    self._update_scrollbar_from_view(self.global_y_scrollbar, b_ref, b_ref)
+                else: 
+                    log.warning(f"[EXPLORER-CAPTURE] No Y base range for global scrollbar")
+                    self._reset_scrollbar(self.global_y_scrollbar)
+                for s in self.individual_y_scrollbars.values(): self._reset_scrollbar(s)
+            else: self._reset_scrollbar(self.global_y_scrollbar)
+            log.info(f"[EXPLORER-CAPTURE] Base range capture complete")
+            self._update_limit_fields(); self._update_y_controls_visibility()
+        finally:
+            # Reconnect signals after base range capture
+            log.info(f"[EXPLORER-CAPTURE] Reconnecting signals after base range capture")
+            self._reconnect_viewbox_signals_after_plotting()
 
     def _reset_all_sliders(self):
         sliders = [self.x_zoom_slider, self.global_y_slider] + list(self.individual_y_sliders.values())
@@ -1912,8 +1931,20 @@ class ExplorerTab(QtWidgets.QWidget):
         plot = self.channel_plots.get(chan_id)
         if not plot or not plot.isVisible() or not plot.getViewBox(): return
         
-        # Auto-range operation - now safe from feedback loops
-        plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        log.info(f"[EXPLORER-RESET-SINGLE] Resetting view for {chan_id}")
+        
+        # CRITICAL: Disconnect signals during single plot auto-range to prevent Windows cascade
+        log.info(f"[EXPLORER-RESET-SINGLE] Temporarily disconnecting signals for {chan_id}")
+        self._disconnect_viewbox_signals_temporarily()
+        
+        try:
+            # Auto-range operation - now protected from signal cascade
+            log.info(f"[EXPLORER-RESET-SINGLE] Calling enableAutoRange Y for {chan_id}")
+            plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        finally:
+            # Reconnect signals after auto-range operation
+            log.info(f"[EXPLORER-RESET-SINGLE] Reconnecting signals after auto-range for {chan_id}")
+            self._reconnect_viewbox_signals_after_plotting()
             
         QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
 
@@ -2394,14 +2425,17 @@ class ExplorerTab(QtWidgets.QWidget):
             if plot_item and plot_item.getViewBox():
                 vb = plot_item.getViewBox()
                 try:
-                    # Ensure not double-connected
+                    # Always try to disconnect first (ignore if not connected)
                     try:
                         vb.sigXRangeChanged.disconnect(self._handle_vb_xrange_changed)
+                    except (TypeError, RuntimeError):
+                        pass  # Signal not connected or other Qt error
+                    try:
                         vb.sigYRangeChanged.disconnect(self._handle_vb_yrange_changed)
-                    except:
-                        pass
+                    except (TypeError, RuntimeError):
+                        pass  # Signal not connected or other Qt error
                     
-                    # Reconnect
+                    # Now connect the signals
                     vb.sigXRangeChanged.connect(self._handle_vb_xrange_changed)
                     vb.sigYRangeChanged.connect(self._handle_vb_yrange_changed)
                     log.info(f"[EXPLORER-SIGNALS] Successfully reconnected signals for {chan_id}")
