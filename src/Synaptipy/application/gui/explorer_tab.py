@@ -555,13 +555,21 @@ class ExplorerTab(QtWidgets.QWidget):
     # =========================================================================
     # Public Methods for Interaction
     # =========================================================================
+    def load_file(self, filepath: Path, file_list: List[Path] = None, selected_index: int = -1):
+        """Legacy method - redirects to load_recording_data"""
+        if file_list is None:
+            file_list = [filepath]
+        if selected_index == -1:
+            selected_index = 0
+        self.load_recording_data(filepath, file_list, selected_index)
+
     def load_recording_data(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int):
         """
         Stores the list of files selected by the user and loads the initial one.
         Navigation between files is handled by _next_file_folder / _prev_file_folder.
         """
         # CHANGE: Log using the clearer argument name
-        log.info(f"ExplorerTab received file list (count: {len(file_list)}). Initial file to display: {initial_filepath_to_load.name} (Index {current_index})")
+        log.info(f"[EXPLORER-LOAD] ExplorerTab received file list (count: {len(file_list)}). Initial file to display: {initial_filepath_to_load.name} (Index {current_index})")
         # Store the full list and the starting index provided by MainWindow
         self.file_list = file_list
         self.current_file_index = current_index
@@ -781,6 +789,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Create Y control sliders and scrollbars for each channel
         self._create_y_controls_for_channels()
         
+        # CRITICAL: Connect ViewBox range change signals
+        self._connect_viewbox_signals()
+        
         # Ensure all plots are properly sized and laid out
         self.graphics_layout_widget.ci.setSpacing(10)  # Add spacing between plots
         
@@ -791,6 +802,23 @@ class ExplorerTab(QtWidgets.QWidget):
         
         # Complete initial UI update
         self._update_ui_state()
+
+    def _connect_viewbox_signals(self):
+        """Connect ViewBox range change signals to handlers - CRITICAL for zoom/scroll functionality"""
+        log.info(f"[EXPLORER-SIGNALS] Connecting ViewBox range change signals for {len(self.channel_plots)} plots")
+        for chan_id, plot_item in self.channel_plots.items():
+            if plot_item and plot_item.getViewBox():
+                vb = plot_item.getViewBox()
+                try:
+                    # Connect X range change signal
+                    vb.sigXRangeChanged.connect(self._handle_vb_xrange_changed)
+                    log.info(f"[EXPLORER-SIGNALS] Connected X range signal for {chan_id}")
+                    
+                    # Connect Y range change signal  
+                    vb.sigYRangeChanged.connect(self._handle_vb_yrange_changed)
+                    log.info(f"[EXPLORER-SIGNALS] Connected Y range signal for {chan_id}")
+                except Exception as e:
+                    log.error(f"[EXPLORER-SIGNALS] Failed to connect signals for {chan_id}: {e}")
 
     def _create_y_controls_for_channels(self):
         """Creates and connects individual Y sliders and scrollbars for each channel."""
@@ -1107,6 +1135,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self.channel_plot_data_items.clear()
 
     def _update_plot(self):
+        log.info(f"[EXPLORER-PLOT] Plot update starting - recording={self.current_recording is not None}")
+        if not self.current_recording: 
+            log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
+            return
+        
         self._clear_plot_data_only()
         if not self.current_recording or not self.channel_plots:
              log.warning("Update plot: No data/plots."); self._update_ui_state(); return
@@ -1427,45 +1460,61 @@ class ExplorerTab(QtWidgets.QWidget):
         except Exception as e: log.error(f"Error in _calculate_new_range: {e}"); return None
 
     def _on_x_zoom_changed(self, value: int):
+        log.info(f"[EXPLORER-ZOOM] X zoom changed to: {value}, manual_limits={self.manual_limits_enabled}, base_range={self.base_x_range}, updating={self._updating_viewranges}")
         if self.manual_limits_enabled or self.base_x_range is None or self._updating_viewranges: return
         new_x = self._calculate_new_range(self.base_x_range, value)
-        if new_x is None: return
+        if new_x is None: 
+            log.warning(f"[EXPLORER-ZOOM] X zoom calculation returned None")
+            return
+        log.info(f"[EXPLORER-ZOOM] X zoom calculated new range: {new_x}")
         plot = next((p for p in self.channel_plots.values() if p.isVisible()), None)
         if plot and plot.getViewBox():
             vb=plot.getViewBox(); self._updating_viewranges=True
-            try: vb.setXRange(new_x[0], new_x[1], padding=0)
+            try: 
+                log.info(f"[EXPLORER-ZOOM] X zoom applying setXRange: {new_x}")
+                vb.setXRange(new_x[0], new_x[1], padding=0)
             finally: self._updating_viewranges=False; self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_x)
 
     def _on_x_scrollbar_changed(self, value: int):
+        log.info(f"[EXPLORER-SCROLL] X scrollbar changed to: {value}, manual_limits={self.manual_limits_enabled}, base_range={self.base_x_range}, updating={self._updating_scrollbars}")
         if self.manual_limits_enabled or self.base_x_range is None or self._updating_scrollbars: return
         plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-        if not plot: return
+        if not plot: 
+            log.warning(f"[EXPLORER-SCROLL] X scrollbar - no visible plot found")
+            return
         vb=plot.getViewBox(); self._updating_viewranges=True
         try:
             cx = vb.viewRange()[0]; cs=max(abs(cx[1]-cx[0]), 1e-12)
             bs=max(abs(self.base_x_range[1]-self.base_x_range[0]), 1e-12)
             sr=max(0, bs-cs); f=float(value)/max(1, self.x_scrollbar.maximum())
             nm=self.base_x_range[0]+f*sr; nM=nm+cs # Corrected var
+            log.info(f"[EXPLORER-SCROLL] X scrollbar applying setXRange: [{nm}, {nM}]")
             vb.setXRange(nm, nM, padding=0)
-        except Exception as e: log.error(f"Error in _on_x_scrollbar_changed: {e}")
+        except Exception as e: log.error(f"[EXPLORER-SCROLL] Error in _on_x_scrollbar_changed: {e}")
         finally: self._updating_viewranges=False
 
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
+        log.info(f"[EXPLORER-RANGE] X range changed to: {new_range}, updating_viewranges={self._updating_viewranges}")
         # --- UPDATED: Check shared X limits --- 
         is_manual_enabled = self.manual_limits_enabled
         manual_x = self.manual_x_limits if is_manual_enabled else None
         # --- END UPDATE ---
         if is_manual_enabled and manual_x and not self._updating_viewranges:
+            log.warning(f"[EXPLORER-RANGE] X manual limit override: {manual_x} (was {new_range})")
             # ROBUST feedback loop prevention: Block signals during setXRange
             self._updating_viewranges = True
             try:
                 vb.sigXRangeChanged.blockSignals(True)
                 vb.setXRange(manual_x[0], manual_x[1], padding=0)
+                log.info(f"[EXPLORER-RANGE] X manual setXRange applied: {manual_x}")
             finally:
                 vb.sigXRangeChanged.blockSignals(False)
                 self._updating_viewranges = False
             return
-        if self._updating_viewranges or self.base_x_range is None: return
+        if self._updating_viewranges or self.base_x_range is None: 
+            log.debug(f"[EXPLORER-RANGE] X range change ignored - updating={self._updating_viewranges}, base_range={self.base_x_range}")
+            return
+        log.info(f"[EXPLORER-RANGE] X range updating scrollbar from {self.base_x_range} to {new_range}")
         self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
         if not is_manual_enabled: self._trigger_limit_field_update()
 
@@ -1709,30 +1758,42 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _handle_vb_yrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
         cid = getattr(vb,'_synaptipy_chan_id',None)
-        if cid is None: return
+        if cid is None: 
+            log.debug(f"[EXPLORER-RANGE] Y range change ignored - no channel ID")
+            return
+        log.info(f"[EXPLORER-RANGE] Y range changed for {cid}: {new_range}, updating_viewranges={self._updating_viewranges}")
         # --- UPDATED: Check per-channel Y limits --- 
         is_manual_enabled = self.manual_limits_enabled
         channel_limits = self.manual_channel_limits.get(cid, {})
         manual_y = channel_limits.get('y') if is_manual_enabled else None
         # --- END UPDATE --- 
         if is_manual_enabled and manual_y and not self._updating_viewranges:
+            log.warning(f"[EXPLORER-RANGE] Y manual limit override for {cid}: {manual_y} (was {new_range})")
             # ROBUST feedback loop prevention: Block signals during setYRange
             self._updating_viewranges = True
             try:
                 vb.sigYRangeChanged.blockSignals(True)
                 vb.setYRange(manual_y[0], manual_y[1], padding=0)
+                log.info(f"[EXPLORER-RANGE] Y manual setYRange applied for {cid}: {manual_y}")
             finally:
                 vb.sigYRangeChanged.blockSignals(False)
                 self._updating_viewranges = False
             return
         b=self.base_y_ranges.get(cid)
-        if self._updating_viewranges or b is None: return
+        if self._updating_viewranges or b is None: 
+            log.debug(f"[EXPLORER-RANGE] Y range change ignored for {cid} - updating={self._updating_viewranges}, base_range={b}")
+            return
+        log.info(f"[EXPLORER-RANGE] Y range updating scrollbar for {cid} from {b} to {new_range}")
         if self.y_axes_locked:
             fvb = next((p.getViewBox() for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-            if vb == fvb: self._update_scrollbar_from_view(self.global_y_scrollbar, b, new_range)
+            if vb == fvb: 
+                log.info(f"[EXPLORER-RANGE] Y updating global scrollbar for locked axes")
+                self._update_scrollbar_from_view(self.global_y_scrollbar, b, new_range)
         else:
              s=self.individual_y_scrollbars.get(cid)
-             if s: self._update_scrollbar_from_view(s, b, new_range)
+             if s: 
+                 log.info(f"[EXPLORER-RANGE] Y updating individual scrollbar for {cid}")
+                 self._update_scrollbar_from_view(s, b, new_range)
         if not is_manual_enabled: self._trigger_limit_field_update()
 
     def _update_scrollbar_from_view(self, scrollbar: QtWidgets.QScrollBar, base_range: Optional[Tuple[float,float]], view_range: Optional[Tuple[float, float]]):
@@ -1752,52 +1813,85 @@ class ExplorerTab(QtWidgets.QWidget):
         finally: self._updating_scrollbars=False
 
     def _reset_view(self):
-        if not self.current_recording: self._reset_ui_and_state_for_new_file(); self._update_ui_state(); return
-        if self.manual_limits_enabled: self._apply_manual_limits(); self._update_ui_state(); return
-        log.debug("Auto-ranging plots.")
+        log.info(f"[EXPLORER-RESET] Reset view called - has_recording={self.current_recording is not None}, manual_limits={self.manual_limits_enabled}")
+        if not self.current_recording: 
+            log.info(f"[EXPLORER-RESET] No recording - calling reset UI and state")
+            self._reset_ui_and_state_for_new_file(); self._update_ui_state(); return
+        if self.manual_limits_enabled: 
+            log.info(f"[EXPLORER-RESET] Manual limits enabled - applying manual limits")
+            self._apply_manual_limits(); self._update_ui_state(); return
+        log.info(f"[EXPLORER-RESET] Auto-ranging plots...")
         vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
         vis_map={k:v for k,v in vis_map.items() if k is not None}
-        if not vis_map: self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
+        if not vis_map: 
+            log.warning(f"[EXPLORER-RESET] No visible plots found")
+            self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
         first_cid, first_plot = next(iter(vis_map.items()))
+        log.info(f"[EXPLORER-RESET] Found {len(vis_map)} visible plots, first: {first_cid}")
         
         # Auto-range operations - now safe from feedback loops
+        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
         first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        for plot in vis_map.values(): 
+        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on Y for all plots")
+        for plot_id, plot in vis_map.items():
+            log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         
         # Range capture happens AFTER auto-range operations
+        log.info(f"[EXPLORER-RESET] Scheduling base range capture in 50ms")
         QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
-        log.debug("Capturing base ranges...")
+        log.info(f"[EXPLORER-CAPTURE] Capturing base ranges...")
         vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
         vis_map={k:v for k,v in vis_map.items() if k is not None}
-        if not vis_map: return
+        if not vis_map: 
+            log.warning(f"[EXPLORER-CAPTURE] No visible plots for base range capture")
+            return
         first_cid, first_plot = next(iter(vis_map.items()))
+        log.info(f"[EXPLORER-CAPTURE] Capturing X base range from {first_cid}")
         try:
-             self.base_x_range=first_plot.getViewBox().viewRange()[0]
-             if self.base_x_range: self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, self.base_x_range)
-             else: self._reset_scrollbar(self.x_scrollbar)
-        except Exception as e: log.error(f"Error capture base X: {e}"); self.base_x_range=None; self._reset_scrollbar(self.x_scrollbar)
+             current_x_range = first_plot.getViewBox().viewRange()[0]
+             log.info(f"[EXPLORER-CAPTURE] Current X range: {current_x_range}")
+             self.base_x_range=current_x_range
+             if self.base_x_range: 
+                 log.info(f"[EXPLORER-CAPTURE] Setting X scrollbar from base range")
+                 self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, self.base_x_range)
+             else: 
+                 log.warning(f"[EXPLORER-CAPTURE] X base range is None, resetting scrollbar")
+                 self._reset_scrollbar(self.x_scrollbar)
+        except Exception as e: 
+            log.error(f"[EXPLORER-CAPTURE] Error capture base X: {e}"); 
+            self.base_x_range=None; self._reset_scrollbar(self.x_scrollbar)
         self.base_y_ranges.clear()
+        log.info(f"[EXPLORER-CAPTURE] Capturing Y base ranges for {len(vis_map)} plots")
         for cid, p in vis_map.items():
             try:
-                 by=p.getViewBox().viewRange()[1]; self.base_y_ranges[cid]=by
+                 current_y_range = p.getViewBox().viewRange()[1]
+                 log.info(f"[EXPLORER-CAPTURE] Captured Y range for {cid}: {current_y_range}")
+                 self.base_y_ranges[cid]=current_y_range
                  if not self.y_axes_locked:
                      s=self.individual_y_scrollbars.get(cid)
-                     if s: self._update_scrollbar_from_view(s, by, by)
+                     if s: 
+                         log.info(f"[EXPLORER-CAPTURE] Setting individual Y scrollbar for {cid}")
+                         self._update_scrollbar_from_view(s, current_y_range, current_y_range)
             except Exception as e:
-                 log.error(f"Error capture base Y {cid}: {e}")
+                 log.error(f"[EXPLORER-CAPTURE] Error capture base Y {cid}: {e}")
                  if cid in self.base_y_ranges: del self.base_y_ranges[cid]
                  s=self.individual_y_scrollbars.get(cid);
                  if s: self._reset_scrollbar(s)
         if self.y_axes_locked:
             b_ref=self.base_y_ranges.get(first_cid)
-            if b_ref: self._update_scrollbar_from_view(self.global_y_scrollbar, b_ref, b_ref)
-            else: self._reset_scrollbar(self.global_y_scrollbar)
+            if b_ref: 
+                log.info(f"[EXPLORER-CAPTURE] Setting global Y scrollbar from {first_cid}: {b_ref}")
+                self._update_scrollbar_from_view(self.global_y_scrollbar, b_ref, b_ref)
+            else: 
+                log.warning(f"[EXPLORER-CAPTURE] No Y base range for global scrollbar")
+                self._reset_scrollbar(self.global_y_scrollbar)
             for s in self.individual_y_scrollbars.values(): self._reset_scrollbar(s)
         else: self._reset_scrollbar(self.global_y_scrollbar)
+        log.info(f"[EXPLORER-CAPTURE] Base range capture complete")
         self._update_limit_fields(); self._update_y_controls_visibility()
 
     def _reset_all_sliders(self):
