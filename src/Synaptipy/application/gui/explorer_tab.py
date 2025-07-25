@@ -1140,182 +1140,190 @@ class ExplorerTab(QtWidgets.QWidget):
             log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
             return
         
-        self._clear_plot_data_only()
-        if not self.current_recording or not self.channel_plots:
-             log.warning("Update plot: No data/plots."); self._update_ui_state(); return
-        is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
-        log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
-        
-        # Import styling functions to ensure consistent appearance
-        from Synaptipy.shared.styling import get_grid_pen
-        
-        vis_const_available = VisConstants is not None
-        _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
-        _trial_alpha_val = getattr(VisConstants, 'TRIAL_ALPHA', 70) if vis_const_available else 70
-        _avg_color_str = getattr(VisConstants, 'AVERAGE_COLOR', '#EE4B2B') if vis_const_available else '#EE4B2B'
-        _pen_width_val = getattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH', 1) if vis_const_available else 1
-        _ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if vis_const_available else 5000
+        # CRITICAL: Disconnect range change signals during plot data addition to prevent Windows scaling cascade
+        self._disconnect_viewbox_signals_temporarily()
         
         try:
-            if isinstance(_trial_color_def, (tuple, list)) and len(_trial_color_def) >= 3: rgb_tuple = tuple(int(c) for c in _trial_color_def[:3])
-            elif isinstance(_trial_color_def, str): color_hex = _trial_color_def.lstrip('#'); rgb_tuple = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
-            else: raise ValueError(f"Unsupported color format: {_trial_color_def}")
-            alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
-            rgba_tuple = rgb_tuple + (alpha_int,)
-            trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")  # Original trial pen
-            log.debug(f"Trial pen RGBA: {rgba_tuple}")
-        except Exception as e:
-            log.error(f"Error creating trial_pen: {e}. Fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
-        average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")  # Original average pen
-        single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")  # Original single trial pen
-        enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
-        ds_threshold = _ds_thresh_val
-        any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
+            # --- Rest of existing _update_plot logic with temporary signal disconnection ---
+            self._clear_plot_data_only()
+            if not self.current_recording or not self.channel_plots:
+                 log.warning("Update plot: No data/plots."); self._update_ui_state(); return  # This return is now inside try block, so finally will execute
+            is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
+            log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
+            
+            # Import styling functions to ensure consistent appearance
+            from Synaptipy.shared.styling import get_grid_pen
+            
+            vis_const_available = VisConstants is not None
+            _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
+            _trial_alpha_val = getattr(VisConstants, 'TRIAL_ALPHA', 70) if vis_const_available else 70
+            _avg_color_str = getattr(VisConstants, 'AVERAGE_COLOR', '#EE4B2B') if vis_const_available else '#EE4B2B'
+            _pen_width_val = getattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH', 1) if vis_const_available else 1
+            _ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if vis_const_available else 5000
+            
+            try:
+                if isinstance(_trial_color_def, (tuple, list)) and len(_trial_color_def) >= 3: rgb_tuple = tuple(int(c) for c in _trial_color_def[:3])
+                elif isinstance(_trial_color_def, str): color_hex = _trial_color_def.lstrip('#'); rgb_tuple = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
+                else: raise ValueError(f"Unsupported color format: {_trial_color_def}")
+                alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
+                rgba_tuple = rgb_tuple + (alpha_int,)
+                trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")  # Original trial pen
+                log.debug(f"Trial pen RGBA: {rgba_tuple}")
+            except Exception as e:
+                log.error(f"Error creating trial_pen: {e}. Fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
+            average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")  # Original average pen
+            single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")  # Original single trial pen
+            enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
+            ds_threshold = _ds_thresh_val
+            any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
 
-        for chan_id, plot_item in self.channel_plots.items():
-            checkbox = self.channel_checkboxes.get(chan_id)
-            channel = self.current_recording.channels.get(chan_id)
-            if checkbox and checkbox.isChecked() and channel and plot_item:
-                plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
-                
-                # Step 1: Apply basic styling BEFORE plotting
-                try:
-                    # Set background via the view box for PlotItem
-                    vb = plot_item.getViewBox()
-                    if vb:
-                        vb.setBackgroundColor('white')
-                        # Normal ViewBox behavior restored
-                        # vb.enableAutoRange(enable=False)
-                        # vb.setAutoVisible(x=False, y=False)
-                except:
-                    pass  # Fallback if background setting fails
-                
-                # Enable grid with normal configuration
-                plot_item.showGrid(x=True, y=True, alpha=1.0)
-                
-                # Step 3: Force grid lines to have proper z-values and pens
-                try:
-                    for axis_name in ['bottom', 'left']:
-                        axis = plot_item.getAxis(axis_name)
-                        if axis and hasattr(axis, 'grid'):
-                            # Set grid opacity
-                            if hasattr(axis, 'setGrid'):
-                                axis.setGrid(255)  # Full opacity
-                                
-                            # Set grid z-order
-                            if hasattr(axis.grid, 'setZValue'):
-                                axis.grid.setZValue(Z_ORDER['grid'])
-                                
-                            # Apply proper grid pen
-                            if hasattr(axis.grid, 'setPen'):
-                                grid_pen = get_grid_pen()
-                                axis.grid.setPen(grid_pen)
-                except Exception as e:
-                    log.warning(f"Could not configure grid for channel {chan_id}: {e}")
-                
-                # Now plot the data with proper z-ordering
-                if not is_cycle_mode:
-                    # --- Overlay All + Avg Mode ---
-                    for trial_idx in range(channel.num_trials):
-                        data = channel.get_data(trial_idx)
-                        time_vec = channel.get_relative_time_vector(trial_idx)
-                        if data is not None and time_vec is not None:
-                            item = plot_item.plot(time_vec, data, pen=trial_pen)
-                            # Set z-order for proper layering
-                            if hasattr(item, 'setZValue'):
-                                item.setZValue(1)
-                            item.opts['autoDownsample'] = enable_downsampling
-                            item.opts['autoDownsampleThreshold'] = ds_threshold
-                            self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                            channel_plotted = True
-                        else:
-                            log.warning(f"Missing data or time for trial {trial_idx+1}, Ch {chan_id}")
+            for chan_id, plot_item in self.channel_plots.items():
+                checkbox = self.channel_checkboxes.get(chan_id)
+                channel = self.current_recording.channels.get(chan_id)
+                if checkbox and checkbox.isChecked() and channel and plot_item:
+                    plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
                     
-                    # Plot average trace
-                    avg_data = channel.get_averaged_data()
-                    avg_time_vec = channel.get_relative_averaged_time_vector()
-                    if avg_data is not None and avg_time_vec is not None:
-                        item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
-                        # Set average data z-order
-                        if hasattr(item, 'setZValue'):
-                            item.setZValue(2)
-                        item.opts['autoDownsample'] = enable_downsampling
-                        item.opts['autoDownsampleThreshold'] = ds_threshold
-                        self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                        channel_plotted = True
-
-                else:
-                    # --- Cycle Single Trial Mode ---
-                    idx = min(self.current_trial_index, channel.num_trials - 1) if channel.num_trials > 0 else -1
-                    if idx >= 0:
-                        data = channel.get_data(idx)
-                        time_vec = channel.get_relative_time_vector(idx)
-                        if data is not None and time_vec is not None:
-                            item = plot_item.plot(time_vec, data, pen=single_trial_pen)
-                            # Set primary data z-order
+                    # Step 1: Apply basic styling BEFORE plotting
+                    try:
+                        # Set background via the view box for PlotItem
+                        vb = plot_item.getViewBox()
+                        if vb:
+                            vb.setBackgroundColor('white')
+                            # Normal ViewBox behavior restored
+                            # vb.enableAutoRange(enable=False)
+                            # vb.setAutoVisible(x=False, y=False)
+                    except:
+                        pass  # Fallback if background setting fails
+                    
+                    # Enable grid with normal configuration
+                    plot_item.showGrid(x=True, y=True, alpha=1.0)
+                    
+                    # Step 3: Force grid lines to have proper z-values and pens
+                    try:
+                        for axis_name in ['bottom', 'left']:
+                            axis = plot_item.getAxis(axis_name)
+                            if axis and hasattr(axis, 'grid'):
+                                # Set grid opacity
+                                if hasattr(axis, 'setGrid'):
+                                    axis.setGrid(255)  # Full opacity
+                                    
+                                # Set grid z-order
+                                if hasattr(axis.grid, 'setZValue'):
+                                    axis.grid.setZValue(Z_ORDER['grid'])
+                                
+                                # Apply proper grid pen
+                                if hasattr(axis.grid, 'setPen'):
+                                    grid_pen = get_grid_pen()
+                                    axis.grid.setPen(grid_pen)
+                    except Exception as e:
+                        log.warning(f"Could not configure grid for channel {chan_id}: {e}")
+                    
+                    # Now plot the data with proper z-ordering
+                    if not is_cycle_mode:
+                        # --- Overlay All + Avg Mode ---
+                        for trial_idx in range(channel.num_trials):
+                            data = channel.get_data(trial_idx)
+                            time_vec = channel.get_relative_time_vector(trial_idx)
+                            if data is not None and time_vec is not None:
+                                item = plot_item.plot(time_vec, data, pen=trial_pen)
+                                # Set z-order for proper layering
+                                if hasattr(item, 'setZValue'):
+                                    item.setZValue(1)
+                                item.opts['autoDownsample'] = enable_downsampling
+                                item.opts['autoDownsampleThreshold'] = ds_threshold
+                                self.channel_plot_data_items.setdefault(chan_id, []).append(item)
+                                channel_plotted = True
+                            else:
+                                log.warning(f"Missing data or time for trial {trial_idx+1}, Ch {chan_id}")
+                        
+                        # Plot average trace
+                        avg_data = channel.get_averaged_data()
+                        avg_time_vec = channel.get_relative_averaged_time_vector()
+                        if avg_data is not None and avg_time_vec is not None:
+                            item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
+                            # Set average data z-order
                             if hasattr(item, 'setZValue'):
-                                item.setZValue(3)
+                                item.setZValue(2)
                             item.opts['autoDownsample'] = enable_downsampling
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
+
+                    else:
+                        # --- Cycle Single Trial Mode ---
+                        idx = min(self.current_trial_index, channel.num_trials - 1) if channel.num_trials > 0 else -1
+                        if idx >= 0:
+                            data = channel.get_data(idx)
+                            time_vec = channel.get_relative_time_vector(idx)
+                            if data is not None and time_vec is not None:
+                                item = plot_item.plot(time_vec, data, pen=single_trial_pen)
+                                # Set primary data z-order
+                                if hasattr(item, 'setZValue'):
+                                    item.setZValue(3)
+                                item.opts['autoDownsample'] = enable_downsampling
+                                item.opts['autoDownsampleThreshold'] = ds_threshold
+                                self.channel_plot_data_items.setdefault(chan_id, []).append(item)
+                                channel_plotted = True
+                            else: 
+                                text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
+                                # Set text overlay z-order
+                                if hasattr(text_item, 'setZValue'):
+                                    text_item.setZValue(10)
+                                plot_item.addItem(text_item)
                         else: 
-                            text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
+                            text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
                             # Set text overlay z-order
                             if hasattr(text_item, 'setZValue'):
                                 text_item.setZValue(10)
                             plot_item.addItem(text_item)
-                    else: 
-                        text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
+
+                    if not channel_plotted: 
+                        text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
                         # Set text overlay z-order
                         if hasattr(text_item, 'setZValue'):
                             text_item.setZValue(10)
                         plot_item.addItem(text_item)
+                    
+                    # Final step: Re-apply grid settings to ensure they're visible after all plotting
+                    plot_item.showGrid(x=True, y=True, alpha=1.0)
+                    
+                    if channel_plotted: any_data_plotted = True
+                elif plot_item: plot_item.hide()
 
-                if not channel_plotted: 
-                    text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
-                    # Set text overlay z-order
-                    if hasattr(text_item, 'setZValue'):
-                        text_item.setZValue(10)
-                    plot_item.addItem(text_item)
-                
-                # Final step: Re-apply grid settings to ensure they're visible after all plotting
-                plot_item.showGrid(x=True, y=True, alpha=1.0)
-                
-                if channel_plotted: any_data_plotted = True
-            elif plot_item: plot_item.hide()
+            # --- Axis linking logic (Corrected) ---
+            last_visible_plot = visible_plots[-1] if visible_plots else None
+            for i, plot_item in enumerate(self.channel_plots.values()):
+                is_visible = plot_item in visible_plots; is_last = plot_item == last_visible_plot
+                plot_item.showAxis('bottom', show=is_last)
+                bottom_axis = plot_item.getAxis('bottom')
+                if is_last:
+                     if bottom_axis: bottom_axis.setLabel("Time", units='s')
+                elif bottom_axis and bottom_axis.labelText:
+                     bottom_axis.setLabel(None)
 
-        # --- Axis linking logic (Corrected) ---
-        last_visible_plot = visible_plots[-1] if visible_plots else None
-        for i, plot_item in enumerate(self.channel_plots.values()):
-            is_visible = plot_item in visible_plots; is_last = plot_item == last_visible_plot
-            plot_item.showAxis('bottom', show=is_last)
-            bottom_axis = plot_item.getAxis('bottom')
-            if is_last:
-                 if bottom_axis: bottom_axis.setLabel("Time", units='s')
-            elif bottom_axis and bottom_axis.labelText:
-                 bottom_axis.setLabel(None)
-
-            if is_visible:
-                try:
-                    idx = visible_plots.index(plot_item)
-                    target = visible_plots[idx - 1].getViewBox() if idx > 0 else None
+                if is_visible:
+                    try:
+                        idx = visible_plots.index(plot_item)
+                        target = visible_plots[idx - 1].getViewBox() if idx > 0 else None
+                        vb = plot_item.getViewBox()
+                        if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
+                            plot_item.setXLink(target)
+                        elif vb and not hasattr(vb, 'linkedView'): # Safety
+                            plot_item.setXLink(target)
+                    except Exception as link_e:
+                         chan_id = getattr(plot_item.getViewBox(), '_synaptipy_chan_id', f'plot_{i}')
+                         log.warning(f"XLink Err {chan_id}: {link_e}")
+                         plot_item.setXLink(None)
+                else: # Unlink hidden plots
                     vb = plot_item.getViewBox()
-                    if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
-                        plot_item.setXLink(target)
-                    elif vb and not hasattr(vb, 'linkedView'): # Safety
-                        plot_item.setXLink(target)
-                except Exception as link_e:
-                     chan_id = getattr(plot_item.getViewBox(), '_synaptipy_chan_id', f'plot_{i}')
-                     log.warning(f"XLink Err {chan_id}: {link_e}")
-                     plot_item.setXLink(None)
-            else: # Unlink hidden plots
-                vb = plot_item.getViewBox()
-                if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
-                    plot_item.setXLink(None)
-        # --- End Axis linking ---
+                    if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
+                        plot_item.setXLink(None)
+            # --- End Axis linking ---
 
-        self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
+            self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
+        finally:
+            # Reconnect ViewBox range change signals after plot data addition is complete
+            self._reconnect_viewbox_signals_after_plotting()
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
@@ -2361,5 +2369,43 @@ class ExplorerTab(QtWidgets.QWidget):
                         pass  # Ignore grid errors on Windows
         except:
             pass  # Ignore all errors to prevent crashes
+
+    def _disconnect_viewbox_signals_temporarily(self):
+        """Temporarily disconnect ViewBox range change signals during plot data addition"""
+        import sys
+        platform = "Windows" if sys.platform.startswith('win') else "Mac/Linux"
+        log.info(f"[EXPLORER-SIGNALS] Temporarily disconnecting range signals on {platform} to prevent scaling cascade")
+        for chan_id, plot_item in self.channel_plots.items():
+            if plot_item and plot_item.getViewBox():
+                vb = plot_item.getViewBox()
+                try:
+                    vb.sigXRangeChanged.disconnect(self._handle_vb_xrange_changed)
+                    vb.sigYRangeChanged.disconnect(self._handle_vb_yrange_changed)
+                    log.debug(f"[EXPLORER-SIGNALS] Disconnected signals for {chan_id}")
+                except Exception as e:
+                    log.debug(f"[EXPLORER-SIGNALS] Signal already disconnected for {chan_id}: {e}")
+
+    def _reconnect_viewbox_signals_after_plotting(self):
+        """Reconnect ViewBox range change signals after plot data addition is complete"""
+        import sys
+        platform = "Windows" if sys.platform.startswith('win') else "Mac/Linux"
+        log.info(f"[EXPLORER-SIGNALS] Reconnecting range signals on {platform} after plot data addition")
+        for chan_id, plot_item in self.channel_plots.items():
+            if plot_item and plot_item.getViewBox():
+                vb = plot_item.getViewBox()
+                try:
+                    # Ensure not double-connected
+                    try:
+                        vb.sigXRangeChanged.disconnect(self._handle_vb_xrange_changed)
+                        vb.sigYRangeChanged.disconnect(self._handle_vb_yrange_changed)
+                    except:
+                        pass
+                    
+                    # Reconnect
+                    vb.sigXRangeChanged.connect(self._handle_vb_xrange_changed)
+                    vb.sigYRangeChanged.connect(self._handle_vb_yrange_changed)
+                    log.info(f"[EXPLORER-SIGNALS] Successfully reconnected signals for {chan_id}")
+                except Exception as e:
+                    log.error(f"[EXPLORER-SIGNALS] Failed to reconnect signals for {chan_id}: {e}")
 
     # --- End of Methods ---
