@@ -98,8 +98,9 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
         
-        # Skip grid configuration to avoid Windows null pointer errors
-        # Grid can be enabled later if needed
+        # Apply Windows-safe grid configuration after a delay
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, lambda: self._apply_safe_grid())
         
         # Add reset view button below plot
         self._setup_reset_view_button(layout)
@@ -107,9 +108,28 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
         
-        log.debug(f"Plot area setup for {self.__class__.__name__} - simple approach")
+                log.debug(f"Plot area setup for {self.__class__.__name__} - simple approach")
 
-    # --- END ADDED ---
+    def _apply_safe_grid(self):
+        """Safely apply grid configuration to analysis plot."""
+        try:
+            if self.plot_widget and hasattr(self.plot_widget, 'plotItem'):
+                plot_item = self.plot_widget.plotItem
+                if plot_item and hasattr(plot_item, 'ctrl') and plot_item.ctrl:
+                    # Use the control panel's grid toggle if available (safer than direct showGrid)
+                    if hasattr(plot_item.ctrl, 'xGridCheck') and hasattr(plot_item.ctrl, 'yGridCheck'):
+                        plot_item.ctrl.xGridCheck.setChecked(True)
+                        plot_item.ctrl.yGridCheck.setChecked(True)
+                    else:
+                        # Fallback: try showGrid but catch any errors
+                        try:
+                            self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+                        except:
+                            pass  # Ignore grid errors on Windows
+        except Exception as e:
+            log.debug(f"Grid configuration failed for {self.__class__.__name__}: {e}")
+
+        # --- END ADDED ---
 
     # --- ADDED: Method to setup save button --- 
     def _setup_save_button(self, layout: QtWidgets.QLayout, alignment = QtCore.Qt.AlignmentFlag.AlignCenter):

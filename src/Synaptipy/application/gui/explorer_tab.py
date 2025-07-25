@@ -728,8 +728,9 @@ class ExplorerTab(QtWidgets.QWidget):
             except:
                 pass  # Fallback if background setting fails
             
-            # Ensure grid is visible with opaque lines - explicitly call showGrid after styling
-            plot_item.showGrid(x=True, y=True, alpha=1.0)
+            # Apply Windows-safe grid configuration after a delay
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(150, lambda p=plot_item: self._apply_safe_grid_to_plot(p))
             
             # Explicitly set grid pens to ensure visibility and proper z-ordering
             try:
@@ -1058,8 +1059,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 except:
                     pass  # Fallback if background setting fails
                 
-                # Ensure grids remain visible and opaque
-                plot_item.showGrid(x=True, y=True)
+                # Skip showGrid to prevent Windows infinite scroll issues
                 
                 # Explicitly set grid pens for both axes
                 try:
@@ -1148,8 +1148,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 except:
                     pass  # Fallback if background setting fails
                 
-                # Step 2: Explicitly show grid with alpha=1.0
-                plot_item.showGrid(x=True, y=True, alpha=1.0)
+                # Skip showGrid to prevent Windows infinite scroll issues
                 
                 # Step 3: Force grid lines to have proper z-values and pens
                 try:
@@ -1237,8 +1236,7 @@ class ExplorerTab(QtWidgets.QWidget):
                         text_item.setZValue(10)
                     plot_item.addItem(text_item)
                 
-                # Final step: Re-apply grid settings to ensure they're visible after all plotting
-                plot_item.showGrid(x=True, y=True, alpha=1.0)
+                # Skip showGrid to prevent Windows infinite scroll issues
                 
                 if channel_plotted: any_data_plotted = True
             elif plot_item: plot_item.hide()
@@ -2215,5 +2213,22 @@ class ExplorerTab(QtWidgets.QWidget):
     def _trigger_limit_field_update(self):
         if not self.manual_limits_enabled and not self._updating_limit_fields:
             QtCore.QTimer.singleShot(50, self._update_limit_fields)
+
+    def _apply_safe_grid_to_plot(self, plot_item):
+        """Safely apply grid configuration to a specific plot item."""
+        try:
+            if plot_item and hasattr(plot_item, 'ctrl') and plot_item.ctrl:
+                # Use the control panel's grid toggle if available (safer than direct showGrid)
+                if hasattr(plot_item.ctrl, 'xGridCheck') and hasattr(plot_item.ctrl, 'yGridCheck'):
+                    plot_item.ctrl.xGridCheck.setChecked(True)
+                    plot_item.ctrl.yGridCheck.setChecked(True)
+                else:
+                    # Fallback: try showGrid but catch any errors
+                    try:
+                        plot_item.showGrid(x=True, y=True, alpha=0.3)
+                    except:
+                        pass  # Ignore grid errors on Windows
+        except:
+            pass  # Ignore all errors to prevent crashes
 
     # --- End of Methods ---
