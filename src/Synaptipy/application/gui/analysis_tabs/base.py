@@ -19,9 +19,7 @@ from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.shared.error_handling import SynaptipyError, FileReadError
 from Synaptipy.shared.styling import (
-    style_button, 
-    configure_plot_widget,
-    get_grid_pen
+    style_button,
 )
 from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
 
@@ -100,11 +98,8 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
         
-        # Simple grid configuration - no complex deferred setup
-        try:
-            self.plot_widget.showGrid(x=True, y=True, alpha=1.0)
-        except Exception as e:
-            log.debug(f"Grid configuration warning: {e}")
+        # Skip grid configuration to avoid Windows null pointer errors
+        # Grid can be enabled later if needed
         
         # Add reset view button below plot
         self._setup_reset_view_button(layout)

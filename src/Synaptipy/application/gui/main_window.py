@@ -493,9 +493,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_all_plots(self):
         """Refresh all plots to reflect the new theme."""
-        from Synaptipy.shared.styling import configure_plot_widget
-        
-        log.info("Refreshing all plots with new theme settings...")
+        log.info("Refreshing plots with new theme settings...")
         
         # Find all PlotWidget instances in the application
         all_plot_widgets = []
@@ -507,10 +505,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 all_plot_widgets.extend(plot_widgets)
                 log.debug(f"Found {len(plot_widgets)} plot widgets in {tab.__class__.__name__}")
         
-        # Apply styling to each PlotWidget
+        # Apply basic styling to each PlotWidget - avoid problematic grid config
         for pw in all_plot_widgets:
             try:
-                configure_plot_widget(pw)
+                # Just update background and refresh - skip grid configuration
+                pw.setBackground('white')
                 pw.update()
                 log.debug(f"Refreshed PlotWidget")
             except Exception as e:
