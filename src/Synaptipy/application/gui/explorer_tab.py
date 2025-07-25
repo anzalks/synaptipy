@@ -1843,27 +1843,72 @@ class ExplorerTab(QtWidgets.QWidget):
         
         if is_windows:
             log.info(f"[EXPLORER-RESET] Using manual range calculation on Windows")
+            # Temporarily block signals during and after manual range setting
+            log.info(f"[EXPLORER-RESET] Blocking range signals during manual calculation")
+            self._disconnect_viewbox_signals_temporarily()
+            
             try:
                 # Manual X range calculation for Windows
                 log.info(f"[EXPLORER-RESET] Calculating manual X range for {first_cid}")
                 x_bounds = first_plot.getViewBox().childrenBounds()[0]
+                log.info(f"[EXPLORER-RESET] X bounds from childrenBounds: {x_bounds}")
                 if x_bounds and len(x_bounds) == 2 and x_bounds[0] != x_bounds[1]:
                     x_padding = (x_bounds[1] - x_bounds[0]) * 0.02  # 2% padding
                     manual_x_range = [x_bounds[0] - x_padding, x_bounds[1] + x_padding]
                     first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
                     log.info(f"[EXPLORER-RESET] Set manual X range: {manual_x_range}")
+                else:
+                    log.warning(f"[EXPLORER-RESET] Invalid X bounds for {first_cid}: {x_bounds}, using fallback")
+                    # Fallback: Get current data range directly from plot data
+                    plot_data_items = first_plot.listDataItems()
+                    if plot_data_items:
+                        # Get X data from the first plot item
+                        data_item = plot_data_items[0]
+                        if hasattr(data_item, 'xData') and data_item.xData is not None:
+                            x_data = data_item.xData
+                            if len(x_data) > 0:
+                                x_min, x_max = float(np.min(x_data)), float(np.max(x_data))
+                                x_padding = (x_max - x_min) * 0.02
+                                manual_x_range = [x_min - x_padding, x_max + x_padding]
+                                first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
+                                log.info(f"[EXPLORER-RESET] Set manual X range from data: {manual_x_range}")
+                            else:
+                                log.warning(f"[EXPLORER-RESET] No X data points found")
+                        else:
+                            log.warning(f"[EXPLORER-RESET] No xData attribute found in plot item")
+                    else:
+                        log.warning(f"[EXPLORER-RESET] No plot data items found for X range calculation")
                 
                 # Manual Y range calculation for all plots
                 log.info(f"[EXPLORER-RESET] Calculating manual Y ranges for all plots")
                 for plot_id, plot in vis_map.items():
                     y_bounds = plot.getViewBox().childrenBounds()[1]
+                    log.info(f"[EXPLORER-RESET] Y bounds for {plot_id}: {y_bounds}")
                     if y_bounds and len(y_bounds) == 2 and y_bounds[0] != y_bounds[1]:
                         y_padding = (y_bounds[1] - y_bounds[0]) * 0.02  # 2% padding
                         manual_y_range = [y_bounds[0] - y_padding, y_bounds[1] + y_padding]
                         plot.getViewBox().setYRange(*manual_y_range, padding=0)
                         log.info(f"[EXPLORER-RESET] Set manual Y range for {plot_id}: {manual_y_range}")
                     else:
-                        log.warning(f"[EXPLORER-RESET] Invalid Y bounds for {plot_id}: {y_bounds}")
+                        log.warning(f"[EXPLORER-RESET] Invalid Y bounds for {plot_id}: {y_bounds}, using data fallback")
+                        # Fallback: Get current data range directly from plot data
+                        plot_data_items = plot.listDataItems()
+                        if plot_data_items:
+                            data_item = plot_data_items[0]
+                            if hasattr(data_item, 'yData') and data_item.yData is not None:
+                                y_data = data_item.yData
+                                if len(y_data) > 0:
+                                    y_min, y_max = float(np.min(y_data)), float(np.max(y_data))
+                                    y_padding = (y_max - y_min) * 0.02
+                                    manual_y_range = [y_min - y_padding, y_max + y_padding]
+                                    plot.getViewBox().setYRange(*manual_y_range, padding=0)
+                                    log.info(f"[EXPLORER-RESET] Set manual Y range from data for {plot_id}: {manual_y_range}")
+                                else:
+                                    log.warning(f"[EXPLORER-RESET] No Y data points found for {plot_id}")
+                            else:
+                                log.warning(f"[EXPLORER-RESET] No yData attribute found for {plot_id}")
+                        else:
+                            log.warning(f"[EXPLORER-RESET] No plot data items found for Y range calculation for {plot_id}")
             except Exception as e:
                 log.error(f"[EXPLORER-RESET] Manual range calculation failed: {e}")
                 # Fallback to enableAutoRange if manual calculation fails
@@ -1871,6 +1916,10 @@ class ExplorerTab(QtWidgets.QWidget):
                 first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
                 for plot_id, plot in vis_map.items():
                     plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+            finally:
+                # Reconnect signals after a delay to allow manual ranges to stabilize (Windows fix)
+                log.info(f"[EXPLORER-RESET] Scheduling signal reconnection in 100ms to allow ranges to stabilize")
+                QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
         else:
             # Mac/Linux: Use normal enableAutoRange (fast and reliable)
             log.info(f"[EXPLORER-RESET] Using enableAutoRange on Mac/Linux")
@@ -1882,8 +1931,14 @@ class ExplorerTab(QtWidgets.QWidget):
                 plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         
         # Range capture happens AFTER auto-range operations
-        log.info(f"[EXPLORER-RESET] Scheduling base range capture in 50ms")
-        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+        if is_windows:
+            # On Windows, wait longer for ranges to fully stabilize after signal reconnection
+            log.info(f"[EXPLORER-RESET] Scheduling base range capture in 150ms (Windows - after signal reconnection)")
+            QtCore.QTimer.singleShot(150, self._capture_base_ranges_after_reset)
+        else:
+            # On Mac/Linux, normal timing
+            log.info(f"[EXPLORER-RESET] Scheduling base range capture in 50ms")
+            QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
