@@ -16,7 +16,7 @@ from .base import BaseAnalysisTab
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.core.analysis import spike_analysis # Import the analysis function
 from Synaptipy.infrastructure.file_readers import NeoAdapter # <<< ADDED
-from Synaptipy.shared.styling import style_button, configure_plot_widget  # Import styling functions
+from Synaptipy.shared.styling import style_button  # Import styling functions
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.spike_tab')
 

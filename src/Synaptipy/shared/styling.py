@@ -175,16 +175,8 @@ def configure_plot_widget(plot_widget):
     plot_widget.getAxis('left').setTextPen(axis_color)
     plot_widget.getAxis('bottom').setTextPen(axis_color)
     
-    # Enable grid with full opacity (like explorer tab)
-    plot_widget.showGrid(x=True, y=True, alpha=1.0)
-    
-    # Defer grid configuration to prevent Windows timing issues
-    def configure_grid_deferred():
-        _configure_grid_z_order_safe(plot_widget)
-    
-    # Use Qt's QTimer to defer grid configuration slightly
-    from PySide6.QtCore import QTimer
-    QTimer.singleShot(1, configure_grid_deferred)  # 1ms delay
+    # Skip grid configuration to avoid Windows null pointer errors
+    # Grid can be configured manually if needed
     
     return plot_widget
 

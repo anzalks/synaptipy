@@ -23,7 +23,6 @@ from Synaptipy.shared.styling import (
     style_result_display,
     get_baseline_pen,
     get_response_pen,
-    configure_plot_widget
 )
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rin_tab')
