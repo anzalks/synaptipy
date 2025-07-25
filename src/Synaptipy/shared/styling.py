@@ -68,20 +68,10 @@ def toggle_theme_mode() -> str:
 
 def configure_pyqtgraph_globally():
     """Apply global PyQtGraph configuration for consistent behavior across all plots."""
-    # Configure global PyQtGraph settings to match Qt theme
+    # Configure global PyQtGraph settings (matching explorer tab)
     pg.setConfigOption('imageAxisOrder', 'row-major')
-    
-    # CRITICAL FIX: Match PyQtGraph colors to Qt theme
-    if CURRENT_THEME_MODE == "dark":
-        # Dark theme: dark background + white foreground  
-        pg.setConfigOption('background', 'd')  # Dark background
-        pg.setConfigOption('foreground', 'w')  # White foreground (text, axes, grids)
-        log.info("PyQtGraph configured for DARK theme: dark background + white foreground")
-    else:
-        # Light theme: white background + black foreground
-        pg.setConfigOption('background', 'w')  # White background  
-        pg.setConfigOption('foreground', 'k')  # Black foreground (text, axes, grids)
-        log.info("PyQtGraph configured for LIGHT theme: white background + black foreground")
+    pg.setConfigOption('background', 'w')  # White background
+    pg.setConfigOption('foreground', 'k')  # Black foreground (text, axes, grids)
 
 # ==============================================================================
 # Application Theme Functions
