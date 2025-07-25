@@ -144,32 +144,16 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         
         main_layout.addWidget(plot_container, stretch=1)
         
-        # Plot items will be setup when the plot widget is ready (deferred creation)
-
-        self.setLayout(main_layout)
-
-    def _on_plot_widget_ready(self):
-        """Setup spike-specific plot items after plot widget is created."""
-        try:
-            import pyqtgraph as pg
-            from PySide6 import QtCore
-            
-            # Create spike markers and threshold line
-            self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)) # Original red markers
-            self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red threshold line
-            
-            # Add items to plot
+        # Add spike-specific plot items - simple approach
+        if self.plot_widget:
+            self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150))
+            self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
             self.plot_widget.addItem(self.spike_markers_item)
             self.plot_widget.addItem(self.threshold_line)
-            
-            # Initially hidden
             self.spike_markers_item.setVisible(False)
             self.threshold_line.setVisible(False)
-            
-            log.debug("Spike analysis plot items setup completed")
-            
-        except Exception as e:
-            log.error(f"Failed to setup spike plot items: {e}")
+
+        self.setLayout(main_layout)
 
     def _connect_signals(self):
         """Connect signals specific to Spike tab widgets."""

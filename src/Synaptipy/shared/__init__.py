@@ -69,9 +69,7 @@ from .error_handling import (
     FileReadError,
     UnsupportedFormatError,
     ExportError,
-    SynaptipyFileNotFoundError,
-    handle_error,
-    log_error
+    SynaptipyFileNotFoundError
 )
 
 from .logging_config import setup_logging
@@ -120,8 +118,6 @@ __all__ = [
     'UnsupportedFormatError',
     'ExportError', 
     'SynaptipyFileNotFoundError',
-    'handle_error',
-    'log_error',
     
     # Logging
     'setup_logging',
