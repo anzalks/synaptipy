@@ -1871,9 +1871,22 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET] Blocking range signals during manual calculation")
             self._disconnect_viewbox_signals_temporarily()
             
-            # CRITICAL: Delay manual range calculation to allow PyQtGraph to process plot data
-            log.info(f"[EXPLORER-RESET] Scheduling delayed manual range calculation in 50ms")
-            QtCore.QTimer.singleShot(50, lambda: self._perform_delayed_manual_range_calculation(vis_map, first_cid, first_plot))
+            # Simple Windows fix: Use enableAutoRange with signal protection
+            log.info(f"[EXPLORER-RESET] Using protected enableAutoRange on Windows")
+            try:
+                # Auto-range operations with signal protection
+                first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+                for plot_id, plot in vis_map.items():
+                    plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+                    # Force update to ensure visibility on Windows
+                    plot.update()
+                log.info(f"[EXPLORER-RESET] Windows auto-range completed")
+            except Exception as e:
+                log.error(f"[EXPLORER-RESET] Windows auto-range failed: {e}")
+            finally:
+                # Reconnect signals after auto-range
+                log.info(f"[EXPLORER-RESET] Scheduling signal reconnection in 100ms")
+                QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
         else:
             # Mac/Linux: Use normal enableAutoRange (fast and reliable)
             log.info(f"[EXPLORER-RESET] Using enableAutoRange on Mac/Linux")
@@ -2500,192 +2513,4 @@ class ExplorerTab(QtWidgets.QWidget):
                 except Exception as e:
                     log.error(f"[EXPLORER-SIGNALS] Failed to reconnect signals for {chan_id}: {e}")
 
-    def _perform_delayed_manual_range_calculation(self, vis_map, first_cid, first_plot):
-        """Perform manual range calculation after PyQtGraph has processed plot data (Windows fix)"""
-        log.info(f"[EXPLORER-RESET-DELAYED] Starting delayed manual range calculation")
-        
-        try:
-            # Manual X range calculation for Windows (after delay)
-            log.info(f"[EXPLORER-RESET-DELAYED] Calculating manual X range for {first_cid}")
-            x_bounds = first_plot.getViewBox().childrenBounds()[0]
-            log.info(f"[EXPLORER-RESET-DELAYED] X bounds from childrenBounds: {x_bounds}")
-            if x_bounds and len(x_bounds) == 2 and abs(x_bounds[1] - x_bounds[0]) > 1e-10:
-                x_padding = (x_bounds[1] - x_bounds[0]) * 0.02  # 2% padding
-                manual_x_range = [x_bounds[0] - x_padding, x_bounds[1] + x_padding]
-                first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
-                log.info(f"[EXPLORER-RESET-DELAYED] Set manual X range: {manual_x_range}")
-                
-                # CRITICAL: Force immediate update after X range setting (Windows fix)
-                try:
-                    first_plot.update()
-                    first_plot.getViewBox().update()
-                    log.info(f"[EXPLORER-RESET-DELAYED] Forced X plot update for {first_cid}")
-                except Exception as e:
-                    log.warning(f"[EXPLORER-RESET-DELAYED] X plot update failed for {first_cid}: {e}")
-            else:
-                log.warning(f"[EXPLORER-RESET-DELAYED] Invalid X bounds for {first_cid}: {x_bounds}, using data fallback")
-                # Fallback: Get current data range directly from plot data
-                plot_data_items = first_plot.listDataItems()
-                if plot_data_items:
-                    # Get X data from the first plot item
-                    data_item = plot_data_items[0]
-                    if hasattr(data_item, 'xData') and data_item.xData is not None:
-                        x_data = data_item.xData
-                        if len(x_data) > 0:
-                            x_min, x_max = float(np.min(x_data)), float(np.max(x_data))
-                            x_padding = (x_max - x_min) * 0.02
-                            manual_x_range = [x_min - x_padding, x_max + x_padding]
-                            first_plot.getViewBox().setXRange(*manual_x_range, padding=0)
-                            log.info(f"[EXPLORER-RESET-DELAYED] Set manual X range from data: {manual_x_range}")
-                            
-                            # CRITICAL: Force immediate update after X range setting (Windows fix)
-                            try:
-                                first_plot.update()
-                                first_plot.getViewBox().update()
-                                log.info(f"[EXPLORER-RESET-DELAYED] Forced X plot update for {first_cid}")
-                            except Exception as e:
-                                log.warning(f"[EXPLORER-RESET-DELAYED] X plot update failed for {first_cid}: {e}")
-                        else:
-                            log.warning(f"[EXPLORER-RESET-DELAYED] No X data points found")
-                    else:
-                        log.warning(f"[EXPLORER-RESET-DELAYED] No xData attribute found in plot item")
-                else:
-                    log.warning(f"[EXPLORER-RESET-DELAYED] No plot data items found for X range calculation")
-            
-            # Manual Y range calculation for all plots (after delay)
-            log.info(f"[EXPLORER-RESET-DELAYED] Calculating manual Y ranges for all plots")
-            for plot_id, plot in vis_map.items():
-                y_bounds = plot.getViewBox().childrenBounds()[1]
-                log.info(f"[EXPLORER-RESET-DELAYED] Y bounds for {plot_id}: {y_bounds}")
-                
-                # Check if bounds are reasonable by comparing with actual data
-                use_bounds = False
-                if y_bounds and len(y_bounds) == 2 and abs(y_bounds[1] - y_bounds[0]) > 1e-6:
-                    # Get actual data range to validate bounds
-                    plot_data_items = plot.listDataItems()
-                    if plot_data_items:
-                        data_item = plot_data_items[0]
-                        if hasattr(data_item, 'yData') and data_item.yData is not None:
-                            y_data = data_item.yData
-                            if len(y_data) > 0:
-                                actual_min, actual_max = float(np.min(y_data)), float(np.max(y_data))
-                                actual_range = actual_max - actual_min
-                                bounds_range = y_bounds[1] - y_bounds[0]
-                                
-                                # Use bounds only if they're close to actual data range (within 50% tolerance)
-                                if actual_range > 0 and abs(bounds_range - actual_range) / actual_range < 0.5:
-                                    use_bounds = True
-                                    log.info(f"[EXPLORER-RESET-DELAYED] Y bounds validated for {plot_id}: bounds_range={bounds_range:.6f}, actual_range={actual_range:.6f}")
-                                else:
-                                    log.warning(f"[EXPLORER-RESET-DELAYED] Y bounds mismatch for {plot_id}: bounds_range={bounds_range:.6f}, actual_range={actual_range:.6f}, using data fallback")
-                
-                if use_bounds:
-                    y_padding = (y_bounds[1] - y_bounds[0]) * 0.02  # 2% padding
-                    manual_y_range = [y_bounds[0] - y_padding, y_bounds[1] + y_padding]
-                    plot.getViewBox().setYRange(*manual_y_range, padding=0)
-                    log.info(f"[EXPLORER-RESET-DELAYED] Set manual Y range for {plot_id}: {manual_y_range}")
-                    
-                    # CRITICAL: Force immediate update after range setting (Windows fix)
-                    try:
-                        plot.update()
-                        plot.getViewBox().update()
-                        log.info(f"[EXPLORER-RESET-DELAYED] Forced plot update for {plot_id}")
-                    except Exception as e:
-                        log.warning(f"[EXPLORER-RESET-DELAYED] Plot update failed for {plot_id}: {e}")
-                else:
-                    log.warning(f"[EXPLORER-RESET-DELAYED] Invalid Y bounds for {plot_id}: {y_bounds}, using data fallback")
-                    # Fallback: Get current data range directly from plot data
-                    plot_data_items = plot.listDataItems()
-                    if plot_data_items:
-                        data_item = plot_data_items[0]
-                        if hasattr(data_item, 'yData') and data_item.yData is not None:
-                            y_data = data_item.yData
-                            if len(y_data) > 0:
-                                y_min, y_max = float(np.min(y_data)), float(np.max(y_data))
-                                y_padding = (y_max - y_min) * 0.02
-                                manual_y_range = [y_min - y_padding, y_max + y_padding]
-                                plot.getViewBox().setYRange(*manual_y_range, padding=0)
-                                log.info(f"[EXPLORER-RESET-DELAYED] Set manual Y range from data for {plot_id}: {manual_y_range}")
-                                
-                                # CRITICAL: Force immediate update after range setting (Windows fix)
-                                try:
-                                    plot.update()
-                                    plot.getViewBox().update()
-                                    log.info(f"[EXPLORER-RESET-DELAYED] Forced plot update for {plot_id}")
-                                except Exception as e:
-                                    log.warning(f"[EXPLORER-RESET-DELAYED] Plot update failed for {plot_id}: {e}")
-                            else:
-                                log.warning(f"[EXPLORER-RESET-DELAYED] No Y data points found for {plot_id}")
-                        else:
-                            log.warning(f"[EXPLORER-RESET-DELAYED] No yData attribute found for {plot_id}")
-                        else:
-                            log.warning(f"[EXPLORER-RESET-DELAYED] No plot data items found for Y range calculation for {plot_id}")
-        except Exception as e:
-            log.error(f"[EXPLORER-RESET-DELAYED] Manual range calculation failed: {e}")
-            # Fallback to enableAutoRange if manual calculation fails
-            log.info(f"[EXPLORER-RESET-DELAYED] Falling back to enableAutoRange")
-            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-            for plot_id, plot in vis_map.items():
-                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        finally:
-            # Reconnect signals after a delay to allow manual ranges to stabilize (Windows fix)
-            log.info(f"[EXPLORER-RESET-DELAYED] Scheduling signal reconnection in 100ms to allow ranges to stabilize")
-            QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
-            
-            # DEBUGGING: Check plot visibility and rendering state
-            QtCore.QTimer.singleShot(200, lambda: self._debug_plot_visibility(vis_map))
-
-    def _debug_plot_visibility(self, vis_map):
-        """Debug plot visibility and rendering state on Windows"""
-        log.info(f"[EXPLORER-DEBUG] === PLOT VISIBILITY DEBUG ===")
-        
-        for plot_id, plot in vis_map.items():
-            if plot:
-                log.info(f"[EXPLORER-DEBUG] Plot {plot_id}:")
-                log.info(f"[EXPLORER-DEBUG]   - isVisible(): {plot.isVisible()}")
-                log.info(f"[EXPLORER-DEBUG]   - isEnabled(): {plot.isEnabled()}")
-                
-                # Check ViewBox
-                vb = plot.getViewBox()
-                if vb:
-                    x_range = vb.viewRange()[0]
-                    y_range = vb.viewRange()[1]
-                    log.info(f"[EXPLORER-DEBUG]   - ViewBox X range: {x_range}")
-                    log.info(f"[EXPLORER-DEBUG]   - ViewBox Y range: {y_range}")
-                    log.info(f"[EXPLORER-DEBUG]   - ViewBox geometry: {vb.geometry()}")
-                
-                # Check plot data items
-                data_items = plot.listDataItems()
-                log.info(f"[EXPLORER-DEBUG]   - Data items count: {len(data_items)}")
-                
-                for i, item in enumerate(data_items):
-                    if hasattr(item, 'isVisible'):
-                        log.info(f"[EXPLORER-DEBUG]   - Item {i} visible: {item.isVisible()}")
-                    if hasattr(item, 'pen'):
-                        pen = item.pen()
-                        if pen:
-                            color = pen.color()
-                            log.info(f"[EXPLORER-DEBUG]   - Item {i} pen color: RGBA({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})")
-                            log.info(f"[EXPLORER-DEBUG]   - Item {i} pen width: {pen.width()}")
-                    if hasattr(item, 'opts'):
-                        log.info(f"[EXPLORER-DEBUG]   - Item {i} opts: {item.opts}")
-                    if hasattr(item, 'xData') and hasattr(item, 'yData'):
-                        x_data = item.xData
-                        y_data = item.yData
-                        if x_data is not None and y_data is not None and len(x_data) > 0 and len(y_data) > 0:
-                            log.info(f"[EXPLORER-DEBUG]   - Item {i} data: X[{np.min(x_data):.3f}, {np.max(x_data):.3f}], Y[{np.min(y_data):.3f}, {np.max(y_data):.3f}]")
-                        else:
-                            log.info(f"[EXPLORER-DEBUG]   - Item {i} data: X={x_data is not None}, Y={y_data is not None}")
-                
-                # Check if plot needs update
-                log.info(f"[EXPLORER-DEBUG]   - Forcing plot update...")
-                try:
-                    plot.update()
-                    vb.update() if vb else None
-                    log.info(f"[EXPLORER-DEBUG]   - Plot update completed")
-                except Exception as e:
-                    log.error(f"[EXPLORER-DEBUG]   - Plot update failed: {e}")
-        
-        log.info(f"[EXPLORER-DEBUG] === END VISIBILITY DEBUG ===")
-
-    # --- End of Methods ---
+        # --- End of Methods ---
