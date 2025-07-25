@@ -380,70 +380,39 @@ class RinAnalysisTab(BaseAnalysisTab):
         
         main_layout.addWidget(plot_container, 1)
 
-        # Plot items will be setup when the plot widget is ready (deferred creation)
+        # Add RIN-specific plot items - simple approach
+        if self.plot_widget:
+            plot_item = self.plot_widget.getPlotItem()
+            if plot_item:
+                from PySide6 import QtGui
+                from Synaptipy.shared.styling import get_baseline_pen, get_response_pen
+                
+                # Create regions and lines with consistent styling
+                baseline_brush = QtGui.QBrush(QtGui.QColor(46, 204, 113, 50))  # Green with alpha
+                response_brush = QtGui.QBrush(QtGui.QColor(243, 156, 18, 50))  # Orange with alpha
+                
+                self.baseline_region = pg.LinearRegionItem(values=[0.0, 0.1], brush=baseline_brush, movable=True, bounds=[0, 1])
+                self.response_region = pg.LinearRegionItem(values=[0.2, 0.3], brush=response_brush, movable=True, bounds=[0, 1])
+                self.baseline_line = pg.InfiniteLine(angle=0, movable=False, pen=get_baseline_pen())
+                self.response_line = pg.InfiniteLine(angle=0, movable=False, pen=get_response_pen())
+                
+                # Add items to the PLOT ITEM
+                plot_item.addItem(self.baseline_region)
+                plot_item.addItem(self.response_region)
+                plot_item.addItem(self.baseline_line)
+                plot_item.addItem(self.response_line)
+                
+                # Set initial visibility
+                self.baseline_region.setVisible(False)
+                self.response_region.setVisible(False)
+                self.baseline_line.setVisible(False)
+                self.response_line.setVisible(False)
 
         self.setLayout(main_layout)
         log.debug("Rin/G Analysis Tab UI setup complete (Generalized).")
         
         # Set initial UI state
         self._on_mode_changed()  # Ensure proper initial UI setup
-
-    def _on_plot_widget_ready(self):
-        """Setup RIN-specific plot items after plot widget is created."""
-        try:
-            import pyqtgraph as pg
-            from PySide6 import QtGui
-            from Synaptipy.shared.styling import get_baseline_pen, get_response_pen
-            
-            # Get the plot item from the plot widget
-            plot_item = self.plot_widget.getPlotItem()
-            if not plot_item:
-                log.error("Failed to get PlotItem from PlotWidget in RIN tab")
-                return
-            
-            # Create regions and lines with consistent styling
-            baseline_brush = QtGui.QBrush(QtGui.QColor(46, 204, 113, 50))  # Green with alpha
-            response_brush = QtGui.QBrush(QtGui.QColor(243, 156, 18, 50))  # Orange with alpha
-            
-            self.baseline_region = pg.LinearRegionItem(
-                values=[0.0, 0.1], 
-                brush=baseline_brush, 
-                movable=True, 
-                bounds=[0, 1]
-            )
-            self.response_region = pg.LinearRegionItem(
-                values=[0.2, 0.3], 
-                brush=response_brush, 
-                movable=True, 
-                bounds=[0, 1]
-            )
-            self.baseline_line = pg.InfiniteLine(
-                angle=0, 
-                movable=False, 
-                pen=get_baseline_pen()
-            )
-            self.response_line = pg.InfiniteLine(
-                angle=0, 
-                movable=False, 
-                pen=get_response_pen()
-            )
-            
-            # Add items to the PLOT ITEM
-            plot_item.addItem(self.baseline_region)
-            plot_item.addItem(self.response_region)
-            plot_item.addItem(self.baseline_line)
-            plot_item.addItem(self.response_line)
-            
-            # Set initial visibility
-            self.baseline_region.setVisible(False)
-            self.response_region.setVisible(False)
-            self.baseline_line.setVisible(False)
-            self.response_line.setVisible(False)
-            
-            log.debug("RIN analysis plot items setup completed")
-            
-        except Exception as e:
-            log.error(f"Failed to setup RIN plot items: {e}")
 
     def _connect_signals(self):
         # Connect signals for widgets common to all tabs

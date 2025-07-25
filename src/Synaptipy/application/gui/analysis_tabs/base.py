@@ -85,22 +85,26 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
     # --- ADDED: Method to setup plot area --- 
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
-        """Adds a PlotWidget to the provided layout using unified plot factory."""
-        # Instead of creating the plot immediately, add a placeholder and defer creation
-        self._plot_layout = layout
-        self._plot_stretch_factor = stretch_factor
+        """Adds a PlotWidget to the provided layout with simple Windows-safe configuration."""
+        self.plot_widget = pg.PlotWidget()
         
-        # Create a placeholder widget that will be replaced with the actual plot
-        self._plot_placeholder = QtWidgets.QLabel("Loading plot...")
-        self._plot_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._plot_placeholder.setStyleSheet("border: 1px dashed gray; background-color: #f0f0f0;")
-        self._plot_placeholder.setMinimumHeight(300)
+        # Set white background
+        self.plot_widget.setBackground('white')
         
-        layout.addWidget(self._plot_placeholder, stretch=stretch_factor)
+        # Configure mouse mode
+        viewbox = self.plot_widget.getViewBox()
+        if viewbox:
+            viewbox.setMouseMode(pg.ViewBox.RectMode)
+            viewbox.mouseEnabled = True
         
-        # Defer plot creation to prevent Windows null pointer errors
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(100, self._create_deferred_plot)  # 100ms delay for Windows
+        # Add the plot widget to the layout
+        layout.addWidget(self.plot_widget, stretch=stretch_factor)
+        
+        # Simple grid configuration - no complex deferred setup
+        try:
+            self.plot_widget.showGrid(x=True, y=True, alpha=1.0)
+        except Exception as e:
+            log.debug(f"Grid configuration warning: {e}")
         
         # Add reset view button below plot
         self._setup_reset_view_button(layout)
@@ -108,47 +112,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
         
-        log.debug(f"Plot area setup deferred for {self.__class__.__name__} to prevent Windows errors")
-
-    def _create_deferred_plot(self):
-        """Create the actual plot widget after a delay to prevent Windows issues."""
-        try:
-            from Synaptipy.shared.plot_factory import create_analysis_plot
-            
-            # Create the actual plot widget
-            self.plot_widget = create_analysis_plot(parent=self)
-            
-            # Replace the placeholder with the actual plot
-            if hasattr(self, '_plot_placeholder') and self._plot_placeholder:
-                # Remove the placeholder
-                self._plot_layout.removeWidget(self._plot_placeholder)
-                self._plot_placeholder.deleteLater()
-                
-                # Add the real plot widget
-                self._plot_layout.insertWidget(0, self.plot_widget, stretch=self._plot_stretch_factor)
-                
-                # Trigger any additional plot setup that subclasses might need
-                self._on_plot_widget_ready()
-                
-            log.debug(f"Deferred plot creation completed for {self.__class__.__name__}")
-            
-        except Exception as e:
-            log.error(f"Failed to create deferred plot for {self.__class__.__name__}: {e}")
-            # Keep the placeholder with error message
-            if hasattr(self, '_plot_placeholder') and self._plot_placeholder:
-                self._plot_placeholder.setText(f"Plot creation failed: {e}")
-                
-    def _on_plot_widget_ready(self):
-        """Called when the plot widget is ready. Subclasses can override for additional setup."""
-        # Default implementation does nothing
-        pass
-
-    def _configure_plot_item_like_explorer_tab(self, plot_item):
-        """Legacy method - now handled by unified plot factory."""
-        # This method is kept for backward compatibility but does nothing
-        # All plot configuration is now handled by the unified plot factory
-        log.debug("Plot configuration delegated to unified plot factory")
-        pass
+        log.debug(f"Plot area setup for {self.__class__.__name__} - simple approach")
 
     # --- END ADDED ---
 

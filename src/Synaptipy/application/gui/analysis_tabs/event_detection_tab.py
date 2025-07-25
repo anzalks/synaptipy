@@ -261,21 +261,16 @@ class EventDetectionTab(BaseAnalysisTab):
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
         
+        # Add event markers - simple approach
+        if self.plot_widget:
+            self.event_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(0, 0, 255, 150))
+            self.plot_widget.addItem(self.event_markers_item)
+            self.event_markers_item.setVisible(False)
+        
         main_layout.addWidget(plot_container, stretch=1) # Add plot below controls/tabs section
 
         self.setLayout(main_layout)
         self._on_mini_method_changed() # Set initial visibility for params
-
-    def _on_plot_widget_ready(self):
-        """Setup additional plot items after the plot widget is created."""
-        try:
-            import pyqtgraph as pg
-            self.event_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(0, 0, 255, 150))
-            self.plot_widget.addItem(self.event_markers_item)
-            self.event_markers_item.setVisible(False)
-            log.debug("Event markers item added to plot widget")
-        except Exception as e:
-            log.error(f"Failed to setup event markers: {e}")
 
     def _connect_signals(self):
         """Connect signals for Event Detection tab widgets."""

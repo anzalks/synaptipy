@@ -214,31 +214,21 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         
         main_layout.addWidget(plot_container, stretch=1) # Plot stretches vertically
 
-        # Plot items will be setup when the plot widget is ready (deferred creation)
-
-        log.debug("Baseline Analysis Tab UI setup complete (3-Column Top Layout).")
-        self._on_mode_changed(initial_call=True)
-
-    def _on_plot_widget_ready(self):
-        """Setup plot items specific to Baseline analysis after plot widget is created."""
-        try:
-            import pyqtgraph as pg
-            from PySide6 import QtCore, QtGui
-            
-            # Create interactive region for baseline selection
+        # Add baseline-specific plot items - simple approach
+        if self.plot_widget:
             self.interactive_region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, 1], movable=True)
             self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 30)))
             self.plot_widget.addItem(self.interactive_region)
-            self.interactive_region.setVisible(True) # Default visibility handled by _on_mode_changed
+            self.interactive_region.setVisible(True)
 
             # Create InfiniteLine objects for showing baseline statistics
-            self.baseline_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))  # Original red color
-            self.baseline_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red dashed
-            self.baseline_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))  # Original red dashed
+            self.baseline_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))
+            self.baseline_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+            self.baseline_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
             
             # Automatic and manual mode lines (gray dashed)
-            self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))  # Original gray
-            self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))  # Original gray
+            self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
+            self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
             
             # Add all line items to plot
             self.plot_widget.addItem(self.baseline_mean_line)
@@ -250,11 +240,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             # Hide initially
             self._clear_baseline_visualization_lines()
             self._clear_auto_baseline_visualization_lines()
-            
-            log.debug("Baseline analysis plot items setup completed")
-            
-        except Exception as e:
-            log.error(f"Failed to setup baseline plot items: {e}")
+
+        log.debug("Baseline Analysis Tab UI setup complete (3-Column Top Layout).")
+        self._on_mode_changed(initial_call=True)
 
     # --- ADDED: Method to clear auto-calculation visualization lines ---
     def _clear_auto_baseline_visualization_lines(self):
