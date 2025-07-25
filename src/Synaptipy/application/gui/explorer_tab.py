@@ -1744,38 +1744,41 @@ class ExplorerTab(QtWidgets.QWidget):
         if not vis_map: self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
         first_cid, first_plot = next(iter(vis_map.items()))
         
-        # Auto-range operations happen here in _reset_view, not in _capture_base_ranges_after_reset
-        try:
-            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        except Exception as e:
-            import sys
-            if sys.platform.startswith('win'):
-                # On Windows, ignore X auto-range errors that cause infinite scroll
-                pass
-            else:
-                raise
-                
-        for plot in vis_map.values(): 
-            # Windows-specific fix: wrap Y auto-range to prevent scaling issues
+        # Platform-specific auto-range handling to prevent Windows axis scaling issues
+        import sys
+        if sys.platform.startswith('win'):
+            # On Windows: Use manual range setting to avoid rapid axis changes
+            log.debug("Using manual range setting for Windows compatibility")
+            
+            # Manual X-axis range setting for all plots
             try:
-                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+                first_vb = first_plot.getViewBox()
+                bounds = first_vb.childrenBounds()
+                if bounds and len(bounds) == 2:
+                    x_range, _ = bounds
+                    if x_range and len(x_range) == 2:
+                        x_padding = (x_range[1] - x_range[0]) * 0.05
+                        first_vb.setXRange(x_range[0] - x_padding, x_range[1] + x_padding, padding=0)
             except Exception as e:
-                import sys
-                if sys.platform.startswith('win'):
-                    # On Windows, fallback to manual range setting if auto-range fails
-                    try:
-                        vb = plot.getViewBox()
-                        bounds = vb.childrenBounds()
-                        if bounds and len(bounds) == 2:
-                            x_range, y_range = bounds
-                            if y_range and len(y_range) == 2:
-                                y_padding = (y_range[1] - y_range[0]) * 0.05
-                                vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
-                    except:
-                        pass  # If manual fallback fails, continue normally
-                else:
-                    # On non-Windows, re-raise the exception
-                    raise
+                log.debug(f"Windows manual X-range failed: {e}")
+            
+            # Manual Y-axis range setting for each plot
+            for plot in vis_map.values():
+                try:
+                    vb = plot.getViewBox()
+                    bounds = vb.childrenBounds()
+                    if bounds and len(bounds) == 2:
+                        _, y_range = bounds
+                        if y_range and len(y_range) == 2:
+                            y_padding = (y_range[1] - y_range[0]) * 0.05
+                            vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
+                except Exception as e:
+                    log.debug(f"Windows manual Y-range failed: {e}")
+        else:
+            # On non-Windows: Use normal auto-range operations
+            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+            for plot in vis_map.values(): 
+                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         
         # Range capture happens AFTER auto-range operations
         QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
@@ -1821,26 +1824,25 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.manual_limits_enabled: return
         plot = self.channel_plots.get(chan_id)
         if not plot or not plot.isVisible() or not plot.getViewBox(): return
-        # Normal auto-range operation with Windows-specific error handling
-        try:
+        
+        # Platform-specific auto-range handling to prevent Windows axis scaling issues
+        import sys
+        if sys.platform.startswith('win'):
+            # On Windows: Use manual range setting to avoid rapid axis changes
+            try:
+                vb = plot.getViewBox()
+                bounds = vb.childrenBounds()
+                if bounds and len(bounds) == 2:
+                    _, y_range = bounds
+                    if y_range and len(y_range) == 2:
+                        y_padding = (y_range[1] - y_range[0]) * 0.05
+                        vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
+            except Exception as e:
+                log.debug(f"Windows manual single Y-range failed: {e}")
+        else:
+            # On non-Windows: Use normal auto-range operation
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        except Exception as e:
-            import sys
-            if sys.platform.startswith('win'):
-                # On Windows, fallback to manual range setting if auto-range fails
-                try:
-                    vb = plot.getViewBox()
-                    bounds = vb.childrenBounds()
-                    if bounds and len(bounds) == 2:
-                        x_range, y_range = bounds
-                        if y_range and len(y_range) == 2:
-                            y_padding = (y_range[1] - y_range[0]) * 0.05
-                            vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
-                except:
-                    pass  # If manual fallback fails, continue normally
-            else:
-                # On non-Windows, re-raise the exception  
-                raise
+            
         QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
 
     def _capture_single_base_range_after_reset(self, chan_id: str):
@@ -2153,16 +2155,22 @@ class ExplorerTab(QtWidgets.QWidget):
                         if chan_id == next(iter(self.channel_plots.keys())): 
                              log.debug(f"Applied shared X limits {manual_x}")
                     else:
-                        # Auto-range X if no manual X - with Windows error handling
-                        try:
+                        # Auto-range X if no manual X - with Windows protection
+                        import sys
+                        if sys.platform.startswith('win'):
+                            # On Windows: Use manual range setting to avoid rapid axis changes
+                            try:
+                                bounds = vb.childrenBounds()
+                                if bounds and len(bounds) == 2:
+                                    x_range, _ = bounds
+                                    if x_range and len(x_range) == 2:
+                                        x_padding = (x_range[1] - x_range[0]) * 0.05
+                                        vb.setXRange(x_range[0] - x_padding, x_range[1] + x_padding, padding=0)
+                            except Exception as e:
+                                log.debug(f"Windows manual X-range failed in apply_manual_limits: {e}")
+                        else:
+                            # On non-Windows: Use normal auto-range
                             vb.enableAutoRange(axis=pg.ViewBox.XAxis)
-                        except Exception as e:
-                            import sys
-                            if sys.platform.startswith('win'):
-                                # On Windows, ignore auto-range errors for manual fallback
-                                pass
-                            else:
-                                raise
                     
                     # Apply per-channel Y limit
                     channel_y_limits = self.manual_channel_limits.get(chan_id, {}).get('y')
@@ -2170,16 +2178,22 @@ class ExplorerTab(QtWidgets.QWidget):
                         vb.setYRange(channel_y_limits[0], channel_y_limits[1], padding=0); applied_any=True
                         log.debug(f"Applied Y limits {channel_y_limits} to {chan_id}")
                     else:
-                        # Auto-range Y if no manual Y - with Windows error handling
-                        try:
+                        # Auto-range Y if no manual Y - with Windows protection
+                        import sys
+                        if sys.platform.startswith('win'):
+                            # On Windows: Use manual range setting to avoid rapid axis changes
+                            try:
+                                bounds = vb.childrenBounds()
+                                if bounds and len(bounds) == 2:
+                                    _, y_range = bounds
+                                    if y_range and len(y_range) == 2:
+                                        y_padding = (y_range[1] - y_range[0]) * 0.05
+                                        vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
+                            except Exception as e:
+                                log.debug(f"Windows manual Y-range failed in apply_manual_limits: {e}")
+                        else:
+                            # On non-Windows: Use normal auto-range
                             vb.enableAutoRange(axis=pg.ViewBox.YAxis)
-                        except Exception as e:
-                            import sys
-                            if sys.platform.startswith('win'):
-                                # On Windows, ignore auto-range errors for manual fallback  
-                                pass
-                            else:
-                                raise
             # --- END UPDATE ---
         finally:
              self._updating_viewranges=False
