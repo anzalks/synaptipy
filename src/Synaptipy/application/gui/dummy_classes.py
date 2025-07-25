@@ -95,6 +95,13 @@ except Exception as e_import:
     class DummyVisConstants:
         TRIAL_COLOR = '#888888'; TRIAL_ALPHA = 70; AVERAGE_COLOR = '#EE4B2B'
         DEFAULT_PLOT_PEN_WIDTH = 1; DOWNSAMPLING_THRESHOLD = 5000
+        Z_ORDER = {
+            'grid': -1000,
+            'baseline': -500,
+            'data': 0,
+            'selection': 500,
+            'annotation': 1000,
+        }
 
     def DummyErrors():
         class SynaptipyError(Exception): pass
@@ -118,6 +125,13 @@ if 'VisConstants' not in locals() or VisConstants is None:
     class FallbackVisConstants:
         TRIAL_COLOR = '#888888'; TRIAL_ALPHA = 70; AVERAGE_COLOR = '#EE4B2B'
         DEFAULT_PLOT_PEN_WIDTH = 1; DOWNSAMPLING_THRESHOLD = 5000
+        Z_ORDER = {
+            'grid': -1000,
+            'baseline': -500,
+            'data': 0,
+            'selection': 500,
+            'annotation': 1000,
+        }
     VisConstants = FallbackVisConstants()
 if 'NeoAdapter' not in locals(): NeoAdapter = DummyNeoAdapter # Ensure NeoAdapter exists even if only dummies defined
 if 'NWBExporter' not in locals(): NWBExporter = DummyNWBExporter

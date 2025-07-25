@@ -17,6 +17,14 @@ TRIAL_COLOR = (55, 126, 184)  # Blueish (similar to #377eb8)
 AVERAGE_COLOR = (0, 0, 0)      # Black
 TRIAL_ALPHA = 100              # Alpha for overlaid trials (0-255)
 
+# PyQtGraph Z-Ordering Constants (for layering plot elements)
+Z_ORDER = {
+    'grid': -1000,      # Grid lines should be behind everything
+    'baseline': -500,   # Baseline lines behind data but above grid
+    'data': 0,          # Data traces at default level
+    'selection': 500,   # Selection indicators above data
+    'annotation': 1000, # Annotations on top
+}
 
 # Downsampling Constants
 DOWNSAMPLING_THRESHOLD = 100000 # Apply auto-downsampling if samples > this
@@ -88,6 +96,7 @@ __all__ = [
     'TRIAL_COLOR',
     'AVERAGE_COLOR',
     'TRIAL_ALPHA',
+    'Z_ORDER',
     'DOWNSAMPLING_THRESHOLD',
     'NEO_READER_EXTENSIONS',
     'get_neo_file_filter',

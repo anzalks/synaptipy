@@ -25,6 +25,20 @@ from .dummy_classes import (
 )
 # --- Other Imports ---
 from .nwb_dialog import NwbMetadataDialog
+
+# Import Z_ORDER constant with fallback
+try:
+    from Synaptipy.shared.constants import Z_ORDER
+except ImportError:
+    # Fallback Z_ORDER in case constants are not available
+    Z_ORDER = {
+        'grid': -1000,
+        'baseline': -500,
+        'data': 0,
+        'selection': 500,
+        'annotation': 1000,
+    }
+
 try:
     import tzlocal
 except ImportError:
