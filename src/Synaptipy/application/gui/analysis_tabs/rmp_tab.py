@@ -214,8 +214,18 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         
         main_layout.addWidget(plot_container, stretch=1) # Plot stretches vertically
 
-        # --- Plot items specific to Baseline ---
-        if self.plot_widget:
+        # Plot items will be setup when the plot widget is ready (deferred creation)
+
+        log.debug("Baseline Analysis Tab UI setup complete (3-Column Top Layout).")
+        self._on_mode_changed(initial_call=True)
+
+    def _on_plot_widget_ready(self):
+        """Setup plot items specific to Baseline analysis after plot widget is created."""
+        try:
+            import pyqtgraph as pg
+            from PySide6 import QtCore, QtGui
+            
+            # Create interactive region for baseline selection
             self.interactive_region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, 1], movable=True)
             self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 30)))
             self.plot_widget.addItem(self.interactive_region)
@@ -229,18 +239,22 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             # Automatic and manual mode lines (gray dashed)
             self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))  # Original gray
             self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))  # Original gray
-            self.plot_widget.addItem(self.baseline_mean_line); self.plot_widget.addItem(self.baseline_plus_sd_line); self.plot_widget.addItem(self.baseline_minus_sd_line)
-            self._clear_baseline_visualization_lines() # Hide initially
-
-            self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
-            self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
-            self.plot_widget.addItem(self.auto_plus_sd_line); self.plot_widget.addItem(self.auto_minus_sd_line)
-            self._clear_auto_baseline_visualization_lines() # Hide initially
-        else:
-             log.error("Plot widget not created by base class setup.")
-
-        log.debug("Baseline Analysis Tab UI setup complete (3-Column Top Layout).")
-        self._on_mode_changed(initial_call=True)
+            
+            # Add all line items to plot
+            self.plot_widget.addItem(self.baseline_mean_line)
+            self.plot_widget.addItem(self.baseline_plus_sd_line)
+            self.plot_widget.addItem(self.baseline_minus_sd_line)
+            self.plot_widget.addItem(self.auto_plus_sd_line)
+            self.plot_widget.addItem(self.auto_minus_sd_line)
+            
+            # Hide initially
+            self._clear_baseline_visualization_lines()
+            self._clear_auto_baseline_visualization_lines()
+            
+            log.debug("Baseline analysis plot items setup completed")
+            
+        except Exception as e:
+            log.error(f"Failed to setup baseline plot items: {e}")
 
     # --- ADDED: Method to clear auto-calculation visualization lines ---
     def _clear_auto_baseline_visualization_lines(self):
