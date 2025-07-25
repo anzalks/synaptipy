@@ -89,18 +89,19 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Set white background
         self.plot_widget.setBackground('white')
 
-        # Configure mouse mode
+        # Configure mouse mode - simplified for Windows compatibility
         viewbox = self.plot_widget.getViewBox()
         if viewbox:
+            # Disable auto-scaling to prevent Windows scaling issues
             viewbox.setMouseMode(pg.ViewBox.RectMode)
-            viewbox.mouseEnabled = True
+            viewbox.enableAutoRange(enable=False)
+            viewbox.setAutoVisible(x=False, y=False)
 
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
 
-        # Apply Windows-safe grid configuration after a delay
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(100, lambda: self._apply_safe_grid())
+        # Skip all grid configuration on Windows to prevent scaling issues
+        # Grid can be manually enabled by users if needed
 
         # Add reset view button below plot
         self._setup_reset_view_button(layout)
@@ -108,7 +109,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
 
-        log.debug(f"Plot area setup for {self.__class__.__name__} - simple approach")
+        log.debug(f"Plot area setup for {self.__class__.__name__} - Windows-safe approach")
 
     def _apply_safe_grid(self):
         """Safely apply grid configuration to analysis plot."""
@@ -187,8 +188,36 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
     def _on_reset_view_clicked(self):
         """Handle reset view button click."""
-        self.auto_range_plot()
-        log.debug(f"Reset view triggered for {self.__class__.__name__}")
+        if self.plot_widget:
+            try:
+                # Instead of autoRange(), manually set reasonable ranges to prevent Windows scaling issues
+                plot_item = self.plot_widget.plotItem
+                if plot_item:
+                    # Get data bounds manually if possible
+                    try:
+                        bounds = plot_item.getViewBox().childrenBounds()
+                        if bounds and len(bounds) == 2:
+                            x_range, y_range = bounds
+                            if x_range and len(x_range) == 2 and y_range and len(y_range) == 2:
+                                # Add 5% padding
+                                x_padding = (x_range[1] - x_range[0]) * 0.05
+                                y_padding = (y_range[1] - y_range[0]) * 0.05
+                                plot_item.getViewBox().setRange(
+                                    xRange=[x_range[0] - x_padding, x_range[1] + x_padding],
+                                    yRange=[y_range[0] - y_padding, y_range[1] + y_padding]
+                                )
+                                return
+                    except:
+                        pass
+                
+                # Fallback: try autoRange but catch any Windows scaling errors
+                try:
+                    self.plot_widget.autoRange()
+                except:
+                    pass  # Ignore autoRange errors on Windows
+                    
+            except Exception as e:
+                log.debug(f"Reset view failed for {self.__class__.__name__}: {e}")
 
     def _setup_zoom_sync(self):
         """Initialize the zoom synchronization manager for reset functionality only."""
@@ -215,16 +244,41 @@ class BaseAnalysisTab(QtWidgets.QWidget):
             log.debug(f"Data ranges set: X={x_range}, Y={y_range}")
     
     def auto_range_plot(self):
-        """Auto-range the plot to fit all data."""
-        if self.zoom_sync:
-            self.zoom_sync.auto_range()
-        elif self.plot_widget:
-            self.plot_widget.autoRange()
+        """Auto-range the plot to fit all data using Windows-safe approach."""
+        if self.plot_widget:
+            try:
+                # Use manual range setting instead of autoRange to prevent Windows scaling issues
+                plot_item = self.plot_widget.plotItem
+                if plot_item:
+                    # Get data bounds manually if possible
+                    try:
+                        bounds = plot_item.getViewBox().childrenBounds()
+                        if bounds and len(bounds) == 2:
+                            x_range, y_range = bounds
+                            if x_range and len(x_range) == 2 and y_range and len(y_range) == 2:
+                                # Add 5% padding
+                                x_padding = (x_range[1] - x_range[0]) * 0.05
+                                y_padding = (y_range[1] - y_range[0]) * 0.05
+                                plot_item.getViewBox().setRange(
+                                    xRange=[x_range[0] - x_padding, x_range[1] + x_padding],
+                                    yRange=[y_range[0] - y_padding, y_range[1] + y_padding]
+                                )
+                                return
+                    except:
+                        pass
+                
+                # Fallback: try autoRange but catch any Windows scaling errors
+                try:
+                    self.plot_widget.autoRange()
+                except:
+                    pass  # Ignore autoRange errors on Windows
+                    
+            except Exception as e:
+                log.debug(f"Auto-range failed for {self.__class__.__name__}: {e}")
 
-    def _on_plot_range_changed(self, axis: str, new_range: Tuple[float, float]):
-        """Called when plot range changes from any source (zoom, scroll, manual)."""
-        # Subclasses can override this to handle range changes
-        # For example, to update analysis regions or recalculate results
+    def _on_plot_range_changed(self, view_box, new_range):
+        """Handle plot range changes for zoom synchronization."""
+        # Disable range change handling to prevent Windows scaling feedback loops
         pass
 
     # ViewBox state change handler
