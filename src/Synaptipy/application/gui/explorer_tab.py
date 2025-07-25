@@ -1141,6 +1141,9 @@ class ExplorerTab(QtWidgets.QWidget):
             log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
             return
         
+        # Disconnect range signals during plotting to prevent Windows rapid scaling
+        self._disconnect_viewbox_signals_temporarily()
+        
         try:
             # --- Rest of existing _update_plot logic with temporary signal disconnection ---
             self._clear_plot_data_only()
@@ -1245,6 +1248,8 @@ class ExplorerTab(QtWidgets.QWidget):
                                         log.warning(f"[DATA-VALID] Data has {np.sum(~np.isfinite(data))} invalid values")
                                 
                                 item = plot_item.plot(time_vec, data, pen=trial_pen)
+                                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+                                item.setPen(trial_pen)
                                 # Set z-order for proper layering
                                 if hasattr(item, 'setZValue'):
                                     item.setZValue(1)
@@ -1257,7 +1262,8 @@ class ExplorerTab(QtWidgets.QWidget):
                                 if trial_idx == 0:  # Only log for first trial to avoid spam
                                     log.info(f"[PLOT-DEBUG] Trial item created - Type: {type(item)}")
                                     log.info(f"[PLOT-DEBUG] Item visible: {item.isVisible()}")
-                                    log.info(f"[PLOT-DEBUG] Item pen: {getattr(item.opts, 'pen', 'None')}")
+                                    log.info(f"[PLOT-DEBUG] Item pen BEFORE setPen: {getattr(item.opts, 'pen', 'None')}")
+                                    log.info(f"[PLOT-DEBUG] Item pen AFTER setPen: {item.opts.get('pen', 'None')}")
                                     log.info(f"[PLOT-DEBUG] Item in scene: {item.scene() is not None}")
                                     log.info(f"[PLOT-DEBUG] Item parent: {item.parentItem()}")
                                     log.info(f"[PLOT-DEBUG] Data length: time={len(time_vec)}, data={len(data)}")
@@ -1275,6 +1281,8 @@ class ExplorerTab(QtWidgets.QWidget):
                             log.info(f"[EXPLORER-DATA] Average - Data stats: mean={np.mean(avg_data):.6f}, std={np.std(avg_data):.6f}")
                             
                             item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
+                            # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+                            item.setPen(average_pen)
                             # Set average data z-order
                             if hasattr(item, 'setZValue'):
                                 item.setZValue(2)
@@ -1287,7 +1295,7 @@ class ExplorerTab(QtWidgets.QWidget):
                             # COMPREHENSIVE DEBUG: Check average plot item state
                             log.info(f"[PLOT-DEBUG] Average item created - Type: {type(item)}")
                             log.info(f"[PLOT-DEBUG] Average visible: {item.isVisible()}")
-                            log.info(f"[PLOT-DEBUG] Average pen: {getattr(item.opts, 'pen', 'None')}")
+                            log.info(f"[PLOT-DEBUG] Average pen AFTER setPen: {item.opts.get('pen', 'None')}")
                             log.info(f"[PLOT-DEBUG] Average in scene: {item.scene() is not None}")
                             log.info(f"[PLOT-DEBUG] Average parent: {item.parentItem()}")
                             log.info(f"[PLOT-DEBUG] Plot total items after average: {len(plot_item.listDataItems())}")
@@ -1308,6 +1316,8 @@ class ExplorerTab(QtWidgets.QWidget):
                                 log.info(f"[EXPLORER-DATA] Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
                                 
                                 item = plot_item.plot(time_vec, data, pen=single_trial_pen)
+                                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+                                item.setPen(single_trial_pen)
                                 log.info(f"[EXPLORER-DATA] Plot item created successfully for {chan_id}")
                                 
                                 # Set primary data z-order
@@ -1322,7 +1332,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                 # COMPREHENSIVE DEBUG: Check single trial plot item state
                                 log.info(f"[PLOT-DEBUG] Single trial item created - Type: {type(item)}")
                                 log.info(f"[PLOT-DEBUG] Single visible: {item.isVisible()}")
-                                log.info(f"[PLOT-DEBUG] Single pen: {getattr(item.opts, 'pen', 'None')}")
+                                log.info(f"[PLOT-DEBUG] Single pen AFTER setPen: {item.opts.get('pen', 'None')}")
                                 log.info(f"[PLOT-DEBUG] Single in scene: {item.scene() is not None}")
                                 log.info(f"[PLOT-DEBUG] Single parent: {item.parentItem()}")
                                 log.info(f"[PLOT-DEBUG] Plot total items after single: {len(plot_item.listDataItems())}")
@@ -1398,7 +1408,8 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[PLOT-FINAL] Total data items across all plots: {total_data_items}")
             log.info(f"[PLOT-FINAL] === END SUMMARY ===")
         finally:
-            pass  # Theme conflict fixed - no need for signal workarounds
+            # Reconnect range signals after plotting
+            self._reconnect_viewbox_signals_after_plotting()
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
