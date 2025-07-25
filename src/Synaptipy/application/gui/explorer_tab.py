@@ -2541,7 +2541,29 @@ class ExplorerTab(QtWidgets.QWidget):
             for plot_id, plot in vis_map.items():
                 y_bounds = plot.getViewBox().childrenBounds()[1]
                 log.info(f"[EXPLORER-RESET-DELAYED] Y bounds for {plot_id}: {y_bounds}")
-                if y_bounds and len(y_bounds) == 2 and abs(y_bounds[1] - y_bounds[0]) > 1e-10:
+                
+                # Check if bounds are reasonable by comparing with actual data
+                use_bounds = False
+                if y_bounds and len(y_bounds) == 2 and abs(y_bounds[1] - y_bounds[0]) > 1e-6:
+                    # Get actual data range to validate bounds
+                    plot_data_items = plot.listDataItems()
+                    if plot_data_items:
+                        data_item = plot_data_items[0]
+                        if hasattr(data_item, 'yData') and data_item.yData is not None:
+                            y_data = data_item.yData
+                            if len(y_data) > 0:
+                                actual_min, actual_max = float(np.min(y_data)), float(np.max(y_data))
+                                actual_range = actual_max - actual_min
+                                bounds_range = y_bounds[1] - y_bounds[0]
+                                
+                                # Use bounds only if they're close to actual data range (within 50% tolerance)
+                                if actual_range > 0 and abs(bounds_range - actual_range) / actual_range < 0.5:
+                                    use_bounds = True
+                                    log.info(f"[EXPLORER-RESET-DELAYED] Y bounds validated for {plot_id}: bounds_range={bounds_range:.6f}, actual_range={actual_range:.6f}")
+                                else:
+                                    log.warning(f"[EXPLORER-RESET-DELAYED] Y bounds mismatch for {plot_id}: bounds_range={bounds_range:.6f}, actual_range={actual_range:.6f}, using data fallback")
+                
+                if use_bounds:
                     y_padding = (y_bounds[1] - y_bounds[0]) * 0.02  # 2% padding
                     manual_y_range = [y_bounds[0] - y_padding, y_bounds[1] + y_padding]
                     plot.getViewBox().setYRange(*manual_y_range, padding=0)
