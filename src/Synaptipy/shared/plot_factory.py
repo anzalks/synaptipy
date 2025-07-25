@@ -86,8 +86,11 @@ class SynaptipyPlotFactory:
                         QtCore.QTimer.singleShot(retry_delay, lambda: attempt_grid_config(attempt + 1))
                     return
                 
-                # Enable grid first
-                plot_item.showGrid(x=True, y=True, alpha=1.0)
+                # Enable grid safely with error handling
+                try:
+                    plot_item.showGrid(x=True, y=True, alpha=1.0)
+                except:
+                    pass  # Ignore grid errors on Windows
                 
                 # Get Z_ORDER with fallback
                 try:
