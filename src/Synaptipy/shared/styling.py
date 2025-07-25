@@ -68,8 +68,6 @@ def toggle_theme_mode() -> str:
 
 def configure_pyqtgraph_globally():
     """Apply global PyQtGraph configuration for consistent behavior across all plots."""
-    import pyqtgraph as pg
-    
     # Configure global PyQtGraph settings (matching explorer tab)
     pg.setConfigOption('imageAxisOrder', 'row-major')
     pg.setConfigOption('background', 'w')  # White background
@@ -180,34 +178,63 @@ def configure_plot_widget(plot_widget):
     # Enable grid with full opacity (like explorer tab)
     plot_widget.showGrid(x=True, y=True, alpha=1.0)
     
-    # Ensure grids are properly behind data by setting correct z-values
-    _configure_grid_z_order(plot_widget)
+    # Defer grid configuration to prevent Windows timing issues
+    def configure_grid_deferred():
+        _configure_grid_z_order_safe(plot_widget)
+    
+    # Use Qt's QTimer to defer grid configuration slightly
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(1, configure_grid_deferred)  # 1ms delay
     
     return plot_widget
 
-def _configure_grid_z_order(plot_widget):
-    """Ensure grid lines are behind data by setting proper z-values (like explorer tab)."""
+def _configure_grid_z_order_safe(plot_widget):
+    """Safely configure grid z-order with better error handling for Windows compatibility."""
     try:
         plot_item = plot_widget.getPlotItem()
-        if plot_item:
-            # Set grid z-values to be behind data (negative values)
-            for axis_name in ['bottom', 'left']:
+        if not plot_item:
+            return
+            
+        # Import Z_ORDER from constants
+        try:
+            from Synaptipy.shared.constants import Z_ORDER
+            grid_z_value = Z_ORDER['grid']
+        except (ImportError, KeyError):
+            # Fallback to hardcoded value if constants not available
+            grid_z_value = -1000
+            
+        # Set grid z-values to be behind data (negative values)
+        for axis_name in ['bottom', 'left']:
+            try:
                 axis = plot_item.getAxis(axis_name)
-                if axis and hasattr(axis, 'grid'):
-                    if hasattr(axis.grid, 'setZValue'):
-                        # Use negative z-value to ensure grids stay behind data
-                        axis.grid.setZValue(-1000)
+                if not axis:
+                    continue
                     
-                    # Set grid pen to black (consistent with explorer tab)
-                    if hasattr(axis.grid, 'setPen'):
-                        axis.grid.setPen(get_grid_pen())
+                # Check if grid exists and is properly initialized
+                if not hasattr(axis, 'grid') or axis.grid is None:
+                    continue
                     
-                    # Ensure grid opacity is set correctly
-                    if hasattr(axis, 'setGrid'):
-                        axis.setGrid(255)  # Full opacity
+                # Only set z-value if the grid item has a valid scene
+                if hasattr(axis.grid, 'setZValue') and hasattr(axis.grid, 'scene'):
+                    if axis.grid.scene() is not None:  # Ensure it's added to a scene
+                        axis.grid.setZValue(grid_z_value)
+                    
+                # Set grid pen only if grid is properly initialized
+                if hasattr(axis.grid, 'setPen'):
+                    axis.grid.setPen(get_grid_pen())
+                    
+                # Ensure grid opacity is set correctly
+                if hasattr(axis, 'setGrid'):
+                    axis.setGrid(255)  # Full opacity
+                    
+            except Exception as e:
+                # Log individual axis errors for debugging but continue
+                log.debug(f"Could not configure grid for axis '{axis_name}': {e}")
+                continue
+                
     except Exception as e:
-        # Silently handle any grid configuration errors
-        pass
+        # Silently handle any major grid configuration errors
+        log.debug(f"Grid configuration failed: {e}")
 
 def get_trial_pen():
     """Get pen for individual trial traces."""
@@ -220,18 +247,19 @@ def get_average_pen():
     return pg.mkPen(color=color, width=2.0)
 
 def get_baseline_pen():
-    """Get pen for baseline indicators."""
-    color = "#2ecc71" if CURRENT_THEME_MODE == "dark" else "#27ae60"  # Green
-    return pg.mkPen(color=color, style=QtCore.Qt.PenStyle.DashLine, width=1.5)
+    """Get pen for baseline indicator lines."""
+    color = "#7f8c8d" if CURRENT_THEME_MODE == "dark" else "#95a5a6"  # Gray
+    return pg.mkPen(color=color, width=1.5, style=QtCore.Qt.DashLine)
 
 def get_response_pen():
-    """Get pen for response indicators."""
+    """Get pen for response indicator lines."""
     color = "#f39c12" if CURRENT_THEME_MODE == "dark" else "#e67e22"  # Orange
-    return pg.mkPen(color=color, style=QtCore.Qt.PenStyle.DashLine, width=1.5)
+    return pg.mkPen(color=color, width=1.5, style=QtCore.Qt.DashLine)
 
 def get_grid_pen():
-    """Get pen for grid lines - always black for consistency with explorer tab."""
-    return pg.mkPen(color='#000000', width=1.0, style=QtCore.Qt.PenStyle.DotLine)
+    """Get pen for grid lines."""
+    color = "#000000"  # Always black for grid lines
+    return pg.mkPen(color=color, width=0.5, style=QtCore.Qt.SolidLine)
 
 # ==============================================================================
 # Simple Widget Styling Helpers

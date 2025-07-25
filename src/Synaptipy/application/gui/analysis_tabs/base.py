@@ -118,6 +118,14 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         """Apply the exact same grid configuration as explorer tab."""
         from Synaptipy.shared.styling import get_grid_pen
         
+        # Import Z_ORDER with fallback
+        try:
+            from Synaptipy.shared.constants import Z_ORDER
+            grid_z_value = Z_ORDER['grid']
+        except (ImportError, KeyError):
+            # Fallback to hardcoded value if constants not available
+            grid_z_value = -1000
+        
         # Set background via the view box for PlotItem (like explorer tab)
         try:
             vb = plot_item.getViewBox()
@@ -129,22 +137,36 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Call showGrid on plot_item (NOT plot_widget) with alpha=1.0 like explorer tab
         plot_item.showGrid(x=True, y=True, alpha=1.0)
         
-        # Apply exact explorer tab grid configuration
+        # Apply exact explorer tab grid configuration with better error handling
         try:
             for axis_name in ['bottom', 'left']:
-                axis = plot_item.getAxis(axis_name)
-                if axis and hasattr(axis, 'grid'):
+                try:
+                    axis = plot_item.getAxis(axis_name)
+                    if not axis:
+                        continue
+                        
+                    # Check if grid exists and is properly initialized
+                    if not hasattr(axis, 'grid') or axis.grid is None:
+                        continue
+                    
                     # Set grid opacity to full (like explorer tab)
                     if hasattr(axis, 'setGrid'):
                         axis.setGrid(255)  # Full opacity
                     
-                    # Set grid z-value to be behind data (use negative value)
-                    if hasattr(axis.grid, 'setZValue'):
-                        axis.grid.setZValue(-1000)  # Negative z-value = behind data
+                    # Set grid z-value only if grid item has a valid scene
+                    if hasattr(axis.grid, 'setZValue') and hasattr(axis.grid, 'scene'):
+                        if axis.grid.scene() is not None:  # Ensure it's added to a scene
+                            axis.grid.setZValue(grid_z_value)
                     
                     # Apply black grid pen (like explorer tab)
                     if hasattr(axis.grid, 'setPen'):
                         axis.grid.setPen(get_grid_pen())
+                        
+                except Exception as e:
+                    # Log individual axis errors for debugging but continue
+                    log.debug(f"Could not configure grid for axis '{axis_name}': {e}")
+                    continue
+                    
         except Exception as e:
             pass  # Silently handle any grid configuration errors
 
