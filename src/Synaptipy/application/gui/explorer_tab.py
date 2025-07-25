@@ -1086,8 +1086,8 @@ class ExplorerTab(QtWidgets.QWidget):
         # Update current plot data based on current settings
         self._update_plot_data()
         
-        # Force plots to be immediately updated
-        self.graphics_layout_widget.update()
+        # DISABLED: Force update can cause Windows scaling issues
+        # self.graphics_layout_widget.update()
         
         log.debug("Plot update triggered and styling refreshed.")
 
@@ -1265,18 +1265,21 @@ class ExplorerTab(QtWidgets.QWidget):
                     idx = visible_plots.index(plot_item)
                     target = visible_plots[idx - 1].getViewBox() if idx > 0 else None
                     vb = plot_item.getViewBox()
-                    if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
-                        plot_item.setXLink(target)
-                    elif vb and not hasattr(vb, 'linkedView'): # Safety
-                        plot_item.setXLink(target)
+                    # DISABLED: setXLink operations cause Windows scaling issues
+                    # if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
+                    #     plot_item.setXLink(target)
+                    # elif vb and not hasattr(vb, 'linkedView'): # Safety
+                    #     plot_item.setXLink(target)
                 except Exception as link_e:
                      chan_id = getattr(plot_item.getViewBox(), '_synaptipy_chan_id', f'plot_{i}')
                      log.warning(f"XLink Err {chan_id}: {link_e}")
-                     plot_item.setXLink(None)
+                     # DISABLED: setXLink operations cause Windows scaling issues
+                     # plot_item.setXLink(None)
             else: # Unlink hidden plots
                 vb = plot_item.getViewBox()
-                if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
-                    plot_item.setXLink(None)
+                # DISABLED: setXLink operations cause Windows scaling issues
+                # if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
+                #     plot_item.setXLink(None)
         # --- End Axis linking ---
 
         self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
@@ -1740,9 +1743,11 @@ class ExplorerTab(QtWidgets.QWidget):
         vis_map={k:v for k,v in vis_map.items() if k is not None}
         if not vis_map: self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
         first_cid, first_plot = next(iter(vis_map.items()))
-        first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        for plot in vis_map.values(): plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+        # DISABLED: enableAutoRange calls cause Windows scaling issues
+        # first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+        # for plot in vis_map.values(): plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        # DISABLED: Range capture can also cause Windows scaling issues
+        # QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
@@ -1785,8 +1790,10 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.manual_limits_enabled: return
         plot = self.channel_plots.get(chan_id)
         if not plot or not plot.isVisible() or not plot.getViewBox(): return
-        plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
+        # DISABLED: enableAutoRange call causes Windows scaling issues
+        # plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        # DISABLED: Range capture can also cause Windows scaling issues
+        # QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
 
     def _capture_single_base_range_after_reset(self, chan_id: str):
         plot=self.channel_plots.get(chan_id)
@@ -2098,7 +2105,9 @@ class ExplorerTab(QtWidgets.QWidget):
                         if chan_id == next(iter(self.channel_plots.keys())): 
                              log.debug(f"Applied shared X limits {manual_x}")
                     else:
-                         vb.enableAutoRange(axis=pg.ViewBox.XAxis) # Auto-range X if no manual X
+                         # DISABLED: enableAutoRange call causes Windows scaling issues
+                         # vb.enableAutoRange(axis=pg.ViewBox.XAxis) # Auto-range X if no manual X
+                         pass
                     
                     # Apply per-channel Y limit
                     channel_y_limits = self.manual_channel_limits.get(chan_id, {}).get('y')
@@ -2106,7 +2115,9 @@ class ExplorerTab(QtWidgets.QWidget):
                         vb.setYRange(channel_y_limits[0], channel_y_limits[1], padding=0); applied_any=True
                         log.debug(f"Applied Y limits {channel_y_limits} to {chan_id}")
                     else:
-                        vb.enableAutoRange(axis=pg.ViewBox.YAxis) # Auto-range Y if no manual Y for this channel
+                        # DISABLED: enableAutoRange call causes Windows scaling issues
+                        # vb.enableAutoRange(axis=pg.ViewBox.YAxis) # Auto-range Y if no manual Y for this channel
+                        pass
             # --- END UPDATE ---
         finally:
              self._updating_viewranges=False
