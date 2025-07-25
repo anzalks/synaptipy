@@ -1222,10 +1222,16 @@ class ExplorerTab(QtWidgets.QWidget):
                     # Now plot the data with proper z-ordering
                     if not is_cycle_mode:
                         # --- Overlay All + Avg Mode ---
+                        log.info(f"[EXPLORER-DATA] Plotting overlay mode for {chan_id} ({channel.num_trials} trials)")
                         for trial_idx in range(channel.num_trials):
                             data = channel.get_data(trial_idx)
                             time_vec = channel.get_relative_time_vector(trial_idx)
                             if data is not None and time_vec is not None:
+                                if trial_idx == 0:  # Log details for first trial only to avoid spam
+                                    log.info(f"[EXPLORER-DATA] First trial - Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
+                                    log.info(f"[EXPLORER-DATA] First trial - Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
+                                    log.info(f"[EXPLORER-DATA] First trial - Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
+                                
                                 item = plot_item.plot(time_vec, data, pen=trial_pen)
                                 # Set z-order for proper layering
                                 if hasattr(item, 'setZValue'):
@@ -1235,12 +1241,17 @@ class ExplorerTab(QtWidgets.QWidget):
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
                             else:
-                                log.warning(f"Missing data or time for trial {trial_idx+1}, Ch {chan_id}")
+                                log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {trial_idx+1}: data={data is not None}, time_vec={time_vec is not None}")
                         
                         # Plot average trace
                         avg_data = channel.get_averaged_data()
                         avg_time_vec = channel.get_relative_averaged_time_vector()
                         if avg_data is not None and avg_time_vec is not None:
+                            log.info(f"[EXPLORER-DATA] Plotting average trace for {chan_id}")
+                            log.info(f"[EXPLORER-DATA] Average - Time range: [{np.min(avg_time_vec):.6f}, {np.max(avg_time_vec):.6f}] ({len(avg_time_vec)} points)")
+                            log.info(f"[EXPLORER-DATA] Average - Data range: [{np.min(avg_data):.6f}, {np.max(avg_data):.6f}] ({len(avg_data)} points)")
+                            log.info(f"[EXPLORER-DATA] Average - Data stats: mean={np.mean(avg_data):.6f}, std={np.std(avg_data):.6f}")
+                            
                             item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
                             # Set average data z-order
                             if hasattr(item, 'setZValue'):
@@ -1249,6 +1260,9 @@ class ExplorerTab(QtWidgets.QWidget):
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
+                            log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}")
+                        else:
+                            log.warning(f"[EXPLORER-DATA] Missing average data for {chan_id}: avg_data={avg_data is not None}, avg_time_vec={avg_time_vec is not None}")
 
                     else:
                         # --- Cycle Single Trial Mode ---
@@ -1257,7 +1271,15 @@ class ExplorerTab(QtWidgets.QWidget):
                             data = channel.get_data(idx)
                             time_vec = channel.get_relative_time_vector(idx)
                             if data is not None and time_vec is not None:
+                                # DETAILED DATA LOGGING for debugging Windows visibility issues
+                                log.info(f"[EXPLORER-DATA] Plotting trial {idx+1} for {chan_id}")
+                                log.info(f"[EXPLORER-DATA] Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
+                                log.info(f"[EXPLORER-DATA] Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
+                                log.info(f"[EXPLORER-DATA] Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
+                                
                                 item = plot_item.plot(time_vec, data, pen=single_trial_pen)
+                                log.info(f"[EXPLORER-DATA] Plot item created successfully for {chan_id}")
+                                
                                 # Set primary data z-order
                                 if hasattr(item, 'setZValue'):
                                     item.setZValue(3)
@@ -1265,7 +1287,9 @@ class ExplorerTab(QtWidgets.QWidget):
                                 item.opts['autoDownsampleThreshold'] = ds_threshold
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
+                                log.info(f"[EXPLORER-DATA] Plot data added for {chan_id}")
                             else: 
+                                log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {idx+1}: data={data is not None}, time_vec={time_vec is not None}")
                                 text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
                                 # Set text overlay z-order
                                 if hasattr(text_item, 'setZValue'):
