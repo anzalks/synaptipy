@@ -1871,20 +1871,47 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET] Blocking range signals during manual calculation")
             self._disconnect_viewbox_signals_temporarily()
             
-            # Simple Windows fix: Use enableAutoRange with signal protection
-            log.info(f"[EXPLORER-RESET] Using protected enableAutoRange on Windows")
+            # CRITICAL: Direct data range calculation - enableAutoRange is broken on Windows
+            log.info(f"[EXPLORER-RESET] Using direct data range calculation on Windows")
             try:
-                # Auto-range operations with signal protection
-                first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+                # Calculate X range from actual data in first plot
+                data_items = first_plot.listDataItems()
+                if data_items and len(data_items) > 0:
+                    x_data = data_items[0].xData
+                    if x_data is not None and len(x_data) > 0:
+                        x_min, x_max = float(np.min(x_data)), float(np.max(x_data))
+                        x_padding = (x_max - x_min) * 0.02
+                        x_range = [x_min - x_padding, x_max + x_padding]
+                        first_plot.getViewBox().setXRange(*x_range, padding=0)
+                        log.info(f"[EXPLORER-RESET] Set Windows X range from data: {x_range}")
+                
+                # Calculate Y range from actual data for each plot
                 for plot_id, plot in vis_map.items():
-                    plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-                    # Force update to ensure visibility on Windows
-                    plot.update()
-                log.info(f"[EXPLORER-RESET] Windows auto-range completed")
+                    data_items = plot.listDataItems()
+                    if data_items and len(data_items) > 0:
+                        # Get Y data from all plot items and find global range
+                        all_y_data = []
+                        for item in data_items:
+                            if hasattr(item, 'yData') and item.yData is not None:
+                                all_y_data.extend(item.yData)
+                        
+                        if all_y_data:
+                            y_min, y_max = float(np.min(all_y_data)), float(np.max(all_y_data))
+                            y_padding = (y_max - y_min) * 0.02
+                            y_range = [y_min - y_padding, y_max + y_padding]
+                            plot.getViewBox().setYRange(*y_range, padding=0)
+                            plot.update()  # Force immediate update
+                            log.info(f"[EXPLORER-RESET] Set Windows Y range from data for {plot_id}: {y_range}")
+                        else:
+                            log.warning(f"[EXPLORER-RESET] No Y data found for {plot_id}")
+                    else:
+                        log.warning(f"[EXPLORER-RESET] No data items found for {plot_id}")
+                        
+                log.info(f"[EXPLORER-RESET] Windows direct range calculation completed")
             except Exception as e:
-                log.error(f"[EXPLORER-RESET] Windows auto-range failed: {e}")
+                log.error(f"[EXPLORER-RESET] Windows direct range calculation failed: {e}")
             finally:
-                # Reconnect signals after auto-range
+                # Reconnect signals after range setting
                 log.info(f"[EXPLORER-RESET] Scheduling signal reconnection in 100ms")
                 QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
         else:
