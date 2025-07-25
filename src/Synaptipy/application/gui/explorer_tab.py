@@ -725,12 +725,14 @@ class ExplorerTab(QtWidgets.QWidget):
                 vb = plot_item.getViewBox()
                 if vb:
                     vb.setBackgroundColor('white')
+                    # Add Windows-safe ViewBox configuration
+                    vb.enableAutoRange(enable=False)
+                    vb.setAutoVisible(x=False, y=False)
             except:
                 pass  # Fallback if background setting fails
             
-            # Apply Windows-safe grid configuration after a delay
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(150, lambda p=plot_item: self._apply_safe_grid_to_plot(p))
+            # Skip all grid configuration to prevent Windows scaling issues
+            # Grid can be manually enabled by users if needed
             
             # Explicitly set grid pens to ensure visibility and proper z-ordering
             try:
@@ -1056,6 +1058,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     vb = plot_item.getViewBox()
                     if vb:
                         vb.setBackgroundColor('white')
+                        # Add Windows-safe ViewBox configuration
+                        vb.enableAutoRange(enable=False)
+                        vb.setAutoVisible(x=False, y=False)
                 except:
                     pass  # Fallback if background setting fails
                 
@@ -1145,6 +1150,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     vb = plot_item.getViewBox()
                     if vb:
                         vb.setBackgroundColor('white')
+                        # Add Windows-safe ViewBox configuration
+                        vb.enableAutoRange(enable=False)
+                        vb.setAutoVisible(x=False, y=False)
                 except:
                     pass  # Fallback if background setting fails
                 

@@ -508,7 +508,11 @@ class EventDetectionTab(BaseAnalysisTab):
                 
                 plot_succeeded = True
                 log.debug(f"Event Detection Plotting Success. Rate: {sample_rate}")
-                self.plot_widget.autoRange()
+                # Auto-range the plot to show data with Windows-safe approach
+                try:
+                    self.auto_range_plot()
+                except:
+                    pass  # Ignore auto-range errors on Windows
             else:
                 log.warning(f"Event Plotting: No valid data vector for Ch {chan_id}, Source: {source_data_key}")
                 if self.plot_widget: self.plot_widget.setTitle("Plot Error: No Data Vector")
