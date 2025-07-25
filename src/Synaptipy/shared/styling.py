@@ -163,25 +163,6 @@ def get_plot_foreground_color() -> str:
     else:
         return "#000000"  # Black
 
-def _apply_safe_grid(plot_widget):
-    """Safely apply grid configuration after plot widget is fully initialized."""
-    try:
-        if plot_widget and hasattr(plot_widget, 'plotItem'):
-            plot_item = plot_widget.plotItem
-            if plot_item and hasattr(plot_item, 'ctrl') and plot_item.ctrl:
-                # Use the control panel's grid toggle if available (safer than direct showGrid)
-                if hasattr(plot_item.ctrl, 'xGridCheck') and hasattr(plot_item.ctrl, 'yGridCheck'):
-                    plot_item.ctrl.xGridCheck.setChecked(True)
-                    plot_item.ctrl.yGridCheck.setChecked(True)
-                else:
-                    # Fallback: try showGrid but catch any errors
-                    try:
-                        plot_widget.showGrid(x=True, y=True, alpha=0.3)
-                    except:
-                        pass  # Ignore grid errors on Windows
-    except:
-        pass  # Ignore all errors to prevent crashes
-
 
 def configure_plot_widget(plot_widget):
     """Configure a PyQtGraph PlotWidget with consistent styling matching explorer tab approach."""
@@ -195,11 +176,8 @@ def configure_plot_widget(plot_widget):
     plot_widget.getAxis('left').setTextPen(axis_color)
     plot_widget.getAxis('bottom').setTextPen(axis_color)
     
-    # Apply Windows-safe grid configuration after a delay
-    from PySide6.QtCore import QTimer
-    QTimer.singleShot(100, lambda: _apply_safe_grid(plot_widget))
-    
-    return plot_widget
+    # Enable grid with normal configuration
+    plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
 def _configure_grid_z_order_safe(plot_widget):
     """Safely configure grid z-order with better error handling for Windows compatibility."""

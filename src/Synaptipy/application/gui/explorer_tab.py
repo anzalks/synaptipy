@@ -725,9 +725,9 @@ class ExplorerTab(QtWidgets.QWidget):
                 vb = plot_item.getViewBox()
                 if vb:
                     vb.setBackgroundColor('white')
-                    # Add Windows-safe ViewBox configuration
-                    vb.enableAutoRange(enable=False)
-                    vb.setAutoVisible(x=False, y=False)
+                    # Normal ViewBox behavior restored
+                    # vb.enableAutoRange(enable=False)
+                    # vb.setAutoVisible(x=False, y=False)
             except:
                 pass  # Fallback if background setting fails
             
@@ -1058,15 +1058,16 @@ class ExplorerTab(QtWidgets.QWidget):
                     vb = plot_item.getViewBox()
                     if vb:
                         vb.setBackgroundColor('white')
-                        # Add Windows-safe ViewBox configuration
-                        vb.enableAutoRange(enable=False)
-                        vb.setAutoVisible(x=False, y=False)
+                        # Normal ViewBox behavior restored
+                        # vb.enableAutoRange(enable=False)
+                        # vb.setAutoVisible(x=False, y=False)
                 except:
                     pass  # Fallback if background setting fails
                 
-                # Skip showGrid to prevent Windows infinite scroll issues
+                # Enable grid with normal configuration  
+                plot_item.showGrid(x=True, y=True, alpha=1.0)
                 
-                # Explicitly set grid pens for both axes
+                # Step 3: Force grid lines to have proper z-values and pens
                 try:
                     for axis_name in ['bottom', 'left']:
                         axis = plot_item.getAxis(axis_name)
@@ -1086,11 +1087,8 @@ class ExplorerTab(QtWidgets.QWidget):
         # Update current plot data based on current settings
         self._update_plot_data()
         
-        # Re-enable graphics update with error handling to render plots
-        try:
-            self.graphics_layout_widget.update()
-        except Exception as e:
-            log.debug(f"Graphics update failed on Windows: {e}")
+        # Normal graphics update restored
+        self.graphics_layout_widget.update()
         
         log.debug("Plot update triggered and styling refreshed.")
 
@@ -1153,13 +1151,14 @@ class ExplorerTab(QtWidgets.QWidget):
                     vb = plot_item.getViewBox()
                     if vb:
                         vb.setBackgroundColor('white')
-                        # Add Windows-safe ViewBox configuration
-                        vb.enableAutoRange(enable=False)
-                        vb.setAutoVisible(x=False, y=False)
+                        # Normal ViewBox behavior restored
+                        # vb.enableAutoRange(enable=False)
+                        # vb.setAutoVisible(x=False, y=False)
                 except:
                     pass  # Fallback if background setting fails
                 
-                # Skip showGrid to prevent Windows infinite scroll issues
+                # Enable grid with normal configuration
+                plot_item.showGrid(x=True, y=True, alpha=1.0)
                 
                 # Step 3: Force grid lines to have proper z-values and pens
                 try:
@@ -1247,7 +1246,8 @@ class ExplorerTab(QtWidgets.QWidget):
                         text_item.setZValue(10)
                     plot_item.addItem(text_item)
                 
-                # Skip showGrid to prevent Windows infinite scroll issues
+                # Final step: Re-apply grid settings to ensure they're visible after all plotting
+                plot_item.showGrid(x=True, y=True, alpha=1.0)
                 
                 if channel_plotted: any_data_plotted = True
             elif plot_item: plot_item.hide()
@@ -1268,21 +1268,18 @@ class ExplorerTab(QtWidgets.QWidget):
                     idx = visible_plots.index(plot_item)
                     target = visible_plots[idx - 1].getViewBox() if idx > 0 else None
                     vb = plot_item.getViewBox()
-                    # DISABLED: setXLink operations cause Windows scaling issues
-                    # if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
-                    #     plot_item.setXLink(target)
-                    # elif vb and not hasattr(vb, 'linkedView'): # Safety
-                    #     plot_item.setXLink(target)
+                    if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
+                        plot_item.setXLink(target)
+                    elif vb and not hasattr(vb, 'linkedView'): # Safety
+                        plot_item.setXLink(target)
                 except Exception as link_e:
                      chan_id = getattr(plot_item.getViewBox(), '_synaptipy_chan_id', f'plot_{i}')
                      log.warning(f"XLink Err {chan_id}: {link_e}")
-                     # DISABLED: setXLink operations cause Windows scaling issues
-                     # plot_item.setXLink(None)
+                     plot_item.setXLink(None)
             else: # Unlink hidden plots
                 vb = plot_item.getViewBox()
-                # DISABLED: setXLink operations cause Windows scaling issues
-                # if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
-                #     plot_item.setXLink(None)
+                if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
+                    plot_item.setXLink(None)
         # --- End Axis linking ---
 
         self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
@@ -1746,11 +1743,42 @@ class ExplorerTab(QtWidgets.QWidget):
         vis_map={k:v for k,v in vis_map.items() if k is not None}
         if not vis_map: self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
         first_cid, first_plot = next(iter(vis_map.items()))
-        # DISABLED: enableAutoRange calls cause Windows scaling issues
-        # first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        # for plot in vis_map.values(): plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        # DISABLED: Range capture can also cause Windows scaling issues
-        # QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+        
+        # Auto-range operations happen here in _reset_view, not in _capture_base_ranges_after_reset
+        try:
+            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+        except Exception as e:
+            import sys
+            if sys.platform.startswith('win'):
+                # On Windows, ignore X auto-range errors that cause infinite scroll
+                pass
+            else:
+                raise
+                
+        for plot in vis_map.values(): 
+            # Windows-specific fix: wrap Y auto-range to prevent scaling issues
+            try:
+                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+            except Exception as e:
+                import sys
+                if sys.platform.startswith('win'):
+                    # On Windows, fallback to manual range setting if auto-range fails
+                    try:
+                        vb = plot.getViewBox()
+                        bounds = vb.childrenBounds()
+                        if bounds and len(bounds) == 2:
+                            x_range, y_range = bounds
+                            if y_range and len(y_range) == 2:
+                                y_padding = (y_range[1] - y_range[0]) * 0.05
+                                vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
+                    except:
+                        pass  # If manual fallback fails, continue normally
+                else:
+                    # On non-Windows, re-raise the exception
+                    raise
+        
+        # Range capture happens AFTER auto-range operations
+        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
@@ -1784,17 +1812,6 @@ class ExplorerTab(QtWidgets.QWidget):
         else: self._reset_scrollbar(self.global_y_scrollbar)
         self._update_limit_fields(); self._update_y_controls_visibility()
 
-        # Re-enable auto-range with Windows error handling to show data
-        try:
-            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-            for plot in vis_map.values(): 
-                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        except Exception as e:
-            log.debug(f"AutoRange failed on Windows, trying fallback: {e}")
-        
-        # Re-enable range capture for zoom/scroll controls
-        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
-
     def _reset_all_sliders(self):
         sliders = [self.x_zoom_slider, self.global_y_slider] + list(self.individual_y_sliders.values())
         for s in sliders:
@@ -1804,13 +1821,26 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.manual_limits_enabled: return
         plot = self.channel_plots.get(chan_id)
         if not plot or not plot.isVisible() or not plot.getViewBox(): return
-        # Re-enable auto-range with Windows error handling
+        # Normal auto-range operation with Windows-specific error handling
         try:
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         except Exception as e:
-            log.debug(f"Single plot autoRange failed on Windows: {e}")
-        
-        # Re-enable range capture with error handling
+            import sys
+            if sys.platform.startswith('win'):
+                # On Windows, fallback to manual range setting if auto-range fails
+                try:
+                    vb = plot.getViewBox()
+                    bounds = vb.childrenBounds()
+                    if bounds and len(bounds) == 2:
+                        x_range, y_range = bounds
+                        if y_range and len(y_range) == 2:
+                            y_padding = (y_range[1] - y_range[0]) * 0.05
+                            vb.setYRange(y_range[0] - y_padding, y_range[1] + y_padding, padding=0)
+                except:
+                    pass  # If manual fallback fails, continue normally
+            else:
+                # On non-Windows, re-raise the exception  
+                raise
         QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
 
     def _capture_single_base_range_after_reset(self, chan_id: str):
@@ -2123,11 +2153,16 @@ class ExplorerTab(QtWidgets.QWidget):
                         if chan_id == next(iter(self.channel_plots.keys())): 
                              log.debug(f"Applied shared X limits {manual_x}")
                     else:
-                         # Re-enable auto-range fallback with Windows error handling
-                         try:
-                             vb.enableAutoRange(axis=pg.ViewBox.XAxis)
-                         except Exception as e:
-                             log.debug(f"X auto-range fallback failed on Windows: {e}")
+                        # Auto-range X if no manual X - with Windows error handling
+                        try:
+                            vb.enableAutoRange(axis=pg.ViewBox.XAxis)
+                        except Exception as e:
+                            import sys
+                            if sys.platform.startswith('win'):
+                                # On Windows, ignore auto-range errors for manual fallback
+                                pass
+                            else:
+                                raise
                     
                     # Apply per-channel Y limit
                     channel_y_limits = self.manual_channel_limits.get(chan_id, {}).get('y')
@@ -2135,11 +2170,16 @@ class ExplorerTab(QtWidgets.QWidget):
                         vb.setYRange(channel_y_limits[0], channel_y_limits[1], padding=0); applied_any=True
                         log.debug(f"Applied Y limits {channel_y_limits} to {chan_id}")
                     else:
-                        # Re-enable auto-range fallback with Windows error handling
+                        # Auto-range Y if no manual Y - with Windows error handling
                         try:
                             vb.enableAutoRange(axis=pg.ViewBox.YAxis)
                         except Exception as e:
-                            log.debug(f"Y auto-range fallback failed on Windows: {e}")
+                            import sys
+                            if sys.platform.startswith('win'):
+                                # On Windows, ignore auto-range errors for manual fallback  
+                                pass
+                            else:
+                                raise
             # --- END UPDATE ---
         finally:
              self._updating_viewranges=False

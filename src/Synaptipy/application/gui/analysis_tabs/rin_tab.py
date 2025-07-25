@@ -1096,12 +1096,11 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Update button states
         self._update_run_button_state()
 
-        # Auto-range view AFTER setting data and potentially adding regions with Windows-safe approach
+        # Auto-range view AFTER setting data and potentially adding regions
         if self.plot_widget:
-            try:
-                self.auto_range_plot()
-            except:
-                pass  # Ignore auto-range errors on Windows
+            self.plot_widget.autoRange() # Adjust view
+        # Force repaint of the plot widget
+        self.plot_widget.update()
 
     # --- ADDED: Method to initialize spinbox values from time vector ---
     def _set_default_time_windows(self):

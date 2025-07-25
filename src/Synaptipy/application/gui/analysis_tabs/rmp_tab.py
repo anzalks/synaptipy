@@ -493,11 +493,8 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self.plot_widget.addItem(self.interactive_region)
             self.plot_widget.setTitle(data_label) # Set title for clarity
 
-            # Auto-range the plot to show data with Windows-safe approach
-            try:
-                self.auto_range_plot()
-            except:
-                pass  # Ignore auto-range errors on Windows
+            # Auto-range the plot initially
+            self.plot_widget.autoRange()
 
             # --- ADDED: Plot Baseline and SD lines if available ---
             self._plot_baseline_visualization_lines()
@@ -935,11 +932,8 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self._update_save_button_state()
             # 5. Restore cursor
             QtWidgets.QApplication.restoreOverrideCursor()
-            # 6. Auto-range with Windows-safe approach
-            try:
-                self.auto_range_plot()
-            except:
-                pass  # Ignore auto-range errors on Windows
+            # 6. Auto-range
+            self.plot_widget.autoRange()
             log.debug("  Auto Baseline final block finished.")
 
     def cleanup(self):

@@ -198,30 +198,10 @@ class PlotZoomSyncManager(QtCore.QObject):
             log.warning(f"Invalid manual limit values: {e}")
     
     def auto_range(self):
-        """Auto-range the plot to fit all data using Windows-safe approach."""
+        """Auto-range the plot to fit all data."""
         if self.view_box:
-            try:
-                # Use manual range setting if base ranges are available
-                if self.base_x_range and self.base_y_range:
-                    # Add 5% padding to base ranges
-                    x_padding = (self.base_x_range[1] - self.base_x_range[0]) * 0.05
-                    y_padding = (self.base_y_range[1] - self.base_y_range[0]) * 0.05
-                    self.view_box.setRange(
-                        xRange=[self.base_x_range[0] - x_padding, self.base_x_range[1] + x_padding],
-                        yRange=[self.base_y_range[0] - y_padding, self.base_y_range[1] + y_padding]
-                    )
-                    log.debug("Plot auto-ranged using base ranges")
-                    return
-                
-                # Fallback: try autoRange but catch any Windows scaling errors
-                try:
-                    self.view_box.autoRange()
-                    log.debug("Plot auto-ranged using ViewBox autoRange")
-                except:
-                    log.debug("ViewBox autoRange failed - ignoring on Windows")
-                    
-            except Exception as e:
-                log.debug(f"Auto-range failed: {e}")
+            self.view_box.autoRange()
+            log.debug("Plot auto-ranged")
     
     def is_zoom_available(self) -> bool:
         """Check if zoom controls are available and functional."""
