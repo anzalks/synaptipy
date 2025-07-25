@@ -94,8 +94,13 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Get the plot item (this is what explorer tab configures)
         plot_item = self.plot_widget.getPlotItem()
         
-        # Apply explorer tab's exact grid configuration
-        self._configure_plot_item_like_explorer_tab(plot_item)
+        # Defer grid configuration to prevent Windows null pointer errors
+        def configure_plot_deferred():
+            self._configure_plot_item_like_explorer_tab(plot_item)
+        
+        # Use Qt's QTimer to defer grid configuration (Windows compatibility)
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, configure_plot_deferred)  # 10ms delay for Windows
         
         # Use the same mouse mode settings as explorer tab
         viewbox = self.plot_widget.getViewBox()
@@ -115,7 +120,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         log.debug(f"Plot area setup for {self.__class__.__name__} - analysis mode (reset only)")
 
     def _configure_plot_item_like_explorer_tab(self, plot_item):
-        """Apply the exact same grid configuration as explorer tab."""
+        """Apply the exact same grid configuration as explorer tab (Windows-safe)."""
         from Synaptipy.shared.styling import get_grid_pen
         
         # Import Z_ORDER with fallback
@@ -126,16 +131,25 @@ class BaseAnalysisTab(QtWidgets.QWidget):
             # Fallback to hardcoded value if constants not available
             grid_z_value = -1000
         
+        # Check if plot_item is valid and ready for configuration
+        if not plot_item:
+            log.debug("Plot item is None, skipping grid configuration")
+            return
+            
         # Set background via the view box for PlotItem (like explorer tab)
         try:
             vb = plot_item.getViewBox()
             if vb:
                 vb.setBackgroundColor('white')
-        except:
-            pass  # Fallback if background setting fails
+        except Exception as e:
+            log.debug(f"Could not set background color: {e}")
         
         # Call showGrid on plot_item (NOT plot_widget) with alpha=1.0 like explorer tab
-        plot_item.showGrid(x=True, y=True, alpha=1.0)
+        try:
+            plot_item.showGrid(x=True, y=True, alpha=1.0)
+        except Exception as e:
+            log.debug(f"Could not show grid: {e}")
+            return  # If showGrid fails, don't continue with grid config
         
         # Apply exact explorer tab grid configuration with better error handling
         try:
@@ -149,13 +163,21 @@ class BaseAnalysisTab(QtWidgets.QWidget):
                     if not hasattr(axis, 'grid') or axis.grid is None:
                         continue
                     
+                    # Additional Windows safety check - ensure graphics item is valid
+                    if hasattr(axis.grid, 'isVisible') and not axis.grid.isVisible():
+                        continue
+                    
                     # Set grid opacity to full (like explorer tab)
                     if hasattr(axis, 'setGrid'):
                         axis.setGrid(255)  # Full opacity
                     
-                    # Set grid z-value only if grid item has a valid scene
-                    if hasattr(axis.grid, 'setZValue') and hasattr(axis.grid, 'scene'):
-                        if axis.grid.scene() is not None:  # Ensure it's added to a scene
+                    # Set grid z-value only if grid item has a valid scene and parentItem
+                    if (hasattr(axis.grid, 'setZValue') and 
+                        hasattr(axis.grid, 'scene') and
+                        hasattr(axis.grid, 'parentItem')):
+                        
+                        if (axis.grid.scene() is not None and 
+                            axis.grid.parentItem() is not None):  # Both scene and parent must be valid
                             axis.grid.setZValue(grid_z_value)
                     
                     # Apply black grid pen (like explorer tab)
@@ -168,7 +190,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
                     continue
                     
         except Exception as e:
-            pass  # Silently handle any grid configuration errors
+            log.debug(f"Grid configuration failed: {e}")  # Log but don't crash
 
     # --- END ADDED ---
 
