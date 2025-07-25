@@ -84,25 +84,32 @@ class BaseAnalysisTab(QtWidgets.QWidget):
     # --- ADDED: Method to setup plot area --- 
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
         """Adds a PlotWidget to the provided layout with normal configuration."""
+        log.info(f"[ANALYSIS-BASE] Setting up plot area for {self.__class__.__name__}")
+        
         self.plot_widget = pg.PlotWidget()
+        log.debug(f"[ANALYSIS-BASE] Created plot widget for {self.__class__.__name__}")
 
         # Set white background
         self.plot_widget.setBackground('white')
+        log.debug(f"[ANALYSIS-BASE] Set white background for {self.__class__.__name__}")
 
         # Configure mouse mode normally
         viewbox = self.plot_widget.getViewBox()
         if viewbox:
             viewbox.setMouseMode(pg.ViewBox.RectMode)
             viewbox.mouseEnabled = True
+            log.debug(f"[ANALYSIS-BASE] Configured mouse mode for {self.__class__.__name__}")
 
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
+        log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
 
         # Normal grid configuration
         try:
             self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            log.debug(f"[ANALYSIS-BASE] Grid configuration successful for {self.__class__.__name__}")
         except Exception as e:
-            log.debug(f"Grid configuration warning: {e}")
+            log.warning(f"[ANALYSIS-BASE] Grid configuration warning for {self.__class__.__name__}: {e}")
 
         # Add reset view button below plot
         self._setup_reset_view_button(layout)
@@ -110,7 +117,7 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
 
-        log.debug(f"Plot area setup for {self.__class__.__name__} - normal approach")
+        log.info(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
 
     # --- END ADDED ---
 
@@ -170,8 +177,9 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
     def _on_reset_view_clicked(self):
         """Handle reset view button click."""
+        log.info(f"[ANALYSIS-BASE] Reset view clicked for {self.__class__.__name__}")
         self.auto_range_plot()
-        log.debug(f"Reset view triggered for {self.__class__.__name__}")
+        log.debug(f"[ANALYSIS-BASE] Reset view triggered for {self.__class__.__name__}")
 
     def _setup_zoom_sync(self):
         """Initialize the zoom synchronization manager for reset functionality only."""
@@ -199,10 +207,15 @@ class BaseAnalysisTab(QtWidgets.QWidget):
     
     def auto_range_plot(self):
         """Auto-range the plot to fit all data."""
+        log.info(f"[ANALYSIS-BASE] Auto-ranging plot for {self.__class__.__name__}")
         if self.zoom_sync:
+            log.debug(f"[ANALYSIS-BASE] Using zoom sync auto-range")
             self.zoom_sync.auto_range()
         elif self.plot_widget:
+            log.debug(f"[ANALYSIS-BASE] Using direct plot widget auto-range")
             self.plot_widget.autoRange()
+        else:
+            log.warning(f"[ANALYSIS-BASE] No plot widget available for auto-range")
 
     def _on_plot_range_changed(self, axis: str, new_range: Tuple[float, float]):
         """Called when plot range changes from any source (zoom, scroll, manual)."""
