@@ -1141,9 +1141,6 @@ class ExplorerTab(QtWidgets.QWidget):
             log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
             return
         
-        # CRITICAL: Disconnect range change signals during plot data addition to prevent Windows scaling cascade
-        self._disconnect_viewbox_signals_temporarily()
-        
         try:
             # --- Rest of existing _update_plot logic with temporary signal disconnection ---
             self._clear_plot_data_only()
@@ -1347,8 +1344,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
             self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
         finally:
-            # Reconnect ViewBox range change signals after plot data addition is complete
-            self._reconnect_viewbox_signals_after_plotting()
+            pass  # Theme conflict fixed - no need for signal workarounds
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
@@ -1862,98 +1858,15 @@ class ExplorerTab(QtWidgets.QWidget):
         first_cid, first_plot = next(iter(vis_map.items()))
         log.info(f"[EXPLORER-RESET] Found {len(vis_map)} visible plots, first: {first_cid}")
         
-        # CRITICAL: Use manual range calculation on Windows to avoid delayed PyQtGraph signals
-        is_windows = sys.platform.startswith('win')
+        # Standard auto-ranging for all platforms (theme conflict fixed)
+        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
+        first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+        for plot_id, plot in vis_map.items():
+            log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
+            plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         
-        if is_windows:
-            log.info(f"[EXPLORER-RESET] Using manual range calculation on Windows")
-            # Temporarily block signals during and after manual range setting
-            log.info(f"[EXPLORER-RESET] Blocking range signals during manual calculation")
-            self._disconnect_viewbox_signals_temporarily()
-            
-            # CRITICAL: Direct data range calculation - enableAutoRange is broken on Windows
-            log.info(f"[EXPLORER-RESET] Using direct data range calculation on Windows")
-            try:
-                # Calculate X range from actual data in first plot
-                data_items = first_plot.listDataItems()
-                if data_items and len(data_items) > 0:
-                    x_data = data_items[0].xData
-                    if x_data is not None and len(x_data) > 0:
-                        x_min, x_max = float(np.min(x_data)), float(np.max(x_data))
-                        x_padding = (x_max - x_min) * 0.02
-                        x_range = [x_min - x_padding, x_max + x_padding]
-                        first_plot.getViewBox().setXRange(*x_range, padding=0)
-                        log.info(f"[EXPLORER-RESET] Set Windows X range from data: {x_range}")
-                
-                # Calculate Y range from ONLY main signal data (not grid/axes)
-                for plot_id, plot in vis_map.items():
-                    data_items = plot.listDataItems()
-                    if data_items and len(data_items) > 0:
-                        # Get Y data from MAIN signal items only (filter out grid/axes)
-                        main_y_data = []
-                        for item in data_items:
-                            if hasattr(item, 'yData') and item.yData is not None:
-                                # Filter: Only include items with reasonable data size (exclude grid/axes)
-                                if len(item.yData) > 100:  # Main signals have many points
-                                    main_y_data.extend(item.yData)
-                                    log.info(f"[EXPLORER-RESET] Including data item with {len(item.yData)} points, range: [{float(np.min(item.yData)):.2f}, {float(np.max(item.yData)):.2f}]")
-                        
-                        if main_y_data:
-                            y_min, y_max = float(np.min(main_y_data)), float(np.max(main_y_data))
-                            y_padding = (y_max - y_min) * 0.05  # 5% padding for better visibility
-                            y_range = [y_min - y_padding, y_max + y_padding]
-                            plot.getViewBox().setYRange(*y_range, padding=0)
-                            
-                            # WINDOWS VISIBILITY FIX: Force aggressive redraw and check visibility
-                            plot.update()
-                            plot.getViewBox().update()
-                            plot.repaint()  # Force immediate repaint
-                            
-                            # Debug visibility of plot items
-                            for i, item in enumerate(data_items):
-                                if hasattr(item, 'yData') and item.yData is not None and len(item.yData) > 100:
-                                    visible = item.isVisible()
-                                    alpha = getattr(item.opts.get('pen', {}), 'color', lambda: None)() if hasattr(item.opts.get('pen', {}), 'color') else 'unknown'
-                                    log.info(f"[EXPLORER-VISIBILITY] Item {i}: visible={visible}, pen_alpha={alpha}, data_points={len(item.yData)}")
-                                    
-                                    # Force visibility and opaque pen
-                                    item.setVisible(True)
-                                    if hasattr(item, 'setPen'):
-                                        item.setPen(pg.mkPen(color='white', width=1))  # Force visible white pen
-                                        log.info(f"[EXPLORER-VISIBILITY] Forced white pen for item {i}")
-                            
-                            log.info(f"[EXPLORER-RESET] Set Windows Y range from MAIN signal data for {plot_id}: {y_range}")
-                        else:
-                            log.warning(f"[EXPLORER-RESET] No main signal data found for {plot_id}")
-                    else:
-                        log.warning(f"[EXPLORER-RESET] No data items found for {plot_id}")
-                        
-                log.info(f"[EXPLORER-RESET] Windows direct range calculation completed")
-            except Exception as e:
-                log.error(f"[EXPLORER-RESET] Windows direct range calculation failed: {e}")
-            finally:
-                # Reconnect signals after range setting
-                log.info(f"[EXPLORER-RESET] Scheduling signal reconnection in 100ms")
-                QtCore.QTimer.singleShot(100, self._reconnect_viewbox_signals_after_plotting)
-        else:
-            # Mac/Linux: Use normal enableAutoRange (fast and reliable)
-            log.info(f"[EXPLORER-RESET] Using enableAutoRange on Mac/Linux")
-            log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
-            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-            log.info(f"[EXPLORER-RESET] Calling enableAutoRange on Y for all plots")
-            for plot_id, plot in vis_map.items():
-                log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
-                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        
-        # Range capture happens AFTER auto-range operations
-        if is_windows:
-            # On Windows, wait longer for ranges to fully stabilize after signal reconnection
-            log.info(f"[EXPLORER-RESET] Scheduling base range capture in 150ms (Windows - after signal reconnection)")
-            QtCore.QTimer.singleShot(150, self._capture_base_ranges_after_reset)
-        else:
-            # On Mac/Linux, normal timing
-            log.info(f"[EXPLORER-RESET] Scheduling base range capture in 50ms")
-            QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+        # Schedule base range capture after auto-range  
+        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
