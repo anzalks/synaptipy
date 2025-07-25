@@ -214,12 +214,11 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         
         main_layout.addWidget(plot_container, stretch=1) # Plot stretches vertically
 
-        # Add baseline-specific plot items - simple approach
+        # Create baseline-specific plot items but don't add to plot yet
+        # They will be added when data is loaded to prevent Qt graphics errors
         if self.plot_widget:
             self.interactive_region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, 1], movable=True)
             self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 30)))
-            self.plot_widget.addItem(self.interactive_region)
-            self.interactive_region.setVisible(True)
 
             # Create InfiniteLine objects for showing baseline statistics
             self.baseline_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))
@@ -230,16 +229,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
             self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
             
-            # Add all line items to plot
-            self.plot_widget.addItem(self.baseline_mean_line)
-            self.plot_widget.addItem(self.baseline_plus_sd_line)
-            self.plot_widget.addItem(self.baseline_minus_sd_line)
-            self.plot_widget.addItem(self.auto_plus_sd_line)
-            self.plot_widget.addItem(self.auto_minus_sd_line)
-            
-            # Hide initially
-            self._clear_baseline_visualization_lines()
-            self._clear_auto_baseline_visualization_lines()
+            # Plot items will be added when data is loaded
 
         log.debug("Baseline Analysis Tab UI setup complete (3-Column Top Layout).")
         self._on_mode_changed(initial_call=True)
