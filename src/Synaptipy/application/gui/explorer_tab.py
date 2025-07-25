@@ -1086,8 +1086,11 @@ class ExplorerTab(QtWidgets.QWidget):
         # Update current plot data based on current settings
         self._update_plot_data()
         
-        # DISABLED: Force update can cause Windows scaling issues
-        # self.graphics_layout_widget.update()
+        # Re-enable graphics update with error handling to render plots
+        try:
+            self.graphics_layout_widget.update()
+        except Exception as e:
+            log.debug(f"Graphics update failed on Windows: {e}")
         
         log.debug("Plot update triggered and styling refreshed.")
 
@@ -1781,6 +1784,17 @@ class ExplorerTab(QtWidgets.QWidget):
         else: self._reset_scrollbar(self.global_y_scrollbar)
         self._update_limit_fields(); self._update_y_controls_visibility()
 
+        # Re-enable auto-range with Windows error handling to show data
+        try:
+            first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
+            for plot in vis_map.values(): 
+                plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        except Exception as e:
+            log.debug(f"AutoRange failed on Windows, trying fallback: {e}")
+        
+        # Re-enable range capture for zoom/scroll controls
+        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+
     def _reset_all_sliders(self):
         sliders = [self.x_zoom_slider, self.global_y_slider] + list(self.individual_y_sliders.values())
         for s in sliders:
@@ -1790,10 +1804,14 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.manual_limits_enabled: return
         plot = self.channel_plots.get(chan_id)
         if not plot or not plot.isVisible() or not plot.getViewBox(): return
-        # DISABLED: enableAutoRange call causes Windows scaling issues
-        # plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        # DISABLED: Range capture can also cause Windows scaling issues
-        # QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
+        # Re-enable auto-range with Windows error handling
+        try:
+            plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
+        except Exception as e:
+            log.debug(f"Single plot autoRange failed on Windows: {e}")
+        
+        # Re-enable range capture with error handling
+        QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
 
     def _capture_single_base_range_after_reset(self, chan_id: str):
         plot=self.channel_plots.get(chan_id)
@@ -2105,9 +2123,11 @@ class ExplorerTab(QtWidgets.QWidget):
                         if chan_id == next(iter(self.channel_plots.keys())): 
                              log.debug(f"Applied shared X limits {manual_x}")
                     else:
-                         # DISABLED: enableAutoRange call causes Windows scaling issues
-                         # vb.enableAutoRange(axis=pg.ViewBox.XAxis) # Auto-range X if no manual X
-                         pass
+                         # Re-enable auto-range fallback with Windows error handling
+                         try:
+                             vb.enableAutoRange(axis=pg.ViewBox.XAxis)
+                         except Exception as e:
+                             log.debug(f"X auto-range fallback failed on Windows: {e}")
                     
                     # Apply per-channel Y limit
                     channel_y_limits = self.manual_channel_limits.get(chan_id, {}).get('y')
@@ -2115,9 +2135,11 @@ class ExplorerTab(QtWidgets.QWidget):
                         vb.setYRange(channel_y_limits[0], channel_y_limits[1], padding=0); applied_any=True
                         log.debug(f"Applied Y limits {channel_y_limits} to {chan_id}")
                     else:
-                        # DISABLED: enableAutoRange call causes Windows scaling issues
-                        # vb.enableAutoRange(axis=pg.ViewBox.YAxis) # Auto-range Y if no manual Y for this channel
-                        pass
+                        # Re-enable auto-range fallback with Windows error handling
+                        try:
+                            vb.enableAutoRange(axis=pg.ViewBox.YAxis)
+                        except Exception as e:
+                            log.debug(f"Y auto-range fallback failed on Windows: {e}")
             # --- END UPDATE ---
         finally:
              self._updating_viewranges=False
