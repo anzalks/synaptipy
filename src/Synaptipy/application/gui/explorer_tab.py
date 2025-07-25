@@ -1171,6 +1171,12 @@ class ExplorerTab(QtWidgets.QWidget):
                 log.error(f"Error creating trial_pen: {e}. Fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
             average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")  # Original average pen
             single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")  # Original single trial pen
+            
+            # PEN DEBUG: Check what colors we're actually using
+            log.info(f"[PEN-DEBUG] Trial color def: {_trial_color_def}, alpha: {_trial_alpha_val}")
+            log.info(f"[PEN-DEBUG] Trial pen: {trial_pen}")
+            log.info(f"[PEN-DEBUG] Average pen: {average_pen} (color: {_avg_color_str})")
+            log.info(f"[PEN-DEBUG] Single trial pen: {single_trial_pen}")
             enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
             ds_threshold = _ds_thresh_val
             any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
@@ -1228,6 +1234,15 @@ class ExplorerTab(QtWidgets.QWidget):
                                     log.info(f"[EXPLORER-DATA] First trial - Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
                                     log.info(f"[EXPLORER-DATA] First trial - Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
                                     log.info(f"[EXPLORER-DATA] First trial - Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
+                                    
+                                    # DATA VALIDITY DEBUG: Check for NaN/Inf
+                                    time_valid = np.isfinite(time_vec).all()
+                                    data_valid = np.isfinite(data).all()
+                                    log.info(f"[DATA-VALID] Time array valid: {time_valid}, Data array valid: {data_valid}")
+                                    if not time_valid:
+                                        log.warning(f"[DATA-VALID] Time has {np.sum(~np.isfinite(time_vec))} invalid values")
+                                    if not data_valid:
+                                        log.warning(f"[DATA-VALID] Data has {np.sum(~np.isfinite(data))} invalid values")
                                 
                                 item = plot_item.plot(time_vec, data, pen=trial_pen)
                                 # Set z-order for proper layering
@@ -1237,6 +1252,16 @@ class ExplorerTab(QtWidgets.QWidget):
                                 item.opts['autoDownsampleThreshold'] = ds_threshold
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
+                                
+                                # COMPREHENSIVE DEBUG: Check plot item state
+                                if trial_idx == 0:  # Only log for first trial to avoid spam
+                                    log.info(f"[PLOT-DEBUG] Trial item created - Type: {type(item)}")
+                                    log.info(f"[PLOT-DEBUG] Item visible: {item.isVisible()}")
+                                    log.info(f"[PLOT-DEBUG] Item pen: {getattr(item.opts, 'pen', 'None')}")
+                                    log.info(f"[PLOT-DEBUG] Item in scene: {item.scene() is not None}")
+                                    log.info(f"[PLOT-DEBUG] Item parent: {item.parentItem()}")
+                                    log.info(f"[PLOT-DEBUG] Data length: time={len(time_vec)}, data={len(data)}")
+                                    log.info(f"[PLOT-DEBUG] Plot has {len(plot_item.listDataItems())} total data items")
                             else:
                                 log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {trial_idx+1}: data={data is not None}, time_vec={time_vec is not None}")
                         
@@ -1258,6 +1283,14 @@ class ExplorerTab(QtWidgets.QWidget):
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
                             log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}")
+                            
+                            # COMPREHENSIVE DEBUG: Check average plot item state
+                            log.info(f"[PLOT-DEBUG] Average item created - Type: {type(item)}")
+                            log.info(f"[PLOT-DEBUG] Average visible: {item.isVisible()}")
+                            log.info(f"[PLOT-DEBUG] Average pen: {getattr(item.opts, 'pen', 'None')}")
+                            log.info(f"[PLOT-DEBUG] Average in scene: {item.scene() is not None}")
+                            log.info(f"[PLOT-DEBUG] Average parent: {item.parentItem()}")
+                            log.info(f"[PLOT-DEBUG] Plot total items after average: {len(plot_item.listDataItems())}")
                         else:
                             log.warning(f"[EXPLORER-DATA] Missing average data for {chan_id}: avg_data={avg_data is not None}, avg_time_vec={avg_time_vec is not None}")
 
@@ -1285,6 +1318,14 @@ class ExplorerTab(QtWidgets.QWidget):
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
                                 log.info(f"[EXPLORER-DATA] Plot data added for {chan_id}")
+                                
+                                # COMPREHENSIVE DEBUG: Check single trial plot item state
+                                log.info(f"[PLOT-DEBUG] Single trial item created - Type: {type(item)}")
+                                log.info(f"[PLOT-DEBUG] Single visible: {item.isVisible()}")
+                                log.info(f"[PLOT-DEBUG] Single pen: {getattr(item.opts, 'pen', 'None')}")
+                                log.info(f"[PLOT-DEBUG] Single in scene: {item.scene() is not None}")
+                                log.info(f"[PLOT-DEBUG] Single parent: {item.parentItem()}")
+                                log.info(f"[PLOT-DEBUG] Plot total items after single: {len(plot_item.listDataItems())}")
                             else: 
                                 log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {idx+1}: data={data is not None}, time_vec={time_vec is not None}")
                                 text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
@@ -1343,6 +1384,19 @@ class ExplorerTab(QtWidgets.QWidget):
             # --- End Axis linking ---
 
             self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
+            
+            # FINAL DEBUG: Check the state of all data items across all plots
+            log.info(f"[PLOT-FINAL] === FINAL PLOT STATE SUMMARY ===")
+            total_data_items = 0
+            for chan_id, plot_item in self.channel_plots.items():
+                if plot_item.isVisible():
+                    data_items = plot_item.listDataItems()
+                    total_data_items += len(data_items)
+                    log.info(f"[PLOT-FINAL] Plot {chan_id}: {len(data_items)} data items, visible={plot_item.isVisible()}")
+                    for i, item in enumerate(data_items[:3]):  # Log first 3 items only
+                        log.info(f"[PLOT-FINAL]   Item {i}: visible={item.isVisible()}, pen={getattr(item.opts, 'pen', 'None')}, data_len={len(getattr(item, 'yData', []))}")
+            log.info(f"[PLOT-FINAL] Total data items across all plots: {total_data_items}")
+            log.info(f"[PLOT-FINAL] === END SUMMARY ===")
         finally:
             pass  # Theme conflict fixed - no need for signal workarounds
 
