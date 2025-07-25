@@ -144,14 +144,12 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         
         main_layout.addWidget(plot_container, stretch=1)
         
-        # Add spike-specific plot items - simple approach
+        # Create spike-specific plot items but don't add to plot yet
+        # They will be added when data is loaded to prevent Qt graphics errors
         if self.plot_widget:
             self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150))
             self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
-            self.plot_widget.addItem(self.spike_markers_item)
-            self.plot_widget.addItem(self.threshold_line)
-            self.spike_markers_item.setVisible(False)
-            self.threshold_line.setVisible(False)
+            # Items will be added to plot when data is loaded
 
         self.setLayout(main_layout)
 
@@ -328,13 +326,15 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                 log.warning(f"Spike Plotting: No valid data for Ch {chan_id}, Source: {source_data}")
                 self.plot_widget.setTitle("Plot Error: No Data")
 
-            # Re-add spike markers item (clearPlots removes it)
-            self.plot_widget.addItem(self.spike_markers_item) 
+            # Re-add spike markers and threshold line (clearPlots removes them)
+            self.plot_widget.addItem(self.spike_markers_item)
+            self.plot_widget.addItem(self.threshold_line) 
 
         except Exception as e:
             log.error(f"Spike Plotting Error: Ch {chan_id}: {e}", exc_info=True)
             self.plot_widget.clear()
             self.plot_widget.addItem(self.spike_markers_item) # Ensure markers item is present even on error
+            self.plot_widget.addItem(self.threshold_line) # Ensure threshold line is present even on error
             self.plot_widget.setTitle("Plot Error")
             self._current_plot_data = None
             plot_succeeded = False

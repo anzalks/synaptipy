@@ -261,11 +261,11 @@ class EventDetectionTab(BaseAnalysisTab):
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
         
-        # Add event markers - simple approach
+        # Create event markers but don't add to plot yet
+        # They will be added when data is loaded to prevent Qt graphics errors
         if self.plot_widget:
             self.event_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(0, 0, 255, 150))
-            self.plot_widget.addItem(self.event_markers_item)
-            self.event_markers_item.setVisible(False)
+            # Markers will be added to plot when data is loaded
         
         main_layout.addWidget(plot_container, stretch=1) # Add plot below controls/tabs section
 

@@ -395,17 +395,7 @@ class RinAnalysisTab(BaseAnalysisTab):
                 self.baseline_line = pg.InfiniteLine(angle=0, movable=False, pen=get_baseline_pen())
                 self.response_line = pg.InfiniteLine(angle=0, movable=False, pen=get_response_pen())
                 
-                # Add items to the PLOT ITEM
-                plot_item.addItem(self.baseline_region)
-                plot_item.addItem(self.response_region)
-                plot_item.addItem(self.baseline_line)
-                plot_item.addItem(self.response_line)
-                
-                # Set initial visibility
-                self.baseline_region.setVisible(False)
-                self.response_region.setVisible(False)
-                self.baseline_line.setVisible(False)
-                self.response_line.setVisible(False)
+                # Plot items will be added when data is loaded to prevent Qt graphics errors
 
         self.setLayout(main_layout)
         log.debug("Rin/G Analysis Tab UI setup complete (Generalized).")
