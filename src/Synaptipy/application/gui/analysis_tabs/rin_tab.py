@@ -1078,11 +1078,11 @@ class RinAnalysisTab(BaseAnalysisTab):
 
         # Plot the main data trace - keep the original black color
         pen = pg.mkPen(color=(0, 0, 0), width=1)  # Original black pen
-                        self.plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen)
-                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-                if self.plot_item:
-                    self.plot_item.setPen(pen)
-                    log.info(f"[RIN-DEBUG] Data plot pen applied: {pen}")
+        self.plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen)
+        # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+        if self.plot_item:
+            self.plot_item.setPen(pen)
+            log.info(f"[RIN-DEBUG] Data plot pen applied: {pen}")
         
         # Set data ranges for zoom synchronization
         x_range = (time_vec.min(), time_vec.max())
