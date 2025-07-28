@@ -297,6 +297,11 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             # Plotting
             if time_vec is not None and voltage_vec is not None:
                 self.voltage_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
+                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+                if self.voltage_plot_item:
+                    pen = pg.mkPen('k')
+                    self.voltage_plot_item.setPen(pen)
+                    log.info(f"[SPIKE-DEBUG] Voltage plot pen applied: {pen}")
                 
                 # Base class already configured grids properly - no need to override
                 
@@ -433,6 +438,10 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                 # Plot markers at the threshold crossing time, using threshold as Y
                 # Or, if detection function returns peaks, plot at peaks.
                 self.spike_markers_item.setData(x=spike_times, y=voltage[spike_indices]) # Plot at detected point Y value
+                # CRITICAL: Force pen/brush application (Windows PyQtGraph bug fix)
+                red_brush = pg.mkBrush(255, 0, 0, 150)
+                self.spike_markers_item.setBrush(red_brush)
+                log.info(f"[SPIKE-DEBUG] Spike markers brush applied: {red_brush}")
                 self.spike_markers_item.setVisible(True)
                 
             else:

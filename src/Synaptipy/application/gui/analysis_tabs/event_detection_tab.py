@@ -487,6 +487,11 @@ class EventDetectionTab(BaseAnalysisTab):
 
             if time_vec is not None and data_vec is not None:
                 self.data_plot_item = self.plot_widget.plot(time_vec, data_vec, pen='k', name=data_label)
+                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+                if self.data_plot_item:
+                    pen = pg.mkPen('k')
+                    self.data_plot_item.setPen(pen)
+                    log.info(f"[EVENT-DEBUG] Data plot pen applied: {pen}")
                 # --- Get Label from Data Model --- 
                 units = channel.units or "?"
                 base_label = channel.get_primary_data_label()
@@ -672,6 +677,10 @@ class EventDetectionTab(BaseAnalysisTab):
                  event_values = data[peak_indices] 
                  if self.event_markers_item:
                      self.event_markers_item.setData(x=event_times, y=event_values)
+                     # CRITICAL: Force brush application (Windows PyQtGraph bug fix)
+                     blue_brush = pg.mkBrush(0, 0, 255, 150)
+                     self.event_markers_item.setBrush(blue_brush)
+                     log.info(f"[EVENT-DEBUG] Event markers brush applied: {blue_brush}")
                      self.event_markers_item.setVisible(True)
                      log.info(f"Plotted {len(peak_indices)} event markers.")
                  else:
