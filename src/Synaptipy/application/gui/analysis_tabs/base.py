@@ -99,6 +99,12 @@ class BaseAnalysisTab(QtWidgets.QWidget):
             viewbox.setMouseMode(pg.ViewBox.RectMode)
             viewbox.mouseEnabled = True
             log.debug(f"[ANALYSIS-BASE] Configured mouse mode for {self.__class__.__name__}")
+            
+            # Add Windows signal protection to prevent rapid range changes
+            import sys
+            if sys.platform.startswith('win'):
+                log.debug(f"[ANALYSIS-BASE] Adding Windows signal protection for {self.__class__.__name__}")
+                self._setup_windows_signal_protection(viewbox)
 
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
@@ -216,6 +222,47 @@ class BaseAnalysisTab(QtWidgets.QWidget):
             self.plot_widget.autoRange()
         else:
             log.warning(f"[ANALYSIS-BASE] No plot widget available for auto-range")
+
+    def _setup_windows_signal_protection(self, viewbox):
+        """Setup signal protection for Windows to prevent rapid range changes."""
+        try:
+            # Wrap existing signal handlers to add protection
+            original_x_handler = getattr(self, '_handle_x_range_change', None)
+            original_y_handler = getattr(self, '_handle_y_range_change', None)
+            
+            def protected_x_handler(vb, range_data):
+                # Simple debouncing - prevent excessive calls
+                if not hasattr(self, '_last_x_change'):
+                    self._last_x_change = 0
+                import time
+                now = time.time()
+                if now - self._last_x_change < 0.05:  # 50ms debounce
+                    return
+                self._last_x_change = now
+                if original_x_handler:
+                    original_x_handler(vb, range_data)
+            
+            def protected_y_handler(vb, range_data):
+                # Simple debouncing - prevent excessive calls
+                if not hasattr(self, '_last_y_change'):
+                    self._last_y_change = 0
+                import time
+                now = time.time()
+                if now - self._last_y_change < 0.05:  # 50ms debounce
+                    return
+                self._last_y_change = now
+                if original_y_handler:
+                    original_y_handler(vb, range_data)
+            
+            # Only connect if original handlers exist
+            if original_x_handler:
+                viewbox.sigXRangeChanged.connect(protected_x_handler)
+            if original_y_handler:
+                viewbox.sigYRangeChanged.connect(protected_y_handler)
+                
+            log.debug(f"[ANALYSIS-BASE] Windows signal protection setup complete for {self.__class__.__name__}")
+        except Exception as e:
+            log.warning(f"[ANALYSIS-BASE] Failed to setup Windows signal protection: {e}")
 
     def _on_plot_range_changed(self, axis: str, new_range: Tuple[float, float]):
         """Called when plot range changes from any source (zoom, scroll, manual)."""

@@ -452,6 +452,11 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self.plot_widget.clear() # Clear previous plots
             if time_vec is not None and voltage_vec is not None:
                 self.data_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
+                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
+                if self.data_plot_item:
+                    pen = pg.mkPen('k')
+                    self.data_plot_item.setPen(pen)
+                    log.info(f"[RMP-DEBUG] Data plot pen applied: {pen}")
                 
                 # Base class already configured grids properly - no need to override
 
