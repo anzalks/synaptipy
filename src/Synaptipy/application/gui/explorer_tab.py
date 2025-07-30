@@ -228,7 +228,8 @@ class ExplorerTab(QtWidgets.QWidget):
         left_panel_widget = QtWidgets.QWidget()
         left_panel_layout = QtWidgets.QVBoxLayout(left_panel_widget)
         left_panel_layout.setSpacing(10)
-        left_panel_widget.setMinimumWidth(200) # <<< ADDED
+        # Remove fixed minimum width for better scaling on Windows
+        # left_panel_widget.setMinimumWidth(200) # <<< REMOVED FOR WINDOWS SCALING
 
         # File Op Group
         file_op_group = QtWidgets.QGroupBox("Load Data")
@@ -309,7 +310,8 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self.y_limits_scroll_area = QtWidgets.QScrollArea()
         self.y_limits_scroll_area.setWidgetResizable(True)
-        self.y_limits_scroll_area.setMaximumHeight(150) # <<< ADDED
+        # Allow more flexible height for better scaling
+        # self.y_limits_scroll_area.setMaximumHeight(150) # <<< REMOVED FOR WINDOWS SCALING
         # --- UPDATED: Scroll bar policies --- 
         self.y_limits_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff) # No horizontal scroll
         self.y_limits_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded) # Vertical scroll as needed
@@ -450,7 +452,8 @@ class ExplorerTab(QtWidgets.QWidget):
         # --- Right Panel ---
         y_controls_panel_widget = QtWidgets.QWidget()
         y_controls_panel_layout = QtWidgets.QHBoxLayout(y_controls_panel_widget)
-        y_controls_panel_widget.setMinimumWidth(180) # <<< ADDED
+        # Remove fixed minimum width for better scaling on Windows  
+        # y_controls_panel_widget.setMinimumWidth(180) # <<< REMOVED FOR WINDOWS SCALING
         y_controls_panel_layout.setContentsMargins(0, 0, 0, 0)
         y_controls_panel_layout.setSpacing(5)
         y_scroll_widget = QtWidgets.QWidget()
@@ -698,8 +701,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.global_y_range_base = None
         self.channel_y_range_bases.clear()
 
-        # Import critical styling functions
-        from Synaptipy.shared.styling import configure_plot_widget, get_grid_pen
+        # Simple plotting approach matching analysis tabs
         
         # Set white background on the GraphicsLayoutWidget (parent of all plot items)
         if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
@@ -740,27 +742,12 @@ class ExplorerTab(QtWidgets.QWidget):
             except:
                 pass  # Fallback if background setting fails
             
-            # Skip all grid configuration to prevent Windows scaling issues
-            # Grid can be manually enabled by users if needed
-            
-            # Explicitly set grid pens to ensure visibility and proper z-ordering
+            # Simple grid configuration matching analysis tabs approach
             try:
-                # Set the grid explicitly with non-transparent grid lines
-                for axis_name in ['bottom', 'left']:
-                    axis = plot_item.getAxis(axis_name)
-                    if axis and hasattr(axis, 'grid'):
-                        # Set grid in the axis to force opacity
-                        if hasattr(axis, 'setGrid'):
-                            axis.setGrid(255)  # Full opacity
-                        
-                        # If grid is an object, set its z-value and pen
-                        if hasattr(axis.grid, 'setZValue'):
-                            axis.grid.setZValue(Z_ORDER['grid'])
-                        
-                        if hasattr(axis.grid, 'setPen'):
-                            axis.grid.setPen(get_grid_pen())
+                plot_item.showGrid(x=True, y=True, alpha=0.3)
+                log.debug(f"Grid enabled for channel {chan_key}")
             except Exception as e:
-                log.warning(f"Could not set grid opacity for channel {chan_key}: {e}")
+                log.warning(f"Could not enable grid for channel {chan_key}: {e}")
             
             # Store this association
             plot_item.getViewBox()._synaptipy_chan_id = chan_key  # Attach ID to viewbox
@@ -1093,19 +1080,11 @@ class ExplorerTab(QtWidgets.QWidget):
                 except:
                     pass  # Fallback if background setting fails
                 
-                # Enable grid with normal configuration  
-                plot_item.showGrid(x=True, y=True, alpha=1.0)
-                
-                # Step 3: Force grid lines to have proper z-values and pens
+                # Simple grid configuration matching analysis tabs
                 try:
-                    for axis_name in ['bottom', 'left']:
-                        axis = plot_item.getAxis(axis_name)
-                        if axis and hasattr(axis, 'grid'):
-                            axis.grid.setPen(get_grid_pen())
-                            # Set grid opacity to 100%
-                            axis.setGrid(255)
+                    plot_item.showGrid(x=True, y=True, alpha=0.3)
                 except Exception as e:
-                    log.warning(f"Could not set grid opacity for channel {chan_id}: {e}")
+                    log.warning(f"Could not enable grid for channel {chan_id}: {e}")
 
         # Special case for checkbox senders - update selected average plots
         if is_channel_checkbox and self.selected_average_plot_items:
@@ -1141,9 +1120,6 @@ class ExplorerTab(QtWidgets.QWidget):
             log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
             return
         
-        # Disconnect range signals during plotting to prevent Windows rapid scaling
-        self._disconnect_viewbox_signals_temporarily()
-        
         try:
             # --- Rest of existing _update_plot logic with temporary signal disconnection ---
             self._clear_plot_data_only()
@@ -1152,8 +1128,7 @@ class ExplorerTab(QtWidgets.QWidget):
             is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
             log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
             
-            # Import styling functions to ensure consistent appearance
-            from Synaptipy.shared.styling import get_grid_pen
+                    # Simple styling approach - no complex grid configuration needed
             
             vis_const_available = VisConstants is not None
             _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
@@ -1202,30 +1177,13 @@ class ExplorerTab(QtWidgets.QWidget):
                     except:
                         pass  # Fallback if background setting fails
                     
-                    # Enable grid with normal configuration
-                    plot_item.showGrid(x=True, y=True, alpha=1.0)
-                    
-                    # Step 3: Force grid lines to have proper z-values and pens
+                    # Simple grid configuration matching analysis tabs
                     try:
-                        for axis_name in ['bottom', 'left']:
-                            axis = plot_item.getAxis(axis_name)
-                            if axis and hasattr(axis, 'grid'):
-                                # Set grid opacity
-                                if hasattr(axis, 'setGrid'):
-                                    axis.setGrid(255)  # Full opacity
-                                    
-                                # Set grid z-order
-                                if hasattr(axis.grid, 'setZValue'):
-                                    axis.grid.setZValue(Z_ORDER['grid'])
-                                
-                                # Apply proper grid pen
-                                if hasattr(axis.grid, 'setPen'):
-                                    grid_pen = get_grid_pen()
-                                    axis.grid.setPen(grid_pen)
+                        plot_item.showGrid(x=True, y=True, alpha=0.3)
                     except Exception as e:
-                        log.warning(f"Could not configure grid for channel {chan_id}: {e}")
+                        log.warning(f"Could not enable grid for channel {chan_id}: {e}")
                     
-                    # Now plot the data with proper z-ordering
+                    # Now plot the data
                     if not is_cycle_mode:
                         # --- Overlay All + Avg Mode ---
                         log.info(f"[EXPLORER-DATA] Plotting overlay mode for {chan_id} ({channel.num_trials} trials)")
@@ -1247,27 +1205,16 @@ class ExplorerTab(QtWidgets.QWidget):
                                     if not data_valid:
                                         log.warning(f"[DATA-VALID] Data has {np.sum(~np.isfinite(data))} invalid values")
                                 
+                                # Simple plotting approach matching analysis tabs
                                 item = plot_item.plot(time_vec, data, pen=trial_pen)
-                                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-                                item.setPen(trial_pen)
-                                # Set z-order for proper layering
-                                if hasattr(item, 'setZValue'):
-                                    item.setZValue(1)
                                 item.opts['autoDownsample'] = enable_downsampling
                                 item.opts['autoDownsampleThreshold'] = ds_threshold
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
                                 
-                                # COMPREHENSIVE DEBUG: Check plot item state
+                                # Simplified debug logging
                                 if trial_idx == 0:  # Only log for first trial to avoid spam
-                                    log.info(f"[PLOT-DEBUG] Trial item created - Type: {type(item)}")
-                                    log.info(f"[PLOT-DEBUG] Item visible: {item.isVisible()}")
-                                    log.info(f"[PLOT-DEBUG] Item pen BEFORE setPen: {getattr(item.opts, 'pen', 'None')}")
-                                    log.info(f"[PLOT-DEBUG] Item pen AFTER setPen: {item.opts.get('pen', 'None')}")
-                                    log.info(f"[PLOT-DEBUG] Item in scene: {item.scene() is not None}")
-                                    log.info(f"[PLOT-DEBUG] Item parent: {item.parentItem()}")
-                                    log.info(f"[PLOT-DEBUG] Data length: time={len(time_vec)}, data={len(data)}")
-                                    log.info(f"[PLOT-DEBUG] Plot has {len(plot_item.listDataItems())} total data items")
+                                    log.info(f"[EXPLORER-DATA] Trial data plotted for {chan_id}: {len(data)} points")
                             else:
                                 log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {trial_idx+1}: data={data is not None}, time_vec={time_vec is not None}")
                         
@@ -1280,25 +1227,13 @@ class ExplorerTab(QtWidgets.QWidget):
                             log.info(f"[EXPLORER-DATA] Average - Data range: [{np.min(avg_data):.6f}, {np.max(avg_data):.6f}] ({len(avg_data)} points)")
                             log.info(f"[EXPLORER-DATA] Average - Data stats: mean={np.mean(avg_data):.6f}, std={np.std(avg_data):.6f}")
                             
+                            # Simple plotting approach matching analysis tabs
                             item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
-                            # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-                            item.setPen(average_pen)
-                            # Set average data z-order
-                            if hasattr(item, 'setZValue'):
-                                item.setZValue(2)
                             item.opts['autoDownsample'] = enable_downsampling
                             item.opts['autoDownsampleThreshold'] = ds_threshold
                             self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                             channel_plotted = True
-                            log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}")
-                            
-                            # COMPREHENSIVE DEBUG: Check average plot item state
-                            log.info(f"[PLOT-DEBUG] Average item created - Type: {type(item)}")
-                            log.info(f"[PLOT-DEBUG] Average visible: {item.isVisible()}")
-                            log.info(f"[PLOT-DEBUG] Average pen AFTER setPen: {item.opts.get('pen', 'None')}")
-                            log.info(f"[PLOT-DEBUG] Average in scene: {item.scene() is not None}")
-                            log.info(f"[PLOT-DEBUG] Average parent: {item.parentItem()}")
-                            log.info(f"[PLOT-DEBUG] Plot total items after average: {len(plot_item.listDataItems())}")
+                            log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}: {len(avg_data)} points")
                         else:
                             log.warning(f"[EXPLORER-DATA] Missing average data for {chan_id}: avg_data={avg_data is not None}, avg_time_vec={avg_time_vec is not None}")
 
@@ -1315,50 +1250,30 @@ class ExplorerTab(QtWidgets.QWidget):
                                 log.info(f"[EXPLORER-DATA] Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
                                 log.info(f"[EXPLORER-DATA] Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
                                 
+                                # Simple plotting approach matching analysis tabs
                                 item = plot_item.plot(time_vec, data, pen=single_trial_pen)
-                                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-                                item.setPen(single_trial_pen)
-                                log.info(f"[EXPLORER-DATA] Plot item created successfully for {chan_id}")
-                                
-                                # Set primary data z-order
-                                if hasattr(item, 'setZValue'):
-                                    item.setZValue(3)
                                 item.opts['autoDownsample'] = enable_downsampling
                                 item.opts['autoDownsampleThreshold'] = ds_threshold
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
-                                log.info(f"[EXPLORER-DATA] Plot data added for {chan_id}")
-                                
-                                # COMPREHENSIVE DEBUG: Check single trial plot item state
-                                log.info(f"[PLOT-DEBUG] Single trial item created - Type: {type(item)}")
-                                log.info(f"[PLOT-DEBUG] Single visible: {item.isVisible()}")
-                                log.info(f"[PLOT-DEBUG] Single pen AFTER setPen: {item.opts.get('pen', 'None')}")
-                                log.info(f"[PLOT-DEBUG] Single in scene: {item.scene() is not None}")
-                                log.info(f"[PLOT-DEBUG] Single parent: {item.parentItem()}")
-                                log.info(f"[PLOT-DEBUG] Plot total items after single: {len(plot_item.listDataItems())}")
+                                log.info(f"[EXPLORER-DATA] Single trial plotted for {chan_id}: {len(data)} points")
                             else: 
                                 log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {idx+1}: data={data is not None}, time_vec={time_vec is not None}")
                                 text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
-                                # Set text overlay z-order
-                                if hasattr(text_item, 'setZValue'):
-                                    text_item.setZValue(10)
                                 plot_item.addItem(text_item)
                         else: 
                             text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
-                            # Set text overlay z-order
-                            if hasattr(text_item, 'setZValue'):
-                                text_item.setZValue(10)
                             plot_item.addItem(text_item)
 
                     if not channel_plotted: 
                         text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
-                        # Set text overlay z-order
-                        if hasattr(text_item, 'setZValue'):
-                            text_item.setZValue(10)
                         plot_item.addItem(text_item)
                     
-                    # Final step: Re-apply grid settings to ensure they're visible after all plotting
-                    plot_item.showGrid(x=True, y=True, alpha=1.0)
+                    # Final step: Ensure grid is visible after plotting
+                    try:
+                        plot_item.showGrid(x=True, y=True, alpha=0.3)
+                    except Exception:
+                        pass
                     
                     if channel_plotted: any_data_plotted = True
                 elif plot_item: plot_item.hide()
@@ -1395,21 +1310,11 @@ class ExplorerTab(QtWidgets.QWidget):
 
             self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
             
-            # FINAL DEBUG: Check the state of all data items across all plots
-            log.info(f"[PLOT-FINAL] === FINAL PLOT STATE SUMMARY ===")
-            total_data_items = 0
-            for chan_id, plot_item in self.channel_plots.items():
-                if plot_item.isVisible():
-                    data_items = plot_item.listDataItems()
-                    total_data_items += len(data_items)
-                    log.info(f"[PLOT-FINAL] Plot {chan_id}: {len(data_items)} data items, visible={plot_item.isVisible()}")
-                    for i, item in enumerate(data_items[:3]):  # Log first 3 items only
-                        log.info(f"[PLOT-FINAL]   Item {i}: visible={item.isVisible()}, pen={getattr(item.opts, 'pen', 'None')}, data_len={len(getattr(item, 'yData', []))}")
-            log.info(f"[PLOT-FINAL] Total data items across all plots: {total_data_items}")
-            log.info(f"[PLOT-FINAL] === END SUMMARY ===")
+            # Simplified debug summary
+            total_data_items = sum(len(plot_item.listDataItems()) for plot_item in self.channel_plots.values() if plot_item.isVisible())
+            log.info(f"[EXPLORER-PLOT] Plot update complete: {total_data_items} data items plotted across {len([p for p in self.channel_plots.values() if p.isVisible()])} visible channels")
         finally:
-            # Reconnect range signals after plotting
-            self._reconnect_viewbox_signals_after_plotting()
+            pass  # Simplified signal handling
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
