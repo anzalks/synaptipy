@@ -423,6 +423,7 @@ class EventDetectionTab(BaseAnalysisTab):
 
 
     def _plot_selected_trace(self):
+        log.info(f"[EVENT-DETECTION] Starting plot trace for analysis tab...")
         """Plots the selected trace and clears previous events."""
         plot_succeeded = False
         self._current_plot_data = None
@@ -492,6 +493,7 @@ class EventDetectionTab(BaseAnalysisTab):
                     pen = pg.mkPen('k')
                     self.data_plot_item.setPen(pen)
                     log.info(f"[EVENT-DEBUG] Data plot pen applied: {pen}")
+                    log.info(f"[EVENT-DETECTION] Plot data successfully added to widget")
                 # --- Get Label from Data Model --- 
                 units = channel.units or "?"
                 base_label = channel.get_primary_data_label()

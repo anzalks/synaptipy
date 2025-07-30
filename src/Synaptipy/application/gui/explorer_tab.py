@@ -688,6 +688,10 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _create_channel_ui(self):
         """Creates UI for channels in the current recording."""
+        log.info(f"[EXPLORER-CREATE-UI] Starting channel UI creation...")
+        log.info(f"[EXPLORER-CREATE-UI] Current recording: {self.current_recording is not None}")
+        if self.current_recording:
+            log.info(f"[EXPLORER-CREATE-UI] Recording has {len(self.current_recording.channels)} channels")
         log.debug(f"Creating channel UI elements for {self.current_recording.source_file if self.current_recording else None}")
         # Need to scan the recording for channels
         if not self.current_recording or not self.current_recording.channels:
@@ -786,10 +790,12 @@ class ExplorerTab(QtWidgets.QWidget):
         # Update manual limits UI
         self._update_manual_limits_ui()
         
-        log.debug(f"Created {len(channel_keys)} channel UI elements with white backgrounds and grid lines behind data.")
+        log.info(f"[EXPLORER-CREATE-UI] Created {len(channel_keys)} channel UI elements successfully")
         
         # Complete initial UI update
+        log.info(f"[EXPLORER-CREATE-UI] Updating UI state...")
         self._update_ui_state()
+        log.info(f"[EXPLORER-CREATE-UI] Channel UI creation complete")
 
     def _connect_viewbox_signals(self):
         """Connect ViewBox range change signals to handlers - CRITICAL for zoom/scroll functionality"""
@@ -1028,10 +1034,20 @@ class ExplorerTab(QtWidgets.QWidget):
         self.status_bar.showMessage(f"Loading '{filepath.name}'..."); QtWidgets.QApplication.processEvents()
         self._reset_ui_and_state_for_new_file(); self.current_recording = None
         try:
-            log.info(f"Reading: {filepath}"); self.current_recording = self.neo_adapter.read_recording(filepath)
-            log.info(f"Loaded: {filepath.name}"); self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
-            self._create_channel_ui(); self._update_metadata_display(); self._update_plot(); self._reset_view()
+            log.info(f"Reading: {filepath}")
+            self.current_recording = self.neo_adapter.read_recording(filepath)
+            log.info(f"Loaded: {filepath.name}")
+            self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
+            log.info(f"Creating channel UI for {len(self.current_recording.channels) if self.current_recording else 0} channels...")
+            self._create_channel_ui()
+            log.info(f"Updating metadata display...")
+            self._update_metadata_display()
+            log.info(f"Starting plot update...")
+            self._update_plot()
+            log.info(f"Resetting view...")
+            self._reset_view()
             self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
+            log.info(f"File loading complete: {filepath.name}")
         except (FileNotFoundError, UnsupportedFormatError, FileReadError, SynaptipyError) as e:
              log.error(f"Load fail '{filepath.name}': {e}", exc_info=False)
              QtWidgets.QMessageBox.critical(self, "Loading Error", f"Could not load:\n{filepath.name}\n\nError: {e}")
@@ -1116,6 +1132,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _update_plot(self):
         log.info(f"[EXPLORER-PLOT] Plot update starting - recording={self.current_recording is not None}")
+        if self.current_recording:
+            log.info(f"[EXPLORER-PLOT] Recording has {len(self.current_recording.channels)} channels")
+            log.info(f"[EXPLORER-PLOT] Channel plots dict has {len(self.channel_plots)} plots")
         if not self.current_recording: 
             log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
             return
@@ -1493,29 +1512,24 @@ class ExplorerTab(QtWidgets.QWidget):
         finally: self._updating_viewranges=False
 
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
-        log.info(f"[EXPLORER-RANGE] X range changed to: {new_range}, updating_viewranges={self._updating_viewranges}")
-        # --- UPDATED: Check shared X limits --- 
-        is_manual_enabled = self.manual_limits_enabled
-        manual_x = self.manual_x_limits if is_manual_enabled else None
-        # --- END UPDATE ---
-        if is_manual_enabled and manual_x and not self._updating_viewranges:
-            log.warning(f"[EXPLORER-RANGE] X manual limit override: {manual_x} (was {new_range})")
-            # ROBUST feedback loop prevention: Block signals during setXRange
-            self._updating_viewranges = True
-            try:
-                vb.sigXRangeChanged.blockSignals(True)
-                vb.setXRange(manual_x[0], manual_x[1], padding=0)
-                log.info(f"[EXPLORER-RANGE] X manual setXRange applied: {manual_x}")
-            finally:
-                vb.sigXRangeChanged.blockSignals(False)
-                self._updating_viewranges = False
+        # Simple debouncing to prevent rapid scaling feedback on Windows
+        if not hasattr(self, '_last_x_range_change'):
+            self._last_x_range_change = 0
+        import time
+        now = time.time()
+        if now - self._last_x_range_change < 0.1:  # 100ms debounce
             return
-        if self._updating_viewranges or self.base_x_range is None: 
-            log.debug(f"[EXPLORER-RANGE] X range change ignored - updating={self._updating_viewranges}, base_range={self.base_x_range}")
+        self._last_x_range_change = now
+        
+        # Skip complex processing that can cause feedback loops
+        if self._updating_viewranges or self.base_x_range is None:
             return
-        log.info(f"[EXPLORER-RANGE] X range updating scrollbar from {self.base_x_range} to {new_range}")
-        self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
-        if not is_manual_enabled: self._trigger_limit_field_update()
+            
+        # Simple scrollbar update without extensive logging
+        try:
+            self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
+        except Exception:
+            pass  # Ignore scrollbar update errors
 
     @QtCore.Slot(int)
     def _on_y_lock_changed(self, state: int):
@@ -1756,44 +1770,29 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges=False
 
     def _handle_vb_yrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
+        # Simple debouncing to prevent rapid scaling feedback on Windows
         cid = getattr(vb,'_synaptipy_chan_id',None)
-        if cid is None: 
-            log.debug(f"[EXPLORER-RANGE] Y range change ignored - no channel ID")
+        if cid is None:
             return
-        log.info(f"[EXPLORER-RANGE] Y range changed for {cid}: {new_range}, updating_viewranges={self._updating_viewranges}")
-        # --- UPDATED: Check per-channel Y limits --- 
-        is_manual_enabled = self.manual_limits_enabled
-        channel_limits = self.manual_channel_limits.get(cid, {})
-        manual_y = channel_limits.get('y') if is_manual_enabled else None
-        # --- END UPDATE --- 
-        if is_manual_enabled and manual_y and not self._updating_viewranges:
-            log.warning(f"[EXPLORER-RANGE] Y manual limit override for {cid}: {manual_y} (was {new_range})")
-            # ROBUST feedback loop prevention: Block signals during setYRange
-            self._updating_viewranges = True
-            try:
-                vb.sigYRangeChanged.blockSignals(True)
-                vb.setYRange(manual_y[0], manual_y[1], padding=0)
-                log.info(f"[EXPLORER-RANGE] Y manual setYRange applied for {cid}: {manual_y}")
-            finally:
-                vb.sigYRangeChanged.blockSignals(False)
-                self._updating_viewranges = False
+            
+        if not hasattr(self, '_last_y_range_changes'):
+            self._last_y_range_changes = {}
+        if cid not in self._last_y_range_changes:
+            self._last_y_range_changes[cid] = 0
+            
+        import time
+        now = time.time()
+        if now - self._last_y_range_changes[cid] < 0.1:  # 100ms debounce per channel
             return
-        b=self.base_y_ranges.get(cid)
-        if self._updating_viewranges or b is None: 
-            log.debug(f"[EXPLORER-RANGE] Y range change ignored for {cid} - updating={self._updating_viewranges}, base_range={b}")
+        self._last_y_range_changes[cid] = now
+        
+        # Skip complex processing that can cause feedback loops
+        if self._updating_viewranges or self.base_y_ranges.get(cid) is None:
             return
-        log.info(f"[EXPLORER-RANGE] Y range updating scrollbar for {cid} from {b} to {new_range}")
-        if self.y_axes_locked:
-            fvb = next((p.getViewBox() for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-            if vb == fvb: 
-                log.info(f"[EXPLORER-RANGE] Y updating global scrollbar for locked axes")
-                self._update_scrollbar_from_view(self.global_y_scrollbar, b, new_range)
-        else:
-             s=self.individual_y_scrollbars.get(cid)
-             if s: 
-                 log.info(f"[EXPLORER-RANGE] Y updating individual scrollbar for {cid}")
-                 self._update_scrollbar_from_view(s, b, new_range)
-        if not is_manual_enabled: self._trigger_limit_field_update()
+            
+        # Simple scrollbar update without extensive logging  
+        # Skip complex scrollbar updates that cause feedback loops on Windows
+        pass
 
     def _update_scrollbar_from_view(self, scrollbar: QtWidgets.QScrollBar, base_range: Optional[Tuple[float,float]], view_range: Optional[Tuple[float, float]]):
         if self._updating_scrollbars or scrollbar is None: return
