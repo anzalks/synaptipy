@@ -226,39 +226,25 @@ class BaseAnalysisTab(QtWidgets.QWidget):
     def _setup_windows_signal_protection(self, viewbox):
         """Setup signal protection for Windows to prevent rapid range changes."""
         try:
-            # Wrap existing signal handlers to add protection
-            original_x_handler = getattr(self, '_handle_x_range_change', None)
-            original_y_handler = getattr(self, '_handle_y_range_change', None)
+            # Simple debouncing by limiting rapid range changes
+            def debounced_range_handler(signal_name):
+                def handler(vb, range_data):
+                    # Simple debouncing - prevent excessive calls
+                    attr_name = f'_last_{signal_name}_change'
+                    if not hasattr(self, attr_name):
+                        setattr(self, attr_name, 0)
+                    import time
+                    now = time.time()
+                    last_change = getattr(self, attr_name)
+                    if now - last_change < 0.1:  # 100ms debounce for Windows
+                        return
+                    setattr(self, attr_name, now)
+                    log.debug(f"[ANALYSIS-BASE] {signal_name} range change allowed for {self.__class__.__name__}")
+                return handler
             
-            def protected_x_handler(vb, range_data):
-                # Simple debouncing - prevent excessive calls
-                if not hasattr(self, '_last_x_change'):
-                    self._last_x_change = 0
-                import time
-                now = time.time()
-                if now - self._last_x_change < 0.05:  # 50ms debounce
-                    return
-                self._last_x_change = now
-                if original_x_handler:
-                    original_x_handler(vb, range_data)
-            
-            def protected_y_handler(vb, range_data):
-                # Simple debouncing - prevent excessive calls
-                if not hasattr(self, '_last_y_change'):
-                    self._last_y_change = 0
-                import time
-                now = time.time()
-                if now - self._last_y_change < 0.05:  # 50ms debounce
-                    return
-                self._last_y_change = now
-                if original_y_handler:
-                    original_y_handler(vb, range_data)
-            
-            # Only connect if original handlers exist
-            if original_x_handler:
-                viewbox.sigXRangeChanged.connect(protected_x_handler)
-            if original_y_handler:
-                viewbox.sigYRangeChanged.connect(protected_y_handler)
+            # Connect simple debouncing handlers to prevent rapid range changes
+            viewbox.sigXRangeChanged.connect(debounced_range_handler('x'))
+            viewbox.sigYRangeChanged.connect(debounced_range_handler('y'))
                 
             log.debug(f"[ANALYSIS-BASE] Windows signal protection setup complete for {self.__class__.__name__}")
         except Exception as e:
