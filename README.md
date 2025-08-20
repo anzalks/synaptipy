@@ -8,14 +8,14 @@
 
 ## 🚀 **NEW: One-Command Installation!**
 
-**Synaptipy now automatically handles ALL dependencies including Qt6 system libraries!**
+**Synaptipy now automatically handles ALL dependencies via conda-forge for consistency!**
 
 ```bash
 # Single command installation - everything is handled automatically!
 pip install -e .
 ```
 
-✅ **No more manual Qt6 installation**  
+✅ **All packages from same source (conda-forge)**  
 ✅ **No more dependency conflicts**  
 ✅ **Works on Windows, macOS, and Linux**  
 ✅ **Automatic environment detection and setup**
@@ -61,10 +61,25 @@ pip install -e .
 ```
 
 **That's it!** The setup automatically:
-1. ✅ Installs all Python dependencies
-2. ✅ Detects your operating system
-3. ✅ Installs Qt6 system libraries
+1. ✅ Installs ALL dependencies via conda-forge (same source as working env)
+2. ✅ Falls back to pip if conda is not available
+3. ✅ Verifies Qt6 functionality after installation
 4. ✅ Ensures full GUI functionality
+
+### 🔧 **Environment Consistency Setup (For Multiple Environments)**
+
+If you have multiple conda environments (like `synaptipy` and `sudeepta`) and want them to work identically:
+
+```bash
+# Run the environment setup script to ensure both environments are identical
+python setup_environment.py
+```
+
+This script will:
+1. ✅ Install identical packages in both environments
+2. ✅ Ensure Qt6 system libraries are available
+3. ✅ Install Synaptipy in development mode
+4. ✅ Verify both environments work the same way
 
 ### 🔧 **Alternative: Conda Environment (Advanced Users)**
 
@@ -234,9 +249,9 @@ setup_logging(log_dir="/path/to/custom/logs")
 
 ### **Qt6/File Operation Issues**
 - **Problem**: File dialogs don't work or GUI is broken
-- **Solution**: The setup automatically installs Qt6 - if issues persist, run:
+- **Solution**: The setup automatically installs ALL dependencies via conda-forge - if issues persist, run:
   ```bash
-  conda install -c conda-forge qt pyside6 pyqtgraph
+  conda install -c conda-forge qt pyside6 pyqtgraph numpy scipy neo pynwb tzlocal
   ```
 
 ## 🤝 Contributing

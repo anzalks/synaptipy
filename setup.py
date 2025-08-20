@@ -12,114 +12,142 @@ from setuptools import setup, find_packages
 from setuptools.command.develop import develop
 from setuptools.command.install import install
 
-def install_qt6_dependencies():
-    """Install Qt6 system libraries automatically."""
-    print("🔧 Checking Qt6 system libraries...")
+def install_all_dependencies_via_conda():
+    """Install ALL dependencies via conda-forge for consistency."""
+    print("🔧 Installing ALL dependencies via conda-forge for consistency...")
+    
+    # All packages that should come from conda-forge (same as working synaptipy env)
+    conda_packages = [
+        "qt",           # Qt6 system libraries
+        "pyside6",      # Qt6 Python bindings
+        "pyqtgraph",    # Plotting library
+        "numpy",        # Core scientific computing
+        "scipy",        # Scientific computing
+        "neo",          # Electrophysiology data handling
+        "pynwb",        # Neurodata without borders
+        "tzlocal",      # Timezone handling
+    ]
     
     try:
-        # Try to import PySide6 to see if Qt6 is available
-        import PySide6
-        print("✅ Qt6 system libraries are already available")
-        return True
-    except ImportError:
-        print("❌ PySide6 not found, will attempt to install Qt6...")
-    except Exception as e:
-        print(f"⚠️ Qt6 check failed: {e}")
-    
-    # Determine the platform and install Qt6
-    system = platform.system().lower()
-    
-    try:
-        if system == "windows":
-            print("🪟 Windows detected - installing Qt6 via conda...")
-            # Use conda to install Qt6 (most reliable on Windows)
-            subprocess.run([
-                "conda", "install", "-c", "conda-forge", 
-                "qt", "pyside6", "pyqtgraph", "-y"
-            ], check=True)
-            print("✅ Qt6 installed successfully via conda")
-            
-        elif system == "darwin":  # macOS
-            print("🍎 macOS detected - installing Qt6 via conda...")
-            subprocess.run([
-                "conda", "install", "-c", "conda-forge", 
-                "qt", "pyside6", "pyqtgraph", "-y"
-            ], check=True)
-            print("✅ Qt6 installed successfully via conda")
-            
-        elif system == "linux":
-            print("🐧 Linux detected - attempting to install Qt6...")
-            # Try conda first, then system package manager
-            try:
-                subprocess.run([
-                    "conda", "install", "-c", "conda-forge", 
-                    "qt", "pyside6", "pyqtgraph", "-y"
-                ], check=True)
-                print("✅ Qt6 installed successfully via conda")
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                print("📦 Conda not available, trying system package manager...")
-                # Try common Linux package managers
-                for pkg_mgr in ["apt", "yum", "dnf", "pacman", "zypper"]:
-                    try:
-                        if pkg_mgr == "apt":
-                            subprocess.run(["sudo", "apt", "update"], check=True)
-                            subprocess.run([
-                                "sudo", "apt", "install", "-y", 
-                                "qt6-base-dev", "qt6-declarative-dev"
-                            ], check=True)
-                        elif pkg_mgr == "yum":
-                            subprocess.run([
-                                "sudo", "yum", "install", "-y", 
-                                "qt6-qtbase-devel", "qt6-qtdeclarative-devel"
-                            ], check=True)
-                        elif pkg_mgr == "dnf":
-                            subprocess.run([
-                                "sudo", "dnf", "install", "-y", 
-                                "qt6-qtbase-devel", "qt6-qtdeclarative-devel"
-                            ], check=True)
-                        elif pkg_mgr == "pacman":
-                            subprocess.run([
-                                "sudo", "pacman", "-S", "--noconfirm", 
-                                "qt6-base", "qt6-declarative"
-                            ], check=True)
-                        elif pkg_mgr == "zypper":
-                            subprocess.run([
-                                "sudo", "zypper", "install", "-y", 
-                                "qt6-qtbase-devel", "qt6-qtdeclarative-devel"
-                            ], check=True)
-                        
-                        print(f"✅ Qt6 installed successfully via {pkg_mgr}")
-                        break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
-                        continue
-                else:
-                    print("❌ Could not install Qt6 via any package manager")
-                    print("💡 Please install Qt6 manually or use conda")
-                    return False
-        else:
-            print(f"❓ Unknown platform: {system}")
-            return False
-            
+        print("📦 Installing packages via conda-forge...")
+        subprocess.run([
+            "conda", "install", "-c", "conda-forge", 
+            *conda_packages, "-y"
+        ], check=True)
+        print("✅ All dependencies installed successfully via conda-forge")
         return True
         
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to install via conda: {e}")
+        print("💡 Falling back to pip installation...")
+        return install_dependencies_via_pip()
+    except FileNotFoundError:
+        print("❌ Conda not found, falling back to pip installation...")
+        return install_dependencies_via_pip()
     except Exception as e:
-        print(f"❌ Failed to install Qt6: {e}")
-        print("💡 Please install Qt6 manually:")
-        print("   - Windows/macOS: conda install -c conda-forge qt pyside6 pyqtgraph")
-        print("   - Linux: Use your system package manager or conda")
+        print(f"❌ Unexpected error: {e}")
         return False
+
+def install_dependencies_via_pip():
+    """Fallback: Install dependencies via pip if conda fails."""
+    print("🐍 Installing dependencies via pip (fallback)...")
+    
+    pip_packages = [
+        "numpy>=1.23.5",
+        "PySide6>=6.5.0", 
+        "pyqtgraph>=0.13.3",
+        "neo>=0.12.0",
+        "scipy",
+        "pynwb>=2.5.0",
+        "tzlocal",
+    ]
+    
+    try:
+        for package in pip_packages:
+            print(f"  📦 Installing {package}...")
+            subprocess.run([sys.executable, "-m", "pip", "install", package], check=True)
+            print(f"    ✅ {package} installed successfully")
+        
+        print("🎉 All Python dependencies installed successfully via pip")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to install Python dependencies: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error installing Python dependencies: {e}")
+        return False
+
+def verify_qt6_availability():
+    """Verify that Qt6 is available after installation."""
+    print("🔍 Verifying Qt6 availability...")
+    
+    try:
+        import PySide6
+        print("✅ PySide6 is available")
+        
+        # Test basic Qt6 functionality
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        print("✅ Qt6 widgets are functional")
+        return True
+        
+    except ImportError as e:
+        print(f"❌ PySide6 not available: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Qt6 verification failed: {e}")
+        return False
+
+def ensure_environment_consistency():
+    """Ensure the environment has all required packages."""
+    print("🔍 Checking environment consistency...")
+    
+    # Check if we're in a conda environment
+    conda_env = os.environ.get('CONDA_DEFAULT_ENV')
+    if conda_env:
+        print(f"  📦 Detected conda environment: {conda_env}")
+        
+        # Verify key packages are available
+        key_packages = ["numpy", "scipy", "PySide6", "pyqtgraph", "neo", "pynwb"]
+        
+        for package in key_packages:
+            try:
+                if package == "PySide6":
+                    import PySide6
+                elif package == "pyqtgraph":
+                    import pyqtgraph
+                else:
+                    __import__(package)
+                print(f"    ✅ {package} available")
+            except ImportError:
+                print(f"    ❌ {package} missing")
+                return False
+    else:
+        print("  📦 No conda environment detected")
+    
+    print("✅ Environment consistency check complete")
+    return True
 
 class PostDevelopCommand(develop):
     """Post-install command for development installs."""
     def run(self):
         develop.run(self)
-        install_qt6_dependencies()
+        print("\n🚀 Post-install setup for development mode...")
+        install_all_dependencies_via_conda()
+        verify_qt6_availability()
+        ensure_environment_consistency()
 
 class PostInstallCommand(install):
     """Post-install command for regular installs."""
     def run(self):
         install.run(self)
-        install_qt6_dependencies()
+        print("\n🚀 Post-install setup for regular install...")
+        install_all_dependencies_via_conda()
+        verify_qt6_availability()
+        ensure_environment_consistency()
 
 if __name__ == "__main__":
     setup(
@@ -130,6 +158,7 @@ if __name__ == "__main__":
         packages=find_packages(where="src"),
         package_dir={"": "src"},
         install_requires=[
+            # These are the minimum requirements - actual installation happens via conda
             "numpy>=1.23.5",
             "PySide6>=6.5.0",
             "pyqtgraph>=0.13.3",

@@ -8,8 +8,8 @@ requires-python = ">=3.9"
 # COMPLETE DEPENDENCY MANAGEMENT
 # ==============================================================================
 # 
-# This project uses setup.py for automatic Qt6 installation
-# All dependencies are automatically handled during pip install
+# This project uses setup.py for automatic dependency installation
+# ALL dependencies are installed via conda-forge for consistency
 dependencies = [
     "numpy>=1.23.5",
     # --- GUI and Plotting ---
@@ -28,14 +28,14 @@ dependencies = [
 # ==============================================================================
 # 
 # ✅ SINGLE COMMAND INSTALLATION: pip install -e .
-# ✅ AUTOMATIC Qt6 SYSTEM LIBRARY INSTALLATION
+# ✅ AUTOMATIC ALL-DEPENDENCY INSTALLATION via conda-forge
 # ✅ CROSS-PLATFORM SUPPORT (Windows, macOS, Linux)
 # ✅ INTELLIGENT DEPENDENCY RESOLUTION
 #
 # The setup.py automatically:
-# 1. Installs all Python dependencies
-# 2. Detects your operating system
-# 3. Installs Qt6 system libraries via conda or system package manager
+# 1. Installs ALL dependencies via conda-forge (same source as working env)
+# 2. Falls back to pip if conda is not available
+# 3. Verifies Qt6 functionality after installation
 # 4. Ensures full GUI functionality
 
 [project.scripts]
@@ -114,9 +114,9 @@ Issues = "https://github.com/anzalks/synaptipy/issues"
 # 🚀 ONE COMMAND INSTALLATION:
 #    pip install -e .
 #
-# 🔧 MANUAL Qt6 INSTALLATION (if automatic fails):
-#    Windows/macOS: conda install -c conda-forge qt pyside6 pyqtgraph
-#    Linux: Use your system package manager or conda
+# 🔧 AUTOMATIC DEPENDENCY INSTALLATION:
+#    All dependencies are automatically installed via conda-forge
+#    This ensures consistency with the working synaptipy environment
 #
 # 📦 ENVIRONMENT SETUP:
 #    conda create -n myenv python=3.9
