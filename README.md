@@ -50,8 +50,10 @@ Synaptipy is a multi-channel electrophysiology visualization and analysis toolki
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
 cd synaptipy
-pip install .
+pip install -e .
 ```
+
+**⚠️ Note**: This installs all Python dependencies, but Qt6 system libraries must be available on your system for full GUI functionality (file dialogs, file operations, etc.).
 
 For development:
 
@@ -70,9 +72,14 @@ conda create -n synaptipy python=3.9
 # Activate the environment
 conda activate synaptipy
 
+# Install Qt6 system libraries and PySide6 (REQUIRED for GUI functionality)
+conda install -c conda-forge qt pyside6 pyqtgraph
+
 # Install Synaptipy in editable mode
 pip install -e .
 ```
+
+**⚠️ Important**: The Qt6 system libraries are required for file operations, file dialogs, and full GUI functionality. Installing only with `pip install -e .` will result in a partially functional application.
 
 ## Quick Start
 
@@ -164,6 +171,12 @@ python scripts/run_tests.py --verbose --test test_main_window
 - If the welcome screen doesn't transition to the main GUI, check the logs in `~/.synaptipy/logs/`
 - Ensure all dependencies are properly installed in your conda environment
 - Use `conda run -n synaptipy synaptipy-gui` for consistent environment execution
+
+**Qt6/File Operation Issues:**
+- If the GUI starts but file opening doesn't work, you're missing Qt6 system libraries
+- Solution: `conda install -c conda-forge qt pyside6 pyqtgraph` before installing Synaptipy
+- The `synaptipy` environment works because it has the full Qt6 stack installed
+- The `sudeepta` environment fails because it only has Python packages without Qt6 system libraries
 
 **Performance Issues:**
 - The welcome screen now provides real-time feedback during startup
