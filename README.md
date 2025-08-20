@@ -53,7 +53,7 @@ cd synaptipy
 pip install -e .
 ```
 
-**⚠️ Note**: This installs all Python dependencies, but Qt6 system libraries must be available on your system for full GUI functionality (file dialogs, file operations, etc.).
+**✅ Now with Automatic Qt6 Installation**: The setup script automatically detects your platform and installs Qt6 system libraries when needed, ensuring full GUI functionality with just one command!
 
 For development:
 

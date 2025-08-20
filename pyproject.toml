@@ -3,6 +3,18 @@ name = "Synaptipy"
 version = "0.1.0"
 description = "Electrophysiology Visualization Suite"
 requires-python = ">=3.9"
+
+# ==============================================================================
+# SYSTEM REQUIREMENTS (NOT handled by pip)
+# ==============================================================================
+# 
+# For full GUI functionality, Qt6 system libraries must be available:
+# - Windows: Qt6 runtime libraries (qtbase, qtdeclarative, etc.)
+# - macOS: Qt6 framework
+# - Linux: Qt6 development packages
+#
+# These are NOT Python packages and cannot be installed via pip!
+# Use conda or system package managers to install Qt6 first.
 dependencies = [
     "numpy>=1.23.5",
     # --- GUI and Plotting ---
@@ -14,11 +26,13 @@ dependencies = [
     # --- Export ---
     "pynwb>=2.5.0",
     "tzlocal", # Recommended for timezone handling in NWB
+    "toml", # Required for setup.py to read pyproject.toml
     # "pandas",
 ]
 
-# Note: PySide6 requires Qt6 system libraries for full GUI functionality
-# On some systems, you may need to install Qt6 separately or use conda
+# ⚠️ CRITICAL: PySide6 requires Qt6 system libraries for full GUI functionality
+# These are NOT Python packages and cannot be installed via pip
+# Users must ensure Qt6 is available on their system before installation
 
 # ==============================================================================
 # IMPORTANT: Qt6 System Libraries Required
@@ -29,25 +43,30 @@ dependencies = [
 #
 # INSTALLATION METHODS:
 #
-# 1. SINGLE COMMAND (pip):
+# 1. SINGLE COMMAND (pip) - REQUIRES Qt6 ON SYSTEM:
+#    # First, ensure Qt6 is available on your system:
+#    # - Windows: Install Qt6 from qt.io or use conda
+#    # - macOS: Install Qt6 from qt.io or use conda  
+#    # - Linux: Install Qt6 from package manager or use conda
+#    
 #    pip install -e .
-#    Note: This installs all Python dependencies but Qt6 system libraries 
-#    must be available on your system for full GUI functionality.
+#    
+#    ⚠️ WARNING: If Qt6 is not available, GUI will be partially functional
+#    (file dialogs, file operations will fail)
 #
-# 2. CONDA ENVIRONMENT (Recommended for full functionality):
+# 2. CONDA ENVIRONMENT (RECOMMENDED - handles Qt6 automatically):
 #    conda create -n synaptipy python=3.9
 #    conda activate synaptipy
 #    conda install -c conda-forge qt pyside6 pyqtgraph
 #    pip install -e .
 #
-# The conda method is preferred as it handles Qt6 system libraries automatically.
+# The conda method is preferred as it automatically handles Qt6 system libraries.
 
 [project.scripts]
 synaptipy-gui = "Synaptipy.application.__main__:run_gui"
 
-[build-system]
-requires = ["setuptools>=61.0.0"]
-build-backend = "setuptools.build_meta"
+# Note: Using setup.py for automatic Qt6 installation
+# build-system section removed to use setup.py instead
 
 # Development dependencies
 [project.optional-dependencies]
