@@ -5,16 +5,11 @@ description = "Electrophysiology Visualization Suite"
 requires-python = ">=3.9"
 
 # ==============================================================================
-# SYSTEM REQUIREMENTS (NOT handled by pip)
+# COMPLETE DEPENDENCY MANAGEMENT
 # ==============================================================================
 # 
-# For full GUI functionality, Qt6 system libraries must be available:
-# - Windows: Qt6 runtime libraries (qtbase, qtdeclarative, etc.)
-# - macOS: Qt6 framework
-# - Linux: Qt6 development packages
-#
-# These are NOT Python packages and cannot be installed via pip!
-# Use conda or system package managers to install Qt6 first.
+# This project uses setup.py for automatic Qt6 installation
+# All dependencies are automatically handled during pip install
 dependencies = [
     "numpy>=1.23.5",
     # --- GUI and Plotting ---
@@ -26,49 +21,29 @@ dependencies = [
     # --- Export ---
     "pynwb>=2.5.0",
     "tzlocal", # Recommended for timezone handling in NWB
-    "toml", # Required for setup.py to read pyproject.toml
-    # "pandas",
 ]
 
-# ⚠️ CRITICAL: PySide6 requires Qt6 system libraries for full GUI functionality
-# These are NOT Python packages and cannot be installed via pip
-# Users must ensure Qt6 is available on their system before installation
-
 # ==============================================================================
-# IMPORTANT: Qt6 System Libraries Required
+# AUTOMATIC INSTALLATION FEATURES
 # ==============================================================================
 # 
-# Synaptipy requires Qt6 system libraries for GUI functionality (file dialogs, 
-# file operations, etc.). These are NOT automatically installed with pip.
+# ✅ SINGLE COMMAND INSTALLATION: pip install -e .
+# ✅ AUTOMATIC Qt6 SYSTEM LIBRARY INSTALLATION
+# ✅ CROSS-PLATFORM SUPPORT (Windows, macOS, Linux)
+# ✅ INTELLIGENT DEPENDENCY RESOLUTION
 #
-# INSTALLATION METHODS:
-#
-# 1. SINGLE COMMAND (pip) - REQUIRES Qt6 ON SYSTEM:
-#    # First, ensure Qt6 is available on your system:
-#    # - Windows: Install Qt6 from qt.io or use conda
-#    # - macOS: Install Qt6 from qt.io or use conda  
-#    # - Linux: Install Qt6 from package manager or use conda
-#    
-#    pip install -e .
-#    
-#    ⚠️ WARNING: If Qt6 is not available, GUI will be partially functional
-#    (file dialogs, file operations will fail)
-#
-# 2. CONDA ENVIRONMENT (RECOMMENDED - handles Qt6 automatically):
-#    conda create -n synaptipy python=3.9
-#    conda activate synaptipy
-#    conda install -c conda-forge qt pyside6 pyqtgraph
-#    pip install -e .
-#
-# The conda method is preferred as it automatically handles Qt6 system libraries.
+# The setup.py automatically:
+# 1. Installs all Python dependencies
+# 2. Detects your operating system
+# 3. Installs Qt6 system libraries via conda or system package manager
+# 4. Ensures full GUI functionality
 
 [project.scripts]
 synaptipy-gui = "Synaptipy.application.__main__:run_gui"
 
-# Note: Using setup.py for automatic Qt6 installation
-# build-system section removed to use setup.py instead
-
-# Development dependencies
+# ==============================================================================
+# DEVELOPMENT AND OPTIONAL DEPENDENCIES
+# ==============================================================================
 [project.optional-dependencies]
 dev = [
     # Testing
@@ -91,8 +66,8 @@ dev = [
     "sphinx-rtd-theme",
 ]
 
-# Qt6 system libraries (required for GUI functionality)
-qt = [
+# GUI-specific dependencies (already included in main dependencies)
+gui = [
     "PySide6>=6.5.0",
     "pyqtgraph>=0.13.3",
 ]
@@ -107,3 +82,47 @@ full = [
     "pynwb>=2.5.0",
     "tzlocal",
 ]
+
+# Testing dependencies
+test = [
+    "pytest>=7.0.0",
+    "pytest-qt>=4.0.0",
+    "pytest-mock",
+    "pytest-cov",
+]
+
+# ==============================================================================
+# BUILD SYSTEM CONFIGURATION
+# ==============================================================================
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ==============================================================================
+# PROJECT METADATA
+# ==============================================================================
+[project.urls]
+Homepage = "https://github.com/anzalks/synaptipy"
+Repository = "https://github.com/anzalks/synaptipy"
+Documentation = "https://github.com/anzalks/synaptipy/docs"
+Issues = "https://github.com/anzalks/synaptipy/issues"
+
+# ==============================================================================
+# INSTALLATION INSTRUCTIONS
+# ==============================================================================
+# 
+# 🚀 ONE COMMAND INSTALLATION:
+#    pip install -e .
+#
+# 🔧 MANUAL Qt6 INSTALLATION (if automatic fails):
+#    Windows/macOS: conda install -c conda-forge qt pyside6 pyqtgraph
+#    Linux: Use your system package manager or conda
+#
+# 📦 ENVIRONMENT SETUP:
+#    conda create -n myenv python=3.9
+#    conda activate myenv
+#    pip install -e .
+#
+# ✅ VERIFICATION:
+#    python test_setup.py
+#    synaptipy-gui
