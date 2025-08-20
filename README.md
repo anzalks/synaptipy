@@ -2,10 +2,11 @@
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-green.svg)](https://github.com/anzalks/synaptipy)
 
 Synaptipy is a multi-channel electrophysiology visualization and analysis toolkit designed for neuroscience and electrophysiology researchers. It provides a user-friendly interface for exploring, analyzing, and exporting electrophysiological data.
 
-![Synaptipy Screenshot](docs/images/synaptipy_screenshot.png)
+**Now available on Windows, macOS, and Linux!** 🖥️ 🍎 🐧
 
 ## Features
 
@@ -18,11 +19,24 @@ Synaptipy is a multi-channel electrophysiology visualization and analysis toolki
 - **Export Capabilities**:
   - NWB (Neurodata Without Borders) export for standardized data sharing
   - CSV export of analysis results
-- **Consistent UI & Styling**:
-  - Centralized styling system for visual consistency
-  - Dark mode support with PyQtGraph integration
-  - Theme-based customization
+- **User Experience**:
+  - Welcome screen with loading progress during startup
+  - Real-time progress tracking for application initialization
+  - Smooth transition from loading to main interface
+  - Brain icon and modern loading interface
+- **Intelligent Cross-Platform Styling**:
+  - Automatically detects and respects system theme (light/dark)
+  - Native platform styling for consistent appearance
+  - White plot backgrounds for optimal data visualization
+  - No theme conflicts or patchwork styling
 - **Extensible Architecture**: Easy to add new analysis methods or file format support
+
+### What's New in Current Version
+- 🆕 **Cross-Platform Support**: Now available on Windows, macOS, and Linux
+- 🆕 **Intelligent Styling**: Automatically detects and respects your system theme
+- 🆕 **Welcome Screen**: Modern loading interface with brain icon and progress tracking
+- 🆕 **Improved Performance**: Faster startup times and smoother transitions
+- 🆕 **Theme Consistency**: No more patchwork styling or theme conflicts
 
 ## Installation
 
@@ -45,19 +59,35 @@ For development:
 pip install -e ".[dev]"
 ```
 
+### Conda Environment Setup (Recommended)
+
+For isolated development and testing:
+
+```bash
+# Create a new conda environment
+conda create -n synaptipy python=3.9
+
+# Activate the environment
+conda activate synaptipy
+
+# Install Synaptipy in editable mode
+pip install -e .
+```
+
 ## Quick Start
 
 ### GUI Application
 
-After installation, run the application:
+After installation, run the application using the commands shown in the [Usage](#running-the-application) section below.
 
-```bash
-# Using installed entry point
-synaptipy-gui
+**Startup Process**: The application features an intelligent welcome screen that provides:
+- Real-time loading progress with detailed status updates
+- Step-by-step initialization of core components (Qt framework, PyQtGraph, styling, main window, analysis modules)
+- Brain icon and modern interface design
+- Smooth transition to the main interface once loading is complete
+- Consistent theme throughout the entire startup process
 
-# Or using the Python module
-python -m Synaptipy
-```
+This significantly improves the user experience by providing clear feedback during startup and eliminating the previous slow loading times.
 
 ### Programmatic Usage
 
@@ -95,6 +125,18 @@ See the [examples](examples/) directory for more detailed examples.
 - [Styling Guide](docs/development/styling_guide.md) - Guide for UI styling and theming
 - [Examples](examples/) - Example scripts demonstrating usage
 
+## Styling & Theme System
+
+Synaptipy features an intelligent cross-platform styling system that:
+
+- **Automatically detects your system theme** (light/dark mode) on Windows, macOS, and Linux
+- **Uses native platform styling** for consistent appearance across operating systems
+- **Maintains white plot backgrounds** for optimal data visualization regardless of UI theme
+- **Eliminates theme conflicts** that previously caused patchwork styling issues
+- **Provides seamless user experience** from welcome screen through main interface
+
+The application now maintains your preferred system theme throughout the entire session, ensuring a consistent and professional appearance.
+
 ## Testing
 
 Run the test suite with:
@@ -108,6 +150,25 @@ Or run specific tests:
 ```bash
 python scripts/run_tests.py --verbose --test test_main_window
 ```
+
+## Troubleshooting
+
+### Common Issues
+
+**Theme/Styling Issues:**
+- If you experience inconsistent UI themes or patchwork styling, ensure you're using the latest version
+- The application automatically detects and respects your system theme
+- Plot backgrounds remain white for optimal data visualization
+
+**Startup Issues:**
+- If the welcome screen doesn't transition to the main GUI, check the logs in `~/.synaptipy/logs/`
+- Ensure all dependencies are properly installed in your conda environment
+- Use `conda run -n synaptipy synaptipy-gui` for consistent environment execution
+
+**Performance Issues:**
+- The welcome screen now provides real-time feedback during startup
+- Initial loading times have been significantly improved
+- Check logs for any component initialization delays
 
 ## Contributing
 
@@ -154,14 +215,67 @@ Synaptipy uses the [neo](https://neo.readthedocs.io/) library under the hood, en
 
 For a complete and up-to-date list, please refer to the [neo documentation](https://neo.readthedocs.io/en/latest/iolist.html).
 
+## Screenshots
+
+### Welcome Screen & Loading
+The application starts with an intelligent welcome screen that shows real-time loading progress:
+- Brain icon and modern interface design
+- Step-by-step initialization progress
+- Consistent theme throughout startup process
+
+### Main Interface
+The main application window provides:
+- **Explorer Tab**: File loading and data visualization
+- **Analyser Tab**: Multiple analysis tools (Event Detection, Resistance, Baseline, Spike Analysis)
+- **Exporter Tab**: Data export in various formats (NWB, CSV)
+
+### Analysis Tools
+Built-in analysis capabilities include:
+- Input resistance/conductance calculations
+- Resting membrane potential analysis
+- Event detection and spike analysis
+- Custom analysis plugin support
+
+*Note: New screenshots of the current version will be added here showing the welcome screen, main interface, and analysis tabs. For now, see the Legacy Screenshots section below for reference.*
+
 ## Usage
 
 ### Running the Application
 
-Run the GUI application from your terminal:
-
-```bash
+#### Windows
+```cmd
+# Using installed entry point (recommended)
 synaptipy-gui
+
+# Or using conda run (if using conda environment)
+conda run -n synaptipy synaptipy-gui
+
+# Or using the Python module
+python -m Synaptipy.application
+```
+
+#### macOS
+```bash
+# Using installed entry point (recommended)
+synaptipy-gui
+
+# Or using the Python module
+python -m Synaptipy.application
+
+# Or using conda run (if using conda environment)
+conda run -n synaptipy synaptipy-gui
+```
+
+#### Linux
+```bash
+# Using installed entry point (recommended)
+synaptipy-gui
+
+# Or using the Python module
+python -m Synaptipy.application
+
+# Or using conda run (if using conda environment)
+conda run -n synaptipy synaptipy-gui
 ```
 
 ### Development Mode
@@ -174,12 +288,29 @@ synaptipy-gui --dev
 
 You can also set the environment variable `SYNAPTIPY_DEV_MODE=1` to achieve the same effect:
 
+#### Windows
+```cmd
+# Command Prompt
+set SYNAPTIPY_DEV_MODE=1 && synaptipy-gui
+
+# PowerShell
+$env:SYNAPTIPY_DEV_MODE=1; synaptipy-gui
+
+# Conda environment
+conda run -n synaptipy synaptipy-gui --dev
+```
+
+#### macOS/Linux
 ```bash
-# Linux/macOS
+# Set environment variable and run
 SYNAPTIPY_DEV_MODE=1 synaptipy-gui
 
-# Windows (PowerShell)
-$env:SYNAPTIPY_DEV_MODE=1; synaptipy-gui
+# Or export for current session
+export SYNAPTIPY_DEV_MODE=1
+synaptipy-gui
+
+# Conda environment
+conda run -n synaptipy synaptipy-gui --dev
 ```
 
 Development mode provides:
@@ -189,14 +320,37 @@ Development mode provides:
 
 ### Logs
 
-Logs are stored in `~/.synaptipy/logs/` by default. You can specify a custom log directory with:
+Logs are stored in the following locations by default:
+- **Windows**: `C:\Users\<username>\.synaptipy\logs\`
+- **macOS/Linux**: `~/.synaptipy/logs/`
 
+You can specify a custom log directory with:
+
+#### Windows
+```cmd
+synaptipy-gui --log-dir C:\custom\path\to\logs
+```
+
+#### macOS/Linux
 ```bash
 synaptipy-gui --log-dir /custom/path/to/logs
 ```
 
-## Screen grabs
-![Screenshot 2025-04-07 at 12 55 35](https://github.com/user-attachments/assets/4c379633-59b2-4f8b-aa5f-db0ea24eed91)
-![Screenshot 2025-04-07 at 12 56 11](https://github.com/user-attachments/assets/a1c35c20-f697-4a17-b1ea-62282b184c1d)
-![Screenshot 2025-04-07 at 12 56 28](https://github.com/user-attachments/assets/1ff65828-8d09-4992-b7a7-b4fda0e8cdbc)
-![Screenshot 2025-04-07 at 12 57 09](https://github.com/user-attachments/assets/03bf9064-e745-4913-a08d-39bb72d4d94e)
+## Legacy Screenshots
+*Note: These are older screenshots from previous versions. The current version features:*
+- Modern welcome screen with brain icon
+- Improved UI styling and theme consistency
+- Enhanced analysis tools and visualization
+- Better cross-platform compatibility
+
+![Legacy Screenshot 1](https://github.com/user-attachments/assets/4c379633-59b2-4f8b-aa5f-db0ea24eed91)
+![Legacy Screenshot 2](https://github.com/user-attachments/assets/a1c35c20-f697-4a17-b1ea-62282b184c1d)
+![Legacy Screenshot 3](https://github.com/user-attachments/assets/1ff65828-8d09-4992-b7a7-b4fda0e8cdbc)
+![Legacy Screenshot 4](https://github.com/user-attachments/assets/03bf9064-e745-4913-a08d-39bb72d4d94e)
+
+**Current Version Features:**
+- ✅ Intelligent cross-platform styling
+- ✅ Welcome screen with loading progress
+- ✅ Consistent theme throughout application
+- ✅ Improved startup performance
+- ✅ Windows, macOS, and Linux support
