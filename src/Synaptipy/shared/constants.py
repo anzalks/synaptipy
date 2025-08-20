@@ -14,7 +14,7 @@ PLOT_COLORS = [
     # Add more colors if needed
 ]
 TRIAL_COLOR = (55, 126, 184)  # Blueish (similar to #377eb8)
-AVERAGE_COLOR = (238, 75, 43)  # Red (#EE4B2B)
+AVERAGE_COLOR = (0, 0, 0)  # Black (#000000)
 TRIAL_ALPHA = 100              # Alpha for overlaid trials (0-255)
 
 # PyQtGraph Z-Ordering Constants (for layering plot elements)

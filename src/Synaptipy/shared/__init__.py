@@ -37,9 +37,6 @@ from .constants import (
 )
 
 from .styling import (
-    get_current_theme_mode,
-    set_theme_mode,
-    toggle_theme_mode,
     apply_stylesheet,
     configure_pyqtgraph_globally,
     configure_plot_widget,
@@ -53,7 +50,7 @@ from .styling import (
     style_result_display,
     style_info_label,
     style_error_message,
-    THEME,
+    get_system_theme_mode,
     PLOT_COLORS as STYLING_PLOT_COLORS
 )
 
@@ -87,9 +84,6 @@ __all__ = [
     'get_neo_file_filter',
     
     # Styling
-    'get_current_theme_mode',
-    'set_theme_mode', 
-    'toggle_theme_mode',
     'apply_stylesheet',
     'configure_pyqtgraph_globally',
     'configure_plot_widget',
@@ -103,7 +97,7 @@ __all__ = [
     'style_result_display',
     'style_info_label',
     'style_error_message',
-    'THEME',
+    'get_system_theme_mode',
     'STYLING_PLOT_COLORS',
     
     # Plot Factory

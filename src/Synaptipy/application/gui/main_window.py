@@ -32,10 +32,9 @@ try:
 except ImportError:
     tzlocal = None
 
-# Import styling module for theme handling
+# Import styling module for basic styling
 from Synaptipy.shared.styling import (
-    toggle_theme_mode, get_current_theme_mode, apply_stylesheet,
-    set_theme_mode
+    apply_stylesheet
 )
 
 # Use a specific logger for this module
@@ -43,6 +42,9 @@ log = logging.getLogger('Synaptipy.application.gui.main_window')
 
 class MainWindow(QtWidgets.QMainWindow):
     """Main application window managing different functional tabs."""
+
+    # Emitted when the window finished initializing all UI and state
+    initialized = QtCore.Signal()
 
     def __init__(self):
         super().__init__()
@@ -108,6 +110,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status_bar.showMessage("Ready. Open a file using File > Open...", 5000)
         self._update_menu_state()
         log.info("MainWindow initialization complete.")
+        # Notify listeners that initialization is complete
+        try:
+            self.initialized.emit()
+        except Exception:
+            pass
 
 
     def _setup_menu_and_status_bar(self):
@@ -135,17 +142,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quit_action.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
         self.quit_action.triggered.connect(self.close)
         
-        # --- View Menu for Theme Toggling ---
-        view_menu = menu_bar.addMenu("&View")
-        # Theme Toggle Action
-        self.toggle_theme_action = QtGui.QAction("Switch to &Light Theme", self)
-        self.toggle_theme_action.setCheckable(True)
-        self.toggle_theme_action.setChecked(False)  # Dark theme is default
-        self.toggle_theme_action.triggered.connect(self._toggle_theme)
-        view_menu.addAction(self.toggle_theme_action)
-        
-        # Update theme action text based on current theme
-        self._update_theme_action_text()
+        # View menu removed - preserving original UI appearance
         
         log.debug("Menu bar and status bar setup complete.")
 
@@ -408,15 +405,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.restoreState(self.settings.value("windowState"))
             log.debug("Restored window state.")
         
-        # Restore theme preference if available
-        if self.settings.contains("theme_mode"):
-            theme_mode = self.settings.value("theme_mode", "dark", type=str)
-            # Set the theme mode
-            set_theme_mode(theme_mode)
-            # Update UI to match the restored theme
-            self._update_theme_action_text()
-            self.toggle_theme_action.setChecked(theme_mode == "light")
-            log.debug(f"Restored theme preference: {theme_mode}")
+        # Theme preference restoration removed - preserving original UI appearance
 
 
     def closeEvent(self, event: QtGui.QCloseEvent):
@@ -461,69 +450,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.analysis_results_updated.emit(self.saved_analysis_results)
     # --- END ADDED ---
 
-    def _toggle_theme(self):
-        """Toggle between light and dark themes."""
-        # Toggle the theme mode
-        new_mode = toggle_theme_mode()
-        
-        # Re-apply the stylesheet to the entire application
-        app = QtWidgets.QApplication.instance()
-        apply_stylesheet(app)
-        
-        # Update action text
-        self._update_theme_action_text()
-        
-        # Save theme preference
-        self.settings.setValue("theme_mode", new_mode)
-        
-        # Refresh all plots
-        self._refresh_all_plots()
-        
-        # Log the change
-        log.info(f"Theme switched to {new_mode} mode.")
-        self.status_bar.showMessage(f"Theme switched to {new_mode} mode.", 3000)
+    # Theme toggle methods removed - preserving original UI appearance
 
-    def _update_theme_action_text(self):
-        """Update the theme toggle action text based on current theme."""
-        current_mode = get_current_theme_mode()
-        if current_mode == "dark":
-            self.toggle_theme_action.setText("Switch to &Light Theme")
-        else:
-            self.toggle_theme_action.setText("Switch to &Dark Theme")
-
-    def _refresh_all_plots(self):
-        """Refresh all plots to reflect the new theme."""
-        log.info("Refreshing plots with new theme settings...")
-        
-        # Find all PlotWidget instances in the application
-        all_plot_widgets = []
-        
-        # Find in all tabs
-        for tab in [self.explorer_tab, self.analyser_tab, self.exporter_tab]:
-            if tab:
-                plot_widgets = tab.findChildren(pg.PlotWidget)
-                all_plot_widgets.extend(plot_widgets)
-                log.debug(f"Found {len(plot_widgets)} plot widgets in {tab.__class__.__name__}")
-        
-        # Apply basic styling to each PlotWidget - avoid problematic grid config
-        for pw in all_plot_widgets:
-            try:
-                # Just update background and refresh - skip grid configuration
-                pw.setBackground('white')
-                pw.update()
-                log.debug(f"Refreshed PlotWidget")
-            except Exception as e:
-                log.warning(f"Error refreshing plot widget: {e}")
-        
-        # Handle analysis tabs with plot_widget attribute
-        if hasattr(self, 'analyser_tab') and self.analyser_tab:
-            for child in self.analyser_tab.children():
-                if hasattr(child, 'plot_widget') and isinstance(child.plot_widget, pg.PlotWidget):
-                    try:
-                        configure_plot_widget(child.plot_widget)
-                        child.plot_widget.update()
-                        log.debug(f"Refreshed {child.__class__.__name__} plot_widget")
-                    except Exception as e:
-                        log.warning(f"Error refreshing {child.__class__.__name__} plot: {e}")
-        
-        log.info("Plot refresh complete")
+    # Plot refresh method removed - preserving original UI appearance

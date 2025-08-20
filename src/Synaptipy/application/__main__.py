@@ -7,7 +7,7 @@ This module is responsible for:
 1. Processing command line arguments
 2. Setting up the logging system with dev mode support
 3. Initializing the Qt application and UI styling
-4. Creating and displaying the main application window
+4. Creating and displaying the welcome screen with startup manager
 5. Running the event loop
 
 The module defines the `run_gui` function called by the entry point script
@@ -24,10 +24,9 @@ from pathlib import Path
 from PySide6 import QtWidgets, QtCore
 
 # --- Import Core Components ---
-from Synaptipy.application.gui.main_window import MainWindow
+from Synaptipy.application.startup_manager import StartupManager
 from Synaptipy.application.gui.dummy_classes import SYNAPTIPY_AVAILABLE
 from Synaptipy.shared.logging_config import setup_logging
-from Synaptipy.shared.styling import apply_stylesheet
 
 # Log instance to be initialized after setting up logging
 log = logging.getLogger('Synaptipy.application')
@@ -47,14 +46,15 @@ def parse_arguments():
 
 def run_gui():
     """
-    Set up and run the Synaptipy GUI application.
+    Set up and run the Synaptipy GUI application with welcome screen.
     
     This function:
     1. Parses command line arguments
     2. Configures the logging system
     3. Initializes the Qt application
-    4. Creates and displays the main window
-    5. Runs the Qt event loop
+    4. Creates and displays the welcome screen
+    5. Manages startup process with progress tracking
+    6. Runs the Qt event loop
     
     Returns:
         int: The application exit code
@@ -88,34 +88,22 @@ def run_gui():
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
 
-    # Configure PyQtGraph globally for consistent plot behavior
+    # Create startup manager and begin loading process
     try:
-        from Synaptipy.shared.styling import configure_pyqtgraph_globally
-        configure_pyqtgraph_globally()
-        log.info("Applied global PyQtGraph configuration for consistent plot styling.")
+        startup_manager = StartupManager(app)
+        welcome_screen = startup_manager.start_loading()
+        
+        # Show welcome screen immediately
+        welcome_screen.show()
+        log.info("Welcome screen displayed, beginning startup process")
+        
     except Exception as e:
-        log.warning(f"Could not configure PyQtGraph globally: {e}")
-
-    # Apply application styling using our centralized styling module
-    try:
-        app = apply_stylesheet(app)
-        log.info("Applied application styling from styling module.")
-    except Exception as e:
-        log.warning(f"Could not apply application styling: {e}")
-
-    # Create and Show Main Window
-    try:
-        window = MainWindow()
-        window.show()
-        log.info("Main window created and shown.")
-    except Exception as e:
-        log.critical(f"Failed to initialize or show the MainWindow: {e}", exc_info=True)
+        log.critical(f"Failed to create startup manager: {e}", exc_info=True)
         try: 
             QtWidgets.QMessageBox.critical(None, "Application Startup Error", 
-                                         f"Failed to create main window:\n{e}\n\nSee logs.")
+                                         f"Failed to create startup manager:\n{e}\n\nSee logs.")
         except Exception:
             pass
-        # Exit if window creation fails critically
         sys.exit(1)
 
     # Start Qt Event Loop

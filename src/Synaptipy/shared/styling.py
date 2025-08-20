@@ -16,51 +16,10 @@ import logging
 log = logging.getLogger(__name__)
 
 # ==============================================================================
-# Theme Mode Management
+# Theme Management - Disabled to preserve original UI appearance
 # ==============================================================================
 
-# Current theme mode (dark/light) - default to dark
-CURRENT_THEME_MODE = "dark"
-
-def get_current_theme_mode() -> str:
-    """Returns the current theme mode ('dark' or 'light')."""
-    return CURRENT_THEME_MODE
-
-def set_theme_mode(mode: str) -> str:
-    """
-    Set the theme to a specific mode.
-    
-    Args:
-        mode: String "light" or "dark"
-        
-    Returns:
-        The current theme mode.
-    """
-    global CURRENT_THEME_MODE, THEME
-    
-    if mode not in ["light", "dark"]:
-        log.warning(f"Invalid theme mode '{mode}'. Using 'dark' instead.")
-        mode = "dark"
-    
-        CURRENT_THEME_MODE = mode
-    # Update THEME dictionary with current colors
-    THEME.update(_get_theme_dict())
-    log.info(f"Theme mode set to: {mode}")
-    return CURRENT_THEME_MODE
-
-def toggle_theme_mode() -> str:
-    """
-    Toggle between light and dark theme modes.
-    Returns the new theme mode name ("light" or "dark").
-    """
-    global CURRENT_THEME_MODE, THEME
-    
-    new_mode = "light" if CURRENT_THEME_MODE == "dark" else "dark"
-    CURRENT_THEME_MODE = new_mode
-    # Update THEME dictionary with current colors
-    THEME.update(_get_theme_dict())
-    log.info(f"Theme toggled to: {new_mode}")
-    return new_mode
+# Theme mode management removed - preserving original system styling
 
 # ==============================================================================
 # PyQtGraph Global Configuration (matching explorer tab)
@@ -70,114 +29,155 @@ def configure_pyqtgraph_globally():
     """Apply global PyQtGraph configuration for consistent behavior across all plots."""
     # Configure global PyQtGraph settings (matching explorer tab)
     pg.setConfigOption('imageAxisOrder', 'row-major')
-    pg.setConfigOption('background', 'w')  # White background
-    pg.setConfigOption('foreground', 'k')  # Black foreground (text, axes, grids)
+    # Don't override background/foreground - let the original styling remain
 
 # ==============================================================================
 # Application Theme Functions
 # ==============================================================================
 
 def apply_stylesheet(app: QtWidgets.QApplication) -> QtWidgets.QApplication:
-    """Apply the appropriate Qt native theme to the QApplication based on current theme mode."""
+    """Apply clean, consistent styling that respects system theme without conflicts."""
     try:
-        if CURRENT_THEME_MODE == "dark":
-            _apply_qt_dark_theme(app)
-        else:
-            _apply_qt_light_theme(app)
-        log.info(f"Applied Qt native {CURRENT_THEME_MODE} theme")
+        import platform
+        
+        # Don't override the system style - let it handle theme automatically
+        # This prevents the style from resetting to default light theme
+        log.info("Keeping system default style to preserve theme")
+        
+        # Let the system handle its own theme (light/dark) automatically
+        # Don't override with custom palettes or styles - this prevents conflicts
+        log.info("System theme handling enabled - no style or palette overrides")
+        
     except Exception as e:
-        log.warning(f"Could not apply Qt native theme: {e}")
-    
+        log.warning(f"Could not apply styling: {e}")
+        log.info("Keeping system default styling")
+        
     return app
 
-def _apply_qt_dark_theme(app: QtWidgets.QApplication):
-    """Apply Qt's native dark theme using palette and style."""
-    # Use Fusion style for consistent cross-platform dark theme
-    app.setStyle("Fusion")
-    
-    # Create dark palette using Qt's native color roles
-    dark_palette = QtGui.QPalette()
-    
-    # Window colors
-    dark_palette.setColor(QtGui.QPalette.Window, QtGui.QColor(53, 53, 53))
-    dark_palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor(255, 255, 255))
-    
-    # Base colors (for input fields, etc.)
-    dark_palette.setColor(QtGui.QPalette.Base, QtGui.QColor(25, 25, 25))
-    dark_palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(53, 53, 53))
-    
-    # Text colors
-    dark_palette.setColor(QtGui.QPalette.Text, QtGui.QColor(255, 255, 255))
-    dark_palette.setColor(QtGui.QPalette.BrightText, QtGui.QColor(255, 0, 0))
-    
-    # Button colors
-    dark_palette.setColor(QtGui.QPalette.Button, QtGui.QColor(53, 53, 53))
-    dark_palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(255, 255, 255))
-    
-    # Highlight colors (selection)
-    dark_palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(42, 130, 218))
-    dark_palette.setColor(QtGui.QPalette.HighlightedText, QtGui.QColor(0, 0, 0))
-    
-    # Disabled colors
-    dark_palette.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.WindowText, QtGui.QColor(127, 127, 127))
-    dark_palette.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.Text, QtGui.QColor(127, 127, 127))
-    dark_palette.setColor(QtGui.QPalette.Disabled, QtGui.QPalette.ButtonText, QtGui.QColor(127, 127, 127))
-    
-    # Tooltip colors
-    dark_palette.setColor(QtGui.QPalette.ToolTipBase, QtGui.QColor(0, 0, 0))
-    dark_palette.setColor(QtGui.QPalette.ToolTipText, QtGui.QColor(255, 255, 255))
-    
-    # Links
-    dark_palette.setColor(QtGui.QPalette.Link, QtGui.QColor(42, 130, 218))
-    dark_palette.setColor(QtGui.QPalette.LinkVisited, QtGui.QColor(255, 0, 255))
-    
-    app.setPalette(dark_palette)
-
-def _apply_qt_light_theme(app: QtWidgets.QApplication):
-    """Apply Qt's native light theme using palette and style."""
-    # Use the default system style for light theme
+def _detect_linux_desktop() -> str:
+    """Detect the Linux desktop environment."""
     try:
-        # Try to use native system style first
-        app.setStyle("windowsvista")  # Windows
-    except:
-        try:
-            app.setStyle("macintosh")  # macOS
-        except:
-            app.setStyle("Fusion")  # Fallback
-    
-    # Reset to default light palette
-    app.setPalette(app.style().standardPalette())
+        import os
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+        
+        if "gnome" in desktop:
+            return "gnome"
+        elif "kde" in desktop or "plasma" in desktop:
+            return "kde"
+        elif "xfce" in desktop:
+            return "xfce"
+        elif "mate" in desktop:
+            return "mate"
+        elif "cinnamon" in desktop:
+            return "cinnamon"
+        else:
+            # Try to detect from process list
+            try:
+                import subprocess
+                result = subprocess.run(["ps", "-e"], capture_output=True, text=True)
+                if "gnome" in result.stdout.lower():
+                    return "gnome"
+                elif "kde" in result.stdout.lower() or "plasma" in result.stdout.lower():
+                    return "kde"
+            except:
+                pass
+            
+        return "unknown"
+        
+    except Exception as e:
+        log.debug(f"Could not detect Linux desktop: {e}")
+        return "unknown"
+
+def get_system_theme_mode() -> str:
+    """Detect the current system theme mode (light/dark) across platforms."""
+    try:
+        import platform
+        
+        if platform.system() == "Darwin":  # macOS
+            # macOS: Check for dark mode
+            try:
+                import subprocess
+                result = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"], 
+                                     capture_output=True, text=True)
+                if "Dark" in result.stdout:
+                    return "dark"
+                else:
+                    return "light"
+            except:
+                return "light"  # Default to light if detection fails
+                
+        elif platform.system() == "Linux":
+            # Linux: Check for dark mode in common desktop environments
+            try:
+                import os
+                desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+                
+                if "gnome" in desktop:
+                    # GNOME: Check gsettings for dark mode
+                    try:
+                        import subprocess
+                        result = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"], 
+                                             capture_output=True, text=True)
+                        if "dark" in result.stdout.lower():
+                            return "dark"
+                        else:
+                            return "light"
+                    except:
+                        pass
+                        
+                elif "kde" in desktop:
+                    # KDE: Check for dark mode
+                    try:
+                        import subprocess
+                        result = subprocess.run(["kreadconfig5", "--group", "General", "--key", "ColorScheme"], 
+                                             capture_output=True, text=True)
+                        if "breeze" in result.stdout.lower():
+                            return "light"  # Breeze is typically light
+                        else:
+                            return "dark"
+                    except:
+                        pass
+                        
+            except:
+                pass
+                
+            return "light"  # Default to light for Linux
+            
+        elif platform.system() == "Windows":
+            # Windows: Check registry for dark mode
+            try:
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                                   r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+                winreg.CloseKey(key)
+                return "light" if value == 1 else "dark"
+            except:
+                return "light"  # Default to light if detection fails
+                
+        return "light"  # Default fallback
+        
+    except Exception as e:
+        log.debug(f"Could not detect system theme: {e}")
+        return "light"
+
+
+
+# Removed custom theme functions - preserving original system styling
 
 # ==============================================================================
 # Plot Styling for PyQtGraph
 # ==============================================================================
 
-def get_plot_background_color() -> str:
-    """Get consistent white background color for all plots."""
-    return "#ffffff"  # Always white for consistency
-
-def get_plot_foreground_color() -> str:
-    """Get the appropriate foreground color for plots based on current theme."""
-    if CURRENT_THEME_MODE == "dark":
-        return "#ffffff"  # White
-    else:
-        return "#000000"  # Black
+# Plot color functions removed - preserving original plot appearance
 
 
 def configure_plot_widget(plot_widget):
-    """Configure a PyQtGraph PlotWidget with consistent styling matching explorer tab approach."""
-    # Always set background to white for consistency across all plots
-    plot_widget.setBackground('white')
-    
-    # Configure axes with theme-appropriate colors
-    axis_color = get_plot_foreground_color()
-    plot_widget.getAxis('left').setPen(axis_color)
-    plot_widget.getAxis('bottom').setPen(axis_color)
-    plot_widget.getAxis('left').setTextPen(axis_color)
-    plot_widget.getAxis('bottom').setTextPen(axis_color)
-    
-    # Enable grid with normal configuration
-    plot_widget.showGrid(x=True, y=True, alpha=0.3)
+    """Configure a PyQtGraph PlotWidget with minimal styling to preserve original appearance."""
+    # Don't override plot styling - let the original appearance remain
+    # Only enable grid if not already configured
+    if not plot_widget.gridAlpha:
+        plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
 def _configure_grid_z_order_safe(plot_widget):
     """Safely configure grid z-order with better error handling for Windows compatibility."""
@@ -229,23 +229,19 @@ def _configure_grid_z_order_safe(plot_widget):
 
 def get_trial_pen():
     """Get pen for individual trial traces."""
-    color = "#3498db" if CURRENT_THEME_MODE == "dark" else "#2980b9"  # Blue
-    return pg.mkPen(color=color, width=1.0)
+    return pg.mkPen(color="#377eb8", width=1.0)  # Original blue color
 
 def get_average_pen():
     """Get pen for average traces."""
-    color = "#e74c3c" if CURRENT_THEME_MODE == "dark" else "#c0392b"  # Red
-    return pg.mkPen(color=color, width=2.0)
+    return pg.mkPen(color="#000000", width=2.0)  # Black as requested
 
 def get_baseline_pen():
     """Get pen for baseline indicator lines."""
-    color = "#7f8c8d" if CURRENT_THEME_MODE == "dark" else "#95a5a6"  # Gray
-    return pg.mkPen(color=color, width=1.5, style=QtCore.Qt.DashLine)
+    return pg.mkPen(color="#7f8c8d", width=1.5, style=QtCore.Qt.DashLine)  # Gray
 
 def get_response_pen():
     """Get pen for response indicator lines."""
-    color = "#f39c12" if CURRENT_THEME_MODE == "dark" else "#e67e22"  # Orange
-    return pg.mkPen(color=color, width=1.5, style=QtCore.Qt.DashLine)
+    return pg.mkPen(color="#f39c12", width=1.5, style=QtCore.Qt.DashLine)  # Orange
 
 def get_grid_pen():
     """Get pen for grid lines."""
@@ -301,31 +297,13 @@ def style_error_message(widget):
     return widget
 
 # ==============================================================================
-# Legacy compatibility - maintain basic color constants for existing code
+# Legacy compatibility - simplified for original UI appearance
 # ==============================================================================
 
 # Basic color constants for backward compatibility
-def _get_theme_dict():
-    """Get theme dictionary with current colors."""
-    return {
-        'primary': '#2980b9',
-        'accent': '#e74c3c', 
-        'background': get_plot_background_color(),
-        'text_primary': get_plot_foreground_color(),
-    }
-
-# Initialize THEME as a basic dict, will be updated by functions as needed
-THEME = {
-    'primary': '#2980b9',
-    'accent': '#e74c3c', 
-    'background': '#ffffff',  # Default light background
-    'text_primary': '#000000',  # Default dark text
-}
-
-# Plot colors for data visualization
 PLOT_COLORS = [
-    '#3498db',  # Blue
-    '#e74c3c',  # Red
+    '#377eb8',  # Blue (original trial color)
+    '#000000',  # Black (average color)
     '#2ecc71',  # Green
     '#f39c12',  # Orange
     '#9b59b6',  # Purple
@@ -336,10 +314,8 @@ PLOT_COLORS = [
 
 # Expose main functions
 __all__ = [
-    'CURRENT_THEME_MODE', 'THEME', 'PLOT_COLORS',
-    'get_current_theme_mode', 'set_theme_mode', 'toggle_theme_mode',
     'apply_stylesheet', 'configure_plot_widget', 'configure_pyqtgraph_globally',
     'get_trial_pen', 'get_average_pen', 'get_baseline_pen', 'get_response_pen', 'get_grid_pen',
     'style_button', 'style_label', 'style_result_display', 'style_info_label', 'style_error_message',
-    'get_plot_background_color', 'get_plot_foreground_color'
+    'get_system_theme_mode', 'PLOT_COLORS'
 ] 
