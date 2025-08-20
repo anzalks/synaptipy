@@ -17,6 +17,31 @@ dependencies = [
     # "pandas",
 ]
 
+# Note: PySide6 requires Qt6 system libraries for full GUI functionality
+# On some systems, you may need to install Qt6 separately or use conda
+
+# ==============================================================================
+# IMPORTANT: Qt6 System Libraries Required
+# ==============================================================================
+# 
+# Synaptipy requires Qt6 system libraries for GUI functionality (file dialogs, 
+# file operations, etc.). These are NOT automatically installed with pip.
+#
+# INSTALLATION METHODS:
+#
+# 1. SINGLE COMMAND (pip):
+#    pip install -e .
+#    Note: This installs all Python dependencies but Qt6 system libraries 
+#    must be available on your system for full GUI functionality.
+#
+# 2. CONDA ENVIRONMENT (Recommended for full functionality):
+#    conda create -n synaptipy python=3.9
+#    conda activate synaptipy
+#    conda install -c conda-forge qt pyside6 pyqtgraph
+#    pip install -e .
+#
+# The conda method is preferred as it handles Qt6 system libraries automatically.
+
 [project.scripts]
 synaptipy-gui = "Synaptipy.application.__main__:run_gui"
 
@@ -45,4 +70,21 @@ dev = [
     # Documentation
     "sphinx",
     "sphinx-rtd-theme",
+]
+
+# Qt6 system libraries (required for GUI functionality)
+qt = [
+    "PySide6>=6.5.0",
+    "pyqtgraph>=0.13.3",
+]
+
+# Full installation with all dependencies
+full = [
+    "numpy>=1.23.5",
+    "PySide6>=6.5.0",
+    "pyqtgraph>=0.13.3",
+    "neo>=0.12.0",
+    "scipy",
+    "pynwb>=2.5.0",
+    "tzlocal",
 ]
