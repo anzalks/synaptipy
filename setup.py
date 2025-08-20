@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for Synaptipy with automatic Qt6 installation.
+Setup script for Synaptipy with complete dependency management.
 This ensures that when someone runs 'pip install -e .', they get everything needed.
 """
 
@@ -121,40 +121,51 @@ class PostInstallCommand(install):
         install.run(self)
         install_qt6_dependencies()
 
-# Read the pyproject.toml to get project metadata
-def get_project_metadata():
-    """Extract metadata from pyproject.toml."""
-    import toml
-    
-    try:
-        with open("pyproject.toml", "r") as f:
-            data = toml.load(f)
-        
-        project = data.get("project", {})
-        return {
-            "name": project.get("name", "Synaptipy"),
-            "version": project.get("version", "0.1.0"),
-            "description": project.get("description", "Electrophysiology Visualization Suite"),
-            "requires_python": project.get("requires-python", ">=3.9"),
-            "dependencies": project.get("dependencies", []),
-            "optional_dependencies": project.get("optional-dependencies", {}),
-        }
-    except Exception as e:
-        print(f"⚠️ Could not read pyproject.toml: {e}")
-        return {}
-
 if __name__ == "__main__":
-    metadata = get_project_metadata()
-    
     setup(
-        name=metadata.get("name", "Synaptipy"),
-        version=metadata.get("version", "0.1.0"),
-        description=metadata.get("description", "Electrophysiology Visualization Suite"),
-        python_requires=metadata.get("requires_python", ">=3.9"),
+        name="Synaptipy",
+        version="0.1.0",
+        description="Electrophysiology Visualization Suite",
+        python_requires=">=3.9",
         packages=find_packages(where="src"),
         package_dir={"": "src"},
-        install_requires=metadata.get("dependencies", []),
-        extras_require=metadata.get("optional_dependencies", {}),
+        install_requires=[
+            "numpy>=1.23.5",
+            "PySide6>=6.5.0",
+            "pyqtgraph>=0.13.3",
+            "neo>=0.12.0",
+            "scipy",
+            "pynwb>=2.5.0",
+            "tzlocal",
+        ],
+        extras_require={
+            "dev": [
+                "pytest>=7.0.0",
+                "pytest-qt>=4.0.0",
+                "pytest-mock",
+                "pytest-cov",
+                "flake8",
+                "black",
+                "isort",
+                "build",
+                "twine",
+                "sphinx",
+                "sphinx-rtd-theme",
+            ],
+            "gui": [
+                "PySide6>=6.5.0",
+                "pyqtgraph>=0.13.3",
+            ],
+            "full": [
+                "numpy>=1.23.5",
+                "PySide6>=6.5.0",
+                "pyqtgraph>=0.13.3",
+                "neo>=0.12.0",
+                "scipy",
+                "pynwb>=2.5.0",
+                "tzlocal",
+            ],
+        },
         cmdclass={
             "develop": PostDevelopCommand,
             "install": PostInstallCommand,
