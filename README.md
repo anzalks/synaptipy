@@ -54,7 +54,7 @@ pip install -e .
 
 ### 🔧 **Environment Consistency Setup (For Multiple Environments)**
 
-If you have multiple conda environments (like `synaptipy` and `sudeepta`) and want them to work identically:
+If you have multiple conda environments and want them to work identically:
 
 ```bash
 # Method 1: Use environment.yml (Recommended)
