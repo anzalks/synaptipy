@@ -6,46 +6,19 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 
-## 🚀 **NEW: One-Command Installation!**
+## 🚀 **NEW: DeepLabCut-Style Installation!**
 
-**Synaptipy now automatically handles ALL dependencies via conda-forge for consistency!**
+**Synaptipy now uses environment.yml for EXACT environment replication - just like DeepLabCut!**
 
 ```bash
-# Single command installation - everything is handled automatically!
+# Single command installation - gets EXACT environment from working synaptipy!
 pip install -e .
 ```
 
-✅ **All packages from same source (conda-forge)**  
-✅ **No more dependency conflicts**  
+✅ **Exact environment replication** via environment.yml  
+✅ **All packages with exact versions** from working synaptipy environment  
+✅ **No more dependency conflicts** - perfect match every time  
 ✅ **Works on Windows, macOS, and Linux**  
-✅ **Automatic environment detection and setup**
-
-## ✨ Features
-
-### 🧬 **Core Functionality**
-- **Multi-format Support**: ABF, WCP, NWB, and more via Neo library
-- **Interactive Visualization**: Real-time data exploration with PyQtGraph
-- **Advanced Analysis**: Event detection, spike analysis, input resistance, RMP
-- **Export Capabilities**: CSV, NWB, and custom formats
-
-### 🎨 **User Experience**
-- **Welcome Screen**: Beautiful loading interface with progress tracking
-- **Smooth Transitions**: Seamless navigation between components
-- **Brain Icon**: Neuroscience-themed visual identity 🧠
-- **Progress Indicators**: Real-time loading status and feedback
-
-### 🌍 **Intelligent Cross-Platform Styling**
-- **Auto-detects system theme** (light/dark mode)
-- **Native styling** for each operating system
-- **White plot backgrounds** for optimal data visualization
-- **No theme conflicts** - preserves system appearance
-- **Consistent UI** across all platforms
-
-### 🔧 **Developer Experience**
-- **Modular Architecture**: Clean separation of concerns
-- **Comprehensive Testing**: Unit tests for all components
-- **Type Hints**: Full Python type annotation support
-- **Documentation**: Extensive API and user guides
 
 ## 📦 Installation
 
@@ -61,37 +34,33 @@ pip install -e .
 ```
 
 **That's it!** The setup automatically:
-1. ✅ Installs ALL dependencies via conda-forge (same source as working env)
-2. ✅ Falls back to pip if conda is not available
-3. ✅ Verifies Qt6 functionality after installation
+1. ✅ Installs EXACT environment from environment.yml
+2. ✅ Gets ALL packages with exact versions from working synaptipy environment
+3. ✅ Verifies environment matches perfectly
 4. ✅ Ensures full GUI functionality
+
+### 🔧 **Alternative: Manual Environment Creation (Advanced Users)**
+
+```bash
+# Create environment with exact Python version
+conda create -n synaptipy python=3.9
+
+# Install exact environment from environment.yml
+conda env update -f environment.yml
+
+# Install Synaptipy in development mode
+pip install -e .
+```
 
 ### 🔧 **Environment Consistency Setup (For Multiple Environments)**
 
 If you have multiple conda environments (like `synaptipy` and `sudeepta`) and want them to work identically:
 
 ```bash
-# Run the environment setup script to ensure both environments are identical
-python setup_environment.py
-```
+# Method 1: Use environment.yml (Recommended)
+conda env update -f environment.yml
 
-This script will:
-1. ✅ Install identical packages in both environments
-2. ✅ Ensure Qt6 system libraries are available
-3. ✅ Install Synaptipy in development mode
-4. ✅ Verify both environments work the same way
-
-### 🔧 **Alternative: Conda Environment (Advanced Users)**
-
-```bash
-# Create environment
-conda create -n synaptipy python=3.9
-conda activate synaptipy
-
-# Install Qt6 dependencies
-conda install -c conda-forge qt pyside6 pyqtgraph
-
-# Install Synaptipy
+# Method 2: Use setup.py
 pip install -e .
 ```
 
