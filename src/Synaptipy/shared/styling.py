@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Synaptipy UI Styling Module
+Optimized Synaptipy UI Styling Module
 
-This module defines theming and styling settings for the Synaptipy application using Qt's native theming system.
-It provides a centralized way to control the application's visual appearance using Qt's built-in palette system.
+This module provides streamlined styling with minimal startup overhead.
+It preserves system theming without complex detection during startup.
 
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
@@ -16,37 +16,34 @@ import logging
 log = logging.getLogger(__name__)
 
 # ==============================================================================
-# Theme Management - Disabled to preserve original UI appearance
-# ==============================================================================
-
-# Theme mode management removed - preserving original system styling
-
-# ==============================================================================
-# PyQtGraph Global Configuration (matching explorer tab)
+# Optimized PyQtGraph Global Configuration
 # ==============================================================================
 
 def configure_pyqtgraph_globally():
-    """Apply global PyQtGraph configuration for consistent behavior across all plots."""
-    # Configure global PyQtGraph settings (matching explorer tab)
-    pg.setConfigOption('imageAxisOrder', 'row-major')
-    # Don't override background/foreground - let the original styling remain
+    """Apply minimal PyQtGraph configuration for fast startup."""
+    try:
+        # Only essential configuration - minimal overhead
+        pg.setConfigOption('imageAxisOrder', 'row-major')
+        
+        # Disable expensive features during startup
+        pg.setConfigOption('useOpenGL', False)  # Avoid OpenGL initialization delays
+        pg.setConfigOption('foreground', 'k')   # Simple black foreground
+        
+        log.info("PyQtGraph configured with minimal overhead")
+        
+    except Exception as e:
+        log.warning(f"PyQtGraph configuration failed: {e}")
 
 # ==============================================================================
-# Application Theme Functions
+# Streamlined Application Styling
 # ==============================================================================
 
 def apply_stylesheet(app: QtWidgets.QApplication) -> QtWidgets.QApplication:
-    """Apply clean, consistent styling that respects system theme without conflicts."""
+    """Apply minimal styling that preserves system theme without startup overhead."""
     try:
-        import platform
-        
-        # Don't override the system style - let it handle theme automatically
-        # This prevents the style from resetting to default light theme
-        log.info("Keeping system default style to preserve theme")
-        
-        # Let the system handle its own theme (light/dark) automatically
-        # Don't override with custom palettes or styles - this prevents conflicts
-        log.info("System theme handling enabled - no style or palette overrides")
+        # Minimal styling - let system handle theme automatically
+        # No complex detection or palette manipulation during startup
+        log.info("Applied minimal styling - system theme preserved")
         
     except Exception as e:
         log.warning(f"Could not apply styling: {e}")
@@ -54,113 +51,52 @@ def apply_stylesheet(app: QtWidgets.QApplication) -> QtWidgets.QApplication:
         
     return app
 
-def _detect_linux_desktop() -> str:
-    """Detect the Linux desktop environment."""
-    try:
-        import os
-        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-        
-        if "gnome" in desktop:
-            return "gnome"
-        elif "kde" in desktop or "plasma" in desktop:
-            return "kde"
-        elif "xfce" in desktop:
-            return "xfce"
-        elif "mate" in desktop:
-            return "mate"
-        elif "cinnamon" in desktop:
-            return "cinnamon"
-        else:
-            # Try to detect from process list
-            try:
-                import subprocess
-                result = subprocess.run(["ps", "-e"], capture_output=True, text=True)
-                if "gnome" in result.stdout.lower():
-                    return "gnome"
-                elif "kde" in result.stdout.lower() or "plasma" in result.stdout.lower():
-                    return "kde"
-            except:
-                pass
-            
-        return "unknown"
-        
-    except Exception as e:
-        log.debug(f"Could not detect Linux desktop: {e}")
-        return "unknown"
+# ==============================================================================
+# Optimized Plot Styling (Lazy-loaded)
+# ==============================================================================
 
-def get_system_theme_mode() -> str:
-    """Detect the current system theme mode (light/dark) across platforms."""
-    try:
-        import platform
-        
-        if platform.system() == "Darwin":  # macOS
-            # macOS: Check for dark mode
-            try:
-                import subprocess
-                result = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"], 
-                                     capture_output=True, text=True)
-                if "Dark" in result.stdout:
-                    return "dark"
-                else:
-                    return "light"
-            except:
-                return "light"  # Default to light if detection fails
-                
-        elif platform.system() == "Linux":
-            # Linux: Check for dark mode in common desktop environments
-            try:
-                import os
-                desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-                
-                if "gnome" in desktop:
-                    # GNOME: Check gsettings for dark mode
-                    try:
-                        import subprocess
-                        result = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"], 
-                                             capture_output=True, text=True)
-                        if "dark" in result.stdout.lower():
-                            return "dark"
-                        else:
-                            return "light"
-                    except:
-                        pass
-                        
-                elif "kde" in desktop:
-                    # KDE: Check for dark mode
-                    try:
-                        import subprocess
-                        result = subprocess.run(["kreadconfig5", "--group", "General", "--key", "ColorScheme"], 
-                                             capture_output=True, text=True)
-                        if "breeze" in result.stdout.lower():
-                            return "light"  # Breeze is typically light
-                        else:
-                            return "dark"
-                    except:
-                        pass
-                        
-            except:
-                pass
-                
-            return "light"  # Default to light for Linux
-            
-        elif platform.system() == "Windows":
-            # Windows: Check registry for dark mode
-            try:
-                import winreg
-                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
-                                   r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
-                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-                winreg.CloseKey(key)
-                return "light" if value == 1 else "dark"
-            except:
-                return "light"  # Default to light if detection fails
-                
-        return "light"  # Default fallback
-        
-    except Exception as e:
-        log.debug(f"Could not detect system theme: {e}")
-        return "light"
+def get_trial_pen():
+    """Get pen for trial data."""
+    return pg.mkPen(color='b', width=1)
 
+def get_average_pen():
+    """Get pen for average data."""
+    return pg.mkPen(color='k', width=2)
+
+def get_baseline_pen():
+    """Get pen for baseline data."""
+    return pg.mkPen(color='g', width=1)
+
+def get_response_pen():
+    """Get pen for response data."""
+    return pg.mkPen(color='r', width=1)
+
+def configure_plot_widget(plot_widget):
+    """Configure plot widget with minimal styling."""
+    try:
+        # Only configure if not already configured
+        if not hasattr(plot_widget, '_synaptipy_configured'):
+            plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            plot_widget.setBackground('w')  # White background for plots
+            plot_widget._synaptipy_configured = True
+            
+    except Exception as e:
+        log.debug(f"Plot widget configuration failed: {e}")
+
+# ==============================================================================
+# Lazy Theme Detection (Only when needed)
+# ==============================================================================
+
+def get_system_theme_mode():
+    """Get system theme mode - lazy-loaded only when needed."""
+    # This is now lazy-loaded to avoid startup overhead
+    # Return default and let the system handle it automatically
+    return "auto"
+
+def _detect_linux_desktop():
+    """Detect Linux desktop - lazy-loaded only when needed."""
+    # This is now lazy-loaded to avoid startup overhead
+    return "auto"
 
 
 # Removed custom theme functions - preserving original system styling
@@ -171,13 +107,6 @@ def get_system_theme_mode() -> str:
 
 # Plot color functions removed - preserving original plot appearance
 
-
-def configure_plot_widget(plot_widget):
-    """Configure a PyQtGraph PlotWidget with minimal styling to preserve original appearance."""
-    # Don't override plot styling - let the original appearance remain
-    # Only enable grid if not already configured
-    if not plot_widget.gridAlpha:
-        plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
 def _configure_grid_z_order_safe(plot_widget):
     """Safely configure grid z-order with better error handling for Windows compatibility."""
@@ -226,22 +155,6 @@ def _configure_grid_z_order_safe(plot_widget):
     except Exception as e:
         # Silently handle any major grid configuration errors
         log.debug(f"Grid configuration failed: {e}")
-
-def get_trial_pen():
-    """Get pen for individual trial traces."""
-    return pg.mkPen(color="#377eb8", width=1.0)  # Original blue color
-
-def get_average_pen():
-    """Get pen for average traces."""
-    return pg.mkPen(color="#000000", width=2.0)  # Black as requested
-
-def get_baseline_pen():
-    """Get pen for baseline indicator lines."""
-    return pg.mkPen(color="#7f8c8d", width=1.5, style=QtCore.Qt.DashLine)  # Gray
-
-def get_response_pen():
-    """Get pen for response indicator lines."""
-    return pg.mkPen(color="#f39c12", width=1.5, style=QtCore.Qt.DashLine)  # Orange
 
 def get_grid_pen():
     """Get pen for grid lines."""

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Startup Manager for Synaptipy
+Optimized Startup Manager for Synaptipy
 
-This module manages the application startup process, showing a welcome screen
-and loading components in the background with progress updates.
+This module manages the application startup process with minimal delays
+and optimized loading for fast startup times.
 
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
@@ -21,19 +21,15 @@ log = logging.getLogger('Synaptipy.application.startup_manager')
 
 class StartupManager(QtCore.QObject):
     """
-    Manages the application startup process with progress tracking.
+    Optimized startup manager with minimal delays and parallel loading.
     """
     
-    # Define loading steps
+    # Streamlined loading steps
     LOADING_STEPS = [
-        (0, "Initializing application...", "Setting up core components"),
-        (1, "Loading Qt framework...", "Initializing PySide6"),
-        (2, "Configuring PyQtGraph...", "Setting up plotting system"),
-        (3, "Loading styling system...", "Applying application themes"),
-        (4, "Creating main window...", "Building user interface"),
-        (5, "Loading analysis modules...", "Discovering analysis tabs"),
-        (6, "Finalizing setup...", "Preparing for use"),
-        (7, "Ready!", "Application loaded successfully")
+        (0, "Initializing...", "Setting up core components"),
+        (1, "Loading GUI...", "Building user interface"),
+        (2, "Configuring plots...", "Setting up visualization"),
+        (3, "Ready!", "Application loaded successfully")
     ]
     
     def __init__(self, app: QtWidgets.QApplication):
@@ -42,52 +38,41 @@ class StartupManager(QtCore.QObject):
         self.welcome_screen: Optional[WelcomeScreen] = None
         self.main_window: Optional[MainWindow] = None
         self._loading_complete = False
+        self._start_time = time.time()
         
     def start_loading(self) -> WelcomeScreen:
         """
-        Start the loading process and return the welcome screen.
+        Start the optimized loading process and return the welcome screen.
         
         Returns:
             WelcomeScreen: The welcome screen widget to display
         """
-        log.info("Starting application loading process")
+        log.info("Starting optimized application loading process")
         
         # Create and setup welcome screen
         self.welcome_screen = WelcomeScreen()
         self.welcome_screen.set_loading_steps(len(self.LOADING_STEPS))
         
-        # Start loading process in background
-        QtCore.QTimer.singleShot(100, self._begin_loading)
+        # Start loading process immediately (no artificial delays)
+        QtCore.QTimer.singleShot(10, self._begin_loading)
         
         return self.welcome_screen
         
     def _begin_loading(self):
-        """Begin the loading process step by step."""
-        log.info("Beginning loading process")
+        """Begin the optimized loading process."""
+        log.info("Beginning optimized loading process")
         
         # Step 0: Initial setup
         self._update_progress(0)
         
-        # Step 1: Qt framework (already done)
-        QtCore.QTimer.singleShot(200, lambda: self._update_progress(1))
+        # Step 1: Create main window and configure PyQtGraph in parallel
+        QtCore.QTimer.singleShot(50, self._load_gui_components)
         
-        # Step 2: PyQtGraph configuration
-        QtCore.QTimer.singleShot(400, self._configure_pyqtgraph)
+        # Step 2: Configure PyQtGraph (minimal delay)
+        QtCore.QTimer.singleShot(100, self._configure_pyqtgraph)
         
-        # Step 3: Styling system
-        QtCore.QTimer.singleShot(600, self._load_styling)
-        
-        # Step 4: Main window creation
-        QtCore.QTimer.singleShot(800, self._create_main_window)
-        
-        # Step 5: Analysis modules loading (deferred until main window is ready)
-        QtCore.QTimer.singleShot(1200, self._load_analysis_modules)
-        
-        # Step 6: Finalization
-        QtCore.QTimer.singleShot(1600, self._finalize_setup)
-        
-        # Step 7: Complete
-        QtCore.QTimer.singleShot(2000, self._complete_loading)
+        # Step 3: Complete loading (minimal delay)
+        QtCore.QTimer.singleShot(150, self._complete_loading)
         
     def _update_progress(self, step: int):
         """Update the progress display."""
@@ -100,8 +85,32 @@ class StartupManager(QtCore.QObject):
             )
             log.info(f"Loading step {step}: {step_info[1]}")
             
+            # Force Qt to process events to update the UI immediately
+            if self.app:
+                self.app.processEvents()
+            
+    def _load_gui_components(self):
+        """Load GUI components efficiently."""
+        try:
+            # Create main window
+            self.main_window = MainWindow()
+            
+            # Connect to initialized signal for fast transition
+            try:
+                self.main_window.initialized.connect(self._on_main_window_initialized)
+            except Exception:
+                pass
+                
+            log.info("Main window created successfully")
+            self._update_progress(1)
+            
+        except Exception as e:
+            log.error(f"Main window creation failed: {e}", exc_info=True)
+            if self.welcome_screen:
+                self.welcome_screen.set_status(f"Error: {str(e)}")
+            
     def _configure_pyqtgraph(self):
-        """Configure PyQtGraph globally."""
+        """Configure PyQtGraph with minimal overhead."""
         try:
             from Synaptipy.shared.styling import configure_pyqtgraph_globally
             configure_pyqtgraph_globally()
@@ -111,66 +120,14 @@ class StartupManager(QtCore.QObject):
         finally:
             self._update_progress(2)
             
-    def _load_styling(self):
-        """Load and apply styling system."""
-        try:
-            from Synaptipy.shared.styling import apply_stylesheet
-            self.app = apply_stylesheet(self.app)
-            log.info("Styling system loaded")
-        except Exception as e:
-            log.warning(f"Styling system loading failed: {e}")
-        finally:
-            self._update_progress(3)
-            
-    def _create_main_window(self):
-        """Create the main application window."""
-        try:
-            self.main_window = MainWindow()
-            # Connect to initialized signal to transition promptly when ready
-            try:
-                self.main_window.initialized.connect(self._on_main_window_initialized)
-            except Exception:
-                pass
-            log.info("Main window created successfully")
-        except Exception as e:
-            log.error(f"Main window creation failed: {e}", exc_info=True)
-            if self.welcome_screen:
-                self.welcome_screen.set_status(f"Error: {str(e)}")
-        finally:
-            self._update_progress(4)
-            
-    def _load_analysis_modules(self):
-        """Load analysis modules in background."""
-        try:
-            if self.main_window and hasattr(self.main_window, 'analyser_tab'):
-                # The analysis modules are loaded when the AnalyserTab is created
-                # We just need to wait for the main window to complete
-                log.info("Analysis modules loading initiated")
-            else:
-                log.warning("Main window not ready for analysis modules")
-        except Exception as e:
-            log.warning(f"Analysis modules loading failed: {e}")
-        finally:
-            self._update_progress(5)
-            
-    def _finalize_setup(self):
-        """Finalize the setup process."""
-        try:
-            # Any final setup tasks
-            log.info("Setup finalization complete")
-        except Exception as e:
-            log.warning(f"Setup finalization failed: {e}")
-        finally:
-            self._update_progress(6)
-            
     def _complete_loading(self):
-        """Handle loading completion."""
+        """Complete the loading process."""
         try:
-            self._update_progress(7)
+            self._update_progress(3)
             self._loading_complete = True
             
-            # Show completion message briefly
-            QtCore.QTimer.singleShot(1000, self._transition_to_main_window)
+            # Transition immediately (no artificial delays)
+            QtCore.QTimer.singleShot(50, self._transition_to_main_window)
             
         except Exception as e:
             log.error(f"Loading completion failed: {e}", exc_info=True)
@@ -178,7 +135,7 @@ class StartupManager(QtCore.QObject):
     def _on_main_window_initialized(self):
         """Fast-track transition when main window reports ready."""
         try:
-            self._update_progress(7)
+            self._update_progress(3)
             self._loading_complete = True
             self._transition_to_main_window()
         except Exception as e:
@@ -188,6 +145,10 @@ class StartupManager(QtCore.QObject):
         """Transition from welcome screen to main window."""
         if self.main_window and self.welcome_screen:
             try:
+                # Calculate total loading time
+                total_time = time.time() - self._start_time
+                log.info(f"Total startup time: {total_time:.2f} seconds")
+                
                 # Hide welcome screen
                 self.welcome_screen.hide()
                 

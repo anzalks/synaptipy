@@ -93,8 +93,17 @@ def run_gui():
         startup_manager = StartupManager(app)
         welcome_screen = startup_manager.start_loading()
         
-        # Show welcome screen immediately
+        # Show welcome screen immediately and force display
         welcome_screen.show()
+        welcome_screen.raise_()  # Bring to front
+        welcome_screen.activateWindow()  # Activate the window
+        
+        # Force Qt to process events and display the window immediately
+        app.processEvents()
+        
+        # Use the optimized display method
+        welcome_screen.force_display()
+        
         log.info("Welcome screen displayed, beginning startup process")
         
     except Exception as e:

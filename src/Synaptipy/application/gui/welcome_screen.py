@@ -24,6 +24,18 @@ class WelcomeScreen(QtWidgets.QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        
+        # Set window flags for instant display
+        self.setWindowFlags(
+            QtCore.Qt.WindowType.Window |
+            QtCore.Qt.WindowType.WindowStaysOnTopHint |
+            QtCore.Qt.WindowType.FramelessWindowHint
+        )
+        
+        # Set window attributes for better performance
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_NoSystemBackground, False)
+        
         self._setup_ui()
         self._current_step = 0
         self._total_steps = 0
@@ -156,6 +168,35 @@ class WelcomeScreen(QtWidgets.QWidget):
         # Set window properties
         self.setWindowTitle("Synaptipy - Starting...")
         self.setMinimumSize(500, 400)
+        
+    def showEvent(self, event):
+        """Override showEvent to ensure proper positioning and immediate display."""
+        super().showEvent(event)
+        
+        # Center the window on screen
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen:
+            available_geometry = screen.availableGeometry()
+            window_geometry = self.geometry()
+            
+            # Calculate center position
+            x = available_geometry.left() + (available_geometry.width() - window_geometry.width()) // 2
+            y = available_geometry.top() + (available_geometry.height() - window_geometry.height()) // 2
+            
+            # Move to center
+            self.move(x, y)
+            
+        # Force immediate display
+        self.repaint()
+        QtWidgets.QApplication.processEvents()
+        
+    def force_display(self):
+        """Force the welcome screen to display immediately."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.repaint()
+        QtWidgets.QApplication.processEvents()
         
     def set_loading_steps(self, total_steps: int):
         """Set the total number of loading steps."""
