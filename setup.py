@@ -3,6 +3,9 @@
 Setup script for Synaptipy with exact environment replication.
 This ensures that when someone runs 'pip install -e .', they get EXACTLY the same environment
 as the working synaptipy environment, just like DeepLabCut does.
+
+CRITICAL: Use environment.yml for full installation to prevent Qt platform plugin errors.
+PySide6 versions are pinned to match Qt system libraries exactly (6.7.3).
 """
 
 import os
@@ -26,6 +29,7 @@ def install_exact_environment():
         
         print("📦 Installing exact environment via conda...")
         print("🔄 This will install ALL packages with exact versions from working synaptipy env")
+        print("🎯 PySide6 versions are pinned to match Qt system libraries (6.7.3)")
         
         # Install the exact environment
         subprocess.run([
@@ -34,6 +38,7 @@ def install_exact_environment():
         
         print("✅ Exact environment installed successfully!")
         print("🎯 Your environment now matches the working synaptipy environment exactly")
+        print("🔒 PySide6 versions locked to prevent Qt platform plugin errors")
         return True
         
     except subprocess.CalledProcessError as e:
@@ -54,10 +59,10 @@ def install_environment_manually():
     try:
         # Install Qt6 and core packages via conda-forge
         print("📦 Installing Qt6 and core packages via conda-forge...")
+        print("🎯 Note: PySide6 will be installed via pip to ensure version matching")
         conda_packages = [
             "python=3.9.23",
             "qt=6.7.3",
-            "pyside6=6.7.3", 
             "pyqtgraph=0.13.7",
             "numpy=2.0.2",
             "scipy=1.13.1",
@@ -179,13 +184,14 @@ if __name__ == "__main__":
         package_dir={"": "src"},
         install_requires=[
             # These are the minimum requirements - actual installation happens via environment.yml
-            "numpy>=1.23.5",
-            "PySide6>=6.5.0",
-            "pyqtgraph>=0.13.3",
-            "neo>=0.12.0",
-            "scipy",
-            "pynwb>=2.5.0",
-            "tzlocal",
+            # PySide6 versions are pinned to match Qt system libraries exactly
+            "numpy>=2.0.2",
+            "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+            "pyqtgraph>=0.13.7",
+            "neo>=0.14.2",
+            "scipy>=1.13.1",
+            "pynwb>=3.1.2",
+            "tzlocal>=5.3.1",
         ],
         extras_require={
             "dev": [
@@ -202,17 +208,17 @@ if __name__ == "__main__":
                 "sphinx-rtd-theme",
             ],
             "gui": [
-                "PySide6>=6.5.0",
-                "pyqtgraph>=0.13.3",
+                "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+                "pyqtgraph>=0.13.7",
             ],
             "full": [
-                "numpy>=1.23.5",
-                "PySide6>=6.5.0",
-                "pyqtgraph>=0.13.3",
-                "neo>=0.12.0",
-                "scipy",
-                "pynwb>=2.5.0",
-                "tzlocal",
+                "numpy>=2.0.2",
+                "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+                "pyqtgraph>=0.13.7",
+                "neo>=0.14.2",
+                "scipy>=1.13.1",
+                "pynwb>=3.1.2",
+                "tzlocal>=5.3.1",
             ],
         },
         cmdclass={
