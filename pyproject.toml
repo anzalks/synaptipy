@@ -8,8 +8,8 @@ requires-python = ">=3.9"
 # COMPLETE DEPENDENCY MANAGEMENT
 # ==============================================================================
 # 
-# This project uses setup.py for automatic dependency installation
-# ALL dependencies are installed via conda-forge for consistency
+# This project uses setup.py for exact dependency replication
+# ALL packages are installed with EXACT versions from working synaptipy environment
 dependencies = [
     "numpy>=1.23.5",
     # --- GUI and Plotting ---
@@ -28,14 +28,14 @@ dependencies = [
 # ==============================================================================
 # 
 # ✅ SINGLE COMMAND INSTALLATION: pip install -e .
-# ✅ AUTOMATIC ALL-DEPENDENCY INSTALLATION via conda-forge
+# ✅ EXACT VERSION REPLICATION from working synaptipy environment
 # ✅ CROSS-PLATFORM SUPPORT (Windows, macOS, Linux)
 # ✅ INTELLIGENT DEPENDENCY RESOLUTION
 #
 # The setup.py automatically:
-# 1. Installs ALL dependencies via conda-forge (same source as working env)
-# 2. Falls back to pip if conda is not available
-# 3. Verifies Qt6 functionality after installation
+# 1. Installs Qt6 packages via conda-forge with EXACT versions
+# 2. Installs Python packages via pip with EXACT versions
+# 3. Verifies all package versions match working environment
 # 4. Ensures full GUI functionality
 
 [project.scripts]
@@ -114,9 +114,10 @@ Issues = "https://github.com/anzalks/synaptipy/issues"
 # 🚀 ONE COMMAND INSTALLATION:
 #    pip install -e .
 #
-# 🔧 AUTOMATIC DEPENDENCY INSTALLATION:
-#    All dependencies are automatically installed via conda-forge
-#    This ensures consistency with the working synaptipy environment
+# 🔧 EXACT VERSION REPLICATION:
+#    All packages are installed with EXACT versions from working synaptipy environment
+#    - Qt6 packages: conda-forge (qt=6.7.3, pyside6=6.7.3, pyqtgraph=0.13.7)
+#    - Python packages: pip (numpy=2.0.2, scipy=1.13.1, neo=0.14.2, pynwb=3.1.2, tzlocal=5.3.1)
 #
 # 📦 ENVIRONMENT SETUP:
 #    conda create -n myenv python=3.9
@@ -124,5 +125,4 @@ Issues = "https://github.com/anzalks/synaptipy/issues"
 #    pip install -e .
 #
 # ✅ VERIFICATION:
-#    python test_setup.py
-#    synaptipy-gui
+#    The setup automatically verifies all package versions match exactly
