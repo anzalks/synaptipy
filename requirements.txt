@@ -1,9 +1,10 @@
 # Exact pip packages from working synaptipy environment
 # Generated from conda env export
+# Note: synaptipy is installed separately via pip install -e .
 attrs==25.3.0
 h5py==3.14.0
 hdmf==4.1.0
-jsonschema==4.25.1
+jsonschema==25.1
 jsonschema-specifications==2025.4.1
 neo==0.14.2
 packaging==25.0
@@ -18,7 +19,6 @@ rpds-py==0.27.0
 ruamel-yaml==0.18.14
 ruamel-yaml-clib==0.2.12
 six==1.17.0
-synaptipy==0.1.0
 typing-extensions==4.14.1
 tzdata==2025.2
 tzlocal==5.3.1
