@@ -8,35 +8,38 @@ requires-python = ">=3.9"
 # COMPLETE DEPENDENCY MANAGEMENT
 # ==============================================================================
 # 
-# This project uses setup.py for exact dependency replication
+# This project uses environment.yml for exact dependency replication
 # ALL packages are installed with EXACT versions from working synaptipy environment
+# 
+# CRITICAL: Use environment.yml for full installation, not pip install -e .
+# This ensures Qt6 system libraries are properly installed via conda-forge
 dependencies = [
-    "numpy>=1.23.5",
+    "numpy>=2.0.2",
     # --- GUI and Plotting ---
-    "PySide6>=6.5.0",
-    "pyqtgraph>=0.13.3",
+    "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+    "pyqtgraph>=0.13.7",
     # --- Core/Infra ---
-    "neo>=0.12.0",
-    "scipy",
+    "neo>=0.14.2",
+    "scipy>=1.13.1",
     # --- Export ---
-    "pynwb>=2.5.0",
-    "tzlocal", # Recommended for timezone handling in NWB
+    "pynwb>=3.1.2",
+    "tzlocal>=5.3.1", # Recommended for timezone handling in NWB
 ]
 
 # ==============================================================================
 # AUTOMATIC INSTALLATION FEATURES
 # ==============================================================================
 # 
-# ✅ SINGLE COMMAND INSTALLATION: pip install -e .
+# ✅ ENVIRONMENT-BASED INSTALLATION: conda env create -f environment.yml
 # ✅ EXACT VERSION REPLICATION from working synaptipy environment
 # ✅ CROSS-PLATFORM SUPPORT (Windows, macOS, Linux)
 # ✅ INTELLIGENT DEPENDENCY RESOLUTION
 #
-# The setup.py automatically:
-# 1. Installs Qt6 packages via conda-forge with EXACT versions
+# The environment.yml automatically:
+# 1. Installs Qt6 system libraries via conda-forge with EXACT versions (6.7.3)
 # 2. Installs Python packages via pip with EXACT versions
-# 3. Verifies all package versions match working environment
-# 4. Ensures full GUI functionality
+# 3. Ensures PySide6 versions match Qt system libraries exactly
+# 4. Prevents Qt platform plugin and DLL loading issues
 
 [project.scripts]
 synaptipy-gui = "Synaptipy.application.__main__:run_gui"
@@ -111,18 +114,22 @@ Issues = "https://github.com/anzalks/synaptipy/issues"
 # INSTALLATION INSTRUCTIONS
 # ==============================================================================
 # 
-# 🚀 ONE COMMAND INSTALLATION:
+# 🚀 RECOMMENDED INSTALLATION:
+#    conda env create -f environment.yml
+#    conda activate synaptipy
 #    pip install -e .
 #
 # 🔧 EXACT VERSION REPLICATION:
 #    All packages are installed with EXACT versions from working synaptipy environment
-#    - Qt6 packages: conda-forge (qt=6.7.3, pyside6=6.7.3, pyqtgraph=0.13.7)
-#    - Python packages: pip (numpy=2.0.2, scipy=1.13.1, neo=0.14.2, pynwb=3.1.2, tzlocal=5.3.1)
+#    - Qt6 system libraries: conda-forge (qt=6.7.3, pyqtgraph=0.13.7)
+#    - PySide6 Python bindings: pip (pyside6==6.7.3, exact match with Qt)
+#    - Python packages: pip (numpy=2.0.2, scipy=1.13.1, neo=0.14.2, pynwb=3.1.2)
 #
 # 📦 ENVIRONMENT SETUP:
-#    conda create -n myenv python=3.9
+#    conda env create -f environment.yml -n myenv
 #    conda activate myenv
 #    pip install -e .
 #
 # ✅ VERIFICATION:
-#    The setup automatically verifies all package versions match exactly
+#    The environment.yml ensures all package versions match exactly
+#    PySide6 versions are pinned to prevent Qt platform plugin errors
