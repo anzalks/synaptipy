@@ -81,6 +81,46 @@ class BaseAnalysisTab(QtWidgets.QWidget):
 
         self.analysis_item_combo.currentIndexChanged.connect(self._on_analysis_item_selected)
 
+    def _update_plot_pens_only(self):
+        """Efficiently update only the pen properties of existing plot items without recreating data."""
+        if not self.plot_widget:
+            return
+            
+        try:
+            # Get current pens from customization manager
+            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen
+            single_trial_pen = get_single_trial_pen()
+            average_pen = get_average_pen()
+            grid_pen = get_grid_pen()
+            
+            # Update pens for existing plot data items
+            for item in self.plot_widget.plotItem.items:
+                if isinstance(item, pg.PlotDataItem):
+                    # Determine which pen to apply based on item properties or name
+                    if hasattr(item, 'opts') and 'name' in item.opts:
+                        item_name = item.opts['name']
+                        if 'average' in item_name.lower() or 'avg' in item_name.lower():
+                            item.setPen(average_pen)
+                        else:
+                            item.setPen(single_trial_pen)
+                    else:
+                        # Default to single trial pen if we can't determine the type
+                        item.setPen(single_trial_pen)
+            
+            # Update grid
+            try:
+                alpha = grid_pen.alpha() if hasattr(grid_pen, 'alpha') else 0.3
+                self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
+            except Exception as e:
+                log.warning(f"Could not update grid: {e}")
+                
+            log.debug(f"[ANALYSIS-BASE] Pen update complete for {self.__class__.__name__}")
+            
+        except ImportError:
+            log.warning(f"Could not import plot customization - skipping pen update for {self.__class__.__name__}")
+        except Exception as e:
+            log.error(f"Error updating plot pens for {self.__class__.__name__}: {e}")
+
     # --- ADDED: Method to setup plot area --- 
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
         """Adds a PlotWidget to the provided layout with normal configuration."""
@@ -110,10 +150,18 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
 
-        # Normal grid configuration
+        # Normal grid configuration with customization support
         try:
-            self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-            log.debug(f"[ANALYSIS-BASE] Grid configuration successful for {self.__class__.__name__}")
+            # Try to use customized grid settings
+            try:
+                from Synaptipy.shared.plot_customization import get_grid_pen
+                grid_pen = get_grid_pen()
+                alpha = grid_pen.alpha() if hasattr(grid_pen, 'alpha') else 0.3
+                self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
+                log.debug(f"[ANALYSIS-BASE] Customized grid configuration successful for {self.__class__.__name__}")
+            except ImportError:
+                self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+                log.debug(f"[ANALYSIS-BASE] Default grid configuration successful for {self.__class__.__name__}")
         except Exception as e:
             log.warning(f"[ANALYSIS-BASE] Grid configuration warning for {self.__class__.__name__}: {e}")
 

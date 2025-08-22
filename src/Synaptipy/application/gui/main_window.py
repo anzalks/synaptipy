@@ -27,6 +27,7 @@ from .explorer_tab import ExplorerTab
 from .analyser_tab import AnalyserTab
 from .exporter_tab import ExporterTab
 from .nwb_dialog import NwbMetadataDialog
+from .plot_customization_dialog import PlotCustomizationDialog
 try:
     import tzlocal # Optional, for local timezone handling
 except ImportError:
@@ -142,9 +143,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quit_action.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
         self.quit_action.triggered.connect(self.close)
         
-        # View menu removed - preserving original UI appearance
+        # --- View Menu ---
+        view_menu = menu_bar.addMenu("&View")
+        
+        # Plot Customization Action
+        self.plot_customization_action = view_menu.addAction("Plot &Customization...")
+        self.plot_customization_action.setToolTip("Customize plot colors, widths, and transparency")
+        self.plot_customization_action.triggered.connect(self._show_plot_customization)
         
         log.debug("Menu bar and status bar setup complete.")
+        
+        # Connect to plot customization signals
+        self._connect_plot_customization_signals()
 
     def _setup_tabs(self):
         """Creates the QTabWidget and adds the different functional tabs."""
@@ -185,6 +195,128 @@ class MainWindow(QtWidgets.QMainWindow):
                                 self.explorer_tab.get_current_recording() is not None)
         self.export_nwb_action.setEnabled(has_data_in_explorer)
         log.debug(f"Updated menu state: Export enabled = {has_data_in_explorer}")
+    
+    def _connect_plot_customization_signals(self):
+        """Connect to plot customization signals for automatic plot updates."""
+        try:
+            from Synaptipy.shared.plot_customization import get_plot_customization_signals
+            signals = get_plot_customization_signals()
+            signals.preferences_updated.connect(self._on_plot_preferences_updated)
+            log.debug("Connected to plot customization signals")
+        except Exception as e:
+            log.warning(f"Failed to connect plot customization signals: {e}")
+    
+    def _needs_plot_update(self) -> bool:
+        """Check if plot update is actually needed."""
+        try:
+            # Always allow plot updates when preferences change, even if no plots are currently displayed
+            # This ensures that when plots are created later, they use the new preferences
+            
+            # Check if we have any active plots that need immediate updating
+            has_explorer_plots = (hasattr(self, 'explorer_tab') and 
+                                self.explorer_tab and 
+                                hasattr(self.explorer_tab, 'channel_plot_data_items') and
+                                self.explorer_tab.channel_plot_data_items)
+            
+            has_analysis_plots = (hasattr(self, 'analyser_tab') and 
+                                self.analyser_tab and
+                                ((hasattr(self.analyser_tab, 'count') and self.analyser_tab.count() > 0) or
+                                 (hasattr(self.analyser_tab, 'plot_widget') and self.analyser_tab.plot_widget)))
+            
+            # If we have active plots, update them immediately
+            if has_explorer_plots or has_analysis_plots:
+                log.debug("Active plots found - will update immediately")
+                return True
+            
+            # If no active plots, still allow the update (for future plots)
+            log.debug("No active plots found - allowing update for future plots")
+            return True
+            
+        except Exception as e:
+            log.warning(f"Could not check if plot update is needed: {e}")
+            return True  # Assume update needed if we can't check
+
+    def _on_plot_preferences_updated(self):
+        """Handle plot preferences update signal."""
+        try:
+            log.info("=== PLOT PREFERENCES UPDATE SIGNAL RECEIVED ===")
+            log.info("Plot preferences updated - checking if update is needed")
+            
+            # Check if we actually need to update plots
+            needs_update = self._needs_plot_update()
+            log.info(f"Plot update needed: {needs_update}")
+            
+            if not needs_update:
+                log.info("No active plots found - skipping plot update")
+                return
+            
+            log.info("Active plots found - refreshing plots")
+            
+            # Update explorer tab plots - use smart update logic for better performance
+            if hasattr(self, 'explorer_tab') and self.explorer_tab:
+                log.info("Explorer tab found - attempting to update plots")
+                if hasattr(self.explorer_tab, '_update_plot'):
+                    log.info("Explorer tab has _update_plot method")
+                    # Check if we need a full update or just pen update
+                    if hasattr(self.explorer_tab, '_needs_full_plot_update'):
+                        log.info("Explorer tab has _needs_full_plot_update method")
+                        if self.explorer_tab._needs_full_plot_update():
+                            log.info("Full update needed - calling _update_plot(pen_only=False)")
+                            self.explorer_tab._update_plot(pen_only=False)
+                            log.info("Refreshed explorer tab plots (full update needed)")
+                        else:
+                            log.info("Pen-only update sufficient - calling _update_plot(pen_only=True)")
+                            self.explorer_tab._update_plot(pen_only=True)
+                            log.info("Refreshed explorer tab plots (pen-only update)")
+                    else:
+                        # Fallback to pen-only update
+                        log.info("No _needs_full_plot_update method - using fallback pen-only update")
+                        self.explorer_tab._update_plot(pen_only=True)
+                        log.info("Refreshed explorer tab plots (pen-only update, fallback)")
+                else:
+                    log.warning("Explorer tab does not have _update_plot method")
+            else:
+                log.info("No explorer tab found or available")
+            
+            # Update analysis tab plots - use pen-only update for better performance
+            if hasattr(self, 'analyser_tab') and self.analyser_tab:
+                try:
+                    # Check if analyser_tab is a QTabWidget
+                    if hasattr(self.analyser_tab, 'count'):
+                        for i in range(self.analyser_tab.count()):
+                            analysis_widget = self.analyser_tab.widget(i)
+                            if hasattr(analysis_widget, '_update_plot_pens_only'):
+                                # Use pen-only update for better performance
+                                analysis_widget._update_plot_pens_only()
+                                log.debug(f"Refreshed analysis tab {i} plots (pen-only update)")
+                            elif hasattr(analysis_widget, '_plot_selected_trace'):
+                                # Fallback to full replot if pen-only update not available
+                                analysis_widget._plot_selected_trace()
+                                log.debug(f"Refreshed analysis tab {i} plots (full replot)")
+                    else:
+                        # analyser_tab might be a single widget
+                        if hasattr(self.analyser_tab, '_update_plot_pens_only'):
+                            self.analyser_tab._update_plot_pens_only()
+                            log.debug("Refreshed single analysis tab plots (pen-only update)")
+                        elif hasattr(self.analyser_tab, '_plot_selected_trace'):
+                            self.analyser_tab._plot_selected_trace()
+                            log.debug("Refreshed single analysis tab plots (full replot)")
+                except Exception as e:
+                    log.warning(f"Could not refresh analysis tabs: {e}")
+                        
+            log.info("Plot refresh complete")
+        except Exception as e:
+            log.error(f"Failed to refresh plots after preference update: {e}")
+
+    def _show_plot_customization(self):
+        """Show the plot customization dialog."""
+        try:
+            dialog = PlotCustomizationDialog(self)
+            dialog.exec()
+            log.debug("Plot customization dialog closed")
+        except Exception as e:
+            log.error(f"Failed to show plot customization dialog: {e}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open plot customization:\n{e}")
 
     # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same as previous answer ---
     # V V V (Keep methods from previous answer here) V V V

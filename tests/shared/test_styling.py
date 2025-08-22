@@ -34,50 +34,27 @@ except ImportError:
 
 # Import styling module - this should always succeed
 from Synaptipy.shared.styling import (
-    THEME, PLOT_COLORS,
+    PLOT_COLORS,
     get_trial_pen, get_average_pen, get_baseline_pen, get_response_pen, get_grid_pen,
     configure_plot_widget, apply_stylesheet,
     style_button, style_label, style_result_display, style_info_label,
-    style_error_message, get_current_theme_mode, set_theme_mode, toggle_theme_mode
+    style_error_message, get_system_theme_mode
 )
 
 
 class TestStylingConstants(unittest.TestCase):
     """Test the theme and color constants."""
     
-    def test_theme_contains_expected_colors(self):
-        """Verify THEME contains all expected color keys."""
-        expected_keys = [
-            'primary', 'secondary', 'accent', 'background', 'surface',
-            'error', 'warning', 'success', 'text_primary', 'text_secondary',
-            'text_disabled', 'trial_color', 'average_color', 'axis_color',
-            'grid_color', 'baseline_region', 'response_region'
-        ]
-        for key in expected_keys:
-            self.assertIn(key, THEME, f"Missing key {key} in THEME")
-    
     def test_plot_colors_available(self):
         """Verify PLOT_COLORS is available and contains colors."""
         self.assertIsInstance(PLOT_COLORS, list)
         self.assertGreater(len(PLOT_COLORS), 0)
     
-    def test_theme_mode_functions(self):
-        """Verify theme mode functions work correctly."""
-        # Test get_current_theme_mode
-        current = get_current_theme_mode()
-        self.assertIn(current, ['light', 'dark'])
-        
-        # Test set_theme_mode
-        set_theme_mode('light')
-        self.assertEqual(get_current_theme_mode(), 'light')
-        
-        set_theme_mode('dark')
-        self.assertEqual(get_current_theme_mode(), 'dark')
-        
-        # Test toggle_theme_mode
-        initial = get_current_theme_mode()
-        toggled = toggle_theme_mode()
-        self.assertNotEqual(initial, toggled)
+    def test_system_theme_mode_function(self):
+        """Verify system theme mode function works correctly."""
+        # Test get_system_theme_mode
+        current = get_system_theme_mode()
+        self.assertEqual(current, "auto")
 
 
 class TestStylingFunctions(unittest.TestCase):

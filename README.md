@@ -94,6 +94,16 @@ pip install -e .
 synaptipy-gui
 ```
 
+### **Plot Customization**
+The GUI now includes a **View > Plot Customization** menu that allows you to:
+- 🎨 **Customize colors** for average plots, single trials, and grid lines
+- 📏 **Adjust line widths** from 0.5 to 10 points
+- 🌫️ **Set transparency** from 20% to 100% opacity
+- 💾 **Save preferences** that persist across sessions
+- 🔄 **Reset to defaults** when needed
+
+All plotting throughout the application automatically uses your customized settings!
+
 ### **Programmatic Usage**
 ```python
 from Synaptipy.core.data_model import Recording
