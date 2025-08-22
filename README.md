@@ -11,7 +11,10 @@
 **Synaptipy now uses environment.yml for EXACT environment replication - just like DeepLabCut!**
 
 ```bash
-# Single command installation - gets EXACT environment from working synaptipy!
+# CRITICAL: Use environment.yml FIRST, then pip install -e .
+# This ensures Qt6 system libraries are properly installed
+conda env create -f environment.yml
+conda activate synaptipy
 pip install -e .
 ```
 
@@ -22,23 +25,54 @@ pip install -e .
 
 ## 📦 Installation
 
-### 🚀 **One-Command Installation (Recommended)**
+### 🚨 **IMPORTANT: Two-Step Installation Required**
+
+**The `pip install -e .` command alone is NOT sufficient!** It only installs the Python package, not the Qt6 system libraries needed for plotting.
+
+### 🚀 **Step 1: Create Environment from environment.yml (REQUIRED)**
 
 ```bash
 # Clone the repository
 git clone https://github.com/anzalks/synaptipy.git
 cd synaptipy
 
-# Single command installation - everything is automatic!
+# CRITICAL: Create environment from environment.yml FIRST
+conda env create -f environment.yml
+
+# Activate the environment
+conda activate synaptipy
+```
+
+### 🚀 **Step 2: Install Synaptipy Package (REQUIRED)**
+
+```bash
+# After activating the environment, install the package
 pip install -e .
 ```
 
-**That's it!** The setup automatically:
-1. ✅ **Removes any conflicting pip-installed PySide6 packages** that cause Qt issues
-2. ✅ Installs EXACT environment from environment.yml
-3. ✅ Gets ALL packages with exact versions from working synaptipy environment
-4. ✅ Verifies environment matches perfectly
-5. ✅ Ensures full GUI functionality with proper plotting
+**That's it!** The two-step process ensures:
+1. ✅ **Qt6 system libraries** installed via conda (PySide6, Qt6, etc.)
+2. ✅ **Python packages** installed via pip (numpy, scipy, neo, etc.)
+3. ✅ **Binary compatibility** between Qt6 and PySide6
+4. ✅ **Full GUI functionality** with proper plotting
+
+### ❌ **What DOESN'T Work (And Why)**
+
+```bash
+# ❌ WRONG: This only installs Python package, not Qt6 system libraries
+pip install -e .
+
+# ❌ WRONG: This creates empty environment, no Qt6
+conda create -n myenv
+conda activate myenv
+pip install -e .
+```
+
+**Why it fails:**
+- `pip install -e .` only installs Python dependencies from `pyproject.toml`
+- **Qt6 system libraries** (PySide6, Qt6) are NOT in pip dependencies
+- **Plotting fails** because Qt6 backend is missing
+- **Theme detection fails** because Qt6 system libraries are missing
 
 ### 🔧 **Alternative: Manual Environment Creation (Advanced Users)**
 
@@ -61,7 +95,7 @@ If you have multiple conda environments and want them to work identically:
 # Method 1: Use environment.yml (Recommended)
 conda env update -f environment.yml
 
-# Method 2: Use setup.py
+# Method 2: Use setup.py (NOT recommended - incomplete)
 pip install -e .
 ```
 
