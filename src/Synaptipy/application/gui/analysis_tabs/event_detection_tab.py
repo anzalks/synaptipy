@@ -487,10 +487,18 @@ class EventDetectionTab(BaseAnalysisTab):
                      log.warning(f"Unknown data source key: {source_data_key}")
 
             if time_vec is not None and data_vec is not None:
-                self.data_plot_item = self.plot_widget.plot(time_vec, data_vec, pen='k', name=data_label)
+                # Use customized single trial pen
+                try:
+                    from Synaptipy.shared.plot_customization import get_single_trial_pen
+                    pen = get_single_trial_pen()
+                    log.debug(f"[EVENT-DEBUG] Using customized single trial pen: {pen}")
+                except ImportError:
+                    pen = pg.mkPen('k')  # Fallback to black
+                    log.debug(f"[EVENT-DEBUG] Using fallback pen: {pen}")
+                
+                self.data_plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen, name=data_label)
                 # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
                 if self.data_plot_item:
-                    pen = pg.mkPen('k')
                     self.data_plot_item.setPen(pen)
                     log.info(f"[EVENT-DEBUG] Data plot pen applied: {pen}")
                     log.info(f"[EVENT-DETECTION] Plot data successfully added to widget")
