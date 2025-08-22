@@ -34,10 +34,11 @@ pip install -e .
 ```
 
 **That's it!** The setup automatically:
-1. ✅ Installs EXACT environment from environment.yml
-2. ✅ Gets ALL packages with exact versions from working synaptipy environment
-3. ✅ Verifies environment matches perfectly
-4. ✅ Ensures full GUI functionality
+1. ✅ **Removes any conflicting pip-installed PySide6 packages** that cause Qt issues
+2. ✅ Installs EXACT environment from environment.yml
+3. ✅ Gets ALL packages with exact versions from working synaptipy environment
+4. ✅ Verifies environment matches perfectly
+5. ✅ Ensures full GUI functionality with proper plotting
 
 ### 🔧 **Alternative: Manual Environment Creation (Advanced Users)**
 
@@ -63,6 +64,29 @@ conda env update -f environment.yml
 # Method 2: Use setup.py
 pip install -e .
 ```
+
+## 🚨 **Troubleshooting: PySide6 Issues**
+
+### **Automatic Fix (Recommended)**
+The setup now **automatically detects and fixes** PySide6 conflicts:
+```bash
+pip install -e .  # Automatically removes conflicting packages and installs correct ones
+```
+
+### **Manual Fix (If Needed)**
+If you encounter plotting issues or Qt errors:
+```bash
+# Remove conflicting pip-installed packages
+pip uninstall pyside6 pyside6-addons pyside6-essentials shiboken6 -y
+
+# Install correct versions via conda
+conda install -c conda-forge pyside6=6.7.3
+```
+
+### **Why This Happens**
+- **pip-installed PySide6**: Causes Qt binary compatibility issues → plotting fails
+- **conda-installed PySide6**: Properly linked to Qt system libraries → plotting works
+- **Our setup**: Automatically ensures conda installation for compatibility
 
 ## 🚀 Quick Start
 

@@ -31,6 +31,10 @@ def install_exact_environment():
         print("🔄 This will install ALL packages with exact versions from working synaptipy env")
         print("🎯 PySide6 versions are pinned to match Qt system libraries (6.7.3)")
         
+        # CRITICAL: First remove any pip-installed PySide6 packages that cause conflicts
+        print("🧹 Cleaning up any conflicting pip-installed PySide6 packages...")
+        cleanup_pyside6_conflicts()
+        
         # Install the exact environment
         subprocess.run([
             "conda", "env", "update", "-f", "environment.yml"
@@ -89,6 +93,51 @@ def install_environment_manually():
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
         return False
+
+def cleanup_pyside6_conflicts():
+    """Automatically remove pip-installed PySide6 packages that cause Qt conflicts."""
+    print("🧹 Checking for conflicting PySide6 packages...")
+    
+    try:
+        # List of PySide6 packages that cause conflicts when installed via pip
+        conflicting_packages = [
+            "pyside6", "pyside6-addons", "pyside6-essentials", "shiboken6"
+        ]
+        
+        # Check if any are installed via pip
+        import subprocess
+        result = subprocess.run([
+            sys.executable, "-m", "pip", "list", "--format=freeze"
+        ], capture_output=True, text=True, check=True)
+        
+        installed_packages = result.stdout.lower()
+        conflicts_found = []
+        
+        for package in conflicting_packages:
+            if package.lower() in installed_packages:
+                conflicts_found.append(package)
+        
+        if conflicts_found:
+            print(f"⚠️  Found conflicting pip-installed packages: {', '.join(conflicts_found)}")
+            print("🧹 Removing them to prevent Qt binary compatibility issues...")
+            
+            # Uninstall conflicting packages
+            for package in conflicts_found:
+                try:
+                    subprocess.run([
+                        sys.executable, "-m", "pip", "uninstall", package, "-y"
+                    ], check=True, capture_output=True)
+                    print(f"✅ Removed {package}")
+                except subprocess.CalledProcessError:
+                    print(f"⚠️  Could not remove {package} (may not be installed)")
+            
+            print("🎯 Conflicting packages removed. PySide6 will be installed via conda.")
+        else:
+            print("✅ No conflicting PySide6 packages found.")
+            
+    except Exception as e:
+        print(f"⚠️  Could not check for conflicting packages: {e}")
+        print("💡 Continuing with installation...")
 
 def verify_environment():
     """Verify that the environment matches the working synaptipy environment."""
@@ -184,9 +233,9 @@ if __name__ == "__main__":
         package_dir={"": "src"},
         install_requires=[
             # These are the minimum requirements - actual installation happens via environment.yml
-            # PySide6 versions are pinned to match Qt system libraries exactly
+            # CRITICAL: PySide6 is NOT installed via pip - it comes from conda environment
+            # Installing via pip causes Qt binary compatibility issues and plotting failures
             "numpy>=2.0.2",
-            "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
             "pyqtgraph>=0.13.7",
             "neo>=0.14.2",
             "scipy>=1.13.1",
@@ -208,12 +257,12 @@ if __name__ == "__main__":
                 "sphinx-rtd-theme",
             ],
             "gui": [
-                "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+                # CRITICAL: PySide6 is NOT installed via pip - it comes from conda environment
                 "pyqtgraph>=0.13.7",
             ],
             "full": [
                 "numpy>=2.0.2",
-                "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+                # CRITICAL: PySide6 is NOT installed via pip - it comes from conda environment
                 "pyqtgraph>=0.13.7",
                 "neo>=0.14.2",
                 "scipy>=1.13.1",
