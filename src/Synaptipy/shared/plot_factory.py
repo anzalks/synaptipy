@@ -14,6 +14,8 @@ from typing import Optional, Any, Dict
 from PySide6 import QtCore, QtWidgets
 import pyqtgraph as pg
 
+from .plot_customization import get_plot_customization_manager
+
 log = logging.getLogger(__name__)
 
 class SynaptipyPlotFactory:
@@ -68,6 +70,33 @@ class SynaptipyPlotFactory:
             log.error(f"Failed to create plot widget: {e}")
             # Return a basic plot widget as fallback
             return pg.PlotWidget(parent=parent)
+    
+    @staticmethod
+    def get_average_pen() -> pg.mkPen:
+        """Get pen for average plots with current customization."""
+        try:
+            return get_plot_customization_manager().get_average_pen()
+        except Exception as e:
+            log.warning(f"Failed to get average pen, using default: {e}")
+            return pg.mkPen(color='black', width=2)
+    
+    @staticmethod
+    def get_single_trial_pen() -> pg.mkPen:
+        """Get pen for single trial plots with current customization."""
+        try:
+            return get_plot_customization_manager().get_single_trial_pen()
+        except Exception as e:
+            log.warning(f"Failed to get single trial pen, using default: {e}")
+            return pg.mkPen(color='blue', width=1)
+    
+    @staticmethod
+    def get_grid_pen() -> pg.mkPen:
+        """Get pen for grid lines with current customization."""
+        try:
+            return get_plot_customization_manager().get_grid_pen()
+        except Exception as e:
+            log.warning(f"Failed to get grid pen, using default: {e}")
+            return pg.mkPen(color='gray', width=1, alpha=0.3)
     
     @staticmethod
     def _configure_grid_safe(plot_widget: pg.PlotWidget) -> None:

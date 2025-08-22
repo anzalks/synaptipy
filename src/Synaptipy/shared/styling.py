@@ -57,11 +57,19 @@ def apply_stylesheet(app: QtWidgets.QApplication) -> QtWidgets.QApplication:
 
 def get_trial_pen():
     """Get pen for trial data."""
-    return pg.mkPen(color='b', width=1)
+    try:
+        from .plot_customization import get_single_trial_pen
+        return get_single_trial_pen()
+    except ImportError:
+        return pg.mkPen(color='b', width=1)
 
 def get_average_pen():
     """Get pen for average data."""
-    return pg.mkPen(color='k', width=2)
+    try:
+        from .plot_customization import get_average_pen
+        return get_average_pen()
+    except ImportError:
+        return pg.mkPen(color='k', width=2)
 
 def get_baseline_pen():
     """Get pen for baseline data."""
@@ -76,7 +84,14 @@ def configure_plot_widget(plot_widget):
     try:
         # Only configure if not already configured
         if not hasattr(plot_widget, '_synaptipy_configured'):
-            plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            # Try to use customized grid settings
+            try:
+                from .plot_customization import get_grid_pen
+                grid_pen = get_grid_pen()
+                plot_widget.showGrid(x=True, y=True, alpha=grid_pen.alpha() if hasattr(grid_pen, 'alpha') else 0.3)
+            except ImportError:
+                plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
             plot_widget.setBackground('w')  # White background for plots
             plot_widget._synaptipy_configured = True
             
