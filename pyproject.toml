@@ -26,6 +26,13 @@ dependencies = [
     # --- Export ---
     "pynwb>=3.1.2",
     "tzlocal>=5.3.1", # Recommended for timezone handling in NWB
+    # --- Data Processing ---
+    "h5py>=3.14.0",
+    "hdmf>=4.1.0",
+    "jsonschema>=4.25.1",
+    "quantities>=0.16.2",
+    "referencing>=0.36.2",
+    "pandas>=2.3.1",
 ]
 
 # ==============================================================================
@@ -38,10 +45,14 @@ dependencies = [
 # ✅ INTELLIGENT DEPENDENCY RESOLUTION
 #
 # The environment.yml automatically:
-# 1. Installs Qt6 system libraries via conda-forge with EXACT versions (6.7.3)
-# 2. Installs Python packages via pip with EXACT versions
-# 3. Ensures PySide6 versions match Qt system libraries exactly
-# 4. Prevents Qt platform plugin and DLL loading issues
+# 1. Installs Qt6 system libraries via defaults channel with EXACT versions (6.7.3)
+# 2. Installs PySide6 via defaults channel to match Qt6 (binary compatibility)
+# 3. Installs Python packages via pip with EXACT versions
+# 4. Ensures PySide6 versions match Qt system libraries exactly
+# 5. Prevents Qt platform plugin and DLL loading issues
+#
+# CRITICAL: Qt6 and PySide6 MUST come from SAME channel (defaults) for Windows
+# This matches the working environment and prevents binary compatibility issues
 
 [project.scripts]
 synaptipy-gui = "Synaptipy.application.__main__:run_gui"
@@ -71,21 +82,25 @@ dev = [
     "sphinx-rtd-theme",
 ]
 
-# GUI-specific dependencies (already included in main dependencies)
+# GUI-specific dependencies (PySide6 comes from conda environment)
 gui = [
-    "PySide6>=6.5.0",
-    "pyqtgraph>=0.13.3",
+    "pyqtgraph>=0.13.7",
 ]
 
-# Full installation with all dependencies
+# Full installation with all dependencies (PySide6 comes from conda environment)
 full = [
-    "numpy>=1.23.5",
-    "PySide6>=6.5.0",
-    "pyqtgraph>=0.13.3",
-    "neo>=0.12.0",
-    "scipy",
-    "pynwb>=2.5.0",
-    "tzlocal",
+    "numpy>=2.0.2",
+    "pyqtgraph>=0.13.7",
+    "neo>=0.14.2",
+    "scipy>=1.13.1",
+    "pynwb>=3.1.2",
+    "tzlocal>=5.3.1",
+    "h5py>=3.14.0",
+    "hdmf>=4.1.0",
+    "jsonschema>=4.25.1",
+    "quantities>=0.16.2",
+    "referencing>=0.36.2",
+    "pandas>=2.3.1",
 ]
 
 # Testing dependencies
@@ -124,7 +139,7 @@ Issues = "https://github.com/anzalks/synaptipy/issues"
 # 🔧 EXACT VERSION REPLICATION:
 #    All packages are installed with EXACT versions from working synaptipy environment
 #    - Qt6 system libraries: conda-forge (qt=6.7.3, pyqtgraph=0.13.7)
-#    - PySide6 Python bindings: pip (pyside6==6.7.3, exact match with Qt)
+#    - PySide6 Python bindings: conda (pyside6=6.7.3, exact match with Qt)
 #    - Python packages: pip (numpy=2.0.2, scipy=1.13.1, neo=0.14.2, pynwb=3.1.2)
 #
 # 📦 ENVIRONMENT SETUP:
