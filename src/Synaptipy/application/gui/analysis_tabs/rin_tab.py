@@ -1076,8 +1076,15 @@ class RinAnalysisTab(BaseAnalysisTab):
             response_end = response_start + 0.2 * time_range
             self.response_region.setRegion([response_start, response_end])
 
-        # Plot the main data trace - keep the original black color
-        pen = pg.mkPen(color=(0, 0, 0), width=1)  # Original black pen
+        # Plot the main data trace - use customized average pen
+        try:
+            from Synaptipy.shared.plot_customization import get_average_pen
+            pen = get_average_pen()
+            log.debug(f"[RIN-DEBUG] Using customized average pen: {pen}")
+        except ImportError:
+            pen = pg.mkPen(color=(0, 0, 0), width=1)  # Fallback to original black pen
+            log.debug(f"[RIN-DEBUG] Using fallback pen: {pen}")
+        
         self.plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen)
         # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
         if self.plot_item:
