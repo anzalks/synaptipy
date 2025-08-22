@@ -16,7 +16,9 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy>=2.0.2",
     # --- GUI and Plotting ---
-    "PySide6==6.7.3",  # EXACT VERSION - must match Qt system libraries
+    # CRITICAL: PySide6 is NOT installed via pip - it comes from conda environment
+    # Installing via pip causes Qt binary compatibility issues and plotting failures
+    # Use environment.yml for full installation: conda env create -f environment.yml
     "pyqtgraph>=0.13.7",
     # --- Core/Infra ---
     "neo>=0.14.2",
