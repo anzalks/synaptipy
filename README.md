@@ -6,96 +6,63 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 
-## 🚀 **NEW: DeepLabCut-Style Installation!**
+## 🚀 **NEW: One-Command Installation!**
 
-**Synaptipy now uses environment.yml for EXACT environment replication - just like DeepLabCut!**
+**Synaptipy now installs everything automatically with a single command!**
 
 ```bash
-# CRITICAL: Use environment.yml FIRST, then pip install -e .
-# This ensures Qt6 system libraries are properly installed
-conda env create -f environment.yml
-conda activate synaptipy
+# Single command installation - everything is automatic!
 pip install -e .
 ```
 
-✅ **Exact environment replication** via environment.yml  
-✅ **All packages with exact versions** from working synaptipy environment  
+✅ **Automatic environment creation** from environment.yml  
+✅ **All Qt6 system libraries** installed automatically  
+✅ **All Python packages** with exact versions  
 ✅ **No more dependency conflicts** - perfect match every time  
 ✅ **Works on Windows, macOS, and Linux**  
 
 ## 📦 Installation
 
-### 🚨 **IMPORTANT: Two-Step Installation Required**
-
-**The `pip install -e .` command alone is NOT sufficient!** It only installs the Python package, not the Qt6 system libraries needed for plotting.
-
-### 🚀 **Step 1: Create Environment from environment.yml (REQUIRED)**
+### 🚀 **One-Command Installation (Recommended)**
 
 ```bash
 # Clone the repository
 git clone https://github.com/anzalks/synaptipy.git
 cd synaptipy
 
-# CRITICAL: Create environment from environment.yml FIRST
-conda env create -f environment.yml
-
-# Activate the environment
-conda activate synaptipy
-```
-
-### 🚀 **Step 2: Install Synaptipy Package (REQUIRED)**
-
-```bash
-# After activating the environment, install the package
+# Single command installation - everything is automatic!
 pip install -e .
 ```
 
-**That's it!** The two-step process ensures:
-1. ✅ **Qt6 system libraries** installed via conda (PySide6, Qt6, etc.)
-2. ✅ **Python packages** installed via pip (numpy, scipy, neo, etc.)
-3. ✅ **Binary compatibility** between Qt6 and PySide6
-4. ✅ **Full GUI functionality** with proper plotting
+**That's it!** The setup automatically:
+1. ✅ **Creates synaptipy environment** from environment.yml
+2. ✅ **Installs Qt6 system libraries** (PySide6, Qt6, etc.) via conda
+3. ✅ **Installs scientific computing packages** (numpy, scipy, etc.) via conda
+4. ✅ **Installs Python packages** (neo, pynwb, etc.) via pip
+5. ✅ **Installs Synaptipy package** in development mode
+6. ✅ **Ensures binary compatibility** between Qt6 and PySide6
+7. ✅ **Makes synaptipy-gui command available**
 
-### ❌ **What DOESN'T Work (And Why)**
+### 🚀 **What Happens During Installation:**
 
-```bash
-# ❌ WRONG: This only installs Python package, not Qt6 system libraries
-pip install -e .
+When you run `pip install -e .`, the setup automatically:
 
-# ❌ WRONG: This creates empty environment, no Qt6
-conda create -n myenv
-conda activate myenv
-pip install -e .
-```
-
-**Why it fails:**
-- `pip install -e .` only installs Python dependencies from `pyproject.toml`
-- **Qt6 system libraries** (PySide6, Qt6) are NOT in pip dependencies
-- **Plotting fails** because Qt6 backend is missing
-- **Theme detection fails** because Qt6 system libraries are missing
+- **🔧 Environment Setup**: Creates `synaptipy` environment from `environment.yml`
+- **🎨 Qt6 Installation**: Installs Qt6 system libraries and PySide6 Python bindings
+- **🧮 Scientific Computing**: Installs optimized numpy, scipy, and PyQtGraph
+- **📦 Python Packages**: Installs neo, pynwb, and other dependencies
+- **✅ Verification**: Checks that everything is properly installed and compatible
 
 ### 🔧 **Alternative: Manual Environment Creation (Advanced Users)**
 
-```bash
-# Create environment with exact Python version
-conda create -n synaptipy python=3.9
-
-# Install exact environment from environment.yml
-conda env update -f environment.yml
-
-# Install Synaptipy in development mode
-pip install -e .
-```
-
-### 🔧 **Environment Consistency Setup (For Multiple Environments)**
-
-If you have multiple conda environments and want them to work identically:
+If you prefer manual control:
 
 ```bash
-# Method 1: Use environment.yml (Recommended)
-conda env update -f environment.yml
+# Create synaptipy environment manually
+conda env create -n synaptipy -f environment.yml
 
-# Method 2: Use setup.py (NOT recommended - incomplete)
+# Activate and install
+conda activate synaptipy
 pip install -e .
 ```
 
@@ -107,16 +74,6 @@ The setup now **automatically detects and fixes** PySide6 conflicts:
 pip install -e .  # Automatically removes conflicting packages and installs correct ones
 ```
 
-### **Manual Fix (If Needed)**
-If you encounter plotting issues or Qt errors:
-```bash
-# Remove conflicting pip-installed packages
-pip uninstall pyside6 pyside6-addons pyside6-essentials shiboken6 -y
-
-# Install correct versions via conda
-conda install -c conda-forge pyside6=6.7.3
-```
-
 ### **Why This Happens**
 - **pip-installed PySide6**: Causes Qt binary compatibility issues → plotting fails
 - **conda-installed PySide6**: Properly linked to Qt system libraries → plotting works
@@ -124,9 +81,16 @@ conda install -c conda-forge pyside6=6.7.3
 
 ## 🚀 Quick Start
 
-### **Launch GUI Application**
+### **Installation & Launch**
 ```bash
-# After installation, simply run:
+# 1. Clone and enter repository
+git clone https://github.com/anzalks/synaptipy.git
+cd synaptipy
+
+# 2. Install everything automatically (creates synaptipy environment)
+pip install -e .
+
+# 3. Launch the GUI
 synaptipy-gui
 ```
 
@@ -154,7 +118,7 @@ synaptipy-gui
 # PowerShell
 synaptipy-gui
 
-# With conda
+# With conda (synaptipy environment)
 conda run -n synaptipy synaptipy-gui
 ```
 
@@ -163,7 +127,7 @@ conda run -n synaptipy synaptipy-gui
 # Terminal
 synaptipy-gui
 
-# With conda
+# With conda (synaptipy environment)
 conda run -n synaptipy synaptipy-gui
 
 # Python module
@@ -175,7 +139,7 @@ python -m Synaptipy.application
 # Terminal
 synaptipy-gui
 
-# With conda
+# With conda (synaptipy environment)
 conda run -n synaptipy synaptipy-gui
 
 # Python module
@@ -219,10 +183,7 @@ pytest tests/application/gui/
 
 ### **Windows**
 ```cmd
-# Activate environment
-conda activate synaptipy
-
-# Install in development mode
+# Install everything automatically
 pip install -e .
 
 # Run tests
@@ -231,10 +192,7 @@ pytest
 
 ### **macOS/Linux**
 ```bash
-# Activate environment
-conda activate synaptipy
-
-# Install in development mode
+# Install everything automatically
 pip install -e .
 
 # Run tests
@@ -276,9 +234,9 @@ setup_logging(log_dir="/path/to/custom/logs")
 
 ### **Qt6/File Operation Issues**
 - **Problem**: File dialogs don't work or GUI is broken
-- **Solution**: The setup automatically installs ALL dependencies via conda-forge - if issues persist, run:
+- **Solution**: The setup automatically installs ALL dependencies - if issues persist, run:
   ```bash
-  conda install -c conda-forge qt pyside6 pyqtgraph numpy scipy neo pynwb tzlocal
+  conda env update -n synaptipy -f environment.yml
   ```
 
 ## 🤝 Contributing
@@ -289,7 +247,11 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
 cd synaptipy
+
+# Install everything automatically (including dev dependencies)
 pip install -e ".[dev]"
+
+# Run tests
 pytest
 ```
 
@@ -349,6 +311,7 @@ exporter.export_recording(recording, "output.nwb")
 
 **What's New in Current Version:**
 - ✅ **One-command installation** with automatic Qt6 handling
+- ✅ **Automatic environment creation** from environment.yml
 - ✅ **Cross-platform compatibility** (Windows, macOS, Linux)
 - ✅ **Intelligent system theme detection** and native styling
 - ✅ **Welcome screen** with progress tracking
