@@ -61,9 +61,9 @@ def install_environment_manually():
     print("🔧 Installing environment manually...")
     
     try:
-        # Install Qt6 and core packages via conda-forge
-        print("📦 Installing Qt6 and core packages via conda-forge...")
-        print("🎯 Note: PySide6 will be installed via pip to ensure version matching")
+        # Install Qt6 and core packages via conda
+        print("📦 Installing Qt6 and core packages via conda...")
+        print("🎯 Note: Qt6 and PySide6 come from defaults channel for Windows compatibility")
         conda_packages = [
             "python=3.9.23",
             "qt=6.7.3",
@@ -73,6 +73,13 @@ def install_environment_manually():
             "pip=25.1"
         ]
         
+        # Install Qt6 from defaults channel (matches working environment)
+        subprocess.run([
+            "conda", "install", "-c", "defaults", 
+            "qt=6.7.3", "pyside6=6.7.3", "-y"
+        ], check=True)
+        
+        # Install other packages from conda-forge
         subprocess.run([
             "conda", "install", "-c", "conda-forge", 
             *conda_packages, "-y"
@@ -241,6 +248,13 @@ if __name__ == "__main__":
             "scipy>=1.13.1",
             "pynwb>=3.1.2",
             "tzlocal>=5.3.1",
+            # Data processing dependencies
+            "h5py>=3.14.0",
+            "hdmf>=4.1.0",
+            "jsonschema>=4.25.1",
+            "quantities>=0.16.2",
+            "referencing>=0.36.2",
+            "pandas>=2.3.1",
         ],
         extras_require={
             "dev": [
@@ -268,6 +282,12 @@ if __name__ == "__main__":
                 "scipy>=1.13.1",
                 "pynwb>=3.1.2",
                 "tzlocal>=5.3.1",
+                "h5py>=3.14.0",
+                "hdmf>=4.1.0",
+                "jsonschema>=4.25.1",
+                "quantities>=0.16.2",
+                "referencing>=0.36.2",
+                "pandas>=2.3.1",
             ],
         },
         cmdclass={
