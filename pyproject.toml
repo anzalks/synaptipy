@@ -5,7 +5,7 @@ description = "Electrophysiology Visualization Suite"
 requires-python = ">=3.9"
 
 # ==============================================================================
-# COMPLETE DEPENDENCY MANAGEMENT
+# CROSS-PLATFORM DEPENDENCY MANAGEMENT
 # ==============================================================================
 # 
 # This project automatically creates the complete environment during pip install
@@ -13,6 +13,15 @@ requires-python = ">=3.9"
 # 
 # CRITICAL: pip install -e . automatically handles everything!
 # This ensures Qt6 system libraries are properly installed via conda
+# 
+# CROSS-PLATFORM APPROACH:
+# - Single environment.yml handles Windows, macOS, and Linux automatically
+# - Conda automatically installs OS-specific packages (ucrt, libcxx, libstdcxx-ng, etc.)
+# - No OS-specific dependencies in pyproject.toml or setup.py
+# - Everything works on all platforms without modification
+# 
+# The setup.py automatically detects the OS and handles environment creation
+# while preserving source locks and versions across all platforms.
 dependencies = [
     "numpy>=2.0.2",
     # --- GUI and Plotting ---
@@ -31,7 +40,7 @@ dependencies = [
     "hdmf>=4.1.0",
     "jsonschema>=4.25.1",
     "quantities>=0.16.2",
-    "referencing>=0.36.2",
+    "referencing>=0.36.0",
     "pandas>=2.3.1",
 ]
 
@@ -40,20 +49,24 @@ dependencies = [
 # ==============================================================================
 # 
 # ✅ ONE-COMMAND INSTALLATION: pip install -e .
-# ✅ AUTOMATIC ENVIRONMENT CREATION from environment.yml
+# ✅ AUTOMATIC ENVIRONMENT CREATION from single environment.yml
 # ✅ EXACT VERSION REPLICATION from working synaptipy environment
 # ✅ CROSS-PLATFORM SUPPORT (Windows, macOS, Linux)
 # ✅ INTELLIGENT DEPENDENCY RESOLUTION
+# ✅ OS-SPECIFIC PACKAGE HANDLING (automatic via conda)
 #
 # The setup automatically:
 # 1. Creates synaptipy environment from environment.yml
-# 2. Installs Qt6 system libraries via conda with EXACT versions (6.7.3)
-# 3. Installs PySide6 via conda to match Qt6 (binary compatibility)
-# 4. Installs Python packages via pip with EXACT versions
-# 5. Ensures PySide6 versions match Qt system libraries exactly
-# 6. Prevents Qt platform plugin and DLL loading issues
+# 2. Conda automatically handles OS-specific packages (ucrt, libcxx, libstdcxx-ng, etc.)
+# 3. Installs Qt6 system libraries via conda with EXACT versions (6.7.3)
+# 4. Installs PySide6 via conda to match Qt6 (binary compatibility)
+# 5. Installs Python packages via pip with EXACT versions
+# 6. Ensures PySide6 versions match Qt system libraries exactly
+# 7. Prevents Qt platform plugin and DLL loading issues
+# 8. Preserves source locks and versions across all platforms
+# 9. Works on Windows, macOS, and Linux without modification
 #
-# CRITICAL: Qt6 and PySide6 come from controlled sources for Windows compatibility
+# CRITICAL: Qt6 and PySide6 come from controlled sources for cross-platform compatibility
 # This matches the working environment and prevents binary compatibility issues
 
 [project.scripts]
@@ -101,20 +114,12 @@ full = [
     "hdmf>=4.1.0",
     "jsonschema>=4.25.1",
     "quantities>=0.16.2",
-    "referencing>=0.36.2",
+    "referencing>=0.36.0",
     "pandas>=2.3.1",
 ]
 
-# Testing dependencies
-test = [
-    "pytest>=7.0.0",
-    "pytest-qt>=4.0.0",
-    "pytest-mock",
-    "pytest-cov",
-]
-
 # ==============================================================================
-# BUILD SYSTEM CONFIGURATION
+# BUILD SYSTEM
 # ==============================================================================
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -127,29 +132,13 @@ build-backend = "setuptools.build_meta"
 Homepage = "https://github.com/anzalks/synaptipy"
 Repository = "https://github.com/anzalks/synaptipy"
 Documentation = "https://github.com/anzalks/synaptipy/docs"
-Issues = "https://github.com/anzalks/synaptipy/issues"
+"Bug Tracker" = "https://github.com/anzalks/synaptipy/issues"
 
 # ==============================================================================
-# INSTALLATION INSTRUCTIONS
+# TOOL CONFIGURATION
 # ==============================================================================
-# 
-# 🚀 RECOMMENDED INSTALLATION:
-#    pip install -e .
-#
-# 🔧 MANUAL ENVIRONMENT CREATION (if needed):
-#    conda env create -n synaptipy -f environment.yml
-#
-# 🔧 EXACT VERSION REPLICATION:
-#    All packages are installed with EXACT versions from working synaptipy environment
-#    - Qt6 system libraries: conda-forge (qt=6.7.3, pyqtgraph=0.13.7)
-#    - PySide6 Python bindings: conda (pyside6=6.7.3, exact match with Qt)
-#    - Python packages: pip (numpy=2.0.2, scipy=1.13.1, neo=0.14.2, pynwb=3.1.2)
-#
-# 📦 ENVIRONMENT SETUP:
-#    conda env create -f environment.yml -n myenv
-#    conda activate myenv
-#    pip install -e .
-#
-# ✅ VERIFICATION:
-#    The environment.yml ensures all package versions match exactly
-#    PySide6 versions are pinned to prevent Qt platform plugin errors
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yml", "*.yaml", "*.txt"]

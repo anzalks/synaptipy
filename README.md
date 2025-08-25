@@ -6,20 +6,21 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
 
-## 🚀 **NEW: One-Command Installation!**
+## �� **NEW: One-Command Cross-Platform Installation!**
 
-**Synaptipy now installs everything automatically with a single command!**
+**Synaptipy now installs everything automatically on any OS with a single command!**
 
 ```bash
-# Single command installation - everything is automatic!
+# Single command installation - works on Windows, macOS, and Linux!
 pip install -e .
 ```
 
-✅ **Automatic environment creation** from environment.yml  
+✅ **Automatic environment creation** from single environment.yml  
 ✅ **All Qt6 system libraries** installed automatically  
+✅ **OS-specific packages** handled automatically by conda  
 ✅ **All Python packages** with exact versions  
 ✅ **No more dependency conflicts** - perfect match every time  
-✅ **Works on Windows, macOS, and Linux**  
+✅ **Works on Windows, macOS, and Linux** without modification  
 
 ## 📦 Installation
 
@@ -37,17 +38,29 @@ pip install -e .
 **That's it!** The setup automatically:
 1. ✅ **Creates synaptipy environment** from environment.yml
 2. ✅ **Installs Qt6 system libraries** (PySide6, Qt6, etc.) via conda
-3. ✅ **Installs scientific computing packages** (numpy, scipy, etc.) via conda
-4. ✅ **Installs Python packages** (neo, pynwb, etc.) via pip
-5. ✅ **Installs Synaptipy package** in development mode
-6. ✅ **Ensures binary compatibility** between Qt6 and PySide6
-7. ✅ **Makes synaptipy-gui command available**
+3. ✅ **Handles OS-specific packages** automatically (ucrt, libcxx, libstdcxx-ng, etc.)
+4. ✅ **Installs scientific computing packages** (numpy, scipy, etc.) via conda
+5. ✅ **Installs Python packages** (neo, pynwb, etc.) via pip
+6. ✅ **Installs Synaptipy package** in development mode
+7. ✅ **Ensures binary compatibility** between Qt6 and PySide6
+8. ✅ **Makes synaptipy-gui command available**
+
+### 🌍 **Cross-Platform Compatibility**
+
+**Synaptipy automatically works on all operating systems:**
+
+- **🪟 Windows**: Automatically installs ucrt, vc, vs2015_runtime, libclang13, libwinpthread
+- **🍎 macOS**: Automatically installs libcxx, libcxxabi, libobjc, libtapi, llvm-tools  
+- **🐧 Linux**: Automatically installs libstdcxx-ng, libgcc-ng, libgomp, libgfortran-ng, libgfortran5
+
+**No manual configuration needed** - conda handles everything automatically!
 
 ### 🚀 **What Happens During Installation:**
 
 When you run `pip install -e .`, the setup automatically:
 
 - **🔧 Environment Setup**: Creates `synaptipy` environment from `environment.yml`
+- **🌍 OS Detection**: Conda automatically installs platform-specific packages
 - **🎨 Qt6 Installation**: Installs Qt6 system libraries and PySide6 Python bindings
 - **🧮 Scientific Computing**: Installs optimized numpy, scipy, and PyQtGraph
 - **📦 Python Packages**: Installs neo, pynwb, and other dependencies
