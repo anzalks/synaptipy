@@ -83,7 +83,7 @@ def configure_plot_widget(plot_widget):
     """Configure plot widget with minimal styling."""
     try:
         # Only configure if not already configured
-        if not hasattr(plot_widget, '_synaptipy_configured'):
+        if not getattr(plot_widget, '_synaptipy_configured', False):
             # Try to use customized grid settings
             try:
                 from .plot_customization import get_grid_pen
@@ -97,6 +97,8 @@ def configure_plot_widget(plot_widget):
             
     except Exception as e:
         log.debug(f"Plot widget configuration failed: {e}")
+        
+    return plot_widget
 
 # ==============================================================================
 # Lazy Theme Detection (Only when needed)

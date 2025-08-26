@@ -1,86 +1,9 @@
 #!/usr/bin/env python3
 """
-Cross-platform setup for Synaptipy
-Handles all dependencies via single environment.yml while preserving source locks and versions
+Setup for Synaptipy
 """
 
-import os
-import sys
-import subprocess
-from pathlib import Path
 from setuptools import setup, find_packages
-from setuptools.command.develop import develop
-from setuptools.command.install import install
-
-# Get the directory containing this setup.py
-SETUP_DIR = Path(__file__).parent
-
-
-def create_conda_environment():
-    """Create the conda environment with all dependencies."""
-    env_name = "synaptipy"
-    
-    print("🔧 Setting up Synaptipy environment...")
-    
-    # Check if conda is available
-    try:
-        subprocess.run(["conda", "--version"], check=True, capture_output=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("Error: conda is not available. Please install Anaconda or Miniconda first.")
-        print("Visit: https://docs.conda.io/en/latest/miniconda.html")
-        sys.exit(1)
-    
-    # Check if environment already exists
-    result = subprocess.run(
-        ["conda", "env", "list"], 
-        capture_output=True, 
-        text=True, 
-        check=True
-    )
-    
-    env_exists = env_name in result.stdout
-    
-    # Environment file
-    env_file = SETUP_DIR / "environment.yml"
-    if not env_file.exists():
-        print(f"❌ Environment file not found: {env_file}")
-        return False
-    
-    try:
-        if env_exists:
-            print(f"Environment '{env_name}' already exists. Updating...")
-            subprocess.run([
-                "conda", "env", "update", "-n", env_name, "-f", str(env_file)
-            ], check=True)
-        else:
-            print(f"Creating new environment '{env_name}'...")
-            subprocess.run([
-                "conda", "env", "create", "-n", env_name, "-f", str(env_file)
-            ], check=True)
-        
-        print(f"✅ Environment '{env_name}' is ready!")
-        return True
-        
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to create/update environment: {e}")
-        return False
-
-
-class DevelopCommand(develop):
-    """Custom develop command that sets up the conda environment."""
-    
-    def run(self):
-        create_conda_environment()
-        super().run()
-
-
-class InstallCommand(install):
-    """Custom install command that sets up the conda environment."""
-    
-    def run(self):
-        create_conda_environment()
-        super().run()
-
 
 # Package configuration
 setup(
@@ -94,7 +17,7 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.9",
     
-    # Core dependencies (cross-platform)
+    # Core dependencies
     install_requires=[
         "numpy>=2.0.2",
         "pyqtgraph>=0.13.7",
@@ -149,12 +72,6 @@ setup(
         "console_scripts": [
             "synaptipy-gui=Synaptipy.application.__main__:run_gui",
         ],
-    },
-    
-    # Custom commands
-    cmdclass={
-        "develop": DevelopCommand,
-        "install": InstallCommand,
     },
     
     # Package data
