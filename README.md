@@ -1,346 +1,153 @@
-# Synaptipy 🧠
+# Synaptipy
 
-**Electrophysiology Visualization Suite** - Now available on Windows, macOS, and Linux! 🖥️ 🍎 🐧
+Electrophysiology Visualization Suite
 
-[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-brightgreen)](https://github.com/anzalks/synaptipy)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
+## 🚀 **Cross-Platform Installation (Recommended)**
 
-## �� **NEW: One-Command Cross-Platform Installation!**
+**This method works on Windows, macOS, and Linux automatically!**
 
-**Synaptipy now installs everything automatically on any OS with a single command!**
+### Prerequisites
+- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) installed
+- Python 3.11+ (automatically handled by conda)
+
+### **Option 1: Automated Installation (Easiest)**
 
 ```bash
-# Single command installation - works on Windows, macOS, and Linux!
-pip install -e .
+# Run the automated installation script
+python install.py
 ```
 
-✅ **Automatic environment creation** from single environment.yml  
-✅ **All Qt6 system libraries** installed automatically  
-✅ **OS-specific packages** handled automatically by conda  
-✅ **All Python packages** with exact versions  
-✅ **No more dependency conflicts** - perfect match every time  
-✅ **Works on Windows, macOS, and Linux** without modification  
+**This script automatically:**
+- Detects your OS (Windows/macOS/Linux)
+- Creates/updates the conda environment
+- Installs all dependencies
+- Installs Synaptipy in development mode
 
-## 📦 Installation
-
-### 🚀 **One-Command Installation (Recommended)**
+### **Option 2: Manual Installation**
 
 ```bash
-# Clone the repository
-git clone https://github.com/anzalks/synaptipy.git
-cd synaptipy
+# 1. Create conda environment (handles all OS-specific packages automatically)
+conda env create -f environment.yml
 
-# Single command installation - everything is automatic!
-pip install -e .
-```
-
-**That's it!** The setup automatically:
-1. ✅ **Creates synaptipy environment** from environment.yml
-2. ✅ **Installs Qt6 system libraries** (PySide6, Qt6, etc.) via conda
-3. ✅ **Handles OS-specific packages** automatically (ucrt, libcxx, libstdcxx-ng, etc.)
-4. ✅ **Installs scientific computing packages** (numpy, scipy, etc.) via conda
-5. ✅ **Installs Python packages** (neo, pynwb, etc.) via pip
-6. ✅ **Installs Synaptipy package** in development mode
-7. ✅ **Ensures binary compatibility** between Qt6 and PySide6
-8. ✅ **Makes synaptipy-gui command available**
-
-### 🌍 **Cross-Platform Compatibility**
-
-**Synaptipy automatically works on all operating systems:**
-
-- **🪟 Windows**: Automatically installs ucrt, vc, vs2015_runtime, libclang13, libwinpthread
-- **🍎 macOS**: Automatically installs libcxx, libcxxabi, libobjc, libtapi, llvm-tools  
-- **🐧 Linux**: Automatically installs libstdcxx-ng, libgcc-ng, libgomp, libgfortran-ng, libgfortran5
-
-**No manual configuration needed** - conda handles everything automatically!
-
-### 🚀 **What Happens During Installation:**
-
-When you run `pip install -e .`, the setup automatically:
-
-- **🔧 Environment Setup**: Creates `synaptipy` environment from `environment.yml`
-- **🌍 OS Detection**: Conda automatically installs platform-specific packages
-- **🎨 Qt6 Installation**: Installs Qt6 system libraries and PySide6 Python bindings
-- **🧮 Scientific Computing**: Installs optimized numpy, scipy, and PyQtGraph
-- **📦 Python Packages**: Installs neo, pynwb, and other dependencies
-- **✅ Verification**: Checks that everything is properly installed and compatible
-
-### 🔧 **Alternative: Manual Environment Creation (Advanced Users)**
-
-If you prefer manual control:
-
-```bash
-# Create synaptipy environment manually
-conda env create -n synaptipy -f environment.yml
-
-# Activate and install
+# 2. Activate environment
 conda activate synaptipy
+
+# 3. Install Synaptipy (only Python packages, system libs already installed)
 pip install -e .
 ```
 
-## 🚨 **Troubleshooting: PySide6 Issues**
+### **What Happens Automatically:**
 
-### **Automatic Fix (Recommended)**
-The setup now **automatically detects and fixes** PySide6 conflicts:
+- ✅ **Windows**: Installs Visual C++ runtimes, Qt6 system libraries, optimized numpy/scipy
+- ✅ **macOS**: Installs system libraries, Qt6 frameworks, optimized scientific packages  
+- ✅ **Linux**: Installs system libraries, Qt6 binaries, optimized computing packages
+
+### **Run the Application:**
+
 ```bash
-pip install -e .  # Automatically removes conflicting packages and installs correct ones
-```
-
-### **Why This Happens**
-- **pip-installed PySide6**: Causes Qt binary compatibility issues → plotting fails
-- **conda-installed PySide6**: Properly linked to Qt system libraries → plotting works
-- **Our setup**: Automatically ensures conda installation for compatibility
-
-## 🚀 Quick Start
-
-### **Installation & Launch**
-```bash
-# 1. Clone and enter repository
-git clone https://github.com/anzalks/synaptipy.git
-cd synaptipy
-
-# 2. Install everything automatically (creates synaptipy environment)
-pip install -e .
-
-# 3. Launch the GUI
-synaptipy-gui
-```
-
-### **Plot Customization**
-The GUI now includes a **View > Plot Customization** menu that allows you to:
-- 🎨 **Customize colors** for average plots, single trials, and grid lines
-- 📏 **Adjust line widths** from 0.5 to 10 points
-- 🌫️ **Set transparency** from 20% to 100% opacity
-- 💾 **Save preferences** that persist across sessions
-- 🔄 **Reset to defaults** when needed
-
-All plotting throughout the application automatically uses your customized settings!
-
-### **Programmatic Usage**
-```python
-from Synaptipy.core.data_model import Recording
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
-
-# Load data
-adapter = NeoAdapter()
-recording = adapter.read_file("your_data.abf")
-
-# Analyze
-print(f"Loaded {len(recording.channels)} channels")
-print(f"Duration: {recording.duration:.2f} seconds")
-```
-
-## 🖥️ **Cross-Platform Commands**
-
-### **Windows**
-```cmd
-# Command Prompt
+# Launch the GUI
 synaptipy-gui
 
-# PowerShell
-synaptipy-gui
-
-# With conda (synaptipy environment)
-conda run -n synaptipy synaptipy-gui
+# Or run tests
+python -m pytest
 ```
 
-### **macOS**
+## 🌍 **Cross-Platform Compatibility**
+
+### **Automatic OS-Specific Package Resolution:**
+- **Windows**: `ucrt`, `vc`, `vs2015_runtime`, `libclang13`, `libwinpthread`
+- **macOS**: `libcxx`, `libcxxabi`, `libobjc`, `libtapi`, `llvm-tools`
+- **Linux**: `libstdcxx-ng`, `libgcc-ng`, `libgomp`, `libgfortran-ng`
+
+### **No Manual Configuration Required:**
+- Conda automatically detects your OS and installs appropriate packages
+- Binary compatibility issues are resolved automatically
+- All dependencies are properly linked for your platform
+
+## 📦 **What's Included**
+
+The `environment.yml` file contains all necessary dependencies:
+
+### **Core System (conda):**
+- **Python**: 3.11 with optimized runtime
+- **Scientific**: numpy 2.0.2, scipy 1.13.1 (MKL-optimized)
+- **GUI**: Qt6 6.7.3, PySide6 6.7.3, pyqtgraph 0.13.7
+- **System Libraries**: All OS-specific runtimes and dependencies
+
+### **Python Packages (pip):**
+- **Data**: neo 0.14.2, pynwb 3.1.2, h5py 3.14.0, pandas 2.3.1
+- **Utilities**: attrs 25.3.0, jsonschema 4.25.1, quantities 0.16.2
+- **Testing**: pytest, pytest-qt, pytest-mock (via extras_require["dev"])
+
+## 🔧 **Alternative Installation Methods**
+
+### **Development Installation (with test dependencies):**
 ```bash
-# Terminal
-synaptipy-gui
-
-# With conda (synaptipy environment)
-conda run -n synaptipy synaptipy-gui
-
-# Python module
-python -m Synaptipy.application
-```
-
-### **Linux**
-```bash
-# Terminal
-synaptipy-gui
-
-# With conda (synaptipy environment)
-conda run -n synaptipy synaptipy-gui
-
-# Python module
-python -m Synaptipy.application
-```
-
-## 📊 Screenshots
-
-### **Welcome Screen**
-*Beautiful loading interface with brain icon and progress tracking*
-
-### **Main Interface**
-*Clean, modern UI with system-native styling*
-
-### **Analysis Tools**
-*Comprehensive electrophysiology analysis capabilities*
-
-*Note: New screenshots will be added as features are developed*
-
-## 📚 Documentation
-
-- **[User Guide](docs/user_guide.md)**: Complete user manual
-- **[API Reference](docs/api_reference.md)**: Developer documentation
-- **[Developer Guide](docs/developer_guide.md)**: Contributing guidelines
-- **[Styling Guide](docs/development/styling_guide.md)**: UI/UX standards
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src
-
-# Run GUI tests
-pytest tests/application/gui/
-```
-
-## 🔧 Development Mode
-
-### **Windows**
-```cmd
-# Install everything automatically
-pip install -e .
-
-# Run tests
-pytest
-```
-
-### **macOS/Linux**
-```bash
-# Install everything automatically
-pip install -e .
-
-# Run tests
-pytest
-```
-
-## 📝 Logs
-
-### **Default Log Locations**
-- **Windows**: `%USERPROFILE%\AppData\Local\synaptipy\logs\`
-- **macOS**: `~/Library/Logs/synaptipy/`
-- **Linux**: `~/.local/share/synaptipy/logs/`
-
-### **Custom Log Directory**
-```python
-import logging
-from Synaptipy.shared.logging_config import setup_logging
-
-# Set custom log directory
-setup_logging(log_dir="/path/to/custom/logs")
-```
-
-## 🆘 Troubleshooting
-
-### **Theme/Styling Issues**
-- **Problem**: UI looks different than expected
-- **Solution**: The app automatically uses your system's native theme
-- **Note**: Plots always have white backgrounds for optimal visualization
-
-### **Startup Issues**
-- **Problem**: App doesn't start or crashes
-- **Solution**: Check logs in the default location
-- **Note**: First run may take longer due to Qt6 installation
-
-### **Performance Issues**
-- **Problem**: Slow loading or unresponsive UI
-- **Solution**: Ensure you have sufficient RAM (4GB+ recommended)
-- **Note**: Large files (>100MB) may take time to load
-
-### **Qt6/File Operation Issues**
-- **Problem**: File dialogs don't work or GUI is broken
-- **Solution**: The setup automatically installs ALL dependencies - if issues persist, run:
-  ```bash
-  conda env update -n synaptipy -f environment.yml
-  ```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) and [Development Guide](docs/developer_guide.md).
-
-### **Development Setup**
-```bash
-git clone https://github.com/anzalks/synaptipy.git
-cd synaptipy
-
-# Install everything automatically (including dev dependencies)
+conda env create -f environment.yml
+conda activate synaptipy
 pip install -e ".[dev]"
-
-# Run tests
-pytest
 ```
 
-## 📄 License
-
-This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Neo library** for multi-format electrophysiology data support
-- **PySide6** for modern Qt6-based GUI framework
-- **PyQtGraph** for high-performance scientific plotting
-- **NWB** community for standardized data format support
-
-## 📊 Supported File Formats
-
-- **ABF** (Axon Binary Format) - via Neo
-- **WCP** (WinWCP) - via Neo
-- **NWB** (Neurodata Without Borders) - via PyNWB
-- **HDF5** - via Neo
-- **MAT** (MATLAB) - via Neo
-- **And more** - any format supported by Neo library
-
-## 💡 Usage Examples
-
-### **Basic Data Loading**
-```python
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
-
-adapter = NeoAdapter()
-recording = adapter.read_file("experiment.abf")
-print(f"Channels: {len(recording.channels)}")
+### **Production Installation:**
+```bash
+conda env create -f environment.yml
+conda activate synaptipy
+pip install .
 ```
 
-### **Event Detection**
-```python
-from Synaptipy.core.analysis.event_detection import EventDetector
+## 🧪 **Development & Testing**
 
-detector = EventDetector()
-events = detector.detect_events(recording.channels[0])
-print(f"Detected {len(events)} events")
+### **Running Tests:**
+```bash
+conda activate synaptipy
+python -m pytest
 ```
 
-### **Export to NWB**
-```python
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-
-exporter = NWBExporter()
-exporter.export_recording(recording, "output.nwb")
+### **Project Structure:**
 ```
+src/Synaptipy/
+├── application/     # GUI and CLI
+├── core/           # Analysis and data processing
+├── infrastructure/ # File readers and exporters
+└── shared/         # Common utilities and styling
+```
+
+## 💡 **Why This Method Works for All OS**
+
+1. **Conda Environment**: Handles all system-level dependencies automatically
+2. **Channel Priority**: Uses conda-forge for optimized scientific packages
+3. **Binary Compatibility**: Ensures Qt6 and PySide6 are properly linked
+4. **OS Detection**: Conda automatically installs platform-specific packages
+5. **No Manual Steps**: Eliminates the need for OS-specific installation procedures
+
+## 🆘 **Troubleshooting**
+
+### **Common Issues:**
+- **"conda command not found"**: Install [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+- **Environment creation fails**: Ensure you have sufficient disk space (2-3GB recommended)
+- **Import errors**: Always activate the `synaptipy` environment before running
+
+### **Platform-Specific Notes:**
+- **Windows**: May take longer for first-time setup due to larger binary downloads
+- **macOS**: Works on Intel and Apple Silicon (M1/M2) automatically
+- **Linux**: Compatible with most modern distributions (Ubuntu 18.04+, CentOS 7+, etc.)
+
+## 📄 **License**
+
+MIT License - see LICENSE file for details.
+
+## 👨‍💻 **Author**
+
+Anzal - anzal.ks@gmail.com
+
+## 🤝 **Contributing**
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
 ---
 
-**Status: Active Development** 🚀
-
-*Synaptipy is actively developed and maintained. New features and improvements are added regularly.*
-
-**What's New in Current Version:**
-- ✅ **One-command installation** with automatic Qt6 handling
-- ✅ **Automatic environment creation** from environment.yml
-- ✅ **Cross-platform compatibility** (Windows, macOS, Linux)
-- ✅ **Intelligent system theme detection** and native styling
-- ✅ **Welcome screen** with progress tracking
-- ✅ **Automatic dependency resolution** and conflict prevention
-- ✅ **Comprehensive error handling** and user feedback
-
----
-
-*For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/anzalks/synaptipy).*
+**🎯 This installation method ensures Synaptipy works identically on Windows, macOS, and Linux with zero manual configuration required!**
