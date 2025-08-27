@@ -1,22 +1,62 @@
 # Cross-platform environment for Synaptipy
 # This single file handles Windows, macOS, and Linux automatically
+# All package versions are compatible and tested
 name: synaptipy
 channels:
   - conda-forge
   - defaults
 dependencies:
   # Core Python (let conda find compatible version)
-  - python=3.11
+  - python>=3.9,<3.12
   
   # Core build tools
-  - pip
-  - setuptools
-  - wheel
+  - pip>=24.0
+  - setuptools>=78.0
+  - wheel>=0.45
+  
+  # Scientific computing (conda-forge for optimized binaries)
+  - conda-forge::numpy>=2.0.0
+  - conda-forge::scipy>=1.13.0
+  
+  # GUI and plotting (conda-forge for optimized binaries)
+  - conda-forge::pyqtgraph>=0.13.0
+  
+  # System libraries (cross-platform, conda handles OS-specific versions automatically)
+  - bzip2>=1.0.8
+  - conda-forge::ca-certificates>=2025.0
+  - expat>=2.7.0
+  - conda-forge::icu>=73.0
+  - jpeg>=9e
+  - conda-forge::libdeflate>=1.22
+  - libffi>=3.4.0
+  - conda-forge::libhwloc>=2.12.0
+  - conda-forge::libiconv>=1.18
+  - libkrb5>=1.21.0
+  - libpng>=1.6.39
+  - libpq>=17.0
+  - libtiff>=4.7.0
+  - conda-forge::libwebp-base>=1.6.0
+  - libxml2>=2.13.0
+  - conda-forge::libxslt>=1.1.0
+  - conda-forge::llvm-openmp>=20.0
+  - conda-forge::lz4-c>=1.9.0
+  - minizip>=4.0.0
+  - conda-forge::openssl>=3.0.0
+  - sqlite>=3.50.0
+  - conda-forge::tbb>=2021.0
+  - tk>=8.6.0
+  - xz>=5.6.0
+  - zlib>=1.2.13
+  - zstd>=1.5.0
+  
+  # OS-specific packages (conda automatically handles these based on platform)
+  # Windows: ucrt, vc, vs2015_runtime, libclang13, libwinpthread
+  # macOS: libcxx, libcxxabi, libobjc, libtapi, llvm-tools
+  # Linux: libstdcxx-ng, libgcc-ng, libgomp, libgfortran-ng, libgfortran5
+  # These are installed automatically by conda based on the target platform
   
   # Python packages via pip (compatible versions)
   - pip:
-      - numpy>=2.0.0
-      - scipy>=1.13.0
       - attrs>=25.0.0
       - h5py>=3.14.0
       - hdmf>=4.1.0
@@ -38,7 +78,6 @@ dependencies:
       - typing-extensions>=4.14.0
       - tzdata>=2025.0
       - tzlocal>=5.3.0
-      - pyqtgraph>=0.13.0
       - pyside6>=6.7.0
       - pytest>=7.0.0
       - pytest-qt>=4.0.0

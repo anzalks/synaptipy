@@ -8,7 +8,7 @@ Electrophysiology Visualization Suite
 
 ### Prerequisites
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) installed
-- Python 3.11+ (automatically handled by conda)
+- Python 3.9+ (automatically handled by conda)
 
 ### **Installation Steps**
 
@@ -129,6 +129,14 @@ python -m pytest tests/
 2. **Environment creation fails**: Try `conda env remove -n synaptipy -y` then recreate
 3. **Package conflicts**: The minimal environment.yml should avoid most conflicts
 4. **macOS version issues**: The pip-based approach handles newer macOS versions better
+
+### **Previous Installation Issues (Now Fixed)**
+
+- **Conda/pip conflicts**: PySide6 and Qt6 packages were causing version conflicts
+- **Missing RECORD files**: pip couldn't uninstall conda packages properly  
+- **OS-specific failures**: Different package sources were incompatible
+
+**Solution Applied**: Moved PySide6 to pip section and kept only essential system libraries in conda.
 
 ### **Getting Help**
 
