@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Synaptipy"
+version = "0.1.0"
+description = "Electrophysiology Visualization Suite"
+authors = [
+    {name = "Anzal", email = "anzal.ks@gmail.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+# No dependencies listed here - they're handled by conda environment
+# This prevents pip from trying to install system packages
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-qt>=4.0.0",
+    "pytest-mock",
+    "pytest-cov",
+    "flake8",
+    "black",
+    "isort",
+]
+
+[project.scripts]
+synaptipy-gui = "Synaptipy.application.__main__:run_gui"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+Synaptipy = ["*.yml", "*.yaml", "*.txt"]
