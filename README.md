@@ -2,7 +2,48 @@
 
 Electrophysiology Visualization Suite
 
-## 🚀 **Cross-Platform Installation (Recommended)**
+## Installation
+
+This package uses a **two-step installation process** that works across all operating systems:
+
+### Step 1: Clone the repository
+```bash
+git clone https://github.com/anzalks/synaptipy.git
+cd synaptipy
+```
+
+### Step 2: Install the package
+```bash
+pip install -e .
+```
+
+That's it! The package will be installed in editable mode and ready to use.
+
+## How it works
+
+1. **Environment.yml**: Contains all the conda dependencies with OS-specific packages handled automatically
+2. **Pyproject.toml**: Modern Python packaging configuration that handles the package setup
+3. **Cross-platform**: Works on Windows, macOS, and Linux without modification
+
+## Prerequisites
+
+- Python 3.9 or higher
+- Conda (Anaconda or Miniconda)
+- Git
+
+## Usage
+
+After installation, you can:
+
+- Run the GUI: `synaptipy-gui`
+- Import in Python: `import Synaptipy`
+- Run tests: `python -m pytest`
+
+## Development
+
+For development, the package is installed in editable mode, so changes to the source code are immediately available without reinstalling.
+
+## 🚀 **Cross-Platform Installation**
 
 **This method works on Windows, macOS, and Linux automatically!**
 
@@ -10,20 +51,7 @@ Electrophysiology Visualization Suite
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) installed
 - Python 3.11+ (automatically handled by conda)
 
-### **Option 1: Automated Installation (Easiest)**
-
-```bash
-# Run the automated installation script
-python install.py
-```
-
-**This script automatically:**
-- Detects your OS (Windows/macOS/Linux)
-- Creates/updates the conda environment
-- Installs all dependencies
-- Installs Synaptipy in development mode
-
-### **Option 2: Manual Installation**
+### **Installation Steps**
 
 ```bash
 # 1. Create conda environment (handles all OS-specific packages automatically)
