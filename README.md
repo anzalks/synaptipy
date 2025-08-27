@@ -2,48 +2,7 @@
 
 Electrophysiology Visualization Suite
 
-## Installation
-
-This package uses a **two-step installation process** that works across all operating systems:
-
-### Step 1: Clone the repository
-```bash
-git clone https://github.com/anzalks/synaptipy.git
-cd synaptipy
-```
-
-### Step 2: Install the package
-```bash
-pip install -e .
-```
-
-That's it! The package will be installed in editable mode and ready to use.
-
-## How it works
-
-1. **Environment.yml**: Contains all the conda dependencies with OS-specific packages handled automatically
-2. **Pyproject.toml**: Modern Python packaging configuration that handles the package setup
-3. **Cross-platform**: Works on Windows, macOS, and Linux without modification
-
-## Prerequisites
-
-- Python 3.9 or higher
-- Conda (Anaconda or Miniconda)
-- Git
-
-## Usage
-
-After installation, you can:
-
-- Run the GUI: `synaptipy-gui`
-- Import in Python: `import Synaptipy`
-- Run tests: `python -m pytest`
-
-## Development
-
-For development, the package is installed in editable mode, so changes to the source code are immediately available without reinstalling.
-
-## 🚀 **Cross-Platform Installation**
+## 🚀 **Cross-Platform Installation (Recommended)**
 
 **This method works on Windows, macOS, and Linux automatically!**
 
@@ -66,116 +25,138 @@ pip install -e .
 
 ### **What Happens Automatically:**
 
-- ✅ **Windows**: Installs Visual C++ runtimes, Qt6 system libraries, optimized numpy/scipy
-- ✅ **macOS**: Installs system libraries, Qt6 frameworks, optimized scientific packages  
-- ✅ **Linux**: Installs system libraries, Qt6 binaries, optimized computing packages
+- ✅ **Windows**: Installs Visual C++ runtimes, Qt6 system libraries, and all dependencies
+- ✅ **macOS**: Installs Qt6 system libraries, system dependencies, and all packages
+- ✅ **Linux**: Installs system libraries, Qt6 dependencies, and all packages
+- ✅ **All OS**: Creates isolated Python environment with exact package versions
 
-### **Run the Application:**
+### **Why This Works:**
+
+The `environment.yml` file uses a **minimal conda approach** that:
+1. **Creates a basic Python 3.11 environment** with only essential build tools
+2. **Installs all scientific packages via pip** to avoid conda version conflicts
+3. **Lets pip handle OS-specific binary compatibility** automatically
+4. **Avoids complex conda dependency resolution** that can fail on newer OS versions
+
+## 🧪 **Testing Your Installation**
 
 ```bash
-# Launch the GUI
-synaptipy-gui
+# Activate the environment
+conda activate synaptipy
 
-# Or run tests
+# Run all tests
 python -m pytest
+
+# Run tests with coverage
+python -m pytest --cov=Synaptipy
+```
+
+## 🖥️ **Running the Application**
+
+```bash
+# Activate the environment
+conda activate synaptipy
+
+# Start the GUI application
+python -m Synaptipy.application
+
+# Or use the console script
+synaptipy-gui
+```
+
+## 📦 **What's Included**
+
+### **Core Scientific Libraries**
+- **NumPy 2.3.2**: Advanced array operations and numerical computing
+- **SciPy 1.16.1**: Scientific computing and optimization
+- **Pandas 2.3.2**: Data manipulation and analysis
+- **Neo 0.14.2**: Electrophysiology data handling
+- **PyNWB 3.1.2**: Neurodata Without Borders format support
+
+### **GUI Framework**
+- **PySide6 6.9.2**: Modern Qt6-based GUI framework
+- **PyQtGraph 0.13.7**: High-performance plotting and visualization
+- **Cross-platform compatibility**: Works on Windows, macOS, and Linux
+
+### **Data Processing**
+- **H5Py 3.14.0**: HDF5 file format support
+- **Quantities 0.16.2**: Physical quantities with units
+- **HDMF 4.1.0**: Hierarchical Data Modeling Framework
+
+### **Development Tools**
+- **Pytest 8.4.1**: Testing framework
+- **Pytest-Qt 4.5.0**: Qt testing support
+- **Pytest-Mock**: Mocking support for tests
+
+## 🔧 **Development Setup**
+
+```bash
+# Clone the repository
+git clone https://github.com/anzalks/synaptipy.git
+cd synaptipy
+
+# Install in development mode
+conda env create -f environment.yml
+conda activate synaptipy
+pip install -e .
+
+# Activate environment
+conda activate synaptipy
+
+# Run tests
+python -m pytest
+
+# Make changes and test
+python -m pytest tests/
 ```
 
 ## 🌍 **Cross-Platform Compatibility**
 
-### **Automatic OS-Specific Package Resolution:**
-- **Windows**: `ucrt`, `vc`, `vs2015_runtime`, `libclang13`, `libwinpthread`
-- **macOS**: `libcxx`, `libcxxabi`, `libobjc`, `libtapi`, `llvm-tools`
-- **Linux**: `libstdcxx-ng`, `libgcc-ng`, `libgomp`, `libgfortran-ng`
+| Feature | Windows | macOS | Linux |
+|---------|---------|-------|-------|
+| **Python 3.11** | ✅ | ✅ | ✅ |
+| **Qt6/PySide6** | ✅ | ✅ | ✅ |
+| **Scientific Libraries** | ✅ | ✅ | ✅ |
+| **GUI Applications** | ✅ | ✅ | ✅ |
+| **File I/O** | ✅ | ✅ | ✅ |
+| **Testing** | ✅ | ✅ | ✅ |
 
-### **No Manual Configuration Required:**
-- Conda automatically detects your OS and installs appropriate packages
-- Binary compatibility issues are resolved automatically
-- All dependencies are properly linked for your platform
+## 🚨 **Troubleshooting**
 
-## 📦 **What's Included**
+### **Common Issues**
 
-The `environment.yml` file contains all necessary dependencies:
+1. **Conda not found**: Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+2. **Environment creation fails**: Try `conda env remove -n synaptipy -y` then recreate
+3. **Package conflicts**: The minimal environment.yml should avoid most conflicts
+4. **macOS version issues**: The pip-based approach handles newer macOS versions better
 
-### **Core System (conda):**
-- **Python**: 3.11 with optimized runtime
-- **Scientific**: numpy 2.0.2, scipy 1.13.1 (MKL-optimized)
-- **GUI**: Qt6 6.7.3, PySide6 6.7.3, pyqtgraph 0.13.7
-- **System Libraries**: All OS-specific runtimes and dependencies
+### **Getting Help**
 
-### **Python Packages (pip):**
-- **Data**: neo 0.14.2, pynwb 3.1.2, h5py 3.14.0, pandas 2.3.1
-- **Utilities**: attrs 25.3.0, jsonschema 4.25.1, quantities 0.16.2
-- **Testing**: pytest, pytest-qt, pytest-mock (via extras_require["dev"])
+- **Issues**: [GitHub Issues](https://github.com/anzalks/synaptipy/issues)
+- **Documentation**: [docs/](docs/) directory
+- **Tests**: Run `python -m pytest` to verify installation
 
-## 🔧 **Alternative Installation Methods**
+## 📚 **Documentation**
 
-### **Development Installation (with test dependencies):**
-```bash
-conda env create -f environment.yml
-conda activate synaptipy
-pip install -e ".[dev]"
-```
-
-### **Production Installation:**
-```bash
-conda env create -f environment.yml
-conda activate synaptipy
-pip install .
-```
-
-## 🧪 **Development & Testing**
-
-### **Running Tests:**
-```bash
-conda activate synaptipy
-python -m pytest
-```
-
-### **Project Structure:**
-```
-src/Synaptipy/
-├── application/     # GUI and CLI
-├── core/           # Analysis and data processing
-├── infrastructure/ # File readers and exporters
-└── shared/         # Common utilities and styling
-```
-
-## 💡 **Why This Method Works for All OS**
-
-1. **Conda Environment**: Handles all system-level dependencies automatically
-2. **Channel Priority**: Uses conda-forge for optimized scientific packages
-3. **Binary Compatibility**: Ensures Qt6 and PySide6 are properly linked
-4. **OS Detection**: Conda automatically installs platform-specific packages
-5. **No Manual Steps**: Eliminates the need for OS-specific installation procedures
-
-## 🆘 **Troubleshooting**
-
-### **Common Issues:**
-- **"conda command not found"**: Install [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-- **Environment creation fails**: Ensure you have sufficient disk space (2-3GB recommended)
-- **Import errors**: Always activate the `synaptipy` environment before running
-
-### **Platform-Specific Notes:**
-- **Windows**: May take longer for first-time setup due to larger binary downloads
-- **macOS**: Works on Intel and Apple Silicon (M1/M2) automatically
-- **Linux**: Compatible with most modern distributions (Ubuntu 18.04+, CentOS 7+, etc.)
-
-## 📄 **License**
-
-MIT License - see LICENSE file for details.
-
-## 👨‍💻 **Author**
-
-Anzal - anzal.ks@gmail.com
+- **[User Guide](docs/user_guide.md)**: Getting started with Synaptipy
+- **[API Reference](docs/api_reference.md)**: Complete API documentation
+- **[Developer Guide](docs/developer_guide.md)**: Contributing to the project
+- **[Styling Guide](docs/development/styling_guide.md)**: UI consistency guidelines
 
 ## 🤝 **Contributing**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) and [Development Guide](docs/developer_guide.md).
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 **Acknowledgments**
+
+- **Qt6/PySide6**: Modern cross-platform GUI framework
+- **Scientific Python Ecosystem**: NumPy, SciPy, Pandas, and more
+- **Electrophysiology Community**: For feedback and testing
 
 ---
 
-**🎯 This installation method ensures Synaptipy works identically on Windows, macOS, and Linux with zero manual configuration required!**
+**Made with ❤️ by the Synaptipy Team**
