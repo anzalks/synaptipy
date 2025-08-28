@@ -431,7 +431,10 @@ class ExplorerTab(QtWidgets.QWidget):
         view_layout = QtWidgets.QHBoxLayout(view_group)
         self.reset_view_button = QtWidgets.QPushButton("Reset View")
         self.reset_view_button.setToolTip("Reset zoom/pan")
+        self.save_plot_button = QtWidgets.QPushButton("Save Plot")
+        self.save_plot_button.setToolTip("Save plot as PNG or PDF")
         view_layout.addWidget(self.reset_view_button)
+        view_layout.addWidget(self.save_plot_button)
         plot_controls_layout.addWidget(view_group)
         x_zoom_group = QtWidgets.QGroupBox("X Zoom")
         x_zoom_layout = QtWidgets.QHBoxLayout(x_zoom_group)
@@ -534,6 +537,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.downsample_checkbox.stateChanged.connect(self._trigger_plot_update)
         self.plot_mode_combobox.currentIndexChanged.connect(self._on_plot_mode_changed)
         self.reset_view_button.clicked.connect(self._reset_view)
+        self.save_plot_button.clicked.connect(self._save_plot)
         self.prev_trial_button.clicked.connect(self._prev_trial)
         self.next_trial_button.clicked.connect(self._next_trial)
         self.prev_file_button.clicked.connect(self._prev_file_folder)
@@ -2912,3 +2916,47 @@ class ExplorerTab(QtWidgets.QWidget):
         """Mark the cache as dirty, indicating data needs to be reloaded."""
         self._cache_dirty = True
         log.debug("Marked data cache as dirty")
+
+    def _save_plot(self):
+        """Save the current plot view as PNG or PDF."""
+        log.info(f"[EXPLORER-SAVE] Save plot requested")
+        
+        if not self.channel_plots:
+            log.warning(f"[EXPLORER-SAVE] No plots available for saving")
+            return
+            
+        try:
+            from Synaptipy.application.gui.plot_save_dialog import save_plot_with_dialog
+            
+            # Get the first visible plot widget for saving
+            # We'll save the entire graphics layout widget to capture all channels
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                plot_widget = self.graphics_layout_widget
+                default_filename = "explorer_plot"
+            else:
+                # Fallback to first channel plot
+                first_plot = next(iter(self.channel_plots.values()))
+                plot_widget = first_plot
+                default_filename = "explorer_plot"
+            
+            # Show save dialog and save plot
+            success = save_plot_with_dialog(
+                plot_widget, 
+                parent=self, 
+                default_filename=default_filename
+            )
+            
+            if success:
+                log.info(f"[EXPLORER-SAVE] Plot saved successfully")
+            else:
+                log.debug(f"[EXPLORER-SAVE] Plot save cancelled")
+                
+        except Exception as e:
+            log.error(f"[EXPLORER-SAVE] Failed to save plot: {e}")
+            # Show error message to user
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self, 
+                "Save Error", 
+                f"Failed to save plot:\n{str(e)}"
+            )
