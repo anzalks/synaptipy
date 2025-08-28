@@ -90,7 +90,7 @@ class SynaptipyPlotFactory:
             return pg.mkPen(color='blue', width=1)
     
     @staticmethod
-    def get_grid_pen() -> pg.mkPen:
+    def get_grid_pen() -> Optional[pg.mkPen]:
         """Get pen for grid lines with current customization."""
         try:
             return get_plot_customization_manager().get_grid_pen()
@@ -117,9 +117,26 @@ class SynaptipyPlotFactory:
                 
                 # Enable grid safely with error handling
                 try:
-                    plot_item.showGrid(x=True, y=True, alpha=1.0)
+                    from .plot_customization import is_grid_enabled, get_grid_pen
+                    if is_grid_enabled():
+                        grid_pen = get_grid_pen()
+                        if grid_pen:
+                            # Get alpha value from pen color
+                            alpha = 0.3  # Default alpha
+                            if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                                alpha = grid_pen.color().alpha() / 255.0
+                                log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
+                            else:
+                                log.debug("Using default grid alpha: 0.3")
+                            
+                            plot_item.showGrid(x=True, y=True, alpha=alpha)
+                        else:
+                            plot_item.showGrid(x=False, y=False)
+                    else:
+                        plot_item.showGrid(x=False, y=False)
                 except:
-                    pass  # Ignore grid errors on Windows
+                    # Fallback to enabled grid
+                    plot_item.showGrid(x=True, y=True, alpha=0.3)
                 
                 # Get Z_ORDER with fallback
                 try:
@@ -149,7 +166,12 @@ class SynaptipyPlotFactory:
                             
                         if hasattr(grid_item, 'setPen'):
                             from Synaptipy.shared.styling import get_grid_pen
-                            grid_item.setPen(get_grid_pen())
+                            grid_pen = get_grid_pen()
+                            if grid_pen:
+                                grid_item.setPen(grid_pen)
+                                log.debug(f"Applied grid pen to axis {axis_name}")
+                            else:
+                                log.debug(f"Grid pen is None for axis {axis_name}")
                             
                     except Exception as e:
                         log.debug(f"Grid config failed for axis {axis_name}: {e}")

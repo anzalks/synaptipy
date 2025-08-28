@@ -82,13 +82,26 @@ def get_response_pen():
 def configure_plot_widget(plot_widget):
     """Configure plot widget with minimal styling."""
     try:
-        # Only configure if not already configured
-        if not hasattr(plot_widget, '_synaptipy_configured'):
+                # Only configure if not already configured
+        if not getattr(plot_widget, '_synaptipy_configured', False):
             # Try to use customized grid settings
             try:
-                from .plot_customization import get_grid_pen
-                grid_pen = get_grid_pen()
-                plot_widget.showGrid(x=True, y=True, alpha=grid_pen.alpha() if hasattr(grid_pen, 'alpha') else 0.3)
+                from .plot_customization import get_grid_pen, is_grid_enabled
+                if is_grid_enabled():
+                    grid_pen = get_grid_pen()
+                    if grid_pen:
+                        # Get alpha value from pen color
+                        alpha = grid_pen.color().alpha() / 255.0
+                        log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
+                        
+                        plot_widget.showGrid(x=True, y=True, alpha=alpha)
+                        log.debug(f"Grid enabled with alpha: {alpha}")
+                    else:
+                        plot_widget.showGrid(x=False, y=False)
+                        log.debug("Grid disabled - no grid pen")
+                else:
+                    plot_widget.showGrid(x=False, y=False)
+                    log.debug("Grid disabled by preference")
             except ImportError:
                 plot_widget.showGrid(x=True, y=True, alpha=0.3)
             
@@ -97,6 +110,8 @@ def configure_plot_widget(plot_widget):
             
     except Exception as e:
         log.debug(f"Plot widget configuration failed: {e}")
+        
+    return plot_widget
 
 # ==============================================================================
 # Lazy Theme Detection (Only when needed)
@@ -156,7 +171,12 @@ def _configure_grid_z_order_safe(plot_widget):
                     
                 # Set grid pen only if grid is properly initialized
                 if hasattr(axis.grid, 'setPen'):
-                    axis.grid.setPen(get_grid_pen())
+                    grid_pen = get_grid_pen()
+                    if grid_pen:
+                        axis.grid.setPen(grid_pen)
+                        log.debug(f"Applied grid pen to axis {axis_name}")
+                    else:
+                        log.debug(f"Grid pen is None for axis {axis_name}")
                     
                 # Ensure grid opacity is set correctly
                 if hasattr(axis, 'setGrid'):
@@ -173,8 +193,16 @@ def _configure_grid_z_order_safe(plot_widget):
 
 def get_grid_pen():
     """Get pen for grid lines."""
-    color = "#000000"  # Always black for grid lines
-    return pg.mkPen(color=color, width=0.5, style=QtCore.Qt.SolidLine)
+    try:
+        from .plot_customization import get_grid_pen as get_customized_grid_pen, is_grid_enabled
+        if is_grid_enabled():
+            return get_customized_grid_pen()
+        else:
+            return None  # Grid is disabled
+    except ImportError:
+        # Fallback to default grid pen
+        color = "#000000"  # Always black for grid lines
+        return pg.mkPen(color=color, width=0.5, alpha=0.3, style=QtCore.Qt.SolidLine)
 
 # ==============================================================================
 # Simple Widget Styling Helpers

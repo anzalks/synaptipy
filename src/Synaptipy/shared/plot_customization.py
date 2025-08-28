@@ -100,17 +100,18 @@ class PlotCustomizationManager:
             'average': {
                 'color': average_color,
                 'width': 2,
-                'transparency': 100  # 100% = fully opaque
+                'opacity': 100  # 100% = fully opaque (alpha 1.0)
             },
             'single_trial': {
                 'color': trial_color,
                 'width': 1,
-                'transparency': trial_transparency
+                'opacity': trial_transparency
             },
             'grid': {
+                'enabled': True,  # Whether grid is visible
                 'color': '#808080',  # Gray
                 'width': 1,
-                'transparency': 30  # 30% = 70% transparent
+                'opacity': 70  # 70% = 70% opaque (alpha 0.7)
             }
         }
     
@@ -125,7 +126,7 @@ class PlotCustomizationManager:
                     key = f"{plot_type}/{property_name}"
                     default_value = self.defaults[plot_type][property_name]
                     
-                    if property_name == 'transparency':
+                    if property_name in ['transparency', 'opacity']:
                         value = self._settings.value(key, default_value, type=int)
                     else:
                         value = self._settings.value(key, default_value)
@@ -193,13 +194,30 @@ class PlotCustomizationManager:
         if cached_pen:
             return cached_pen
         
-        # Create new pen
-        color = self.defaults['average']['color']
+        # Create new pen with proper opacity handling
+        color_str = self.defaults['average']['color']
         width = self.defaults['average']['width']
-        alpha = self.defaults['average']['transparency']
+        opacity = self.defaults['average']['opacity']
+        
+        # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
+        alpha = opacity / 100.0
+        
+        # Convert hex color to QColor with proper alpha
+        from PySide6.QtGui import QColor
+        if color_str.startswith('#'):
+            # Parse hex color
+            r = int(color_str[1:3], 16)
+            g = int(color_str[3:5], 16)
+            b = int(color_str[5:7], 16)
+            alpha_value = int(alpha * 255)
+            color = QColor(r, g, b, alpha_value)
+        else:
+            # Named color
+            color = QColor(color_str)
+            color.setAlpha(int(alpha * 255))
 
-        pen = pg.mkPen(color=color, width=width, alpha=alpha/100.0)
-        log.debug(f"Created average pen: color={color}, width={width}, alpha={alpha/100.0}")
+        pen = pg.mkPen(color=color, width=width)
+        log.debug(f"Created average pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})")
         self._cache_pen('average', pen)
         return pen
 
@@ -210,32 +228,64 @@ class PlotCustomizationManager:
         if cached_pen:
             return cached_pen
         
-        # Create new pen
-        color = self.defaults['single_trial']['color']
+        # Create new pen with proper opacity handling
+        color_str = self.defaults['single_trial']['color']
         width = self.defaults['single_trial']['width']
-        alpha = self.defaults['single_trial']['transparency']
+        opacity = self.defaults['single_trial']['opacity']
+        
+        # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
+        alpha = opacity / 100.0
+        
+        # Convert hex color to QColor with proper alpha
+        from PySide6.QtGui import QColor
+        if color_str.startswith('#'):
+            # Parse hex color
+            r = int(color_str[1:3], 16)
+            g = int(color_str[3:5], 16)
+            b = int(color_str[5:7], 16)
+            alpha_value = int(alpha * 255)
+            color = QColor(r, g, b, alpha_value)
+        else:
+            # Named color
+            color = QColor(color_str)
+            color.setAlpha(int(alpha * 255))
 
-        pen = pg.mkPen(color=color, width=width, alpha=alpha/100.0)
-        log.debug(f"Created single trial pen: color={color}, width={width}, alpha={alpha/100.0}")
+        pen = pg.mkPen(color=color, width=width)
+        log.debug(f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})")
         self._cache_pen('single_trial', pen)
         return pen
 
-    def get_grid_pen(self) -> pg.mkPen:
-        """Get pen for grid lines."""
+    def get_grid_pen(self) -> Optional[pg.mkPen]:
+        """Get pen for grid lines. Returns None if grid is disabled."""
+        # Check if grid is enabled
+        if not self.defaults['grid']['enabled']:
+            return None
+            
         # Check cache first
         cached_pen = self._get_cached_pen('grid')
         if cached_pen:
             return cached_pen
         
-        # Create new pen
-        color = self.defaults['grid']['color']
+        # Create new pen with proper opacity handling
         width = self.defaults['grid']['width']
-        alpha = self.defaults['grid']['transparency']
+        opacity = self.defaults['grid']['opacity']
+        
+        # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
+        alpha = opacity / 100.0
+        
+        # Create color with proper alpha - always black for grid
+        from PySide6.QtGui import QColor
+        alpha_value = int(alpha * 255)
+        color = QColor(0, 0, 0, alpha_value)  # Black with custom alpha
 
-        pen = pg.mkPen(color=color, width=width, alpha=alpha/100.0)
-        log.debug(f"Created grid pen: color={color}, width={width}, alpha={alpha/100.0}")
+        pen = pg.mkPen(color=color, width=width)
+        log.debug(f"Created grid pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})")
         self._cache_pen('grid', pen)
         return pen
+    
+    def is_grid_enabled(self) -> bool:
+        """Check if grid is currently enabled."""
+        return self.defaults['grid']['enabled']
     
     def has_preferences_changed(self, new_preferences: Dict[str, Dict[str, Any]]) -> bool:
         """Check if the given preferences differ from current ones."""
@@ -328,6 +378,110 @@ class PlotCustomizationManager:
         self._cache_dirty = True
         log.info("Plot preferences reset to defaults")
 
+    def update_grid_visibility(self, plot_widgets: list):
+        """Update grid visibility for a list of plot widgets."""
+        try:
+            if not plot_widgets:
+                return
+                
+            is_enabled = self.defaults['grid']['enabled']
+            grid_pen = self.get_grid_pen() if is_enabled else None
+            
+            for plot_widget in plot_widgets:
+                try:
+                    if hasattr(plot_widget, 'showGrid'):
+                        if is_enabled and grid_pen:
+                            # Get alpha value from pen color
+                            alpha = 0.3  # Default alpha
+                            if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                                alpha = grid_pen.color().alpha() / 255.0
+                                log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
+                            else:
+                                log.debug("Using default grid alpha: 0.3")
+                            
+                            plot_widget.showGrid(x=True, y=True, alpha=alpha)
+                        else:
+                            plot_widget.showGrid(x=False, y=False)
+                            
+                    # Also try to update PlotItem if available
+                    if hasattr(plot_widget, 'getPlotItem'):
+                        plot_item = plot_widget.getPlotItem()
+                        if plot_item and hasattr(plot_item, 'showGrid'):
+                            if is_enabled and grid_pen:
+                                # Get alpha value from pen color
+                                alpha = 0.3  # Default alpha
+                                if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                                    alpha = grid_pen.color().alpha() / 255.0
+                                    log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
+                                else:
+                                    log.debug("Using default grid alpha: 0.3")
+                                
+                                plot_item.showGrid(x=True, y=True, alpha=alpha)
+                            else:
+                                plot_item.showGrid(x=False, y=False)
+                                
+                except Exception as e:
+                    log.debug(f"Could not update grid for plot widget: {e}")
+                    continue
+                    
+            log.debug(f"Updated grid visibility for {len(plot_widgets)} plot widgets (enabled: {is_enabled})")
+            
+        except Exception as e:
+            log.warning(f"Failed to update grid visibility: {e}")
+    
+    def update_plot_pens(self, plot_widgets: list):
+        """Update plot pens for existing plots when preferences change."""
+        try:
+            if not plot_widgets:
+                return
+                
+            # Get current pens
+            average_pen = self.get_average_pen()
+            single_trial_pen = self.get_single_trial_pen()
+            
+            for plot_widget in plot_widgets:
+                try:
+                    # Update plot items in the widget
+                    if hasattr(plot_widget, 'plotItem') and plot_widget.plotItem():
+                        plot_item = plot_widget.plotItem()
+                        self._update_plot_item_pens(plot_item, average_pen, single_trial_pen)
+                    
+                    # Also try to update PlotItem if available
+                    if hasattr(plot_widget, 'getPlotItem'):
+                        plot_item = plot_widget.getPlotItem()
+                        if plot_item:
+                            self._update_plot_item_pens(plot_item, average_pen, single_trial_pen)
+                            
+                except Exception as e:
+                    log.debug(f"Could not update pens for plot widget: {e}")
+                    continue
+                    
+            log.debug(f"Updated plot pens for {len(plot_widgets)} plot widgets")
+            
+        except Exception as e:
+            log.warning(f"Failed to update plot pens: {e}")
+    
+    def _update_plot_item_pens(self, plot_item, average_pen, single_trial_pen):
+        """Update pens for all items in a plot item."""
+        try:
+            if not plot_item or not hasattr(plot_item, 'items'):
+                return
+                
+            for item in plot_item.items:
+                if hasattr(item, 'setPen') and hasattr(item, 'opts'):
+                    # Try to determine item type from name or other properties
+                    item_name = item.opts.get('name', '').lower()
+                    if 'average' in item_name or 'avg' in item_name:
+                        item.setPen(average_pen)
+                        log.debug(f"Updated average pen for item: {item_name}")
+                    else:
+                        # Default to single trial pen
+                        item.setPen(single_trial_pen)
+                        log.debug(f"Updated single trial pen for item: {item_name}")
+                        
+        except Exception as e:
+            log.debug(f"Could not update plot item pens: {e}")
+
 # Global instance for application-wide access
 _plot_customization_manager = None
 
@@ -350,6 +504,18 @@ def get_single_trial_pen() -> pg.mkPen:
 def get_grid_pen() -> pg.mkPen:
     """Get pen for grid lines."""
     return get_plot_customization_manager().get_grid_pen()
+
+def is_grid_enabled() -> bool:
+    """Check if grid is currently enabled."""
+    return get_plot_customization_manager().is_grid_enabled()
+
+def update_grid_visibility(plot_widgets: list):
+    """Update grid visibility for a list of plot widgets."""
+    get_plot_customization_manager().update_grid_visibility(plot_widgets)
+
+def update_plot_pens(plot_widgets: list):
+    """Update plot pens for existing plots when preferences change."""
+    get_plot_customization_manager().update_plot_pens(plot_widgets)
 
 def update_plot_preference(plot_type: str, property_name: str, value: Any):
     """Update a plot preference."""
