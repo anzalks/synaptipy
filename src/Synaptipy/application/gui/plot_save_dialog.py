@@ -31,8 +31,46 @@ class PlotSaveDialog(QtWidgets.QDialog):
         self.selected_path = ""
         self.selected_format = "png"
         
+        # Load last save location from settings
+        self.last_save_location = self._load_last_save_location()
         self._setup_ui()
         self._connect_signals()
+        
+    def _load_last_save_location(self) -> str:
+        """Load the last save location from QSettings."""
+        try:
+            from PySide6.QtCore import QSettings
+            settings = QSettings("Synaptipy", "PlotSaveDialog")
+            last_location = settings.value("last_save_location", "")
+            
+            log.debug(f"QSettings - Organization: {settings.organizationName()}, App: {settings.applicationName()}")
+            log.debug(f"QSettings - Raw last_save_location value: {last_location}")
+            
+            # Use the last location if it's not empty, regardless of whether it exists
+            # This allows remembering directories that might have been deleted or are on different systems
+            if last_location and last_location.strip():
+                log.debug(f"Loaded last save location: {last_location}")
+                return last_location
+            else:
+                log.debug(f"No last save location found, using default")
+                return os.path.expanduser("~/Desktop")
+                
+        except Exception as e:
+            log.warning(f"Failed to load last save location: {e}")
+            return os.path.expanduser("~/Desktop")
+            
+    def _save_last_save_location(self, path: str):
+        """Save the last save location to QSettings."""
+        try:
+            from PySide6.QtCore import QSettings
+            settings = QSettings("Synaptipy", "PlotSaveDialog")
+            log.debug(f"QSettings - Organization: {settings.organizationName()}, App: {settings.applicationName()}")
+            log.debug(f"QSettings - Setting last_save_location to: {path}")
+            settings.setValue("last_save_location", path)
+            settings.sync()  # Force immediate write
+            log.debug(f"Saved last save location: {path}")
+        except Exception as e:
+            log.warning(f"Failed to save last save location: {e}")
         
     def _setup_ui(self):
         """Setup the user interface."""
@@ -44,7 +82,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         
         self.path_edit = QtWidgets.QLineEdit()
         self.path_edit.setPlaceholderText("Select file path...")
-        self.path_edit.setText(os.path.expanduser("~/Desktop"))
+        self.path_edit.setText(self.last_save_location)
         
         self.browse_button = QtWidgets.QPushButton("Browse...")
         self.browse_button.setToolTip("Browse for save location")
@@ -118,7 +156,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         """Browse for save directory."""
         current_path = self.path_edit.text()
         if not current_path or not os.path.exists(current_path):
-            current_path = os.path.expanduser("~/Desktop")
+            current_path = self.last_save_location
             
         directory = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select Save Directory", current_path
@@ -126,6 +164,8 @@ class PlotSaveDialog(QtWidgets.QDialog):
         
         if directory:
             self.path_edit.setText(directory)
+            # Update the last save location when browsing
+            self.last_save_location = directory
             
     def _update_preview(self):
         """Update the full path preview."""
@@ -162,6 +202,9 @@ class PlotSaveDialog(QtWidgets.QDialog):
         # Store the selected values
         self.selected_path = path
         self.selected_format = format_text
+        
+        # Save the selected path as the last save location
+        self._save_last_save_location(path)
         
         # Close dialog with accept
         self.accept()
