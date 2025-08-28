@@ -255,6 +255,18 @@ class MainWindow(QtWidgets.QMainWindow):
             # Update explorer tab plots - use smart update logic for better performance
             if hasattr(self, 'explorer_tab') and self.explorer_tab:
                 log.info("Explorer tab found - attempting to update plots")
+                
+                # Check if grid preferences changed - if so, update grid visibility immediately
+                try:
+                    from Synaptipy.shared.plot_customization import is_grid_enabled, update_grid_visibility
+                    if hasattr(self.explorer_tab, 'channel_plots'):
+                        plot_widgets = list(self.explorer_tab.channel_plots.values())
+                        if plot_widgets:
+                            update_grid_visibility(plot_widgets)
+                            log.info("Updated grid visibility for explorer tab plots")
+                except Exception as e:
+                    log.debug(f"Could not update grid visibility: {e}")
+                
                 if hasattr(self.explorer_tab, '_update_plot'):
                     log.info("Explorer tab has _update_plot method")
                     # Check if we need a full update or just pen update
@@ -285,6 +297,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     if hasattr(self.analyser_tab, 'count'):
                         for i in range(self.analyser_tab.count()):
                             analysis_widget = self.analyser_tab.widget(i)
+                            
+                            # Update grid visibility for analysis tab plots
+                            try:
+                                if hasattr(analysis_widget, 'plot_widget'):
+                                    from Synaptipy.shared.plot_customization import update_grid_visibility
+                                    update_grid_visibility([analysis_widget.plot_widget])
+                                    log.debug(f"Updated grid visibility for analysis tab {i}")
+                            except Exception as e:
+                                log.debug(f"Could not update grid visibility for analysis tab {i}: {e}")
+                            
                             if hasattr(analysis_widget, '_update_plot_pens_only'):
                                 # Use pen-only update for better performance
                                 analysis_widget._update_plot_pens_only()
@@ -295,6 +317,16 @@ class MainWindow(QtWidgets.QMainWindow):
                                 log.debug(f"Refreshed analysis tab {i} plots (full replot)")
                     else:
                         # analyser_tab might be a single widget
+                        
+                        # Update grid visibility for single analysis tab
+                        try:
+                            if hasattr(self.analyser_tab, 'plot_widget'):
+                                from Synaptipy.shared.plot_customization import update_grid_visibility
+                                update_grid_visibility([self.analyser_tab.plot_widget])
+                                log.debug("Updated grid visibility for single analysis tab")
+                        except Exception as e:
+                            log.debug(f"Could not update grid visibility for single analysis tab: {e}")
+                        
                         if hasattr(self.analyser_tab, '_update_plot_pens_only'):
                             self.analyser_tab._update_plot_pens_only()
                             log.debug("Refreshed single analysis tab plots (pen-only update)")
@@ -307,6 +339,46 @@ class MainWindow(QtWidgets.QMainWindow):
             log.info("Plot refresh complete")
         except Exception as e:
             log.error(f"Failed to refresh plots after preference update: {e}")
+    
+    def _update_plot_pens_only(self):
+        """Update only plot pens when user changes preferences in dialog."""
+        try:
+            log.info("=== UPDATING PLOT PENS ONLY ===")
+            
+            # Update explorer tab plot pens
+            if hasattr(self, 'explorer_tab') and self.explorer_tab:
+                try:
+                    from Synaptipy.shared.plot_customization import update_plot_pens
+                    if hasattr(self.explorer_tab, 'channel_plots'):
+                        plot_widgets = list(self.explorer_tab.channel_plots.values())
+                        if plot_widgets:
+                            update_plot_pens(plot_widgets)
+                            log.info("Updated plot pens for explorer tab plots")
+                except Exception as e:
+                    log.debug(f"Could not update plot pens for explorer tab: {e}")
+            
+            # Update analysis tab plot pens
+            if hasattr(self, 'analyser_tab') and self.analyser_tab:
+                try:
+                    from Synaptipy.shared.plot_customization import update_plot_pens
+                    # Check if analyser_tab is a QTabWidget
+                    if hasattr(self.analyser_tab, 'count'):
+                        for i in range(self.analyser_tab.count()):
+                            analysis_widget = self.analyser_tab.widget(i)
+                            if hasattr(analysis_widget, 'plot_widget'):
+                                update_plot_pens([analysis_widget.plot_widget])
+                                log.debug(f"Updated plot pens for analysis tab {i}")
+                    else:
+                        # analyser_tab might be a single widget
+                        if hasattr(self.analyser_tab, 'plot_widget'):
+                            update_plot_pens([self.analyser_tab.plot_widget])
+                            log.debug("Updated plot pens for single analysis tab")
+                except Exception as e:
+                    log.debug(f"Could not update plot pens for analysis tabs: {e}")
+            
+            log.info("Plot pen update complete")
+        except Exception as e:
+            log.error(f"Failed to update plot pens: {e}")
 
     def _show_plot_customization(self):
         """Show the plot customization dialog."""

@@ -1430,16 +1430,31 @@ class ExplorerTab(QtWidgets.QWidget):
                     try:
                         # Try to use customized grid settings
                         try:
-                            from Synaptipy.shared.plot_customization import get_grid_pen
-                            grid_pen = get_grid_pen()
-                            alpha = grid_pen.alpha() if hasattr(grid_pen, 'alpha') else 0.3
-                            plot_item.showGrid(x=True, y=True, alpha=alpha)
-                            log.debug(f"Customized grid configuration for channel {chan_id}")
+                            from Synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
+                            if is_grid_enabled():
+                                grid_pen = get_grid_pen()
+                                if grid_pen:
+                                    # Get alpha value from pen color
+                                    alpha = 0.3  # Default alpha
+                                    if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                                        alpha = grid_pen.color().alpha() / 255.0
+                                        log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
+                                    else:
+                                        log.debug("Using default grid alpha: 0.3")
+                                    
+                                    plot_item.showGrid(x=True, y=True, alpha=alpha)
+                                    log.debug(f"Customized grid configuration for channel {chan_id} with alpha: {alpha}")
+                                else:
+                                    plot_item.showGrid(x=False, y=False)
+                                    log.debug(f"Grid disabled for channel {chan_id}")
+                            else:
+                                plot_item.showGrid(x=False, y=False)
+                                log.debug(f"Grid disabled for channel {chan_id}")
                         except ImportError:
                             plot_item.showGrid(x=True, y=True, alpha=0.3)
                             log.debug(f"Default grid configuration for channel {chan_id}")
                     except Exception as e:
-                        log.warning(f"Could not enable grid for channel {chan_id}: {e}")
+                        log.warning(f"Could not configure grid for channel {chan_id}: {e}")
                     
                     # Now plot the data
                     if not is_cycle_mode:

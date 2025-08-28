@@ -122,18 +122,18 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         
         layout.addWidget(width_group)
         
-        # Transparency selection
-        transparency_group = QtWidgets.QGroupBox("Transparency")
-        transparency_layout = QtWidgets.QHBoxLayout(transparency_group)
+        # Opacity selection
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        opacity_layout = QtWidgets.QHBoxLayout(opacity_group)
         
-        self.average_transparency_combo = QtWidgets.QComboBox()
-        self._populate_transparency_combo(self.average_transparency_combo)
+        self.average_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.average_opacity_combo)
         
-        transparency_layout.addWidget(QtWidgets.QLabel("Opacity:"))
-        transparency_layout.addWidget(self.average_transparency_combo)
-        transparency_layout.addStretch()
+        opacity_layout.addWidget(QtWidgets.QLabel("Opacity:"))
+        opacity_layout.addWidget(self.average_opacity_combo)
+        opacity_layout.addStretch()
         
-        layout.addWidget(transparency_group)
+        layout.addWidget(opacity_group)
         
         layout.addStretch()
         self.tab_widget.addTab(tab, "Average")
@@ -169,18 +169,18 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         
         layout.addWidget(width_group)
         
-        # Transparency selection
-        transparency_group = QtWidgets.QGroupBox("Transparency")
-        transparency_layout = QtWidgets.QHBoxLayout(transparency_group)
+        # Opacity selection
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        opacity_layout = QtWidgets.QHBoxLayout(opacity_group)
         
-        self.single_trial_transparency_combo = QtWidgets.QComboBox()
-        self._populate_transparency_combo(self.single_trial_transparency_combo)
+        self.single_trial_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.single_trial_opacity_combo)
         
-        transparency_layout.addWidget(QtWidgets.QLabel("Opacity:"))
-        transparency_layout.addWidget(self.single_trial_transparency_combo)
-        transparency_layout.addStretch()
+        opacity_layout.addWidget(QtWidgets.QLabel("Opacity:"))
+        opacity_layout.addWidget(self.single_trial_opacity_combo)
+        opacity_layout.addStretch()
         
-        layout.addWidget(transparency_group)
+        layout.addWidget(opacity_group)
         
         layout.addStretch()
         self.tab_widget.addTab(tab, "Single Trial")
@@ -190,18 +190,22 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         tab = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(tab)
         
-        # Color selection
-        color_group = QtWidgets.QGroupBox("Color")
-        color_layout = QtWidgets.QHBoxLayout(color_group)
+        # Grid toggle checkbox
+        toggle_group = QtWidgets.QGroupBox("Grid Display")
+        toggle_layout = QtWidgets.QHBoxLayout(toggle_group)
         
-        self.grid_color_combo = QtWidgets.QComboBox()
-        self._populate_color_combo(self.grid_color_combo)
+        self.grid_enabled_checkbox = QtWidgets.QCheckBox("Enable Grid")
+        self.grid_enabled_checkbox.setChecked(True)  # Default to enabled
         
-        color_layout.addWidget(QtWidgets.QLabel("Grid Color:"))
-        color_layout.addWidget(self.grid_color_combo)
-        color_layout.addStretch()
+        toggle_layout.addWidget(self.grid_enabled_checkbox)
+        toggle_layout.addStretch()
         
-        layout.addWidget(color_group)
+        layout.addWidget(toggle_group)
+        
+        # Note: Grid color is always black for consistency
+        info_label = QtWidgets.QLabel("Note: Grid color is always black for optimal visibility")
+        info_label.setStyleSheet("color: gray; font-style: italic;")
+        layout.addWidget(info_label)
         
         # Width selection
         width_group = QtWidgets.QGroupBox("Line Width")
@@ -216,18 +220,18 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         
         layout.addWidget(width_group)
         
-        # Transparency selection
-        transparency_group = QtWidgets.QGroupBox("Transparency")
-        transparency_layout = QtWidgets.QHBoxLayout(transparency_group)
+        # Opacity selection
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        opacity_layout = QtWidgets.QHBoxLayout(opacity_group)
         
-        self.grid_transparency_combo = QtWidgets.QComboBox()
-        self._populate_transparency_combo(self.grid_transparency_combo)
+        self.grid_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.grid_opacity_combo)
         
-        transparency_layout.addWidget(QtWidgets.QLabel("Opacity:"))
-        transparency_layout.addWidget(self.grid_transparency_combo)
-        transparency_layout.addStretch()
+        opacity_layout.addWidget(QtWidgets.QLabel("Opacity:"))
+        opacity_layout.addWidget(self.grid_opacity_combo)
+        opacity_layout.addStretch()
         
-        layout.addWidget(transparency_group)
+        layout.addWidget(opacity_group)
         
         layout.addStretch()
         self.tab_widget.addTab(tab, "Grid")
@@ -268,8 +272,8 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         for width in widths:
             combo.addItem(f"{width} pts", width)
     
-    def _populate_transparency_combo(self, combo: QtWidgets.QComboBox):
-        """Populate a transparency combo box with opacity options."""
+    def _populate_opacity_combo(self, combo: QtWidgets.QComboBox):
+        """Populate an opacity combo box with opacity options."""
         opacities = [20, 30, 40, 50, 60, 70, 80, 90, 100]
         
         for opacity in opacities:
@@ -281,17 +285,17 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             # Average preferences
             self._set_combo_value(self.average_color_combo, self.current_preferences['average']['color'])
             self._set_combo_value(self.average_width_combo, self.current_preferences['average']['width'])
-            self._set_combo_value(self.average_transparency_combo, self.current_preferences['average']['transparency'])
+            self._set_combo_value(self.average_opacity_combo, self.current_preferences['average']['opacity'])
             
             # Single trial preferences
             self._set_combo_value(self.single_trial_color_combo, self.current_preferences['single_trial']['color'])
             self._set_combo_value(self.single_trial_width_combo, self.current_preferences['single_trial']['width'])
-            self._set_combo_value(self.single_trial_transparency_combo, self.current_preferences['single_trial']['transparency'])
+            self._set_combo_value(self.single_trial_opacity_combo, self.current_preferences['single_trial']['opacity'])
             
             # Grid preferences
-            self._set_combo_value(self.grid_color_combo, self.current_preferences['grid']['color'])
             self._set_combo_value(self.grid_width_combo, self.current_preferences['grid']['width'])
-            self._set_combo_value(self.grid_transparency_combo, self.current_preferences['grid']['transparency'])
+            self._set_combo_value(self.grid_opacity_combo, self.current_preferences['grid']['opacity'])
+            self.grid_enabled_checkbox.setChecked(self.current_preferences['grid']['enabled'])
             
             log.debug("Current preferences loaded into UI")
         except Exception as e:
@@ -299,25 +303,42 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
     
     def _set_combo_value(self, combo: QtWidgets.QComboBox, value: Any):
         """Set the combo box to display a specific value."""
+        # First try to find an exact match
         for i in range(combo.count()):
             if combo.itemData(i) == value:
                 combo.setCurrentIndex(i)
-                break
+                return
+        
+        # If no exact match, find the closest value for numeric data
+        if isinstance(value, (int, float)) and combo.count() > 0:
+            closest_index = 0
+            closest_distance = float('inf')
+            
+            for i in range(combo.count()):
+                item_value = combo.itemData(i)
+                if isinstance(item_value, (int, float)):
+                    distance = abs(item_value - value)
+                    if distance < closest_distance:
+                        closest_distance = distance
+                        closest_index = i
+            
+            combo.setCurrentIndex(closest_index)
+            log.debug(f"Set combo to closest value: {combo.itemData(closest_index)} (requested: {value})")
     
     def _connect_signals(self):
         """Connect UI control signals."""
         # Connect all combo boxes to update preferences
         self.average_color_combo.currentIndexChanged.connect(self._on_average_color_changed)
         self.average_width_combo.currentIndexChanged.connect(self._on_average_width_changed)
-        self.average_transparency_combo.currentIndexChanged.connect(self._on_average_transparency_changed)
+        self.average_opacity_combo.currentIndexChanged.connect(self._on_average_opacity_changed)
         
         self.single_trial_color_combo.currentIndexChanged.connect(self._on_single_trial_color_changed)
         self.single_trial_width_combo.currentIndexChanged.connect(self._on_single_trial_width_changed)
-        self.single_trial_transparency_combo.currentIndexChanged.connect(self._on_single_trial_transparency_changed)
+        self.single_trial_opacity_combo.currentIndexChanged.connect(self._on_single_trial_opacity_changed)
         
-        self.grid_color_combo.currentIndexChanged.connect(self._on_grid_color_changed)
         self.grid_width_combo.currentIndexChanged.connect(self._on_grid_width_changed)
-        self.grid_transparency_combo.currentIndexChanged.connect(self._on_grid_transparency_changed)
+        self.grid_opacity_combo.currentIndexChanged.connect(self._on_grid_opacity_changed)
+        self.grid_enabled_checkbox.stateChanged.connect(self._on_grid_enabled_changed)
     
     def _on_average_color_changed(self):
         """Handle average color change."""
@@ -335,10 +356,10 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         width = self.average_width_combo.currentData()
         self.current_preferences['average']['width'] = width
     
-    def _on_average_transparency_changed(self):
-        """Handle average transparency change."""
-        transparency = self.average_transparency_combo.currentData()
-        self.current_preferences['average']['transparency'] = transparency
+    def _on_average_opacity_changed(self):
+        """Handle average opacity change."""
+        opacity = self.average_opacity_combo.currentData()
+        self.current_preferences['average']['opacity'] = opacity
     
     def _on_single_trial_color_changed(self):
         """Handle single trial color change."""
@@ -350,25 +371,24 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         width = self.single_trial_width_combo.currentData()
         self.current_preferences['single_trial']['width'] = width
     
-    def _on_single_trial_transparency_changed(self):
-        """Handle single trial transparency change."""
-        transparency = self.single_trial_transparency_combo.currentData()
-        self.current_preferences['single_trial']['transparency'] = transparency
-    
-    def _on_grid_color_changed(self):
-        """Handle grid color change."""
-        color = self.grid_color_combo.currentData()
-        self.current_preferences['grid']['color'] = color
+    def _on_single_trial_opacity_changed(self):
+        """Handle single trial opacity change."""
+        opacity = self.single_trial_opacity_combo.currentData()
+        self.current_preferences['single_trial']['opacity'] = opacity
     
     def _on_grid_width_changed(self):
         """Handle grid width change."""
         width = self.grid_width_combo.currentData()
         self.current_preferences['grid']['width'] = width
     
-    def _on_grid_transparency_changed(self):
-        """Handle grid transparency change."""
-        transparency = self.grid_transparency_combo.currentData()
-        self.current_preferences['grid']['transparency'] = transparency
+    def _on_grid_opacity_changed(self):
+        """Handle grid opacity change."""
+        opacity = self.grid_opacity_combo.currentData()
+        self.current_preferences['grid']['opacity'] = opacity
+    
+    def _on_grid_enabled_changed(self):
+        """Handle grid enabled state change."""
+        self.current_preferences['grid']['enabled'] = self.grid_enabled_checkbox.isChecked()
     
     def _reset_to_defaults(self):
         """Reset all preferences to default values."""
@@ -409,7 +429,13 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
                     log.info("Plot preferences applied and saved (fallback method)")
                 
                 # Signal is already emitted by the customization manager
-                # No need to call _notify_plot_update() here
+                # Now update plot pens directly for immediate visual feedback
+                try:
+                    if hasattr(self.parent(), '_update_plot_pens_only'):
+                        self.parent()._update_plot_pens_only()
+                        log.info("Updated plot pens directly for immediate visual feedback")
+                except Exception as e:
+                    log.debug(f"Could not update plot pens directly: {e}")
             else:
                 log.info("No changes detected - skipping save and update")
             

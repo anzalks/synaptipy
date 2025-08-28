@@ -93,50 +93,51 @@ class TestWidgetStyling(unittest.TestCase):
                 cls.app = QtWidgets.QApplication([])
     
     def test_style_button_mock(self):
-        """Test that style_button applies stylesheet (using mocks)."""
+        """Test that style_button applies primary styling (using mocks)."""
         # Use mock instead of real QPushButton to avoid crashes
         button = MagicMock()
-        button.styleSheet = MagicMock(return_value="")
-        button.setStyleSheet = MagicMock()
+        button.setDefault = MagicMock()
         
         # Call the function
         result = style_button(button, 'primary')
         
-        # Check that setStyleSheet was called
-        button.setStyleSheet.assert_called_once()
+        # Check that setDefault was called for primary style
+        button.setDefault.assert_called_once_with(True)
         self.assertEqual(result, button)  # Should return the same button
     
     def test_style_label_mock(self):
-        """Test that style_label applies stylesheet (using mocks)."""
+        """Test that style_label applies heading styling (using mocks)."""
         # Use mock instead of real QLabel to avoid crashes
         label = MagicMock()
-        label.styleSheet = MagicMock(return_value="")
-        label.setStyleSheet = MagicMock()
+        mock_font = MagicMock()
+        label.font = MagicMock(return_value=mock_font)
+        label.setFont = MagicMock()
         
         # Call the function
         result = style_label(label, 'heading')
         
-        # Check that setStyleSheet was called
-        label.setStyleSheet.assert_called_once()
+        # Check that font was modified and set
+        mock_font.setBold.assert_called_once_with(True)
+        mock_font.setPointSize.assert_called_once()
+        label.setFont.assert_called_once_with(mock_font)
         self.assertEqual(result, label)  # Should return the same label
     
-    @patch('pyqtgraph.PlotWidget')
-    def test_configure_plot_widget(self, mock_plot_widget):
+    def test_configure_plot_widget(self):
         """Test that configure_plot_widget applies the correct styling."""
-        mock_axis = MagicMock()
-        mock_plot_widget.getAxis.return_value = mock_axis
+        # Create a proper mock for the plot widget
+        mock_widget = MagicMock()
+        mock_widget.setBackground = MagicMock()
+        mock_widget.showGrid = MagicMock()
+        mock_widget._synaptipy_configured = False  # Ensure it's not already configured
         
-        # Setup mock methods
-        mock_plot_widget.setBackground = MagicMock()
-        mock_plot_widget.getAxis = MagicMock(return_value=mock_axis)
-        mock_plot_widget.showGrid = MagicMock()
-        
-        result = configure_plot_widget(mock_plot_widget)
+        # Call the function
+        result = configure_plot_widget(mock_widget)
         
         # Verify proper styling was applied
-        mock_plot_widget.setBackground.assert_called_once()
-        mock_plot_widget.showGrid.assert_called_once_with(x=True, y=True, alpha=0.3)
-        self.assertEqual(mock_plot_widget, result)
+        mock_widget.setBackground.assert_called_once_with('w')
+        mock_widget.showGrid.assert_called_once_with(x=True, y=True, alpha=0.3)
+        self.assertEqual(mock_widget, result)
+        self.assertTrue(mock_widget._synaptipy_configured)
 
 
 if __name__ == '__main__':
