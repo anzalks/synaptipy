@@ -154,11 +154,26 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         try:
             # Try to use customized grid settings
             try:
-                from Synaptipy.shared.plot_customization import get_grid_pen
-                grid_pen = get_grid_pen()
-                alpha = grid_pen.alpha() if hasattr(grid_pen, 'alpha') else 0.3
-                self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
-                log.debug(f"[ANALYSIS-BASE] Customized grid configuration successful for {self.__class__.__name__}")
+                from Synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
+                if is_grid_enabled():
+                    grid_pen = get_grid_pen()
+                    if grid_pen:
+                        # Get alpha value from pen color
+                        alpha = 0.3  # Default alpha
+                        if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                            alpha = grid_pen.color().alpha() / 255.0
+                            log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
+                        else:
+                            log.debug("Using default grid alpha: 0.3")
+                        
+                        self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
+                        log.debug(f"[ANALYSIS-BASE] Customized grid configuration successful for {self.__class__.__name__} with alpha: {alpha}")
+                    else:
+                        self.plot_widget.showGrid(x=False, y=False)
+                        log.debug(f"[ANALYSIS-BASE] Grid disabled for {self.__class__.__name__}")
+                else:
+                    self.plot_widget.showGrid(x=False, y=False)
+                    log.debug(f"[ANALYSIS-BASE] Grid disabled for {self.__class__.__name__}")
             except ImportError:
                 self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
                 log.debug(f"[ANALYSIS-BASE] Default grid configuration successful for {self.__class__.__name__}")
