@@ -180,11 +180,11 @@ class PlotSaveDialog(QtWidgets.QDialog):
         return full_path, format_text
 
 
-def save_plot_as_image(plot_widget: pg.PlotWidget, file_path: str, format_type: str = "png") -> bool:
+def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") -> bool:
     """Save a plot widget as an image file.
     
     Args:
-        plot_widget: The PyQtGraph plot widget to save
+        plot_widget: The PyQtGraph plot widget or graphics layout widget to save
         file_path: Full path where to save the file
         format_type: File format ("png" or "pdf")
         
@@ -193,35 +193,77 @@ def save_plot_as_image(plot_widget: pg.PlotWidget, file_path: str, format_type: 
     """
     try:
         if format_type.lower() == "png":
-            # Save as PNG
+            # Save as PNG - works for both single plots and graphics layout widgets
             plot_widget.grab().save(file_path, "PNG")
             log.info(f"Plot saved as PNG: {file_path}")
             return True
             
         elif format_type.lower() == "pdf":
-            # Save as PDF using QPrinter
-            from PySide6.QtPrintSupport import QPrinter
-            from PySide6.QtGui import QPainter
-            
-            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-            printer.setOutputFileName(file_path)
-            
-            # Get the plot item and render it
-            plot_item = plot_widget.getPlotItem()
-            if plot_item:
+            # Save as PDF using high-quality image conversion
+            # This approach captures the plot as a high-quality image first, then converts to PDF
+            try:
+                from PySide6.QtGui import QPixmap, QPainter
+                from PySide6.QtCore import QSizeF
+                from PySide6.QtPrintSupport import QPrinter
+                
+                # Capture the plot as a high-quality pixmap
+                # Use a larger size for better quality
+                original_size = plot_widget.size()
+                capture_size = QSizeF(original_size.width() * 2, original_size.height() * 2)
+                
+                # Create a high-resolution pixmap
+                pixmap = plot_widget.grab()
+                if pixmap.isNull():
+                    log.error(f"Failed to capture plot as pixmap for PDF: {file_path}")
+                    return False
+                
+                # Create PDF printer with high resolution
+                printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                printer.setOutputFileName(file_path)
+                # Use standard A4 page size for simplicity
+                from PySide6.QtGui import QPageSize
+                printer.setPageSize(QPageSize.A4)
+                
                 painter = QPainter()
                 if painter.begin(printer):
-                    # Render the plot to the printer
-                    plot_item.render(painter)
-                    painter.end()
-                    log.info(f"Plot saved as PDF: {file_path}")
-                    return True
+                    try:
+                        # Calculate scaling to fit the pixmap on the page
+                        page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
+                        pixmap_rect = pixmap.rect()
+                        
+                        # Scale to fit while maintaining aspect ratio
+                        scale_x = page_rect.width() / pixmap_rect.width()
+                        scale_y = page_rect.height() / pixmap_rect.height()
+                        scale = min(scale_x, scale_y)
+                        
+                        # Center the plot on the page
+                        scaled_width = pixmap_rect.width() * scale
+                        scaled_height = pixmap_rect.height() * scale
+                        x_offset = (page_rect.width() - scaled_width) / 2
+                        y_offset = (page_rect.height() - scaled_height) / 2
+                        
+                        # Draw the pixmap
+                        painter.drawPixmap(
+                            int(x_offset), int(y_offset), 
+                            int(scaled_width), int(scaled_height), 
+                            pixmap
+                        )
+                        
+                        painter.end()
+                        log.info(f"Plot saved as high-quality PDF: {file_path}")
+                        return True
+                        
+                    except Exception as render_error:
+                        painter.end()
+                        log.error(f"Failed to render pixmap to PDF: {render_error}")
+                        return False
                 else:
                     log.error(f"Failed to begin painting for PDF: {file_path}")
                     return False
-            else:
-                log.error(f"No plot item found for PDF export: {file_path}")
+                    
+            except Exception as e:
+                log.error(f"Failed to create high-quality PDF: {e}")
                 return False
         else:
             log.error(f"Unsupported format: {format_type}")
@@ -232,11 +274,11 @@ def save_plot_as_image(plot_widget: pg.PlotWidget, file_path: str, format_type: 
         return False
 
 
-def save_plot_with_dialog(plot_widget: pg.PlotWidget, parent=None, default_filename: str = "plot") -> bool:
+def save_plot_with_dialog(plot_widget, parent=None, default_filename: str = "plot") -> bool:
     """Show save plot dialog and save the plot if user confirms.
     
     Args:
-        plot_widget: The PyQtGraph plot widget to save
+        plot_widget: The PyQtGraph plot widget, graphics layout widget, or other plot widget to save
         parent: Parent widget for the dialog
         default_filename: Default filename (without extension)
         
