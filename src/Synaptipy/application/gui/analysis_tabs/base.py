@@ -237,6 +237,18 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         self.reset_view_button.clicked.connect(self._on_reset_view_clicked)
         
         button_layout.addWidget(self.reset_view_button)
+        
+        # Create save plot button
+        self.save_plot_button = QtWidgets.QPushButton("Save Plot")
+        self.save_plot_button.setToolTip("Save plot as PNG or PDF")
+        
+        # Apply consistent button styling
+        style_button(self.save_plot_button)
+        
+        # Connect to save functionality
+        self.save_plot_button.clicked.connect(self._on_save_plot_clicked)
+        
+        button_layout.addWidget(self.save_plot_button)
         button_layout.addStretch()  # Push button to center
         
         # Add button layout to main layout
@@ -249,6 +261,42 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         log.info(f"[ANALYSIS-BASE] Reset view clicked for {self.__class__.__name__}")
         self.auto_range_plot()
         log.debug(f"[ANALYSIS-BASE] Reset view triggered for {self.__class__.__name__}")
+
+    def _on_save_plot_clicked(self):
+        """Handle save plot button click."""
+        log.info(f"[ANALYSIS-BASE] Save plot clicked for {self.__class__.__name__}")
+        
+        if not self.plot_widget:
+            log.warning(f"[ANALYSIS-BASE] No plot widget available for saving")
+            return
+            
+        try:
+            from Synaptipy.application.gui.plot_save_dialog import save_plot_with_dialog
+            
+            # Generate default filename based on tab name
+            default_filename = f"{self.__class__.__name__.lower().replace('tab', '')}_plot"
+            
+            # Show save dialog and save plot
+            success = save_plot_with_dialog(
+                self.plot_widget, 
+                parent=self, 
+                default_filename=default_filename
+            )
+            
+            if success:
+                log.info(f"[ANALYSIS-BASE] Plot saved successfully for {self.__class__.__name__}")
+            else:
+                log.debug(f"[ANALYSIS-BASE] Plot save cancelled for {self.__class__.__name__}")
+                
+        except Exception as e:
+            log.error(f"[ANALYSIS-BASE] Failed to save plot for {self.__class__.__name__}: {e}")
+            # Show error message to user
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self, 
+                "Save Error", 
+                f"Failed to save plot:\n{str(e)}"
+            )
 
     def _setup_zoom_sync(self):
         """Initialize the zoom synchronization manager for reset functionality only."""
