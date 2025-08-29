@@ -779,6 +779,13 @@ class ExplorerTab(QtWidgets.QWidget):
             # Set up selection rectangle tool for zooming plots
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
             
+            # Apply system theme colors to the selection rectangle
+            try:
+                from Synaptipy.shared.zoom_theme import apply_theme_with_patching
+                QtCore.QTimer.singleShot(100, lambda: apply_theme_with_patching(plot_item.getViewBox()))
+            except Exception as e:
+                log.debug(f"Failed to apply theme to plot widget: {e}")
+            
             # Add a placeholder for the data - don't add plot items here, they're added in _update_plot
             self.channel_plot_data_items[chan_key] = []  # Initialize empty list to store plot items
         
