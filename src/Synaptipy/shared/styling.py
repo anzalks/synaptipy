@@ -273,5 +273,6 @@ __all__ = [
     'apply_stylesheet', 'configure_plot_widget', 'configure_pyqtgraph_globally',
     'get_trial_pen', 'get_average_pen', 'get_baseline_pen', 'get_response_pen', 'get_grid_pen',
     'style_button', 'style_label', 'style_result_display', 'style_info_label', 'style_error_message',
-    'get_system_theme_mode', 'PLOT_COLORS'
+    'get_system_theme_mode', 'PLOT_COLORS', 'get_system_accent_color', 'customize_viewbox_selection_colors',
+    'apply_theme_to_plot_widget'
 ] 
