@@ -1273,7 +1273,13 @@ class ExplorerTab(QtWidgets.QWidget):
             trial_pen = get_single_trial_pen()
             average_pen = get_average_pen()
             grid_pen = get_grid_pen()
-            log.info(f"[EXPLORER-PEN] Retrieved pens - Trial: {trial_pen.color().name()}, Average: {average_pen.color().name()}, Grid: {grid_pen.color().name()}")
+            
+            # Validate pens before proceeding
+            if not trial_pen or not average_pen:
+                log.warning("Invalid pens received from customization manager - skipping pen update")
+                return
+                
+            log.info(f"[EXPLORER-PEN] Retrieved pens - Trial: {trial_pen.color().name()}, Average: {average_pen.color().name()}, Grid: {grid_pen.color().name() if grid_pen else 'None'}")
         except ImportError:
             log.warning("Could not import plot customization - skipping pen update")
             return
@@ -1296,7 +1302,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 if isinstance(item, pg.PlotDataItem):
                     # Determine which pen to apply based on item properties or name
                     old_pen = item.opts.get('pen') if hasattr(item, 'opts') else None
-                    old_color = old_pen.color().name() if old_pen else "unknown"
+                    old_color = old_pen.color().name() if old_pen and hasattr(old_pen, 'color') and old_pen.color() else "unknown"
                     
                     if hasattr(item, 'opts') and 'name' in item.opts:
                         item_name = item.opts['name']
@@ -1323,7 +1329,7 @@ class ExplorerTab(QtWidgets.QWidget):
             for chan_id, avg_item in self.selected_average_plot_items.items():
                 if isinstance(avg_item, pg.PlotDataItem):
                     old_pen = avg_item.opts.get('pen') if hasattr(avg_item, 'opts') else None
-                    old_color = old_pen.color().name() if old_pen else "unknown"
+                    old_color = old_pen.color().name() if old_pen and hasattr(old_pen, 'color') and old_pen.color() else "unknown"
                     
                     avg_item.setPen(average_pen)
                     log.info(f"[EXPLORER-PEN] Updated {chan_id} selected average item from {old_color} to {average_pen.color().name()}")
@@ -1333,19 +1339,20 @@ class ExplorerTab(QtWidgets.QWidget):
                     skipped_count += 1
         else:
             log.info("[EXPLORER-PEN] No selected average plot items to process")
-            
-            # Update grid for this channel
-            plot_item = self.channel_plots.get(chan_id)
-            if plot_item:
-                try:
-                    # PySide6 QPen doesn't have alpha() method, use brush color alpha instead
+        
+        # Update grid for all channels
+        if grid_pen:
+            for chan_id, plot_item in self.channel_plots.items():
+                if plot_item:
                     try:
-                        alpha = grid_pen.brush().color().alpha() / 255.0 if grid_pen.brush() else 0.3
-                    except:
-                        alpha = 0.3
-                    plot_item.showGrid(x=True, y=True, alpha=alpha)
-                except Exception as e:
-                    log.warning(f"Could not update grid for channel {chan_id}: {e}")
+                        # PySide6 QPen doesn't have alpha() method, use brush color alpha instead
+                        try:
+                            alpha = grid_pen.brush().color().alpha() / 255.0 if grid_pen.brush() else 0.3
+                        except:
+                            alpha = 0.3
+                        plot_item.showGrid(x=True, y=True, alpha=alpha)
+                    except Exception as e:
+                        log.warning(f"Could not update grid for channel {chan_id}: {e}")
         
         log.info(f"[EXPLORER-PEN] Pen update complete - updated {updated_count} items, skipped {skipped_count} items")
 
@@ -2826,33 +2833,51 @@ class ExplorerTab(QtWidgets.QWidget):
             # Create hash from pen properties
             pen_hash_parts = []
             
-            if trial_pen:
-                pen_hash_parts.append(f"trial_color_{trial_pen.color().name()}")
-                pen_hash_parts.append(f"trial_width_{trial_pen.width()}")
-                # PySide6 QPen doesn't have alpha() method, use brush color alpha instead
+            if trial_pen and hasattr(trial_pen, 'color') and trial_pen.color():
                 try:
-                    alpha = trial_pen.brush().color().alpha() if trial_pen.brush() else 255
-                    pen_hash_parts.append(f"trial_alpha_{alpha}")
-                except:
-                    pen_hash_parts.append("trial_alpha_255")
+                    pen_hash_parts.append(f"trial_color_{trial_pen.color().name()}")
+                    pen_hash_parts.append(f"trial_width_{trial_pen.width()}")
+                    # PySide6 QPen doesn't have alpha() method, use brush color alpha instead
+                    try:
+                        alpha = trial_pen.brush().color().alpha() if trial_pen.brush() else 255
+                        pen_hash_parts.append(f"trial_alpha_{alpha}")
+                    except:
+                        pen_hash_parts.append("trial_alpha_255")
+                except Exception as e:
+                    log.warning(f"Could not process trial pen properties: {e}")
+                    pen_hash_parts.append("trial_pen_error")
+            else:
+                pen_hash_parts.append("trial_pen_none")
             
-            if average_pen:
-                pen_hash_parts.append(f"avg_color_{average_pen.color().name()}")
-                pen_hash_parts.append(f"avg_width_{average_pen.width()}")
+            if average_pen and hasattr(average_pen, 'color') and average_pen.color():
                 try:
-                    alpha = average_pen.brush().color().alpha() if average_pen.brush() else 255
-                    pen_hash_parts.append(f"avg_alpha_{alpha}")
-                except:
-                    pen_hash_parts.append("avg_alpha_255")
+                    pen_hash_parts.append(f"avg_color_{average_pen.color().name()}")
+                    pen_hash_parts.append(f"avg_width_{average_pen.width()}")
+                    try:
+                        alpha = average_pen.brush().color().alpha() if average_pen.brush() else 255
+                        pen_hash_parts.append(f"avg_alpha_{alpha}")
+                    except:
+                        pen_hash_parts.append("avg_alpha_255")
+                except Exception as e:
+                    log.warning(f"Could not process average pen properties: {e}")
+                    pen_hash_parts.append("avg_pen_error")
+            else:
+                pen_hash_parts.append("avg_pen_none")
             
-            if grid_pen:
-                pen_hash_parts.append(f"grid_color_{grid_pen.color().name()}")
-                pen_hash_parts.append(f"grid_width_{grid_pen.width()}")
+            if grid_pen and hasattr(grid_pen, 'color') and grid_pen.color():
                 try:
-                    alpha = grid_pen.brush().color().alpha() if grid_pen.brush() else 255
-                    pen_hash_parts.append(f"grid_alpha_{alpha}")
-                except:
-                    pen_hash_parts.append("grid_alpha_255")
+                    pen_hash_parts.append(f"grid_color_{grid_pen.color().name()}")
+                    pen_hash_parts.append(f"grid_width_{grid_pen.width()}")
+                    try:
+                        alpha = grid_pen.brush().color().alpha() if grid_pen.brush() else 255
+                        pen_hash_parts.append(f"grid_alpha_{alpha}")
+                    except:
+                        pen_hash_parts.append("grid_alpha_255")
+                except Exception as e:
+                    log.warning(f"Could not process grid pen properties: {e}")
+                    pen_hash_parts.append("grid_pen_error")
+            else:
+                pen_hash_parts.append("grid_pen_none")
             
             return "_".join(pen_hash_parts)
             
