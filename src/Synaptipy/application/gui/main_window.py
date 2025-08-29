@@ -348,12 +348,18 @@ class MainWindow(QtWidgets.QMainWindow):
             # Update explorer tab plot pens
             if hasattr(self, 'explorer_tab') and self.explorer_tab:
                 try:
-                    from Synaptipy.shared.plot_customization import update_plot_pens
-                    if hasattr(self.explorer_tab, 'channel_plots'):
-                        plot_widgets = list(self.explorer_tab.channel_plots.values())
-                        if plot_widgets:
-                            update_plot_pens(plot_widgets)
-                            log.info("Updated plot pens for explorer tab plots")
+                    if hasattr(self.explorer_tab, '_update_plot_pens_only'):
+                        # Use explorer tab's own pen update method for better performance
+                        self.explorer_tab._update_plot_pens_only()
+                        log.info("Updated plot pens for explorer tab plots (using tab's method)")
+                    else:
+                        # Fallback to generic method if tab doesn't have its own
+                        from Synaptipy.shared.plot_customization import update_plot_pens
+                        if hasattr(self.explorer_tab, 'channel_plots'):
+                            plot_widgets = list(self.explorer_tab.channel_plots.values())
+                            if plot_widgets:
+                                update_plot_pens(plot_widgets)
+                                log.info("Updated plot pens for explorer tab plots (using generic method)")
                 except Exception as e:
                     log.debug(f"Could not update plot pens for explorer tab: {e}")
             
