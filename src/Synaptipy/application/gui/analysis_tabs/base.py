@@ -311,8 +311,9 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         
         # Apply system theme colors to the selection rectangle
         try:
-            from Synaptipy.shared.zoom_theme import apply_theme_with_patching
-            QtCore.QTimer.singleShot(100, lambda: apply_theme_with_patching(self.plot_widget.getViewBox()))
+            from Synaptipy.shared.zoom_theme import apply_theme_with_custom_selection
+            # Apply custom selection rectangle with theme
+            apply_theme_with_custom_selection(self.plot_widget.getViewBox())
         except Exception as e:
             log.debug(f"Failed to apply theme to plot widget: {e}")
         
