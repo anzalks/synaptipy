@@ -76,9 +76,9 @@ def apply_theme_to_viewbox(viewbox) -> None:
         new_pen = QPen(color)
         new_pen.setWidth(1)
         
-        # Create brush with semi-transparent color
+        # Create brush with 70% transparency (30% opacity)
         brush_color = QColor(color)
-        brush_color.setAlpha(100)  # 40% opacity
+        brush_color.setAlpha(77)  # 30% opacity (77/255 ≈ 0.3) = 70% transparency
         new_brush = QBrush(brush_color)
         
         # Store the colors on the viewbox for later use
@@ -182,3 +182,179 @@ def setup_theme_for_viewbox(viewbox) -> None:
     except Exception as e:
         log.warning(f"Failed to set up theme for ViewBox: {e}")
 
+
+def apply_theme_with_monitoring(viewbox) -> None:
+    """Apply theme and monitor for rbScaleBox changes to reapply theme."""
+    try:
+        if not viewbox:
+            return
+            
+        log.info("🔄 Applying theme with monitoring...")
+        
+        # Apply initial theme
+        apply_theme_to_viewbox(viewbox)
+        
+        # Set up aggressive monitoring to reapply theme when rbScaleBox changes
+        def monitor_and_reapply():
+            try:
+                if hasattr(viewbox, 'rbScaleBox') and viewbox.rbScaleBox is not None:
+                    # Force reapply theme to ensure it sticks
+                    apply_theme_to_viewbox(viewbox)
+                    
+                    # Also try to force the rectangle shape
+                    rb = viewbox.rbScaleBox
+                    if rb is not None:
+                        # Force rectangular shape
+                        rb.resetTransform()
+                        rb.setRotation(0)
+                        rb.setScale(1.0)
+                        
+                        # Force sharp corners
+                        from PySide6.QtCore import Qt
+                        from PySide6.QtGui import QPen
+                        if hasattr(viewbox, '_synaptipy_theme_pen'):
+                            sharp_pen = QPen(viewbox._synaptipy_theme_pen.color())
+                            sharp_pen.setWidth(1)
+                            sharp_pen.setCapStyle(Qt.SquareCap)
+                            sharp_pen.setJoinStyle(Qt.MiterJoin)
+                            rb.setPen(sharp_pen)
+                        
+                        # Force transparency
+                        if hasattr(viewbox, '_synaptipy_theme_brush'):
+                            rb.setBrush(viewbox._synaptipy_theme_brush)
+                    
+                    # Set up a timer to keep monitoring
+                    from PySide6.QtCore import QTimer
+                    timer = QTimer()
+                    timer.timeout.connect(lambda: monitor_and_reapply())
+                    timer.start(50)  # Check every 50ms for more aggressive monitoring
+                    
+            except Exception as e:
+                log.debug(f"Monitor reapply failed: {e}")
+        
+        # Start monitoring immediately
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, monitor_and_reapply)
+        
+        log.info("✅ Theme with monitoring applied successfully!")
+        
+    except Exception as e:
+        log.error(f"❌ Failed to apply theme with monitoring: {e}")
+        import traceback
+        log.error(f"Traceback: {traceback.format_exc()}")
+
+
+def apply_theme_with_patching(viewbox) -> None:
+    """Apply theme with patching - alias for monitoring approach."""
+    apply_theme_with_monitoring(viewbox)
+
+
+def customize_pyqtgraph_selection(viewbox) -> None:
+    """Customize PyQtGraph's existing rbScaleBox with system colors and transparency."""
+    try:
+        if not viewbox:
+            return
+            
+        log.info("🔄 Customizing PyQtGraph's selection rectangle...")
+        
+        # Get system accent color
+        from PySide6.QtGui import QColor, QPen, QBrush
+        from PySide6.QtCore import Qt, QTimer
+        
+        accent_color = get_system_accent_color()
+        color = QColor(accent_color)
+        if not color.isValid():
+            color = QColor("#6B7280")  # Fallback grey
+            log.info(f"⚠️ Invalid accent color, using fallback: {color.name()}")
+        else:
+            log.info(f"🎨 SYSTEM ACCENT COLOR: {color.name()}")
+        
+        # Create pen and brush with system colors and transparency
+        pen = QPen(color)
+        pen.setWidth(1)
+        pen.setStyle(Qt.SolidLine)
+        pen.setCapStyle(Qt.SquareCap)
+        pen.setJoinStyle(Qt.MiterJoin)
+        pen.setCosmetic(True)
+        
+        brush_color = QColor(color)
+        brush_color.setAlpha(77)  # 30% opacity = 70% transparency
+        brush = QBrush(brush_color, Qt.SolidPattern)
+        
+        log.info(f"🖌️ CREATED PEN: color={pen.color().name()}, width={pen.width()}")
+        log.info(f"🖌️ CREATED BRUSH: color={brush_color.name()}, alpha={brush_color.alpha()} (70% transparency)")
+        
+        # Function to apply theme to rbScaleBox when it's created
+        def apply_theme_to_rbScaleBox():
+            try:
+                if hasattr(viewbox, 'rbScaleBox') and viewbox.rbScaleBox is not None:
+                    viewbox.rbScaleBox.setPen(pen)
+                    viewbox.rbScaleBox.setBrush(brush)
+                    return True
+                else:
+                    return False
+            except Exception as e:
+                log.error(f"❌ Failed to apply theme to rbScaleBox: {e}")
+                return False
+        
+        # Store the theme application function on the viewbox
+        viewbox._synaptipy_apply_theme = apply_theme_to_rbScaleBox
+        
+        # Apply theme immediately if rbScaleBox already exists
+        apply_theme_to_rbScaleBox()
+        
+        # Override setMouseMode to apply theme when rbScaleBox is created
+        if not hasattr(viewbox, '_synaptipy_original_setMouseMode'):
+            viewbox._synaptipy_original_setMouseMode = viewbox.setMouseMode
+        
+        def custom_setMouseMode(mode, *args, **kwargs):
+            # Call original setMouseMode
+            result = viewbox._synaptipy_original_setMouseMode(mode, *args, **kwargs)
+            
+            # Apply theme after mode is set
+            QTimer.singleShot(10, apply_theme_to_rbScaleBox)  # Small delay to ensure rbScaleBox is created
+            
+            return result
+        
+        viewbox.setMouseMode = custom_setMouseMode
+        
+        # Set up monitoring to reapply theme when rbScaleBox is recreated
+        def monitor_and_reapply():
+            apply_theme_to_rbScaleBox()
+            
+        # Monitor every 500ms to catch when rbScaleBox is recreated
+        timer = QTimer()
+        timer.timeout.connect(monitor_and_reapply)
+        timer.start(500)
+        viewbox._synaptipy_theme_monitor = timer  # Keep reference to prevent garbage collection
+        
+        log.info("✅ PyQtGraph selection customization complete!")
+        
+    except Exception as e:
+        log.error(f"❌ Failed to customize PyQtGraph selection: {e}")
+        import traceback
+        log.error(f"Traceback: {traceback.format_exc()}")
+
+
+def apply_theme_with_custom_selection(viewbox) -> None:
+    """Apply theme and customize PyQtGraph's selection rectangle."""
+    try:
+        if not viewbox:
+            return
+            
+        log.info("🔄 Applying theme with PyQtGraph customization...")
+        
+        # Apply basic theme colors to ViewBox
+        apply_theme_to_viewbox(viewbox)
+        
+        # Customize PyQtGraph's existing selection rectangle
+        customize_pyqtgraph_selection(viewbox)
+        
+        log.info("✅ Theme with PyQtGraph customization applied successfully!")
+        
+    except Exception as e:
+        log.error(f"❌ Failed to apply theme with PyQtGraph customization: {e}")
+        import traceback
+        log.error(f"Traceback: {traceback.format_exc()}")
+
+ 
