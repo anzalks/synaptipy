@@ -11,6 +11,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 from typing import Optional
+import shiboken6
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def get_system_accent_color() -> str:
 def apply_theme_to_viewbox(viewbox) -> None:
     """Apply system theme colors to a ViewBox's zoom selection rectangle."""
     try:
-        if not viewbox:
+        if not viewbox or not shiboken6.isValid(viewbox):
             return
             
         # Get system-accented color
@@ -85,10 +86,11 @@ def apply_theme_to_viewbox(viewbox) -> None:
         viewbox._synaptipy_theme_pen = new_pen
         viewbox._synaptipy_theme_brush = new_brush
         
-        # Apply the colors immediately if rbScaleBox exists
-        if hasattr(viewbox, 'rbScaleBox') and viewbox.rbScaleBox is not None:
-            viewbox.rbScaleBox.setPen(new_pen)
-            viewbox.rbScaleBox.setBrush(new_brush)
+        # Apply the colors immediately if rbScaleBox exists and is valid
+        rb = getattr(viewbox, 'rbScaleBox', None)
+        if rb is not None and shiboken6.isValid(rb):
+            rb.setPen(new_pen)
+            rb.setBrush(new_brush)
             
         log.debug(f"Applied theme to ViewBox: pen={color.name()}, brush={brush_color.name()}")
         
@@ -114,15 +116,16 @@ def apply_theme_to_plot_widget(plot_widget) -> None:
 def ensure_theme_colors(viewbox) -> None:
     """Ensure theme colors are applied to a ViewBox."""
     try:
-        if not viewbox:
+        if not viewbox or not shiboken6.isValid(viewbox):
             return
             
         # Check if we have stored theme colors
         if hasattr(viewbox, '_synaptipy_theme_pen') and hasattr(viewbox, '_synaptipy_theme_brush'):
             # Apply stored theme colors
-            if hasattr(viewbox, 'rbScaleBox') and viewbox.rbScaleBox is not None:
-                viewbox.rbScaleBox.setPen(viewbox._synaptipy_theme_pen)
-                viewbox.rbScaleBox.setBrush(viewbox._synaptipy_theme_brush)
+            rb = getattr(viewbox, 'rbScaleBox', None)
+            if rb is not None and shiboken6.isValid(rb):
+                rb.setPen(viewbox._synaptipy_theme_pen)
+                rb.setBrush(viewbox._synaptipy_theme_brush)
         else:
             # Apply theme colors for the first time
             apply_theme_to_viewbox(viewbox)
@@ -139,15 +142,16 @@ def apply_theme_with_patching(viewbox) -> None:
 def refresh_theme_colors(viewbox) -> None:
     """Refresh theme colors on a ViewBox - call this whenever you want to ensure theme is applied."""
     try:
-        if not viewbox:
+        if not viewbox or not shiboken6.isValid(viewbox):
             return
             
         # Check if we have stored theme colors
         if hasattr(viewbox, '_synaptipy_theme_pen') and hasattr(viewbox, '_synaptipy_theme_brush'):
             # Apply stored theme colors
-            if hasattr(viewbox, 'rbScaleBox') and viewbox.rbScaleBox is not None:
-                viewbox.rbScaleBox.setPen(viewbox._synaptipy_theme_pen)
-                viewbox.rbScaleBox.setBrush(viewbox._synaptipy_theme_brush)
+            rb = getattr(viewbox, 'rbScaleBox', None)
+            if rb is not None and shiboken6.isValid(rb):
+                rb.setPen(viewbox._synaptipy_theme_pen)
+                rb.setBrush(viewbox._synaptipy_theme_brush)
                 log.debug("Refreshed theme colors on ViewBox")
         else:
             # Apply theme colors for the first time
@@ -252,7 +256,7 @@ def apply_theme_with_patching(viewbox) -> None:
 def customize_pyqtgraph_selection(viewbox) -> None:
     """Customize PyQtGraph's existing rbScaleBox with system colors and transparency."""
     try:
-        if not viewbox:
+        if not viewbox or not shiboken6.isValid(viewbox):
             return
             
         log.info("🔄 Customizing PyQtGraph's selection rectangle...")
@@ -287,14 +291,18 @@ def customize_pyqtgraph_selection(viewbox) -> None:
         # Function to apply theme to rbScaleBox when it's created
         def apply_theme_to_rbScaleBox():
             try:
-                if hasattr(viewbox, 'rbScaleBox') and viewbox.rbScaleBox is not None:
-                    viewbox.rbScaleBox.setPen(pen)
-                    viewbox.rbScaleBox.setBrush(brush)
-                    return True
-                else:
+                vb = viewbox
+                if vb is None or not shiboken6.isValid(vb):
                     return False
+                rb = getattr(vb, 'rbScaleBox', None)
+                if rb is not None and shiboken6.isValid(rb):
+                    rb.setPen(pen)
+                    rb.setBrush(brush)
+                    return True
+                return False
             except Exception as e:
-                log.error(f"❌ Failed to apply theme to rbScaleBox: {e}")
+                # This can legitimately happen during teardown; keep it at debug level
+                log.debug(f"Failed to apply theme to rbScaleBox (likely teardown): {e}")
                 return False
         
         # Store the theme application function on the viewbox
@@ -308,12 +316,13 @@ def customize_pyqtgraph_selection(viewbox) -> None:
             viewbox._synaptipy_original_setMouseMode = viewbox.setMouseMode
         
         def custom_setMouseMode(mode, *args, **kwargs):
+            vb = viewbox
+            if vb is None or not shiboken6.isValid(vb):
+                return None
             # Call original setMouseMode
-            result = viewbox._synaptipy_original_setMouseMode(mode, *args, **kwargs)
-            
+            result = vb._synaptipy_original_setMouseMode(mode, *args, **kwargs)
             # Apply theme after mode is set
             QTimer.singleShot(10, apply_theme_to_rbScaleBox)  # Small delay to ensure rbScaleBox is created
-            
             return result
         
         viewbox.setMouseMode = custom_setMouseMode
@@ -323,10 +332,20 @@ def customize_pyqtgraph_selection(viewbox) -> None:
             apply_theme_to_rbScaleBox()
             
         # Monitor every 500ms to catch when rbScaleBox is recreated
-        timer = QTimer()
+        timer = QTimer(viewbox)  # parented to ViewBox to auto-stop on deletion
+        timer.setInterval(500)
         timer.timeout.connect(monitor_and_reapply)
-        timer.start(500)
-        viewbox._synaptipy_theme_monitor = timer  # Keep reference to prevent garbage collection
+        timer.start()
+        viewbox._synaptipy_theme_monitor = timer  # Keep python ref (optional since it has a Qt parent)
+
+        # Ensure timer stops if the ViewBox is destroyed
+        try:
+            def _stop_timer(*_):
+                if timer.isActive():
+                    timer.stop()
+            viewbox.destroyed.connect(_stop_timer)
+        except Exception:
+            pass
         
         log.info("✅ PyQtGraph selection customization complete!")
         
