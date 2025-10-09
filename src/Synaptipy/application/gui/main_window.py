@@ -259,16 +259,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 
                 if hasattr(self.explorer_tab, '_update_plot'):
                     log.info("Explorer tab has _update_plot method")
-                    # Force a full replot on preference changes, using cached data for parity with initial load
-                    log.info("Preference change: forcing full replot for Explorer tab")
+                    # New logic that triggers an efficient pen-only update
+                    log.info("Preference change: refreshing plots with new styles")
                     try:
-                        # Request inline average plotting during this refresh
-                        setattr(self.explorer_tab, '_inline_avg_now', True)
-                        self.explorer_tab._update_plot(pen_only=False)
+                        # Use pen-only to avoid full data replot
+                        self.explorer_tab._update_plot(pen_only=True)
                     finally:
-                        try: delattr(self.explorer_tab, '_inline_avg_now')
-                        except Exception: pass
-                    log.info("Refreshed explorer tab plots (full replot on preference change)")
+                        pass
+                    log.info("Refreshed explorer tab plots (pen-only on preference change)")
                 else:
                     log.warning("Explorer tab does not have _update_plot method")
             else:

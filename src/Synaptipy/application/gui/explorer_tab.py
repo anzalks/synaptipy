@@ -117,6 +117,20 @@ class ExplorerTab(QtWidgets.QWidget):
         self.individual_y_scrollbars: Dict[str, QtWidgets.QScrollBar] = {}
         self.individual_y_slider_values: Dict[str, int] = {}
         self.individual_y_scrollbar_values: Dict[str, int] = {}
+
+        # --- Debounce timers for calm interactions ---
+        self._x_range_update_timer = QtCore.QTimer()
+        self._x_range_update_timer.setSingleShot(True)
+        self._x_range_update_timer.setInterval(50)
+        self._x_range_update_timer.timeout.connect(self._perform_x_range_update)
+
+        self._y_range_update_timer = QtCore.QTimer()
+        self._y_range_update_timer.setSingleShot(True)
+        self._y_range_update_timer.setInterval(50)
+        self._y_range_update_timer.timeout.connect(self._perform_y_range_update)
+
+        self._last_x_range = None
+        self._last_y_vbs = {}
         
         # Manual limits storage
         self.manual_x_range: Optional[Tuple[float, float]] = None
@@ -1901,24 +1915,15 @@ class ExplorerTab(QtWidgets.QWidget):
         finally: self._updating_viewranges=False
 
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
-        # Simple debouncing to prevent rapid scaling feedback on Windows
-        if not hasattr(self, '_last_x_range_change'):
-            self._last_x_range_change = 0
-        import time
-        now = time.time()
-        if now - self._last_x_range_change < 0.1:  # 100ms debounce
-            return
-        self._last_x_range_change = now
-        
-        # Skip complex processing that can cause feedback loops
         if self._updating_viewranges or self.base_x_range is None:
             return
-            
-        # Simple scrollbar update without extensive logging
-        try:
-            self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
-        except Exception:
-            pass  # Ignore scrollbar update errors
+        self._last_x_range = new_range
+        self._x_range_update_timer.start()
+
+    def _perform_x_range_update(self):
+        if self._last_x_range is not None:
+            self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, self._last_x_range)
+            self._trigger_limit_field_update()
 
     @QtCore.Slot(int)
     def _on_y_lock_changed(self, state: int):
@@ -2159,29 +2164,27 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges=False
 
     def _handle_vb_yrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
-        # Simple debouncing to prevent rapid scaling feedback on Windows
-        cid = getattr(vb,'_synaptipy_chan_id',None)
-        if cid is None:
+        cid = getattr(vb, '_synaptipy_chan_id', None)
+        if cid is None or self._updating_viewranges or self.base_y_ranges.get(cid) is None:
             return
-            
-        if not hasattr(self, '_last_y_range_changes'):
-            self._last_y_range_changes = {}
-        if cid not in self._last_y_range_changes:
-            self._last_y_range_changes[cid] = 0
-            
-        import time
-        now = time.time()
-        if now - self._last_y_range_changes[cid] < 0.1:  # 100ms debounce per channel
-            return
-        self._last_y_range_changes[cid] = now
-        
-        # Skip complex processing that can cause feedback loops
-        if self._updating_viewranges or self.base_y_ranges.get(cid) is None:
-            return
-            
-        # Simple scrollbar update without extensive logging  
-        # Skip complex scrollbar updates that cause feedback loops on Windows
-        pass
+        self._last_y_vbs[cid] = (vb, new_range)
+        self._y_range_update_timer.start()
+
+    def _perform_y_range_update(self):
+        if self.y_axes_locked:
+            if self._last_y_vbs:
+                first_cid = next(iter(self._last_y_vbs))
+                _, new_range = self._last_y_vbs[first_cid]
+                base_range = self.base_y_ranges.get(first_cid)
+                self._update_scrollbar_from_view(self.global_y_scrollbar, base_range, new_range)
+        else:
+            for cid, (vb, new_range) in self._last_y_vbs.items():
+                scrollbar = self.individual_y_scrollbars.get(cid)
+                base_range = self.base_y_ranges.get(cid)
+                self._update_scrollbar_from_view(scrollbar, base_range, new_range)
+
+        self._last_y_vbs.clear()
+        self._trigger_limit_field_update()
 
     def _update_scrollbar_from_view(self, scrollbar: QtWidgets.QScrollBar, base_range: Optional[Tuple[float,float]], view_range: Optional[Tuple[float, float]]):
         if self._updating_scrollbars or scrollbar is None: return

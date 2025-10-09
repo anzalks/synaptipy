@@ -403,35 +403,25 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             log.error(f"Failed to reset preferences: {e}")
     
     def _apply_changes(self):
-        """Apply current changes and save preferences."""
+        """Apply current changes and save preferences only if they have changed."""
         try:
-            # Check if preferences actually changed
+            # Only proceed if preferences have actually been modified
             if self._preferences_changed():
+                log.info("Changes detected, applying new plot preferences.")
                 # Use batch update for better performance
-                if hasattr(self.customization_manager, 'update_preferences_batch'):
-                    success = self.customization_manager.update_preferences_batch(
-                        self.current_preferences, 
-                        emit_signal=True
-                    )
-                    if success:
-                        log.info("Plot preferences applied and saved via batch update")
-                        # Update the original preferences reference after successful save
-                        self._original_preferences = copy.deepcopy(self.current_preferences)
-                    else:
-                        log.warning("Batch update failed - falling back to individual updates")
-                        # Fallback to individual updates
-                        self.customization_manager.save_preferences()
-                        self._original_preferences = copy.deepcopy(self.current_preferences)
-                else:
-                    # Fallback for older versions
-                    self.customization_manager.save_preferences()
+                success = self.customization_manager.update_preferences_batch(
+                    self.current_preferences,
+                    emit_signal=True
+                )
+                if success:
+                    log.info("Plot preferences applied and saved via batch update.")
+                    # Update the original preferences reference to prevent re-applying the same change
                     self._original_preferences = copy.deepcopy(self.current_preferences)
-                    log.info("Plot preferences applied and saved (fallback method)")
-                
-                # Signal is already emitted by the customization manager; avoid redundant direct refresh
+                else:
+                    log.warning("Batch update failed.")
             else:
-                log.info("No changes detected - skipping save and update")
-            
+                log.info("No changes detected - skipping save and update signal.")
+                
         except Exception as e:
             log.error(f"Failed to apply preferences: {e}")
 
