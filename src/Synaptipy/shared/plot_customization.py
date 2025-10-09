@@ -180,9 +180,12 @@ class PlotCustomizationManager:
             self._cache_dirty = False  # Reset cache state
             log.debug("Cleared pen cache after preference change")
             
-            # Emit signal to notify about preference changes
-            _plot_signals.preferences_updated.emit()
-            log.debug("Emitted plot preferences update signal")
+            # Emit signal to notify about preference changes (queued to keep UI responsive)
+            try:
+                QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)
+            except Exception:
+                _plot_signals.preferences_updated.emit()
+            log.debug("Scheduled plot preferences update signal (queued)")
             
         except Exception as e:
             log.error(f"Failed to save plot preferences: {e}")
@@ -318,14 +321,21 @@ class PlotCustomizationManager:
                         if property_name in self.defaults[plot_type]:
                             self.defaults[plot_type][property_name] = new_preferences[plot_type][property_name]
             
-            # Mark cache as dirty
-            self._cache_dirty = True
-            log.debug("Updated preferences in batch")
+            # Clear and reset pen cache so subsequent get_* calls create and reuse fresh pens once
+            try:
+                self._pen_cache.clear()
+            except Exception:
+                pass
+            self._cache_dirty = False
+            log.debug("Updated preferences in batch and reset pen cache")
             
-            # Emit signal if requested
+            # Emit signal if requested (queued to allow dialogs to close first)
             if emit_signal:
-                _plot_signals.preferences_updated.emit()
-                log.debug("Emitted preferences update signal after batch update")
+                try:
+                    QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)
+                except Exception:
+                    _plot_signals.preferences_updated.emit()
+                log.debug("Scheduled preferences update signal after batch update (queued)")
             
             return True
             

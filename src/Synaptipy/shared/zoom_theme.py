@@ -15,6 +15,49 @@ import shiboken6
 
 log = logging.getLogger(__name__)
 
+# Cached styling objects and class-patch state
+_CACHED_PEN = None
+_CACHED_BRUSH = None
+_PATCHED_CLASSES = set()
+
+
+def _build_cached_pen_brush():
+    """Create and cache the pen/brush from current system accent color."""
+    from PySide6.QtGui import QPen, QBrush, QColor
+    from PySide6.QtCore import Qt
+
+    accent_color = get_system_accent_color()
+    color = QColor(accent_color)
+    if not color.isValid():
+        color = QColor("#6B7280")
+
+    pen = QPen(color)
+    pen.setWidth(1)
+    pen.setStyle(Qt.SolidLine)
+    pen.setCapStyle(Qt.SquareCap)
+    pen.setJoinStyle(Qt.MiterJoin)
+    pen.setCosmetic(True)
+
+    brush_color = QColor(color)
+    brush_color.setAlpha(77)  # ~30% opacity (70% transparency)
+    brush = QBrush(brush_color, Qt.SolidPattern)
+
+    global _CACHED_PEN, _CACHED_BRUSH
+    _CACHED_PEN, _CACHED_BRUSH = pen, brush
+
+
+def get_cached_pen_brush():
+    """Return cached pen/brush, building them if needed."""
+    global _CACHED_PEN, _CACHED_BRUSH
+    if _CACHED_PEN is None or _CACHED_BRUSH is None:
+        _build_cached_pen_brush()
+    return _CACHED_PEN, _CACHED_BRUSH
+
+
+def refresh_cached_pen_brush():
+    """Rebuild cached pen/brush (call on theme change)."""
+    _build_cached_pen_brush()
+
 
 def get_system_accent_color() -> str:
     """Get the system accent color or fallback to a neutral color."""
@@ -57,42 +100,20 @@ def apply_theme_to_viewbox(viewbox) -> None:
     try:
         if not viewbox or not shiboken6.isValid(viewbox):
             return
-            
-        # Get system-accented color
-        accent_color = get_system_accent_color()
-        
-        # Create new pen and brush with system colors
-        from PySide6.QtGui import QPen, QBrush, QColor
-        
-        # Parse the hex color
-        if accent_color.startswith('#'):
-            color = QColor(accent_color)
-        else:
-            color = QColor(accent_color)
-            
-        if not color.isValid():
-            color = QColor("#6B7280")  # Fallback grey
-            
-        # Create pen with solid color
-        new_pen = QPen(color)
-        new_pen.setWidth(1)
-        
-        # Create brush with 70% transparency (30% opacity)
-        brush_color = QColor(color)
-        brush_color.setAlpha(77)  # 30% opacity (77/255 ≈ 0.3) = 70% transparency
-        new_brush = QBrush(brush_color)
-        
-        # Store the colors on the viewbox for later use
-        viewbox._synaptipy_theme_pen = new_pen
-        viewbox._synaptipy_theme_brush = new_brush
-        
-        # Apply the colors immediately if rbScaleBox exists and is valid
+        # Use cached pen/brush to avoid per-ViewBox construction and palette fetch
+        pen, brush = get_cached_pen_brush()
+
+        # Store references in case other code wants to reuse them
+        viewbox._synaptipy_theme_pen = pen
+        viewbox._synaptipy_theme_brush = brush
+
+        # Apply immediately if rbScaleBox exists and is valid
         rb = getattr(viewbox, 'rbScaleBox', None)
         if rb is not None and shiboken6.isValid(rb):
-            rb.setPen(new_pen)
-            rb.setBrush(new_brush)
-            
-        log.debug(f"Applied theme to ViewBox: pen={color.name()}, brush={brush_color.name()}")
+            rb.setPen(pen)
+            rb.setBrush(brush)
+        
+        log.debug("Applied cached theme to ViewBox")
         
     except Exception as e:
         log.warning(f"Failed to apply theme to ViewBox: {e}")
@@ -258,96 +279,46 @@ def customize_pyqtgraph_selection(viewbox) -> None:
     try:
         if not viewbox or not shiboken6.isValid(viewbox):
             return
-            
-        log.info("🔄 Customizing PyQtGraph's selection rectangle...")
-        
-        # Get system accent color
-        from PySide6.QtGui import QColor, QPen, QBrush
-        from PySide6.QtCore import Qt, QTimer
-        
-        accent_color = get_system_accent_color()
-        color = QColor(accent_color)
-        if not color.isValid():
-            color = QColor("#6B7280")  # Fallback grey
-            log.info(f"⚠️ Invalid accent color, using fallback: {color.name()}")
-        else:
-            log.info(f"🎨 SYSTEM ACCENT COLOR: {color.name()}")
-        
-        # Create pen and brush with system colors and transparency
-        pen = QPen(color)
-        pen.setWidth(1)
-        pen.setStyle(Qt.SolidLine)
-        pen.setCapStyle(Qt.SquareCap)
-        pen.setJoinStyle(Qt.MiterJoin)
-        pen.setCosmetic(True)
-        
-        brush_color = QColor(color)
-        brush_color.setAlpha(77)  # 30% opacity = 70% transparency
-        brush = QBrush(brush_color, Qt.SolidPattern)
-        
-        log.info(f"🖌️ CREATED PEN: color={pen.color().name()}, width={pen.width()}")
-        log.info(f"🖌️ CREATED BRUSH: color={brush_color.name()}, alpha={brush_color.alpha()} (70% transparency)")
-        
-        # Function to apply theme to rbScaleBox when it's created
-        def apply_theme_to_rbScaleBox():
-            try:
-                vb = viewbox
-                if vb is None or not shiboken6.isValid(vb):
-                    return False
-                rb = getattr(vb, 'rbScaleBox', None)
-                if rb is not None and shiboken6.isValid(rb):
-                    rb.setPen(pen)
-                    rb.setBrush(brush)
-                    return True
-                return False
-            except Exception as e:
-                # This can legitimately happen during teardown; keep it at debug level
-                log.debug(f"Failed to apply theme to rbScaleBox (likely teardown): {e}")
-                return False
-        
-        # Store the theme application function on the viewbox
-        viewbox._synaptipy_apply_theme = apply_theme_to_rbScaleBox
-        
-        # Apply theme immediately if rbScaleBox already exists
-        apply_theme_to_rbScaleBox()
-        
-        # Override setMouseMode to apply theme when rbScaleBox is created
-        if not hasattr(viewbox, '_synaptipy_original_setMouseMode'):
-            viewbox._synaptipy_original_setMouseMode = viewbox.setMouseMode
-        
-        def custom_setMouseMode(mode, *args, **kwargs):
-            vb = viewbox
-            if vb is None or not shiboken6.isValid(vb):
-                return None
-            # Call original setMouseMode
-            result = vb._synaptipy_original_setMouseMode(mode, *args, **kwargs)
-            # Apply theme after mode is set
-            QTimer.singleShot(10, apply_theme_to_rbScaleBox)  # Small delay to ensure rbScaleBox is created
-            return result
-        
-        viewbox.setMouseMode = custom_setMouseMode
-        
-        # Set up monitoring to reapply theme when rbScaleBox is recreated
-        def monitor_and_reapply():
-            apply_theme_to_rbScaleBox()
-            
-        # Monitor every 500ms to catch when rbScaleBox is recreated
-        timer = QTimer(viewbox)  # parented to ViewBox to auto-stop on deletion
-        timer.setInterval(500)
-        timer.timeout.connect(monitor_and_reapply)
-        timer.start()
-        viewbox._synaptipy_theme_monitor = timer  # Keep python ref (optional since it has a Qt parent)
+        # Ensure cached objects exist
+        pen, brush = get_cached_pen_brush()
 
-        # Ensure timer stops if the ViewBox is destroyed
+        # Install a single class-level patch on ViewBox.updateScaleBox so the rectangle
+        # always receives our pen/brush the moment it's created/updated. This avoids
+        # per-instance timers and per-instance monkey-patching.
+        cls = viewbox.__class__
+        if cls not in _PATCHED_CLASSES:
+            try:
+                if not hasattr(cls, '_synaptipy_original_updateScaleBox'):
+                    cls._synaptipy_original_updateScaleBox = cls.updateScaleBox
+
+                def _patched_updateScaleBox(self, *args, **kwargs):
+                    result = self._synaptipy_original_updateScaleBox(*args, **kwargs)
+                    try:
+                        rb = getattr(self, 'rbScaleBox', None)
+                        if rb is not None and shiboken6.isValid(self) and shiboken6.isValid(rb):
+                            p, b = get_cached_pen_brush()
+                            rb.setPen(p)
+                            rb.setBrush(b)
+                    except Exception:
+                        pass
+                    return result
+
+                cls.updateScaleBox = _patched_updateScaleBox
+                _PATCHED_CLASSES.add(cls)
+                log.info("Installed global ViewBox.updateScaleBox patch for selection styling")
+            except Exception:
+                pass
+
+        # Apply immediately if already present for this instance
         try:
-            def _stop_timer(*_):
-                if timer.isActive():
-                    timer.stop()
-            viewbox.destroyed.connect(_stop_timer)
+            rb = getattr(viewbox, 'rbScaleBox', None)
+            if rb is not None and shiboken6.isValid(viewbox) and shiboken6.isValid(rb):
+                rb.setPen(pen)
+                rb.setBrush(brush)
         except Exception:
             pass
-        
-        log.info("✅ PyQtGraph selection customization complete!")
+
+        log.debug("Selection customization active (class patch)")
         
     except Exception as e:
         log.error(f"❌ Failed to customize PyQtGraph selection: {e}")
@@ -361,7 +332,7 @@ def apply_theme_with_custom_selection(viewbox) -> None:
         if not viewbox:
             return
             
-        log.info("🔄 Applying theme with PyQtGraph customization...")
+        log.debug("Applying theme with PyQtGraph customization...")
         
         # Apply basic theme colors to ViewBox
         apply_theme_to_viewbox(viewbox)
@@ -369,7 +340,7 @@ def apply_theme_with_custom_selection(viewbox) -> None:
         # Customize PyQtGraph's existing selection rectangle
         customize_pyqtgraph_selection(viewbox)
         
-        log.info("✅ Theme with PyQtGraph customization applied successfully!")
+        log.debug("Theme with PyQtGraph customization applied successfully!")
         
     except Exception as e:
         log.error(f"❌ Failed to apply theme with PyQtGraph customization: {e}")

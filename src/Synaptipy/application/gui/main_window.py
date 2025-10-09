@@ -252,39 +252,23 @@ class MainWindow(QtWidgets.QMainWindow):
             
             log.info("Active plots found - refreshing plots")
             
-            # Update explorer tab plots - use smart update logic for better performance
+            # Update explorer tab plots
             if hasattr(self, 'explorer_tab') and self.explorer_tab:
                 log.info("Explorer tab found - attempting to update plots")
-                
-                # Check if grid preferences changed - if so, update grid visibility immediately
-                try:
-                    from Synaptipy.shared.plot_customization import is_grid_enabled, update_grid_visibility
-                    if hasattr(self.explorer_tab, 'channel_plots'):
-                        plot_widgets = list(self.explorer_tab.channel_plots.values())
-                        if plot_widgets:
-                            update_grid_visibility(plot_widgets)
-                            log.info("Updated grid visibility for explorer tab plots")
-                except Exception as e:
-                    log.debug(f"Could not update grid visibility: {e}")
+                # Grid visibility will be applied during replot to avoid redundant passes
                 
                 if hasattr(self.explorer_tab, '_update_plot'):
                     log.info("Explorer tab has _update_plot method")
-                    # Check if we need a full update or just pen update
-                    if hasattr(self.explorer_tab, '_needs_full_plot_update'):
-                        log.info("Explorer tab has _needs_full_plot_update method")
-                        if self.explorer_tab._needs_full_plot_update():
-                            log.info("Full update needed - calling _update_plot(pen_only=False)")
-                            self.explorer_tab._update_plot(pen_only=False)
-                            log.info("Refreshed explorer tab plots (full update needed)")
-                        else:
-                            log.info("Pen-only update sufficient - calling _update_plot(pen_only=True)")
-                            self.explorer_tab._update_plot(pen_only=True)
-                            log.info("Refreshed explorer tab plots (pen-only update)")
-                    else:
-                        # Fallback to pen-only update
-                        log.info("No _needs_full_plot_update method - using fallback pen-only update")
-                        self.explorer_tab._update_plot(pen_only=True)
-                        log.info("Refreshed explorer tab plots (pen-only update, fallback)")
+                    # Force a full replot on preference changes, using cached data for parity with initial load
+                    log.info("Preference change: forcing full replot for Explorer tab")
+                    try:
+                        # Request inline average plotting during this refresh
+                        setattr(self.explorer_tab, '_inline_avg_now', True)
+                        self.explorer_tab._update_plot(pen_only=False)
+                    finally:
+                        try: delattr(self.explorer_tab, '_inline_avg_now')
+                        except Exception: pass
+                    log.info("Refreshed explorer tab plots (full replot on preference change)")
                 else:
                     log.warning("Explorer tab does not have _update_plot method")
             else:

@@ -779,13 +779,8 @@ class ExplorerTab(QtWidgets.QWidget):
             # Set up selection rectangle tool for zooming plots
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
             
-            # Apply system theme colors to the selection rectangle
-            try:
-                from Synaptipy.shared.zoom_theme import apply_theme_with_custom_selection
-                # Apply custom selection rectangle with theme
-                apply_theme_with_custom_selection(plot_item.getViewBox())
-            except Exception as e:
-                log.debug(f"Failed to apply theme to plot widget: {e}")
+            # Selection styling is installed globally via class-level patch in zoom_theme
+            # No per-ViewBox customization needed here
             
             # Add a placeholder for the data - don't add plot items here, they're added in _update_plot
             self.channel_plot_data_items[chan_key] = []  # Initialize empty list to store plot items
@@ -1292,7 +1287,26 @@ class ExplorerTab(QtWidgets.QWidget):
             log.warning("Could not import plot customization - skipping pen update")
             return
         
-        # Update pens for existing plot data items
+        # Batch: block scene updates and viewbox signals to avoid intermediate repaints
+        blocked_vbs = []
+        try:
+            for plot_item in self.channel_plots.values():
+                vb = plot_item.getViewBox() if plot_item else None
+                if vb:
+                    try:
+                        vb.blockSignals(True)
+                        blocked_vbs.append(vb)
+                    except Exception:
+                        pass
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                try:
+                    self.graphics_layout_widget.setUpdatesEnabled(False)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Update pens for existing plot data items (no repaint until unblocked)
         updated_count = 0
         skipped_count = 0
         
@@ -1305,30 +1319,23 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-PEN] Processing {len(plot_data_items)} items for channel {chan_id}")
             
             for i, item in enumerate(plot_data_items):
-                log.info(f"[EXPLORER-PEN] Item {i}: type={type(item).__name__}, opts={getattr(item, 'opts', 'No opts')}")
+                log.debug(f"[EXPLORER-PEN] Item {i}: type={type(item).__name__}, opts={getattr(item, 'opts', 'No opts')}")
                 
                 if isinstance(item, pg.PlotDataItem):
-                    # Determine which pen to apply based on item properties or name
+                    # Determine target pen and skip setPen if unchanged
+                    target_pen = average_pen if (hasattr(item, 'opts') and 'name' in item.opts and ('average' in item.opts['name'].lower() or 'avg' in item.opts['name'].lower())) else trial_pen
                     old_pen = item.opts.get('pen') if hasattr(item, 'opts') else None
-                    old_color = old_pen.color().name() if old_pen and hasattr(old_pen, 'color') and old_pen.color() else "unknown"
-                    
-                    if hasattr(item, 'opts') and 'name' in item.opts:
-                        item_name = item.opts['name']
-                        log.info(f"[EXPLORER-PEN] Item {i} name: '{item_name}'")
-                        
-                        if 'average' in item_name.lower() or 'avg' in item_name.lower():
-                            item.setPen(average_pen)
-                            log.info(f"[EXPLORER-PEN] Updated {chan_id} average item {i} from {old_color} to {average_pen.color().name()}")
-                        else:
-                            item.setPen(trial_pen)
-                            log.info(f"[EXPLORER-PEN] Updated {chan_id} trial item {i} from {old_color} to {trial_pen.color().name()}")
-                    else:
-                        # Default to trial pen if we can't determine the type
-                        item.setPen(trial_pen)
-                        log.info(f"[EXPLORER-PEN] Updated {chan_id} unknown item {i} from {old_color} to {trial_pen.color().name()}")
+                    try:
+                        if old_pen and hasattr(old_pen, 'color') and hasattr(target_pen, 'color'):
+                            if old_pen.color() == target_pen.color() and old_pen.width() == target_pen.width():
+                                skipped_count += 1
+                                continue
+                    except Exception:
+                        pass
+                    item.setPen(target_pen)
                     updated_count += 1
                 else:
-                    log.info(f"[EXPLORER-PEN] Skipped item {i} - not a PlotDataItem (type: {type(item).__name__})")
+                    log.debug(f"[EXPLORER-PEN] Skipped item {i} - not a PlotDataItem (type: {type(item).__name__})")
                     skipped_count += 1
         
         # Now update the selected average plot items (these are separate from regular plot items)
@@ -1337,31 +1344,37 @@ class ExplorerTab(QtWidgets.QWidget):
             for chan_id, avg_item in self.selected_average_plot_items.items():
                 if isinstance(avg_item, pg.PlotDataItem):
                     old_pen = avg_item.opts.get('pen') if hasattr(avg_item, 'opts') else None
-                    old_color = old_pen.color().name() if old_pen and hasattr(old_pen, 'color') and old_pen.color() else "unknown"
-                    
-                    avg_item.setPen(average_pen)
-                    log.info(f"[EXPLORER-PEN] Updated {chan_id} selected average item from {old_color} to {average_pen.color().name()}")
-                    updated_count += 1
+                    try:
+                        if old_pen and hasattr(old_pen, 'color') and old_pen.color() == average_pen.color() and old_pen.width() == average_pen.width():
+                            skipped_count += 1
+                        else:
+                            avg_item.setPen(average_pen)
+                            updated_count += 1
+                    except Exception:
+                        avg_item.setPen(average_pen)
+                        updated_count += 1
                 else:
-                    log.info(f"[EXPLORER-PEN] Skipped selected average item for {chan_id} - not a PlotDataItem (type: {type(avg_item).__name__})")
+                    log.debug(f"[EXPLORER-PEN] Skipped selected average item for {chan_id} - not a PlotDataItem (type: {type(avg_item).__name__})")
                     skipped_count += 1
         else:
             log.info("[EXPLORER-PEN] No selected average plot items to process")
         
-        # Update grid for all channels
-        if grid_pen:
-            for chan_id, plot_item in self.channel_plots.items():
-                if plot_item:
-                    try:
-                        # PySide6 QPen doesn't have alpha() method, use brush color alpha instead
-                        try:
-                            alpha = grid_pen.brush().color().alpha() / 255.0 if grid_pen.brush() else 0.3
-                        except:
-                            alpha = 0.3
-                        plot_item.showGrid(x=True, y=True, alpha=alpha)
-                    except Exception as e:
-                        log.warning(f"Could not update grid for channel {chan_id}: {e}")
+        # Do not reapply grid here; grid does not depend on pens and is handled during plotting or via preference signal
         
+        # Unblock updates and signals and trigger a single repaint
+        try:
+            for vb in blocked_vbs:
+                try: vb.blockSignals(False)
+                except Exception: pass
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                try:
+                    self.graphics_layout_widget.setUpdatesEnabled(True)
+                    self.graphics_layout_widget.update()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         log.info(f"[EXPLORER-PEN] Pen update complete - updated {updated_count} items, skipped {skipped_count} items")
 
     def _update_plot(self, pen_only=False):
@@ -1379,6 +1392,16 @@ class ExplorerTab(QtWidgets.QWidget):
             return
         
         try:
+            # Batch update: temporarily block ViewBox signals during item creation
+            _batch_vbs = []
+            try:
+                _batch_vbs = [p.getViewBox() for p in self.channel_plots.values() if p and p.getViewBox()]
+                for _vb in _batch_vbs:
+                    try: _vb.blockSignals(True)
+                    except Exception: pass
+            except Exception:
+                _batch_vbs = []
+
             # --- Rest of existing _update_plot logic with temporary signal disconnection ---
             self._clear_plot_data_only()
             if not self.current_recording or not self.channel_plots:
@@ -1510,8 +1533,16 @@ class ExplorerTab(QtWidgets.QWidget):
                                 
                                 # Simple plotting approach matching analysis tabs
                                 item = plot_item.plot(time_vec, data, pen=trial_pen)
+                                # Enforce efficient rendering options
+                                try:
+                                    if hasattr(item, 'setClipToView'): item.setClipToView(True)
+                                    if hasattr(item, 'setDownsampling'): item.setDownsampling(auto=True, method='peak')
+                                except Exception:
+                                    pass
                                 item.opts['autoDownsample'] = enable_downsampling
                                 item.opts['autoDownsampleThreshold'] = ds_threshold
+                                item.opts['clipToView'] = True
+                                item.opts['downsampleMethod'] = 'peak'
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
                                 
@@ -1535,22 +1566,10 @@ class ExplorerTab(QtWidgets.QWidget):
                                 log.debug(f"[EXPLORER-CACHE] Cached average data for {chan_id}")
                         
                         if avg_data is not None and avg_time_vec is not None:
-                            log.info(f"[EXPLORER-DATA] Plotting average trace for {chan_id}")
-                            log.info(f"[EXPLORER-DATA] Average - Time range: [{np.min(avg_time_vec):.6f}, {np.max(avg_time_vec):.6f}] ({len(avg_time_vec)} points)")
-                            log.info(f"[EXPLORER-DATA] Average - Data range: [{np.min(avg_data):.6f}, {np.max(avg_data):.6f}] ({len(avg_data)} points)")
-                            log.info(f"[EXPLORER-DATA] Average - Data stats: mean={np.mean(avg_data):.6f}, std={np.std(avg_data):.6f}")
-                            
-                            # Simple plotting approach matching analysis tabs
-                            item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
-                            item.opts['autoDownsample'] = enable_downsampling
-                            item.opts['autoDownsampleThreshold'] = ds_threshold
-                            self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                            
-                            # Also add to selected_average_plot_items so pen updates work
-                            self.selected_average_plot_items[chan_id] = item
-                            
-                            channel_plotted = True
-                            log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}: {len(avg_data)} points")
+                            # Defer average plotting until next event loop turn for snappier initial load
+                            log.info(f"[EXPLORER-DATA] Queueing average trace for {chan_id}")
+                            if not hasattr(self, '_deferred_avg_queue'): self._deferred_avg_queue = []
+                            self._deferred_avg_queue.append((chan_id, plot_item, avg_time_vec, avg_data, average_pen, enable_downsampling, ds_threshold))
                         else:
                             log.warning(f"[EXPLORER-DATA] Missing average data for {chan_id}: avg_data={avg_data is not None}, avg_time_vec={avg_time_vec is not None}")
 
@@ -1580,8 +1599,15 @@ class ExplorerTab(QtWidgets.QWidget):
                                 
                                 # Simple plotting approach matching analysis tabs
                                 item = plot_item.plot(time_vec, data, pen=single_trial_pen)
+                                try:
+                                    if hasattr(item, 'setClipToView'): item.setClipToView(True)
+                                    if hasattr(item, 'setDownsampling'): item.setDownsampling(auto=True, method='peak')
+                                except Exception:
+                                    pass
                                 item.opts['autoDownsample'] = enable_downsampling
                                 item.opts['autoDownsampleThreshold'] = ds_threshold
+                                item.opts['clipToView'] = True
+                                item.opts['downsampleMethod'] = 'peak'
                                 self.channel_plot_data_items.setdefault(chan_id, []).append(item)
                                 channel_plotted = True
                                 log.info(f"[EXPLORER-DATA] Single trial plotted for {chan_id}: {len(data)} points")
@@ -1606,16 +1632,22 @@ class ExplorerTab(QtWidgets.QWidget):
                     if channel_plotted: any_data_plotted = True
                 elif plot_item: plot_item.hide()
 
-            # --- Axis linking logic (Corrected) ---
+            # --- Axis linking logic (Corrected & consistent grid rendering) ---
             last_visible_plot = visible_plots[-1] if visible_plots else None
             for i, plot_item in enumerate(self.channel_plots.values()):
                 is_visible = plot_item in visible_plots; is_last = plot_item == last_visible_plot
-                plot_item.showAxis('bottom', show=is_last)
+                # Keep bottom axis present on all plots so grid lines render consistently
+                plot_item.showAxis('bottom', show=True)
                 bottom_axis = plot_item.getAxis('bottom')
-                if is_last:
-                     if bottom_axis: bottom_axis.setLabel("Time", units='s')
-                elif bottom_axis and bottom_axis.labelText:
-                     bottom_axis.setLabel(None)
+                if bottom_axis:
+                    if is_last:
+                        bottom_axis.setLabel("Time", units='s')
+                        try: bottom_axis.showLabel(True)
+                        except Exception: pass
+                    else:
+                        # Hide labels but keep the axis (and its grid) active
+                        try: bottom_axis.showLabel(False)
+                        except Exception: pass
 
                 if is_visible:
                     try:
@@ -1638,11 +1670,59 @@ class ExplorerTab(QtWidgets.QWidget):
 
             self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
             
+            # Defer averages by default; for preference-driven full replot we may inline them
+            try:
+                from PySide6 import QtCore as _QtCore
+                # Then plot deferred averages (or inline if requested)
+                def _plot_deferred_averages():
+                    try:
+                        if hasattr(self, '_deferred_avg_queue') and self._deferred_avg_queue:
+                            for chan_id, plot_item, avg_time_vec, avg_data, average_pen, enable_downsampling, ds_threshold in self._deferred_avg_queue:
+                                try:
+                                    log.info(f"[EXPLORER-DATA] Plotting deferred average for {chan_id}")
+                                    item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
+                                    try:
+                                        if hasattr(item, 'setClipToView'): item.setClipToView(True)
+                                        if hasattr(item, 'setDownsampling'): item.setDownsampling(auto=True, method='peak')
+                                    except Exception:
+                                        pass
+                                    item.opts['autoDownsample'] = enable_downsampling
+                                    item.opts['autoDownsampleThreshold'] = ds_threshold
+                                    item.opts['clipToView'] = True
+                                    item.opts['downsampleMethod'] = 'peak'
+                                    self.channel_plot_data_items.setdefault(chan_id, []).append(item)
+                                    self.selected_average_plot_items[chan_id] = item
+                                    log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}: {len(avg_data)} points")
+                                except Exception as _e:
+                                    log.warning(f"[EXPLORER-DATA] Failed to plot deferred average for {chan_id}: {_e}")
+                            self._deferred_avg_queue.clear()
+                    except Exception:
+                        pass
+                # If a caller requested inline averages (e.g., preference change), do it now
+                if getattr(self, '_inline_avg_now', False):
+                    _plot_deferred_averages()
+                else:
+                    _QtCore.QTimer.singleShot(0, _plot_deferred_averages)
+            except Exception:
+                pass
+            
             # Simplified debug summary
             total_data_items = sum(len(plot_item.listDataItems()) for plot_item in self.channel_plots.values() if plot_item.isVisible())
             log.info(f"[EXPLORER-PLOT] Plot update complete: {total_data_items} data items plotted across {len([p for p in self.channel_plots.values() if p.isVisible()])} visible channels")
+            # Initialize pen hash after initial plotting so immediate pen-only update will be skipped
+            try:
+                self._last_pen_hash = self._get_pen_hash()
+                log.debug(f"[EXPLORER-PEN] Initialized last pen hash post-plot: {self._last_pen_hash}")
+            except Exception:
+                pass
         finally:
-            pass  # Simplified signal handling
+            # Unblock signals after batch update
+            try:
+                for _vb in _batch_vbs:
+                    try: _vb.blockSignals(False)
+                    except Exception: pass
+            except Exception:
+                pass
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
@@ -2143,8 +2223,20 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         
-        # Schedule base range capture after auto-range  
-        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+        # Schedule base range capture after auto-range using the first visible plot's
+        # range-change signal to avoid timer delays under heavy load
+        vb_first = first_plot.getViewBox()
+        def _on_first_range_changed_for_capture(*_):
+            try:
+                vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
+            except Exception:
+                pass
+            self._capture_base_ranges_after_reset()
+        try:
+            vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
+        except Exception:
+            pass
+        vb_first.sigRangeChanged.connect(_on_first_range_changed_for_capture)
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
@@ -2238,7 +2330,19 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET-SINGLE] Calling enableAutoRange Y for {chan_id}")
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
             
-        QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
+        # Capture single base range when the viewbox finishes autoranging
+        vb_single = plot.getViewBox()
+        def _on_single_range_changed(*_):
+            try:
+                vb_single.sigRangeChanged.disconnect(_on_single_range_changed)
+            except Exception:
+                pass
+            self._capture_single_base_range_after_reset(chan_id)
+        try:
+            vb_single.sigRangeChanged.disconnect(_on_single_range_changed)
+        except Exception:
+            pass
+        vb_single.sigRangeChanged.connect(_on_single_range_changed)
 
     def _capture_single_base_range_after_reset(self, chan_id: str):
         plot=self.channel_plots.get(chan_id)

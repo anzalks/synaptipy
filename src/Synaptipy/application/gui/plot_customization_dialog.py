@@ -428,14 +428,7 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
                     self._original_preferences = copy.deepcopy(self.current_preferences)
                     log.info("Plot preferences applied and saved (fallback method)")
                 
-                # Signal is already emitted by the customization manager
-                # Now update plot pens directly for immediate visual feedback
-                try:
-                    if hasattr(self.parent(), '_update_plot_pens_only'):
-                        self.parent()._update_plot_pens_only()
-                        log.info("Updated plot pens directly for immediate visual feedback")
-                except Exception as e:
-                    log.debug(f"Could not update plot pens directly: {e}")
+                # Signal is already emitted by the customization manager; avoid redundant direct refresh
             else:
                 log.info("No changes detected - skipping save and update")
             
