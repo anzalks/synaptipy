@@ -1276,8 +1276,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._mark_cache_dirty()
 
     def _update_plot_pens_only(self):
-        """Efficiently update only the pen properties of existing plot items without recreating data."""
-        # Check if pen update is actually needed
+        """Efficiently update only the pen properties of existing plot items using a batch update."""
         if not self._needs_pen_update():
             log.debug("[EXPLORER-PLOT] No pen changes detected - skipping pen update")
             return
@@ -1285,111 +1284,58 @@ class ExplorerTab(QtWidgets.QWidget):
         log.info("[EXPLORER-PLOT] Updating plot pens only (no data recreation)")
         
         try:
-            # Get current pens from customization manager
-            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen
+            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen, is_grid_enabled
             trial_pen = get_single_trial_pen()
             average_pen = get_average_pen()
             grid_pen = get_grid_pen()
-            
-            # Validate pens before proceeding
-            if not trial_pen or not average_pen:
-                log.warning("Invalid pens received from customization manager - skipping pen update")
-                return
-                
-            log.info(f"[EXPLORER-PEN] Retrieved pens - Trial: {trial_pen.color().name()}, Average: {average_pen.color().name()}, Grid: {grid_pen.color().name() if grid_pen else 'None'}")
         except ImportError:
             log.warning("Could not import plot customization - skipping pen update")
             return
         
-        # Batch: block scene updates and viewbox signals to avoid intermediate repaints
-        blocked_vbs = []
-        try:
-            for plot_item in self.channel_plots.values():
-                vb = plot_item.getViewBox() if plot_item else None
-                if vb:
-                    try:
-                        vb.blockSignals(True)
-                        blocked_vbs.append(vb)
-                    except Exception:
-                        pass
-            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
-                try:
-                    self.graphics_layout_widget.setUpdatesEnabled(False)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        # --- BATCH UPDATE START ---
+        # Pause all visual updates on the graphics widget. This is the critical step
+        # that prevents the "spinning wheel" by stopping the flood of redraw commands.
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+            self.graphics_layout_widget.setUpdatesEnabled(False)
 
-        # Update pens for existing plot data items (no repaint until unblocked)
-        updated_count = 0
-        skipped_count = 0
-        
-        # First, update regular plot data items
-        for chan_id, plot_data_items in self.channel_plot_data_items.items():
-            if not plot_data_items:
-                log.info(f"[EXPLORER-PEN] No plot data items for channel {chan_id}")
-                continue
-                
-            log.info(f"[EXPLORER-PEN] Processing {len(plot_data_items)} items for channel {chan_id}")
-            
-            for i, item in enumerate(plot_data_items):
-                log.debug(f"[EXPLORER-PEN] Item {i}: type={type(item).__name__}, opts={getattr(item, 'opts', 'No opts')}")
-                
-                if isinstance(item, pg.PlotDataItem):
-                    # Determine target pen and skip setPen if unchanged
-                    target_pen = average_pen if (hasattr(item, 'opts') and 'name' in item.opts and ('average' in item.opts['name'].lower() or 'avg' in item.opts['name'].lower())) else trial_pen
-                    old_pen = item.opts.get('pen') if hasattr(item, 'opts') else None
-                    try:
-                        if old_pen and hasattr(old_pen, 'color') and hasattr(target_pen, 'color'):
-                            if old_pen.color() == target_pen.color() and old_pen.width() == target_pen.width():
-                                skipped_count += 1
-                                continue
-                    except Exception:
-                        pass
-                    item.setPen(target_pen)
-                    updated_count += 1
-                else:
-                    log.debug(f"[EXPLORER-PEN] Skipped item {i} - not a PlotDataItem (type: {type(item).__name__})")
-                    skipped_count += 1
-        
-        # Now update the selected average plot items (these are separate from regular plot items)
-        if self.selected_average_plot_items:
-            log.info(f"[EXPLORER-PEN] Processing {len(self.selected_average_plot_items)} selected average plot items")
-            for chan_id, avg_item in self.selected_average_plot_items.items():
+        try:
+            # Update pens for existing plot data items. These changes now happen in memory
+            # without triggering any UI updates, keeping the application responsive.
+            for plot_data_items in self.channel_plot_data_items.values():
+                for item in plot_data_items:
+                    if isinstance(item, pg.PlotDataItem):
+                        is_avg = hasattr(item, 'opts') and 'name' in item.opts and ('average' in item.opts['name'].lower() or 'avg' in item.opts['name'].lower())
+                        target_pen = average_pen if is_avg else trial_pen
+                        item.setPen(target_pen)
+
+            # Update the selected average plot items
+            for avg_item in self.selected_average_plot_items.values():
                 if isinstance(avg_item, pg.PlotDataItem):
-                    old_pen = avg_item.opts.get('pen') if hasattr(avg_item, 'opts') else None
+                    avg_item.setPen(average_pen)
+            
+            # Update grids on all visible plots
+            for plot_item in self.channel_plots.values():
+                if plot_item.isVisible():
                     try:
-                        if old_pen and hasattr(old_pen, 'color') and old_pen.color() == average_pen.color() and old_pen.width() == average_pen.width():
-                            skipped_count += 1
+                        if is_grid_enabled():
+                            alpha = 0.3
+                            if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                                alpha = grid_pen.color().alpha() / 255.0
+                            plot_item.showGrid(x=True, y=True, alpha=alpha)
                         else:
-                            avg_item.setPen(average_pen)
-                            updated_count += 1
-                    except Exception:
-                        avg_item.setPen(average_pen)
-                        updated_count += 1
-                else:
-                    log.debug(f"[EXPLORER-PEN] Skipped selected average item for {chan_id} - not a PlotDataItem (type: {type(avg_item).__name__})")
-                    skipped_count += 1
-        else:
-            log.info("[EXPLORER-PEN] No selected average plot items to process")
-        
-        # Do not reapply grid here; grid does not depend on pens and is handled during plotting or via preference signal
-        
-        # Unblock updates and signals and trigger a single repaint
-        try:
-            for vb in blocked_vbs:
-                try: vb.blockSignals(False)
-                except Exception: pass
-            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
-                try:
-                    self.graphics_layout_widget.setUpdatesEnabled(True)
-                    self.graphics_layout_widget.update()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                            plot_item.showGrid(x=False, y=False)
+                    except Exception as e:
+                        log.warning(f"Could not re-apply grid during pen update: {e}")
 
-        log.info(f"[EXPLORER-PEN] Pen update complete - updated {updated_count} items, skipped {skipped_count} items")
+        finally:
+            # --- BATCH UPDATE END ---
+            # Resume visual updates and trigger a single, efficient repaint of all the
+            # changes that were made in memory.
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                self.graphics_layout_widget.setUpdatesEnabled(True)
+                self.graphics_layout_widget.update()
+                
+        log.info("[EXPLORER-PEN] Pen update complete.")
 
     def _update_plot(self, pen_only=False):
         """Update plots with option to only update pens for better performance."""
