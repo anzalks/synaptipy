@@ -21,6 +21,8 @@ from .dummy_classes import (
     NeoAdapter, NWBExporter, Recording, SynaptipyError, ExportError,
     SYNAPTIPY_AVAILABLE
 )
+# Import the new DataLoader for background file loading
+from ..data_loader import DataLoader
 # --- Tab Imports ---
 # Use RELATIVE imports for tabs and dialogs within the gui package
 from .explorer_tab import ExplorerTab
@@ -46,6 +48,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # Emitted when the window finished initializing all UI and state
     initialized = QtCore.Signal()
+    
+    # Signal for requesting file loading with lazy load flag
+    load_request = QtCore.Signal(Path, bool)
 
     def __init__(self):
         super().__init__()
@@ -93,6 +98,9 @@ class MainWindow(QtWidgets.QMainWindow):
              except Exception as mb_error: print(f"Failed to show message box: {mb_error}")
              QtCore.QTimer.singleShot(100, lambda: sys.exit(1))
              return
+
+        # --- Setup Background Data Loading ---
+        self._setup_data_loader()
 
         # --- Settings ---
         self.settings = QtCore.QSettings("Synaptipy", "Viewer") # Org name, App name
@@ -155,6 +163,35 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Connect to plot customization signals
         self._connect_plot_customization_signals()
+
+    def _setup_data_loader(self):
+        """Setup the background data loader with worker thread."""
+        log.debug("Setting up background data loader...")
+        
+        # Create worker thread
+        self.data_loader_thread = QtCore.QThread()
+        
+        # Create data loader instance
+        self.data_loader = DataLoader()
+        
+        # Move the loader to the worker thread
+        self.data_loader.moveToThread(self.data_loader_thread)
+        
+        # Connect signals
+        self.data_loader.data_ready.connect(self._on_data_ready)
+        self.data_loader.data_error.connect(self._on_data_error)
+        self.data_loader.loading_started.connect(self._on_loading_started)
+        self.data_loader.loading_progress.connect(self._on_loading_progress)
+        
+        # Connect the load request signal to the data loader
+        self.load_request.connect(self.data_loader.load_file)
+        
+        # Connect thread finished signal to cleanup
+        self.data_loader_thread.finished.connect(self.data_loader.deleteLater)
+        
+        # Start the worker thread
+        self.data_loader_thread.start()
+        log.debug("Background data loader setup complete.")
 
     def _setup_tabs(self):
         """Creates the QTabWidget and adds the different functional tabs."""
@@ -378,6 +415,92 @@ class MainWindow(QtWidgets.QMainWindow):
             log.error(f"Failed to show plot customization dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open plot customization:\n{e}")
 
+    # --- Background Data Loading Signal Handlers ---
+    
+    def _on_loading_started(self, file_path: str):
+        """Handle signal when file loading starts."""
+        log.info(f"Background loading started for: {file_path}")
+        self.status_bar.showMessage(f"Loading {Path(file_path).name}...", 0)  # 0 = no timeout
+    
+    def _on_loading_progress(self, progress: int):
+        """Handle loading progress updates."""
+        # Update status bar with progress
+        current_msg = self.status_bar.currentMessage()
+        if "Loading" in current_msg:
+            self.status_bar.showMessage(f"{current_msg} ({progress}%)", 0)
+    
+    def _on_data_ready(self, recording_data: Recording):
+        """Handle successful data loading."""
+        log.info(f"Background loading completed successfully for: {recording_data.source_file.name}")
+        
+        try:
+            # Get the file list and current index from the current state
+            # These should have been set when _load_in_explorer was called
+            if hasattr(self, '_pending_file_list') and hasattr(self, '_pending_current_index'):
+                file_list = self._pending_file_list
+                current_index = self._pending_current_index
+                
+                # Clear the pending state
+                delattr(self, '_pending_file_list')
+                delattr(self, '_pending_current_index')
+                
+                # Load the data in the explorer tab
+                self.explorer_tab.load_recording_data(recording_data.source_file, file_list, current_index)
+                self.tab_widget.setCurrentWidget(self.explorer_tab)
+                
+                self.status_bar.showMessage(f"Loaded {recording_data.source_file.name} ({len(recording_data.channels)} channels)", 5000)
+            else:
+                log.warning("Data loaded but no pending file list found. Using single file mode.")
+                # Fallback: treat as single file
+                file_list = [recording_data.source_file]
+                current_index = 0
+                self.explorer_tab.load_recording_data(recording_data.source_file, file_list, current_index)
+                self.tab_widget.setCurrentWidget(self.explorer_tab)
+                self.status_bar.showMessage(f"Loaded {recording_data.source_file.name}", 5000)
+                
+        except Exception as e:
+            log.error(f"Error handling loaded data: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(self, "Data Loading Error", f"Error processing loaded data:\n{e}")
+            self.status_bar.showMessage("Error processing loaded data", 5000)
+        finally:
+            # Update UI state
+            self._update_menu_state()
+            if hasattr(self, 'exporter_tab') and self.exporter_tab:
+                try: 
+                    self.exporter_tab.update_state()
+                except Exception as e_export_update: 
+                    log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
+            if hasattr(self, 'analyser_tab') and self.analyser_tab:
+                try: 
+                    self.analyser_tab.update_state(self.explorer_tab._analysis_items)
+                except Exception as e_analyse_update: 
+                    log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+    
+    def _on_data_error(self, error_message: str):
+        """Handle data loading errors."""
+        log.error(f"Background loading failed: {error_message}")
+        QtWidgets.QMessageBox.critical(self, "File Loading Error", f"Failed to load file:\n{error_message}")
+        self.status_bar.showMessage("File loading failed", 5000)
+        
+        # Clear any pending state
+        if hasattr(self, '_pending_file_list'):
+            delattr(self, '_pending_file_list')
+        if hasattr(self, '_pending_current_index'):
+            delattr(self, '_pending_current_index')
+        
+        # Update UI state
+        self._update_menu_state()
+        if hasattr(self, 'exporter_tab') and self.exporter_tab:
+            try: 
+                self.exporter_tab.update_state()
+            except Exception as e_export_update: 
+                log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
+        if hasattr(self, 'analyser_tab') and self.analyser_tab:
+            try: 
+                self.analyser_tab.update_state(self.explorer_tab._analysis_items)
+            except Exception as e_analyse_update: 
+                log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+
     # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same as previous answer ---
     # V V V (Keep methods from previous answer here) V V V
     def _open_file_dialog(self):
@@ -392,18 +515,38 @@ class MainWindow(QtWidgets.QMainWindow):
 
         last_dir = self.settings.value("lastDirectory", "", type=str)
 
-        # --- REVERTED: Use getOpenFileName --- 
-        filepath_str, selected_filter = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open Recording File", dir=last_dir, filter=file_filter
-        )
-        # --- END REVERT ---
+        # Create instance-based dialog to add custom widget
+        dialog = QtWidgets.QFileDialog(self, "Open Recording File", filter=file_filter)
+        dialog.setDirectory(last_dir) # Set the directory using this correct method
+        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.ExistingFile) # Ensure only one file can be selected
 
-        # --- REVERTED: Check single filepath_str --- 
-        if not filepath_str:
+        # Create and add the checkbox
+        lazy_load_checkbox = QtWidgets.QCheckBox("Lazy Load (recommended for large files)")
+        lazy_load_checkbox.setChecked(False) # Default to OFF
+        
+        # Add the checkbox to the dialog's layout
+        # This is a standard way to add a widget to a QFileDialog
+        layout = dialog.layout()
+        if isinstance(layout, QtWidgets.QGridLayout):
+            # Find the row after the file type selector to insert the checkbox
+            row = layout.rowCount()
+            layout.addWidget(lazy_load_checkbox, row, 0, 1, layout.columnCount())
+
+        # Execute the dialog and check for acceptance
+        if not dialog.exec():
             log.info("File open dialog cancelled.")
             self.status_bar.showMessage("File open cancelled.", 3000)
             return
-        # --- END REVERT ---
+
+        # Get the state of the checkbox and the selected file path
+        lazy_load_enabled = lazy_load_checkbox.isChecked()
+        filepath_str = dialog.selectedFiles()[0] if dialog.selectedFiles() else None
+
+        # Check if file was selected
+        if not filepath_str:
+            log.info("No file selected.")
+            self.status_bar.showMessage("No file selected.", 3000)
+            return
 
         # --- REVERTED: Process single selected file path --- 
         selected_filepath = Path(filepath_str)
@@ -425,7 +568,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Fallback: Load only the selected file if scan fails
             file_list = [selected_filepath]
             current_index = 0
-            self._load_in_explorer(selected_filepath, file_list, current_index)
+            self._load_in_explorer(selected_filepath, file_list, current_index, lazy_load_enabled)
             return
         # --- END REINSTATED SCAN ---
 
@@ -448,7 +591,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Load the file at the determined index from the sibling list --- 
         if file_list:
             if 0 <= current_index < len(file_list):
-                 self._load_in_explorer(file_list[current_index], file_list, current_index)
+                 self._load_in_explorer(file_list[current_index], file_list, current_index, lazy_load_enabled)
             else:
                  log.error(f"Determined index {current_index} is out of bounds for file list (size {len(file_list)}). Cannot load.")
                  QtWidgets.QMessageBox.critical(self, "Loading Error", "Internal error: Could not determine correct file index.")
@@ -459,10 +602,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_menu_state()
 
     # CHANGE: Signature updated to reflect the arguments passed from the modified _open_file_dialog
-    def _load_in_explorer(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int):
-        """Instructs the Explorer tab to load the initial file and provide the full list."""
+    def _load_in_explorer(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int, lazy_load: bool):
+        """Initiates background loading of the initial file and stores context for completion."""
         # CHANGE: Log using the clearer argument name
-        log.info(f"Requesting ExplorerTab to load initial file: {initial_filepath_to_load.name} (from list of {len(file_list)} siblings)")
+        log.info(f"Requesting background load of initial file: {initial_filepath_to_load.name} (from list of {len(file_list)} siblings)")
         if not (hasattr(self, 'explorer_tab') and self.explorer_tab):
             log.error("Cannot load file: Explorer tab not found or not initialized yet.")
             QtWidgets.QMessageBox.critical(self, "Internal Error", "Explorer tab is missing. Cannot load file.")
@@ -471,15 +614,31 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self, 'analyser_tab') and self.analyser_tab: self.analyser_tab.update_state()
             return
 
+        if not (hasattr(self, 'data_loader') and self.data_loader):
+            log.error("Cannot load file: Data loader not found or not initialized yet.")
+            QtWidgets.QMessageBox.critical(self, "Internal Error", "Data loader is missing. Cannot load file.")
+            return
+
         try:
-            # CHANGE: Call the explorer tab's loading method with the initial file, full list, and index
-            self.explorer_tab.load_recording_data(initial_filepath_to_load, file_list, current_index)
-            self.tab_widget.setCurrentWidget(self.explorer_tab)
+            # Store the file list and current index for use when data is ready
+            self._pending_file_list = file_list
+            self._pending_current_index = current_index
+            
+            # Initiate background loading using signal
+            log.debug(f"Initiating background load for: {initial_filepath_to_load} (lazy_load: {lazy_load})")
+            self.load_request.emit(initial_filepath_to_load, lazy_load)
+            
         except Exception as e:
-            log.error(f"Error occurred trying to initiate load in ExplorerTab: {e}", exc_info=True)
+            log.error(f"Error occurred trying to initiate background load: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred initiating the file load:\n{e}")
-        finally:
-            log.debug("Updating menu, exporter, and analyser states after load attempt.")
+            
+            # Clear any pending state on error
+            if hasattr(self, '_pending_file_list'):
+                delattr(self, '_pending_file_list')
+            if hasattr(self, '_pending_current_index'):
+                delattr(self, '_pending_current_index')
+            
+            # Update UI state
             self._update_menu_state()
             if hasattr(self, 'exporter_tab') and self.exporter_tab:
                 try: self.exporter_tab.update_state()
@@ -603,6 +762,31 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event: QtGui.QCloseEvent):
         """Handles the main window close event, saving state."""
         log.info("Close event received. Cleaning up and saving state...")
+        
+        # --- Cleanup Background Data Loader ---
+        if hasattr(self, 'data_loader_thread') and self.data_loader_thread:
+            log.debug("Stopping background data loader thread...")
+            try:
+                # Disconnect signals to prevent any pending operations
+                if hasattr(self, 'data_loader') and self.data_loader:
+                    self.data_loader.data_ready.disconnect()
+                    self.data_loader.data_error.disconnect()
+                    self.data_loader.loading_started.disconnect()
+                    self.data_loader.loading_progress.disconnect()
+                
+                # Request thread to quit
+                self.data_loader_thread.quit()
+                
+                # Wait for thread to finish (with timeout)
+                if not self.data_loader_thread.wait(3000):  # 3 second timeout
+                    log.warning("Data loader thread did not finish within timeout. Terminating...")
+                    self.data_loader_thread.terminate()
+                    self.data_loader_thread.wait(1000)  # Wait 1 more second after terminate
+                
+                log.debug("Background data loader thread cleanup complete.")
+            except Exception as e:
+                log.warning(f"Error during data loader thread cleanup: {e}")
+        
         # --- Call cleanup on tabs if they exist ---
         if hasattr(self, 'explorer_tab') and hasattr(self.explorer_tab, 'cleanup'): # Define cleanup() in ExplorerTab if needed
             try: log.debug("Calling cleanup for ExplorerTab..."); self.explorer_tab.cleanup()
