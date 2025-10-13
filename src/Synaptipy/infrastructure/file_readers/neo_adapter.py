@@ -213,9 +213,9 @@ class NeoAdapter:
 
         return protocol_name, injected_current
 
-    def read_recording(self, filepath: Path) -> Recording:
+    def read_recording(self, filepath: Path, lazy: bool = False) -> Recording:
         """Reads an electrophysiology file using Neo and translates it into a Recording object."""
-        log.info(f"Attempting to read file: {filepath}")
+        log.info(f"Attempting to read file: {filepath} (lazy mode: {lazy})")
         filepath = Path(filepath)
         io_class = None
         reader = None
@@ -256,17 +256,22 @@ class NeoAdapter:
                 else: log.warning("Reader header does not contain 'signal_channels' or is missing.")
             except Exception as e_header: log.warning(f"Error processing reader header: {e_header}", exc_info=True)
 
-            # --- Read Block ---
-            block = reader.read_block(lazy=False, signal_group_mode='split-all')
-            log.info(f"Successfully read neo Block using {io_class_name}.")
+            # --- Read Block with Lazy Loading ---
+            block = reader.read_block(lazy=lazy, signal_group_mode='split-all')
+            log.info(f"Successfully read neo Block using {io_class_name} (lazy mode: {lazy}).")
 
         except (SynaptipyFileNotFoundError, UnsupportedFormatError) as e: log.error(f"File pre-read error: {e}"); raise e
         except neo.io.NeoReadWriteError as ne: log.error(f"Neo failed to read file '{filepath.name}' with {io_class_name}: {ne}", exc_info=True); raise FileReadError(f"Neo error reading {filepath.name}: {ne}") from ne
         except IOError as ioe: log.error(f"IOError obtaining reader or reading '{filepath.name}': {ioe}", exc_info=True); raise UnsupportedFormatError(f"Cannot read file {filepath.name}. Check format/permissions.") from ioe
         except Exception as e: log.error(f"Unexpected error reading file '{filepath.name}' using {io_class_name}: {e}", exc_info=True); raise FileReadError(f"Unexpected error reading {filepath.name} with {io_class_name}: {e}") from e
 
-        # --- Start Translation to Synaptipy Domain Model --- Simplified Approach ---
+        # --- Start Translation to Synaptipy Domain Model --- Lazy Loading Approach ---
         recording = Recording(source_file=filepath)
+
+        # Store the neo Block and reader for lazy data access
+        recording.neo_block = block
+        recording.neo_reader = reader
+        log.debug(f"Stored neo Block and reader for lazy access in recording")
 
         # Extract session start time and assign to recording
         if hasattr(block, 'rec_datetime') and block.rec_datetime:
@@ -293,12 +298,12 @@ class NeoAdapter:
         if not hasattr(recording, 't_start'): recording.t_start = None
         if not hasattr(recording, 'duration'): recording.duration = None
 
-        # --- Process Segments and Signals --- Generic Approach ---
+        # --- Process Segments and Signals --- Lazy Loading Approach ---
         num_segments = len(block.segments)
-        log.info(f"Processing {num_segments} segment(s) generically...")
+        log.info(f"Processing {num_segments} segment(s) for lazy loading...")
 
-        channel_data_map: Dict[str, List[np.ndarray]] = {} # Key: Unique channel map_key
         channel_metadata_map: Dict[str, Dict[str, Any]] = {} # Key: Unique channel map_key
+        channel_lazy_info_map: Dict[str, Dict[str, Any]] = {} # Key: Unique channel map_key -> lazy loading info
 
         for seg_index, segment in enumerate(block.segments):
             log.debug(f"--- SEGMENT {seg_index + 1}/{num_segments} ---")
@@ -310,7 +315,7 @@ class NeoAdapter:
             for sig_index, anasig in enumerate(segment.analogsignals):
                 log.debug(f"    Processing signal index {sig_index} in segment...")
                 # Basic validation
-                if not isinstance(anasig, neo.AnalogSignal):
+                if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
                     log.warning(f"    Skipping non-AnalogSignal object: {type(anasig)}")
                     continue
                 if anasig.shape[1] != 1:
@@ -395,19 +400,21 @@ class NeoAdapter:
                      log.warning(f"        Using placeholder key '{map_key}' based on signal index {sig_index}.")
                 # --- End Channel ID Logic ---
 
-                # --- Extract data and metadata ---
+                # --- Extract metadata (but NOT data) for lazy loading ---
                 try:
-                    data = np.ravel(anasig.magnitude)
+                    # Don't load actual data - just extract metadata
                     units_obj = anasig.units; units = str(units_obj.dimensionality) if hasattr(units_obj, 'dimensionality') else 'unknown'
                     units = 'dimensionless' if units.lower() == 'dimensionless' else units
                     sampling_rate = float(anasig.sampling_rate.magnitude)
                     t_start_signal = float(anasig.t_start.magnitude)
-                    log.debug(f"      Extracted: Units='{units}', Rate={sampling_rate}, t_start={t_start_signal}, Data points={data.shape[0]}")
+                    # Get data shape without loading the actual data
+                    data_shape = anasig.shape[0] if hasattr(anasig, 'shape') else 0
+                    log.debug(f"      Extracted metadata: Units='{units}', Rate={sampling_rate}, t_start={t_start_signal}, Data shape={data_shape}")
                 except Exception as e:
-                    log.error(f"      Error extracting data/metadata for signal key '{map_key}': {e}", exc_info=True)
+                    log.error(f"      Error extracting metadata for signal key '{map_key}': {e}", exc_info=True)
                     continue # Skip this signal
 
-                # --- Store/Update channel metadata and data ---
+                # --- Store/Update channel metadata and lazy loading info ---
                 if map_key not in channel_metadata_map:
                     log.debug(f"      First encounter for map_key '{map_key}'. Storing metadata.")
                     # Extract electrode metadata from annotations
@@ -427,45 +434,60 @@ class NeoAdapter:
                         'electrode_offset': electrode_offset, 'electrode_resistance': electrode_resistance,
                         'electrode_seal': electrode_seal
                     }
-                    channel_data_map[map_key] = [data] # Initialize data list
+                    
+                    # Store lazy loading information
+                    channel_lazy_info_map[map_key] = {
+                        'segment_index': seg_index,
+                        'signal_index': sig_index,
+                        'analog_signal_ref': anasig,  # Store reference to the lazy AnalogSignal
+                        'data_shape': data_shape
+                    }
 
                     # --- Set global recording properties from the *first valid signal* ---
                     if recording.sampling_rate is None:
                         recording.sampling_rate = sampling_rate
                         recording.t_start = t_start_signal
-                        if sampling_rate > 0: recording.duration = data.shape[0] / sampling_rate
+                        if sampling_rate > 0: recording.duration = data_shape / sampling_rate
                         else: recording.duration = 0.0
                         log.info(f"      Set recording props from first signal: Rate={recording.sampling_rate}, t0={recording.t_start}, Est.Duration={recording.duration:.3f} s")
                 else:
-                    # Channel key seen before, check consistency and append data
-                    log.debug(f"      Map_key '{map_key}' seen before. Appending data.")
+                    # Channel key seen before, check consistency and store additional trial info
+                    log.debug(f"      Map_key '{map_key}' seen before. Storing additional trial info.")
                     existing_meta = channel_metadata_map[map_key]
                     if not np.isclose(existing_meta['sampling_rate'], sampling_rate):
                          log.warning(f"      Inconsistent sampling rate for channel key '{map_key}' ('{existing_meta['name']}'). Seg {seg_index+1} rate: {sampling_rate}. Using initial rate: {existing_meta['sampling_rate']}")
                     if existing_meta['units'] != units:
                          log.warning(f"      Inconsistent units for channel key '{map_key}' ('{existing_meta['name']}'). Seg {seg_index+1} units: '{units}'. Using initial units: '{existing_meta['units']}'")
-                    channel_data_map[map_key].append(data)
+                    
+                    # Store additional trial info for lazy loading
+                    if 'trials' not in channel_lazy_info_map[map_key]:
+                        channel_lazy_info_map[map_key]['trials'] = []
+                    channel_lazy_info_map[map_key]['trials'].append({
+                        'segment_index': seg_index,
+                        'signal_index': sig_index,
+                        'analog_signal_ref': anasig,
+                        'data_shape': data_shape
+                    })
 
-        # --- Create final Synaptipy Channel objects --- Generic Approach ---
-        if not channel_data_map:
-             log.warning("No channel data aggregated after processing all segments.")
+        # --- Create final Synaptipy Channel objects --- Lazy Loading Approach ---
+        if not channel_metadata_map:
+             log.warning("No channel metadata aggregated after processing all segments.")
              return recording
 
-        log.info(f"Aggregated data for {len(channel_data_map)} unique channel key(s). Creating Synaptipy Channel objects...")
+        log.info(f"Aggregated metadata for {len(channel_metadata_map)} unique channel key(s). Creating Synaptipy Channel objects with lazy loading...")
         created_channels: List[Channel] = []
-        for map_key, data_trials in channel_data_map.items():
-            meta = channel_metadata_map[map_key]
+        for map_key, meta in channel_metadata_map.items():
             log.debug(f"  Creating Channel for map_key: '{map_key}'")
-            if not data_trials: log.warning(f"    Skipping map_key '{map_key}' ('{meta['name']}') - no data trials collected."); continue
-
+            
             # Determine the final ID for the Synaptipy Channel object
             final_channel_id = str(meta['domain_id']) if meta['domain_id'] is not None else map_key
             log.debug(f"    Using final_channel_id: '{final_channel_id}'")
             
             try:
+                # Create channel with empty data_trials for lazy loading
                 channel = Channel(
                     id=final_channel_id, name=meta['name'], units=meta['units'],
-                    sampling_rate=meta['sampling_rate'], data_trials=data_trials
+                    sampling_rate=meta['sampling_rate'], data_trials=[]  # Empty data_trials for lazy loading
                 )
                 channel.metadata = {} # Initialize metadata dictionary
                 channel.t_start = meta['t_start']
@@ -476,14 +498,34 @@ class NeoAdapter:
                 channel.electrode_seal = meta['electrode_seal']
                 # Store original neo identifier in metadata
                 channel.metadata['original_neo_id'] = meta['original_neo_id']
+                
+                # Store lazy loading information in the channel
+                if map_key in channel_lazy_info_map:
+                    channel.lazy_info = channel_lazy_info_map[map_key]
+                    # Calculate number of trials from lazy info
+                    num_trials = 1  # At least one trial (the first signal)
+                    if 'trials' in channel_lazy_info_map[map_key]:
+                        num_trials += len(channel_lazy_info_map[map_key]['trials'])
+                    channel.metadata['num_trials'] = num_trials
+                    channel.metadata['data_shape'] = channel_lazy_info_map[map_key].get('data_shape', 0)
+                    log.debug(f"    Stored lazy loading info: {num_trials} trials, data_shape={channel.metadata['data_shape']}")
+                else:
+                    log.warning(f"    No lazy loading info found for map_key '{map_key}'")
+                    channel.lazy_info = {}
+                    channel.metadata['num_trials'] = 0
+                    channel.metadata['data_shape'] = 0
 
                 created_channels.append(channel)
-                log.debug(f"    Successfully created Channel: ID='{channel.id}', Name='{channel.name}', Units='{channel.units}', Trials={len(channel.data_trials)}, Samples/Trial={data_trials[0].shape[0] if data_trials else 0}")
+                log.debug(f"    Successfully created lazy Channel: ID='{channel.id}', Name='{channel.name}', Units='{channel.units}', Trials={channel.metadata.get('num_trials', 0)}")
             except Exception as e_channel_create:
                 log.error(f"    Failed to create Synaptipy Channel object for map_key '{map_key}' ('{meta['name']}'): {e_channel_create}", exc_info=True)
 
         # Convert the list of channels to a dictionary keyed by channel ID
         recording.channels = {ch.id: ch for ch in created_channels}
+        
+        # Set recording reference in all channels for lazy loading
+        for channel in created_channels:
+            channel._recording_ref = recording
 
         # --- Final Fallback Checks for Recording Properties (if needed) ---
         # Check if channels is a non-empty dict before trying to access its first element

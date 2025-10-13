@@ -32,7 +32,29 @@ def main_window(qtbot):
     window = MainWindow()
     # qtbot.addWidget(window) # Not strictly necessary unless interacting heavily before show()
     yield window # Use yield if cleanup is needed after the test
-    # Cleanup (if needed): window.close()
+    
+    # Cleanup: Ensure worker thread is properly stopped
+    if hasattr(window, 'data_loader_thread') and window.data_loader_thread:
+        try:
+            # Disconnect signals to prevent any pending operations
+            if hasattr(window, 'data_loader') and window.data_loader:
+                window.data_loader.data_ready.disconnect()
+                window.data_loader.data_error.disconnect()
+                window.data_loader.loading_started.disconnect()
+                window.data_loader.loading_progress.disconnect()
+            
+            # Request thread to quit
+            window.data_loader_thread.quit()
+            
+            # Wait for thread to finish (with timeout)
+            if not window.data_loader_thread.wait(1000):  # 1 second timeout
+                window.data_loader_thread.terminate()
+                window.data_loader_thread.wait(500)  # Wait 0.5 more second after terminate
+        except Exception as e:
+            print(f"Warning: Error during thread cleanup: {e}")
+    
+    # Close the window
+    window.close()
 
 # --- Fixture for Test Data ---
 # IMPORTANT: How you manage test data is crucial.
