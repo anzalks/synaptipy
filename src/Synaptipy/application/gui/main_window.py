@@ -275,7 +275,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_plot_preferences_updated(self):
         """Handle plot preferences update signal by efficiently updating pens."""
-        log.info("Plot preferences updated, refreshing plot styles only.")
+        # PERFORMANCE: Log force opaque state
+        from Synaptipy.shared.plot_customization import get_force_opaque_trials
+        log.info(f"[_on_plot_preferences_updated] Refreshing plots. Force opaque state: {get_force_opaque_trials()}")
+        
         if hasattr(self, 'explorer_tab') and self.explorer_tab:
             self.explorer_tab.update_plot_pens() # This new method will only update styles
         if hasattr(self, 'analyser_tab') and self.analyser_tab:

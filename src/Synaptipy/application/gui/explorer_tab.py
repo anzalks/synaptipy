@@ -132,6 +132,31 @@ class ExplorerTab(QtWidgets.QWidget):
         self._last_x_range = None
         self._last_y_vbs = {}
         
+        # PERFORMANCE: Add debounce timers for slider/scrollbar -> view range updates
+        self._x_zoom_apply_timer = QtCore.QTimer()
+        self._x_zoom_apply_timer.setSingleShot(True)
+        self._x_zoom_apply_timer.setInterval(50)
+        self._x_zoom_apply_timer.timeout.connect(self._apply_debounced_x_zoom)
+        self._last_x_zoom_value = self.SLIDER_DEFAULT_VALUE
+
+        self._x_scroll_apply_timer = QtCore.QTimer()
+        self._x_scroll_apply_timer.setSingleShot(True)
+        self._x_scroll_apply_timer.setInterval(50)
+        self._x_scroll_apply_timer.timeout.connect(self._apply_debounced_x_scroll)
+        self._last_x_scroll_value = 0
+
+        self._y_global_zoom_apply_timer = QtCore.QTimer()
+        self._y_global_zoom_apply_timer.setSingleShot(True)
+        self._y_global_zoom_apply_timer.setInterval(50)
+        self._y_global_zoom_apply_timer.timeout.connect(self._apply_debounced_y_global_zoom)
+        self._last_y_global_zoom_value = self.SLIDER_DEFAULT_VALUE
+
+        self._y_global_scroll_apply_timer = QtCore.QTimer()
+        self._y_global_scroll_apply_timer.setSingleShot(True)
+        self._y_global_scroll_apply_timer.setInterval(50)
+        self._y_global_scroll_apply_timer.timeout.connect(self._apply_debounced_y_global_scroll)
+        self._last_y_global_scroll_value = self.SCROLLBAR_MAX_RANGE // 2
+        
         # Manual limits storage
         self.manual_x_range: Optional[Tuple[float, float]] = None
         self.manual_y_ranges: Dict[str, Tuple[float, float]] = {}
@@ -1428,8 +1453,12 @@ class ExplorerTab(QtWidgets.QWidget):
                     if time_vector is not None and trial_data is not None:
                         pen = get_plot_pens(is_average=False, trial_index=trial_idx)
                         plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{trial_idx}")
-                        plot_item.setDownsampling(auto=ds_enabled, ds='auto')
+                        # PERFORMANCE: Optimized downsampling settings
+                        plot_item.setDownsampling(mode='peak')
+                        plot_item.setClipToView(True)
+                        plot_item.setAutoDownsample(ds_enabled)
                         plot_item.opts['trial_index'] = trial_idx
+                        log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{trial_idx}'")
                         self.channel_plot_data_items[channel_id].append(plot_item)
             else: # OVERLAY_AVG mode
                 log.debug(f"[_update_plot] OVERLAY_AVG mode for channel {channel_id}: Plotting {channel.num_trials} trials and average.")
@@ -1438,15 +1467,23 @@ class ExplorerTab(QtWidgets.QWidget):
                     if time_vector is None or trial_data is None: continue
                     pen = get_plot_pens(is_average=False, trial_index=i)
                     plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{i}")
-                    plot_item.setDownsampling(auto=ds_enabled, ds='auto')
+                    # PERFORMANCE: Optimized downsampling settings
+                    plot_item.setDownsampling(mode='peak')
+                    plot_item.setClipToView(True)
+                    plot_item.setAutoDownsample(ds_enabled)
                     plot_item.opts['trial_index'] = i
+                    log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{i}'")
                     self.channel_plot_data_items[channel_id].append(plot_item)
 
                 avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
                 if avg_data is not None and avg_time is not None:
                     avg_pen = get_plot_pens(is_average=True)
                     avg_item = plot_widget.plot(avg_time, avg_data, pen=avg_pen, name="avg_trace")
-                    avg_item.setDownsampling(auto=ds_enabled, ds='auto')
+                    # PERFORMANCE: Optimized downsampling settings
+                    avg_item.setDownsampling(mode='peak')
+                    avg_item.setClipToView(True)
+                    avg_item.setAutoDownsample(ds_enabled)
+                    log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'avg_trace'")
                     self.channel_plot_data_items[channel_id].append(avg_item)
         log.info(f"[_update_plot] Plot update complete for {len(self.channel_plot_data_items)} channels.")
 
@@ -1593,38 +1630,66 @@ class ExplorerTab(QtWidgets.QWidget):
         except Exception as e: log.error(f"Error in _calculate_new_range: {e}"); return None
 
     def _on_x_zoom_changed(self, value: int):
-        log.info(f"[EXPLORER-ZOOM] X zoom changed to: {value}, manual_limits={self.manual_limits_enabled}, base_range={self.base_x_range}, updating={self._updating_viewranges}")
+        # PERFORMANCE: Store value and start debounce timer, DO NOT apply zoom directly
+        self._last_x_zoom_value = value
+        self._x_zoom_apply_timer.start()
+        log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
+
+    def _on_x_scrollbar_changed(self, value: int):
+        # PERFORMANCE: Store value and start debounce timer, DO NOT apply scroll directly
+        # Only start if not triggered by internal updates
+        if not self._updating_scrollbars:
+            self._last_x_scroll_value = value
+            self._x_scroll_apply_timer.start()
+            log.debug(f"[_on_x_scrollbar_changed] Debouncing X scroll: {value}")
+
+    def _apply_debounced_x_zoom(self):
+        """Apply X zoom after debounce delay."""
+        value = self._last_x_zoom_value
+        log.debug(f"[_apply_debounced_x_zoom] Applying X zoom: {value}")
         if self.manual_limits_enabled or self.base_x_range is None or self._updating_viewranges: return
         new_x = self._calculate_new_range(self.base_x_range, value)
-        if new_x is None: 
-            log.warning(f"[EXPLORER-ZOOM] X zoom calculation returned None")
-            return
-        log.info(f"[EXPLORER-ZOOM] X zoom calculated new range: {new_x}")
+        if new_x is None: return
         plot = next((p for p in self.channel_plots.values() if p.isVisible()), None)
         if plot and plot.getViewBox():
             vb=plot.getViewBox(); self._updating_viewranges=True
-            try: 
-                log.info(f"[EXPLORER-ZOOM] X zoom applying setXRange: {new_x}")
+            try:
                 vb.setXRange(new_x[0], new_x[1], padding=0)
-            finally: self._updating_viewranges=False; self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_x)
+            finally:
+                 self._updating_viewranges=False
+                 # Update scrollbar immediately after applying zoom
+                 self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_x)
 
-    def _on_x_scrollbar_changed(self, value: int):
-        log.info(f"[EXPLORER-SCROLL] X scrollbar changed to: {value}, manual_limits={self.manual_limits_enabled}, base_range={self.base_x_range}, updating={self._updating_scrollbars}")
-        if self.manual_limits_enabled or self.base_x_range is None or self._updating_scrollbars: return
+    def _apply_debounced_x_scroll(self):
+        """Apply X scroll after debounce delay."""
+        value = self._last_x_scroll_value
+        log.debug(f"[_apply_debounced_x_scroll] Applying X scroll: {value}")
+        if self.manual_limits_enabled or self.base_x_range is None or self._updating_viewranges or self._updating_scrollbars: return
         plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-        if not plot: 
-            log.warning(f"[EXPLORER-SCROLL] X scrollbar - no visible plot found")
-            return
+        if not plot: return
         vb=plot.getViewBox(); self._updating_viewranges=True
         try:
             cx = vb.viewRange()[0]; cs=max(abs(cx[1]-cx[0]), 1e-12)
             bs=max(abs(self.base_x_range[1]-self.base_x_range[0]), 1e-12)
-            sr=max(0, bs-cs); f=float(value)/max(1, self.x_scrollbar.maximum())
-            nm=self.base_x_range[0]+f*sr; nM=nm+cs # Corrected var
-            log.info(f"[EXPLORER-SCROLL] X scrollbar applying setXRange: [{nm}, {nM}]")
+            sr=max(0, bs-cs); f=float(value)/max(1, self.x_scrollbar.maximum()) if self.x_scrollbar.maximum() > 0 else 0.0
+            nm=self.base_x_range[0]+f*sr; nM=nm+cs
             vb.setXRange(nm, nM, padding=0)
-        except Exception as e: log.error(f"[EXPLORER-SCROLL] Error in _on_x_scrollbar_changed: {e}")
+        except Exception as e: log.error(f"Error in _apply_debounced_x_scroll: {e}")
         finally: self._updating_viewranges=False
+
+    def _apply_debounced_y_global_zoom(self):
+        """Apply global Y zoom after debounce delay."""
+        value = self._last_y_global_zoom_value
+        log.debug(f"[_apply_debounced_y_global_zoom] Applying Global Y zoom: {value}")
+        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
+        self._apply_global_y_zoom(value)
+
+    def _apply_debounced_y_global_scroll(self):
+        """Apply global Y scroll after debounce delay."""
+        value = self._last_y_global_scroll_value
+        log.debug(f"[_apply_debounced_y_global_scroll] Applying Global Y scroll: {value}")
+        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_scrollbars: return
+        self._apply_global_y_scroll(value)
 
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
         if self._updating_viewranges or self.base_x_range is None:
@@ -1738,8 +1803,10 @@ class ExplorerTab(QtWidgets.QWidget):
                 self.global_y_scrollbar.setEnabled(can_enable and controls_enabled and has_scrollable_range)
 
     def _on_global_y_zoom_changed(self, value: int):
-        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
-        self._apply_global_y_zoom(value)
+        # PERFORMANCE: Store value and start debounce timer, DO NOT apply zoom directly
+        self._last_y_global_zoom_value = value
+        self._y_global_zoom_apply_timer.start()
+        log.debug(f"[_on_global_y_zoom_changed] Debouncing Global Y zoom: {value}")
 
     def _apply_global_y_zoom(self, value: int):
         if self.manual_limits_enabled: return
@@ -1760,8 +1827,12 @@ class ExplorerTab(QtWidgets.QWidget):
              else: self._reset_scrollbar(self.global_y_scrollbar)
 
     def _on_global_y_scrollbar_changed(self, value: int):
-        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_scrollbars: return
-        self._apply_global_y_scroll(value)
+        # PERFORMANCE: Store value and start debounce timer, DO NOT apply scroll directly
+        # Only start if not triggered by internal updates
+        if not self._updating_scrollbars:
+            self._last_y_global_scroll_value = value
+            self._y_global_scroll_apply_timer.start()
+            log.debug(f"[_on_global_y_scrollbar_changed] Debouncing Global Y scroll: {value}")
 
     def _apply_global_y_scroll(self, value: int):
         if self.manual_limits_enabled or not self.y_axes_locked: return # Added lock check here too
