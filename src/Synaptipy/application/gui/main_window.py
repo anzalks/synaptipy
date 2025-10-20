@@ -275,7 +275,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_plot_preferences_updated(self):
         """Handle plot preferences update signal by efficiently updating pens."""
-        # PERFORMANCE: Log force opaque state
+        # Import the getter function (can be done at top of file too)
         from Synaptipy.shared.plot_customization import get_force_opaque_trials
         log.info(f"[_on_plot_preferences_updated] Handling signal. Force opaque state: {get_force_opaque_trials()}")
         

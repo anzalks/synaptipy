@@ -17,22 +17,30 @@ import pyqtgraph as pg
 
 log = logging.getLogger('Synaptipy.shared.plot_customization')
 
-# Global flag for performance mode
-_force_opaque_trials = False
+# --- Performance Mode Flag ---
+_force_opaque_trials = False # Global flag
 
 def set_force_opaque_trials(force_opaque: bool):
     """Globally enable/disable forcing opaque trial plots for performance."""
     global _force_opaque_trials
+    if _force_opaque_trials == force_opaque: return # Avoid unnecessary updates
     _force_opaque_trials = force_opaque
-    log.info(f"Setting force_opaque_trials to: {_force_opaque_trials}")
+    log.info(f"Setting force_opaque_trials globally to: {_force_opaque_trials}")
     # Trigger a preference update signal so plots refresh immediately
     manager = get_plot_customization_manager()
     manager._pen_cache.clear() # Clear cache to force pen regeneration
-    _plot_signals.preferences_updated.emit()
+    try:
+        # Use a single shot timer to ensure signal emission happens in the Qt event loop
+        QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)
+        log.debug("Scheduled preferences_updated signal emission.")
+    except Exception as e:
+        log.warning(f"Failed to schedule preferences_updated signal: {e}")
+        _plot_signals.preferences_updated.emit() # Fallback to immediate emission
 
 def get_force_opaque_trials() -> bool:
     """Check if trial plots should be forced opaque."""
     return _force_opaque_trials
+# --- End Performance Mode Flag ---
 
 # Global signal for plot customization updates
 class PlotCustomizationSignals(QtCore.QObject):
