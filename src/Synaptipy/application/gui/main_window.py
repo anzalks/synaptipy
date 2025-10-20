@@ -367,8 +367,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 delattr(self, '_pending_file_list')
                 delattr(self, '_pending_current_index')
                 
-                # Load the data in the explorer tab
-                self.explorer_tab.load_recording_data(recording_data.source_file, file_list, current_index)
+                # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
+                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab.")
+                self.explorer_tab.load_recording_data(recording_data, file_list, current_index)
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
                 
                 self.status_bar.showMessage(f"Loaded {recording_data.source_file.name} ({len(recording_data.channels)} channels)", 5000)
@@ -377,7 +378,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Fallback: treat as single file
                 file_list = [recording_data.source_file]
                 current_index = 0
-                self.explorer_tab.load_recording_data(recording_data.source_file, file_list, current_index)
+                # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
+                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab.")
+                self.explorer_tab.load_recording_data(recording_data, file_list, current_index)
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
                 self.status_bar.showMessage(f"Loaded {recording_data.source_file.name}", 5000)
                 
