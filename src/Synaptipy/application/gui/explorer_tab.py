@@ -1175,6 +1175,8 @@ class ExplorerTab(QtWidgets.QWidget):
                         average_pen = get_average_pen()
                         
                         item = p.plot(ref_t, avg_d, pen=average_pen)
+                        # Enable automatic downsampling for massive performance gain
+                        item.setDownsampling(auto=True, ds='auto')
                         # Set selected data z-order
                         if hasattr(item, 'setZValue'):
                             item.setZValue(5)
@@ -1337,352 +1339,57 @@ class ExplorerTab(QtWidgets.QWidget):
                 
         log.info("[EXPLORER-PEN] Pen update complete.")
 
-    def _update_plot(self, pen_only=False):
-        """Update plots with option to only update pens for better performance."""
-        if pen_only:
-            self._update_plot_pens_only()
+    def _update_plot(self):
+        """
+        Clears and redraws all plots based on the current recording and UI state.
+        This version correctly stores plot items for later updates.
+        """
+        log.info("[PLOTTING] Starting full plot update.")
+        if not self.current_recording:
+            log.warning("[PLOTTING] No recording loaded, aborting plot.")
             return
-            
-        log.info(f"[EXPLORER-PLOT] Plot update starting - recording={self.current_recording is not None}")
-        if self.current_recording:
-            log.info(f"[EXPLORER-PLOT] Recording has {len(self.current_recording.channels)} channels")
-            log.info(f"[EXPLORER-PLOT] Channel plots dict has {len(self.channel_plots)} plots")
-        if not self.current_recording: 
-            log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
-            return
-        
-        try:
-            # Batch update: temporarily block ViewBox signals during item creation
-            _batch_vbs = []
-            try:
-                _batch_vbs = [p.getViewBox() for p in self.channel_plots.values() if p and p.getViewBox()]
-                for _vb in _batch_vbs:
-                    try: _vb.blockSignals(True)
-                    except Exception: pass
-            except Exception:
-                _batch_vbs = []
 
-            # --- Rest of existing _update_plot logic with temporary signal disconnection ---
-            self._clear_plot_data_only()
-            if not self.current_recording or not self.channel_plots:
-                 log.warning("Update plot: No data/plots."); self._update_ui_state(); return  # This return is now inside try block, so finally will execute
-            is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
-            log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
-            
-                    # Simple styling approach - no complex grid configuration needed
-            
-            vis_const_available = VisConstants is not None
-            _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
-            _trial_alpha_val = getattr(VisConstants, 'TRIAL_ALPHA', 70) if vis_const_available else 70
-            _avg_color_str = getattr(VisConstants, 'AVERAGE_COLOR', '#EE4B2B') if vis_const_available else '#EE4B2B'
-            _pen_width_val = getattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH', 1) if vis_const_available else 1
-            _ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if vis_const_available else 5000
-            
-            # Try to use centralized plot customization
-            try:
-                from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
-                trial_pen = get_single_trial_pen()
-                average_pen = get_average_pen()
-                single_trial_pen = get_single_trial_pen()
-                log.debug("Using centralized plot customization pens")
-            except ImportError:
-                # Fallback to original logic
-                try:
-                    if isinstance(_trial_color_def, (tuple, list)) and len(_trial_color_def) >= 3: rgb_tuple = tuple(int(c) for c in _trial_color_def[:3])
-                    elif isinstance(_trial_color_def, str): color_hex = _trial_color_def.lstrip('#'); rgb_tuple = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
-                    else: raise ValueError(f"Unsupported color format: {_trial_color_def}")
-                    alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
-                    rgba_tuple = rgb_tuple + (alpha_int,)
-                    trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")  # Fallback trial pen
-                    log.debug(f"Trial pen RGBA: {rgba_tuple}")
-                except Exception as e:
-                    log.error(f"Error creating trial_pen: {e}. Fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
-                average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")  # Fallback average pen
-                single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")  # Fallback single trial pen
-            
-            # PEN DEBUG: Check what colors we're actually using
-            log.info(f"[PEN-DEBUG] Trial color def: {_trial_color_def}, alpha: {_trial_alpha_val}")
-            log.info(f"[PEN-DEBUG] Trial pen: {trial_pen}")
-            log.info(f"[PEN-DEBUG] Average pen: {average_pen}")
-            log.info(f"[PEN-DEBUG] Single trial pen: {single_trial_pen}")
-            log.info(f"[PEN-DEBUG] Using centralized customization: {trial_pen is not None and hasattr(trial_pen, 'color')}")
-            enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
-            ds_threshold = _ds_thresh_val
-            any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
+        # Clear all existing plot items before redrawing
+        for plot_widget in self.channel_plots.values():
+            plot_widget.clear()
+        self.channel_plot_data_items.clear()
 
-            for chan_id, plot_item in self.channel_plots.items():
-                checkbox = self.channel_checkboxes.get(chan_id)
-                channel = self.current_recording.channels.get(chan_id)
-                if checkbox and checkbox.isChecked() and channel and plot_item:
-                    plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
-                    
-                    # Step 1: Apply basic styling BEFORE plotting
-                    try:
-                        # Set background via the view box for PlotItem
-                        vb = plot_item.getViewBox()
-                        if vb:
-                            vb.setBackgroundColor('white')
-                            # Normal ViewBox behavior restored
-                            # vb.enableAutoRange(enable=False)
-                            # vb.setAutoVisible(x=False, y=False)
-                    except:
-                        pass  # Fallback if background setting fails
-                    
-                    # Grid configuration with customization support
-                    try:
-                        # Try to use customized grid settings
-                        try:
-                            from Synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
-                            if is_grid_enabled():
-                                grid_pen = get_grid_pen()
-                                if grid_pen:
-                                    # Get alpha value from pen color
-                                    alpha = 0.3  # Default alpha
-                                    if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
-                                        alpha = grid_pen.color().alpha() / 255.0
-                                        log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
-                                    else:
-                                        log.debug("Using default grid alpha: 0.3")
-                                    
-                                    plot_item.showGrid(x=True, y=True, alpha=alpha)
-                                    log.debug(f"Customized grid configuration for channel {chan_id} with alpha: {alpha}")
-                                else:
-                                    plot_item.showGrid(x=False, y=False)
-                                    log.debug(f"Grid disabled for channel {chan_id}")
-                            else:
-                                plot_item.showGrid(x=False, y=False)
-                                log.debug(f"Grid disabled for channel {chan_id}")
-                        except ImportError:
-                            plot_item.showGrid(x=True, y=True, alpha=0.3)
-                            log.debug(f"Default grid configuration for channel {chan_id}")
-                    except Exception as e:
-                        log.warning(f"Could not configure grid for channel {chan_id}: {e}")
-                    
-                    # Now plot the data
-                    if not is_cycle_mode:
-                        # --- Overlay All + Avg Mode ---
-                        log.info(f"[EXPLORER-DATA] Plotting overlay mode for {chan_id} ({channel.num_trials} trials)")
-                        for trial_idx in range(channel.num_trials):
-                            # Try to get cached data first
-                            cached_result = self._get_cached_data(chan_id, trial_idx)
-                            if cached_result is not None:
-                                data, time_vec = cached_result
-                                log.debug(f"[EXPLORER-CACHE] Using cached data for {chan_id}, trial {trial_idx}")
-                            else:
-                                # Load data from channel and cache it
-                                data = channel.get_data(trial_idx)
-                                time_vec = channel.get_relative_time_vector(trial_idx)
-                                if data is not None and time_vec is not None:
-                                    self._cache_data(chan_id, trial_idx, data, time_vec)
-                                    log.debug(f"[EXPLORER-CACHE] Cached data for {chan_id}, trial {trial_idx}")
-                            
-                            if data is not None and time_vec is not None:
-                                if trial_idx == 0:  # Log details for first trial only to avoid spam
-                                    log.info(f"[EXPLORER-DATA] First trial - Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
-                                    log.info(f"[EXPLORER-DATA] First trial - Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
-                                    log.info(f"[EXPLORER-DATA] First trial - Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
-                                    
-                                    # DATA VALIDITY DEBUG: Check for NaN/Inf
-                                    time_valid = np.isfinite(time_vec).all()
-                                    data_valid = np.isfinite(data).all()
-                                    log.info(f"[DATA-VALID] Time array valid: {time_valid}, Data array valid: {data_valid}")
-                                    if not time_valid:
-                                        log.warning(f"[DATA-VALID] Time has {np.sum(~np.isfinite(time_vec))} invalid values")
-                                    if not data_valid:
-                                        log.warning(f"[DATA-VALID] Data has {np.sum(~np.isfinite(data))} invalid values")
-                                
-                                # Simple plotting approach matching analysis tabs
-                                item = plot_item.plot(time_vec, data, pen=trial_pen)
-                                # Enforce efficient rendering options
-                                try:
-                                    if hasattr(item, 'setClipToView'): item.setClipToView(True)
-                                    if hasattr(item, 'setDownsampling'): item.setDownsampling(auto=True, method='peak')
-                                except Exception:
-                                    pass
-                                item.opts['autoDownsample'] = enable_downsampling
-                                item.opts['autoDownsampleThreshold'] = ds_threshold
-                                item.opts['clipToView'] = True
-                                item.opts['downsampleMethod'] = 'peak'
-                                self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                                channel_plotted = True
-                                
-                                # Simplified debug logging
-                                if trial_idx == 0:  # Only log for first trial to avoid spam
-                                    log.info(f"[EXPLORER-DATA] Trial data plotted for {chan_id}: {len(data)} points")
-                            else:
-                                log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {trial_idx+1}: data={data is not None}, time_vec={time_vec is not None}")
-                        
-                        # Plot average trace
-                        cached_avg = self._get_cached_average(chan_id)
-                        if cached_avg is not None:
-                            avg_data, avg_time_vec = cached_avg
-                            log.debug(f"[EXPLORER-CACHE] Using cached average data for {chan_id}")
-                        else:
-                            # Load average data from channel and cache it
-                            avg_data = channel.get_averaged_data()
-                            avg_time_vec = channel.get_relative_averaged_time_vector()
-                            if avg_data is not None and avg_time_vec is not None:
-                                self._cache_average(chan_id, avg_data, avg_time_vec)
-                                log.debug(f"[EXPLORER-CACHE] Cached average data for {chan_id}")
-                        
-                        if avg_data is not None and avg_time_vec is not None:
-                            # Defer average plotting until next event loop turn for snappier initial load
-                            log.info(f"[EXPLORER-DATA] Queueing average trace for {chan_id}")
-                            if not hasattr(self, '_deferred_avg_queue'): self._deferred_avg_queue = []
-                            self._deferred_avg_queue.append((chan_id, plot_item, avg_time_vec, avg_data, average_pen, enable_downsampling, ds_threshold))
-                        else:
-                            log.warning(f"[EXPLORER-DATA] Missing average data for {chan_id}: avg_data={avg_data is not None}, avg_time_vec={avg_time_vec is not None}")
+        from Synaptipy.shared.plot_customization import get_plot_pens
 
-                    else:
-                        # --- Cycle Single Trial Mode ---
-                        idx = min(self.current_trial_index, channel.num_trials - 1) if channel.num_trials > 0 else -1
-                        if idx >= 0:
-                            # Try to get cached data first
-                            cached_result = self._get_cached_data(chan_id, idx)
-                            if cached_result is not None:
-                                data, time_vec = cached_result
-                                log.debug(f"[EXPLORER-CACHE] Using cached data for {chan_id}, trial {idx}")
-                            else:
-                                # Load data from channel and cache it
-                                data = channel.get_data(idx)
-                                time_vec = channel.get_relative_time_vector(idx)
-                                if data is not None and time_vec is not None:
-                                    self._cache_data(chan_id, idx, data, time_vec)
-                                    log.debug(f"[EXPLORER-CACHE] Cached data for {chan_id}, trial {idx}")
-                            
-                            if data is not None and time_vec is not None:
-                                # DETAILED DATA LOGGING for debugging Windows visibility issues
-                                log.info(f"[EXPLORER-DATA] Plotting trial {idx+1} for {chan_id}")
-                                log.info(f"[EXPLORER-DATA] Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
-                                log.info(f"[EXPLORER-DATA] Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
-                                log.info(f"[EXPLORER-DATA] Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
-                                
-                                # Simple plotting approach matching analysis tabs
-                                item = plot_item.plot(time_vec, data, pen=single_trial_pen)
-                                try:
-                                    if hasattr(item, 'setClipToView'): item.setClipToView(True)
-                                    if hasattr(item, 'setDownsampling'): item.setDownsampling(auto=True, method='peak')
-                                except Exception:
-                                    pass
-                                item.opts['autoDownsample'] = enable_downsampling
-                                item.opts['autoDownsampleThreshold'] = ds_threshold
-                                item.opts['clipToView'] = True
-                                item.opts['downsampleMethod'] = 'peak'
-                                self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                                channel_plotted = True
-                                log.info(f"[EXPLORER-DATA] Single trial plotted for {chan_id}: {len(data)} points")
-                            else: 
-                                log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {idx+1}: data={data is not None}, time_vec={time_vec is not None}")
-                                text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
-                                plot_item.addItem(text_item)
-                        else: 
-                            text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
-                            plot_item.addItem(text_item)
+        for channel_id, channel in self.current_recording.channels.items():
+            plot_widget = self.channel_plots.get(channel_id)
+            if not plot_widget:
+                continue
 
-                    if not channel_plotted: 
-                        text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
-                        plot_item.addItem(text_item)
-                    
-                    # Final step: Ensure grid is visible after plotting
-                    try:
-                        plot_item.showGrid(x=True, y=True, alpha=0.3)
-                    except Exception:
-                        pass
-                    
-                    if channel_plotted: any_data_plotted = True
-                elif plot_item: plot_item.hide()
-
-            # --- Axis linking logic (Corrected & consistent grid rendering) ---
-            last_visible_plot = visible_plots[-1] if visible_plots else None
-            for i, plot_item in enumerate(self.channel_plots.values()):
-                is_visible = plot_item in visible_plots; is_last = plot_item == last_visible_plot
-                # Keep bottom axis present on all plots so grid lines render consistently
-                plot_item.showAxis('bottom', show=True)
-                bottom_axis = plot_item.getAxis('bottom')
-                if bottom_axis:
-                    if is_last:
-                        bottom_axis.setLabel("Time", units='s')
-                        try: bottom_axis.showLabel(True)
-                        except Exception: pass
-                    else:
-                        # Hide labels but keep the axis (and its grid) active
-                        try: bottom_axis.showLabel(False)
-                        except Exception: pass
-
-                if is_visible:
-                    try:
-                        idx = visible_plots.index(plot_item)
-                        target = visible_plots[idx - 1].getViewBox() if idx > 0 else None
-                        vb = plot_item.getViewBox()
-                        if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
-                            plot_item.setXLink(target)
-                        elif vb and not hasattr(vb, 'linkedView'): # Safety
-                            plot_item.setXLink(target)
-                    except Exception as link_e:
-                         chan_id = getattr(plot_item.getViewBox(), '_synaptipy_chan_id', f'plot_{i}')
-                         log.warning(f"XLink Err {chan_id}: {link_e}")
-                         plot_item.setXLink(None)
-                else: # Unlink hidden plots
-                    vb = plot_item.getViewBox()
-                    if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
-                        plot_item.setXLink(None)
-            # --- End Axis linking ---
-
-            self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
+            self.channel_plot_data_items[channel_id] = []
             
-            # Defer averages by default; for preference-driven full replot we may inline them
-            try:
-                from PySide6 import QtCore as _QtCore
-                # Then plot deferred averages (or inline if requested)
-                def _plot_deferred_averages():
-                    try:
-                        if hasattr(self, '_deferred_avg_queue') and self._deferred_avg_queue:
-                            for chan_id, plot_item, avg_time_vec, avg_data, average_pen, enable_downsampling, ds_threshold in self._deferred_avg_queue:
-                                try:
-                                    log.info(f"[EXPLORER-DATA] Plotting deferred average for {chan_id}")
-                                    item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
-                                    try:
-                                        if hasattr(item, 'setClipToView'): item.setClipToView(True)
-                                        if hasattr(item, 'setDownsampling'): item.setDownsampling(auto=True, method='peak')
-                                    except Exception:
-                                        pass
-                                    item.opts['autoDownsample'] = enable_downsampling
-                                    item.opts['autoDownsampleThreshold'] = ds_threshold
-                                    item.opts['clipToView'] = True
-                                    item.opts['downsampleMethod'] = 'peak'
-                                    self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                                    self.selected_average_plot_items[chan_id] = item
-                                    log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}: {len(avg_data)} points")
-                                except Exception as _e:
-                                    log.warning(f"[EXPLORER-DATA] Failed to plot deferred average for {chan_id}: {_e}")
-                            self._deferred_avg_queue.clear()
-                    except Exception:
-                        pass
-                # If a caller requested inline averages (e.g., preference change), do it now
-                if getattr(self, '_inline_avg_now', False):
-                    _plot_deferred_averages()
-                else:
-                    _QtCore.QTimer.singleShot(0, _plot_deferred_averages)
-            except Exception:
-                pass
-            
-            # Simplified debug summary
-            total_data_items = sum(len(plot_item.listDataItems()) for plot_item in self.channel_plots.values() if plot_item.isVisible())
-            log.info(f"[EXPLORER-PLOT] Plot update complete: {total_data_items} data items plotted across {len([p for p in self.channel_plots.values() if p.isVisible()])} visible channels")
-            # Initialize pen hash after initial plotting so immediate pen-only update will be skipped
-            try:
-                self._last_pen_hash = self._get_pen_hash()
-                log.debug(f"[EXPLORER-PEN] Initialized last pen hash post-plot: {self._last_pen_hash}")
-            except Exception:
-                pass
-        finally:
-            # Unblock signals after batch update
-            try:
-                for _vb in _batch_vbs:
-                    try: _vb.blockSignals(False)
-                    except Exception: pass
-            except Exception:
-                pass
+            # This logic assumes you are in an overlay mode.
+            # It can be adapted for other modes (e.g., stacked).
+            for i, trial_data in enumerate(channel.data_trials):
+                time_vector = channel.get_relative_time_vector(i)
+                if time_vector is None:
+                    continue
+
+                pen = get_plot_pens(is_average=False, trial_index=i)
+                plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{i}")
+                
+                # Enable high-performance downsampling
+                plot_item.setDownsampling(auto=True, ds='auto')
+                
+                # Store the created item correctly
+                self.channel_plot_data_items[channel_id].append(plot_item)
+
+            # Plot the average trace
+            avg_data = channel.get_averaged_data()
+            if avg_data is not None:
+                avg_time = channel.get_relative_averaged_time_vector()
+                avg_pen = get_plot_pens(is_average=True)
+                avg_item = plot_widget.plot(avg_time, avg_data, pen=avg_pen, name="avg_trace")
+                avg_item.setDownsampling(auto=True, ds='auto')
+                self.channel_plot_data_items[channel_id].append(avg_item)
+
+        log.info(f"[PLOTTING] Full plot update complete for {len(self.channel_plot_data_items)} channels.")
+        self._reset_view()
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
@@ -2441,6 +2148,8 @@ class ExplorerTab(QtWidgets.QWidget):
                     try:
                         avg_d=np.mean(np.array(valid_d), axis=0)
                         item=p.plot(ref_t, avg_d, pen=self.SELECTED_AVG_PEN)
+                        # Enable automatic downsampling for massive performance gain
+                        item.setDownsampling(auto=True, ds='auto')
                         # Set selected data z-order
                         if hasattr(item, 'setZValue'):
                             item.setZValue(5)
@@ -3046,3 +2755,29 @@ class ExplorerTab(QtWidgets.QWidget):
                 "Save Error", 
                 f"Failed to save plot:\n{str(e)}"
             )
+
+    def update_plot_pens(self):
+        """Efficiently updates the pens of all existing plot data items."""
+        log.info("[PEN-UPDATE] Starting efficient pen-only update.")
+        if not self.current_recording or not self.channel_plot_data_items:
+            log.info("[PEN-UPDATE] No data or plot items to update.")
+            return
+
+        from Synaptipy.shared.plot_customization import get_plot_pens
+
+        for channel_id, plot_items in self.channel_plot_data_items.items():
+            for item in plot_items:
+                # Determine if the item is an average or a single trial to get the correct pen
+                is_average = 'avg' in item.opts.get('name', '')
+                trial_index = item.opts.get('trial_index', 0)
+                
+                new_pen = get_plot_pens(is_average=is_average, trial_index=trial_index)
+                item.setPen(new_pen)
+        
+        # CRITICAL FIX: This line was missing. It forces the graphics view to
+        # redraw itself with the new pens that were just set.
+        if self.graphics_layout_widget:
+            self.graphics_layout_widget.update()
+            log.info("[PEN-UPDATE] Graphics view explicitly updated to show new styles.")
+            
+        log.info(f"[PEN-UPDATE] Pen update completed for {len(self.channel_plot_data_items)} channels.")

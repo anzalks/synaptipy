@@ -274,90 +274,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return True  # Assume update needed if we can't check
 
     def _on_plot_preferences_updated(self):
-        """Handle plot preferences update signal."""
-        try:
-            log.info("=== PLOT PREFERENCES UPDATE SIGNAL RECEIVED ===")
-            log.info("Plot preferences updated - checking if update is needed")
-            
-            # Check if we actually need to update plots
-            needs_update = self._needs_plot_update()
-            log.info(f"Plot update needed: {needs_update}")
-            
-            if not needs_update:
-                log.info("No active plots found - skipping plot update")
-                return
-            
-            log.info("Active plots found - refreshing plots")
-            
-            # Update explorer tab plots
-            if hasattr(self, 'explorer_tab') and self.explorer_tab:
-                log.info("Explorer tab found - attempting to update plots")
-                # Grid visibility will be applied during replot to avoid redundant passes
-                
-                if hasattr(self.explorer_tab, '_update_plot'):
-                    log.info("Explorer tab has _update_plot method")
-                    # New logic that triggers an efficient pen-only update
-                    log.info("Preference change: refreshing plots with new styles")
-                    try:
-                        # Use pen-only to avoid full data replot
-                        self.explorer_tab._update_plot(pen_only=True)
-                    finally:
-                        pass
-                    log.info("Refreshed explorer tab plots (pen-only on preference change)")
-                else:
-                    log.warning("Explorer tab does not have _update_plot method")
-            else:
-                log.info("No explorer tab found or available")
-            
-            # Update analysis tab plots - use pen-only update for better performance
-            if hasattr(self, 'analyser_tab') and self.analyser_tab:
-                try:
-                    # Check if analyser_tab is a QTabWidget
-                    if hasattr(self.analyser_tab, 'count'):
-                        for i in range(self.analyser_tab.count()):
-                            analysis_widget = self.analyser_tab.widget(i)
-                            
-                            # Update grid visibility for analysis tab plots
-                            try:
-                                if hasattr(analysis_widget, 'plot_widget'):
-                                    from Synaptipy.shared.plot_customization import update_grid_visibility
-                                    update_grid_visibility([analysis_widget.plot_widget])
-                                    log.debug(f"Updated grid visibility for analysis tab {i}")
-                            except Exception as e:
-                                log.debug(f"Could not update grid visibility for analysis tab {i}: {e}")
-                            
-                            if hasattr(analysis_widget, '_update_plot_pens_only'):
-                                # Use pen-only update for better performance
-                                analysis_widget._update_plot_pens_only()
-                                log.debug(f"Refreshed analysis tab {i} plots (pen-only update)")
-                            elif hasattr(analysis_widget, '_plot_selected_trace'):
-                                # Fallback to full replot if pen-only update not available
-                                analysis_widget._plot_selected_trace()
-                                log.debug(f"Refreshed analysis tab {i} plots (full replot)")
-                    else:
-                        # analyser_tab might be a single widget
-                        
-                        # Update grid visibility for single analysis tab
-                        try:
-                            if hasattr(self.analyser_tab, 'plot_widget'):
-                                from Synaptipy.shared.plot_customization import update_grid_visibility
-                                update_grid_visibility([self.analyser_tab.plot_widget])
-                                log.debug("Updated grid visibility for single analysis tab")
-                        except Exception as e:
-                            log.debug(f"Could not update grid visibility for single analysis tab: {e}")
-                        
-                        if hasattr(self.analyser_tab, '_update_plot_pens_only'):
-                            self.analyser_tab._update_plot_pens_only()
-                            log.debug("Refreshed single analysis tab plots (pen-only update)")
-                        elif hasattr(self.analyser_tab, '_plot_selected_trace'):
-                            self.analyser_tab._plot_selected_trace()
-                            log.debug("Refreshed single analysis tab plots (full replot)")
-                except Exception as e:
-                    log.warning(f"Could not refresh analysis tabs: {e}")
-                        
-            log.info("Plot refresh complete")
-        except Exception as e:
-            log.error(f"Failed to refresh plots after preference update: {e}")
+        """Handle plot preferences update signal by efficiently updating pens."""
+        log.info("Plot preferences updated, refreshing plot styles only.")
+        if hasattr(self, 'explorer_tab') and self.explorer_tab:
+            self.explorer_tab.update_plot_pens() # This new method will only update styles
+        if hasattr(self, 'analyser_tab') and self.analyser_tab:
+             # Add logic here to update analyser tab plots if they exist
+             pass
     
     def _update_plot_pens_only(self):
         """Update only plot pens when user changes preferences in dialog."""
