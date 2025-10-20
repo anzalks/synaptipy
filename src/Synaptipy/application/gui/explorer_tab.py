@@ -132,10 +132,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self._last_x_range = None
         self._last_y_vbs = {}
         
-        # PERFORMANCE: Add debounce timers for slider/scrollbar -> view range updates
+        # --- Add/Ensure these Debounce timers exist ---
         self._x_zoom_apply_timer = QtCore.QTimer()
         self._x_zoom_apply_timer.setSingleShot(True)
-        self._x_zoom_apply_timer.setInterval(50)
+        self._x_zoom_apply_timer.setInterval(50) # Apply ~50ms after slider stops
         self._x_zoom_apply_timer.timeout.connect(self._apply_debounced_x_zoom)
         self._last_x_zoom_value = self.SLIDER_DEFAULT_VALUE
 
@@ -143,7 +143,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._x_scroll_apply_timer.setSingleShot(True)
         self._x_scroll_apply_timer.setInterval(50)
         self._x_scroll_apply_timer.timeout.connect(self._apply_debounced_x_scroll)
-        self._last_x_scroll_value = 0
+        self._last_x_scroll_value = 0 # Or initial scrollbar value
 
         self._y_global_zoom_apply_timer = QtCore.QTimer()
         self._y_global_zoom_apply_timer.setSingleShot(True)
@@ -1627,14 +1627,11 @@ class ExplorerTab(QtWidgets.QWidget):
         except Exception as e: log.error(f"Error in _calculate_new_range: {e}"); return None
 
     def _on_x_zoom_changed(self, value: int):
-        # PERFORMANCE: Store value and start debounce timer, DO NOT apply zoom directly
         self._last_x_zoom_value = value
         self._x_zoom_apply_timer.start()
         log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
 
     def _on_x_scrollbar_changed(self, value: int):
-        # PERFORMANCE: Store value and start debounce timer, DO NOT apply scroll directly
-        # Only start if not triggered by internal updates
         if not self._updating_scrollbars:
             self._last_x_scroll_value = value
             self._x_scroll_apply_timer.start()
@@ -1800,7 +1797,6 @@ class ExplorerTab(QtWidgets.QWidget):
                 self.global_y_scrollbar.setEnabled(can_enable and controls_enabled and has_scrollable_range)
 
     def _on_global_y_zoom_changed(self, value: int):
-        # PERFORMANCE: Store value and start debounce timer, DO NOT apply zoom directly
         self._last_y_global_zoom_value = value
         self._y_global_zoom_apply_timer.start()
         log.debug(f"[_on_global_y_zoom_changed] Debouncing Global Y zoom: {value}")
@@ -1824,8 +1820,6 @@ class ExplorerTab(QtWidgets.QWidget):
              else: self._reset_scrollbar(self.global_y_scrollbar)
 
     def _on_global_y_scrollbar_changed(self, value: int):
-        # PERFORMANCE: Store value and start debounce timer, DO NOT apply scroll directly
-        # Only start if not triggered by internal updates
         if not self._updating_scrollbars:
             self._last_y_global_scroll_value = value
             self._y_global_scroll_apply_timer.start()

@@ -71,7 +71,7 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self._create_single_trial_tab()
         self._create_grid_tab()
         
-        # PERFORMANCE: Add performance options group
+        # --- Performance Option ---
         performance_group = QtWidgets.QGroupBox("Performance")
         performance_layout = QtWidgets.QVBoxLayout(performance_group)
         
@@ -80,13 +80,17 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             "Check this to disable transparency for single trials.\n"
             "This can significantly improve performance when many trials are overlaid."
         )
-        # Import the getter function
+        # Import the getter function here or at the top of the file
         from Synaptipy.shared.plot_customization import get_force_opaque_trials
         self.force_opaque_checkbox.setChecked(get_force_opaque_trials())
-        self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed)
+        self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed) # Connect the signal
         performance_layout.addWidget(self.force_opaque_checkbox)
         
-        layout.addWidget(performance_group)
+        # Add the performance group to the main layout of the dialog
+        main_layout = layout  # layout is already the dialog's main layout
+        # For now, just add it before buttons (buttons are added below)
+        main_layout.addWidget(performance_group)
+        # --- End Performance Option ---
         
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
@@ -487,7 +491,7 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
     def _on_force_opaque_changed(self, state):
         """Handle changes to the force opaque checkbox."""
         is_checked = state == QtCore.Qt.CheckState.Checked.value
-        # Import the setter function
+        # Import the setter function (can be done at top of file too)
         from Synaptipy.shared.plot_customization import set_force_opaque_trials
         set_force_opaque_trials(is_checked)
         log.info(f"Force opaque trials toggled via dialog to: {is_checked}")
