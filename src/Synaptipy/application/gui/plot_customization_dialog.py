@@ -490,5 +490,5 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         # Import the setter function
         from Synaptipy.shared.plot_customization import set_force_opaque_trials
         set_force_opaque_trials(is_checked)
-        log.info(f"Force opaque trials toggled to: {is_checked}")
-        # Note: The set_force_opaque_trials function already emits the signal to update plots.
+        log.info(f"Force opaque trials toggled via dialog to: {is_checked}")
+        # The set_force_opaque_trials function emits the signal to update plots automatically

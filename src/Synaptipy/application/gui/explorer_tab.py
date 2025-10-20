@@ -1454,9 +1454,8 @@ class ExplorerTab(QtWidgets.QWidget):
                         pen = get_plot_pens(is_average=False, trial_index=trial_idx)
                         plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{trial_idx}")
                         # PERFORMANCE: Optimized downsampling settings
-                        plot_item.setDownsampling(mode='peak')
+                        plot_item.setDownsampling(auto=ds_enabled, method='peak')
                         plot_item.setClipToView(True)
-                        plot_item.setAutoDownsample(ds_enabled)
                         plot_item.opts['trial_index'] = trial_idx
                         log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{trial_idx}'")
                         self.channel_plot_data_items[channel_id].append(plot_item)
@@ -1468,9 +1467,8 @@ class ExplorerTab(QtWidgets.QWidget):
                     pen = get_plot_pens(is_average=False, trial_index=i)
                     plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{i}")
                     # PERFORMANCE: Optimized downsampling settings
-                    plot_item.setDownsampling(mode='peak')
+                    plot_item.setDownsampling(auto=ds_enabled, method='peak')
                     plot_item.setClipToView(True)
-                    plot_item.setAutoDownsample(ds_enabled)
                     plot_item.opts['trial_index'] = i
                     log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{i}'")
                     self.channel_plot_data_items[channel_id].append(plot_item)
@@ -1480,9 +1478,8 @@ class ExplorerTab(QtWidgets.QWidget):
                     avg_pen = get_plot_pens(is_average=True)
                     avg_item = plot_widget.plot(avg_time, avg_data, pen=avg_pen, name="avg_trace")
                     # PERFORMANCE: Optimized downsampling settings
-                    avg_item.setDownsampling(mode='peak')
+                    avg_item.setDownsampling(auto=ds_enabled, method='peak')
                     avg_item.setClipToView(True)
-                    avg_item.setAutoDownsample(ds_enabled)
                     log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'avg_trace'")
                     self.channel_plot_data_items[channel_id].append(avg_item)
         log.info(f"[_update_plot] Plot update complete for {len(self.channel_plot_data_items)} channels.")
