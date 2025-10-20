@@ -552,7 +552,7 @@ def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
     """
     from PySide6.QtGui import QColor
     
-    manager = PlotCustomizationManager()
+    manager = get_plot_customization_manager()
     prefs = manager.get_all_preferences()
 
     if is_average:
