@@ -29,13 +29,8 @@ def set_force_opaque_trials(force_opaque: bool):
     # Trigger a preference update signal so plots refresh immediately
     manager = get_plot_customization_manager()
     manager._pen_cache.clear() # Clear cache to force pen regeneration
-    try:
-        # Use a single shot timer to ensure signal emission happens in the Qt event loop
-        QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)
-        log.debug("Scheduled preferences_updated signal emission.")
-    except Exception as e:
-        log.warning(f"Failed to schedule preferences_updated signal: {e}")
-        _plot_signals.preferences_updated.emit() # Fallback to immediate emission
+    # Direct emission for immediate response
+    _plot_signals.preferences_updated.emit()
 
 def get_force_opaque_trials() -> bool:
     """Check if trial plots should be forced opaque."""
