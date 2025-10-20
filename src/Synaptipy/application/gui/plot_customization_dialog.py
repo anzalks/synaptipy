@@ -41,6 +41,9 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         # Store original preferences when dialog opens - use deep copy
         self._original_preferences = copy.deepcopy(self.customization_manager.get_all_preferences())
         
+        # PERFORMANCE: Add checkbox attribute
+        self.force_opaque_checkbox = None
+        
         log.info("=== DIALOG INITIALIZATION ===")
         log.info(f"Manager preferences: {self.customization_manager.get_all_preferences()}")
         log.info(f"Current preferences: {self.current_preferences}")
@@ -67,6 +70,23 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self._create_average_tab()
         self._create_single_trial_tab()
         self._create_grid_tab()
+        
+        # PERFORMANCE: Add performance options group
+        performance_group = QtWidgets.QGroupBox("Performance")
+        performance_layout = QtWidgets.QVBoxLayout(performance_group)
+        
+        self.force_opaque_checkbox = QtWidgets.QCheckBox("Force Opaque Single Trials (Faster Rendering)")
+        self.force_opaque_checkbox.setToolTip(
+            "Check this to disable transparency for single trials.\n"
+            "This can significantly improve performance when many trials are overlaid."
+        )
+        # Import the getter function
+        from Synaptipy.shared.plot_customization import get_force_opaque_trials
+        self.force_opaque_checkbox.setChecked(get_force_opaque_trials())
+        self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed)
+        performance_layout.addWidget(self.force_opaque_checkbox)
+        
+        layout.addWidget(performance_group)
         
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
@@ -463,3 +483,12 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         """Handle OK button click - apply changes and close."""
         self._apply_changes()
         self.accept()
+    
+    def _on_force_opaque_changed(self, state):
+        """Handle changes to the force opaque checkbox."""
+        is_checked = state == QtCore.Qt.CheckState.Checked.value
+        # Import the setter function
+        from Synaptipy.shared.plot_customization import set_force_opaque_trials
+        set_force_opaque_trials(is_checked)
+        log.info(f"Force opaque trials toggled to: {is_checked}")
+        # Note: The set_force_opaque_trials function already emits the signal to update plots.

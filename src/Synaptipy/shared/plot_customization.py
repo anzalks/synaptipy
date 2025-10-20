@@ -17,6 +17,9 @@ import pyqtgraph as pg
 
 log = logging.getLogger('Synaptipy.shared.plot_customization')
 
+# Global flag for performance mode
+_force_opaque_trials = False
+
 # Global signal for plot customization updates
 class PlotCustomizationSignals(QtCore.QObject):
     """Global signals for plot customization updates."""
@@ -239,6 +242,12 @@ class PlotCustomizationManager:
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
         alpha = opacity / 100.0
         
+        # PERFORMANCE: Override alpha if force opaque mode is enabled
+        global _force_opaque_trials
+        if _force_opaque_trials:
+            log.debug("[get_single_trial_pen] Performance mode ON: Forcing alpha to 1.0")
+            alpha = 1.0
+        
         # Convert hex color to QColor with proper alpha
         from PySide6.QtGui import QColor
         if color_str.startswith('#'):
@@ -254,7 +263,7 @@ class PlotCustomizationManager:
             color.setAlpha(int(alpha * 255))
 
         pen = pg.mkPen(color=color, width=width)
-        log.debug(f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})")
+        log.debug(f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f}, force_opaque: {_force_opaque_trials})")
         self._cache_pen('single_trial', pen)
         return pen
 
@@ -538,6 +547,20 @@ def save_plot_preferences():
 def get_plot_customization_signals():
     """Get the global plot customization signals."""
     return _plot_signals
+
+def set_force_opaque_trials(force_opaque: bool):
+    """Globally enable/disable forcing opaque trial plots for performance."""
+    global _force_opaque_trials
+    _force_opaque_trials = force_opaque
+    log.info(f"Setting force_opaque_trials to: {_force_opaque_trials}")
+    # Trigger a preference update signal so plots refresh immediately
+    manager = get_plot_customization_manager()
+    manager._pen_cache.clear() # Clear cache to force pen regeneration
+    _plot_signals.preferences_updated.emit()
+
+def get_force_opaque_trials() -> bool:
+    """Check if trial plots should be forced opaque."""
+    return _force_opaque_trials
 
 def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
     """
