@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Set
+from typing import List, Optional, Dict, Any, Tuple, Set, Union
 import uuid
 from datetime import datetime, timezone
 from functools import partial
@@ -590,18 +590,67 @@ class ExplorerTab(QtWidgets.QWidget):
             selected_index = 0
         self.load_recording_data(filepath, file_list, selected_index)
 
-    def load_recording_data(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int):
+    def _display_recording(self, recording: Recording):
+        """Displays a Recording object that is already loaded in memory."""
+        log.info(f"[_display_recording] Now displaying pre-loaded data for: {recording.source_file.name}")
+        if not recording:
+            log.error("[_display_recording] Method was called with a None Recording object. Aborting.")
+            return
+
+        self.status_bar.showMessage(f"Displaying '{recording.source_file.name}'...")
+        QtWidgets.QApplication.processEvents()
+
+        self._reset_ui_and_state_for_new_file()
+        self._clear_data_cache()
+
+        try:
+            # --- THE CORE FIX: Use the object directly ---
+            self.current_recording = recording
+            log.info(f"[_display_recording] Assigned pre-loaded Recording object directly.")
+
+            self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
+
+            log.info(f"[_display_recording] Creating UI for {len(self.current_recording.channels)} channels...")
+            self._create_channel_ui()
+
+            self._update_metadata_display()
+
+            log.info(f"[_display_recording] Triggering plot update...")
+            self._update_plot()
+
+            log.info(f"[_display_recording] Resetting view...")
+            self._reset_view()
+
+            self._auto_select_trials_for_average()
+
+            self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'. Ready.", 5000)
+            log.info(f"[_display_recording] Display of '{recording.source_file.name}' complete.")
+        except Exception as e:
+             log.error(f"[_display_recording] An unexpected error occurred: {e}", exc_info=True)
+             self._clear_metadata_display()
+        finally:
+             self._update_zoom_scroll_enable_state()
+             self._update_ui_state()
+             if self.manual_limits_enabled: self._apply_manual_limits()
+
+    def load_recording_data(self, data_or_filepath, file_list: List[Path], current_index: int):
         """
-        Stores the list of files selected by the user and loads the initial one.
-        Navigation between files is handled by _next_file_folder / _prev_file_folder.
+        Handles loading data. Accepts either a pre-loaded Recording object (to display)
+        or a Path (to load from disk for file cycling).
         """
-        # CHANGE: Log using the clearer argument name
-        log.info(f"[EXPLORER-LOAD] ExplorerTab received file list (count: {len(file_list)}). Initial file to display: {initial_filepath_to_load.name} (Index {current_index})")
-        # Store the full list and the starting index provided by MainWindow
         self.file_list = file_list
         self.current_file_index = current_index
-        # Load and display the specific file requested initially
-        self._load_and_display_file(initial_filepath_to_load)
+
+        if isinstance(data_or_filepath, Recording):
+            # --- This is the NEW, fast path for initial load ---
+            log.info(f"[load_recording_data] Received a pre-loaded Recording object. Using fast display path.")
+            self._display_recording(data_or_filepath)
+        elif isinstance(data_or_filepath, Path):
+            # --- This is the OLD path, now used only for file cycling ---
+            log.info(f"[load_recording_data] Received a Path object. Using disk-read path for file cycling.")
+            self._load_and_display_file(data_or_filepath)
+        else:
+            log.error(f"[load_recording_data] Received invalid data type: {type(data_or_filepath)}. Aborting.")
 
     def get_current_recording(self) -> Optional[Recording]:
         return self.current_recording
@@ -740,6 +789,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # Loop through channels and create UI elements
         checkbox_group = QtWidgets.QButtonGroup()
         checkbox_group.setExclusive(False)
+        first_plot_item = None
         
         for i, chan_key in enumerate(channel_keys):
             channel = self.current_recording.channels[chan_key]
@@ -756,6 +806,13 @@ class ExplorerTab(QtWidgets.QWidget):
             
             # Create plot item for this channel
             plot_item = self.graphics_layout_widget.addPlot(row=i, col=0)
+            
+            # Link X-axes for synchronized zooming
+            if first_plot_item is None:
+                first_plot_item = plot_item
+            else:
+                plot_item.setXLink(first_plot_item)
+            log.debug(f"[_create_channel_ui] Linked X-axis for plot {i} to the first plot.")
             
             # Apply basic plot styling
             try:
@@ -1341,55 +1398,57 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _update_plot(self):
         """
-        Clears and redraws all plots based on the current recording and UI state.
-        This version correctly stores plot items for later updates.
+        Clears and redraws plots based on the current recording AND plot mode.
         """
-        log.info("[PLOTTING] Starting full plot update.")
         if not self.current_recording:
-            log.warning("[PLOTTING] No recording loaded, aborting plot.")
+            log.warning("[_update_plot] Aborting: No recording loaded.")
             return
 
-        # Clear all existing plot items before redrawing
+        log.info(f"[_update_plot] Starting plot update. Mode: {'CYCLE_SINGLE' if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else 'OVERLAY_AVG'}")
+
         for plot_widget in self.channel_plots.values():
-            plot_widget.clear()
+            if plot_widget: plot_widget.clear()
         self.channel_plot_data_items.clear()
 
         from Synaptipy.shared.plot_customization import get_plot_pens
+        ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
 
         for channel_id, channel in self.current_recording.channels.items():
             plot_widget = self.channel_plots.get(channel_id)
-            if not plot_widget:
-                continue
+            if not plot_widget or not channel: continue
 
             self.channel_plot_data_items[channel_id] = []
-            
-            # This logic assumes you are in an overlay mode.
-            # It can be adapted for other modes (e.g., stacked).
-            for i, trial_data in enumerate(channel.data_trials):
-                time_vector = channel.get_relative_time_vector(i)
-                if time_vector is None:
-                    continue
 
-                pen = get_plot_pens(is_average=False, trial_index=i)
-                plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{i}")
-                
-                # Enable high-performance downsampling
-                plot_item.setDownsampling(auto=True, ds='auto')
-                
-                # Store the created item correctly
-                self.channel_plot_data_items[channel_id].append(plot_item)
+            # --- FIX: Respect Plot Mode ---
+            if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
+                log.debug(f"[_update_plot] CYCLE_SINGLE mode for channel {channel_id}: Plotting trial {self.current_trial_index}.")
+                trial_idx = self.current_trial_index
+                if 0 <= trial_idx < channel.num_trials:
+                    trial_data, time_vector = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
+                    if time_vector is not None and trial_data is not None:
+                        pen = get_plot_pens(is_average=False, trial_index=trial_idx)
+                        plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{trial_idx}")
+                        plot_item.setDownsampling(auto=ds_enabled, ds='auto')
+                        plot_item.opts['trial_index'] = trial_idx
+                        self.channel_plot_data_items[channel_id].append(plot_item)
+            else: # OVERLAY_AVG mode
+                log.debug(f"[_update_plot] OVERLAY_AVG mode for channel {channel_id}: Plotting {channel.num_trials} trials and average.")
+                for i in range(channel.num_trials):
+                    trial_data, time_vector = channel.get_data(i), channel.get_relative_time_vector(i)
+                    if time_vector is None or trial_data is None: continue
+                    pen = get_plot_pens(is_average=False, trial_index=i)
+                    plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{i}")
+                    plot_item.setDownsampling(auto=ds_enabled, ds='auto')
+                    plot_item.opts['trial_index'] = i
+                    self.channel_plot_data_items[channel_id].append(plot_item)
 
-            # Plot the average trace
-            avg_data = channel.get_averaged_data()
-            if avg_data is not None:
-                avg_time = channel.get_relative_averaged_time_vector()
-                avg_pen = get_plot_pens(is_average=True)
-                avg_item = plot_widget.plot(avg_time, avg_data, pen=avg_pen, name="avg_trace")
-                avg_item.setDownsampling(auto=True, ds='auto')
-                self.channel_plot_data_items[channel_id].append(avg_item)
-
-        log.info(f"[PLOTTING] Full plot update complete for {len(self.channel_plot_data_items)} channels.")
-        self._reset_view()
+                avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
+                if avg_data is not None and avg_time is not None:
+                    avg_pen = get_plot_pens(is_average=True)
+                    avg_item = plot_widget.plot(avg_time, avg_data, pen=avg_pen, name="avg_trace")
+                    avg_item.setDownsampling(auto=ds_enabled, ds='auto')
+                    self.channel_plot_data_items[channel_id].append(avg_item)
+        log.info(f"[_update_plot] Plot update complete for {len(self.channel_plot_data_items)} channels.")
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
