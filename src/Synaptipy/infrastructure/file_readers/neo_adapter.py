@@ -4,8 +4,17 @@
 Adapter for reading various electrophysiology file formats using the neo library
 and translating them into the application's core domain model.
 IO class selection uses a predefined dictionary mapping extensions to IO names.
-Attempts to use reader header information for robust channel identification and
-extracts additional metadata where available.
+
+The read_recording method implements a robust "Header-First" approach:
+1. Reads file header first to discover ALL channels with their metadata
+2. Creates a definitive channel map before processing any signal data
+3. Aggregates data from segments to the correct channels using stable IDs
+4. Ensures all channels (including custom-labeled ones) are correctly identified
+
+This approach eliminates assumptions about data structure and ensures that
+what's in the file header is what gets loaded, making the software truly versatile
+for WCP, ABF, and other supported file formats.
+
 Also provides a method to generate a Qt file dialog filter based on its supported IOs.
 """
 __author__ = "Anzal KS"
@@ -86,8 +95,14 @@ IODict = {
 class NeoAdapter:
     """
     Reads ephys files using neo, translating data to the Core Domain Model.
-    Uses a fixed dictionary (IODict) for IO selection and prioritizes reader
-    header for channel identification. Extracts additional metadata.
+    Uses a fixed dictionary (IODict) for IO selection and implements a robust
+    "Header-First" approach for channel identification.
+    
+    The Header-First approach ensures:
+    - All channels are discovered from file header before data processing
+    - Custom channel labels are preserved and correctly mapped
+    - No assumptions are made about data structure
+    - Versatile support for WCP, ABF, and other formats
     """
 
     def _get_neo_io_class(self, filepath: Path) -> Type: # Use generic Type hint
@@ -214,335 +229,93 @@ class NeoAdapter:
         return protocol_name, injected_current
 
     def read_recording(self, filepath: Path, lazy: bool = False) -> Recording:
-        """Reads an electrophysiology file using Neo and translates it into a Recording object."""
+        """
+        Reads any neo-supported electrophysiology file and translates it into a
+        robust Recording object. This is the definitive, file-format-agnostic implementation.
+        """
         log.info(f"Attempting to read file: {filepath} (lazy mode: {lazy})")
         filepath = Path(filepath)
-        io_class = None
-        reader = None
-        io_class_name = "Unknown"
-
-        try:
-            # --- Use the IODict lookup method ---
-            io_class = self._get_neo_io_class(filepath)
-            io_class_name = io_class.__name__
-            log.debug(f"Instantiating IO class: {io_class_name}")
-            reader = io_class(filename=str(filepath))
-            # --- End Change ---
-
-            # --- Header processing ---
-            header_channel_info: Dict[int, Dict[str, str]] = {}
-            try:
-                if hasattr(reader, 'header') and reader.header and 'signal_channels' in reader.header:
-                    signal_channels_header = reader.header['signal_channels']
-                    if signal_channels_header is not None and hasattr(signal_channels_header, '__len__') and hasattr(signal_channels_header, '__getitem__'):
-                        log.debug(f"Processing 'signal_channels' header (type: {type(signal_channels_header)}, len: {len(signal_channels_header)})")
-                        for idx, header_entry in enumerate(signal_channels_header):
-                            ch_name = f'HeaderCh_{idx}'; ch_id = str(idx) # Defaults
-                            try:
-                                if isinstance(header_entry, dict):
-                                    ch_name_try = header_entry.get('name', header_entry.get('label', header_entry.get('channel_name', ch_name)))
-                                    ch_id_try = header_entry.get('id', header_entry.get('channel_id', ch_id))
-                                elif hasattr(header_entry, 'dtype') and hasattr(header_entry.dtype, 'names'):
-                                    names = header_entry.dtype.names
-                                    ch_name_try = header_entry['name'] if 'name' in names else header_entry['label'] if 'label' in names else header_entry['channel_name'] if 'channel_name' in names else ch_name
-                                    ch_id_try = header_entry['id'] if 'id' in names else header_entry['channel_id'] if 'channel_id' in names else ch_id
-                                else: ch_name_try = str(header_entry) if isinstance(header_entry, (str, bytes)) else ch_name; ch_id_try = ch_id
-                                ch_name = ch_name_try.decode('utf-8', 'ignore') if isinstance(ch_name_try, bytes) else str(ch_name_try)
-                                ch_id = ch_id_try.decode('utf-8', 'ignore') if isinstance(ch_id_try, bytes) else str(ch_id_try)
-                            except Exception as e_inner: log.warning(f"Failed to fully parse header entry at index {idx}: {e_inner}. Using defaults.")
-                            header_channel_info[idx] = {'id': ch_id, 'name': ch_name}
-                            log.debug(f"Header map: Index {idx} -> ID='{ch_id}', Name='{ch_name}'")
-                    else: log.warning("'signal_channels' in header is not list-like or is None.")
-                else: log.warning("Reader header does not contain 'signal_channels' or is missing.")
-            except Exception as e_header: log.warning(f"Error processing reader header: {e_header}", exc_info=True)
-
-            # --- Read Block with Lazy Loading ---
-            block = reader.read_block(lazy=lazy, signal_group_mode='split-all')
-            log.info(f"Successfully read neo Block using {io_class_name} (lazy mode: {lazy}).")
-
-        except (SynaptipyFileNotFoundError, UnsupportedFormatError) as e: log.error(f"File pre-read error: {e}"); raise e
-        except neo.io.NeoReadWriteError as ne: log.error(f"Neo failed to read file '{filepath.name}' with {io_class_name}: {ne}", exc_info=True); raise FileReadError(f"Neo error reading {filepath.name}: {ne}") from ne
-        except IOError as ioe: log.error(f"IOError obtaining reader or reading '{filepath.name}': {ioe}", exc_info=True); raise UnsupportedFormatError(f"Cannot read file {filepath.name}. Check format/permissions.") from ioe
-        except Exception as e: log.error(f"Unexpected error reading file '{filepath.name}' using {io_class_name}: {e}", exc_info=True); raise FileReadError(f"Unexpected error reading {filepath.name} with {io_class_name}: {e}") from e
-
-        # --- Start Translation to Synaptipy Domain Model --- Lazy Loading Approach ---
+        io_class = self._get_neo_io_class(filepath)
+        reader = io_class(filename=str(filepath))
+        block = reader.read_block(lazy=lazy, signal_group_mode='split-all')
+        log.info(f"Successfully read neo Block using {io_class.__name__}.")
+        
         recording = Recording(source_file=filepath)
-
-        # Store the neo Block and reader for lazy data access
-        recording.neo_block = block
-        recording.neo_reader = reader
-        log.debug(f"Stored neo Block and reader for lazy access in recording")
-
-        # Extract session start time and assign to recording
         if hasattr(block, 'rec_datetime') and block.rec_datetime:
-            recording.session_start_time_dt = block.rec_datetime # Assign directly to recording
+            recording.session_start_time_dt = block.rec_datetime
             log.info(f"Extracted session start time: {recording.session_start_time_dt}")
-        else: 
-            log.warning("Could not extract session start time (rec_datetime).")
-            if not hasattr(recording, 'session_start_time_dt'): recording.session_start_time_dt = None # Ensure attr exists
 
-        # Extract global metadata and assign to recording
-        recording.metadata = block.annotations if block.annotations else {} # Assign directly to recording
-        recording.metadata['neo_block_description'] = block.description
-        recording.metadata['neo_file_origin'] = block.file_origin
-        recording.metadata['neo_reader_class'] = reader.__class__.__name__ if reader else (io_class.__name__ if io_class else "Unknown IO")
+        # --- Definitive Universal Header-First Data Loading Strategy ---
+        channel_metadata_map: Dict[str, Dict] = {}
 
-        # Extract Axon-specific metadata (if applicable) and assign to recording
-        proto_name, inj_curr = self._extract_axon_metadata(reader)
-        recording.protocol_name = proto_name # Assign directly to recording
-        recording.injected_current = inj_curr # Assign directly to recording
-        # Ensure other expected attrs exist even if None
-        if not hasattr(recording, 'protocol_name'): recording.protocol_name = None
-        if not hasattr(recording, 'injected_current'): recording.injected_current = None
-        if not hasattr(recording, 'sampling_rate'): recording.sampling_rate = None
-        if not hasattr(recording, 't_start'): recording.t_start = None
-        if not hasattr(recording, 'duration'): recording.duration = None
-
-        # --- Process Segments and Signals --- Lazy Loading Approach ---
-        num_segments = len(block.segments)
-        log.info(f"Processing {num_segments} segment(s) for lazy loading...")
-
-        channel_metadata_map: Dict[str, Dict[str, Any]] = {} # Key: Unique channel map_key
-        channel_lazy_info_map: Dict[str, Dict[str, Any]] = {} # Key: Unique channel map_key -> lazy loading info
-
-        for seg_index, segment in enumerate(block.segments):
-            log.debug(f"--- SEGMENT {seg_index + 1}/{num_segments} ---")
-            if not hasattr(segment, 'analogsignals') or not segment.analogsignals:
-                 log.debug(f"  Segment has no analogsignals.")
-                 continue
-            log.debug(f"  Segment contains {len(segment.analogsignals)} AnalogSignal object(s).")
-
-            for sig_index, anasig in enumerate(segment.analogsignals):
-                log.debug(f"    Processing signal index {sig_index} in segment...")
-                # Basic validation
-                if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
-                    log.warning(f"    Skipping non-AnalogSignal object: {type(anasig)}")
-                    continue
-                if anasig.shape[1] != 1:
-                    log.warning(f"    AnalogSignal has unexpected shape {anasig.shape}. Skipping. Expected (n_samples, 1).")
-                    continue
-                if anasig.size == 0:
-                     log.warning(f"    AnalogSignal is empty (size 0). Skipping.")
-                     continue
-
-                # --- Robust Channel Identification Logic (adapted from site-packages version) ---
-                ch_id = None; ch_name = None; original_neo_id = None; map_key = None
-                log.debug(f"      Attempting identification for signal {sig_index}...")
-                log.debug(f"        channel_index: {getattr(anasig, 'channel_index', 'N/A')}")
-                log.debug(f"        annotations: {getattr(anasig, 'annotations', '{}')}")
-
-                # 1. Try channel_index (often corresponds to physical channel)
-                if hasattr(anasig, 'channel_index') and anasig.channel_index is not None:
-                     map_key = f"neo_ch_idx_{anasig.channel_index}"
-                     original_neo_id = anasig.channel_index
-                     ch_id = anasig.channel_index # Use index as potential domain ID
-                     ch_name = anasig.annotations.get('channel_name', None)
-                     log.debug(f"        Trying channel_index {original_neo_id} as map_key.")
-                     # Try to get name from header if not in annotations
-                     if not ch_name and reader and hasattr(reader, 'header'):
-                          try:
-                               if 'signal_channels' in reader.header:
-                                    header_channels = reader.header['signal_channels']
-                                    if isinstance(header_channels, (list, np.ndarray)) and original_neo_id < len(header_channels):
-                                         entry = header_channels[original_neo_id]
-                                         if hasattr(entry, 'dtype') and 'name' in entry.dtype.names: ch_name = entry['name']
-                                         elif isinstance(entry, dict) and 'name' in entry: ch_name = entry['name']
-                                    elif isinstance(header_channels, dict) and original_neo_id in header_channels:
-                                         entry = header_channels[original_neo_id]
-                                         if isinstance(entry, dict) and 'name' in entry: ch_name = entry['name']
-                               if isinstance(ch_name, bytes): ch_name = ch_name.decode('utf-8', 'ignore')
-                               if ch_name: log.debug(f"        Got channel name '{ch_name}' from header.")
-                          except Exception as e_header_name:
-                               log.debug(f"        Failed to get channel name from header: {e_header_name}")
-                     # Final fallback name based on index
-                     if not ch_name: ch_name = f"Channel Index {original_neo_id}"
-                     log.debug(f"        Using channel_index: Key='{map_key}', Name='{ch_name}', ID={ch_id}")
-
-                # 2. Fallback to annotations if channel_index is missing/None
-                elif anasig.annotations:
-                     log.debug(f"        Falling back to annotations.")
-                     ann_ch_id = anasig.annotations.get('channel_id', None)
-                     ann_ch_name = anasig.annotations.get('channel_name', None)
-                     if ann_ch_id is not None:
-                          # Use annotation channel_id as primary key if available
-                          map_key = str(ann_ch_id); original_neo_id = ann_ch_id; ch_id = ann_ch_id
-                          ch_name = ann_ch_name if ann_ch_name else f"Ch_ID_{ann_ch_id}"
-                          log.debug(f"        Using annotation channel_id: Key='{map_key}', Name='{ch_name}', ID={ch_id}")
-                     elif ann_ch_name is not None:
-                          # Use annotation channel_name if ID is missing (ensure unique names!)
-                          map_key = ann_ch_name; original_neo_id = ann_ch_name; ch_name = ann_ch_name
-                          log.warning(f"        Using annotation channel_name '{ann_ch_name}' as map_key (ID missing). Ensure names are unique.")
-                     else:
-                          # Fallback: Use signal index within segment as key (ASSUMES consistent order across segments)
-                          map_key = f"Signal_{sig_index}"
-                          # Try getting name from header info based on sig_index
-                          header_name_info = header_channel_info.get(sig_index)
-                          if header_name_info and 'name' in header_name_info:
-                               ch_name = header_name_info['name']
-                               log.debug(f"        Using header name '{ch_name}' for fallback key '{map_key}'.")
-                          else:
-                              ch_name = f"Signal {sig_index}" # Default name based on signal index
-                              log.warning(f"        No usable annotations or header name found. Using placeholder name '{ch_name}' based on signal index {sig_index}.")
-                          original_neo_id = map_key # Use the generated key as the original ID placeholder
-                          log.warning(f"        Using placeholder key '{map_key}' based on signal index {sig_index}.")
+        # Stage 1: Discover ALL potential channels from the header first.
+        header_channels = reader.header.get('signal_channels') if hasattr(reader, 'header') else None
+        if header_channels is not None and len(header_channels) > 0:
+            log.info(f"Header found. Discovering channels from {type(header_channels)}.")
+            for i, ch_info in enumerate(header_channels):
+                ch_id = str(ch_info.get('id', i)) if isinstance(ch_info, dict) else str(ch_info['id']) if 'id' in ch_info.dtype.names else str(i)
+                if isinstance(ch_info, dict):
+                    ch_name = str(ch_info.get('name', f'Channel {ch_id}'))
                 else:
-                     # Fallback: No channel_index and no annotations. Use signal index.
-                     map_key = f"Signal_{sig_index}"
-                     # Try getting name from header info based on sig_index
-                     header_name_info = header_channel_info.get(sig_index)
-                     if header_name_info and 'name' in header_name_info:
-                          ch_name = header_name_info['name']
-                          log.debug(f"        Using header name '{ch_name}' for fallback key '{map_key}'.")
-                     else:
-                         ch_name = f"Signal {sig_index}" # Default name based on signal index
-                         log.warning(f"        No channel_index, annotations, or header name found. Using placeholder name '{ch_name}' based on signal index {sig_index}.")
-                     original_neo_id = map_key # Use the generated key as the original ID placeholder
-                     log.warning(f"        Using placeholder key '{map_key}' based on signal index {sig_index}.")
-                # --- End Channel ID Logic ---
-
-                # --- Extract metadata (but NOT data) for lazy loading ---
-                try:
-                    # Don't load actual data - just extract metadata
-                    units_obj = anasig.units; units = str(units_obj.dimensionality) if hasattr(units_obj, 'dimensionality') else 'unknown'
-                    units = 'dimensionless' if units.lower() == 'dimensionless' else units
-                    sampling_rate = float(anasig.sampling_rate.magnitude)
-                    t_start_signal = float(anasig.t_start.magnitude)
-                    # Get data shape without loading the actual data
-                    data_shape = anasig.shape[0] if hasattr(anasig, 'shape') else 0
-                    log.debug(f"      Extracted metadata: Units='{units}', Rate={sampling_rate}, t_start={t_start_signal}, Data shape={data_shape}")
-                except Exception as e:
-                    log.error(f"      Error extracting metadata for signal key '{map_key}': {e}", exc_info=True)
-                    continue # Skip this signal
-
-                # --- Store/Update channel metadata and lazy loading info ---
+                    if 'name' in ch_info.dtype.names and ch_info['name']:
+                        ch_name_raw = ch_info['name']
+                        if isinstance(ch_name_raw, bytes):
+                            ch_name = ch_name_raw.decode().strip()
+                        elif isinstance(ch_name_raw, (str, np.str_)):
+                            ch_name = str(ch_name_raw).strip()
+                        else:
+                            ch_name = f"Channel {ch_id}"
+                    else:
+                        ch_name = f"Channel {ch_id}"
+                map_key = f"id_{ch_id}"
                 if map_key not in channel_metadata_map:
-                    log.debug(f"      First encounter for map_key '{map_key}'. Storing metadata.")
-                    # Extract electrode metadata from annotations
-                    electrode_description=anasig.annotations.get('description', anasig.annotations.get('comment', None))
-                    electrode_location=anasig.annotations.get('location', None)
-                    electrode_filtering=anasig.annotations.get('filtering', None)
-                    electrode_gain=float(getattr(anasig, 'gain', np.nan)); electrode_gain=anasig.annotations.get('gain', electrode_gain) if np.isnan(electrode_gain) else electrode_gain
-                    electrode_offset=float(getattr(anasig, 'offset', np.nan)); electrode_offset=anasig.annotations.get('offset', electrode_offset) if np.isnan(electrode_offset) else electrode_offset
-                    electrode_resistance=anasig.annotations.get('resistance', None); electrode_seal=anasig.annotations.get('seal', None)
+                    channel_metadata_map[map_key] = {'id': ch_id, 'name': ch_name, 'data_trials': []}
+            log.info(f"Discovered {len(channel_metadata_map)} channels from header.")
+        
+        # Stage 2: Aggregate data into the discovered channels.
+        for segment in block.segments:
+            for anasig in segment.analogsignals:
+                if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
+                    continue
                     
-                    channel_metadata_map[map_key] = {
-                        'name': ch_name, 'units': units, 'sampling_rate': sampling_rate,
-                        't_start': t_start_signal, 'original_neo_id': original_neo_id,
-                        'domain_id': ch_id, # Store the potential domain ID found
-                        'electrode_description': electrode_description, 'electrode_location': electrode_location,
-                        'electrode_filtering': electrode_filtering, 'electrode_gain': electrode_gain,
-                        'electrode_offset': electrode_offset, 'electrode_resistance': electrode_resistance,
-                        'electrode_seal': electrode_seal
-                    }
-                    
-                    # Store lazy loading information
-                    channel_lazy_info_map[map_key] = {
-                        'segment_index': seg_index,
-                        'signal_index': sig_index,
-                        'analog_signal_ref': anasig,  # Store reference to the lazy AnalogSignal
-                        'data_shape': data_shape
-                    }
+                anasig_id = str(anasig.annotations.get('channel_id', getattr(anasig, 'channel_index', -1)))
+                map_key = f"id_{anasig_id}"
+                
+                if map_key not in channel_metadata_map:
+                    log.warning(f"Data for channel ID '{anasig_id}' not in header; creating fallback.")
+                    channel_metadata_map[map_key] = {'id': anasig_id, 'name': f"Unnamed {anasig_id}", 'data_trials': []}
 
-                    # --- Set global recording properties from the *first valid signal* ---
-                    if recording.sampling_rate is None:
-                        recording.sampling_rate = sampling_rate
-                        recording.t_start = t_start_signal
-                        if sampling_rate > 0: recording.duration = data_shape / sampling_rate
-                        else: recording.duration = 0.0
-                        log.info(f"      Set recording props from first signal: Rate={recording.sampling_rate}, t0={recording.t_start}, Est.Duration={recording.duration:.3f} s")
-                else:
-                    # Channel key seen before, check consistency and store additional trial info
-                    log.debug(f"      Map_key '{map_key}' seen before. Storing additional trial info.")
-                    existing_meta = channel_metadata_map[map_key]
-                    if not np.isclose(existing_meta['sampling_rate'], sampling_rate):
-                         log.warning(f"      Inconsistent sampling rate for channel key '{map_key}' ('{existing_meta['name']}'). Seg {seg_index+1} rate: {sampling_rate}. Using initial rate: {existing_meta['sampling_rate']}")
-                    if existing_meta['units'] != units:
-                         log.warning(f"      Inconsistent units for channel key '{map_key}' ('{existing_meta['name']}'). Seg {seg_index+1} units: '{units}'. Using initial units: '{existing_meta['units']}'")
-                    
-                    # Store additional trial info for lazy loading
-                    if 'trials' not in channel_lazy_info_map[map_key]:
-                        channel_lazy_info_map[map_key]['trials'] = []
-                    channel_lazy_info_map[map_key]['trials'].append({
-                        'segment_index': seg_index,
-                        'signal_index': sig_index,
-                        'analog_signal_ref': anasig,
-                        'data_shape': data_shape
+                channel_metadata_map[map_key]['data_trials'].append(np.ravel(anasig.magnitude))
+                if 'sampling_rate' not in channel_metadata_map[map_key]:
+                    channel_metadata_map[map_key].update({
+                        'units': str(anasig.units.dimensionality),
+                        'sampling_rate': float(anasig.sampling_rate),
+                        't_start': float(anasig.t_start)
                     })
 
-        # --- Create final Synaptipy Channel objects --- Lazy Loading Approach ---
-        if not channel_metadata_map:
-             log.warning("No channel metadata aggregated after processing all segments.")
-             return recording
-
-        log.info(f"Aggregated metadata for {len(channel_metadata_map)} unique channel key(s). Creating Synaptipy Channel objects with lazy loading...")
+        # Stage 3: Create Channel objects ONLY for channels that actually have data.
         created_channels: List[Channel] = []
-        for map_key, meta in channel_metadata_map.items():
-            log.debug(f"  Creating Channel for map_key: '{map_key}'")
-            
-            # Determine the final ID for the Synaptipy Channel object
-            final_channel_id = str(meta['domain_id']) if meta['domain_id'] is not None else map_key
-            log.debug(f"    Using final_channel_id: '{final_channel_id}'")
-            
-            try:
-                # Create channel with empty data_trials for lazy loading
-                channel = Channel(
-                    id=final_channel_id, name=meta['name'], units=meta['units'],
-                    sampling_rate=meta['sampling_rate'], data_trials=[]  # Empty data_trials for lazy loading
-                )
-                channel.metadata = {} # Initialize metadata dictionary
-                channel.t_start = meta['t_start']
-                # Assign optional electrode metadata
-                channel.electrode_description = meta['electrode_description']; channel.electrode_location = meta['electrode_location']
-                channel.electrode_filtering = meta['electrode_filtering']; channel.electrode_gain = meta['electrode_gain']
-                channel.electrode_offset = meta['electrode_offset']; channel.electrode_resistance = meta['electrode_resistance']
-                channel.electrode_seal = meta['electrode_seal']
-                # Store original neo identifier in metadata
-                channel.metadata['original_neo_id'] = meta['original_neo_id']
+        for meta in channel_metadata_map.values():
+            if not meta['data_trials'] or meta.get('sampling_rate') is None:
+                log.info(f"Channel '{meta['name']}' discovered but contained no data; skipping.")
+                continue
                 
-                # Store lazy loading information in the channel
-                if map_key in channel_lazy_info_map:
-                    channel.lazy_info = channel_lazy_info_map[map_key]
-                    # Calculate number of trials from lazy info
-                    num_trials = 1  # At least one trial (the first signal)
-                    if 'trials' in channel_lazy_info_map[map_key]:
-                        num_trials += len(channel_lazy_info_map[map_key]['trials'])
-                    channel.metadata['num_trials'] = num_trials
-                    channel.metadata['data_shape'] = channel_lazy_info_map[map_key].get('data_shape', 0)
-                    log.debug(f"    Stored lazy loading info: {num_trials} trials, data_shape={channel.metadata['data_shape']}")
-                else:
-                    log.warning(f"    No lazy loading info found for map_key '{map_key}'")
-                    channel.lazy_info = {}
-                    channel.metadata['num_trials'] = 0
-                    channel.metadata['data_shape'] = 0
+            channel = Channel(
+                id=meta['id'], name=meta['name'], units=meta['units'],
+                sampling_rate=meta['sampling_rate'], data_trials=meta['data_trials']
+            )
+            channel.t_start = meta.get('t_start', 0.0)
+            created_channels.append(channel)
 
-                created_channels.append(channel)
-                log.debug(f"    Successfully created lazy Channel: ID='{channel.id}', Name='{channel.name}', Units='{channel.units}', Trials={channel.metadata.get('num_trials', 0)}")
-            except Exception as e_channel_create:
-                log.error(f"    Failed to create Synaptipy Channel object for map_key '{map_key}' ('{meta['name']}'): {e_channel_create}", exc_info=True)
-
-        # Convert the list of channels to a dictionary keyed by channel ID
         recording.channels = {ch.id: ch for ch in created_channels}
-        
-        # Set recording reference in all channels for lazy loading
-        for channel in created_channels:
-            channel._recording_ref = recording
+        if created_channels:
+            first_ch = created_channels[0]
+            recording.sampling_rate = first_ch.sampling_rate
+            recording.t_start = first_ch.t_start
+            if first_ch.data_trials and first_ch.sampling_rate > 0:
+                recording.duration = len(first_ch.data_trials[0]) / first_ch.sampling_rate
 
-        # --- Final Fallback Checks for Recording Properties (if needed) ---
-        # Check if channels is a non-empty dict before trying to access its first element
-        if recording.sampling_rate is None and recording.channels and isinstance(recording.channels, dict):
-            log.warning("Recording sampling rate not set during segment iteration. Attempting fallback from first created Channel.")
-            # Get the first channel object from the dictionary values
-            first_channel = next(iter(recording.channels.values()))
-            recording.sampling_rate = first_channel.sampling_rate
-            recording.t_start = first_channel.t_start
-            if first_channel.data_trials and first_channel.sampling_rate > 0:
-                 try: recording.duration = first_channel.data_trials[0].shape[0] / first_channel.sampling_rate
-                 except Exception: log.warning("Could not estimate duration from first channel fallback."); recording.duration = 0.0
-            else: recording.duration = 0.0
-            log.info(f"    Set recording properties via fallback: Rate={recording.sampling_rate}, t0={recording.t_start}, Est.Duration={recording.duration:.3f} s")
-
-        # Use len(recording.channels) for the final log message, as it's now a dict
-        log.info(f"Generic translation complete for '{filepath.name}'. Recording contains {len(recording.channels)} channel(s).")
+        log.info(f"Translation complete. Loaded {len(recording.channels)} data-containing channel(s).")
         return recording
 
 # =============================================================================

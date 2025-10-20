@@ -538,3 +538,36 @@ def save_plot_preferences():
 def get_plot_customization_signals():
     """Get the global plot customization signals."""
     return _plot_signals
+
+def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
+    """
+    Creates a QPen object based on the current customization settings.
+
+    Args:
+        is_average: True if the pen is for an averaged trace, False otherwise.
+        trial_index: The index of the trial (used for potential future color cycling).
+
+    Returns:
+        A configured QPen object.
+    """
+    from PySide6.QtGui import QColor
+    
+    manager = PlotCustomizationManager()
+    prefs = manager.get_all_preferences()
+
+    if is_average:
+        config = prefs.get('average', {})
+        color_str = config.get('color', '#FF0000') # Default red
+        width = config.get('width', 2)
+        opacity = config.get('opacity', 100)
+    else:
+        config = prefs.get('single_trial', {})
+        color_str = config.get('color', '#808080') # Default gray
+        width = config.get('width', 1)
+        opacity = config.get('opacity', 50)
+
+    color = QColor(color_str)
+    color.setAlphaF(opacity / 100.0)
+
+    pen = pg.mkPen(color=color, width=width)
+    return pen
