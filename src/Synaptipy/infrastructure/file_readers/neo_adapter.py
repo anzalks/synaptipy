@@ -273,25 +273,53 @@ class NeoAdapter:
             log.info(f"Discovered {len(channel_metadata_map)} channels from header.")
         
         # Stage 2: Aggregate data into the discovered channels.
-        for segment in block.segments:
-            for anasig in segment.analogsignals:
+        for seg_idx, segment in enumerate(block.segments):
+            log.debug(f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals")
+            
+            # Critical fix: Iterate through ALL analogsignals by index to ensure each channel gets its data
+            for anasig_idx, anasig in enumerate(segment.analogsignals):
                 if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
+                    log.debug(f"Skipping non-AnalogSignal object at index {anasig_idx}")
                     continue
-                    
-                anasig_id = str(anasig.annotations.get('channel_id', getattr(anasig, 'channel_index', -1)))
+                
+                # Extract channel ID using multiple fallback methods for robustness
+                # Try annotation first, then attributes, finally use the signal index
+                anasig_id = None
+                if hasattr(anasig, 'annotations') and 'channel_id' in anasig.annotations:
+                    anasig_id = str(anasig.annotations['channel_id'])
+                elif hasattr(anasig, 'channel_index') and anasig.channel_index is not None:
+                    anasig_id = str(anasig.channel_index)
+                elif hasattr(anasig, 'array_annotations') and 'channel_id' in anasig.array_annotations:
+                    anasig_id = str(anasig.array_annotations['channel_id'][0])
+                else:
+                    # Use the signal's position in the list as the channel ID
+                    anasig_id = str(anasig_idx)
+                    log.debug(f"Using signal index {anasig_idx} as channel ID (no channel metadata found)")
+                
                 map_key = f"id_{anasig_id}"
+                log.debug(f"Processing analogsignal {anasig_idx} -> channel ID '{anasig_id}' (map_key: {map_key})")
                 
                 if map_key not in channel_metadata_map:
-                    log.warning(f"Data for channel ID '{anasig_id}' not in header; creating fallback.")
-                    channel_metadata_map[map_key] = {'id': anasig_id, 'name': f"Unnamed {anasig_id}", 'data_trials': []}
-
-                channel_metadata_map[map_key]['data_trials'].append(np.ravel(anasig.magnitude))
+                    log.warning(f"Data for channel ID '{anasig_id}' not in header; creating fallback channel.")
+                    channel_metadata_map[map_key] = {
+                        'id': anasig_id, 
+                        'name': f"Channel {anasig_id}", 
+                        'data_trials': []
+                    }
+                
+                # Extract and append the signal data for THIS specific channel
+                signal_data = np.array(anasig.magnitude).ravel()
+                channel_metadata_map[map_key]['data_trials'].append(signal_data)
+                log.debug(f"Appended {len(signal_data)} samples to channel '{anasig_id}' from segment {seg_idx}")
+                
+                # Store metadata on first encounter
                 if 'sampling_rate' not in channel_metadata_map[map_key]:
                     channel_metadata_map[map_key].update({
                         'units': str(anasig.units.dimensionality),
                         'sampling_rate': float(anasig.sampling_rate),
                         't_start': float(anasig.t_start)
                     })
+                    log.debug(f"Stored metadata for channel '{anasig_id}': {channel_metadata_map[map_key]['sampling_rate']} Hz")
 
         # Stage 3: Create Channel objects ONLY for channels that actually have data.
         created_channels: List[Channel] = []

@@ -2763,19 +2763,29 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info("[PEN-UPDATE] No data or plot items to update.")
             return
 
-        from Synaptipy.shared.plot_customization import get_plot_pens
+        # Import the fast, cached pen functions
+        from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+
+        try:
+            # Get the pens ONCE. This reads from the global manager's memory cache.
+            avg_pen = get_average_pen()
+            trial_pen = get_single_trial_pen()
+        except Exception as e:
+            log.error(f"[PEN-UPDATE] Failed to get cached pens: {e}")
+            return
 
         for channel_id, plot_items in self.channel_plot_data_items.items():
             for item in plot_items:
-                # Determine if the item is an average or a single trial to get the correct pen
+                # Determine if the item is an average or a single trial
                 is_average = 'avg' in item.opts.get('name', '')
-                trial_index = item.opts.get('trial_index', 0)
                 
-                new_pen = get_plot_pens(is_average=is_average, trial_index=trial_index)
-                item.setPen(new_pen)
+                # Apply the pre-fetched pen. This is just an in-memory pointer assignment.
+                if is_average:
+                    item.setPen(avg_pen)
+                else:
+                    item.setPen(trial_pen)
         
-        # CRITICAL FIX: This line was missing. It forces the graphics view to
-        # redraw itself with the new pens that were just set.
+        # CRITICAL FIX: Force the graphics view to redraw with the new pens.
         if self.graphics_layout_widget:
             self.graphics_layout_widget.update()
             log.info("[PEN-UPDATE] Graphics view explicitly updated to show new styles.")
