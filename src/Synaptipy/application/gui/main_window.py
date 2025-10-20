@@ -277,7 +277,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle plot preferences update signal by efficiently updating pens."""
         # PERFORMANCE: Log force opaque state
         from Synaptipy.shared.plot_customization import get_force_opaque_trials
-        log.info(f"[_on_plot_preferences_updated] Refreshing plots. Force opaque state: {get_force_opaque_trials()}")
+        log.info(f"[_on_plot_preferences_updated] Handling signal. Force opaque state: {get_force_opaque_trials()}")
         
         if hasattr(self, 'explorer_tab') and self.explorer_tab:
             self.explorer_tab.update_plot_pens() # This new method will only update styles
