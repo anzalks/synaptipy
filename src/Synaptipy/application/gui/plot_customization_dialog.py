@@ -82,7 +82,10 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         )
         # Import the getter function here or at the top of the file
         from Synaptipy.shared.plot_customization import get_force_opaque_trials
+        # Block signals during initialization to prevent unnecessary updates
+        self.force_opaque_checkbox.blockSignals(True)
         self.force_opaque_checkbox.setChecked(get_force_opaque_trials())
+        self.force_opaque_checkbox.blockSignals(False)
         self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed) # Connect the signal
         performance_layout.addWidget(self.force_opaque_checkbox)
         
