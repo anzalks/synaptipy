@@ -70,7 +70,15 @@ def test_data_dir():
 @pytest.fixture(scope="session")
 def sample_abf_path(test_data_dir):
     """Provides the path to a sample ABF file for testing."""
-    # Try to find the real file first
+    # Try to use example files from the examples/data directory
+    examples_dir = Path(__file__).parent.parent / "examples" / "data"
+    if examples_dir.exists():
+        # Find any ABF file in examples
+        abf_files = list(examples_dir.glob("*.abf"))
+        if abf_files:
+            return abf_files[0]  # Use the first ABF file found
+    
+    # Try to find the test file
     file_path = test_data_dir / "sample_axon.abf"
     
     # If the file doesn't exist, try to use a synthetic alternative
