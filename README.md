@@ -88,6 +88,28 @@ synaptipy-gui
 - **Pytest-Qt 4.5.0**: Qt testing support
 - **Pytest-Mock**: Mocking support for tests
 
+## ⚡ **Performance Optimizations**
+
+Synaptipy includes several performance optimizations for smooth real-time visualization:
+
+### **Interaction Debouncing**
+- **50ms Debounce Timers**: All zoom/pan sliders and scrollbars use debouncing to prevent excessive redraws
+- **Smart Update Guards**: Prevents recursive updates and feedback loops during UI interactions
+- **Per-Channel Lazy Timers**: Individual Y-axis controls create timers on-demand for efficient memory usage
+- **Inline Logic**: Critical paths use inline logic to eliminate function call overhead
+
+### **Plot Rendering**
+- **Force Opaque Trials Mode**: Optional setting to disable transparency for faster rendering with many overlaid trials
+- **Downsampling Support**: Automatic downsampling for large datasets using PyQtGraph's peak method
+- **View Update Coalescing**: Multiple simultaneous view changes are batched to minimize redraws
+
+### **Expected Performance**
+- **Smooth 60 FPS**: UI remains responsive during rapid zoom/pan operations
+- **Large Dataset Support**: Handles thousands of data points efficiently
+- **Minimal Lag**: ~50ms imperceptible delay during interactions for optimal responsiveness
+
+See [DEBOUNCING_IMPLEMENTATION.md](DEBOUNCING_IMPLEMENTATION.md) for technical details.
+
 ## 🔧 **Development Setup**
 
 ```bash

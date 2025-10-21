@@ -156,6 +156,12 @@ class ExplorerTab(QtWidgets.QWidget):
         self._y_global_scroll_apply_timer.setInterval(50)
         self._y_global_scroll_apply_timer.timeout.connect(self._apply_debounced_y_global_scroll)
         self._last_y_global_scroll_value = self.SCROLLBAR_MAX_RANGE // 2
+
+        # Individual Y zoom/scroll debounce timers and state
+        self._individual_y_zoom_timers: Dict[str, QtCore.QTimer] = {}
+        self._individual_y_scroll_timers: Dict[str, QtCore.QTimer] = {}
+        self._last_individual_y_zoom_values: Dict[str, int] = {}
+        self._last_individual_y_scroll_values: Dict[str, int] = {}
         
         # Manual limits storage
         self.manual_x_range: Optional[Tuple[float, float]] = None
@@ -1676,14 +1682,62 @@ class ExplorerTab(QtWidgets.QWidget):
         value = self._last_y_global_zoom_value
         log.debug(f"[_apply_debounced_y_global_zoom] Applying Global Y zoom: {value}")
         if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
-        self._apply_global_y_zoom(value)
+
+        base_ref, new_ref = None, None
+        self._updating_viewranges=True
+        try:
+            for cid, plot_item in self.channel_plots.items():
+                if plot_item.isVisible() and plot_item.getViewBox():
+                    base = self.base_y_ranges.get(cid)
+                    if base is None: continue
+                    new_y = self._calculate_new_range(base, value)
+                    if new_y:
+                        plot_item.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
+                        # Capture first valid base/new range for scrollbar update
+                        if base_ref is None:
+                            base_ref, new_ref = base, new_y
+        except Exception as e: log.error(f"Error applying debounced global Y zoom: {e}")
+        finally:
+             self._updating_viewranges=False
+             # Update scrollbar based on the effect on the reference plot
+             if base_ref and new_ref:
+                 self._update_scrollbar_from_view(self.global_y_scrollbar, base_ref, new_ref)
+             else: # If no plots were updated (e.g., no base ranges), reset scrollbar
+                 self._reset_scrollbar(self.global_y_scrollbar)
 
     def _apply_debounced_y_global_scroll(self):
         """Apply global Y scroll after debounce delay."""
         value = self._last_y_global_scroll_value
         log.debug(f"[_apply_debounced_y_global_scroll] Applying Global Y scroll: {value}")
-        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_scrollbars: return
-        self._apply_global_y_scroll(value)
+        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges or self._updating_scrollbars: return
+
+        ref_plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
+        if not ref_plot: return
+        ref_vb = ref_plot.getViewBox()
+        ref_cid = getattr(ref_vb, '_synaptipy_chan_id', None)
+        ref_base_range = self.base_y_ranges.get(ref_cid)
+        if ref_base_range is None: return
+
+        self._updating_viewranges = True
+        try:
+            current_ref_y_range = ref_vb.viewRange()[1]
+            current_ref_span = max(abs(current_ref_y_range[1] - current_ref_y_range[0]), 1e-12)
+            base_ref_span = max(abs(ref_base_range[1] - ref_base_range[0]), 1e-12)
+            scrollable_range = max(0, base_ref_span - current_ref_span)
+            scroll_fraction = float(value) / max(1, self.global_y_scrollbar.maximum())
+            target_ref_min_y = ref_base_range[0] + scroll_fraction * scrollable_range
+            y_offset = target_ref_min_y - current_ref_y_range[0]
+
+            for cid, plot_item in self.channel_plots.items():
+                if plot_item.isVisible() and plot_item.getViewBox():
+                    vb = plot_item.getViewBox()
+                    current_plot_y_range = vb.viewRange()[1]
+                    new_min_y = current_plot_y_range[0] + y_offset
+                    new_max_y = current_plot_y_range[1] + y_offset
+                    vb.setYRange(new_min_y, new_max_y, padding=0)
+        except Exception as e: log.error(f"Error applying debounced global Y scroll: {e}", exc_info=True)
+        finally: self._updating_viewranges = False
+        # No need to update scrollbar here
 
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
         if self._updating_viewranges or self.base_x_range is None:
@@ -1878,7 +1932,39 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges = False
             # We don't need to update the scrollbar here, as it triggered this action
 
+    def _get_or_create_individual_y_zoom_timer(self, chan_id: str) -> QtCore.QTimer:
+        """Get or create a debounce timer for individual Y zoom."""
+        if chan_id not in self._individual_y_zoom_timers:
+            timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.setInterval(50)
+            timer.timeout.connect(lambda: self._apply_debounced_individual_y_zoom(chan_id))
+            self._individual_y_zoom_timers[chan_id] = timer
+        return self._individual_y_zoom_timers[chan_id]
+
+    def _get_or_create_individual_y_scroll_timer(self, chan_id: str) -> QtCore.QTimer:
+        """Get or create a debounce timer for individual Y scroll."""
+        if chan_id not in self._individual_y_scroll_timers:
+            timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.setInterval(50)
+            timer.timeout.connect(lambda: self._apply_debounced_individual_y_scroll(chan_id))
+            self._individual_y_scroll_timers[chan_id] = timer
+        return self._individual_y_scroll_timers[chan_id]
+
     def _on_individual_y_zoom_changed(self, chan_id: str, value: int):
+        """Handle individual Y zoom slider change with debouncing."""
+        self._last_individual_y_zoom_values[chan_id] = value
+        timer = self._get_or_create_individual_y_zoom_timer(chan_id)
+        timer.start()
+        log.debug(f"[_on_individual_y_zoom_changed] Debouncing individual Y zoom for {chan_id}: {value}")
+
+    def _apply_debounced_individual_y_zoom(self, chan_id: str):
+        """Apply individual Y zoom after debounce delay."""
+        value = self._last_individual_y_zoom_values.get(chan_id)
+        if value is None: return
+        log.debug(f"[_apply_debounced_individual_y_zoom] Applying individual Y zoom for {chan_id}: {value}")
+        
         if self.manual_limits_enabled or self.y_axes_locked or self._updating_viewranges: return
         p=self.channel_plots.get(chan_id)
         b=self.base_y_ranges.get(chan_id)
@@ -1890,7 +1976,6 @@ class ExplorerTab(QtWidgets.QWidget):
         if new_y:
             # Store the slider value
             self.individual_y_slider_values[chan_id] = value
-            log.debug(f"Individual Y zoom for channel {chan_id}: value={value}, new range={new_y}")
             
             # Apply the zoom
             self._updating_viewranges=True
@@ -1904,7 +1989,20 @@ class ExplorerTab(QtWidgets.QWidget):
                 self._update_scrollbar_from_view(s, b, new_y)
 
     def _on_individual_y_scrollbar_changed(self, chan_id: str, value: int):
-        if self.manual_limits_enabled or self.y_axes_locked or self._updating_scrollbars: return
+        """Handle individual Y scrollbar change with debouncing."""
+        if not self._updating_scrollbars:
+            self._last_individual_y_scroll_values[chan_id] = value
+            timer = self._get_or_create_individual_y_scroll_timer(chan_id)
+            timer.start()
+            log.debug(f"[_on_individual_y_scrollbar_changed] Debouncing individual Y scroll for {chan_id}: {value}")
+
+    def _apply_debounced_individual_y_scroll(self, chan_id: str):
+        """Apply individual Y scroll after debounce delay."""
+        value = self._last_individual_y_scroll_values.get(chan_id)
+        if value is None: return
+        log.debug(f"[_apply_debounced_individual_y_scroll] Applying individual Y scroll for {chan_id}: {value}")
+        
+        if self.manual_limits_enabled or self.y_axes_locked or self._updating_scrollbars or self._updating_viewranges: return
         p=self.channel_plots.get(chan_id)
         b=self.base_y_ranges.get(chan_id)
         s=self.individual_y_scrollbars.get(chan_id)
