@@ -1441,7 +1441,14 @@ class ExplorerTab(QtWidgets.QWidget):
             if plot_widget: plot_widget.clear()
         self.channel_plot_data_items.clear()
 
-        from Synaptipy.shared.plot_customization import get_plot_pens
+        # --- OPTIMIZATION: Import and get cached pens ONCE ---
+        from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+        
+        # Get the globally cached pens. This is extremely fast.
+        single_trial_pen = get_single_trial_pen()
+        average_pen = get_average_pen()
+        # --- END OPTIMIZATION ---
+
         ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
 
         for channel_id, channel in self.current_recording.channels.items():
@@ -1457,8 +1464,9 @@ class ExplorerTab(QtWidgets.QWidget):
                 if 0 <= trial_idx < channel.num_trials:
                     trial_data, time_vector = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
                     if time_vector is not None and trial_data is not None:
-                        pen = get_plot_pens(is_average=False, trial_index=trial_idx)
-                        plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{trial_idx}")
+                        # --- OPTIMIZATION: Use cached pen ---
+                        plot_item = plot_widget.plot(time_vector, trial_data, pen=single_trial_pen, name=f"trial_{trial_idx}")
+                        
                         # PERFORMANCE: Optimized downsampling settings
                         plot_item.setDownsampling(auto=ds_enabled, method='peak')
                         plot_item.setClipToView(True)
@@ -1470,8 +1478,10 @@ class ExplorerTab(QtWidgets.QWidget):
                 for i in range(channel.num_trials):
                     trial_data, time_vector = channel.get_data(i), channel.get_relative_time_vector(i)
                     if time_vector is None or trial_data is None: continue
-                    pen = get_plot_pens(is_average=False, trial_index=i)
-                    plot_item = plot_widget.plot(time_vector, trial_data, pen=pen, name=f"trial_{i}")
+
+                    # --- OPTIMIZATION: Use cached pen ---
+                    plot_item = plot_widget.plot(time_vector, trial_data, pen=single_trial_pen, name=f"trial_{i}")
+
                     # PERFORMANCE: Optimized downsampling settings
                     plot_item.setDownsampling(auto=ds_enabled, method='peak')
                     plot_item.setClipToView(True)
@@ -1481,8 +1491,10 @@ class ExplorerTab(QtWidgets.QWidget):
 
                 avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
                 if avg_data is not None and avg_time is not None:
-                    avg_pen = get_plot_pens(is_average=True)
-                    avg_item = plot_widget.plot(avg_time, avg_data, pen=avg_pen, name="avg_trace")
+
+                    # --- OPTIMIZATION: Use cached pen ---
+                    avg_item = plot_widget.plot(avg_time, avg_data, pen=average_pen, name="avg_trace")
+                    
                     # PERFORMANCE: Optimized downsampling settings
                     avg_item.setDownsampling(auto=ds_enabled, method='peak')
                     avg_item.setClipToView(True)
@@ -2098,20 +2110,25 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
         
-        # Schedule base range capture after auto-range using the first visible plot's
-        # range-change signal to avoid timer delays under heavy load
-        vb_first = first_plot.getViewBox()
-        def _on_first_range_changed_for_capture(*_):
-            try:
-                vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
-            except Exception:
-                pass
-            self._capture_base_ranges_after_reset()
-        try:
-            vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
-        except Exception:
-            pass
-        vb_first.sigRangeChanged.connect(_on_first_range_changed_for_capture)
+        # --- START REPLACEMENT ---
+        # REMOVE THIS BLOCK:
+        # vb_first = first_plot.getViewBox()
+        # def _on_first_range_changed_for_capture(*_):
+        #     try:
+        #         vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
+        #     except Exception:
+        #         pass
+        #     self._capture_base_ranges_after_reset()
+        # try:
+        #     vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
+        # except Exception:
+        #     pass
+        # vb_first.sigRangeChanged.connect(_on_first_range_changed_for_capture)
+
+        # ADD THIS LINE INSTEAD:
+        QtCore.QTimer.singleShot(10, self._capture_base_ranges_after_reset)
+        log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer.")
+        # --- END REPLACEMENT ---
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
