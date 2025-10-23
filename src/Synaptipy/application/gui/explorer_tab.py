@@ -2103,32 +2103,139 @@ class ExplorerTab(QtWidgets.QWidget):
         first_cid, first_plot = next(iter(vis_map.items()))
         log.info(f"[EXPLORER-RESET] Found {len(vis_map)} visible plots, first: {first_cid}")
         
-        # Standard auto-ranging for all platforms (theme conflict fixed)
-        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
-        first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        for plot_id, plot in vis_map.items():
-            log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
-            plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        
-        # --- START REPLACEMENT ---
-        # REMOVE THIS BLOCK:
-        # vb_first = first_plot.getViewBox()
-        # def _on_first_range_changed_for_capture(*_):
-        #     try:
-        #         vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
-        #     except Exception:
-        #         pass
-        #     self._capture_base_ranges_after_reset()
-        # try:
-        #     vb_first.sigRangeChanged.disconnect(_on_first_range_changed_for_capture)
-        # except Exception:
-        #     pass
-        # vb_first.sigRangeChanged.connect(_on_first_range_changed_for_capture)
+        # --- START REPLACEMENT of nested function ---
+        def do_deferred_manual_range_and_capture():
+            log.info(f"[EXPLORER-RESET] Performing deferred manual range setting...")
+            items_to_hide = [] # List to store items temporarily hidden
 
-        # ADD THIS LINE INSTEAD:
-        QtCore.QTimer.singleShot(10, self._capture_base_ranges_after_reset)
-        log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer.")
-        # --- END REPLACEMENT ---
+            try:
+                # --- Manually Calculate Bounds ---
+                x_min, x_max = None, None
+                y_mins, y_maxs = {}, {} # Store per channel_id
+
+                # Iterate through *actual data* for visible channels
+                for chan_id, plot_widget in vis_map.items():
+                    channel = self.current_recording.channels.get(chan_id)
+                    if not channel: continue
+
+                    chan_x_min, chan_x_max = None, None
+                    chan_y_min, chan_y_max = None, None
+
+                    # Determine trials/data to check based on plot mode
+                    trials_to_check = []
+                    data_sources = [] # Tuples of (time_vec, data_vec)
+
+                    if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
+                        trial_idx = self.current_trial_index
+                        if 0 <= trial_idx < channel.num_trials:
+                           data, time_vec = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
+                           if time_vec is not None and data is not None:
+                               data_sources.append((time_vec, data))
+                    else: # OVERLAY_AVG
+                        # Check all trials
+                        for i in range(channel.num_trials):
+                            if 0 <= i < channel.num_trials:
+                                data, time_vec = channel.get_data(i), channel.get_relative_time_vector(i)
+                                if time_vec is not None and data is not None:
+                                    data_sources.append((time_vec, data))
+                        # Also check the average trace
+                        avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
+                        if avg_data is not None and avg_time is not None:
+                            data_sources.append((avg_time, avg_data))
+
+                    # Calculate min/max from collected data sources for this channel
+                    for time_vec, data in data_sources:
+                        if time_vec is not None and len(time_vec) > 0:
+                            t_min, t_max = np.min(time_vec), np.max(time_vec)
+                            chan_x_min = min(chan_x_min, t_min) if chan_x_min is not None else t_min
+                            chan_x_max = max(chan_x_max, t_max) if chan_x_max is not None else t_max
+                        if data is not None and len(data) > 0:
+                            # Filter out NaNs or Infs if they might occur
+                            valid_data = data[np.isfinite(data)]
+                            if len(valid_data) > 0:
+                                d_min, d_max = np.min(valid_data), np.max(valid_data)
+                                chan_y_min = min(chan_y_min, d_min) if chan_y_min is not None else d_min
+                                chan_y_max = max(chan_y_max, d_max) if chan_y_max is not None else d_max
+
+                    # Update overall bounds
+                    if chan_x_min is not None:
+                        x_min = min(x_min, chan_x_min) if x_min is not None else chan_x_min
+                    if chan_x_max is not None:
+                        x_max = max(x_max, chan_x_max) if x_max is not None else chan_x_max
+                    if chan_y_min is not None:
+                        y_mins[chan_id] = chan_y_min
+                    if chan_y_max is not None:
+                        y_maxs[chan_id] = chan_y_max
+                # --- End Manual Calculation ---
+
+                log.info(f"[EXPLORER-RESET] Manual bounds: X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
+
+                # --- TEMPORARILY HIDE ITEMS ---
+                log.debug("[EXPLORER-RESET] Temporarily hiding plot items BEFORE setRange...")
+                for chan_id, plot_widget in vis_map.items(): # Use vis_map from outer scope
+                    plot_items_list = self.channel_plot_data_items.get(chan_id, []) # Use current items
+                    for item in plot_items_list:
+                         if isinstance(item, pg.PlotDataItem) and item.isVisible():
+                             item.hide()
+                             items_to_hide.append(item)
+                log.debug(f"[EXPLORER-RESET] Hid {len(items_to_hide)} items.")
+                # --- END HIDE ---
+
+                # --- Apply Manually Calculated Ranges (Potentially Blocking Step) ---
+                final_x_range = None
+                if x_min is not None and x_max is not None and x_min < x_max:
+                    padding_x = (x_max - x_min) * 0.02 # Add 2% padding
+                    if padding_x == 0: padding_x = 0.1 # Add minimal padding if range is zero
+                    final_x_range = [x_min - padding_x, x_max + padding_x]
+                elif x_min is not None and x_max is not None: # Handle case where min == max
+                    final_x_range = [x_min - 0.1, x_max + 0.1]
+
+                first_plot = next(iter(vis_map.values()))
+                if final_x_range:
+                    log.info(f"[EXPLORER-RESET] Setting manual X range: {final_x_range}")
+                    first_plot.getViewBox().setXRange(*final_x_range, padding=0) # Set X
+
+                for chan_id, plot_widget in vis_map.items():
+                    vb = plot_widget.getViewBox()
+                    y_min = y_mins.get(chan_id)
+                    y_max = y_maxs.get(chan_id)
+                    final_y_range = None
+                    if y_min is not None and y_max is not None and y_min < y_max:
+                         padding_y = (y_max - y_min) * 0.02
+                         if padding_y == 0: padding_y = 0.1
+                         final_y_range = [y_min - padding_y, y_max + padding_y]
+                    elif y_min is not None and y_max is not None: # Handle min == max
+                         final_y_range = [y_min - 0.1, y_max + 0.1]
+
+                    if final_y_range:
+                         log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: {final_y_range}")
+                         vb.setYRange(*final_y_range, padding=0) # Set Y
+                    else:
+                         log.warning(f"[EXPLORER-RESET] Manual Y range calculation failed or invalid for {chan_id}, skipping setYRange.")
+                         # Optionally add a fallback, e.g., vb.setYRange(-1, 1)
+                log.info("[EXPLORER-RESET] Finished applying manual ranges.")
+                # --- End Apply Ranges ---
+
+            except Exception as e:
+                log.error(f"[EXPLORER-RESET] Error during deferred manual range setting: {e}", exc_info=True)
+            finally:
+                # --- ALWAYS RESTORE VISIBILITY ---
+                log.debug("[EXPLORER-RESET] Restoring item visibility AFTER setRange...")
+                for item in items_to_hide:
+                    try: # Try/Except for safety
+                        item.show()
+                    except Exception as show_err:
+                        log.warning(f"Error showing item: {show_err}")
+                log.debug(f"[EXPLORER-RESET] Restored visibility attempt for {len(items_to_hide)} items.")
+
+                # Schedule the capture AFTER restoring visibility
+                QtCore.QTimer.singleShot(0, self._capture_base_ranges_after_reset)
+                log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set and visibility restore.")
+
+        # Schedule the manual range function itself using a 0ms timer.
+        QtCore.QTimer.singleShot(0, do_deferred_manual_range_and_capture)
+        log.info("[EXPLORER-RESET] Scheduled manual range operation via QTimer(0).")
+        # --- END REPLACEMENT of nested function ---
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
