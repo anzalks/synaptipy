@@ -60,13 +60,13 @@ def _debounced_emit_preferences_updated():
         
         # Reset timer - will emit signal after 100ms of no updates
         _update_timer.start(100)
-        print("DEBUG: Timer started successfully")
+        log.debug("Timer started successfully")
     except Exception as e:
         # If timer fails, emit signal immediately as fallback
-        print(f"DEBUG: Timer failed: {e}")
+        log.debug(f"Timer failed: {e}")
         log.warning(f"Debouncing failed, emitting signal immediately: {e}")
         _plot_signals.preferences_updated.emit()
-        print("DEBUG: Fallback signal emitted")
+        log.debug("Fallback signal emitted")
 
 class PlotCustomizationManager:
     """
