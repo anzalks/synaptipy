@@ -17,6 +17,26 @@ import pyqtgraph as pg
 
 log = logging.getLogger('Synaptipy.shared.plot_customization')
 
+# --- Performance Mode Flag ---
+_force_opaque_trials = False # Global flag
+
+def set_force_opaque_trials(force_opaque: bool):
+    """Globally enable/disable forcing opaque trial plots for performance."""
+    global _force_opaque_trials
+    if _force_opaque_trials == force_opaque: return # Avoid unnecessary updates
+    _force_opaque_trials = force_opaque
+    log.info(f"Setting force_opaque_trials globally to: {_force_opaque_trials}")
+    # Trigger a preference update signal so plots refresh immediately
+    manager = get_plot_customization_manager()
+    manager._pen_cache.clear() # Clear cache to force pen regeneration
+    # Direct emission for immediate response
+    _plot_signals.preferences_updated.emit()
+
+def get_force_opaque_trials() -> bool:
+    """Check if trial plots should be forced opaque."""
+    return _force_opaque_trials
+# --- End Performance Mode Flag ---
+
 # Global signal for plot customization updates
 class PlotCustomizationSignals(QtCore.QObject):
     """Global signals for plot customization updates."""
@@ -40,13 +60,13 @@ def _debounced_emit_preferences_updated():
         
         # Reset timer - will emit signal after 100ms of no updates
         _update_timer.start(100)
-        print("DEBUG: Timer started successfully")
+        log.debug("Timer started successfully")
     except Exception as e:
         # If timer fails, emit signal immediately as fallback
-        print(f"DEBUG: Timer failed: {e}")
+        log.debug(f"Timer failed: {e}")
         log.warning(f"Debouncing failed, emitting signal immediately: {e}")
         _plot_signals.preferences_updated.emit()
-        print("DEBUG: Fallback signal emitted")
+        log.debug("Fallback signal emitted")
 
 class PlotCustomizationManager:
     """
@@ -180,9 +200,12 @@ class PlotCustomizationManager:
             self._cache_dirty = False  # Reset cache state
             log.debug("Cleared pen cache after preference change")
             
-            # Emit signal to notify about preference changes
-            _plot_signals.preferences_updated.emit()
-            log.debug("Emitted plot preferences update signal")
+            # Emit signal to notify about preference changes (queued to keep UI responsive)
+            try:
+                QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)
+            except Exception:
+                _plot_signals.preferences_updated.emit()
+            log.debug("Scheduled plot preferences update signal (queued)")
             
         except Exception as e:
             log.error(f"Failed to save plot preferences: {e}")
@@ -236,6 +259,12 @@ class PlotCustomizationManager:
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
         alpha = opacity / 100.0
         
+        # PERFORMANCE: Override alpha if force opaque mode is enabled
+        global _force_opaque_trials
+        if _force_opaque_trials:
+            log.debug("[get_single_trial_pen] Performance mode ON: Forcing alpha to 1.0")
+            alpha = 1.0
+        
         # Convert hex color to QColor with proper alpha
         from PySide6.QtGui import QColor
         if color_str.startswith('#'):
@@ -251,7 +280,7 @@ class PlotCustomizationManager:
             color.setAlpha(int(alpha * 255))
 
         pen = pg.mkPen(color=color, width=width)
-        log.debug(f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})")
+        log.debug(f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f}, force_opaque: {_force_opaque_trials})")
         self._cache_pen('single_trial', pen)
         return pen
 
@@ -318,14 +347,21 @@ class PlotCustomizationManager:
                         if property_name in self.defaults[plot_type]:
                             self.defaults[plot_type][property_name] = new_preferences[plot_type][property_name]
             
-            # Mark cache as dirty
-            self._cache_dirty = True
-            log.debug("Updated preferences in batch")
+            # Clear and reset pen cache so subsequent get_* calls create and reuse fresh pens once
+            try:
+                self._pen_cache.clear()
+            except Exception:
+                pass
+            self._cache_dirty = False
+            log.debug("Updated preferences in batch and reset pen cache")
             
-            # Emit signal if requested
+            # Emit signal if requested (queued to allow dialogs to close first)
             if emit_signal:
-                _plot_signals.preferences_updated.emit()
-                log.debug("Emitted preferences update signal after batch update")
+                try:
+                    QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)
+                except Exception:
+                    _plot_signals.preferences_updated.emit()
+                log.debug("Scheduled preferences update signal after batch update (queued)")
             
             return True
             
@@ -528,3 +564,36 @@ def save_plot_preferences():
 def get_plot_customization_signals():
     """Get the global plot customization signals."""
     return _plot_signals
+
+def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
+    """
+    Creates a QPen object based on the current customization settings.
+
+    Args:
+        is_average: True if the pen is for an averaged trace, False otherwise.
+        trial_index: The index of the trial (used for potential future color cycling).
+
+    Returns:
+        A configured QPen object.
+    """
+    from PySide6.QtGui import QColor
+    
+    manager = get_plot_customization_manager()
+    prefs = manager.get_all_preferences()
+
+    if is_average:
+        config = prefs.get('average', {})
+        color_str = config.get('color', '#FF0000') # Default red
+        width = config.get('width', 2)
+        opacity = config.get('opacity', 100)
+    else:
+        config = prefs.get('single_trial', {})
+        color_str = config.get('color', '#808080') # Default gray
+        width = config.get('width', 1)
+        opacity = config.get('opacity', 50)
+
+    color = QColor(color_str)
+    color.setAlphaF(opacity / 100.0)
+
+    pen = pg.mkPen(color=color, width=width)
+    return pen

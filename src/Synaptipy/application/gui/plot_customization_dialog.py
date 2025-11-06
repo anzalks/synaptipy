@@ -41,6 +41,9 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         # Store original preferences when dialog opens - use deep copy
         self._original_preferences = copy.deepcopy(self.customization_manager.get_all_preferences())
         
+        # PERFORMANCE: Add checkbox attribute
+        self.force_opaque_checkbox = None
+        
         log.info("=== DIALOG INITIALIZATION ===")
         log.info(f"Manager preferences: {self.customization_manager.get_all_preferences()}")
         log.info(f"Current preferences: {self.current_preferences}")
@@ -67,6 +70,30 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self._create_average_tab()
         self._create_single_trial_tab()
         self._create_grid_tab()
+        
+        # --- Performance Option ---
+        performance_group = QtWidgets.QGroupBox("Performance")
+        performance_layout = QtWidgets.QVBoxLayout(performance_group)
+        
+        self.force_opaque_checkbox = QtWidgets.QCheckBox("Force Opaque Single Trials (Faster Rendering)")
+        self.force_opaque_checkbox.setToolTip(
+            "Check this to disable transparency for single trials.\n"
+            "This can significantly improve performance when many trials are overlaid."
+        )
+        # Import the getter function here or at the top of the file
+        from Synaptipy.shared.plot_customization import get_force_opaque_trials
+        # Block signals during initialization to prevent unnecessary updates
+        self.force_opaque_checkbox.blockSignals(True)
+        self.force_opaque_checkbox.setChecked(get_force_opaque_trials())
+        self.force_opaque_checkbox.blockSignals(False)
+        self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed) # Connect the signal
+        performance_layout.addWidget(self.force_opaque_checkbox)
+        
+        # Add the performance group to the main layout of the dialog
+        main_layout = layout  # layout is already the dialog's main layout
+        # For now, just add it before buttons (buttons are added below)
+        main_layout.addWidget(performance_group)
+        # --- End Performance Option ---
         
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
@@ -403,42 +430,25 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             log.error(f"Failed to reset preferences: {e}")
     
     def _apply_changes(self):
-        """Apply current changes and save preferences."""
+        """Apply current changes and save preferences only if they have changed."""
         try:
-            # Check if preferences actually changed
+            # Only proceed if preferences have actually been modified
             if self._preferences_changed():
+                log.info("Changes detected, applying new plot preferences.")
                 # Use batch update for better performance
-                if hasattr(self.customization_manager, 'update_preferences_batch'):
-                    success = self.customization_manager.update_preferences_batch(
-                        self.current_preferences, 
-                        emit_signal=True
-                    )
-                    if success:
-                        log.info("Plot preferences applied and saved via batch update")
-                        # Update the original preferences reference after successful save
-                        self._original_preferences = copy.deepcopy(self.current_preferences)
-                    else:
-                        log.warning("Batch update failed - falling back to individual updates")
-                        # Fallback to individual updates
-                        self.customization_manager.save_preferences()
-                        self._original_preferences = copy.deepcopy(self.current_preferences)
-                else:
-                    # Fallback for older versions
-                    self.customization_manager.save_preferences()
+                success = self.customization_manager.update_preferences_batch(
+                    self.current_preferences,
+                    emit_signal=True
+                )
+                if success:
+                    log.info("Plot preferences applied and saved via batch update.")
+                    # Update the original preferences reference to prevent re-applying the same change
                     self._original_preferences = copy.deepcopy(self.current_preferences)
-                    log.info("Plot preferences applied and saved (fallback method)")
-                
-                # Signal is already emitted by the customization manager
-                # Now update plot pens directly for immediate visual feedback
-                try:
-                    if hasattr(self.parent(), '_update_plot_pens_only'):
-                        self.parent()._update_plot_pens_only()
-                        log.info("Updated plot pens directly for immediate visual feedback")
-                except Exception as e:
-                    log.debug(f"Could not update plot pens directly: {e}")
+                else:
+                    log.warning("Batch update failed.")
             else:
-                log.info("No changes detected - skipping save and update")
-            
+                log.info("No changes detected - skipping save and update signal.")
+                
         except Exception as e:
             log.error(f"Failed to apply preferences: {e}")
 
@@ -480,3 +490,12 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         """Handle OK button click - apply changes and close."""
         self._apply_changes()
         self.accept()
+    
+    def _on_force_opaque_changed(self, state):
+        """Handle changes to the force opaque checkbox."""
+        is_checked = state == QtCore.Qt.CheckState.Checked.value
+        # Import the setter function (can be done at top of file too)
+        from Synaptipy.shared.plot_customization import set_force_opaque_trials
+        set_force_opaque_trials(is_checked)
+        log.info(f"Force opaque trials toggled via dialog to: {is_checked}")
+        # The set_force_opaque_trials function emits the signal to update plots automatically

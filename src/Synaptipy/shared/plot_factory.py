@@ -63,6 +63,14 @@ class SynaptipyPlotFactory:
             if enable_grid:
                 QtCore.QTimer.singleShot(50, lambda: SynaptipyPlotFactory._configure_grid_safe(plot_widget))
             
+            # Apply system theme colors to the selection rectangle
+            try:
+                from .zoom_theme import apply_theme_with_custom_selection
+                # Apply custom selection rectangle with theme
+                apply_theme_with_custom_selection(plot_widget.getViewBox())
+            except Exception as e:
+                log.debug(f"Failed to apply theme to plot widget: {e}")
+            
             log.debug("Created plot widget successfully")
             return plot_widget
             
