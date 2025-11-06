@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Set
+from typing import List, Optional, Dict, Any, Tuple, Set, Union
 import uuid
 from datetime import datetime, timezone
 from functools import partial
@@ -117,6 +117,51 @@ class ExplorerTab(QtWidgets.QWidget):
         self.individual_y_scrollbars: Dict[str, QtWidgets.QScrollBar] = {}
         self.individual_y_slider_values: Dict[str, int] = {}
         self.individual_y_scrollbar_values: Dict[str, int] = {}
+
+        # --- Debounce timers for calm interactions ---
+        self._x_range_update_timer = QtCore.QTimer()
+        self._x_range_update_timer.setSingleShot(True)
+        self._x_range_update_timer.setInterval(50)
+        self._x_range_update_timer.timeout.connect(self._perform_x_range_update)
+
+        self._y_range_update_timer = QtCore.QTimer()
+        self._y_range_update_timer.setSingleShot(True)
+        self._y_range_update_timer.setInterval(50)
+        self._y_range_update_timer.timeout.connect(self._perform_y_range_update)
+
+        self._last_x_range = None
+        self._last_y_vbs = {}
+        
+        # --- Add/Ensure these Debounce timers exist ---
+        self._x_zoom_apply_timer = QtCore.QTimer()
+        self._x_zoom_apply_timer.setSingleShot(True)
+        self._x_zoom_apply_timer.setInterval(50) # Apply ~50ms after slider stops
+        self._x_zoom_apply_timer.timeout.connect(self._apply_debounced_x_zoom)
+        self._last_x_zoom_value = self.SLIDER_DEFAULT_VALUE
+
+        self._x_scroll_apply_timer = QtCore.QTimer()
+        self._x_scroll_apply_timer.setSingleShot(True)
+        self._x_scroll_apply_timer.setInterval(50)
+        self._x_scroll_apply_timer.timeout.connect(self._apply_debounced_x_scroll)
+        self._last_x_scroll_value = 0 # Or initial scrollbar value
+
+        self._y_global_zoom_apply_timer = QtCore.QTimer()
+        self._y_global_zoom_apply_timer.setSingleShot(True)
+        self._y_global_zoom_apply_timer.setInterval(50)
+        self._y_global_zoom_apply_timer.timeout.connect(self._apply_debounced_y_global_zoom)
+        self._last_y_global_zoom_value = self.SLIDER_DEFAULT_VALUE
+
+        self._y_global_scroll_apply_timer = QtCore.QTimer()
+        self._y_global_scroll_apply_timer.setSingleShot(True)
+        self._y_global_scroll_apply_timer.setInterval(50)
+        self._y_global_scroll_apply_timer.timeout.connect(self._apply_debounced_y_global_scroll)
+        self._last_y_global_scroll_value = self.SCROLLBAR_MAX_RANGE // 2
+
+        # Individual Y zoom/scroll debounce timers and state
+        self._individual_y_zoom_timers: Dict[str, QtCore.QTimer] = {}
+        self._individual_y_scroll_timers: Dict[str, QtCore.QTimer] = {}
+        self._last_individual_y_zoom_values: Dict[str, int] = {}
+        self._last_individual_y_scroll_values: Dict[str, int] = {}
         
         # Manual limits storage
         self.manual_x_range: Optional[Tuple[float, float]] = None
@@ -576,18 +621,67 @@ class ExplorerTab(QtWidgets.QWidget):
             selected_index = 0
         self.load_recording_data(filepath, file_list, selected_index)
 
-    def load_recording_data(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int):
+    def _display_recording(self, recording: Recording):
+        """Displays a Recording object that is already loaded in memory."""
+        log.info(f"[_display_recording] Now displaying pre-loaded data for: {recording.source_file.name}")
+        if not recording:
+            log.error("[_display_recording] Method was called with a None Recording object. Aborting.")
+            return
+
+        self.status_bar.showMessage(f"Displaying '{recording.source_file.name}'...")
+        QtWidgets.QApplication.processEvents()
+
+        self._reset_ui_and_state_for_new_file()
+        self._clear_data_cache()
+
+        try:
+            # --- THE CORE FIX: Use the object directly ---
+            self.current_recording = recording
+            log.info(f"[_display_recording] Assigned pre-loaded Recording object directly.")
+
+            self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
+
+            log.info(f"[_display_recording] Creating UI for {len(self.current_recording.channels)} channels...")
+            self._create_channel_ui()
+
+            self._update_metadata_display()
+
+            log.info(f"[_display_recording] Triggering plot update...")
+            self._update_plot()
+
+            log.info(f"[_display_recording] Resetting view...")
+            self._reset_view()
+
+            self._auto_select_trials_for_average()
+
+            self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'. Ready.", 5000)
+            log.info(f"[_display_recording] Display of '{recording.source_file.name}' complete.")
+        except Exception as e:
+             log.error(f"[_display_recording] An unexpected error occurred: {e}", exc_info=True)
+             self._clear_metadata_display()
+        finally:
+             self._update_zoom_scroll_enable_state()
+             self._update_ui_state()
+             if self.manual_limits_enabled: self._apply_manual_limits()
+
+    def load_recording_data(self, data_or_filepath, file_list: List[Path], current_index: int):
         """
-        Stores the list of files selected by the user and loads the initial one.
-        Navigation between files is handled by _next_file_folder / _prev_file_folder.
+        Handles loading data. Accepts either a pre-loaded Recording object (to display)
+        or a Path (to load from disk for file cycling).
         """
-        # CHANGE: Log using the clearer argument name
-        log.info(f"[EXPLORER-LOAD] ExplorerTab received file list (count: {len(file_list)}). Initial file to display: {initial_filepath_to_load.name} (Index {current_index})")
-        # Store the full list and the starting index provided by MainWindow
         self.file_list = file_list
         self.current_file_index = current_index
-        # Load and display the specific file requested initially
-        self._load_and_display_file(initial_filepath_to_load)
+
+        if isinstance(data_or_filepath, Recording):
+            # --- This is the NEW, fast path for initial load ---
+            log.info(f"[load_recording_data] Received a pre-loaded Recording object. Using fast display path.")
+            self._display_recording(data_or_filepath)
+        elif isinstance(data_or_filepath, Path):
+            # --- This is the OLD path, now used only for file cycling ---
+            log.info(f"[load_recording_data] Received a Path object. Using disk-read path for file cycling.")
+            self._load_and_display_file(data_or_filepath)
+        else:
+            log.error(f"[load_recording_data] Received invalid data type: {type(data_or_filepath)}. Aborting.")
 
     def get_current_recording(self) -> Optional[Recording]:
         return self.current_recording
@@ -726,6 +820,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # Loop through channels and create UI elements
         checkbox_group = QtWidgets.QButtonGroup()
         checkbox_group.setExclusive(False)
+        first_plot_item = None
         
         for i, chan_key in enumerate(channel_keys):
             channel = self.current_recording.channels[chan_key]
@@ -742,6 +837,13 @@ class ExplorerTab(QtWidgets.QWidget):
             
             # Create plot item for this channel
             plot_item = self.graphics_layout_widget.addPlot(row=i, col=0)
+            
+            # Link X-axes for synchronized zooming
+            if first_plot_item is None:
+                first_plot_item = plot_item
+            else:
+                plot_item.setXLink(first_plot_item)
+            log.debug(f"[_create_channel_ui] Linked X-axis for plot {i} to the first plot.")
             
             # Apply basic plot styling
             try:
@@ -778,6 +880,9 @@ class ExplorerTab(QtWidgets.QWidget):
             
             # Set up selection rectangle tool for zooming plots
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
+            
+            # Selection styling is installed globally via class-level patch in zoom_theme
+            # No per-ViewBox customization needed here
             
             # Add a placeholder for the data - don't add plot items here, they're added in _update_plot
             self.channel_plot_data_items[chan_key] = []  # Initialize empty list to store plot items
@@ -1158,6 +1263,8 @@ class ExplorerTab(QtWidgets.QWidget):
                         average_pen = get_average_pen()
                         
                         item = p.plot(ref_t, avg_d, pen=average_pen)
+                        # Enable automatic downsampling for massive performance gain
+                        item.setDownsampling(auto=True, ds='auto')
                         # Set selected data z-order
                         if hasattr(item, 'setZValue'):
                             item.setZValue(5)
@@ -1259,8 +1366,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._mark_cache_dirty()
 
     def _update_plot_pens_only(self):
-        """Efficiently update only the pen properties of existing plot items without recreating data."""
-        # Check if pen update is actually needed
+        """Efficiently update only the pen properties of existing plot items using a batch update."""
         if not self._needs_pen_update():
             log.debug("[EXPLORER-PLOT] No pen changes detected - skipping pen update")
             return
@@ -1268,373 +1374,133 @@ class ExplorerTab(QtWidgets.QWidget):
         log.info("[EXPLORER-PLOT] Updating plot pens only (no data recreation)")
         
         try:
-            # Get current pens from customization manager
-            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen
+            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen, is_grid_enabled
             trial_pen = get_single_trial_pen()
             average_pen = get_average_pen()
             grid_pen = get_grid_pen()
-            
-            # Validate pens before proceeding
-            if not trial_pen or not average_pen:
-                log.warning("Invalid pens received from customization manager - skipping pen update")
-                return
-                
-            log.info(f"[EXPLORER-PEN] Retrieved pens - Trial: {trial_pen.color().name()}, Average: {average_pen.color().name()}, Grid: {grid_pen.color().name() if grid_pen else 'None'}")
         except ImportError:
             log.warning("Could not import plot customization - skipping pen update")
             return
         
-        # Update pens for existing plot data items
-        updated_count = 0
-        skipped_count = 0
-        
-        # First, update regular plot data items
-        for chan_id, plot_data_items in self.channel_plot_data_items.items():
-            if not plot_data_items:
-                log.info(f"[EXPLORER-PEN] No plot data items for channel {chan_id}")
-                continue
-                
-            log.info(f"[EXPLORER-PEN] Processing {len(plot_data_items)} items for channel {chan_id}")
-            
-            for i, item in enumerate(plot_data_items):
-                log.info(f"[EXPLORER-PEN] Item {i}: type={type(item).__name__}, opts={getattr(item, 'opts', 'No opts')}")
-                
-                if isinstance(item, pg.PlotDataItem):
-                    # Determine which pen to apply based on item properties or name
-                    old_pen = item.opts.get('pen') if hasattr(item, 'opts') else None
-                    old_color = old_pen.color().name() if old_pen and hasattr(old_pen, 'color') and old_pen.color() else "unknown"
-                    
-                    if hasattr(item, 'opts') and 'name' in item.opts:
-                        item_name = item.opts['name']
-                        log.info(f"[EXPLORER-PEN] Item {i} name: '{item_name}'")
-                        
-                        if 'average' in item_name.lower() or 'avg' in item_name.lower():
-                            item.setPen(average_pen)
-                            log.info(f"[EXPLORER-PEN] Updated {chan_id} average item {i} from {old_color} to {average_pen.color().name()}")
-                        else:
-                            item.setPen(trial_pen)
-                            log.info(f"[EXPLORER-PEN] Updated {chan_id} trial item {i} from {old_color} to {trial_pen.color().name()}")
-                    else:
-                        # Default to trial pen if we can't determine the type
-                        item.setPen(trial_pen)
-                        log.info(f"[EXPLORER-PEN] Updated {chan_id} unknown item {i} from {old_color} to {trial_pen.color().name()}")
-                    updated_count += 1
-                else:
-                    log.info(f"[EXPLORER-PEN] Skipped item {i} - not a PlotDataItem (type: {type(item).__name__})")
-                    skipped_count += 1
-        
-        # Now update the selected average plot items (these are separate from regular plot items)
-        if self.selected_average_plot_items:
-            log.info(f"[EXPLORER-PEN] Processing {len(self.selected_average_plot_items)} selected average plot items")
-            for chan_id, avg_item in self.selected_average_plot_items.items():
-                if isinstance(avg_item, pg.PlotDataItem):
-                    old_pen = avg_item.opts.get('pen') if hasattr(avg_item, 'opts') else None
-                    old_color = old_pen.color().name() if old_pen and hasattr(old_pen, 'color') and old_pen.color() else "unknown"
-                    
-                    avg_item.setPen(average_pen)
-                    log.info(f"[EXPLORER-PEN] Updated {chan_id} selected average item from {old_color} to {average_pen.color().name()}")
-                    updated_count += 1
-                else:
-                    log.info(f"[EXPLORER-PEN] Skipped selected average item for {chan_id} - not a PlotDataItem (type: {type(avg_item).__name__})")
-                    skipped_count += 1
-        else:
-            log.info("[EXPLORER-PEN] No selected average plot items to process")
-        
-        # Update grid for all channels
-        if grid_pen:
-            for chan_id, plot_item in self.channel_plots.items():
-                if plot_item:
-                    try:
-                        # PySide6 QPen doesn't have alpha() method, use brush color alpha instead
-                        try:
-                            alpha = grid_pen.brush().color().alpha() / 255.0 if grid_pen.brush() else 0.3
-                        except:
-                            alpha = 0.3
-                        plot_item.showGrid(x=True, y=True, alpha=alpha)
-                    except Exception as e:
-                        log.warning(f"Could not update grid for channel {chan_id}: {e}")
-        
-        log.info(f"[EXPLORER-PEN] Pen update complete - updated {updated_count} items, skipped {skipped_count} items")
+        # --- BATCH UPDATE START ---
+        # Pause all visual updates on the graphics widget. This is the critical step
+        # that prevents the "spinning wheel" by stopping the flood of redraw commands.
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+            self.graphics_layout_widget.setUpdatesEnabled(False)
 
-    def _update_plot(self, pen_only=False):
-        """Update plots with option to only update pens for better performance."""
-        if pen_only:
-            self._update_plot_pens_only()
-            return
-            
-        log.info(f"[EXPLORER-PLOT] Plot update starting - recording={self.current_recording is not None}")
-        if self.current_recording:
-            log.info(f"[EXPLORER-PLOT] Recording has {len(self.current_recording.channels)} channels")
-            log.info(f"[EXPLORER-PLOT] Channel plots dict has {len(self.channel_plots)} plots")
-        if not self.current_recording: 
-            log.warning(f"[EXPLORER-PLOT] No recording available for plot update")
-            return
-        
         try:
-            # --- Rest of existing _update_plot logic with temporary signal disconnection ---
-            self._clear_plot_data_only()
-            if not self.current_recording or not self.channel_plots:
-                 log.warning("Update plot: No data/plots."); self._update_ui_state(); return  # This return is now inside try block, so finally will execute
-            is_cycle_mode = self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
-            log.debug(f"Updating plots. Mode: {'Cycle' if is_cycle_mode else 'Overlay'}. Trial: {self.current_trial_index}")
-            
-                    # Simple styling approach - no complex grid configuration needed
-            
-            vis_const_available = VisConstants is not None
-            _trial_color_def = getattr(VisConstants, 'TRIAL_COLOR', '#888888') if vis_const_available else '#888888'
-            _trial_alpha_val = getattr(VisConstants, 'TRIAL_ALPHA', 70) if vis_const_available else 70
-            _avg_color_str = getattr(VisConstants, 'AVERAGE_COLOR', '#EE4B2B') if vis_const_available else '#EE4B2B'
-            _pen_width_val = getattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH', 1) if vis_const_available else 1
-            _ds_thresh_val = getattr(VisConstants, 'DOWNSAMPLING_THRESHOLD', 5000) if vis_const_available else 5000
-            
-            # Try to use centralized plot customization
-            try:
-                from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
-                trial_pen = get_single_trial_pen()
-                average_pen = get_average_pen()
-                single_trial_pen = get_single_trial_pen()
-                log.debug("Using centralized plot customization pens")
-            except ImportError:
-                # Fallback to original logic
-                try:
-                    if isinstance(_trial_color_def, (tuple, list)) and len(_trial_color_def) >= 3: rgb_tuple = tuple(int(c) for c in _trial_color_def[:3])
-                    elif isinstance(_trial_color_def, str): color_hex = _trial_color_def.lstrip('#'); rgb_tuple = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
-                    else: raise ValueError(f"Unsupported color format: {_trial_color_def}")
-                    alpha_int = max(0, min(255, int(_trial_alpha_val * 2.55)))
-                    rgba_tuple = rgb_tuple + (alpha_int,)
-                    trial_pen = pg.mkPen(rgba_tuple, width=_pen_width_val, name="Trial")  # Fallback trial pen
-                    log.debug(f"Trial pen RGBA: {rgba_tuple}")
-                except Exception as e:
-                    log.error(f"Error creating trial_pen: {e}. Fallback."); trial_pen = pg.mkPen((128, 128, 128, 80), width=1, name="Trial_Fallback")
-                average_pen = pg.mkPen(_avg_color_str, width=_pen_width_val + 1, name="Average")  # Fallback average pen
-                single_trial_pen = pg.mkPen(_trial_color_def, width=_pen_width_val, name="Single Trial")  # Fallback single trial pen
-            
-            # PEN DEBUG: Check what colors we're actually using
-            log.info(f"[PEN-DEBUG] Trial color def: {_trial_color_def}, alpha: {_trial_alpha_val}")
-            log.info(f"[PEN-DEBUG] Trial pen: {trial_pen}")
-            log.info(f"[PEN-DEBUG] Average pen: {average_pen}")
-            log.info(f"[PEN-DEBUG] Single trial pen: {single_trial_pen}")
-            log.info(f"[PEN-DEBUG] Using centralized customization: {trial_pen is not None and hasattr(trial_pen, 'color')}")
-            enable_downsampling = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
-            ds_threshold = _ds_thresh_val
-            any_data_plotted = False; visible_plots: List[pg.PlotItem] = []
+            # Update pens for existing plot data items. These changes now happen in memory
+            # without triggering any UI updates, keeping the application responsive.
+            for plot_data_items in self.channel_plot_data_items.values():
+                for item in plot_data_items:
+                    if isinstance(item, pg.PlotDataItem):
+                        is_avg = hasattr(item, 'opts') and 'name' in item.opts and ('average' in item.opts['name'].lower() or 'avg' in item.opts['name'].lower())
+                        target_pen = average_pen if is_avg else trial_pen
+                        item.setPen(target_pen)
 
-            for chan_id, plot_item in self.channel_plots.items():
-                checkbox = self.channel_checkboxes.get(chan_id)
-                channel = self.current_recording.channels.get(chan_id)
-                if checkbox and checkbox.isChecked() and channel and plot_item:
-                    plot_item.setVisible(True); visible_plots.append(plot_item); channel_plotted = False
-                    
-                    # Step 1: Apply basic styling BEFORE plotting
+            # Update the selected average plot items
+            for avg_item in self.selected_average_plot_items.values():
+                if isinstance(avg_item, pg.PlotDataItem):
+                    avg_item.setPen(average_pen)
+            
+            # Update grids on all visible plots
+            for plot_item in self.channel_plots.values():
+                if plot_item.isVisible():
                     try:
-                        # Set background via the view box for PlotItem
-                        vb = plot_item.getViewBox()
-                        if vb:
-                            vb.setBackgroundColor('white')
-                            # Normal ViewBox behavior restored
-                            # vb.enableAutoRange(enable=False)
-                            # vb.setAutoVisible(x=False, y=False)
-                    except:
-                        pass  # Fallback if background setting fails
-                    
-                    # Grid configuration with customization support
-                    try:
-                        # Try to use customized grid settings
-                        try:
-                            from Synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
-                            if is_grid_enabled():
-                                grid_pen = get_grid_pen()
-                                if grid_pen:
-                                    # Get alpha value from pen color
-                                    alpha = 0.3  # Default alpha
-                                    if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
-                                        alpha = grid_pen.color().alpha() / 255.0
-                                        log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
-                                    else:
-                                        log.debug("Using default grid alpha: 0.3")
-                                    
-                                    plot_item.showGrid(x=True, y=True, alpha=alpha)
-                                    log.debug(f"Customized grid configuration for channel {chan_id} with alpha: {alpha}")
-                                else:
-                                    plot_item.showGrid(x=False, y=False)
-                                    log.debug(f"Grid disabled for channel {chan_id}")
-                            else:
-                                plot_item.showGrid(x=False, y=False)
-                                log.debug(f"Grid disabled for channel {chan_id}")
-                        except ImportError:
-                            plot_item.showGrid(x=True, y=True, alpha=0.3)
-                            log.debug(f"Default grid configuration for channel {chan_id}")
+                        if is_grid_enabled():
+                            alpha = 0.3
+                            if hasattr(grid_pen, 'color') and hasattr(grid_pen.color(), 'alpha'):
+                                alpha = grid_pen.color().alpha() / 255.0
+                            plot_item.showGrid(x=True, y=True, alpha=alpha)
+                        else:
+                            plot_item.showGrid(x=False, y=False)
                     except Exception as e:
-                        log.warning(f"Could not configure grid for channel {chan_id}: {e}")
-                    
-                    # Now plot the data
-                    if not is_cycle_mode:
-                        # --- Overlay All + Avg Mode ---
-                        log.info(f"[EXPLORER-DATA] Plotting overlay mode for {chan_id} ({channel.num_trials} trials)")
-                        for trial_idx in range(channel.num_trials):
-                            # Try to get cached data first
-                            cached_result = self._get_cached_data(chan_id, trial_idx)
-                            if cached_result is not None:
-                                data, time_vec = cached_result
-                                log.debug(f"[EXPLORER-CACHE] Using cached data for {chan_id}, trial {trial_idx}")
-                            else:
-                                # Load data from channel and cache it
-                                data = channel.get_data(trial_idx)
-                                time_vec = channel.get_relative_time_vector(trial_idx)
-                                if data is not None and time_vec is not None:
-                                    self._cache_data(chan_id, trial_idx, data, time_vec)
-                                    log.debug(f"[EXPLORER-CACHE] Cached data for {chan_id}, trial {trial_idx}")
-                            
-                            if data is not None and time_vec is not None:
-                                if trial_idx == 0:  # Log details for first trial only to avoid spam
-                                    log.info(f"[EXPLORER-DATA] First trial - Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
-                                    log.info(f"[EXPLORER-DATA] First trial - Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
-                                    log.info(f"[EXPLORER-DATA] First trial - Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
-                                    
-                                    # DATA VALIDITY DEBUG: Check for NaN/Inf
-                                    time_valid = np.isfinite(time_vec).all()
-                                    data_valid = np.isfinite(data).all()
-                                    log.info(f"[DATA-VALID] Time array valid: {time_valid}, Data array valid: {data_valid}")
-                                    if not time_valid:
-                                        log.warning(f"[DATA-VALID] Time has {np.sum(~np.isfinite(time_vec))} invalid values")
-                                    if not data_valid:
-                                        log.warning(f"[DATA-VALID] Data has {np.sum(~np.isfinite(data))} invalid values")
-                                
-                                # Simple plotting approach matching analysis tabs
-                                item = plot_item.plot(time_vec, data, pen=trial_pen)
-                                item.opts['autoDownsample'] = enable_downsampling
-                                item.opts['autoDownsampleThreshold'] = ds_threshold
-                                self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                                channel_plotted = True
-                                
-                                # Simplified debug logging
-                                if trial_idx == 0:  # Only log for first trial to avoid spam
-                                    log.info(f"[EXPLORER-DATA] Trial data plotted for {chan_id}: {len(data)} points")
-                            else:
-                                log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {trial_idx+1}: data={data is not None}, time_vec={time_vec is not None}")
-                        
-                        # Plot average trace
-                        cached_avg = self._get_cached_average(chan_id)
-                        if cached_avg is not None:
-                            avg_data, avg_time_vec = cached_avg
-                            log.debug(f"[EXPLORER-CACHE] Using cached average data for {chan_id}")
-                        else:
-                            # Load average data from channel and cache it
-                            avg_data = channel.get_averaged_data()
-                            avg_time_vec = channel.get_relative_averaged_time_vector()
-                            if avg_data is not None and avg_time_vec is not None:
-                                self._cache_average(chan_id, avg_data, avg_time_vec)
-                                log.debug(f"[EXPLORER-CACHE] Cached average data for {chan_id}")
-                        
-                        if avg_data is not None and avg_time_vec is not None:
-                            log.info(f"[EXPLORER-DATA] Plotting average trace for {chan_id}")
-                            log.info(f"[EXPLORER-DATA] Average - Time range: [{np.min(avg_time_vec):.6f}, {np.max(avg_time_vec):.6f}] ({len(avg_time_vec)} points)")
-                            log.info(f"[EXPLORER-DATA] Average - Data range: [{np.min(avg_data):.6f}, {np.max(avg_data):.6f}] ({len(avg_data)} points)")
-                            log.info(f"[EXPLORER-DATA] Average - Data stats: mean={np.mean(avg_data):.6f}, std={np.std(avg_data):.6f}")
-                            
-                            # Simple plotting approach matching analysis tabs
-                            item = plot_item.plot(avg_time_vec, avg_data, pen=average_pen)
-                            item.opts['autoDownsample'] = enable_downsampling
-                            item.opts['autoDownsampleThreshold'] = ds_threshold
-                            self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                            
-                            # Also add to selected_average_plot_items so pen updates work
-                            self.selected_average_plot_items[chan_id] = item
-                            
-                            channel_plotted = True
-                            log.info(f"[EXPLORER-DATA] Average trace plotted for {chan_id}: {len(avg_data)} points")
-                        else:
-                            log.warning(f"[EXPLORER-DATA] Missing average data for {chan_id}: avg_data={avg_data is not None}, avg_time_vec={avg_time_vec is not None}")
+                        log.warning(f"Could not re-apply grid during pen update: {e}")
 
-                    else:
-                        # --- Cycle Single Trial Mode ---
-                        idx = min(self.current_trial_index, channel.num_trials - 1) if channel.num_trials > 0 else -1
-                        if idx >= 0:
-                            # Try to get cached data first
-                            cached_result = self._get_cached_data(chan_id, idx)
-                            if cached_result is not None:
-                                data, time_vec = cached_result
-                                log.debug(f"[EXPLORER-CACHE] Using cached data for {chan_id}, trial {idx}")
-                            else:
-                                # Load data from channel and cache it
-                                data = channel.get_data(idx)
-                                time_vec = channel.get_relative_time_vector(idx)
-                                if data is not None and time_vec is not None:
-                                    self._cache_data(chan_id, idx, data, time_vec)
-                                    log.debug(f"[EXPLORER-CACHE] Cached data for {chan_id}, trial {idx}")
-                            
-                            if data is not None and time_vec is not None:
-                                # DETAILED DATA LOGGING for debugging Windows visibility issues
-                                log.info(f"[EXPLORER-DATA] Plotting trial {idx+1} for {chan_id}")
-                                log.info(f"[EXPLORER-DATA] Time range: [{np.min(time_vec):.6f}, {np.max(time_vec):.6f}] ({len(time_vec)} points)")
-                                log.info(f"[EXPLORER-DATA] Data range: [{np.min(data):.6f}, {np.max(data):.6f}] ({len(data)} points)")
-                                log.info(f"[EXPLORER-DATA] Data stats: mean={np.mean(data):.6f}, std={np.std(data):.6f}")
-                                
-                                # Simple plotting approach matching analysis tabs
-                                item = plot_item.plot(time_vec, data, pen=single_trial_pen)
-                                item.opts['autoDownsample'] = enable_downsampling
-                                item.opts['autoDownsampleThreshold'] = ds_threshold
-                                self.channel_plot_data_items.setdefault(chan_id, []).append(item)
-                                channel_plotted = True
-                                log.info(f"[EXPLORER-DATA] Single trial plotted for {chan_id}: {len(data)} points")
-                            else: 
-                                log.warning(f"[EXPLORER-DATA] Missing data or time_vec for {chan_id}, trial {idx+1}: data={data is not None}, time_vec={time_vec is not None}")
-                                text_item = pg.TextItem(f"Data Err\nTrial {idx+1}", color='r', anchor=(0.5, 0.5))
-                                plot_item.addItem(text_item)
-                        else: 
-                            text_item = pg.TextItem("No Trials", color='orange', anchor=(0.5, 0.5))
-                            plot_item.addItem(text_item)
-
-                    if not channel_plotted: 
-                        text_item = pg.TextItem("No Trials" if channel.num_trials==0 else "Plot Err", color='orange' if channel.num_trials==0 else 'red', anchor=(0.5,0.5))
-                        plot_item.addItem(text_item)
-                    
-                    # Final step: Ensure grid is visible after plotting
-                    try:
-                        plot_item.showGrid(x=True, y=True, alpha=0.3)
-                    except Exception:
-                        pass
-                    
-                    if channel_plotted: any_data_plotted = True
-                elif plot_item: plot_item.hide()
-
-            # --- Axis linking logic (Corrected) ---
-            last_visible_plot = visible_plots[-1] if visible_plots else None
-            for i, plot_item in enumerate(self.channel_plots.values()):
-                is_visible = plot_item in visible_plots; is_last = plot_item == last_visible_plot
-                plot_item.showAxis('bottom', show=is_last)
-                bottom_axis = plot_item.getAxis('bottom')
-                if is_last:
-                     if bottom_axis: bottom_axis.setLabel("Time", units='s')
-                elif bottom_axis and bottom_axis.labelText:
-                     bottom_axis.setLabel(None)
-
-                if is_visible:
-                    try:
-                        idx = visible_plots.index(plot_item)
-                        target = visible_plots[idx - 1].getViewBox() if idx > 0 else None
-                        vb = plot_item.getViewBox()
-                        if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) != target:
-                            plot_item.setXLink(target)
-                        elif vb and not hasattr(vb, 'linkedView'): # Safety
-                            plot_item.setXLink(target)
-                    except Exception as link_e:
-                         chan_id = getattr(plot_item.getViewBox(), '_synaptipy_chan_id', f'plot_{i}')
-                         log.warning(f"XLink Err {chan_id}: {link_e}")
-                         plot_item.setXLink(None)
-                else: # Unlink hidden plots
-                    vb = plot_item.getViewBox()
-                    if vb and hasattr(vb, 'linkedView') and vb.linkedView(0) is not None:
-                        plot_item.setXLink(None)
-            # --- End Axis linking ---
-
-            self._update_trial_label(); self._update_ui_state(); log.debug(f"Plot update done. Plotted: {any_data_plotted}")
-            
-            # Simplified debug summary
-            total_data_items = sum(len(plot_item.listDataItems()) for plot_item in self.channel_plots.values() if plot_item.isVisible())
-            log.info(f"[EXPLORER-PLOT] Plot update complete: {total_data_items} data items plotted across {len([p for p in self.channel_plots.values() if p.isVisible()])} visible channels")
         finally:
-            pass  # Simplified signal handling
+            # --- BATCH UPDATE END ---
+            # Resume visual updates and trigger a single, efficient repaint of all the
+            # changes that were made in memory.
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                self.graphics_layout_widget.setUpdatesEnabled(True)
+                self.graphics_layout_widget.update()
+                
+        log.info("[EXPLORER-PEN] Pen update complete.")
+
+    def _update_plot(self):
+        """
+        Clears and redraws plots based on the current recording AND plot mode.
+        """
+        if not self.current_recording:
+            log.warning("[_update_plot] Aborting: No recording loaded.")
+            return
+
+        log.info(f"[_update_plot] Starting plot update. Mode: {'CYCLE_SINGLE' if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else 'OVERLAY_AVG'}")
+
+        for plot_widget in self.channel_plots.values():
+            if plot_widget: plot_widget.clear()
+        self.channel_plot_data_items.clear()
+
+        # --- OPTIMIZATION: Import and get cached pens ONCE ---
+        from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+        
+        # Get the globally cached pens. This is extremely fast.
+        single_trial_pen = get_single_trial_pen()
+        average_pen = get_average_pen()
+        # --- END OPTIMIZATION ---
+
+        ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
+
+        for channel_id, channel in self.current_recording.channels.items():
+            plot_widget = self.channel_plots.get(channel_id)
+            if not plot_widget or not channel: continue
+
+            self.channel_plot_data_items[channel_id] = []
+
+            # --- FIX: Respect Plot Mode ---
+            if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
+                log.debug(f"[_update_plot] CYCLE_SINGLE mode for channel {channel_id}: Plotting trial {self.current_trial_index}.")
+                trial_idx = self.current_trial_index
+                if 0 <= trial_idx < channel.num_trials:
+                    trial_data, time_vector = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
+                    if time_vector is not None and trial_data is not None:
+                        # --- OPTIMIZATION: Use cached pen ---
+                        plot_item = plot_widget.plot(time_vector, trial_data, pen=single_trial_pen, name=f"trial_{trial_idx}")
+                        
+                        # PERFORMANCE: Optimized downsampling settings
+                        plot_item.setDownsampling(auto=ds_enabled, method='peak')
+                        plot_item.setClipToView(True)
+                        plot_item.opts['trial_index'] = trial_idx
+                        log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{trial_idx}'")
+                        self.channel_plot_data_items[channel_id].append(plot_item)
+            else: # OVERLAY_AVG mode
+                log.debug(f"[_update_plot] OVERLAY_AVG mode for channel {channel_id}: Plotting {channel.num_trials} trials and average.")
+                for i in range(channel.num_trials):
+                    trial_data, time_vector = channel.get_data(i), channel.get_relative_time_vector(i)
+                    if time_vector is None or trial_data is None: continue
+
+                    # --- OPTIMIZATION: Use cached pen ---
+                    plot_item = plot_widget.plot(time_vector, trial_data, pen=single_trial_pen, name=f"trial_{i}")
+
+                    # PERFORMANCE: Optimized downsampling settings
+                    plot_item.setDownsampling(auto=ds_enabled, method='peak')
+                    plot_item.setClipToView(True)
+                    plot_item.opts['trial_index'] = i
+                    log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{i}'")
+                    self.channel_plot_data_items[channel_id].append(plot_item)
+
+                avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
+                if avg_data is not None and avg_time is not None:
+
+                    # --- OPTIMIZATION: Use cached pen ---
+                    avg_item = plot_widget.plot(avg_time, avg_data, pen=average_pen, name="avg_trace")
+                    
+                    # PERFORMANCE: Optimized downsampling settings
+                    avg_item.setDownsampling(auto=ds_enabled, method='peak')
+                    avg_item.setClipToView(True)
+                    log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'avg_trace'")
+                    self.channel_plot_data_items[channel_id].append(avg_item)
+        log.info(f"[_update_plot] Plot update complete for {len(self.channel_plot_data_items)} channels.")
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
@@ -1779,58 +1645,122 @@ class ExplorerTab(QtWidgets.QWidget):
         except Exception as e: log.error(f"Error in _calculate_new_range: {e}"); return None
 
     def _on_x_zoom_changed(self, value: int):
-        log.info(f"[EXPLORER-ZOOM] X zoom changed to: {value}, manual_limits={self.manual_limits_enabled}, base_range={self.base_x_range}, updating={self._updating_viewranges}")
+        self._last_x_zoom_value = value
+        self._x_zoom_apply_timer.start()
+        log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
+
+    def _on_x_scrollbar_changed(self, value: int):
+        if not self._updating_scrollbars:
+            self._last_x_scroll_value = value
+            self._x_scroll_apply_timer.start()
+            log.debug(f"[_on_x_scrollbar_changed] Debouncing X scroll: {value}")
+
+    def _apply_debounced_x_zoom(self):
+        """Apply X zoom after debounce delay."""
+        value = self._last_x_zoom_value
+        log.debug(f"[_apply_debounced_x_zoom] Applying X zoom: {value}")
         if self.manual_limits_enabled or self.base_x_range is None or self._updating_viewranges: return
         new_x = self._calculate_new_range(self.base_x_range, value)
-        if new_x is None: 
-            log.warning(f"[EXPLORER-ZOOM] X zoom calculation returned None")
-            return
-        log.info(f"[EXPLORER-ZOOM] X zoom calculated new range: {new_x}")
+        if new_x is None: return
         plot = next((p for p in self.channel_plots.values() if p.isVisible()), None)
         if plot and plot.getViewBox():
             vb=plot.getViewBox(); self._updating_viewranges=True
-            try: 
-                log.info(f"[EXPLORER-ZOOM] X zoom applying setXRange: {new_x}")
+            try:
                 vb.setXRange(new_x[0], new_x[1], padding=0)
-            finally: self._updating_viewranges=False; self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_x)
+            finally:
+                 self._updating_viewranges=False
+                 # Update scrollbar immediately after applying zoom
+                 self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_x)
 
-    def _on_x_scrollbar_changed(self, value: int):
-        log.info(f"[EXPLORER-SCROLL] X scrollbar changed to: {value}, manual_limits={self.manual_limits_enabled}, base_range={self.base_x_range}, updating={self._updating_scrollbars}")
-        if self.manual_limits_enabled or self.base_x_range is None or self._updating_scrollbars: return
+    def _apply_debounced_x_scroll(self):
+        """Apply X scroll after debounce delay."""
+        value = self._last_x_scroll_value
+        log.debug(f"[_apply_debounced_x_scroll] Applying X scroll: {value}")
+        if self.manual_limits_enabled or self.base_x_range is None or self._updating_viewranges or self._updating_scrollbars: return
         plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
-        if not plot: 
-            log.warning(f"[EXPLORER-SCROLL] X scrollbar - no visible plot found")
-            return
+        if not plot: return
         vb=plot.getViewBox(); self._updating_viewranges=True
         try:
             cx = vb.viewRange()[0]; cs=max(abs(cx[1]-cx[0]), 1e-12)
             bs=max(abs(self.base_x_range[1]-self.base_x_range[0]), 1e-12)
-            sr=max(0, bs-cs); f=float(value)/max(1, self.x_scrollbar.maximum())
-            nm=self.base_x_range[0]+f*sr; nM=nm+cs # Corrected var
-            log.info(f"[EXPLORER-SCROLL] X scrollbar applying setXRange: [{nm}, {nM}]")
+            sr=max(0, bs-cs); f=float(value)/max(1, self.x_scrollbar.maximum()) if self.x_scrollbar.maximum() > 0 else 0.0
+            nm=self.base_x_range[0]+f*sr; nM=nm+cs
             vb.setXRange(nm, nM, padding=0)
-        except Exception as e: log.error(f"[EXPLORER-SCROLL] Error in _on_x_scrollbar_changed: {e}")
+        except Exception as e: log.error(f"Error in _apply_debounced_x_scroll: {e}")
         finally: self._updating_viewranges=False
 
+    def _apply_debounced_y_global_zoom(self):
+        """Apply global Y zoom after debounce delay."""
+        value = self._last_y_global_zoom_value
+        log.debug(f"[_apply_debounced_y_global_zoom] Applying Global Y zoom: {value}")
+        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
+
+        base_ref, new_ref = None, None
+        self._updating_viewranges=True
+        try:
+            for cid, plot_item in self.channel_plots.items():
+                if plot_item.isVisible() and plot_item.getViewBox():
+                    base = self.base_y_ranges.get(cid)
+                    if base is None: continue
+                    new_y = self._calculate_new_range(base, value)
+                    if new_y:
+                        plot_item.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
+                        # Capture first valid base/new range for scrollbar update
+                        if base_ref is None:
+                            base_ref, new_ref = base, new_y
+        except Exception as e: log.error(f"Error applying debounced global Y zoom: {e}")
+        finally:
+             self._updating_viewranges=False
+             # Update scrollbar based on the effect on the reference plot
+             if base_ref and new_ref:
+                 self._update_scrollbar_from_view(self.global_y_scrollbar, base_ref, new_ref)
+             else: # If no plots were updated (e.g., no base ranges), reset scrollbar
+                 self._reset_scrollbar(self.global_y_scrollbar)
+
+    def _apply_debounced_y_global_scroll(self):
+        """Apply global Y scroll after debounce delay."""
+        value = self._last_y_global_scroll_value
+        log.debug(f"[_apply_debounced_y_global_scroll] Applying Global Y scroll: {value}")
+        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges or self._updating_scrollbars: return
+
+        ref_plot = next((p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox()), None)
+        if not ref_plot: return
+        ref_vb = ref_plot.getViewBox()
+        ref_cid = getattr(ref_vb, '_synaptipy_chan_id', None)
+        ref_base_range = self.base_y_ranges.get(ref_cid)
+        if ref_base_range is None: return
+
+        self._updating_viewranges = True
+        try:
+            current_ref_y_range = ref_vb.viewRange()[1]
+            current_ref_span = max(abs(current_ref_y_range[1] - current_ref_y_range[0]), 1e-12)
+            base_ref_span = max(abs(ref_base_range[1] - ref_base_range[0]), 1e-12)
+            scrollable_range = max(0, base_ref_span - current_ref_span)
+            scroll_fraction = float(value) / max(1, self.global_y_scrollbar.maximum())
+            target_ref_min_y = ref_base_range[0] + scroll_fraction * scrollable_range
+            y_offset = target_ref_min_y - current_ref_y_range[0]
+
+            for cid, plot_item in self.channel_plots.items():
+                if plot_item.isVisible() and plot_item.getViewBox():
+                    vb = plot_item.getViewBox()
+                    current_plot_y_range = vb.viewRange()[1]
+                    new_min_y = current_plot_y_range[0] + y_offset
+                    new_max_y = current_plot_y_range[1] + y_offset
+                    vb.setYRange(new_min_y, new_max_y, padding=0)
+        except Exception as e: log.error(f"Error applying debounced global Y scroll: {e}", exc_info=True)
+        finally: self._updating_viewranges = False
+        # No need to update scrollbar here
+
     def _handle_vb_xrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
-        # Simple debouncing to prevent rapid scaling feedback on Windows
-        if not hasattr(self, '_last_x_range_change'):
-            self._last_x_range_change = 0
-        import time
-        now = time.time()
-        if now - self._last_x_range_change < 0.1:  # 100ms debounce
-            return
-        self._last_x_range_change = now
-        
-        # Skip complex processing that can cause feedback loops
         if self._updating_viewranges or self.base_x_range is None:
             return
-            
-        # Simple scrollbar update without extensive logging
-        try:
-            self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, new_range)
-        except Exception:
-            pass  # Ignore scrollbar update errors
+        self._last_x_range = new_range
+        self._x_range_update_timer.start()
+
+    def _perform_x_range_update(self):
+        if self._last_x_range is not None:
+            self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, self._last_x_range)
+            self._trigger_limit_field_update()
 
     @QtCore.Slot(int)
     def _on_y_lock_changed(self, state: int):
@@ -1933,8 +1863,9 @@ class ExplorerTab(QtWidgets.QWidget):
                 self.global_y_scrollbar.setEnabled(can_enable and controls_enabled and has_scrollable_range)
 
     def _on_global_y_zoom_changed(self, value: int):
-        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_viewranges: return
-        self._apply_global_y_zoom(value)
+        self._last_y_global_zoom_value = value
+        self._y_global_zoom_apply_timer.start()
+        log.debug(f"[_on_global_y_zoom_changed] Debouncing Global Y zoom: {value}")
 
     def _apply_global_y_zoom(self, value: int):
         if self.manual_limits_enabled: return
@@ -1955,8 +1886,10 @@ class ExplorerTab(QtWidgets.QWidget):
              else: self._reset_scrollbar(self.global_y_scrollbar)
 
     def _on_global_y_scrollbar_changed(self, value: int):
-        if self.manual_limits_enabled or not self.y_axes_locked or self._updating_scrollbars: return
-        self._apply_global_y_scroll(value)
+        if not self._updating_scrollbars:
+            self._last_y_global_scroll_value = value
+            self._y_global_scroll_apply_timer.start()
+            log.debug(f"[_on_global_y_scrollbar_changed] Debouncing Global Y scroll: {value}")
 
     def _apply_global_y_scroll(self, value: int):
         if self.manual_limits_enabled or not self.y_axes_locked: return # Added lock check here too
@@ -2011,7 +1944,39 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges = False
             # We don't need to update the scrollbar here, as it triggered this action
 
+    def _get_or_create_individual_y_zoom_timer(self, chan_id: str) -> QtCore.QTimer:
+        """Get or create a debounce timer for individual Y zoom."""
+        if chan_id not in self._individual_y_zoom_timers:
+            timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.setInterval(50)
+            timer.timeout.connect(lambda: self._apply_debounced_individual_y_zoom(chan_id))
+            self._individual_y_zoom_timers[chan_id] = timer
+        return self._individual_y_zoom_timers[chan_id]
+
+    def _get_or_create_individual_y_scroll_timer(self, chan_id: str) -> QtCore.QTimer:
+        """Get or create a debounce timer for individual Y scroll."""
+        if chan_id not in self._individual_y_scroll_timers:
+            timer = QtCore.QTimer()
+            timer.setSingleShot(True)
+            timer.setInterval(50)
+            timer.timeout.connect(lambda: self._apply_debounced_individual_y_scroll(chan_id))
+            self._individual_y_scroll_timers[chan_id] = timer
+        return self._individual_y_scroll_timers[chan_id]
+
     def _on_individual_y_zoom_changed(self, chan_id: str, value: int):
+        """Handle individual Y zoom slider change with debouncing."""
+        self._last_individual_y_zoom_values[chan_id] = value
+        timer = self._get_or_create_individual_y_zoom_timer(chan_id)
+        timer.start()
+        log.debug(f"[_on_individual_y_zoom_changed] Debouncing individual Y zoom for {chan_id}: {value}")
+
+    def _apply_debounced_individual_y_zoom(self, chan_id: str):
+        """Apply individual Y zoom after debounce delay."""
+        value = self._last_individual_y_zoom_values.get(chan_id)
+        if value is None: return
+        log.debug(f"[_apply_debounced_individual_y_zoom] Applying individual Y zoom for {chan_id}: {value}")
+        
         if self.manual_limits_enabled or self.y_axes_locked or self._updating_viewranges: return
         p=self.channel_plots.get(chan_id)
         b=self.base_y_ranges.get(chan_id)
@@ -2023,7 +1988,6 @@ class ExplorerTab(QtWidgets.QWidget):
         if new_y:
             # Store the slider value
             self.individual_y_slider_values[chan_id] = value
-            log.debug(f"Individual Y zoom for channel {chan_id}: value={value}, new range={new_y}")
             
             # Apply the zoom
             self._updating_viewranges=True
@@ -2037,7 +2001,20 @@ class ExplorerTab(QtWidgets.QWidget):
                 self._update_scrollbar_from_view(s, b, new_y)
 
     def _on_individual_y_scrollbar_changed(self, chan_id: str, value: int):
-        if self.manual_limits_enabled or self.y_axes_locked or self._updating_scrollbars: return
+        """Handle individual Y scrollbar change with debouncing."""
+        if not self._updating_scrollbars:
+            self._last_individual_y_scroll_values[chan_id] = value
+            timer = self._get_or_create_individual_y_scroll_timer(chan_id)
+            timer.start()
+            log.debug(f"[_on_individual_y_scrollbar_changed] Debouncing individual Y scroll for {chan_id}: {value}")
+
+    def _apply_debounced_individual_y_scroll(self, chan_id: str):
+        """Apply individual Y scroll after debounce delay."""
+        value = self._last_individual_y_scroll_values.get(chan_id)
+        if value is None: return
+        log.debug(f"[_apply_debounced_individual_y_scroll] Applying individual Y scroll for {chan_id}: {value}")
+        
+        if self.manual_limits_enabled or self.y_axes_locked or self._updating_scrollbars or self._updating_viewranges: return
         p=self.channel_plots.get(chan_id)
         b=self.base_y_ranges.get(chan_id)
         s=self.individual_y_scrollbars.get(chan_id)
@@ -2071,29 +2048,27 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges=False
 
     def _handle_vb_yrange_changed(self, vb: pg.ViewBox, new_range: Tuple[float, float]):
-        # Simple debouncing to prevent rapid scaling feedback on Windows
-        cid = getattr(vb,'_synaptipy_chan_id',None)
-        if cid is None:
+        cid = getattr(vb, '_synaptipy_chan_id', None)
+        if cid is None or self._updating_viewranges or self.base_y_ranges.get(cid) is None:
             return
-            
-        if not hasattr(self, '_last_y_range_changes'):
-            self._last_y_range_changes = {}
-        if cid not in self._last_y_range_changes:
-            self._last_y_range_changes[cid] = 0
-            
-        import time
-        now = time.time()
-        if now - self._last_y_range_changes[cid] < 0.1:  # 100ms debounce per channel
-            return
-        self._last_y_range_changes[cid] = now
-        
-        # Skip complex processing that can cause feedback loops
-        if self._updating_viewranges or self.base_y_ranges.get(cid) is None:
-            return
-            
-        # Simple scrollbar update without extensive logging  
-        # Skip complex scrollbar updates that cause feedback loops on Windows
-        pass
+        self._last_y_vbs[cid] = (vb, new_range)
+        self._y_range_update_timer.start()
+
+    def _perform_y_range_update(self):
+        if self.y_axes_locked:
+            if self._last_y_vbs:
+                first_cid = next(iter(self._last_y_vbs))
+                _, new_range = self._last_y_vbs[first_cid]
+                base_range = self.base_y_ranges.get(first_cid)
+                self._update_scrollbar_from_view(self.global_y_scrollbar, base_range, new_range)
+        else:
+            for cid, (vb, new_range) in self._last_y_vbs.items():
+                scrollbar = self.individual_y_scrollbars.get(cid)
+                base_range = self.base_y_ranges.get(cid)
+                self._update_scrollbar_from_view(scrollbar, base_range, new_range)
+
+        self._last_y_vbs.clear()
+        self._trigger_limit_field_update()
 
     def _update_scrollbar_from_view(self, scrollbar: QtWidgets.QScrollBar, base_range: Optional[Tuple[float,float]], view_range: Optional[Tuple[float, float]]):
         if self._updating_scrollbars or scrollbar is None: return
@@ -2113,30 +2088,105 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _reset_view(self):
         log.info(f"[EXPLORER-RESET] Reset view called - has_recording={self.current_recording is not None}, manual_limits={self.manual_limits_enabled}")
-        if not self.current_recording: 
+        if not self.current_recording:
             log.info(f"[EXPLORER-RESET] No recording - calling reset UI and state")
             self._reset_ui_and_state_for_new_file(); self._update_ui_state(); return
-        if self.manual_limits_enabled: 
+        if self.manual_limits_enabled:
             log.info(f"[EXPLORER-RESET] Manual limits enabled - applying manual limits")
             self._apply_manual_limits(); self._update_ui_state(); return
-        log.info(f"[EXPLORER-RESET] Auto-ranging plots...")
+
+        log.info(f"[EXPLORER-RESET] Scheduling manual range setting...")
         vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
         vis_map={k:v for k,v in vis_map.items() if k is not None}
-        if not vis_map: 
-            log.warning(f"[EXPLORER-RESET] No visible plots found")
+        if not vis_map:
+            log.warning(f"[EXPLORER-RESET] No visible plots found for range setting")
             self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
-        first_cid, first_plot = next(iter(vis_map.items()))
-        log.info(f"[EXPLORER-RESET] Found {len(vis_map)} visible plots, first: {first_cid}")
-        
-        # Standard auto-ranging for all platforms (theme conflict fixed)
-        log.info(f"[EXPLORER-RESET] Calling enableAutoRange on X for {first_cid}")
-        first_plot.getViewBox().enableAutoRange(axis=pg.ViewBox.XAxis)
-        for plot_id, plot in vis_map.items():
-            log.info(f"[EXPLORER-RESET] enableAutoRange Y for {plot_id}")
-            plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
-        
-        # Schedule base range capture after auto-range  
-        QtCore.QTimer.singleShot(50, self._capture_base_ranges_after_reset)
+
+        # --- Define function for deferred manual range calculation and application ---
+        def do_deferred_manual_range_and_capture():
+            log.info(f"[EXPLORER-RESET] Performing deferred manual range setting...")
+            try:
+                # --- Manually Calculate Bounds ---
+                x_min, x_max = None, None
+                y_mins, y_maxs = {}, {} # Store per channel_id
+
+                for chan_id, plot_widget in vis_map.items():
+                    channel = self.current_recording.channels.get(chan_id)
+                    if not channel: continue
+
+                    chan_x_min, chan_x_max, chan_y_min, chan_y_max = None, None, None, None
+                    data_sources = [] # Tuples of (time_vec, data_vec)
+
+                    if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
+                        trial_idx = self.current_trial_index
+                        if 0 <= trial_idx < channel.num_trials:
+                           data, time_vec = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
+                           if time_vec is not None and data is not None: data_sources.append((time_vec, data))
+                    else: # OVERLAY_AVG
+                        for i in range(channel.num_trials):
+                             data, time_vec = channel.get_data(i), channel.get_relative_time_vector(i)
+                             if time_vec is not None and data is not None: data_sources.append((time_vec, data))
+                        avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
+                        if avg_data is not None and avg_time is not None: data_sources.append((avg_time, avg_data))
+
+                    for time_vec, data in data_sources:
+                        if time_vec is not None and len(time_vec) > 0:
+                            t_min, t_max = np.min(time_vec), np.max(time_vec)
+                            chan_x_min = min(chan_x_min, t_min) if chan_x_min is not None else t_min
+                            chan_x_max = max(chan_x_max, t_max) if chan_x_max is not None else t_max
+                        if data is not None and len(data) > 0:
+                            valid_data = data[np.isfinite(data)]
+                            if len(valid_data) > 0:
+                                d_min, d_max = np.min(valid_data), np.max(valid_data)
+                                chan_y_min = min(chan_y_min, d_min) if chan_y_min is not None else d_min
+                                chan_y_max = max(chan_y_max, d_max) if chan_y_max is not None else d_max
+
+                    if chan_x_min is not None: x_min = min(x_min, chan_x_min) if x_min is not None else chan_x_min
+                    if chan_x_max is not None: x_max = max(x_max, chan_x_max) if x_max is not None else chan_x_max
+                    if chan_y_min is not None: y_mins[chan_id] = chan_y_min
+                    if chan_y_max is not None: y_maxs[chan_id] = chan_y_max
+                log.info(f"[EXPLORER-RESET] Manual bounds: X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
+                # --- End Manual Calculation ---
+
+                # --- Apply Manually Calculated Ranges Directly ---
+                final_x_range = None
+                if x_min is not None and x_max is not None:
+                    padding_x = (x_max - x_min) * 0.02 if x_min < x_max else 0.1
+                    final_x_range = [x_min - padding_x, x_max + padding_x]
+
+                if final_x_range:
+                    log.info(f"[EXPLORER-RESET] Setting manual X range: {final_x_range}")
+                    first_plot = next(iter(vis_map.values()))
+                    first_plot.getViewBox().setXRange(*final_x_range, padding=0)
+
+                for chan_id, plot_widget in vis_map.items():
+                    vb = plot_widget.getViewBox()
+                    y_min, y_max = y_mins.get(chan_id), y_maxs.get(chan_id)
+                    final_y_range = None
+                    if y_min is not None and y_max is not None:
+                         padding_y = (y_max - y_min) * 0.02 if y_min < y_max else 0.1
+                         final_y_range = [y_min - padding_y, y_max + padding_y]
+
+                    if final_y_range:
+                         log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: {final_y_range}")
+                         vb.setYRange(*final_y_range, padding=0)
+                    else:
+                         log.warning(f"[EXPLORER-RESET] Manual Y range calculation failed/invalid for {chan_id}, skipping setYRange.")
+                log.info("[EXPLORER-RESET] Finished applying manual ranges.")
+                # --- End Apply Ranges ---
+
+            except Exception as e:
+                log.error(f"[EXPLORER-RESET] Error during deferred manual range setting: {e}", exc_info=True)
+            finally:
+                # Schedule capture immediately after setRange attempts
+                QtCore.QTimer.singleShot(0, self._capture_base_ranges_after_reset)
+                log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set.")
+
+        # Schedule the manual range function itself
+        QtCore.QTimer.singleShot(0, do_deferred_manual_range_and_capture)
+        log.info("[EXPLORER-RESET] Scheduled manual range operation via QTimer(0).")
+
+        # Reset sliders etc. immediately
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
@@ -2230,7 +2280,19 @@ class ExplorerTab(QtWidgets.QWidget):
             log.info(f"[EXPLORER-RESET-SINGLE] Calling enableAutoRange Y for {chan_id}")
             plot.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis)
             
-        QtCore.QTimer.singleShot(50, lambda: self._capture_single_base_range_after_reset(chan_id))
+        # Capture single base range when the viewbox finishes autoranging
+        vb_single = plot.getViewBox()
+        def _on_single_range_changed(*_):
+            try:
+                vb_single.sigRangeChanged.disconnect(_on_single_range_changed)
+            except Exception:
+                pass
+            self._capture_single_base_range_after_reset(chan_id)
+        try:
+            vb_single.sigRangeChanged.disconnect(_on_single_range_changed)
+        except Exception:
+            pass
+        vb_single.sigRangeChanged.connect(_on_single_range_changed)
 
     def _capture_single_base_range_after_reset(self, chan_id: str):
         plot=self.channel_plots.get(chan_id)
@@ -2380,6 +2442,8 @@ class ExplorerTab(QtWidgets.QWidget):
                     try:
                         avg_d=np.mean(np.array(valid_d), axis=0)
                         item=p.plot(ref_t, avg_d, pen=self.SELECTED_AVG_PEN)
+                        # Enable automatic downsampling for massive performance gain
+                        item.setDownsampling(auto=True, ds='auto')
                         # Set selected data z-order
                         if hasattr(item, 'setZValue'):
                             item.setZValue(5)
@@ -2985,3 +3049,98 @@ class ExplorerTab(QtWidgets.QWidget):
                 "Save Error", 
                 f"Failed to save plot:\n{str(e)}"
             )
+
+    def update_plot_pens(self):
+        """
+        Applies updated plot customizations by selectively replotting data items
+        while preserving view ranges (zoom/pan). This is fast but the subsequent
+        _reset_view might be slow if complex styles were chosen.
+        """
+        log.info("[PEN-UPDATE] Starting selective replotting to apply new styles.")
+        if not self.current_recording or not self.channel_plots:
+            log.info("[PEN-UPDATE] No recording or plots to update.")
+            return
+
+        if self.graphics_layout_widget:
+            self.graphics_layout_widget.setUpdatesEnabled(False)
+
+        new_items_per_plot: Dict[pg.PlotItem, List[pg.PlotDataItem]] = {}
+
+        try:
+            from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+            new_avg_pen = get_average_pen()
+            new_trial_pen = get_single_trial_pen()
+            ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
+
+            for channel_id, plot_widget in self.channel_plots.items():
+                if not plot_widget or not plot_widget.isVisible():
+                    if channel_id not in self.channel_plot_data_items: self.channel_plot_data_items[channel_id] = [] # Ensure key exists
+                    continue
+
+                items_to_remove = []
+                data_to_replot = [] # (x_data, y_data, is_average, name, opts)
+
+                for item in plot_widget.items:
+                    if isinstance(item, pg.PlotDataItem):
+                        items_to_remove.append(item)
+                        try:
+                            x_data, y_data = item.getData()
+                            if x_data is not None and y_data is not None:
+                                is_average = 'avg' in item.opts.get('name', '').lower()
+                                name = item.opts.get('name', '')
+                                opts = item.opts.copy()
+                                data_to_replot.append((x_data, y_data, is_average, name, opts))
+                        except Exception as e:
+                            log.warning(f"[PEN-UPDATE] Error getting data from item {item.opts.get('name', '')}: {e}")
+
+                log.debug(f"[PEN-UPDATE] Removing {len(items_to_remove)} old items from channel {channel_id}")
+                for item in items_to_remove:
+                    try:
+                        plot_widget.removeItem(item)
+                    except Exception as e:
+                        log.warning(f"[PEN-UPDATE] Error removing item: {e}")
+
+                self.channel_plot_data_items[channel_id] = []
+                new_items_for_this_plot = []
+
+                log.debug(f"[PEN-UPDATE] Preparing {len(data_to_replot)} new items for channel {channel_id}.")
+                for x_data, y_data, is_average, name, opts in data_to_replot:
+                    pen = new_avg_pen if is_average else new_trial_pen
+                    try:
+                        new_item = pg.PlotDataItem(x_data, y_data, pen=pen, name=name)
+                        new_item.setDownsampling(auto=ds_enabled, method='peak')
+                        new_item.setClipToView(True)
+                        if 'trial_index' in opts:
+                             new_item.opts['trial_index'] = opts['trial_index']
+                        new_items_for_this_plot.append(new_item)
+                        self.channel_plot_data_items[channel_id].append(new_item) # Keep track
+                    except Exception as e:
+                         log.error(f"[PEN-UPDATE] Error creating new item {name} for channel {channel_id}: {e}")
+                new_items_per_plot[plot_widget] = new_items_for_this_plot
+
+            log.info(f"[PEN-UPDATE] Adding newly created items to plots...")
+            for plot_widget, new_items in new_items_per_plot.items():
+                for new_item in new_items:
+                    try:
+                        plot_widget.addItem(new_item)
+                    except Exception as e:
+                        log.error(f"[PEN-UPDATE] Error adding new item back to plot {plot_widget}: {e}")
+            log.info(f"[PEN-UPDATE] Finished adding new items.")
+
+            # CRITICAL: Trigger a reset view AFTER replotting completes
+            # This ensures view ranges are calculated based on the *new* items.
+            log.info("[PEN-UPDATE] Scheduling reset view after selective replotting.")
+            QtCore.QTimer.singleShot(0, self._reset_view) # Use the existing (now faster) reset logic
+
+        except Exception as e:
+            log.error(f"[PEN-UPDATE] Critical error during selective replot: {e}", exc_info=True)
+            # Ensure reset view is still attempted even if replot fails
+            QtCore.QTimer.singleShot(0, self._reset_view)
+        finally:
+            if self.graphics_layout_widget:
+                self.graphics_layout_widget.setUpdatesEnabled(True)
+                # Optional: Force repaint immediately after adding items
+                # QtWidgets.QApplication.processEvents()
+                # self.graphics_layout_widget.update()
+
+        log.info(f"[PEN-UPDATE] Selective replotting complete.")

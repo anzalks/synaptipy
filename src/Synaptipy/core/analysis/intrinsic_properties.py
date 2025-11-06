@@ -6,6 +6,7 @@ Analysis functions for intrinsic membrane properties.
 import logging
 import numpy as np
 from typing import Optional, Tuple
+from scipy.optimize import curve_fit
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +64,10 @@ def calculate_rin(
         log.exception(f"Unexpected error during Rin calculation: {e}")
         return None
 
+def _exp_growth(t, V_ss, V_0, tau):
+    """Exponential growth function for fitting."""
+    return V_ss + (V_0 - V_ss) * np.exp(-t / tau)
+
 # Placeholder for Tau calculation
 def calculate_tau(
     voltage_trace: np.ndarray,
@@ -74,12 +79,38 @@ def calculate_tau(
     Placeholder for Membrane Time Constant (Tau) calculation.
     Typically involves fitting an exponential to the rising phase of the voltage response.
     """
-    log.warning("Tau calculation not yet implemented.")
-    # Implementation would involve:
-    # 1. Selecting the relevant portion of the trace after stim_start_time.
-    # 2. Fitting an exponential function (e.g., single or double).
-    # 3. Extracting the time constant(s) from the fit.
-    return None
+    try:
+        fit_start_time = stim_start_time
+        fit_end_time = stim_start_time + fit_duration
+
+        fit_mask = (time_vector >= fit_start_time) & (time_vector < fit_end_time)
+        t_fit = time_vector[fit_mask] - fit_start_time # Start time at 0 for fit
+        V_fit = voltage_trace[fit_mask]
+
+        if len(t_fit) < 3:
+            log.warning("Not enough data points to fit for Tau.")
+            return None
+        
+        V_0 = V_fit[0]
+        V_ss_guess = np.mean(V_fit[-5:]) # Guess steady state from last few points
+
+        # bounds (V_ss, V_0, tau)
+        lower_bounds = [-np.inf, -np.inf, 0.0001] # tau > 0
+        upper_bounds = [np.inf, np.inf, 1.0]     # tau < 1s
+
+        p0 = [V_ss_guess, V_0, 0.01] # Initial guess for tau = 10ms
+
+        popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds))
+        
+        tau_ms = popt[2] * 1000 # convert tau to ms
+        log.info(f"Calculated Tau: {tau_ms:.3f} ms")
+        return tau_ms
+    except RuntimeError:
+        log.warning("Optimal parameters not found for Tau calculation.")
+        return None
+    except Exception as e:
+        log.exception(f"Unexpected error during Tau calculation: {e}")
+        return None
 
 
 # Placeholder for Sag potential calculation
@@ -95,7 +126,31 @@ def calculate_sag_ratio(
     Sag = (V_peak - V_baseline) / (V_steady_state - V_baseline) or similar definitions.
     Requires a hyperpolarizing current step.
     """
-    log.warning("Sag calculation not yet implemented.")
-    # Implementation would involve finding V_peak and V_steady_state within their windows
-    # relative to V_baseline.
-    return None 
+    try:
+        # Baseline
+        baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
+        if not np.any(baseline_mask): return None
+        v_baseline = np.mean(voltage_trace[baseline_mask])
+
+        # Peak hyperpolarization
+        peak_mask = (time_vector >= response_peak_window[0]) & (time_vector < response_peak_window[1])
+        if not np.any(peak_mask): return None
+        v_peak = np.min(voltage_trace[peak_mask])
+
+        # Steady-state hyperpolarization
+        ss_mask = (time_vector >= response_steady_state_window[0]) & (time_vector < response_steady_state_window[1])
+        if not np.any(ss_mask): return None
+        v_ss = np.mean(voltage_trace[ss_mask])
+
+        delta_v_peak = v_peak - v_baseline
+        delta_v_ss = v_ss - v_baseline
+        
+        if delta_v_ss == 0:
+            return None # Avoid division by zero
+
+        sag_ratio = delta_v_peak / delta_v_ss
+        log.info(f"Calculated Sag Ratio: {sag_ratio:.3f}")
+        return sag_ratio
+    except Exception as e:
+        log.exception(f"Unexpected error during Sag calculation: {e}")
+        return None 

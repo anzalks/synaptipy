@@ -43,15 +43,15 @@ class TestPlotCustomizationManager:
             
             assert manager.defaults['average']['color'] == '#000000'  # Black hex
             assert manager.defaults['average']['width'] == 2
-            assert manager.defaults['average']['transparency'] == 100
+            assert manager.defaults['average']['opacity'] == 100
             
             assert manager.defaults['single_trial']['color'] == '#377eb8'  # Matplotlib blue hex
             assert manager.defaults['single_trial']['width'] == 1
-            assert manager.defaults['single_trial']['transparency'] == 39  # 100/255 * 100
+            assert manager.defaults['single_trial']['opacity'] == 39  # Converted from TRIAL_ALPHA (100/255*100)
             
             assert manager.defaults['grid']['color'] == '#808080'  # Gray hex
             assert manager.defaults['grid']['width'] == 1
-            assert manager.defaults['grid']['transparency'] == 30
+            assert manager.defaults['grid']['opacity'] == 70  # Default 70% opacity
     
     def test_update_preference(self):
         """Test updating preferences."""

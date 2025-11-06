@@ -309,6 +309,14 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # Set callback for range changes
         self.zoom_sync.on_range_changed = self._on_plot_range_changed
         
+        # Apply system theme colors to the selection rectangle
+        try:
+            from Synaptipy.shared.zoom_theme import apply_theme_with_custom_selection
+            # Apply custom selection rectangle with theme
+            apply_theme_with_custom_selection(self.plot_widget.getViewBox())
+        except Exception as e:
+            log.debug(f"Failed to apply theme to plot widget: {e}")
+        
         log.debug(f"Zoom sync manager initialized for {self.__class__.__name__} (reset functionality only)")
         
     def setup_zoom_controls(self, **kwargs):

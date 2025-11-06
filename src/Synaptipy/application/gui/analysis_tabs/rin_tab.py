@@ -15,7 +15,7 @@ from .base import BaseAnalysisTab
 # Use absolute paths for core components
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-# from Synaptipy.core.analysis.intrinsic_properties import calculate_rin # Or define below
+from Synaptipy.core.analysis import intrinsic_properties as ip
 from Synaptipy.shared.styling import (
     style_button, 
     style_label, 
@@ -148,6 +148,12 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.current_plot_item: Optional[pg.PlotDataItem] = None # Keep for now, might plot command voltage here later
         # Run Button (Manual Mode)
         self.run_button: Optional[QtWidgets.QPushButton] = None
+        # Other properties
+        self.tau_button: Optional[QtWidgets.QPushButton] = None
+        self.sag_button: Optional[QtWidgets.QPushButton] = None
+        self.tau_result_label: Optional[QtWidgets.QLabel] = None
+        self.sag_result_label: Optional[QtWidgets.QLabel] = None
+
         # Store currently plotted data for analysis
         self._current_plot_data: Optional[Dict[str, Any]] = None # Generalized name
         # Store last calculated result
@@ -161,7 +167,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         self._on_mode_changed() # Set initial UI state
 
     def get_display_name(self) -> str:
-        return "Resistance/Conductance" # Updated name
+        return "Intrinsic Properties" # Updated name
 
     def _setup_ui(self):
         """Set up the UI elements for the Rin/G Analysis tab (Generalized)."""
@@ -324,6 +330,16 @@ class RinAnalysisTab(BaseAnalysisTab):
         style_info_label(self.info_label)
         analysis_params_layout.addWidget(self.info_label)
 
+        # Other properties buttons
+        other_props_group = QtWidgets.QGroupBox("Other Properties")
+        other_props_layout = QtWidgets.QHBoxLayout(other_props_group)
+        self.tau_button = QtWidgets.QPushButton("Calculate Tau")
+        self.sag_button = QtWidgets.QPushButton("Calculate Sag Ratio")
+        other_props_layout.addWidget(self.tau_button)
+        other_props_layout.addWidget(self.sag_button)
+        analysis_params_layout.addWidget(other_props_group)
+
+
         analysis_params_layout.addStretch(1)
         top_controls_layout.addWidget(self.analysis_params_group)
 
@@ -351,7 +367,13 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.delta_i_label = QtWidgets.QLabel("Current Change (ΔI): --")
         self.delta_i_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         results_layout.addWidget(self.delta_i_label)
-        
+
+        # Other properties
+        self.tau_result_label = QtWidgets.QLabel("Tau: --")
+        results_layout.addWidget(self.tau_result_label)
+        self.sag_result_label = QtWidgets.QLabel("Sag Ratio: --")
+        results_layout.addWidget(self.sag_result_label)
+
         self.status_label = QtWidgets.QLabel("Status: Idle")
         self.status_label.setWordWrap(True)
         results_layout.addWidget(self.status_label)
@@ -433,6 +455,10 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Connect Run button
         if self.run_button: 
             self.run_button.clicked.connect(self._run_analysis)
+
+        # Connect other properties buttons
+        if self.tau_button: self.tau_button.clicked.connect(self._calculate_tau)
+        if self.sag_button: self.sag_button.clicked.connect(self._calculate_sag_ratio)
 
         # Ensure plot regions update triggers analysis in interactive mode
         if self.baseline_region: self.baseline_region.sigRegionChanged.connect(self._trigger_analysis_if_interactive)
@@ -709,6 +735,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         if self.rin_result_label: self.rin_result_label.setText("Resistance (Rin) / Conductance (G): --")
         if self.delta_v_label: self.delta_v_label.setText("Voltage Change (ΔV): --") 
         if self.delta_i_label: self.delta_i_label.setText("Current Change (ΔI): --")
+        if self.tau_result_label: self.tau_result_label.setText("Tau: --")
+        if self.sag_result_label: self.sag_result_label.setText("Sag Ratio: --")
         if self.status_label: self.status_label.setText("Status: Idle")
         # Hide lines
         if self.baseline_line: self.baseline_line.setVisible(False)
@@ -1251,6 +1279,41 @@ class RinAnalysisTab(BaseAnalysisTab):
         else:
             log.error("Could not find parent with add_saved_result method")
             self.status_label.setText("Status: Error - could not find save handler")
+
+    @QtCore.Slot()
+    def _calculate_tau(self):
+        if not self._current_plot_data: return
+        time_vec = self._current_plot_data["time_vec"]
+        data_vec = self._current_plot_data["data_vec"]
+        
+        # Use response window for stim start and duration
+        response_window = self.response_region.getRegion()
+        stim_start = response_window[0]
+        fit_duration = response_window[1] - stim_start
+
+        tau = ip.calculate_tau(data_vec, time_vec, stim_start, fit_duration)
+        if tau is not None:
+            self.tau_result_label.setText(f"Tau: {tau:.3f} ms")
+        else:
+            self.tau_result_label.setText("Tau: Failed")
+
+    @QtCore.Slot()
+    def _calculate_sag_ratio(self):
+        if not self._current_plot_data: return
+        time_vec = self._current_plot_data["time_vec"]
+        data_vec = self._current_plot_data["data_vec"]
+
+        baseline_window = self.baseline_region.getRegion()
+        response_window = self.response_region.getRegion()
+        # For sag, peak window is typically early in the response
+        peak_window = (response_window[0], response_window[0] + 0.1 * (response_window[1] - response_window[0]))
+
+        sag = ip.calculate_sag_ratio(data_vec, time_vec, baseline_window, peak_window, response_window)
+        if sag is not None:
+            self.sag_result_label.setText(f"Sag Ratio: {sag:.3f}")
+        else:
+            self.sag_result_label.setText("Sag Ratio: Failed")
+
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
 ANALYSIS_TAB_CLASS = RinAnalysisTab 
