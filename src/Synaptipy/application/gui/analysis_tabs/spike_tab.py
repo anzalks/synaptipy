@@ -126,8 +126,8 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         results_layout = QtWidgets.QVBoxLayout(self.results_group)
         self.results_textedit = QtWidgets.QTextEdit()
         self.results_textedit.setReadOnly(True)
-        self.results_textedit.setFixedHeight(80) # Make it smaller
-        self.results_textedit.setPlaceholderText("Spike counts and rates will appear here...")
+        self.results_textedit.setFixedHeight(150) # Make it larger for more features
+        self.results_textedit.setPlaceholderText("Spike counts, rates, and features will appear here...")
         results_layout.addWidget(self.results_textedit)
         self._setup_save_button(results_layout) # Add save button here
         results_layout.addStretch(1)
@@ -430,9 +430,32 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                 avg_rate = num_spikes / duration if duration > 0 else 0
                 results_str += f"Number of Spikes: {num_spikes}\n"
                 results_str += f"Average Firing Rate: {avg_rate:.2f} Hz\n"
+                
+                # --- NEW: Calculate and display spike features ---
+                features_list = spike_analysis.calculate_spike_features(voltage, time, spike_indices)
+                if features_list:
+                    # Calculate mean and SD for each feature
+                    amplitudes = [f['amplitude'] for f in features_list if not np.isnan(f['amplitude'])]
+                    half_widths = [f['half_width'] for f in features_list if not np.isnan(f['half_width'])]
+                    ahp_depths = [f['ahp_depth'] for f in features_list if not np.isnan(f['ahp_depth'])]
+                    
+                    results_str += "\n--- Spike Features (Mean ± SD) ---\n"
+                    if amplitudes:
+                        results_str += f"Amplitude: {np.mean(amplitudes):.2f} ± {np.std(amplitudes):.2f} {units}\n"
+                    if half_widths:
+                        results_str += f"Half-width: {np.mean(half_widths):.3f} ± {np.std(half_widths):.3f} ms\n"
+                    if ahp_depths:
+                        results_str += f"AHP Depth: {np.mean(ahp_depths):.2f} ± {np.std(ahp_depths):.2f} {units}\n"
+                
+                isis = spike_analysis.calculate_isi(spike_times)
+                if isis.size > 0:
+                    results_str += f"Mean ISI: {np.mean(isis)*1000:.2f} ± {np.std(isis)*1000:.2f} ms\n"
+
+
                 # Store results for saving and plotting
                 self._current_plot_data['spike_indices'] = spike_indices
                 self._current_plot_data['spike_times'] = spike_times
+                self._current_plot_data['spike_features'] = features_list
                 
                 # 5. Update Plot Markers
                 # Plot markers at the threshold crossing time, using threshold as Y
@@ -448,6 +471,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                 results_str += "Number of Spikes: 0\n"
                 self._current_plot_data['spike_indices'] = np.array([])
                 self._current_plot_data['spike_times'] = np.array([])
+                self._current_plot_data['spike_features'] = []
             
             run_successful = True
             
@@ -478,9 +502,10 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         spike_times = self._current_plot_data.get('spike_times')
         spike_indices = self._current_plot_data.get('spike_indices')
         voltage = self._current_plot_data.get('voltage') # Needed for peak values
+        features = self._current_plot_data.get('spike_features')
         
         # Check if spike_times is valid (e.g., a non-empty numpy array)
-        if spike_times is None or not isinstance(spike_times, np.ndarray) or spike_times.size == 0:
+        if spike_times is None or not isinstance(spike_times, np.ndarray):
              log.debug(f"_get_specific_result_data (Spike): spike_times is invalid or empty ({type(spike_times)}).")
              # Allow saving even if 0 spikes were detected, just need parameters
              # return None 
@@ -530,6 +555,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             'average_firing_rate_hz': avg_rate,
             'spike_times_s': spike_times.tolist() if spike_times is not None else [],
             'spike_peak_values': spike_peak_values, # Add peak values
+            'spike_features': features,
             # Data Source Info (for base class)
             'channel_id': channel_id,
             'channel_name': channel_name,
