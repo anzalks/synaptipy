@@ -1228,8 +1228,9 @@ class RinAnalysisTab(BaseAnalysisTab):
             return None
         
         # Get data vectors (support both formats)
-        time_vec = data.get("time") or data.get("time_vec")
-        data_vec = data.get("data") or data.get("data_vec")
+        time_vec = data.get("time") if data.get("time") is not None else data.get("time_vec")
+
+        data_vec = data.get("data") if data.get("data") is not None else data.get("data_vec")   
         
         if time_vec is None or data_vec is None:
             log.warning("_execute_core_analysis: Missing time or data vectors")

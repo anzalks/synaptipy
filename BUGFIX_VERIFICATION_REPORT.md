@@ -8,7 +8,7 @@
 
 ## Summary
 
-All six bugs have been successfully identified, fixed, and verified through automated testing. The fixes ensure the Phase 1-3 refactoring infrastructure is properly implemented in `BaseAnalysisTab` and all subclasses without any runtime errors, duplicate code, incorrect attribute references, or incorrect API method calls.
+All nine bugs have been successfully identified, fixed, and verified through automated testing and syntax checking. The fixes ensure the Phase 1-3 refactoring infrastructure is properly implemented in `BaseAnalysisTab` and all subclasses without any runtime errors, duplicate code, incorrect attribute references, incorrect API method calls, or method name mismatches.
 
 ---
 
@@ -297,24 +297,113 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data PASSED [100
 2. **`src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`**
    - Fixed attribute names in signal connections (Bug 3 fix)
    - Fixed attribute reference in `_get_specific_result_data` (Bug 5 fix)
+   - Fixed method name check in `_gather_analysis_parameters` (Bug 7 fix)
+   - Fixed method name check in `_execute_core_analysis` (Bug 8 fix)
 
 3. **`src/Synaptipy/application/gui/analysis_tabs/spike_tab.py`**
    - Fixed attribute reference in `_get_specific_result_data` (Bug 6 fix)
 
 4. **`src/Synaptipy/application/gui/analysis_tabs/rmp_tab.py`**
    - Fixed indentation errors in `_on_data_plotted` method
+   - Fixed numpy array boolean ambiguity in `_execute_core_analysis` (Bug 9 fix)
+
+---
+
+## Bug 7: Incorrect Method Name Check in `_gather_analysis_parameters`
+
+### Description
+The `_gather_analysis_parameters` method in `EventDetectionTab` checks for the wrong method name string. Line 132 adds "Baseline + Peak + Kinetics" to the UI combobox, but line 767 checks for "Baseline + Peak" (missing "+ Kinetics"). This causes the condition to never match, resulting in incomplete parameters being returned when users select this detection method.
+
+### Location
+- File: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- Method: `_gather_analysis_parameters` (line 767)
+- UI Definition: `_setup_ui` (line 132)
+
+### Fix Applied
+Corrected the method name check to match the UI combobox option:
+
+```python
+# Before (line 767):
+elif selected_method == "Baseline + Peak":
+
+# After:
+elif selected_method == "Baseline + Peak + Kinetics":
+```
+
+### Verification
+- Method name check now matches the UI combobox option defined at line 132
+- Parameters will be gathered correctly when "Baseline + Peak + Kinetics" is selected
+- Analysis execution will proceed with all required parameters
+
+---
+
+## Bug 8: Incorrect Method Name Check in `_execute_core_analysis`
+
+### Description
+The `_execute_core_analysis` method in `EventDetectionTab` checks for the wrong method name string. Line 825 checks for "Baseline + Peak" but should check for "Baseline + Peak + Kinetics" to match the UI combobox option. This mismatch causes the condition to never match when users select "Baseline + Peak + Kinetics", causing `_execute_core_analysis()` to return `None` instead of executing the analysis, leading to analysis failure with no results.
+
+### Location
+- File: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- Method: `_execute_core_analysis` (line 825)
+- Related: UI Definition at line 132
+
+### Fix Applied
+Corrected the method name check to match the UI combobox option:
+
+```python
+# Before (line 825):
+elif selected_method == "Baseline + Peak":
+
+# After:
+elif selected_method == "Baseline + Peak + Kinetics":
+```
+
+### Verification
+- Method name check now matches the UI combobox option defined at line 132
+- Analysis will execute correctly when "Baseline + Peak + Kinetics" is selected
+- Users will receive results instead of analysis failure errors
+
+---
+
+## Bug 9: Ambiguous NumPy Array Boolean in `rmp_tab.py`
+
+### Description
+The `_execute_core_analysis` method in `BaselineAnalysisTab` (RMP tab) uses the `or` operator with numpy arrays at line 915: `voltage_vec = data.get('data') or data.get('voltage')`. This causes a ValueError: "The truth value of an array with more than one element is ambiguous" because numpy arrays cannot be used directly in boolean contexts with `or`.
+
+### Location
+- File: `src/Synaptipy/application/gui/analysis_tabs/rmp_tab.py`
+- Method: `_execute_core_analysis` (line 915)
+
+### Fix Applied
+Replaced the `or` operator with explicit `None` checks:
+
+```python
+# Before (line 915):
+voltage_vec = data.get('data') or data.get('voltage')
+
+# After:
+voltage_vec = data.get('data') if data.get('data') is not None else data.get('voltage')
+```
+
+### Verification
+- No more ambiguous boolean errors with numpy arrays
+- Correctly falls back to alternate key names for backward compatibility
+- Analysis executes successfully without runtime errors
 
 ---
 
 ## Conclusion
 
-All six bugs have been successfully fixed:
+All nine bugs have been successfully fixed:
 - ✅ **Bug 1**: Null check added to `_trigger_analysis`
 - ✅ **Bug 2**: No duplicate method definitions; correct type signatures
 - ✅ **Bug 3**: Correct attribute names in signal connections (event_detection_tab.py)
 - ✅ **Bug 4**: Correct Channel API method calls in `_plot_selected_data`
 - ✅ **Bug 5**: Correct attribute reference in `_get_specific_result_data` (event_detection_tab.py)
 - ✅ **Bug 6**: Correct attribute reference in `_get_specific_result_data` (spike_tab.py)
+- ✅ **Bug 7**: Correct method name check in `_gather_analysis_parameters` (event_detection_tab.py)
+- ✅ **Bug 8**: Correct method name check in `_execute_core_analysis` (event_detection_tab.py)
+- ✅ **Bug 9**: Fixed numpy array boolean ambiguity in `_execute_core_analysis` (rmp_tab.py)
 
 The Phase 1-3 refactoring infrastructure is now properly implemented across all analysis tabs. All existing tests pass without errors, and critical functionality like plotting, analysis execution, and result saving now works correctly. The codebase is ready for continued development with improved maintainability and reduced code duplication.
 
