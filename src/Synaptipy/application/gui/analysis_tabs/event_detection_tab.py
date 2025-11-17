@@ -764,7 +764,7 @@ class EventDetectionTab(BaseAnalysisTab):
                 params['min_amplitude'] = min_amplitude
                 params['max_amplitude'] = max_amplitude
             
-            elif selected_method == "Baseline + Peak":
+            elif selected_method == "Baseline + Peak + Kinetics":
                 params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()
                 params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()
                 params['step_size_ms'] = self.mini_step_size_spinbox.value()
@@ -822,7 +822,7 @@ class EventDetectionTab(BaseAnalysisTab):
                     signal_data, sample_rate, template_path, min_amplitude, max_amplitude
                 )
             
-            elif selected_method == "Baseline + Peak":
+            elif selected_method == "Baseline + Peak + Kinetics":
                 bl_duration_ms = params.get('bl_duration_ms')
                 peak_duration_ms = params.get('peak_duration_ms')
                 step_size_ms = params.get('step_size_ms')

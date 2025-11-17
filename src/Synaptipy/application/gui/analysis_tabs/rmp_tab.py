@@ -912,7 +912,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             return None
         
         time_vec = data['time']
-        voltage_vec = data.get('data') or data.get('voltage')
+        voltage_vec = data.get('data') if data.get('data') is not None else data.get('voltage')
         
         if voltage_vec is None or len(voltage_vec) < 2:
             log.warning("_execute_core_analysis: Invalid voltage data")
