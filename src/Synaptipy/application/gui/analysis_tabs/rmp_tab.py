@@ -60,10 +60,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         super().__init__(neo_adapter=neo_adapter, parent=parent)
 
         # --- UI References specific to Baseline ---
-        self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None # Single channel selection for plot interaction
-        # --- ADDED: Data Source Selection ---
-        self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
-        # --- END ADDED ---
+        # NOTE: signal_channel_combobox and data_source_combobox are now inherited from BaseAnalysisTab
         # Mode Selection
         self.analysis_params_group: Optional[QtWidgets.QGroupBox] = None
         self.mode_button_group: Optional[QtWidgets.QButtonGroup] = None
@@ -83,8 +80,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         self.auto_calculate_button: Optional[QtWidgets.QPushButton] = None
         # ADDED: Plot items for Baseline lines
         self.baseline_mean_line: Optional[pg.InfiniteLine] = None
-        # Store currently plotted data for analysis
-        self._current_plot_data: Optional[Dict[str, np.ndarray]] = None # {'time':..., 'voltage':...}
+        # NOTE: _current_plot_data is now inherited from BaseAnalysisTab
         # ADDED: Store last calculated Baseline result
         self._last_baseline_result: Optional[Dict[str, Any]] = None # {value, sd, method}
         # ADDED: Plot items for SD lines
@@ -120,16 +116,8 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         # 1a. Analysis Item Selector (inherited)
         self._setup_analysis_item_selector(data_selection_layout)
-        # 1b. Signal Channel
-        self.signal_channel_combobox = QtWidgets.QComboBox()
-        self.signal_channel_combobox.setToolTip("Select the signal channel to analyze.")
-        self.signal_channel_combobox.setEnabled(False)
-        data_selection_layout.addRow("Signal Channel:", self.signal_channel_combobox)
-        # 1c. Data Source
-        self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
-        self.data_source_combobox.setEnabled(False)
-        data_selection_layout.addRow("Data Source:", self.data_source_combobox)
+        # 1b. Signal Channel & Data Source (now handled by base class)
+        self._setup_data_selection_ui(data_selection_layout)
         # Set size policy for Col 1
         data_selection_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
         top_controls_layout.addWidget(data_selection_group)
@@ -256,13 +244,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
     def _connect_signals(self):
         # Connect signals specific to Baseline tab widgets.
         # Inherited combo box signal handled by BaseAnalysisTab (_on_analysis_item_selected)
-
-        # Connect channel selector
-        self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
-
-        # --- ADDED: Connect Data Source Selector ---
-        self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_channel_trace)
-        # --- END ADDED ---
+        # NOTE: Channel and Data Source signals are now connected by BaseAnalysisTab._setup_data_selection_ui
 
         # Connect analysis mode change
         # self.mode_button_group.buttonClicked.connect(self._on_mode_changed) <-- Old
@@ -285,241 +267,74 @@ class BaselineAnalysisTab(BaseAnalysisTab):
 
     # --- Overridden Methods from Base ---
     def _update_ui_for_selected_item(self):
-        # Update the Baseline tab UI when a new analysis item is selected.
-        # Populates channel list, plots data, and enables/disables controls.
+        """
+        Update the Baseline tab UI when a new analysis item is selected.
+        NOTE: Channel/data source population and plotting are now handled by BaseAnalysisTab.
+        This method only handles mode-specific UI updates.
+        """
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
-        self._current_plot_data = None # Clear previous plot data
-        if self.mean_sd_result_label: 
-             self.mean_sd_result_label.setText("Mean ± SD: --") # Reset to default text
-        else:
-             # This case should ideally not happen if setup is correct
-             log.warning("mean_sd_result_label is None during _update_ui_for_selected_item")
-        if self.save_button: self.save_button.setEnabled(False) # Disable save on selection change
-
-        # --- Populate Channel ComboBox ---
-        self.signal_channel_combobox.blockSignals(True)
-        self.signal_channel_combobox.clear()
-        any_channel_found = False # Mark that we found channels
-        if self._selected_item_recording and self._selected_item_recording.channels:
-            valid_channels = []
-            # Populate with ALL available channels
-            for chan_id, channel in sorted(self._selected_item_recording.channels.items(), key=lambda item: item[0]):
-                # REMOVED voltage check: units_lower = getattr(channel, 'units', '').lower()
-                # REMOVED voltage check: if 'v' in units_lower:
-                display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
-                self.signal_channel_combobox.addItem(display_name, userData=chan_id)
-                valid_channels.append(chan_id) # Add every channel found
-
-            if valid_channels:
-                self.signal_channel_combobox.setCurrentIndex(0) # Select first valid channel
-                # voltage_channels_found = True # Rename this flag
-                any_channel_found = True # Mark that we found channels
-                # can_enable_ui = True # Enable UI is determined later
-            else:
-                # self.signal_channel_combobox.addItem("No Voltage Channels Found") # Update message
-                self.signal_channel_combobox.addItem("No Channels Found")
-        else:
-            self.signal_channel_combobox.addItem("Load Data Item...")
-
-        # self.signal_channel_combobox.setEnabled(voltage_channels_found) # Enable based on new flag
-        self.signal_channel_combobox.setEnabled(any_channel_found)
-        self.signal_channel_combobox.blockSignals(False)
-
-        # --- Populate Data Source ComboBox --- 
-        self.data_source_combobox.blockSignals(True)
-        self.data_source_combobox.clear()
-        self.data_source_combobox.setEnabled(False) # Default to disabled
-        can_analyze = False # Can we actually run analysis?
-
-        # if voltage_channels_found and self._selected_item_recording: # Need channels and loaded recording # Use new flag
-        if any_channel_found and self._selected_item_recording:
-            selected_item_details = self._analysis_items[self._selected_item_index]
-            item_type = selected_item_details.get('target_type')
-            item_trial_index = selected_item_details.get('trial_index') # 0-based
-
-            # --- Get num_trials and has_average from the first available channel --- 
-            num_trials = 0
-            has_average = False
-            first_channel = next(iter(self._selected_item_recording.channels.values()), None)
-            if first_channel:
-                 num_trials = getattr(first_channel, 'num_trials', 0)
-                 # Check for average data availability (adjust if method name is different)
-                 if hasattr(first_channel, 'get_averaged_data') and first_channel.get_averaged_data() is not None:
-                     has_average = True 
-                 elif hasattr(first_channel, 'has_average_data') and first_channel.has_average_data(): # Alternative check
-                     has_average = True
-            log.debug(f"Determined from first channel: num_trials={num_trials}, has_average={has_average}")
-            # --- End checks --- 
-
-            if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
-                self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index)
-            elif item_type == "Average Trace" and has_average:
-                self.data_source_combobox.addItem("Average Trace", userData="average")
-            elif item_type == "Recording" or item_type == "All Trials":
-                if has_average:
-                    self.data_source_combobox.addItem("Average Trace", userData="average")
-                if num_trials > 0:
-                    for i in range(num_trials):
-                        self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
-                # Enable only if there are options to choose from
-                if self.data_source_combobox.count() > 0:
-                    self.data_source_combobox.setEnabled(True)
-                    can_analyze = True # Can analyze if there's at least one source
-                else:
-                    self.data_source_combobox.addItem("No Trials/Average")
-            else: # Unknown item type or missing info
-                self.data_source_combobox.addItem("Invalid Source Item")
-
-        else: # No recording loaded or no voltage channels
-             self.data_source_combobox.addItem("N/A")
-
-        self.data_source_combobox.blockSignals(False)
-
-        # --- Enable/Disable Remaining Controls --- 
-        self.analysis_params_group.setEnabled(can_analyze)
-        self._on_mode_changed() # Update manual/interactive state based on loaded data availability
-
-        # --- Plot Initial Trace --- 
-        if can_analyze:
-            self._plot_selected_channel_trace() # Plot the trace for the initially selected channel
-        else:
-            self.plot_widget.clear() # Ensure plot is clear if no data/channels
         
-        # Move this call AFTER plotting to ensure _current_plot_data is set
-        self._on_mode_changed() # Update manual/interactive state
-
-    # --- Plotting and Interaction ---
-    def _plot_selected_channel_trace(self):
-        """Plots the voltage trace for the currently selected channel and data source.""" # Updated docstring
-        if not self.plot_widget or not self.signal_channel_combobox or not self.data_source_combobox or not self._selected_item_recording:
-            self._current_plot_data = None
-            if self.plot_widget:
-                self.plot_widget.clear()
-                # Re-add region if cleared
-                if self.interactive_region and self.interactive_region not in self.plot_widget.items:
-                    self.plot_widget.addItem(self.interactive_region)
-            return
-
-        # Clear previous data
-        self.plot_widget.clear()
+        # Clear previous analysis results
         self._current_plot_data = None
-        self._clear_baseline_visualization_lines() # <<< ADDED: Clear Baseline/SD lines
+        if self.mean_sd_result_label: 
+            self.mean_sd_result_label.setText("Mean ± SD: --")
+        if self.save_button:
+            self.save_button.setEnabled(False)
+        
+        # Determine if analysis can be performed based on data availability
+        # BaseAnalysisTab has already loaded the recording and will populate comboboxes
+        can_analyze = (self._selected_item_recording is not None and 
+                      bool(self._selected_item_recording.channels))
+        
+        # Enable/disable analysis parameter controls
+        self.analysis_params_group.setEnabled(can_analyze)
+        
+        # Update mode-specific controls
+        self._on_mode_changed()
 
-        chan_id = self.signal_channel_combobox.currentData()
-        source_data = self.data_source_combobox.currentData() # Trial index (int) or "average" (str)
-
-        if not chan_id or source_data is None:
-            self._current_plot_data = None
-            self.plot_widget.clear()
-            if self.interactive_region and self.interactive_region not in self.plot_widget.items:
-                 self.plot_widget.addItem(self.interactive_region)
+    # --- PHASE 1 REFACTORING: Hook for RMP-Specific Plot Items ---
+    def _on_data_plotted(self):
+        """
+        Hook called by BaseAnalysisTab after plotting main data trace.
+        Adds RMP-specific plot items: interactive region, baseline visualization lines.
+        """
+        log.debug(f"{self.get_display_name()}: _on_data_plotted hook called")
+        
+        # Clear any previous baseline visualization lines
+        self._clear_baseline_visualization_lines()
+        
+        # Validate that base class plotted data successfully
+        if not self._current_plot_data or 'time' not in self._current_plot_data:
+            log.debug("No plot data available, skipping RMP-specific items")
             return
 
-        channel = self._selected_item_recording.channels.get(chan_id)
-        # selected_item_details = self._analysis_items[self._selected_item_index] # Don't need item type here
-        # target_type = selected_item_details.get('target_type')
-        # trial_index = selected_item_details.get('trial_index') # 0-based or None
+        time_vec = self._current_plot_data['time']
+        
+        # Set interactive region bounds based on plotted data
+        min_t, max_t = time_vec[0], time_vec[-1]
+        self.interactive_region.setBounds([min_t, max_t])
+        
+        # Keep current region if valid, otherwise reset to default
+        rgn_start, rgn_end = self.interactive_region.getRegion()
+        if rgn_start < min_t or rgn_end > max_t or rgn_start >= rgn_end:
+            # Set default region (first 100ms or 10% of trace, whichever is smaller)
+            default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
+            self.interactive_region.setRegion([min_t, default_end])
+            log.debug(f"Reset interactive region to default: [{min_t:.4f}, {default_end:.4f}]")
+        else:
+            log.debug(f"Interactive region is valid: [{rgn_start:.4f}, {rgn_end:.4f}]")
 
-        log.debug(f"Plotting Baseline trace for Ch {chan_id}, Data Source: {source_data}")
+        # Add interactive region to plot (removed by base class clear())
+        self.plot_widget.addItem(self.interactive_region)
 
-        time_vec, voltage_vec = None, None
-        data_label = "Trace Error"
+        # Plot baseline visualization lines if previous results exist
+        self._plot_baseline_visualization_lines()
 
-        try:
-            if channel:
-                # --- Select data based on DATA SOURCE COMBOBOX --- 
-                if source_data == "average":
-                    voltage_vec = channel.get_averaged_data()
-                    time_vec = channel.get_relative_averaged_time_vector()
-                    # ADDED: Log values immediately after retrieval
-                    log.debug(f"Retrieved average data: voltage_vec is None = {voltage_vec is None}, time_vec is None = {time_vec is None}")
-                    data_label = f"{channel.name or chan_id} (Average)"
-                elif isinstance(source_data, int):
-                    trial_index = source_data # 0-based index from userData
-                    if 0 <= trial_index < channel.num_trials:
-                        voltage_vec = channel.get_data(trial_index)
-                        time_vec = channel.get_relative_time_vector(trial_index)
-                        # ADDED: Log values immediately after retrieval
-                        log.debug(f"Retrieved trial {trial_index} data: voltage_vec is None = {voltage_vec is None}, time_vec is None = {time_vec is None}")
-                        data_label = f"{channel.name or chan_id} (Trial {trial_index + 1})"
-                    else:
-                        log.warning(f"Invalid trial index {trial_index} requested for Ch {chan_id}")
-                else:
-                     log.warning(f"Unknown data source selected: {source_data}")
-                # --- END data selection --- 
-
-            # --- Plotting --- 
-            self.plot_widget.clear() # Clear previous plots
-            if time_vec is not None and voltage_vec is not None:
-                self.data_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
-                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-                if self.data_plot_item:
-                    pen = pg.mkPen('k')
-                    self.data_plot_item.setPen(pen)
-                    log.info(f"[RMP-DEBUG] Data plot pen applied: {pen}")
-                
-                # Base class already configured grids properly - no need to override
-
-                # --- Get Label from Data Model --- 
-                units = channel.units or '?' # Use '?' if units are None/empty
-                base_label = channel.get_primary_data_label()
-                self.plot_widget.setLabel('left', base_label, units=units)
-                # --- End Get Label from Data Model --- 
-
-                self.plot_widget.setLabel('bottom', 'Time', units='s')
-                self.plot_widget.setTitle(data_label)
-                self._current_plot_data = { # Store data for analysis
-                    'time': time_vec,
-                    'voltage': voltage_vec
-                }
-                
-                # Set data ranges for zoom synchronization
-                x_range = (time_vec.min(), time_vec.max())
-                y_range = (voltage_vec.min(), voltage_vec.max())
-                self.set_data_ranges(x_range, y_range)
-                
-                # Set initial region/bounds based on plotted data
-                min_t, max_t = time_vec[0], time_vec[-1]
-                self.interactive_region.setBounds([min_t, max_t])
-                # Keep current region if valid, otherwise reset
-                rgn_start, rgn_end = self.interactive_region.getRegion()
-                if rgn_start < min_t or rgn_end > max_t or rgn_start >= rgn_end:
-                     # Set default region (e.g., first 100ms or 10% of trace)
-                     default_end = min(min_t + 0.1, min_t + (max_t - min_t) * 0.1, max_t)
-                     self.interactive_region.setRegion([min_t, default_end])
-                     log.debug(f"Resetting region to default: [{min_t}, {default_end}]")
-                else:
-                    log.debug("Region is within bounds and valid.")
-            else:
-                self._current_plot_data = None
-                log.warning(f"No valid data found to plot for channel {chan_id}")
-
-            # Always re-add region item as clear() removes it
-            self.plot_widget.addItem(self.interactive_region)
-            self.plot_widget.setTitle(data_label) # Set title for clarity
-
-            # Auto-range the plot initially
-            self.plot_widget.autoRange()
-
-            # --- ADDED: Plot Baseline and SD lines if available ---
-            self._plot_baseline_visualization_lines()
-            # --- END ADDED ---
-
-            # Update UI state (enable/disable buttons etc.)
-            self._update_analysis_controls_state()
-            # Trigger analysis automatically if in interactive mode initially?
-            # self._trigger_rmp_analysis() # Maybe do this explicitly
-
-        except Exception as e:
-            log.error(f"Error plotting trace for channel {chan_id}: {e}", exc_info=True)
-            self.plot_widget.clear()
-            self.plot_widget.addItem(self.interactive_region) # Re-add region on error
-            self._current_plot_data = None
-
-        # Trigger analysis after plotting new trace
-        # REMOVED: self._trigger_rmp_analysis() 
-        # INSTEAD: Let _update_analysis_controls_state handle button states
-        self._update_analysis_controls_state() # Update controls based on plot success/failure
+        # Update UI control states
+        self._update_analysis_controls_state()
+        
+        log.debug(f"{self.get_display_name()}: RMP-specific plot items added successfully")
+    # --- END PHASE 1 REFACTORING ---
 
     # --- ADDED: Helper to clear Baseline/SD lines ---
     def _clear_baseline_visualization_lines(self):
@@ -651,7 +466,8 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         # --- Trigger Analysis ---
         # MODIFIED: Trigger analysis immediately only if interactive, data loaded, AND NOT the initial call
         if is_interactive and self._current_plot_data and not initial_call:
-            self._trigger_baseline_analysis()
+            # PHASE 2: Use template method
+            self._trigger_analysis()
         else:
             # In Auto/Manual, analysis waits for the Run button or specific input edits
             # Optionally clear results or set status message
@@ -666,14 +482,16 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         """Slot specifically for manual time edit changes."""
         if self.mode_combobox and self.mode_combobox.currentText() == "Manual":
             log.debug("Manual time edit finished, triggering baseline analysis.")
-            self._trigger_baseline_analysis() # Trigger standard window-based analysis
+            # PHASE 2 & 3: Use template method (supports debouncing)
+            self._on_parameter_changed()
 
     @QtCore.Slot()
     def _trigger_baseline_analysis_if_interactive(self):
         """Slot specifically for region changes."""
         if self.mode_combobox and self.mode_combobox.currentText() == "Interactive":
             log.debug("Interactive region change finished, triggering baseline analysis.")
-            self._trigger_baseline_analysis() # Trigger standard window-based analysis
+            # PHASE 2 & 3: Use template method (supports debouncing)
+            self._on_parameter_changed()
 
     # --- ADDED: Slot for Run button (Auto/Manual modes) ---
     @QtCore.Slot()
@@ -682,14 +500,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         if not self.mode_combobox: return
         
         current_mode_text = self.mode_combobox.currentText()
-        if current_mode_text == "Automatic":
-            log.debug("Run button clicked in Automatic mode.")
-            self._run_auto_baseline_analysis() # Run the specific auto-analysis method
-        elif current_mode_text == "Manual":
-            log.debug("Run button clicked in Manual mode.")
-            self._trigger_baseline_analysis() # Run the standard window-based analysis
-        else:
-             log.warning(f"Run button clicked in unexpected mode: {current_mode_text}")
+        log.debug(f"Run button clicked in {current_mode_text} mode.")
+        # PHASE 2: Use template method directly (no debouncing for button clicks)
+        self._trigger_analysis()
     # --- END ADDED ---
 
     def _trigger_baseline_analysis(self):
@@ -706,8 +519,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             self.status_label.setText("Status: Error - No data plotted.")
             return
         # Retrieve data from stored dict
+        # NOTE: Base class now stores data as 'data', not 'voltage'
         time_vec = self._current_plot_data['time']
-        voltage_vec = self._current_plot_data['voltage']
+        voltage_vec = self._current_plot_data.get('data') or self._current_plot_data.get('voltage')
         # --- END ADDED ---
 
         # --- NEW: Get windows based on current mode (Interactive or Manual) ---
@@ -1045,6 +859,265 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         log.debug(f"_get_specific_result_data returning: {specific_data}")
         return specific_data
     # --- END Implementation ---
+
+    # --- PHASE 2: Template Method Pattern Implementation ---
+    def _gather_analysis_parameters(self) -> Dict[str, Any]:
+        """
+        Gather analysis parameters based on current mode.
+        
+        Returns:
+            Dictionary with mode and mode-specific parameters.
+        """
+        if not self.mode_combobox:
+            log.warning("_gather_analysis_parameters: mode_combobox not initialized")
+            return {'mode': 'unknown'}
+        
+        current_mode_text = self.mode_combobox.currentText()
+        params = {'mode': current_mode_text.lower()}
+        
+        if current_mode_text == "Interactive":
+            if self.interactive_region:
+                start_t, end_t = self.interactive_region.getRegion()
+                params['start_time'] = start_t
+                params['end_time'] = end_t
+        
+        elif current_mode_text == "Manual":
+            if self.manual_start_time_spinbox and self.manual_end_time_spinbox:
+                params['start_time'] = self.manual_start_time_spinbox.value()
+                params['end_time'] = self.manual_end_time_spinbox.value()
+        
+        elif current_mode_text == "Automatic":
+            if self.auto_sd_threshold_spinbox:
+                params['sd_threshold'] = self.auto_sd_threshold_spinbox.value()
+            else:
+                params['sd_threshold'] = 0.5  # Default
+        
+        log.debug(f"Gathered parameters: {params}")
+        return params
+    
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Execute baseline analysis based on mode.
+        
+        Args:
+            params: Analysis parameters from _gather_analysis_parameters
+            data: Current plot data
+        
+        Returns:
+            Dictionary with analysis results or None on failure.
+        """
+        # Validate data
+        if not data or 'time' not in data:
+            log.warning("_execute_core_analysis: Missing plot data")
+            return None
+        
+        time_vec = data['time']
+        voltage_vec = data.get('data') or data.get('voltage')
+        
+        if voltage_vec is None or len(voltage_vec) < 2:
+            log.warning("_execute_core_analysis: Invalid voltage data")
+            return None
+        
+        # Get units
+        units = "V"  # Default
+        chan_id = self.signal_channel_combobox.currentData() if self.signal_channel_combobox else None
+        if self._selected_item_recording and chan_id:
+            channel = self._selected_item_recording.channels.get(chan_id)
+            if channel:
+                units = channel.units or "V"
+        
+        mode = params.get('mode', 'unknown')
+        
+        # Branch based on mode
+        if mode in ['interactive', 'manual']:
+            # Window-based analysis
+            start_t = params.get('start_time')
+            end_t = params.get('end_time')
+            
+            if start_t is None or end_t is None:
+                log.warning(f"_execute_core_analysis: Missing time parameters for {mode} mode")
+                return None
+            
+            if start_t >= end_t:
+                log.warning(f"_execute_core_analysis: Invalid time range [{start_t}, {end_t}]")
+                return None
+            
+            # Use existing calculate_baseline_stats function
+            baseline_result = calculate_baseline_stats(time_vec, voltage_vec, start_t, end_t)
+            
+            if baseline_result is None:
+                return None
+            
+            baseline_value, baseline_sd = baseline_result
+            
+            return {
+                'baseline_mean': baseline_value,
+                'baseline_sd': baseline_sd,
+                'baseline_units': units,
+                'calculation_method': f'window_{mode}',
+                'start_time': start_t,
+                'end_time': end_t
+            }
+        
+        elif mode == 'automatic':
+            # Mode-based analysis
+            sd_threshold = params.get('sd_threshold', 0.5)
+            
+            try:
+                # Mode-based calculation (similar to _run_auto_baseline_analysis)
+                # 1. Estimate initial noise
+                end_idx_noise = min(int(0.1 * len(time_vec)), len(time_vec))
+                if end_idx_noise > 1 and time_vec[end_idx_noise] - time_vec[0] > 0.1:
+                    end_idx_noise = np.searchsorted(time_vec, time_vec[0] + 0.1)
+                if end_idx_noise < 2:
+                    end_idx_noise = min(10, len(voltage_vec))
+                
+                # 2. Round voltage and find mode
+                rounded_voltage = np.round(voltage_vec, 1)
+                values, counts = np.unique(rounded_voltage, return_counts=True)
+                
+                if len(values) == 0:
+                    log.warning("_execute_core_analysis: No unique voltage values found")
+                    return None
+                
+                mode_voltage_rounded = values[np.argmax(counts)]
+                
+                # 3. Define tolerance band
+                tolerance_mv = 1.0
+                lower_bound = mode_voltage_rounded - tolerance_mv
+                upper_bound = mode_voltage_rounded + tolerance_mv
+                
+                # 4. Find indices within band
+                mode_indices = np.where((voltage_vec >= lower_bound) & (voltage_vec <= upper_bound))[0]
+                
+                if len(mode_indices) < 10:
+                    log.warning(f"_execute_core_analysis: Only {len(mode_indices)} points within band")
+                    return None
+                
+                # 5. Calculate mean and SD
+                values_at_mode = voltage_vec[mode_indices]
+                auto_baseline_mean = np.mean(values_at_mode)
+                auto_baseline_sd = np.std(values_at_mode)
+                
+                # 6. Get time window
+                start_time = time_vec[mode_indices[0]]
+                end_time = time_vec[mode_indices[-1]]
+                
+                return {
+                    'baseline_mean': auto_baseline_mean,
+                    'baseline_sd': auto_baseline_sd,
+                    'baseline_units': units,
+                    'calculation_method': f'auto_mode_tolerance={tolerance_mv:.1f}mV',
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'mode_voltage': mode_voltage_rounded,
+                    'tolerance': tolerance_mv
+                }
+            
+            except Exception as e:
+                log.error(f"_execute_core_analysis: Auto mode failed: {e}", exc_info=True)
+                return None
+        
+        else:
+            log.warning(f"_execute_core_analysis: Unknown mode '{mode}'")
+            return None
+    
+    def _display_analysis_results(self, results: Dict[str, Any]):
+        """
+        Display analysis results in the UI.
+        
+        Args:
+            results: Analysis results dictionary
+        """
+        baseline_mean = results.get('baseline_mean')
+        baseline_sd = results.get('baseline_sd')
+        units = results.get('baseline_units', 'V')
+        
+        if baseline_mean is not None and baseline_sd is not None:
+            self.mean_sd_result_label.setText(
+                f"Mean: {baseline_mean:.3f} {units} ± SD: {baseline_sd:.3f} {units}"
+            )
+            log.info(f"Baseline result displayed: {baseline_mean:.3f} {units} ± {baseline_sd:.3f} {units}")
+            
+            # Store result for saving
+            self._last_baseline_result = {
+                'baseline_mean': baseline_mean,
+                'baseline_sd': baseline_sd,
+                'baseline_units': units,
+                'calculation_method': results.get('calculation_method', 'unknown')
+            }
+            
+            # Update status
+            mode = results.get('calculation_method', 'unknown')
+            self.status_label.setText(f"Status: Calculation complete ({mode})")
+        else:
+            self.mean_sd_result_label.setText("Calculation Error")
+            self.status_label.setText("Status: Error")
+            self._last_baseline_result = None
+    
+    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+        """
+        Update plot visualizations based on analysis results.
+        
+        Args:
+            results: Analysis results dictionary
+        """
+        # Clear existing visualization lines
+        self._clear_baseline_visualization_lines()
+        
+        # Get baseline values
+        baseline_mean = results.get('baseline_mean')
+        baseline_sd = results.get('baseline_sd')
+        
+        if baseline_mean is None or not np.isfinite(baseline_mean):
+            return
+        
+        # For automatic mode, update interactive region to show detected window
+        mode = results.get('calculation_method', '')
+        if 'auto' in mode and self.interactive_region:
+            start_time = results.get('start_time')
+            end_time = results.get('end_time')
+            if start_time is not None and end_time is not None:
+                self.interactive_region.setRegion([start_time, end_time])
+                self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(128, 128, 128, 50)))
+        
+        # Plot baseline lines (same as _plot_baseline_visualization_lines)
+        baseline_pen = pg.mkPen(color='green', width=2, style=QtCore.Qt.PenStyle.DashLine)
+        label_opts = {
+            'position': 0.1, 'color': 'k', 'movable': False, 'anchor': (0.5, 0.5)
+        }
+        
+        self.baseline_mean_line = pg.InfiniteLine(
+            pos=baseline_mean, angle=0, pen=baseline_pen, movable=False,
+            label=f"Baseline = {baseline_mean:.3f}", labelOpts=label_opts
+        )
+        self.plot_widget.addItem(self.baseline_mean_line)
+        
+        # Plot SD lines if valid
+        if baseline_sd is not None and np.isfinite(baseline_sd) and baseline_sd > 0:
+            upper_sd_val = baseline_mean + baseline_sd
+            lower_sd_val = baseline_mean - baseline_sd
+            
+            sd_pen = pg.mkPen(color='orange', width=1, style=QtCore.Qt.PenStyle.DashLine)
+            
+            upper_label_opts = {'position': 0.2, 'color': 'k', 'movable': False, 'anchor': (0.5, 0)}
+            self.baseline_plus_sd_line = pg.InfiniteLine(
+                pos=upper_sd_val, angle=0, pen=sd_pen, movable=False,
+                label=f"+SD = {upper_sd_val:.3f}", labelOpts=upper_label_opts
+            )
+            self.baseline_plus_sd_line.label.setPos(0, -5)
+            self.plot_widget.addItem(self.baseline_plus_sd_line)
+            
+            lower_label_opts = {'position': 0.2, 'color': 'k', 'movable': False, 'anchor': (0.5, 1)}
+            self.baseline_minus_sd_line = pg.InfiniteLine(
+                pos=lower_sd_val, angle=0, pen=sd_pen, movable=False,
+                label=f"-SD = {lower_sd_val:.3f}", labelOpts=lower_label_opts
+            )
+            self.baseline_minus_sd_line.label.setPos(0, 5)
+            self.plot_widget.addItem(self.baseline_minus_sd_line)
+        
+        log.debug("Baseline visualization updated via template method")
+    # --- END PHASE 2 ---
 
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
