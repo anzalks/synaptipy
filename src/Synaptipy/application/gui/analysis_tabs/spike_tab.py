@@ -27,12 +27,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         super().__init__(neo_adapter=neo_adapter, parent=parent)
 
         # --- UI References specific to Spike ---
-        # REMOVED: self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
-        # REMOVED: self.channel_scroll_area: Optional[QtWidgets.QScrollArea] = None
-        # REMOVED: self.channel_checkbox_layout: Optional[QtWidgets.QVBoxLayout] = None
-        # ADDED: Standard selectors
-        self.channel_combobox: Optional[QtWidgets.QComboBox] = None
-        self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
+        # NOTE: channel_combobox and data_source_combobox are now inherited from BaseAnalysisTab
         # Spike parameters
         self.threshold_edit: Optional[QtWidgets.QLineEdit] = None
         self.refractory_edit: Optional[QtWidgets.QLineEdit] = None
@@ -79,17 +74,9 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self._setup_analysis_item_selector(item_selector_layout)
         controls_layout.addLayout(item_selector_layout)
 
-        # Channel/Data Source
+        # Channel/Data Source (now handled by base class)
         channel_layout = QtWidgets.QFormLayout()
-        self.channel_combobox = QtWidgets.QComboBox()
-        self.channel_combobox.setToolTip("Select the signal channel to analyze.")
-        self.channel_combobox.setEnabled(False)
-        channel_layout.addRow("Signal Channel:", self.channel_combobox)
-
-        self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
-        self.data_source_combobox.setEnabled(False)
-        channel_layout.addRow("Data Source:", self.data_source_combobox)
+        self._setup_data_selection_ui(channel_layout)
         controls_layout.addLayout(channel_layout)
 
         # Threshold Input
@@ -155,200 +142,90 @@ class SpikeAnalysisTab(BaseAnalysisTab):
 
     def _connect_signals(self):
         """Connect signals specific to Spike tab widgets."""
-        # Connect signals specific to Spike tab widgets.
-        # Item selection handled by base class (_on_analysis_item_selected)
-        self.channel_combobox.currentIndexChanged.connect(self._plot_selected_trace)
-        self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_trace)
-        # Connect param edits to update run button state? Or just read on click?
-        # Let's update state on click for now. Requires _validate_params check.
-        # self.threshold_edit.textChanged.connect(self._update_detect_button_state)
-        # self.refractory_edit.textChanged.connect(self._update_detect_button_state)
+        # NOTE: Channel and Data Source signals are now connected by BaseAnalysisTab._setup_data_selection_ui
+        # Plotting and visualization will happen via _on_data_plotted() hook
+        
         # Connect detect button
-        self.detect_button.clicked.connect(self._run_spike_analysis)
-        # Channel checkboxes removed
+        # PHASE 2: Use template method (direct call, no debouncing for button)
+        self.detect_button.clicked.connect(self._trigger_analysis)
+        
+        # PHASE 3: Connect parameter changes to debounced analysis
+        self.threshold_edit.textChanged.connect(self._on_parameter_changed)
+        self.refractory_edit.textChanged.connect(self._on_parameter_changed)
 
     # --- Overridden Methods from Base ---
     def _update_ui_for_selected_item(self):
-        """Update Spike tab UI for new analysis item."""
+        """
+        Update Spike tab UI for new analysis item.
+        NOTE: Channel/data source population and plotting are now handled by BaseAnalysisTab.
+        """
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
-        self._current_plot_data = None # Clear previous plot data
-        self.results_textedit.setText("") # Clear previous results
-        if self.detect_button: self.detect_button.setEnabled(False)
-        if self.save_button: self.save_button.setEnabled(False) # Base class save button
+        
+        # Clear previous results
+        self._current_plot_data = None
+        self.results_textedit.setText("")
+        if self.detect_button:
+            self.detect_button.setEnabled(False)
+        if self.save_button:
+            self.save_button.setEnabled(False)
+        
+        # Determine if analysis can be performed
+        can_analyze = (self._selected_item_recording is not None and 
+                      bool(self._selected_item_recording.channels))
 
-        # --- Populate Channel ComboBox --- (Similar to rmp_tab)
-        self.channel_combobox.blockSignals(True)
-        self.channel_combobox.clear()
-        any_channel_found = False # Use generalized flag
-        if self._selected_item_recording and self._selected_item_recording.channels:
-            for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
-                 display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{channel.units}]"
-                 self.channel_combobox.addItem(display_name, userData=chan_id)
-                 any_channel_found = True # Mark that we found at least one channel
-
-            if any_channel_found:
-                self.channel_combobox.setCurrentIndex(0)
-                # Get the first added channel to update label initially
-                first_chan_id = self.channel_combobox.currentData()
-                selected_channel = self._selected_item_recording.channels.get(first_chan_id)
-
-                if self.threshold_label and selected_channel:
-                    units = selected_channel.units or '' # Use empty string if None
-                    self.threshold_label.setText(f"Threshold ({units}):")
-            else:
-                self.channel_combobox.addItem("No Channels Found")
-                if self.threshold_label: self.threshold_label.setText("Threshold (?):") # Reset if no channels
-        else:
-            self.channel_combobox.addItem("Load Data Item")
-        self.channel_combobox.setEnabled(any_channel_found)
-        self.channel_combobox.blockSignals(False)
-
-        # --- Populate Data Source ComboBox --- (Similar to rmp_tab)
-        self.data_source_combobox.blockSignals(True)
-        self.data_source_combobox.clear()
-        self.data_source_combobox.setEnabled(False)
-        can_analyze = False
-        if any_channel_found and self._selected_item_recording:
-            selected_item_details = self._analysis_items[self._selected_item_index]
-            item_type = selected_item_details.get('target_type')
-            item_trial_index = selected_item_details.get('trial_index')
-            num_trials = 0
-            has_average = False
-            first_channel = next(iter(self._selected_item_recording.channels.values()), None)
-            if first_channel:
-                 num_trials = getattr(first_channel, 'num_trials', 0)
-                 if hasattr(first_channel, 'get_averaged_data') and first_channel.get_averaged_data() is not None: has_average = True
-                 elif hasattr(first_channel, 'has_average_data') and first_channel.has_average_data(): has_average = True
-
-            if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
-                self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index); can_analyze = True
-            elif item_type == "Average Trace" and has_average:
-                self.data_source_combobox.addItem("Average Trace", userData="average"); can_analyze = True
-            elif item_type == "Recording" or item_type == "All Trials":
-                if has_average: self.data_source_combobox.addItem("Average Trace", userData="average")
-                if num_trials > 0:
-                    for i in range(num_trials): self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
-                if self.data_source_combobox.count() > 0: self.data_source_combobox.setEnabled(True); can_analyze = True
-                else: self.data_source_combobox.addItem("No Trials/Average")
-            else: self.data_source_combobox.addItem("Invalid Source Item")
-        else: self.data_source_combobox.addItem("N/A")
-        self.data_source_combobox.blockSignals(False)
-
-        # --- Enable/Disable Remaining Controls ---
+        # Enable/disable controls
         self.threshold_edit.setEnabled(can_analyze)
         self.refractory_edit.setEnabled(can_analyze)
         self.detect_button.setEnabled(can_analyze)
 
-        # --- Plot Initial Trace --- 
-        if can_analyze:
-            self._plot_selected_trace()
+        # Update threshold label with units if channel is available
+        if can_analyze and self._selected_item_recording.channels:
+            first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+            if first_channel and self.threshold_label:
+                units = first_channel.units or '?'
+                self.threshold_label.setText(f"Threshold ({units}):")
         else:
-            if self.plot_widget: self.plot_widget.clear() # Ensure plot is clear
-            self.threshold_edit.setEnabled(False)
-            self.detect_button.setEnabled(False)
-            if self.threshold_label: self.threshold_label.setText("Threshold (?):") # Reset if no data
+            if self.threshold_label:
+                self.threshold_label.setText("Threshold (?):")
 
-    # --- Plotting Method --- 
-    def _plot_selected_trace(self):
-        """Plots the selected voltage trace and clears previous spikes."""
-        # Basic checks
-        if not self.plot_widget or not self.channel_combobox or not self.data_source_combobox or not self._selected_item_recording:
-            if self.plot_widget: self.plot_widget.clearPlots()
-            self._current_plot_data = None
+    # --- PHASE 1 REFACTORING: Hook for Spike-Specific Plot Items ---
+    def _on_data_plotted(self):
+        """
+        Hook called by BaseAnalysisTab after plotting main data trace.
+        Adds Spike-specific plot items: spike markers and threshold line.
+        """
+        log.debug(f"{self.get_display_name()}: _on_data_plotted hook called")
+        
+        # Clear previous spike analysis
+        self.results_textedit.clear()
+        if self.spike_markers_item:
+            self.spike_markers_item.setData([])
+            self.spike_markers_item.setVisible(False)
+        if self.threshold_line:
+            self.threshold_line.setVisible(False)
+        
+        # Validate that base class plotted data successfully
+        if not self._current_plot_data or 'time' not in self._current_plot_data:
+            log.debug("No plot data available, skipping Spike-specific items")
             self.detect_button.setEnabled(False)
             return
 
-        chan_id = self.channel_combobox.currentData()
-        source_data = self.data_source_combobox.currentData()
-        if not chan_id or source_data is None:
-             if self.plot_widget: self.plot_widget.clearPlots()
-             self._current_plot_data = None
-             self.detect_button.setEnabled(False)
-             return
-
-        channel = self._selected_item_recording.channels.get(chan_id)
-        log.debug(f"Spike Plotting: Ch {chan_id}, Source: {source_data}")
-
-        time_vec, voltage_vec = None, None
-        data_label = "Trace Error"
-        plot_succeeded = False
-
-        # Clear previous plot items
-        self.plot_widget.clearPlots()
-        self._current_plot_data = None
-        self.spike_markers_item.setData([]) # Clear spike markers
-        self.spike_markers_item.setVisible(False)
-        self.threshold_line.setVisible(False)
-
-        try:
-            if channel:
-                # Fetch Data (similar to rmp_tab)
-                if source_data == "average":
-                    voltage_vec = channel.get_averaged_data()
-                    time_vec = channel.get_relative_averaged_time_vector()
-                    data_label = f"{channel.name or chan_id} (Average)"
-                elif isinstance(source_data, int):
-                    trial_index = source_data
-                    if 0 <= trial_index < channel.num_trials:
-                        voltage_vec = channel.get_data(trial_index)
-                        time_vec = channel.get_relative_time_vector(trial_index)
-                        data_label = f"{channel.name or chan_id} (Trial {trial_index + 1})"
-
-            # Plotting
-            if time_vec is not None and voltage_vec is not None:
-                self.voltage_plot_item = self.plot_widget.plot(time_vec, voltage_vec, pen='k', name=data_label)
-                # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-                if self.voltage_plot_item:
-                    pen = pg.mkPen('k')
-                    self.voltage_plot_item.setPen(pen)
-                    log.info(f"[SPIKE-DEBUG] Voltage plot pen applied: {pen}")
-                
-                # Base class already configured grids properly - no need to override
-                
-                # --- Get Label from Data Model --- 
-                units = channel.units or 'V' # Default to V if missing
-                base_label = channel.get_primary_data_label()
-                self.plot_widget.setLabel('left', base_label, units=units)
-                # --- End Get Label from Data Model --- 
-                self.plot_widget.setLabel('bottom', 'Time', units='s')
-                self.plot_widget.setTitle(data_label)
-                # Store data needed for analysis
-                self._current_plot_data = {
-                    'time': time_vec,
-                    'voltage': voltage_vec,
-                    'rate': channel.sampling_rate,
-                    'units': channel.units or 'V'
-                }
-                
-                # Set data ranges for zoom synchronization
-                x_range = (time_vec.min(), time_vec.max())
-                y_range = (voltage_vec.min(), voltage_vec.max())
-                self.set_data_ranges(x_range, y_range)
-                
-                plot_succeeded = True
-                log.debug("Spike Plotting: Success")
-            else:
-                log.warning(f"Spike Plotting: No valid data for Ch {chan_id}, Source: {source_data}")
-                self.plot_widget.setTitle("Plot Error: No Data")
-
-            # Re-add spike markers and threshold line (clearPlots removes them)
+        # Add spike-specific visualization items (removed by base class clear())
+        if self.spike_markers_item:
             self.plot_widget.addItem(self.spike_markers_item)
+        if self.threshold_line:
             self.plot_widget.addItem(self.threshold_line) 
 
-        except Exception as e:
-            log.error(f"Spike Plotting Error: Ch {chan_id}: {e}", exc_info=True)
-            self.plot_widget.clear()
-            self.plot_widget.addItem(self.spike_markers_item) # Ensure markers item is present even on error
-            self.plot_widget.addItem(self.threshold_line) # Ensure threshold line is present even on error
-            self.plot_widget.setTitle("Plot Error")
-            self._current_plot_data = None
-            plot_succeeded = False
-
-        # Update button state based on plot success
-        self.detect_button.setEnabled(plot_succeeded)
-        # Clear results text whenever plot changes
-        self.results_textedit.clear()
-        if self.save_button: self.save_button.setEnabled(False) # Disable save if plot changed
+        # Enable detection button now that data is plotted
+        self.detect_button.setEnabled(True)
+        
+        # Update threshold label with correct units
+        if self._current_plot_data.get('units') and self.threshold_label:
+            units = self._current_plot_data['units']
+            self.threshold_label.setText(f"Threshold ({units}):")
+        
+        log.debug(f"{self.get_display_name()}: Spike-specific plot items added successfully")
+    # --- END PHASE 1 REFACTORING ---
 
     # --- Private Helper Methods specific to Spike Tab ---
     def _validate_params(self) -> bool:
@@ -520,8 +397,8 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             return None # Cannot save without valid parameters
 
         # 3. Get data source information
-        channel_id = self.channel_combobox.currentData()
-        channel_name = self.channel_combobox.currentText().split(' (')[0] # Extract name before ID
+        channel_id = self.signal_channel_combobox.currentData()
+        channel_name = self.signal_channel_combobox.currentText().split(' (')[0] # Extract name before ID
         data_source = self.data_source_combobox.currentData() # "average" or trial index (int)
         data_source_text = self.data_source_combobox.currentText()
 
@@ -565,6 +442,173 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         }
         log.debug(f"_get_specific_result_data (Spike) returning: {specific_data}")
         return specific_data
+
+    # --- PHASE 2: Template Method Pattern Implementation ---
+    def _gather_analysis_parameters(self) -> Dict[str, Any]:
+        """Gather spike detection parameters from UI."""
+        if not self._validate_params():
+            log.warning("Invalid spike detection parameters")
+            return {}
+        
+        threshold = float(self.threshold_edit.text())
+        refractory_ms = float(self.refractory_edit.text())
+        refractory_s = refractory_ms / 1000.0
+        
+        params = {
+            'threshold': threshold,
+            'refractory_ms': refractory_ms,
+            'refractory_s': refractory_s
+        }
+        log.debug(f"Gathered spike parameters: {params}")
+        return params
+    
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Execute spike detection analysis."""
+        if not params:
+            return None
+        
+        # Get data
+        voltage = data.get('voltage') or data.get('data')
+        time = data.get('time')
+        rate = data.get('rate')
+        units = data.get('units', 'V')
+        
+        if voltage is None or time is None or rate is None or rate <= 0:
+            log.error("Missing voltage, time, or valid rate in plotted data")
+            return None
+        
+        # Get parameters
+        threshold = params.get('threshold')
+        refractory_s = params.get('refractory_s')
+        
+        try:
+            # Calculate refractory in samples
+            refractory_period_samples = int(refractory_s * rate)
+            
+            # Run detection
+            log.info(f"Running spike detection: Threshold={threshold:.3f}, Refractory={refractory_s:.4f}s")
+            spike_indices, spike_times_from_func = spike_analysis.detect_spikes_threshold(
+                voltage, time, threshold, refractory_period_samples
+            )
+            
+            if spike_indices is None:
+                raise ValueError("Spike detection function returned None")
+            
+            num_spikes = len(spike_indices)
+            log.info(f"Detected {num_spikes} spikes")
+            
+            # Calculate results
+            results = {
+                'num_spikes': num_spikes,
+                'spike_indices': spike_indices,
+                'threshold': threshold,
+                'refractory_ms': params.get('refractory_ms'),
+                'units': units
+            }
+            
+            if num_spikes > 0:
+                spike_times = time[spike_indices]
+                duration = time[-1] - time[0]
+                avg_rate = num_spikes / duration if duration > 0 else 0
+                
+                results['spike_times'] = spike_times
+                results['avg_rate'] = avg_rate
+                results['duration'] = duration
+                
+                # Calculate spike features
+                features_list = spike_analysis.calculate_spike_features(voltage, time, spike_indices)
+                if features_list:
+                    results['spike_features'] = features_list
+                    
+                    # Calculate mean and SD for each feature
+                    amplitudes = [f['amplitude'] for f in features_list if not np.isnan(f['amplitude'])]
+                    half_widths = [f['half_width'] for f in features_list if not np.isnan(f['half_width'])]
+                    ahp_depths = [f['ahp_depth'] for f in features_list if not np.isnan(f['ahp_depth'])]
+                    
+                    if amplitudes:
+                        results['amplitude_mean'] = np.mean(amplitudes)
+                        results['amplitude_std'] = np.std(amplitudes)
+                    if half_widths:
+                        results['half_width_mean'] = np.mean(half_widths)
+                        results['half_width_std'] = np.std(half_widths)
+                    if ahp_depths:
+                        results['ahp_depth_mean'] = np.mean(ahp_depths)
+                        results['ahp_depth_std'] = np.std(ahp_depths)
+                
+                # Calculate ISI
+                isis = spike_analysis.calculate_isi(spike_times)
+                if isis.size > 0:
+                    results['isi_mean_ms'] = np.mean(isis) * 1000
+                    results['isi_std_ms'] = np.std(isis) * 1000
+                
+                # Get spike voltages for plotting
+                results['spike_voltages'] = voltage[spike_indices]
+            
+            return results
+            
+        except Exception as e:
+            log.error(f"Spike detection failed: {e}", exc_info=True)
+            return None
+    
+    def _display_analysis_results(self, results: Dict[str, Any]):
+        """Display spike detection results in text edit."""
+        threshold = results.get('threshold')
+        refractory_ms = results.get('refractory_ms')
+        units = results.get('units', 'V')
+        num_spikes = results.get('num_spikes', 0)
+        
+        results_str = f"--- Spike Detection Results ---\nThreshold: {threshold:.3f} {units}\nRefractory: {refractory_ms:.2f} ms\n\n"
+        results_str += f"Number of Spikes: {num_spikes}\n"
+        
+        if num_spikes > 0:
+            avg_rate = results.get('avg_rate', 0)
+            results_str += f"Average Firing Rate: {avg_rate:.2f} Hz\n"
+            
+            results_str += "\n--- Spike Features (Mean ± SD) ---\n"
+            if 'amplitude_mean' in results:
+                results_str += f"Amplitude: {results['amplitude_mean']:.2f} ± {results['amplitude_std']:.2f} {units}\n"
+            if 'half_width_mean' in results:
+                results_str += f"Half-width: {results['half_width_mean']:.3f} ± {results['half_width_std']:.3f} ms\n"
+            if 'ahp_depth_mean' in results:
+                results_str += f"AHP Depth: {results['ahp_depth_mean']:.2f} ± {results['ahp_depth_std']:.2f} {units}\n"
+            if 'isi_mean_ms' in results:
+                results_str += f"Mean ISI: {results['isi_mean_ms']:.2f} ± {results['isi_std_ms']:.2f} ms\n"
+        
+        self.results_textedit.setText(results_str)
+        log.info(f"Spike detection results displayed: {num_spikes} spikes")
+        
+        # Store results in current_plot_data for saving
+        if self._current_plot_data:
+            self._current_plot_data['spike_indices'] = results.get('spike_indices', np.array([]))
+            self._current_plot_data['spike_times'] = results.get('spike_times', np.array([]))
+            self._current_plot_data['spike_features'] = results.get('spike_features', [])
+    
+    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+        """Update plot with spike markers and threshold line."""
+        # Clear previous markers
+        if self.spike_markers_item:
+            self.spike_markers_item.setData([])
+        
+        # Show threshold line
+        if self.threshold_line:
+            threshold = results.get('threshold')
+            if threshold is not None:
+                self.threshold_line.setValue(threshold)
+                self.threshold_line.setVisible(True)
+        
+        # Plot spike markers if spikes detected
+        num_spikes = results.get('num_spikes', 0)
+        if num_spikes > 0 and self.spike_markers_item:
+            spike_times = results.get('spike_times')
+            spike_voltages = results.get('spike_voltages')
+            
+            if spike_times is not None and spike_voltages is not None:
+                self.spike_markers_item.setData(x=spike_times, y=spike_voltages)
+                red_brush = pg.mkBrush(255, 0, 0, 150)
+                self.spike_markers_item.setBrush(red_brush)
+                self.spike_markers_item.setVisible(True)
+                log.debug(f"Plotted {num_spikes} spike markers")
+    # --- END PHASE 2 ---
 
 # --- END CLASS SpikeAnalysisTab ---
 

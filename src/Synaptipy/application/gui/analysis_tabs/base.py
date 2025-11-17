@@ -10,9 +10,11 @@ See the LICENSE file in the root of the repository for full license details.
 import logging
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
+from abc import ABC, abstractmethod
 
 from PySide6 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
+import numpy as np
 
 # Use absolute path to import NeoAdapter and Recording
 from Synaptipy.core.data_model import Recording
@@ -25,7 +27,12 @@ from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.base')
 
-class BaseAnalysisTab(QtWidgets.QWidget):
+# Custom metaclass to resolve Qt/ABC metaclass conflict
+class QABCMeta(type(QtWidgets.QWidget), type(ABC)):
+    """Metaclass that combines Qt's metaclass with ABC's metaclass."""
+    pass
+
+class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     """Base Class for all analysis sub-tabs."""
 
     # Removed TRIAL_MODES as it's less relevant now
@@ -58,6 +65,24 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # --- ADDED: Reset View Button ---
         self.reset_view_button: Optional[QtWidgets.QPushButton] = None
         # --- END ADDED ---
+        
+        # --- PHASE 1: Data Selection and Plotting ---
+        self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
+        self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
+        self._current_plot_data: Optional[Dict[str, Any]] = None
+        
+        # --- PHASE 2: Analysis Results ---
+        self._last_analysis_result: Optional[Dict[str, Any]] = None
+        
+        # --- PHASE 3: Debounce Timer for Parameter Changes ---
+        self._analysis_debounce_timer: Optional[QtCore.QTimer] = None
+        self._debounce_delay_ms: int = 500  # 500ms delay for debouncing
+        
+        # Initialize debounce timer
+        self._analysis_debounce_timer = QtCore.QTimer(self)
+        self._analysis_debounce_timer.setSingleShot(True)
+        self._analysis_debounce_timer.timeout.connect(self._trigger_analysis)
+        
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
     # --- Methods for UI setup to be called by subclasses ---
@@ -499,6 +524,11 @@ class BaseAnalysisTab(QtWidgets.QWidget):
             # Clear plot before updating UI for new selection
             if self.plot_widget:
                 self.plot_widget.clear()
+            
+            # PHASE 1: Populate channel and data source comboboxes if they exist
+            if self.signal_channel_combobox and self.data_source_combobox:
+                self._populate_channel_and_source_comboboxes()
+            
             self._update_ui_for_selected_item()
         except NotImplementedError: # Catch if subclass forgot to implement
             log.error(f"Subclass {self.__class__.__name__} must implement _update_ui_for_selected_item()")
@@ -532,15 +562,22 @@ class BaseAnalysisTab(QtWidgets.QWidget):
     # --- END ADDED ---
 
     # --- Abstract Methods / Methods Subclasses MUST Implement ---
+    @abstractmethod
     def get_display_name(self) -> str:
+        """Return the display name for this analysis tab."""
         raise NotImplementedError(f"Subclass {self.__class__.__name__} must implement get_display_name()")
 
+    @abstractmethod
     def _setup_ui(self):
+        """
+        Set up the UI for this analysis tab.
+        Subclass implementation MUST call self._setup_analysis_item_selector(layout) somewhere appropriate.
+        Subclass implementation SHOULD call self._setup_plot_area(layout) somewhere appropriate.
+        Subclass implementation CAN call self._setup_save_button(layout) to add the save button.
+        """
         raise NotImplementedError(f"Subclass {self.__class__.__name__} must implement _setup_ui()")
-        # Subclass implementation MUST call self._setup_analysis_item_selector(layout) somewhere appropriate.
-        # Subclass implementation SHOULD call self._setup_plot_area(layout) somewhere appropriate.
-        # Subclass implementation CAN call self._setup_save_button(layout) to add the save button.
 
+    @abstractmethod
     def _update_ui_for_selected_item(self):
         """
         Subclasses MUST implement this method.
@@ -568,7 +605,385 @@ class BaseAnalysisTab(QtWidgets.QWidget):
         # or raise NotImplementedError explicitly if button setup *requires* implementation
         log.warning(f"{self.__class__.__name__}._get_specific_result_data() is not implemented.")
         return None
+    
+    # --- PHASE 2: Abstract Methods for Template Method Pattern ---
+    # BUG 2 FIX: These are the ONLY declarations of these methods - no duplicates
+    
+    @abstractmethod
+    def _gather_analysis_parameters(self) -> Dict[str, Any]:
+        """
+        Gather analysis parameters from UI widgets.
+        
+        Returns:
+            Dictionary containing all parameters needed for analysis.
+            Return empty dict if parameters are invalid.
+        """
+        pass
+    
+    @abstractmethod
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Execute the core analysis logic.
+        
+        Args:
+            params: Parameters gathered from _gather_analysis_parameters
+            data: Current plot data dictionary
+        
+        Returns:
+            Dictionary containing analysis results, or None if analysis fails.
+            NOTE: Return type is Optional to allow returning None on failure.
+        """
+        pass
+    
+    @abstractmethod
+    def _display_analysis_results(self, results: Dict[str, Any]):
+        """
+        Display analysis results in UI widgets.
+        
+        Args:
+            results: Analysis results dictionary from _execute_core_analysis
+        """
+        pass
+    
+    @abstractmethod
+    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+        """
+        Update plot with analysis-specific visualizations (markers, lines, etc.).
+        
+        Args:
+            results: Analysis results dictionary from _execute_core_analysis
+        """
+        pass
 
+    # --- PHASE 1: Data Selection and Plotting Infrastructure ---
+    def _setup_data_selection_ui(self, layout: QtWidgets.QLayout):
+        """
+        Adds channel and data source selection combo boxes to the provided layout.
+        Called by subclasses in their _setup_ui method.
+        """
+        # Signal Channel Selection
+        self.signal_channel_combobox = QtWidgets.QComboBox()
+        self.signal_channel_combobox.setToolTip("Select the signal channel to plot and analyze.")
+        self.signal_channel_combobox.setEnabled(False)
+        
+        # Data Source Selection (Trial vs Average)
+        self.data_source_combobox = QtWidgets.QComboBox()
+        self.data_source_combobox.setToolTip("Select specific trial or average trace.")
+        self.data_source_combobox.setEnabled(False)
+        
+        # Add to layout
+        if isinstance(layout, QtWidgets.QFormLayout):
+            layout.addRow("Signal Channel:", self.signal_channel_combobox)
+            layout.addRow("Data Source:", self.data_source_combobox)
+        else:
+            # Fallback for other layouts
+            hbox1 = QtWidgets.QHBoxLayout()
+            hbox1.addWidget(QtWidgets.QLabel("Signal Channel:"))
+            hbox1.addWidget(self.signal_channel_combobox, stretch=1)
+            layout.addLayout(hbox1)
+            
+            hbox2 = QtWidgets.QHBoxLayout()
+            hbox2.addWidget(QtWidgets.QLabel("Data Source:"))
+            hbox2.addWidget(self.data_source_combobox, stretch=1)
+            layout.addLayout(hbox2)
+        
+        # Connect signals to trigger plotting when selection changes
+        self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_data)
+        self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_data)
+        
+        log.debug(f"{self.__class__.__name__}: Data selection UI setup complete")
+    
+    def _populate_channel_and_source_comboboxes(self):
+        """
+        Populate channel and data source comboboxes based on the currently loaded recording.
+        Called automatically by the base class when an analysis item is selected.
+        """
+        log.debug(f"{self.__class__.__name__}: Populating channel and source comboboxes")
+        
+        # Clear previous selections
+        self.signal_channel_combobox.blockSignals(True)
+        self.data_source_combobox.blockSignals(True)
+        self.signal_channel_combobox.clear()
+        self.data_source_combobox.clear()
+        
+        has_channels = False
+        
+        # Populate Channel ComboBox
+        if self._selected_item_recording and self._selected_item_recording.channels:
+            for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
+                units = getattr(channel, 'units', '')
+                display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{units}]"
+                self.signal_channel_combobox.addItem(display_name, userData=chan_id)
+                has_channels = True
+        
+        if not has_channels:
+            self.signal_channel_combobox.addItem("No Channels Found")
+            self.signal_channel_combobox.setEnabled(False)
+            self.data_source_combobox.addItem("N/A")
+            self.data_source_combobox.setEnabled(False)
+            self.signal_channel_combobox.blockSignals(False)
+            self.data_source_combobox.blockSignals(False)
+            return
+        
+        self.signal_channel_combobox.setEnabled(True)
+        self.signal_channel_combobox.setCurrentIndex(0)
+        
+        # Populate Data Source ComboBox
+        selected_item_details = self._analysis_items[self._selected_item_index] if self._selected_item_index >= 0 else {}
+        item_type = selected_item_details.get('target_type')
+        item_trial_index = selected_item_details.get('trial_index')
+        
+        # Get trial info from first channel
+        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+        num_trials = 0
+        has_average = False
+        
+        if first_channel:
+            num_trials = getattr(first_channel, 'num_trials', 0)
+            # Check for average data
+            if hasattr(first_channel, 'get_averaged_data') and first_channel.get_averaged_data() is not None:
+                has_average = True
+            elif hasattr(first_channel, 'has_average_data') and first_channel.has_average_data():
+                has_average = True
+            elif getattr(first_channel, '_averaged_data', None) is not None:
+                has_average = True
+        
+        # Populate based on item type
+        if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
+            self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index)
+        elif item_type == "Average Trace" and has_average:
+            self.data_source_combobox.addItem("Average Trace", userData="average")
+        else:  # "Recording" or "All Trials"
+            if has_average:
+                self.data_source_combobox.addItem("Average Trace", userData="average")
+            for i in range(num_trials):
+                self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
+        
+        if self.data_source_combobox.count() > 0:
+            self.data_source_combobox.setEnabled(True)
+        else:
+            self.data_source_combobox.addItem("No Data Available")
+            self.data_source_combobox.setEnabled(False)
+        
+        self.signal_channel_combobox.blockSignals(False)
+        self.data_source_combobox.blockSignals(False)
+        
+        log.debug(f"{self.__class__.__name__}: Comboboxes populated - {self.signal_channel_combobox.count()} channels, {self.data_source_combobox.count()} sources")
+        
+        # Trigger initial plot
+        self._plot_selected_data()
+    
+    @QtCore.Slot()
+    def _plot_selected_data(self):
+        """
+        Centralized plotting method that fetches data based on selected channel and source,
+        plots it, and calls the _on_data_plotted hook for subclass-specific additions.
+        """
+        log.debug(f"{self.__class__.__name__}: Plotting selected data")
+        
+        # Clear current plot data
+        self._current_plot_data = None
+        
+        # Validate UI elements
+        if not self.plot_widget or not self.signal_channel_combobox or not self.data_source_combobox:
+            log.warning(f"{self.__class__.__name__}: Plot widget or comboboxes not initialized")
+            return
+        
+        # Validate selections
+        if not self.signal_channel_combobox.isEnabled() or not self.data_source_combobox.isEnabled():
+            log.debug(f"{self.__class__.__name__}: Comboboxes disabled, skipping plot")
+            if self.plot_widget:
+                self.plot_widget.clear()
+            return
+        
+        # Get selected channel and data source
+        chan_id = self.signal_channel_combobox.currentData()
+        data_source = self.data_source_combobox.currentData()
+        
+        if chan_id is None or data_source is None:
+            log.debug(f"{self.__class__.__name__}: No valid selection")
+            if self.plot_widget:
+                self.plot_widget.clear()
+            return
+        
+        # Validate recording
+        if not self._selected_item_recording or chan_id not in self._selected_item_recording.channels:
+            log.warning(f"{self.__class__.__name__}: Channel {chan_id} not found in recording")
+            if self.plot_widget:
+                self.plot_widget.clear()
+            return
+        
+        # Get channel
+        channel = self._selected_item_recording.channels[chan_id]
+        
+        # Fetch data
+        try:
+            if data_source == "average":
+                data_vec = channel.get_averaged_data()
+                time_vec = channel.get_relative_averaged_time_vector()
+                data_label = "Average"
+            elif isinstance(data_source, int):
+                data_vec = channel.get_data(data_source)
+                time_vec = channel.get_relative_time_vector(data_source)
+                data_label = f"Trial {data_source + 1}"
+            else:
+                log.error(f"{self.__class__.__name__}: Invalid data source: {data_source}")
+                if self.plot_widget:
+                    self.plot_widget.clear()
+                return
+            
+            if data_vec is None or time_vec is None:
+                log.warning(f"{self.__class__.__name__}: No data available for {data_label}")
+                if self.plot_widget:
+                    self.plot_widget.clear()
+                return
+            
+            # Store current plot data
+            self._current_plot_data = {
+                'data': data_vec,
+                'time': time_vec,
+                'channel_id': chan_id,
+                'data_source': data_source,
+                'units': channel.units or '?',
+                'sampling_rate': channel.sampling_rate,
+                'channel_name': channel.name or f'Ch {chan_id}'
+            }
+            
+            # Clear plot
+            self.plot_widget.clear()
+            
+            # Plot data
+            try:
+                from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
+                if data_source == "average":
+                    pen = get_average_pen()
+                else:
+                    pen = get_single_trial_pen()
+            except ImportError:
+                pen = pg.mkPen(color=(0, 0, 0), width=1)
+            
+            self.plot_widget.plot(time_vec, data_vec, pen=pen, name=data_label)
+            
+            # Set labels
+            self.plot_widget.setLabel('bottom', 'Time', units='s')
+            self.plot_widget.setLabel('left', channel.name or f'Ch {chan_id}', units=channel.units)
+            self.plot_widget.setTitle(f"{channel.name or f'Channel {chan_id}'} - {data_label}")
+            
+            # Set data ranges for zoom sync
+            if time_vec is not None and data_vec is not None and len(time_vec) > 0 and len(data_vec) > 0:
+                x_range = (float(np.min(time_vec)), float(np.max(time_vec)))
+                y_range = (float(np.min(data_vec)), float(np.max(data_vec)))
+                self.set_data_ranges(x_range, y_range)
+            
+            log.info(f"{self.__class__.__name__}: Successfully plotted {data_label} from channel {chan_id}")
+            
+            # Call hook for subclass-specific plot items
+            self._on_data_plotted()
+            
+        except Exception as e:
+            log.error(f"{self.__class__.__name__}: Error plotting data: {e}", exc_info=True)
+            if self.plot_widget:
+                self.plot_widget.clear()
+            self._current_plot_data = None
+    
+    def _on_data_plotted(self):
+        """
+        Hook method called after data has been successfully plotted by the base class.
+        Subclasses should override this to add their specific plot items (e.g., regions, markers).
+        """
+        pass  # Default implementation does nothing
+    
+    # --- PHASE 2: Template Method Pattern ---
+    @QtCore.Slot()
+    def _trigger_analysis(self):
+        """
+        Template method that orchestrates the analysis workflow.
+        This method should NOT be overridden by subclasses.
+        
+        Workflow:
+        1. Validate data availability
+        2. Set wait cursor
+        3. Gather parameters from UI (via abstract method)
+        4. Execute core analysis (via abstract method)
+        5. Display results (via abstract method)
+        6. Update plot visualizations (via abstract method)
+        7. Enable save button
+        8. Handle errors and restore cursor
+        """
+        log.debug(f"{self.__class__.__name__}: Triggering analysis")
+        
+        # Validate data
+        if not self._current_plot_data:
+            log.warning(f"{self.__class__.__name__}: No data available for analysis")
+            QtWidgets.QMessageBox.warning(
+                self,
+                "No Data",
+                "Please load and plot data before running analysis."
+            )
+            return
+        
+        # Set wait cursor
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        self._last_analysis_result = None
+        
+        try:
+            # Step 1: Gather parameters from subclass UI
+            params = self._gather_analysis_parameters()
+            if not params:
+                log.warning(f"{self.__class__.__name__}: No parameters gathered")
+                self._set_save_button_enabled(False)
+                return
+            
+            # Step 2: Execute core analysis
+            results = self._execute_core_analysis(params, self._current_plot_data)
+            
+            # BUG 1 FIX: Check if results is None before proceeding
+            if results is None:
+                log.warning(f"{self.__class__.__name__}: Analysis returned None")
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Analysis Failed",
+                    "Analysis could not be completed. Please check your parameters and data."
+                )
+                self._set_save_button_enabled(False)
+                return
+            
+            # Store results for saving
+            self._last_analysis_result = results
+            
+            # Step 3: Display results in UI
+            self._display_analysis_results(results)
+            
+            # Step 4: Update plot visualizations
+            self._plot_analysis_visualizations(results)
+            
+            # Enable save button
+            self._set_save_button_enabled(True)
+            
+            log.info(f"{self.__class__.__name__}: Analysis completed successfully")
+            
+        except Exception as e:
+            log.error(f"{self.__class__.__name__}: Analysis failed: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Analysis Error",
+                f"An error occurred during analysis:\n{str(e)}"
+            )
+            self._set_save_button_enabled(False)
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+    
+    # --- PHASE 3: Debounced Parameter Change Handler ---
+    @QtCore.Slot()
+    def _on_parameter_changed(self):
+        """
+        Called when a parameter widget changes.
+        Starts/restarts the debounce timer to trigger analysis after a delay.
+        """
+        if self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
+            log.debug(f"{self.__class__.__name__}: Parameter changed, debounce timer started")
+    
     # --- Optional Methods Subclasses Might Implement ---
     def _connect_signals(self):
         pass # Optional

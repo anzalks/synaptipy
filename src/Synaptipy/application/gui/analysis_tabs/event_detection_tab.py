@@ -29,8 +29,7 @@ class EventDetectionTab(BaseAnalysisTab):
         super().__init__(neo_adapter=neo_adapter, parent=parent)
 
         # --- UI References --- 
-        self.channel_combobox: Optional[QtWidgets.QComboBox] = None
-        self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
+        # NOTE: channel_combobox and data_source_combobox are now inherited from BaseAnalysisTab
         self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
 
         # Miniature Event Controls
@@ -95,21 +94,10 @@ class EventDetectionTab(BaseAnalysisTab):
         self._setup_analysis_item_selector(item_selector_layout)
         shared_controls_layout.addLayout(item_selector_layout)
 
-        channel_select_layout = QtWidgets.QHBoxLayout()
-        channel_select_layout.addWidget(QtWidgets.QLabel("Plot Channel:"))
-        self.channel_combobox = QtWidgets.QComboBox()
-        self.channel_combobox.setToolTip("Select the current or voltage channel to analyze.")
-        self.channel_combobox.setEnabled(False)
-        channel_select_layout.addWidget(self.channel_combobox, stretch=1)
-        shared_controls_layout.addLayout(channel_select_layout)
-
-        data_source_layout = QtWidgets.QHBoxLayout()
-        data_source_layout.addWidget(QtWidgets.QLabel("Data Source:"))
-        self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select the specific trial or average trace.")
-        self.data_source_combobox.setEnabled(False)
-        data_source_layout.addWidget(self.data_source_combobox, stretch=1)
-        shared_controls_layout.addLayout(data_source_layout)
+        # Channel & Data Source (now handled by base class)
+        channel_source_layout = QtWidgets.QFormLayout()
+        self._setup_data_selection_ui(channel_source_layout)
+        shared_controls_layout.addLayout(channel_source_layout)
         
         top_section_layout.addWidget(shared_controls_group) # Add data selection to the left
 
@@ -274,10 +262,23 @@ class EventDetectionTab(BaseAnalysisTab):
 
     def _connect_signals(self):
         """Connect signals for Event Detection tab widgets."""
-        self.channel_combobox.currentIndexChanged.connect(self._plot_selected_trace)
-        self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_trace)
-        self.mini_detect_button.clicked.connect(self._run_miniature_event_detection)
+        # NOTE: Channel and Data Source signals are now connected by BaseAnalysisTab._setup_data_selection_ui
+        # Plotting will happen via _on_data_plotted() hook
+        
+        # PHASE 2: Use template method (direct call, no debouncing for button)
+        self.mini_detect_button.clicked.connect(self._trigger_analysis)
         self.mini_method_combobox.currentIndexChanged.connect(self._on_mini_method_changed)
+        
+        # PHASE 3: Connect parameter changes to debounced analysis for auto-update
+        # Connect all parameter widgets that might change
+        if hasattr(self, 'mini_threshold_edit'):
+            self.mini_threshold_edit.textChanged.connect(self._on_parameter_changed)
+        if hasattr(self, 'mini_deconv_tau_rise_spinbox'):
+            self.mini_deconv_tau_rise_spinbox.valueChanged.connect(self._on_parameter_changed)
+        if hasattr(self, 'mini_deconv_tau_decay_spinbox'):
+            self.mini_deconv_tau_decay_spinbox.valueChanged.connect(self._on_parameter_changed)
+        if hasattr(self, 'mini_deconv_threshold_sd_spinbox'):
+            self.mini_deconv_threshold_sd_spinbox.valueChanged.connect(self._on_parameter_changed)
 
     @QtCore.Slot()
     def _on_mini_method_changed(self):
@@ -323,106 +324,85 @@ class EventDetectionTab(BaseAnalysisTab):
                  self.mini_direction_combo.setVisible(direction_visible)
 
     def _update_ui_for_selected_item(self):
-        """Update Event Detection tab UI for new analysis item."""
+        """
+        Update Event Detection tab UI for new analysis item.
+        NOTE: Channel/data source population and plotting are now handled by BaseAnalysisTab.
+        """
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
+        
+        # Clear previous results
         self._current_plot_data = None
-        if self.mini_results_textedit: self.mini_results_textedit.setText("")
-        if self.mini_detect_button: self.mini_detect_button.setEnabled(False)
-        if self.save_button: self.save_button.setEnabled(False)
+        if self.mini_results_textedit:
+            self.mini_results_textedit.setText("")
+        if self.mini_detect_button:
+            self.mini_detect_button.setEnabled(False)
+        if self.save_button:
+            self.save_button.setEnabled(False)
 
-        # Populate Channel ComboBox
-        self.channel_combobox.blockSignals(True)
-        self.channel_combobox.clear()
-        all_channels_found = False # Use a single flag
-        if self._selected_item_recording and self._selected_item_recording.channels:
-            # Iterate once and add all channels
-            for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
-                 units = getattr(channel, 'units', '')
-                 display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{units}]"
-                 self.channel_combobox.addItem(display_name, userData=chan_id)
-                 all_channels_found = True # Mark if we add at least one
+        # Determine if analysis can be performed
+        can_analyze = (self._selected_item_recording is not None and 
+                      bool(self._selected_item_recording.channels))
+        
+        # Enable/disable controls
+        if self.mini_detect_button:
+            self.mini_detect_button.setEnabled(can_analyze)
 
-        if not all_channels_found:
-            self.channel_combobox.addItem("No Channels Found")
-        else:
-            self.channel_combobox.setCurrentIndex(0) # Select first channel if found
-
-        self.channel_combobox.setEnabled(all_channels_found)
-        self.channel_combobox.blockSignals(False)
-
-        # Populate Data Source ComboBox
-        self.data_source_combobox.blockSignals(True)
-        self.data_source_combobox.clear()
-        self.data_source_combobox.setEnabled(False)
-        can_analyze = False
-        if all_channels_found and self._selected_item_recording:
-            selected_item_details = self._analysis_items[self._selected_item_index]
-            item_type = selected_item_details.get('target_type')
-            item_trial_index = selected_item_details.get('trial_index')
-            num_trials = 0
-            has_average = False
+        # Update dynamic labels with units
+        if can_analyze and self._selected_item_recording.channels:
             first_channel = next(iter(self._selected_item_recording.channels.values()), None)
             if first_channel:
-                 num_trials = getattr(first_channel, 'num_trials', 0)
-                 # Check multiple ways for average data existence
-                 if hasattr(first_channel, 'get_averaged_data') and first_channel.get_averaged_data() is not None: has_average = True
-                 elif hasattr(first_channel, 'has_average_data') and first_channel.has_average_data(): has_average = True
-                 elif getattr(first_channel, '_averaged_data', None) is not None: has_average = True
-
-            if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
-                self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index)
-                can_analyze = True
-            elif item_type == "Average Trace" and has_average:
-                self.data_source_combobox.addItem("Average Trace", userData="average")
-                can_analyze = True
-            elif item_type == "Recording" or item_type == "All Trials":
-                if has_average: self.data_source_combobox.addItem("Average Trace", userData="average")
-                if num_trials > 0:
-                    for i in range(num_trials):
-                        self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
-                if self.data_source_combobox.count() > 0:
-                    self.data_source_combobox.setEnabled(True)
-                    can_analyze = True
-                else:
-                    self.data_source_combobox.addItem("No Trials/Average")
-            else:
-                 self.data_source_combobox.addItem("Invalid Source Item")
-                 log.warning(f"Invalid source item type: {item_type}")
-        else:
-             self.data_source_combobox.addItem("N/A")
-        self.data_source_combobox.blockSignals(False)
-
-        # <<< ADDED: Update dynamic labels >>>
-        if all_channels_found and self._selected_item_recording:
-            first_chan_id = self.channel_combobox.currentData()
-            first_channel = self._selected_item_recording.channels.get(first_chan_id)
-            if first_channel:
                 units = first_channel.units or '?'
-                # Update Threshold Label
-                if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label: # Check attribute exists
+                if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label:
                     self.mini_threshold_label.setText(f"Threshold Value ({units}):")
         else:
             # Reset labels if no suitable channel
-            if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label: # Check attribute exists
+            if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label:
                  self.mini_threshold_label.setText("Threshold Value (?):")
-        # <<< END ADDED >>>
 
         # Enable/Disable Miniature Controls
-        mini_controls_enabled = can_analyze
-        if self.mini_method_combobox: self.mini_method_combobox.setEnabled(mini_controls_enabled)
-        if self.mini_detect_button: self.mini_detect_button.setEnabled(mini_controls_enabled)
+        if self.mini_method_combobox:
+            self.mini_method_combobox.setEnabled(can_analyze)
         self._on_mini_method_changed() # Update parameter visibility/stack based on current method
 
-        # Plot Initial Trace
-        if mini_controls_enabled:
-            self._plot_selected_trace()
-        else:
-            if self.plot_widget: self.plot_widget.clear()
-            if self.channel_combobox: self.channel_combobox.setEnabled(False)
-            if self.data_source_combobox: self.data_source_combobox.setEnabled(False)
+    # --- PHASE 1 REFACTORING: Hook for Event Detection-Specific Plot Items ---
+    def _on_data_plotted(self):
+        """
+        Hook called by BaseAnalysisTab after plotting main data trace.
+        Adds Event Detection-specific plot items: event markers.
+        """
+        log.debug(f"{self.get_display_name()}: _on_data_plotted hook called")
+        
+        # Clear previous event detection results
+        if self.mini_results_textedit:
+            self.mini_results_textedit.clear()
+        if self.event_markers_item:
+            self.event_markers_item.setData([])
+            self.event_markers_item.setVisible(False)
+        
+        # Validate that base class plotted data successfully
+        if not self._current_plot_data or 'time' not in self._current_plot_data:
+            log.debug("No plot data available, skipping Event Detection-specific items")
+            if self.mini_detect_button:
+                self.mini_detect_button.setEnabled(False)
+            return
+        
+        # Add event-specific visualization items (removed by base class clear())
+        if self.event_markers_item:
+            self.plot_widget.addItem(self.event_markers_item)
+        
+        # Enable detection button now that data is plotted
+        if self.mini_detect_button:
+            self.mini_detect_button.setEnabled(True)
+        
+        log.debug(f"{self.get_display_name()}: Event Detection-specific plot items added successfully")
+    # --- END PHASE 1 REFACTORING ---
 
+    # --- REMOVED: _plot_selected_trace() ---
+    # This method has been replaced by BaseAnalysisTab._plot_selected_data()
+    # combined with the _on_data_plotted() hook above.
+    # Base class handles generic plotting; hook adds Event Detection-specific items (markers)
 
-    def _plot_selected_trace(self):
+    def _OLD_plot_selected_trace(self):
         log.info(f"[EVENT-DETECTION] Starting plot trace for analysis tab...")
         """Plots the selected trace and clears previous events."""
         plot_succeeded = False
@@ -717,8 +697,8 @@ class EventDetectionTab(BaseAnalysisTab):
             return None
 
         # Get data source information
-        channel_id = self.channel_combobox.currentData()
-        channel_name = self.channel_combobox.currentText().split(' (')[0]
+        channel_id = self.signal_channel_combobox.currentData()
+        channel_name = self.signal_channel_combobox.currentText().split(' (')[0]
         data_source = self.data_source_combobox.currentData()
         data_source_text = self.data_source_combobox.currentText()
         units = self._current_plot_data.get('units', '?') if self._current_plot_data else '?'
@@ -756,6 +736,191 @@ class EventDetectionTab(BaseAnalysisTab):
              
         log.debug(f"_get_specific_result_data (EventDetection) returning keys: {list(specific_data.keys())}")
         return specific_data
+
+    # --- PHASE 2: Template Method Pattern Implementation ---
+    def _gather_analysis_parameters(self) -> Dict[str, Any]:
+        """Gather event detection parameters from UI."""
+        selected_method = self.mini_method_combobox.currentText()
+        params = {'method': selected_method}
+        
+        try:
+            if selected_method == "Threshold Based":
+                threshold = float(self.mini_threshold_edit.text())
+                direction = self.mini_direction_combo.currentText()
+                params['threshold'] = threshold
+                params['direction'] = direction
+            
+            elif selected_method == "Deconvolution (Custom)":
+                params['tau_rise'] = self.mini_deconv_tau_rise_spinbox.value()
+                params['tau_decay'] = self.mini_deconv_tau_decay_spinbox.value()
+                params['filter_freq'] = self.mini_deconv_filter_spinbox.value()
+                params['threshold_sd'] = self.mini_deconv_threshold_sd_spinbox.value()
+            
+            elif selected_method == "Template Matching":
+                template_path = self.mini_template_path_edit.text()
+                min_amplitude = self.mini_template_min_amp_spinbox.value()
+                max_amplitude = self.mini_template_max_amp_spinbox.value()
+                params['template_path'] = template_path
+                params['min_amplitude'] = min_amplitude
+                params['max_amplitude'] = max_amplitude
+            
+            elif selected_method == "Baseline + Peak":
+                params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()
+                params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()
+                params['step_size_ms'] = self.mini_step_size_spinbox.value()
+                params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()
+                params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()
+            
+            log.debug(f"Gathered event detection parameters: {params}")
+            return params
+            
+        except Exception as e:
+            log.error(f"Failed to gather parameters: {e}")
+            return {'method': selected_method}
+    
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Execute event detection analysis."""
+        # Get data
+        signal_data = data.get('data')
+        sample_rate = data.get('sampling_rate')
+        units = data.get('units', '?')
+        
+        if signal_data is None or sample_rate is None or sample_rate <= 0:
+            log.error("Invalid data or sample rate")
+            return None
+        
+        selected_method = params.get('method')
+        peak_indices = np.array([])
+        event_details = None
+        stats = {}
+        
+        try:
+            if selected_method == "Threshold Based":
+                threshold = params.get('threshold')
+                direction = params.get('direction')
+                peak_indices, stats = ed.detect_events_threshold_crossing(signal_data, threshold, direction)
+            
+            elif selected_method == "Deconvolution (Custom)":
+                tau_rise = params.get('tau_rise')
+                tau_decay = params.get('tau_decay')
+                filter_freq = params.get('filter_freq')
+                threshold_sd = params.get('threshold_sd')
+                
+                if tau_decay <= tau_rise:
+                    raise ValueError("Tau Decay must be > Tau Rise")
+                
+                filter_freq_param = filter_freq if filter_freq > 0 else None
+                peak_indices, stats = ed.detect_events_deconvolution_custom(
+                    signal_data, sample_rate, tau_rise, tau_decay, threshold_sd, filter_freq_param
+                )
+            
+            elif selected_method == "Template Matching":
+                template_path = params.get('template_path')
+                min_amplitude = params.get('min_amplitude')
+                max_amplitude = params.get('max_amplitude')
+                peak_indices, stats = ed.detect_events_template_matching(
+                    signal_data, sample_rate, template_path, min_amplitude, max_amplitude
+                )
+            
+            elif selected_method == "Baseline + Peak":
+                bl_duration_ms = params.get('bl_duration_ms')
+                peak_duration_ms = params.get('peak_duration_ms')
+                step_size_ms = params.get('step_size_ms')
+                baseline_threshold = params.get('baseline_threshold')
+                peak_threshold_factor = params.get('peak_threshold_factor')
+                
+                peak_indices, event_details, stats = ed.detect_events_baseline_peak(
+                    signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
+                    step_size_ms, baseline_threshold, peak_threshold_factor
+                )
+            
+            else:
+                log.warning(f"Unknown detection method: {selected_method}")
+                return None
+            
+            # Build results
+            results = {
+                'method': selected_method,
+                'parameters': params,
+                'summary_stats': stats,
+                'event_indices': peak_indices,
+                'event_details': event_details,
+                'num_events': stats.get('count', 0),
+                'units': units
+            }
+            
+            log.info(f"Event detection completed: {results['num_events']} events detected")
+            return results
+            
+        except Exception as e:
+            log.error(f"Event detection failed: {e}", exc_info=True)
+            return None
+    
+    def _display_analysis_results(self, results: Dict[str, Any]):
+        """Display event detection results in text edit."""
+        selected_method = results.get('method')
+        params = results.get('parameters', {})
+        stats = results.get('summary_stats', {})
+        num_events = results.get('num_events', 0)
+        units = results.get('units', '?')
+        
+        results_str = f"--- {selected_method} Results ---\n"
+        
+        # Add method-specific parameter display
+        if selected_method == "Threshold Based":
+            results_str += f"Direction: {params.get('direction')}\n"
+            results_str += f"Threshold Value: {params.get('threshold'):.3g} {units}\n"
+        elif selected_method == "Deconvolution (Custom)":
+            results_str += f"Parameters: Rise={params.get('tau_rise'):.1f}ms, Decay={params.get('tau_decay'):.1f}ms, "
+            results_str += f"Filter={params.get('filter_freq') or 'None'}Hz, Thr={params.get('threshold_sd'):.1f}*SD\n"
+        
+        results_str += f"Detected Events: {num_events}\n"
+        
+        # Add detailed statistics if available
+        if 'mean_amplitude' in stats:
+            results_str += f"\nMean Amplitude: {stats.get('mean_amplitude'):.3f} {units}\n"
+        if 'mean_interval' in stats:
+            results_str += f"Mean Interval: {stats.get('mean_interval'):.3f} ms\n"
+        
+        self.mini_results_textedit.setText(results_str)
+        log.info(f"Event detection results displayed: {num_events} events")
+        
+        # Store result for saving
+        self._last_analysis_result = {
+            'method': selected_method,
+            'parameters': params,
+            'summary_stats': stats,
+            'event_indices': results.get('event_indices'),
+            'event_details': results.get('event_details')
+        }
+    
+    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+        """Update plot with event markers."""
+        # Clear previous markers
+        if self.event_markers_item:
+            self.event_markers_item.setData([])
+        
+        # Plot event markers if events detected
+        num_events = results.get('num_events', 0)
+        if num_events > 0 and self.event_markers_item:
+            event_indices = results.get('event_indices')
+            
+            if event_indices is not None and len(event_indices) > 0:
+                # Get time and data for plotting
+                if self._current_plot_data:
+                    time_vec = self._current_plot_data.get('time')
+                    data_vec = self._current_plot_data.get('data')
+                    
+                    if time_vec is not None and data_vec is not None:
+                        event_times = time_vec[event_indices]
+                        event_values = data_vec[event_indices]
+                        
+                        self.event_markers_item.setData(x=event_times, y=event_values)
+                        red_brush = pg.mkBrush(255, 0, 0, 150)
+                        self.event_markers_item.setBrush(red_brush)
+                        self.event_markers_item.setVisible(True)
+                        log.debug(f"Plotted {num_events} event markers")
+    # --- END PHASE 2 ---
 
 
 # --- END CLASS EventDetectionTab ---

@@ -115,8 +115,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Initialize Rin/G specific attributes
         self.mode_combobox = None
         # --- UI References specific to Rin/Conductance ---
-        self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
-        self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
+        # NOTE: signal_channel_combobox and data_source_combobox are now inherited from BaseAnalysisTab
         # Mode Selection
         self.analysis_params_group: Optional[QtWidgets.QGroupBox] = None
         self.mode_combobox: Optional[QtWidgets.QComboBox] = None
@@ -167,7 +166,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         self._on_mode_changed() # Set initial UI state
 
     def get_display_name(self) -> str:
-        return "Intrinsic Properties" # Updated name
+        return "Resistance/Conductance"
 
     def _setup_ui(self):
         """Set up the UI elements for the Rin/G Analysis tab (Generalized)."""
@@ -206,17 +205,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Use Base Class Item Combobox
         self._setup_analysis_item_selector(data_selection_layout)
 
-        # Signal Channel Combobox (Renamed from voltage_channel_combobox)
-        self.signal_channel_label = QtWidgets.QLabel("Signal Channel:") # RENAMED LABEL
-        self.signal_channel_combobox = QtWidgets.QComboBox()
-        self.signal_channel_combobox.setToolTip("Select the primary signal channel (Voltage or Current) to analyze.")
-        data_selection_layout.addRow(self.signal_channel_label, self.signal_channel_combobox)
-
-        # Data Source Combobox (Trial/Average)
-        self.data_source_label = QtWidgets.QLabel("Data Source:")
-        self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select the specific trial or average trace to analyze.")
-        data_selection_layout.addRow(self.data_source_label, self.data_source_combobox)
+        # Signal Channel & Data Source (now handled by base class)
+        self._setup_data_selection_ui(data_selection_layout)
 
         top_controls_layout.addWidget(self.data_selection_group)
 
@@ -432,9 +422,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Mode switching
         if self.mode_combobox: self.mode_combobox.currentTextChanged.connect(self._on_mode_changed)
 
-        # Data selection - Use NEW specific slots
-        if self.signal_channel_combobox: self.signal_channel_combobox.currentIndexChanged.connect(self._on_signal_channel_changed)
-        if self.data_source_combobox: self.data_source_combobox.currentIndexChanged.connect(self._on_data_source_changed)
+        # NOTE: Channel and Data Source signals are now connected by BaseAnalysisTab._setup_data_selection_ui
+        # Plotting and analysis triggering will happen via _on_data_plotted() hook
 
         # Manual time window inputs - Connect with valueChanged instead of editingFinished
         if self.manual_baseline_start_spinbox: 
@@ -454,7 +443,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         
         # Connect Run button
         if self.run_button: 
-            self.run_button.clicked.connect(self._run_analysis)
+            # PHASE 2: Connect to template method (direct call, no debouncing)
+            self.run_button.clicked.connect(self._trigger_analysis)
 
         # Connect other properties buttons
         if self.tau_button: self.tau_button.clicked.connect(self._calculate_tau)
@@ -466,28 +456,70 @@ class RinAnalysisTab(BaseAnalysisTab):
 
     # --- NEW Slots for internal combobox changes ---
     @QtCore.Slot()
-    def _on_signal_channel_changed(self):
-        """Called when the signal channel combobox selection changes."""
-        log.debug("Signal channel selection changed, replotting.")
-        self._plot_selected_trace()
-        # Analysis might need re-triggering depending on mode
-        if self.mode_combobox and self.mode_combobox.currentText() == self._MODE_INTERACTIVE:
-             self._run_analysis()
-        elif self.mode_combobox and self.mode_combobox.currentText() == self._MODE_MANUAL:
-             self._clear_results_display() # Clear old results for manual mode
-             # Consider if manual analysis should re-run automatically?
-
-    @QtCore.Slot()
-    def _on_data_source_changed(self):
-        """Called when the data source combobox selection changes."""
-        log.debug("Data source selection changed, replotting.")
-        self._plot_selected_trace()
-        # Analysis might need re-triggering depending on mode
-        if self.mode_combobox and self.mode_combobox.currentText() == self._MODE_INTERACTIVE:
-             self._run_analysis()
-        elif self.mode_combobox and self.mode_combobox.currentText() == self._MODE_MANUAL:
-             self._clear_results_display() # Clear old results for manual mode
-             # Consider if manual analysis should re-run automatically?
+    # --- PHASE 1 REFACTORING: Hook for Rin-Specific Plot Items ---
+    def _on_data_plotted(self):
+        """
+        Hook called by BaseAnalysisTab after plotting main data trace.
+        Adds Rin-specific plot items: baseline/response regions, visualization lines.
+        """
+        log.debug(f"{self.get_display_name()}: _on_data_plotted hook called")
+        
+        # Clear results for new data
+        self._clear_results_display()
+        
+        # Validate that base class plotted data successfully
+        if not self._current_plot_data or 'time' not in self._current_plot_data:
+            log.debug("No plot data available, skipping Rin-specific items")
+            # Hide regions if no data
+            if self.baseline_region: self.baseline_region.setVisible(False)
+            if self.response_region: self.response_region.setVisible(False)
+            return
+        
+        time_vec = self._current_plot_data['time']
+        
+        # Set region bounds based on plotted data
+        min_t, max_t = time_vec[0], time_vec[-1]
+        duration = max_t - min_t
+        
+        # Update region bounds
+        self.baseline_region.setBounds([min_t, max_t])
+        self.response_region.setBounds([min_t, max_t])
+        
+        # Set default regions if they're invalid or outside bounds
+        bl_start, bl_end = self.baseline_region.getRegion()
+        resp_start, resp_end = self.response_region.getRegion()
+        
+        # Reset baseline region if invalid
+        if bl_start < min_t or bl_end > max_t or bl_start >= bl_end:
+            default_bl_end = min(min_t + 0.1, min_t + duration * 0.2, max_t)
+            self.baseline_region.setRegion([min_t, default_bl_end])
+            log.debug(f"Reset baseline region to: [{min_t:.4f}, {default_bl_end:.4f}]")
+        
+        # Reset response region if invalid (place it after baseline)
+        if resp_start < min_t or resp_end > max_t or resp_start >= resp_end:
+            default_resp_start = min(min_t + 0.2, min_t + duration * 0.4, max_t - 0.05)
+            default_resp_end = min(default_resp_start + 0.1, max_t)
+            self.response_region.setRegion([default_resp_start, default_resp_end])
+            log.debug(f"Reset response region to: [{default_resp_start:.4f}, {default_resp_end:.4f}]")
+        
+        # Add regions to plot (removed by base class clear())
+        self.plot_widget.addItem(self.baseline_region)
+        self.plot_widget.addItem(self.response_region)
+        
+        # Show regions if in interactive mode
+        current_mode = self.mode_combobox.currentText() if self.mode_combobox else ""
+        if current_mode == self._MODE_INTERACTIVE:
+            self.baseline_region.setVisible(True)
+            self.response_region.setVisible(True)
+            # Trigger analysis automatically in interactive mode
+            # PHASE 2: Use template method
+            self._trigger_analysis()
+        else:
+            self.baseline_region.setVisible(False)
+            self.response_region.setVisible(False)
+        
+        log.debug(f"{self.get_display_name()}: Rin-specific plot items added successfully")
+    # --- END PHASE 1 REFACTORING ---
 
     # --- Analysis Triggering ---
 
@@ -495,7 +527,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         """Trigger analysis only if the current mode is Interactive."""
         if self.mode_combobox and self.mode_combobox.currentText() == self._MODE_INTERACTIVE:
             log.debug("Interactive region changed, triggering analysis.")
-            self._run_analysis()
+            # PHASE 2 & 3: Use debounced template method
+            self._on_parameter_changed()
         else:
             log.debug("Interactive region changed, but mode is not Interactive. Skipping analysis.")
 
@@ -527,8 +560,9 @@ class RinAnalysisTab(BaseAnalysisTab):
         is_manual = not is_interactive
         
         # Get data vectors from current data
-        time_vec = self._current_plot_data["time_vec"]
-        data_vec = self._current_plot_data["data_vec"]
+        # NOTE: Base class stores as 'time' and 'data', support both formats
+        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
         units = self._current_plot_data.get("units", "unknown")
         
         # Determine if we're dealing with voltage or current signal
@@ -763,7 +797,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         has_data_plotted = self.plot_item is not None # Check if plot exists
         if is_interactive and has_data_plotted:
             log.debug("Mode switched to Interactive with data, triggering analysis.")
-            self._run_analysis()
+            # PHASE 2: Use template method
+            self._trigger_analysis()
 
     # --- Mode and Plot Dependent UI Updates --- # NEW METHOD
     def _update_mode_dependent_ui(self):
@@ -865,102 +900,31 @@ class RinAnalysisTab(BaseAnalysisTab):
     # --- UI Update Method --- 
     def _update_ui_for_selected_item(self):
         """
-        Updates the UI elements specific to Rin/G analysis when a new 
-        analysis item is selected.
-        Populates channel list, data source list, and triggers plotting.
+        Updates the UI elements specific to Rin/G analysis when a new analysis item is selected.
+        NOTE: Channel/data source population and plotting are now handled by BaseAnalysisTab.
+        This method only handles mode-specific UI updates.
         """
         log.debug(f"Rin/G: Updating UI for selected item index {self._selected_item_index}")
         
-        # Clear previous state and plot
-        # Block signals during programmatic changes
-        if self.signal_channel_combobox: self.signal_channel_combobox.blockSignals(True)
-        if self.data_source_combobox: self.data_source_combobox.blockSignals(True)
-        
-        if self.signal_channel_combobox: self.signal_channel_combobox.clear()
-        if self.data_source_combobox: self.data_source_combobox.clear()
-
-        if self.plot_widget:
-            self.plot_widget.clear()
+        # Clear previous analysis results
         self._last_rin_result = None
-        self._clear_results_display() # Clear result labels
-        # Disable controls by default
-        is_data_valid = False
+        self._clear_results_display()
+        
+        # Determine if analysis can be performed based on data availability
+        # BaseAnalysisTab has already loaded the recording and will populate comboboxes
+        is_data_valid = (self._selected_item_recording is not None and 
+                        bool(self._selected_item_recording.channels))
 
-        if self._selected_item_recording:
-            # Populate Signal Channel Combobox
-            if self._selected_item_recording.channels:
-                # NEW: Iterate through channels to create descriptive names
-                for key, channel in self._selected_item_recording.channels.items():
-                    display_text = f"{channel.name} ({channel.units})" if channel.units else channel.name
-                    self.signal_channel_combobox.addItem(display_text, userData=key)
-                
-                self.signal_channel_combobox.setCurrentIndex(0) # Select first channel by default
-                is_data_valid = True # Enable further UI if channels exist
-            else:
-                self.signal_channel_combobox.addItem("No Channels Found")
-            # self.signal_channel_combobox.blockSignals(False) # Unblock later
-
-            # Populate Data Source Combobox based on the first channel (assume homogeneity)
-            first_channel_key = self.signal_channel_combobox.currentData() if self.signal_channel_combobox.count() > 0 else None # NEW: Get key of first item
-            if first_channel_key: # NEW
-                # CORRECT ACCESS: Use dictionary lookup
-                first_channel = self._selected_item_recording.channels.get(first_channel_key)
-                # self.data_source_combobox.blockSignals(True) # Already blocked
-                if first_channel:
-                    num_trials = first_channel.num_trials
-                    # Correct way to check if average data is available
-                    has_average = first_channel.get_averaged_data() is not None
-                    
-                    log.debug(f"Determined from first channel: num_trials={num_trials}, has_average={has_average}")
-
-                    available_sources = []
-                    if has_average:
-                        available_sources.append(("Average", "average"))
-                    for i in range(num_trials):
-                        available_sources.append((f"Trial {i + 1}", f"trial_{i}"))
-                    
-                    if available_sources:
-                        for display_name, data_key in available_sources:
-                            self.data_source_combobox.addItem(display_name, userData=data_key)
-                        self.data_source_combobox.setCurrentIndex(0) # Select first available source
-                    else:
-                        self.data_source_combobox.addItem("No Traces Found")
-                        is_data_valid = False # Cannot analyze if no traces
-                else:
-                     self.data_source_combobox.addItem("Error reading channel")
-                     is_data_valid = False
-                # self.data_source_combobox.blockSignals(False) # Unblock later
-            else:
-                 self.data_source_combobox.addItem("No channels")
-                 is_data_valid = False
-        else:
-            # Handle case where recording didn't load or no item selected
-            self.signal_channel_combobox.addItem("No Recording Selected")
-            self.data_source_combobox.addItem("No Recording Selected")
-
-        # --- Unblock Signals --- 
-        if self.signal_channel_combobox: self.signal_channel_combobox.blockSignals(False)
-        if self.data_source_combobox: self.data_source_combobox.blockSignals(False)
-
-        # Enable/Disable controls based on data validity
-        self.signal_channel_combobox.setEnabled(is_data_valid)
-        self.data_source_combobox.setEnabled(is_data_valid)
+        # Enable/disable analysis parameter controls
         self.analysis_params_group.setEnabled(is_data_valid)
         self.results_group.setEnabled(is_data_valid)
         self.mode_combobox.setEnabled(is_data_valid)
-        # Save button is handled separately by _update_save_button_state
-
-        # Update mode-dependent UI elements (regions, manual inputs)
-        # REMOVED: self._on_mode_changed() # This was likely causing loops/redundancy
-
-        # Plot the selected trace if data is valid
-        if is_data_valid:
-            log.debug("Data is valid, attempting to plot initial trace.")
-            self._plot_selected_trace()
-        else:
-            log.debug("Data is invalid or unavailable, clearing plot and disabling UI.")
-            if self.plot_widget: self.plot_widget.clear()
-            # Ensure regions/lines are hidden if no data
+        
+        # Update mode-specific controls and visualization
+        self._on_mode_changed()
+        
+        # Hide regions/lines if no data
+        if not is_data_valid:
             if self.baseline_region: self.baseline_region.setVisible(False)
             if self.response_region: self.response_region.setVisible(False)
             if self.baseline_line: self.baseline_line.setVisible(False)
@@ -1018,137 +982,19 @@ class RinAnalysisTab(BaseAnalysisTab):
             log.error(f"Error getting data for plotting {channel_name}, {data_source_key}: {e}", exc_info=True)
             return None
 
-    # --- Plotting --- 
-    def _plot_selected_trace(self):
-        """Plots the data trace based on selected channel and data source."""
-        if not self._selected_item_recording or \
-           not self.signal_channel_combobox or \
-           not self.data_source_combobox or \
-           not self.plot_widget:
-            log.debug("Plotting skipped: Missing recording, comboboxes, or plot widget.")
-            if self.plot_widget: self.plot_widget.clear() # Clear if widgets exist but no data
-            return
-
-        # Clear previous plot items (including regions and lines)
-        self.plot_widget.clear()
-        self.plot_item = None # Reset plot item reference
-        # Important: Re-add regions and lines after clearing, but keep them hidden initially
-        if self.baseline_region: self.plot_widget.addItem(self.baseline_region)
-        if self.response_region: self.plot_widget.addItem(self.response_region)
-        if self.baseline_line: self.plot_widget.addItem(self.baseline_line)
-        if self.response_line: self.plot_widget.addItem(self.response_line)
-        self.baseline_region.setVisible(False)
-        self.response_region.setVisible(False)
-        self.baseline_line.setVisible(False)
-        self.response_line.setVisible(False)
-
-
-        # selected_channel_name = self.signal_channel_combobox.currentText() # OLD: Used display text
-        selected_channel_key = self.signal_channel_combobox.currentData() # NEW: Use stored key
-        selected_data_source_key = self.data_source_combobox.currentData()
-
-        # if not selected_channel_name or not selected_data_source_key: # OLD
-        if not selected_channel_key or not selected_data_source_key: # NEW
-            log.warning("Plotting skipped: No channel key or data source selected.")
-            return
-
-        # log.debug(f"Plotting Rin/G trace for Ch: {selected_channel_name}, Source: {selected_data_source_key}") # OLD
-        log.debug(f"Plotting Rin/G trace for Ch Key: {selected_channel_key}, Source: {selected_data_source_key}") # NEW
-
-        # Get data using the helper method
-        # plot_data = self._get_data_for_plotting(selected_channel_name, selected_data_source_key) # OLD
-        plot_data = self._get_data_for_plotting(selected_channel_key, selected_data_source_key) # NEW
-        if plot_data is None:
-            # log.error(f"Failed to retrieve data for plotting {selected_channel_name}, {selected_data_source_key}") # OLD
-            log.error(f"Failed to retrieve data for plotting key {selected_channel_key}, {selected_data_source_key}") # NEW
-            return
-
-        # <<< FIX: Assign retrieved data to local variables >>>
-        time_vec = plot_data['time_vector']
-        data_vec = plot_data['data_vector']
-        ch_label = plot_data['channel_label']
-        y_label = plot_data['y_axis_label']
-        pen = plot_data['pen']
-        sampling_rate = plot_data['sampling_rate']
-
-        # Store for analysis
-        self._current_plot_data = {
-            "time_vec": time_vec,
-            "data_vec": data_vec,
-            "units": plot_data.get('units', 'unknown'), # Get units if available
-            "sampling_rate": sampling_rate
-        }
-
-        # Update plot labels
-        plot_item = self.plot_widget.getPlotItem()
-        if plot_item:
-            plot_item.setLabel('left', y_label)
-            plot_item.setLabel('bottom', 'Time (s)')
-            # Use the channel name in the title?
-            plot_item.setTitle(f"{ch_label} ({self.data_source_combobox.currentText()})")
-        
-        # Set region bounds based on the time vector
-        min_time, max_time = time_vec.min(), time_vec.max()
-        if self.baseline_region: self.baseline_region.setBounds([min_time, max_time])
-        if self.response_region: self.response_region.setBounds([min_time, max_time])
-        
-        # Set default regions
-        time_range = max_time - min_time
-        if self.baseline_region:
-            baseline_start = min_time
-            baseline_end = min_time + 0.2 * time_range
-            self.baseline_region.setRegion([baseline_start, baseline_end])
-            
-        if self.response_region:
-            response_start = baseline_end
-            response_end = response_start + 0.2 * time_range
-            self.response_region.setRegion([response_start, response_end])
-
-        # Plot the main data trace - use customized average pen
-        try:
-            from Synaptipy.shared.plot_customization import get_average_pen
-            pen = get_average_pen()
-            log.debug(f"[RIN-DEBUG] Using customized average pen: {pen}")
-        except ImportError:
-            pen = pg.mkPen(color=(0, 0, 0), width=1)  # Fallback to original black pen
-            log.debug(f"[RIN-DEBUG] Using fallback pen: {pen}")
-        
-        self.plot_item = self.plot_widget.plot(time_vec, data_vec, pen=pen)
-        # CRITICAL: Force pen application (Windows PyQtGraph bug fix)
-        if self.plot_item:
-            self.plot_item.setPen(pen)
-            log.info(f"[RIN-DEBUG] Data plot pen applied: {pen}")
-        
-        # Set data ranges for zoom synchronization
-        x_range = (time_vec.min(), time_vec.max())
-        y_range = (data_vec.min(), data_vec.max())
-        self.set_data_ranges(x_range, y_range)
-        
-        log.debug(f"Successfully plotted {ch_label} trace for Rin/G analysis.")
-
-        # --- Update UI based on new plot ---
-        self._update_mode_dependent_ui() # Ensure regions/manual controls are visible/hidden correctly
-        
-        # Set default values for manual time windows
-        self._set_default_time_windows()
-        
-        # Update button states
-        self._update_run_button_state()
-
-        # Auto-range view AFTER setting data and potentially adding regions
-        if self.plot_widget:
-            self.plot_widget.autoRange() # Adjust view
-        # Force repaint of the plot widget
-        self.plot_widget.update()
+    # --- REMOVED: _plot_selected_trace() ---
+    # This method has been replaced by BaseAnalysisTab._plot_selected_data()
+    # combined with the _on_data_plotted() hook above.
+    # Base class handles generic plotting; hook adds Rin-specific items (regions, lines)
 
     # --- ADDED: Method to initialize spinbox values from time vector ---
     def _set_default_time_windows(self):
         """Set default time windows based on the current plot data."""
-        if not self._current_plot_data or "time_vec" not in self._current_plot_data:
+        if not self._current_plot_data:
             return
             
-        # Get the time vector
-        time_vec = self._current_plot_data["time_vec"]
+        # Get the time vector (support both base class and old format)
+        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
         if time_vec is None or len(time_vec) == 0:
             return
             
@@ -1190,7 +1036,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         has_valid_inputs = False
         
         # Check if we have valid data to operate on
-        if is_manual and self._current_plot_data and "time_vec" in self._current_plot_data and "data_vec" in self._current_plot_data:
+        if is_manual and self._current_plot_data:
             units = self._current_plot_data.get("units", "unknown")
             is_voltage = units and 'mv' in units.lower()
             is_current = units and ('pa' in units.lower() or 'na' in units.lower())
@@ -1283,8 +1129,9 @@ class RinAnalysisTab(BaseAnalysisTab):
     @QtCore.Slot()
     def _calculate_tau(self):
         if not self._current_plot_data: return
-        time_vec = self._current_plot_data["time_vec"]
-        data_vec = self._current_plot_data["data_vec"]
+        # NOTE: Support both base class and old format
+        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
         
         # Use response window for stim start and duration
         response_window = self.response_region.getRegion()
@@ -1300,8 +1147,9 @@ class RinAnalysisTab(BaseAnalysisTab):
     @QtCore.Slot()
     def _calculate_sag_ratio(self):
         if not self._current_plot_data: return
-        time_vec = self._current_plot_data["time_vec"]
-        data_vec = self._current_plot_data["data_vec"]
+        # NOTE: Support both base class and old format
+        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
 
         baseline_window = self.baseline_region.getRegion()
         response_window = self.response_region.getRegion()
@@ -1313,6 +1161,253 @@ class RinAnalysisTab(BaseAnalysisTab):
             self.sag_result_label.setText(f"Sag Ratio: {sag:.3f}")
         else:
             self.sag_result_label.setText("Sag Ratio: Failed")
+
+    # --- PHASE 2: Template Method Pattern Implementation ---
+    def _gather_analysis_parameters(self) -> Dict[str, Any]:
+        """
+        Gather analysis parameters from UI widgets.
+        
+        Returns:
+            Dictionary with mode, windows, and delta values.
+        """
+        params = {}
+        
+        # Get mode
+        is_interactive = (self.mode_combobox and self.mode_combobox.currentText() == self._MODE_INTERACTIVE)
+        params['mode'] = 'interactive' if is_interactive else 'manual'
+        
+        # Get data units to determine signal type
+        if self._current_plot_data:
+            units = self._current_plot_data.get("units", "unknown")
+            params['units'] = units
+            params['is_voltage'] = 'mv' in units.lower() if units else False
+            params['is_current'] = 'pa' in units.lower() or 'na' in units.lower() if units else False
+        
+        # Get windows based on mode
+        if is_interactive:
+            if self.baseline_region and self.response_region:
+                params['baseline_window'] = self.baseline_region.getRegion()
+                params['response_window'] = self.response_region.getRegion()
+        else:  # Manual mode
+            if all([self.manual_baseline_start_spinbox, self.manual_baseline_end_spinbox,
+                    self.manual_response_start_spinbox, self.manual_response_end_spinbox]):
+                params['baseline_window'] = (
+                    self.manual_baseline_start_spinbox.value(),
+                    self.manual_baseline_end_spinbox.value()
+                )
+                params['response_window'] = (
+                    self.manual_response_start_spinbox.value(),
+                    self.manual_response_end_spinbox.value()
+                )
+        
+        # Get delta values
+        if params.get('is_voltage'):
+            if self.manual_delta_i_spinbox:
+                params['delta_i_pa'] = self.manual_delta_i_spinbox.value()
+        elif params.get('is_current'):
+            if self.manual_delta_v_spinbox:
+                params['delta_v_mv'] = self.manual_delta_v_spinbox.value()
+        
+        log.debug(f"Gathered Rin parameters: {params}")
+        return params
+    
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Execute Rin/conductance analysis.
+        
+        Args:
+            params: Analysis parameters from _gather_analysis_parameters
+            data: Current plot data
+        
+        Returns:
+            Dictionary with analysis results or None on failure.
+        """
+        # Validate data
+        if not data:
+            log.warning("_execute_core_analysis: No data available")
+            return None
+        
+        # Get data vectors (support both formats)
+        time_vec = data.get("time") or data.get("time_vec")
+        data_vec = data.get("data") or data.get("data_vec")
+        
+        if time_vec is None or data_vec is None:
+            log.warning("_execute_core_analysis: Missing time or data vectors")
+            return None
+        
+        # Get parameters
+        baseline_window = params.get('baseline_window')
+        response_window = params.get('response_window')
+        is_voltage = params.get('is_voltage', False)
+        is_current = params.get('is_current', False)
+        
+        # Validate windows
+        if not baseline_window or not response_window:
+            log.warning("_execute_core_analysis: Missing baseline/response windows")
+            return None
+        
+        try:
+            if is_voltage:
+                # Calculate Rin from voltage trace
+                delta_i_pa = params.get('delta_i_pa')
+                
+                if not delta_i_pa or np.isclose(delta_i_pa, 0.0):
+                    log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
+                    return None
+                
+                result = calculate_rin(
+                    time_v=time_vec,
+                    voltage=data_vec,
+                    baseline_window=baseline_window,
+                    response_window=response_window,
+                    delta_i_pa=delta_i_pa
+                )
+                
+                if result is None:
+                    return None
+                
+                rin_megaohms, delta_v = result
+                
+                return {
+                    'analysis_type': 'Input Resistance',
+                    'rin_megaohms': rin_megaohms,
+                    'conductance_us': 1000 / rin_megaohms,
+                    'delta_v_mv': delta_v,
+                    'delta_i_pa': delta_i_pa,
+                    'baseline_window': baseline_window,
+                    'response_window': response_window,
+                    'is_voltage': True
+                }
+            
+            elif is_current:
+                # Calculate conductance from current trace
+                delta_v_mv = params.get('delta_v_mv')
+                
+                if not delta_v_mv or np.isclose(delta_v_mv, 0.0):
+                    log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
+                    return None
+                
+                # Calculate mean baseline and response current
+                bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
+                resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
+                
+                if len(bl_indices) == 0 or len(resp_indices) == 0:
+                    log.warning("_execute_core_analysis: No data points in windows")
+                    return None
+                
+                mean_baseline_i = np.mean(data_vec[bl_indices])
+                mean_response_i = np.mean(data_vec[resp_indices])
+                delta_i_pa = mean_response_i - mean_baseline_i
+                
+                # Calculate conductance: G = ΔI / ΔV
+                conductance_us = abs(delta_i_pa) / abs(delta_v_mv) if delta_v_mv != 0 else 0
+                rin_megaohms = 1000 / conductance_us if conductance_us != 0 else float('inf')
+                
+                return {
+                    'analysis_type': 'Conductance',
+                    'rin_megaohms': rin_megaohms,
+                    'conductance_us': conductance_us,
+                    'delta_v_mv': delta_v_mv,
+                    'delta_i_pa': delta_i_pa,
+                    'baseline_window': baseline_window,
+                    'response_window': response_window,
+                    'is_voltage': False
+                }
+            
+            else:
+                log.warning("_execute_core_analysis: Unknown signal type")
+                return None
+        
+        except Exception as e:
+            log.error(f"_execute_core_analysis: Analysis failed: {e}", exc_info=True)
+            return None
+    
+    def _display_analysis_results(self, results: Dict[str, Any]):
+        """
+        Display analysis results in UI labels.
+        
+        Args:
+            results: Analysis results dictionary
+        """
+        rin_megaohms = results.get('rin_megaohms')
+        conductance_us = results.get('conductance_us')
+        delta_v = results.get('delta_v_mv')
+        delta_i = results.get('delta_i_pa')
+        
+        if rin_megaohms is not None and conductance_us is not None:
+            self.rin_result_label.setText(
+                f"Input Resistance (Rin): {rin_megaohms:.2f} MΩ | Conductance: {conductance_us:.4f} μS"
+            )
+            
+            if delta_v is not None:
+                self.delta_v_label.setText(f"Voltage Change (ΔV): {delta_v:.2f} mV")
+            
+            if delta_i is not None:
+                self.delta_i_label.setText(f"Current Change (ΔI): {delta_i:.2f} pA")
+            
+            analysis_type = results.get('analysis_type', 'Analysis')
+            self.status_label.setText(f"Status: {analysis_type} calculation successful")
+            
+            # Store result for saving
+            self._last_rin_result = {
+                "Rin (MΩ)": rin_megaohms,
+                "Conductance (μS)": conductance_us,
+                "ΔV (mV)": delta_v,
+                "ΔI (pA)": delta_i,
+                "Baseline Window (s)": results.get('baseline_window'),
+                "Response Window (s)": results.get('response_window'),
+                "analysis_type": analysis_type,
+                "source_file_name": self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
+            }
+            
+            log.info(f"{analysis_type} result: Rin={rin_megaohms:.2f} MΩ, G={conductance_us:.4f} μS")
+        else:
+            self.status_label.setText("Status: Calculation failed. Check input values.")
+            self._last_rin_result = None
+    
+    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+        """
+        Update plot visualizations with baseline and response lines.
+        
+        Args:
+            results: Analysis results dictionary
+        """
+        # Get data to calculate mean levels
+        if not self._current_plot_data:
+            return
+        
+        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
+        
+        if time_vec is None or data_vec is None:
+            return
+        
+        baseline_window = results.get('baseline_window')
+        response_window = results.get('response_window')
+        
+        if not baseline_window or not response_window:
+            return
+        
+        # Calculate mean levels
+        bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
+        resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
+        
+        if len(bl_indices) > 0 and len(resp_indices) > 0:
+            mean_baseline = np.mean(data_vec[bl_indices])
+            mean_response = np.mean(data_vec[resp_indices])
+            
+            # Update baseline line
+            if self.baseline_line:
+                self.baseline_line.setValue(mean_baseline)
+                self.baseline_line.setVisible(True)
+            
+            # Update response line
+            if self.response_line:
+                self.response_line.setValue(mean_response)
+                self.response_line.setVisible(True)
+            
+            log.debug(f"Updated visualization lines: baseline={mean_baseline:.3f}, response={mean_response:.3f}")
+    # --- END PHASE 2 ---
 
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
