@@ -330,8 +330,7 @@ class EventDetectionTab(BaseAnalysisTab):
         """
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
         
-        # Clear previous results
-        self._current_plot_data = None
+        # Clear previous results (but NOT _current_plot_data - base class manages it)
         if self.mini_results_textedit:
             self.mini_results_textedit.setText("")
         if self.mini_detect_button:
@@ -765,11 +764,10 @@ class EventDetectionTab(BaseAnalysisTab):
                 params['max_amplitude'] = max_amplitude
             
             elif selected_method == "Baseline + Peak + Kinetics":
-                params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()
-                params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()
-                params['step_size_ms'] = self.mini_step_size_spinbox.value()
-                params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()
-                params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()
+                params['direction'] = self.mini_direction_combo.currentText()
+                params['filter_freq_hz'] = self.mini_baseline_filter_spinbox.value()
+                params['peak_prominence_factor'] = self.mini_baseline_prominence_spinbox.value()
+                # Other parameters use defaults (baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms)
             
             log.debug(f"Gathered event detection parameters: {params}")
             return params
@@ -823,15 +821,20 @@ class EventDetectionTab(BaseAnalysisTab):
                 )
             
             elif selected_method == "Baseline + Peak + Kinetics":
-                bl_duration_ms = params.get('bl_duration_ms')
-                peak_duration_ms = params.get('peak_duration_ms')
-                step_size_ms = params.get('step_size_ms')
-                baseline_threshold = params.get('baseline_threshold')
-                peak_threshold_factor = params.get('peak_threshold_factor')
+                direction = params.get('direction', 'negative')
+                filter_freq_hz = params.get('filter_freq_hz', 500.0)
+                peak_prominence_factor = params.get('peak_prominence_factor', 0.0)
                 
-                peak_indices, event_details, stats = ed.detect_events_baseline_peak(
-                    signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
-                    step_size_ms, baseline_threshold, peak_threshold_factor
+                # Use default values for baseline window, step, threshold, and separation
+                # These are calculated automatically by the function
+                filter_freq_param = filter_freq_hz if filter_freq_hz > 0 else None
+                prominence_param = peak_prominence_factor if peak_prominence_factor > 0 else None
+                
+                peak_indices, stats, event_details = ed.detect_events_baseline_peak_kinetics(
+                    signal_data, sample_rate,
+                    direction=direction,
+                    filter_freq_hz=filter_freq_param,
+                    peak_prominence_factor=prominence_param
                 )
             
             else:

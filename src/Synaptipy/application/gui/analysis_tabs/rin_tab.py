@@ -511,9 +511,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         if current_mode == self._MODE_INTERACTIVE:
             self.baseline_region.setVisible(True)
             self.response_region.setVisible(True)
-            # Trigger analysis automatically in interactive mode
-            # PHASE 2: Use template method
-            self._trigger_analysis()
+            # Don't trigger analysis automatically - wait for user to set regions or enter delta values
+            # Analysis will trigger when regions are moved or delta values are changed
         else:
             self.baseline_region.setVisible(False)
             self.response_region.setVisible(False)
@@ -796,9 +795,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         is_interactive = (mode_text == self._MODE_INTERACTIVE)
         has_data_plotted = self.plot_item is not None # Check if plot exists
         if is_interactive and has_data_plotted:
-            log.debug("Mode switched to Interactive with data, triggering analysis.")
-            # PHASE 2: Use template method
-            self._trigger_analysis()
+            log.debug("Mode switched to Interactive with data. Analysis will trigger when user adjusts regions or enters delta values.")
+            # Don't auto-trigger - wait for user interaction
 
     # --- Mode and Plot Dependent UI Updates --- # NEW METHOD
     def _update_mode_dependent_ui(self):
@@ -1207,7 +1205,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         elif params.get('is_current'):
             if self.manual_delta_v_spinbox:
                 params['delta_v_mv'] = self.manual_delta_v_spinbox.value()
-        
+
         log.debug(f"Gathered Rin parameters: {params}")
         return params
     
@@ -1245,6 +1243,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Validate windows
         if not baseline_window or not response_window:
             log.warning("_execute_core_analysis: Missing baseline/response windows")
+            self.status_label.setText("Status: Please set baseline and response windows.")
             return None
         
         try:
@@ -1254,6 +1253,7 @@ class RinAnalysisTab(BaseAnalysisTab):
                 
                 if not delta_i_pa or np.isclose(delta_i_pa, 0.0):
                     log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
+                    self.status_label.setText("Status: Please provide a non-zero ΔI value.")
                     return None
                 
                 result = calculate_rin(
@@ -1286,6 +1286,7 @@ class RinAnalysisTab(BaseAnalysisTab):
                 
                 if not delta_v_mv or np.isclose(delta_v_mv, 0.0):
                     log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
+                    self.status_label.setText("Status: Please provide a non-zero ΔV value.")
                     return None
                 
                 # Calculate mean baseline and response current

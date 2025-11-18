@@ -282,6 +282,39 @@ class Channel:
         return 'Signal' # Default if no units or not recognized
     # --- END ADDED HELPER ---
 
+    def get_data_bounds(self) -> Optional[Tuple[float, float]]:
+        """Returns the min and max values across all trials for this channel."""
+        if not self.data_trials or not any(trial.size > 0 for trial in self.data_trials):
+            return None
+        
+        min_val = np.min([np.min(trial) for trial in self.data_trials if trial.size > 0])
+        max_val = np.max([np.max(trial) for trial in self.data_trials if trial.size > 0])
+        
+        return float(min_val), float(max_val)
+
+    def get_finite_data_bounds(self) -> Optional[Tuple[float, float]]:
+        """
+        Returns the min and max values across all trials, ensuring they are finite.
+        Returns None if no finite data is found.
+        """
+        if not self.data_trials or not any(trial.size > 0 for trial in self.data_trials):
+            return None
+        
+        try:
+            # Concatenate all finite data from all trials
+            all_finite_data = np.concatenate([trial[np.isfinite(trial)] for trial in self.data_trials if trial.size > 0])
+            
+            if all_finite_data.size == 0:
+                return None
+                
+            min_val = np.min(all_finite_data)
+            max_val = np.max(all_finite_data)
+            
+            return float(min_val), float(max_val)
+        except (ValueError, TypeError):
+            # Handles cases where there's no data left after filtering
+            return None
+
     def __repr__(self):
         return f"Channel(id='{self.id}', name='{self.name}', units='{self.units}', trials={self.num_trials})"
 

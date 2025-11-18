@@ -274,8 +274,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         """
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
         
-        # Clear previous analysis results
-        self._current_plot_data = None
+        # Clear previous analysis results (but NOT _current_plot_data - base class manages it)
         if self.mean_sd_result_label: 
             self.mean_sd_result_label.setText("Mean ± SD: --")
         if self.save_button:

@@ -104,6 +104,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
+        self.plot_widgets: List[pg.PlotWidget] = []  # Initialize list for dynamic plot widgets
         
         # NEW: Added missing attributes
         self.channel_y_range_bases: Dict[str, Tuple[float, float]] = {}
@@ -704,6 +705,23 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_selected_trials_display()
         if self.show_selected_average_button:
             self.show_selected_average_button.blockSignals(True); self.show_selected_average_button.setChecked(False); self.show_selected_average_button.blockSignals(False)
+
+        # Disconnect signals from all dynamically created channel UI elements
+        for i in range(len(self.plot_widgets)):
+            checkbox = self.findChild(QtWidgets.QCheckBox, f"channel_checkbox_{i}")
+            if checkbox:
+                try:
+                    # Use a lambda to check if the connection exists before disconnecting
+                    # This is a bit complex, but more robust. A simpler way is just to wrap in try/except
+                    checkbox.stateChanged.disconnect(self._trigger_plot_update)
+                except (TypeError, RuntimeError) as e:
+                    # A TypeError or RuntimeError is raised if the slot is not connected.
+                    # This is expected if the checkbox was created but never connected, or already disconnected.
+                    log.debug(f"Signal for checkbox {i} was not connected or already disconnected: {e}")
+                    pass
+
+        # Clear lists of dynamic widgets
+        self.plot_widgets.clear()
 
         for checkbox in self.channel_checkboxes.values():
             try: checkbox.stateChanged.disconnect(self._trigger_plot_update)

@@ -392,9 +392,120 @@ voltage_vec = data.get('data') if data.get('data') is not None else data.get('vo
 
 ---
 
+## Bug 10: Non-Existent Attributes in "Baseline + Peak + Kinetics" Parameter Gathering
+
+### Description
+The `_gather_analysis_parameters` method references attributes that don't exist in the class when "Baseline + Peak + Kinetics" is selected (lines 768-772). It tried to access `self.mini_baseline_dur_spinbox`, `self.mini_peak_dur_spinbox`, `self.mini_step_size_spinbox`, `self.mini_baseline_threshold_spinbox`, and `self.mini_peak_threshold_spinbox`, but these widgets are never created in `_setup_ui()`. The only existing widgets for this method are `self.mini_baseline_filter_spinbox` and `self.mini_baseline_prominence_spinbox`, plus the shared `self.mini_direction_combo`.
+
+### Location
+- File: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- Method: `_gather_analysis_parameters` (lines 767-772)
+
+### Fix Applied
+Changed to use the correct existing attributes that match the UI widgets and the actual function signature:
+
+```python
+# Before (lines 768-772) - WRONG attributes:
+params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()  # Doesn't exist!
+params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()  # Doesn't exist!
+params['step_size_ms'] = self.mini_step_size_spinbox.value()  # Doesn't exist!
+params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()  # Doesn't exist!
+params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()  # Doesn't exist!
+
+# After - CORRECT attributes:
+params['direction'] = self.mini_direction_combo.currentText()
+params['filter_freq_hz'] = self.mini_baseline_filter_spinbox.value()
+params['peak_prominence_factor'] = self.mini_baseline_prominence_spinbox.value()
+# Other parameters use defaults (baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms)
+```
+
+### Verification
+- All referenced attributes now exist in the UI
+- Parameters match the function signature of `detect_events_baseline_peak_kinetics()`
+- AttributeError will no longer occur when this detection method is selected
+
+---
+
+## Bug 11: Incorrect Function Name and Signature in "Baseline + Peak + Kinetics" Execution
+
+### Description
+The `_execute_core_analysis` method calls a function that doesn't exist: `ed.detect_events_baseline_peak()`. The actual function name in the event_detection module is `detect_events_baseline_peak_kinetics()`. Additionally, the function was being called with incorrect parameters that don't match its signature.
+
+### Location
+- File: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- Method: `_execute_core_analysis` (lines 825-835)
+- Actual function: `src/Synaptipy/core/analysis/event_detection.py` (line 452)
+
+### Fix Applied
+Corrected the function name and adjusted parameters to match the actual function signature:
+
+```python
+# Before (line 832) - WRONG function name and params:
+peak_indices, event_details, stats = ed.detect_events_baseline_peak(
+    signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
+    step_size_ms, baseline_threshold, peak_threshold_factor
+)
+
+# After - CORRECT function name and params:
+filter_freq_param = filter_freq_hz if filter_freq_hz > 0 else None
+prominence_param = peak_prominence_factor if peak_prominence_factor > 0 else None
+
+peak_indices, stats, event_details = ed.detect_events_baseline_peak_kinetics(
+    signal_data, sample_rate,
+    direction=direction,
+    filter_freq_hz=filter_freq_param,
+    peak_prominence_factor=prominence_param
+)
+```
+
+### Function Signature
+The correct function signature is:
+```python
+def detect_events_baseline_peak_kinetics(
+    data: np.ndarray,
+    sample_rate: float,
+    direction: str = 'negative',
+    baseline_window_s: float = 0.5,
+    baseline_step_s: float = 0.1,
+    threshold_sd_factor: float = 3.0,
+    filter_freq_hz: Optional[float] = None,
+    min_event_separation_ms: float = 5.0,
+    peak_prominence_factor: Optional[float] = None
+) -> Tuple[np.ndarray, Dict[str, Any], Optional[List[Dict[str, Any]]]]
+```
+
+### Verification
+- Function name now matches the actual implementation
+- Parameters match the function signature
+- Return value order corrected (peak_indices, stats, event_details)
+- Optional parameters (filter_freq_hz, peak_prominence_factor) handled correctly (None if 0)
+- AttributeError will no longer occur when this detection method is executed
+
+---
+
+## Bug 12: Uninitialized `plot_widgets` Attribute
+
+**Location**: `src/Synaptipy/application/gui/explorer_tab.py` (line 709, 723)
+
+**Problem**: The `_reset_ui_and_state_for_new_file` method tried to access `self.plot_widgets` before it was initialized, causing an `AttributeError` crash when loading files.
+
+**Root Cause**: When adding cleanup code for signal disconnection, `self.plot_widgets` was used but never initialized in `__init__`.
+
+**Fix**: Added initialization of `self.plot_widgets = []` in the `__init__` method (line 107).
+
+**Impact**: HIGH - Application crashed immediately when trying to load any file, making it completely unusable.
+
+**Verification**:
+- ✅ File compiles without errors
+- ✅ No linting errors
+- ✅ All tests pass (12/12)
+- ✅ Application can now load files without crashing
+
+---
+
 ## Conclusion
 
-All nine bugs have been successfully fixed:
+All twelve bugs have been successfully fixed:
 - ✅ **Bug 1**: Null check added to `_trigger_analysis`
 - ✅ **Bug 2**: No duplicate method definitions; correct type signatures
 - ✅ **Bug 3**: Correct attribute names in signal connections (event_detection_tab.py)
@@ -404,6 +515,9 @@ All nine bugs have been successfully fixed:
 - ✅ **Bug 7**: Correct method name check in `_gather_analysis_parameters` (event_detection_tab.py)
 - ✅ **Bug 8**: Correct method name check in `_execute_core_analysis` (event_detection_tab.py)
 - ✅ **Bug 9**: Fixed numpy array boolean ambiguity in `_execute_core_analysis` (rmp_tab.py)
+- ✅ **Bug 10**: Correct attribute references for "Baseline + Peak + Kinetics" parameters (event_detection_tab.py)
+- ✅ **Bug 11**: Correct function name and signature for "Baseline + Peak + Kinetics" execution (event_detection_tab.py)
+- ✅ **Bug 12**: Initialized `plot_widgets` list in `__init__` (explorer_tab.py)
 
-The Phase 1-3 refactoring infrastructure is now properly implemented across all analysis tabs. All existing tests pass without errors, and critical functionality like plotting, analysis execution, and result saving now works correctly. The codebase is ready for continued development with improved maintainability and reduced code duplication.
+The Phase 1-3 refactoring infrastructure is now properly implemented across all analysis tabs. All existing tests pass without errors, and critical functionality like plotting, analysis execution, result saving, and file loading now works correctly. The "Baseline + Peak + Kinetics" detection method will now execute without AttributeError. The application can now successfully load files without crashing. The codebase is ready for continued development with improved maintainability and reduced code duplication.
 

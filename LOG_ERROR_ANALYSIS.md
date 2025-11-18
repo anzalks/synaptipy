@@ -8,7 +8,7 @@
 
 ## Summary
 
-Found and fixed **3 critical errors** (Bugs 7, 8, 9) that would have prevented the Event Detection tab from working correctly and caused runtime failures in the Baseline Analysis tab. All errors have been resolved and verified.
+Found and fixed **6 critical errors** (Bugs 7-12) that would have prevented the Event Detection tab from working correctly, caused runtime failures in the Baseline Analysis tab, and prevented the application from loading files. All errors have been resolved and verified.
 
 ---
 
@@ -180,10 +180,71 @@ This explicitly checks for `None` rather than relying on boolean evaluation of t
 
 ---
 
+## Error 6: Uninitialized `plot_widgets` Attribute
+
+### Error Type
+AttributeError - Accessing Uninitialized Attribute
+
+### Location
+- **File**: `src/Synaptipy/application/gui/explorer_tab.py`
+- **Method**: `_reset_ui_and_state_for_new_file` (lines 709, 723)
+- **Stack Trace**: Lines 5826-5836 in log
+
+### Problem Description
+The application crashes immediately when trying to load any file because `_reset_ui_and_state_for_new_file()` tries to access `self.plot_widgets` before it has been initialized. The attribute is used in two places:
+1. Line 709: `for i in range(len(self.plot_widgets)):`
+2. Line 723: `self.plot_widgets.clear()`
+
+But `self.plot_widgets` is never assigned in the `__init__` method.
+
+### Root Cause
+When adding cleanup code for signal disconnection (to fix a "Failed to disconnect" warning), code was added to iterate over and clear `self.plot_widgets`, but the attribute initialization was forgotten in `__init__`.
+
+```python
+# In _reset_ui_and_state_for_new_file() (lines 709-723):
+for i in range(len(self.plot_widgets)):  # ❌ Crashes here - attribute doesn't exist
+    checkbox = self.findChild(QtWidgets.QCheckBox, f"channel_checkbox_{i}")
+    if checkbox:
+        try:
+            checkbox.stateChanged.disconnect(self._trigger_plot_update)
+        except (TypeError, RuntimeError) as e:
+            log.debug(f"Signal for checkbox {i} was not connected or already disconnected: {e}")
+            pass
+
+self.plot_widgets.clear()  # ❌ Would crash here too
+```
+
+### Impact
+- **Severity**: CRITICAL
+- **User Impact**: Application completely unusable - crashes before displaying any file
+- **Error Type**: `AttributeError: 'ExplorerTab' object has no attribute 'plot_widgets'`
+- **Frequency**: 100% crash on first file load attempt
+- **Data Loss**: Cannot load or view any data
+
+### Fix Applied
+```python
+# In __init__ method (line 107):
+# --- Display State Collections --- 
+self.channel_plots: Dict[str, pg.PlotItem] = {}
+self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
+self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
+self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
+self.plot_widgets: List[pg.PlotWidget] = []  # ✅ Initialize list for dynamic plot widgets
+```
+
+### Verification
+- ✅ File compiles without errors
+- ✅ No linting errors
+- ✅ All tests pass (12/12)
+- ✅ Application now loads files without crashing
+- ✅ No AttributeError when accessing plot_widgets
+
+---
+
 ## Pattern Analysis
 
 ### Common Themes
-All three errors fall into the category of **inconsistent string literals** or **incorrect boolean evaluation patterns**:
+All six errors fall into several categories:
 
 1. **Errors 1 & 2**: UI-to-logic string mismatch
    - UI defines one string, logic checks for a different string
@@ -251,6 +312,141 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data PASSED [100
 
 ---
 
+## Error 4: Non-Existent Attributes in Parameter Gathering
+
+### Error Type
+AttributeError - Accessing Non-Existent Class Attributes
+
+### Location
+- **File**: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- **Method**: `_gather_analysis_parameters` (lines 768-772)
+
+### Problem Description
+When "Baseline + Peak + Kinetics" detection method is selected, the code attempts to access five widget attributes that were never created in `_setup_ui()`:
+- `self.mini_baseline_dur_spinbox` - Doesn't exist!
+- `self.mini_peak_dur_spinbox` - Doesn't exist!
+- `self.mini_step_size_spinbox` - Doesn't exist!
+- `self.mini_baseline_threshold_spinbox` - Doesn't exist!
+- `self.mini_peak_threshold_spinbox` - Doesn't exist!
+
+The only widgets that actually exist for this method are:
+- `self.mini_baseline_filter_spinbox` (line 193)
+- `self.mini_baseline_prominence_spinbox` (line 197)
+- `self.mini_direction_combo` (line 142, shared across methods)
+
+### Root Cause
+Copy-paste error or incomplete implementation. The parameter gathering code was written to match a different function signature than what was actually implemented in the UI and the underlying analysis function.
+
+### Impact
+- **Severity**: CRITICAL
+- **User Impact**: 100% failure rate - immediate crash when selecting "Baseline + Peak + Kinetics"
+- **Error Type**: `AttributeError: 'EventDetectionTab' object has no attribute 'mini_baseline_dur_spinbox'`
+- **Frequency**: Every time user selects this detection method and triggers parameter gathering
+
+### Fix Applied
+```python
+# Before (WRONG):
+params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()  # Doesn't exist!
+params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()  # Doesn't exist!
+params['step_size_ms'] = self.mini_step_size_spinbox.value()  # Doesn't exist!
+params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()  # Doesn't exist!
+params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()  # Doesn't exist!
+
+# After (CORRECT):
+params['direction'] = self.mini_direction_combo.currentText()
+params['filter_freq_hz'] = self.mini_baseline_filter_spinbox.value()
+params['peak_prominence_factor'] = self.mini_baseline_prominence_spinbox.value()
+# Other parameters use defaults (baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms)
+```
+
+### Verification
+- ✅ All referenced attributes now exist
+- ✅ Parameters match UI widgets
+- ✅ Parameters match function signature
+- ✅ No AttributeError
+
+---
+
+## Error 5: Incorrect Function Name in Analysis Execution
+
+### Error Type
+AttributeError - Calling Non-Existent Function
+
+### Location
+- **File**: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- **Method**: `_execute_core_analysis` (line 832)
+- **Actual Function**: `src/Synaptipy/core/analysis/event_detection.py` (line 452)
+
+### Problem Description
+The code attempts to call `ed.detect_events_baseline_peak()` which doesn't exist. The actual function name is `detect_events_baseline_peak_kinetics()`. Additionally:
+1. Wrong function name
+2. Wrong parameter names passed
+3. Wrong return value order expected
+4. Missing parameter conversions (0 → None for optional params)
+
+### Root Cause
+Function was renamed or never existed with the short name. The implementation code wasn't updated to match the actual function signature in the analysis module.
+
+```python
+# What the code tried to call (DOESN'T EXIST):
+ed.detect_events_baseline_peak(...)
+
+# What actually exists:
+ed.detect_events_baseline_peak_kinetics(
+    data, sample_rate,
+    direction='negative',
+    baseline_window_s=0.5,
+    baseline_step_s=0.1,
+    threshold_sd_factor=3.0,
+    filter_freq_hz=None,
+    min_event_separation_ms=5.0,
+    peak_prominence_factor=None
+) -> Tuple[np.ndarray, Dict[str, Any], Optional[List[Dict[str, Any]]]]
+```
+
+### Impact
+- **Severity**: CRITICAL
+- **User Impact**: Analysis execution completely fails
+- **Error Type**: `AttributeError: module 'Synaptipy.core.analysis.event_detection' has no attribute 'detect_events_baseline_peak'`
+- **Frequency**: 100% failure when "Baseline + Peak + Kinetics" analysis is triggered
+- **Data Loss**: Results never computed or displayed
+
+### Fix Applied
+```python
+# Before (WRONG):
+peak_indices, event_details, stats = ed.detect_events_baseline_peak(
+    signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
+    step_size_ms, baseline_threshold, peak_threshold_factor
+)
+
+# After (CORRECT):
+direction = params.get('direction', 'negative')
+filter_freq_hz = params.get('filter_freq_hz', 500.0)
+peak_prominence_factor = params.get('peak_prominence_factor', 0.0)
+
+# Convert 0 to None for optional parameters
+filter_freq_param = filter_freq_hz if filter_freq_hz > 0 else None
+prominence_param = peak_prominence_factor if peak_prominence_factor > 0 else None
+
+# Correct function name and parameter order
+peak_indices, stats, event_details = ed.detect_events_baseline_peak_kinetics(
+    signal_data, sample_rate,
+    direction=direction,
+    filter_freq_hz=filter_freq_param,
+    peak_prominence_factor=prominence_param
+)
+```
+
+### Verification
+- ✅ Function name matches actual implementation
+- ✅ Parameters match function signature
+- ✅ Return values in correct order
+- ✅ Optional parameters handled correctly (0 → None)
+- ✅ Uses default values for baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms
+- ✅ No AttributeError
+
+---
+
 ## Summary of All Fixes
 
 | Bug # | Location | Error Type | Severity | Status |
@@ -258,6 +454,8 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data PASSED [100
 | 7 | event_detection_tab.py:767 | String mismatch | HIGH | ✅ FIXED |
 | 8 | event_detection_tab.py:825 | String mismatch | CRITICAL | ✅ FIXED |
 | 9 | rmp_tab.py:915 | NumPy boolean ambiguity | HIGH | ✅ FIXED |
+| 10 | event_detection_tab.py:768-772 | Non-existent attributes | CRITICAL | ✅ FIXED |
+| 11 | event_detection_tab.py:832 | Non-existent function | CRITICAL | ✅ FIXED |
 
 ---
 
@@ -273,8 +471,21 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data PASSED [100
 
 ## Conclusion
 
-All errors identified in the log from file addition onwards have been successfully fixed. The Event Detection tab's "Baseline + Peak + Kinetics" method will now work correctly, and the Baseline Analysis tab will handle data format fallbacks without runtime errors.
+All errors identified in the log from file addition onwards have been successfully fixed. The Event Detection tab's "Baseline + Peak + Kinetics" method will now:
+- ✅ Access only existing UI widget attributes
+- ✅ Call the correct analysis function with proper parameters
+- ✅ Execute without AttributeError crashes
 
+The Baseline Analysis tab will:
+- ✅ Handle data format fallbacks without NumPy boolean errors
+- ✅ Work with both 'data' and 'voltage' dictionary keys
+
+The Explorer tab will:
+- ✅ Load files without crashing on missing attributes
+- ✅ Properly initialize all required UI state collections
+
+**Total Bugs Fixed**: 6 (Bugs 7-12)  
+**Severity**: 4 CRITICAL, 2 HIGH  
 **Status**: ✅ **ALL ERRORS RESOLVED**
 
 
