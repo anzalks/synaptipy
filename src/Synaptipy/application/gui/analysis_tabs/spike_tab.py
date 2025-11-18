@@ -161,8 +161,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         """
         log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
         
-        # Clear previous results
-        self._current_plot_data = None
+        # Clear previous results (but NOT _current_plot_data - base class manages it)
         self.results_textedit.setText("")
         if self.detect_button:
             self.detect_button.setEnabled(False)
