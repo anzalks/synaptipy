@@ -725,7 +725,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         for checkbox in self.channel_checkboxes.values():
             try: checkbox.stateChanged.disconnect(self._trigger_plot_update)
-            except RuntimeError: pass
+            except (TypeError, RuntimeError): pass
 
         if hasattr(self, 'channel_checkbox_layout') and self.channel_checkbox_layout:
             while self.channel_checkbox_layout.count():
@@ -738,16 +738,16 @@ class ExplorerTab(QtWidgets.QWidget):
             if plot and plot.getViewBox():
                 vb = plot.getViewBox()
                 try: vb.sigXRangeChanged.disconnect()
-                except RuntimeError: pass
+                except (TypeError, RuntimeError): pass
                 try: vb.sigYRangeChanged.disconnect()
-                except RuntimeError: pass
+                except (TypeError, RuntimeError): pass
         if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
              self.graphics_layout_widget.clear()
         self.channel_plots.clear(); self.channel_plot_data_items.clear()
 
         for slider in self.individual_y_sliders.values():
              try: slider.valueChanged.disconnect()
-             except RuntimeError: pass
+             except (TypeError, RuntimeError): pass
         if hasattr(self, 'individual_y_sliders_layout') and self.individual_y_sliders_layout:
             while self.individual_y_sliders_layout.count():
                  item = self.individual_y_sliders_layout.takeAt(0); widget = item.widget(); widget.deleteLater() if widget else None
@@ -755,7 +755,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         for scrollbar in self.individual_y_scrollbars.values():
             try: scrollbar.valueChanged.disconnect()
-            except RuntimeError: pass
+            except (TypeError, RuntimeError): pass
         if hasattr(self, 'individual_y_scrollbars_layout') and self.individual_y_scrollbars_layout:
             while self.individual_y_scrollbars_layout.count():
                  item = self.individual_y_scrollbars_layout.takeAt(0); widget = item.widget(); widget.deleteLater() if widget else None

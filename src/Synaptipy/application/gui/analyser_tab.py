@@ -16,7 +16,7 @@ from .analysis_tabs.rmp_tab import BaselineAnalysisTab
 from .analysis_tabs.rin_tab import RinAnalysisTab
 from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
-# from .analysis_tabs.mini_event_tab import MiniEventAnalysisTab # REMOVED incorrect import
+
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
 
