@@ -30,6 +30,7 @@ from .analyser_tab import AnalyserTab
 from .exporter_tab import ExporterTab
 from .nwb_dialog import NwbMetadataDialog
 from .plot_customization_dialog import PlotCustomizationDialog
+from Synaptipy.application.session_manager import SessionManager
 try:
     import tzlocal # Optional, for local timezone handling
 except ImportError:
@@ -55,6 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         log.info("Initializing MainWindow...")
+        self.session_manager = SessionManager()
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
 
         # --- Calculate initial size based on screen (70%) ---
@@ -378,8 +380,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 delattr(self, '_pending_current_index')
                 
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
-                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab.")
-                self.explorer_tab.load_recording_data(recording_data, file_list, current_index)
+                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager.")
+                
+                # Update SessionManager
+                self.session_manager.set_file_context(file_list, current_index)
+                self.session_manager.current_recording = recording_data
+                
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
                 
                 self.status_bar.showMessage(f"Loaded {recording_data.source_file.name} ({len(recording_data.channels)} channels)", 5000)
@@ -389,8 +395,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 file_list = [recording_data.source_file]
                 current_index = 0
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
-                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab.")
-                self.explorer_tab.load_recording_data(recording_data, file_list, current_index)
+                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager.")
+                
+                # Update SessionManager
+                self.session_manager.set_file_context(file_list, current_index)
+                self.session_manager.current_recording = recording_data
+                
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
                 self.status_bar.showMessage(f"Loaded {recording_data.source_file.name}", 5000)
                 

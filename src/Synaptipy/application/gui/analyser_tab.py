@@ -16,6 +16,7 @@ from .analysis_tabs.rmp_tab import BaselineAnalysisTab
 from .analysis_tabs.rin_tab import RinAnalysisTab
 from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
+from Synaptipy.application.session_manager import SessionManager
 
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
@@ -26,6 +27,7 @@ class AnalyserTab(QtWidgets.QWidget):
     def __init__(self, explorer_tab_ref: ExplorerTab, parent=None):
         super().__init__(parent)
         log.debug("Initializing Main AnalyserTab (dynamic loading)")
+        self.session_manager = SessionManager()
         self._explorer_tab = explorer_tab_ref
         self._analysis_items: List[Dict[str, Any]] = []
         self._loaded_analysis_tabs: List[BaseAnalysisTab] = []
@@ -37,9 +39,10 @@ class AnalyserTab(QtWidgets.QWidget):
 
         self._setup_ui()
         self._load_analysis_tabs()
-        # Connect the signal from ExplorerTab *after* UI is set up
-        self._connect_explorer_signals()
-        self.update_analysis_sources([]) # Initial empty state call
+        # Connect the signal from SessionManager
+        self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
+        # Initialize with current session state
+        self.update_analysis_sources(self.session_manager.selected_analysis_items)
 
     def _setup_ui(self):
         main_layout = QtWidgets.QVBoxLayout(self)

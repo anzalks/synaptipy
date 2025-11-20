@@ -1,0 +1,70 @@
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, Union
+import numpy as np
+
+@dataclass
+class AnalysisResult:
+    """Base class for analysis results."""
+    value: Any  # Primary result value (e.g., float, array, or None if failed)
+    unit: str
+    is_valid: bool = True
+    error_message: Optional[str] = None
+    quality_flags: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def set_error(self, message: str):
+        self.is_valid = False
+        self.error_message = message
+
+@dataclass
+class SpikeTrainResult(AnalysisResult):
+    """
+    Result of spike detection analysis.
+    Primary 'value' is usually the spike count or mean frequency, depending on context.
+    """
+    spike_times: Optional[np.ndarray] = None  # Array of spike times in seconds
+    spike_indices: Optional[np.ndarray] = None # Array of sample indices
+    mean_frequency: Optional[float] = None    # Mean frequency in Hz
+    instantaneous_frequencies: Optional[np.ndarray] = None # Array of inst. freqs in Hz
+    
+    def __repr__(self):
+        if self.is_valid:
+            count = len(self.spike_times) if self.spike_times is not None else 0
+            return f"SpikeTrainResult(count={count}, mean_freq={self.mean_frequency:.2f} Hz)"
+        return f"SpikeTrainResult(Error: {self.error_message})"
+
+@dataclass
+class RinResult(AnalysisResult):
+    """
+    Result of Input Resistance (Rin) analysis.
+    Primary 'value' is the Input Resistance in MOhm.
+    """
+    tau: Optional[float] = None  # Membrane time constant in seconds (or ms)
+    sag_ratio: Optional[float] = None # Ratio (0-1 or %)
+    voltage_deflection: Optional[float] = None # Delta V in mV
+    current_injection: Optional[float] = None # Delta I in pA
+    baseline_voltage: Optional[float] = None # Baseline V in mV
+    steady_state_voltage: Optional[float] = None # Steady state V in mV
+
+    def __repr__(self):
+        if self.is_valid:
+            val_str = f"{self.value:.2f}" if isinstance(self.value, (int, float)) else str(self.value)
+            return f"RinResult(Rin={val_str} {self.unit})"
+        return f"RinResult(Error: {self.error_message})"
+
+@dataclass
+class RmpResult(AnalysisResult):
+    """
+    Result of Resting Membrane Potential (RMP) analysis.
+    Primary 'value' is the RMP in mV.
+    """
+    std_dev: Optional[float] = None # Standard deviation of the trace segment
+    drift: Optional[float] = None # Linear drift (slope) in mV/s
+    duration: Optional[float] = None # Duration of analysis window in seconds
+
+    def __repr__(self):
+        if self.is_valid:
+            val_str = f"{self.value:.2f}" if isinstance(self.value, (int, float)) else str(self.value)
+            return f"RmpResult(RMP={val_str} {self.unit})"
+        return f"RmpResult(Error: {self.error_message})"
+

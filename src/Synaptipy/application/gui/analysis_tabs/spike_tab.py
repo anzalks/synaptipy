@@ -369,12 +369,18 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             
             # Run detection
             log.info(f"Running spike detection: Threshold={threshold:.3f}, Refractory={refractory_s:.4f}s")
-            spike_indices, spike_times_from_func = spike_analysis.detect_spikes_threshold(
+            result_obj = spike_analysis.detect_spikes_threshold(
                 voltage, time, threshold, refractory_period_samples
             )
             
+            if not result_obj.is_valid:
+                raise ValueError(f"Spike detection function returned error: {result_obj.error_message}")
+            
+            spike_indices = result_obj.spike_indices
+            # spike_times_from_func = result_obj.spike_times # Not strictly needed as we recalc from indices later but good to have
+            
             if spike_indices is None:
-                raise ValueError("Spike detection function returned None")
+                spike_indices = np.array([])
             
             num_spikes = len(spike_indices)
             log.info(f"Detected {num_spikes} spikes")
@@ -385,7 +391,8 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                 'spike_indices': spike_indices,
                 'threshold': threshold,
                 'refractory_ms': params.get('refractory_ms'),
-                'units': units
+                'units': units,
+                'result_object': result_obj # Store the full object if needed
             }
             
             if num_spikes > 0:
