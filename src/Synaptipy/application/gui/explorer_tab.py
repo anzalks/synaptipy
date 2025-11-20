@@ -2088,154 +2088,105 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _reset_view(self):
         log.info(f"[EXPLORER-RESET] Reset view called - has_recording={self.current_recording is not None}, manual_limits={self.manual_limits_enabled}")
-        if not self.current_recording: 
+        if not self.current_recording:
             log.info(f"[EXPLORER-RESET] No recording - calling reset UI and state")
             self._reset_ui_and_state_for_new_file(); self._update_ui_state(); return
-        if self.manual_limits_enabled: 
+        if self.manual_limits_enabled:
             log.info(f"[EXPLORER-RESET] Manual limits enabled - applying manual limits")
             self._apply_manual_limits(); self._update_ui_state(); return
-        log.info(f"[EXPLORER-RESET] Auto-ranging plots...")
+
+        log.info(f"[EXPLORER-RESET] Scheduling manual range setting...")
         vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
         vis_map={k:v for k,v in vis_map.items() if k is not None}
-        if not vis_map: 
-            log.warning(f"[EXPLORER-RESET] No visible plots found")
+        if not vis_map:
+            log.warning(f"[EXPLORER-RESET] No visible plots found for range setting")
             self._reset_all_sliders(); self._update_limit_fields(); self._update_ui_state(); return
-        first_cid, first_plot = next(iter(vis_map.items()))
-        log.info(f"[EXPLORER-RESET] Found {len(vis_map)} visible plots, first: {first_cid}")
-        
-        # --- START REPLACEMENT of nested function ---
+
+        # --- Define function for deferred manual range calculation and application ---
         def do_deferred_manual_range_and_capture():
             log.info(f"[EXPLORER-RESET] Performing deferred manual range setting...")
-            items_to_hide = [] # List to store items temporarily hidden
-
             try:
                 # --- Manually Calculate Bounds ---
                 x_min, x_max = None, None
                 y_mins, y_maxs = {}, {} # Store per channel_id
 
-                # Iterate through *actual data* for visible channels
                 for chan_id, plot_widget in vis_map.items():
                     channel = self.current_recording.channels.get(chan_id)
                     if not channel: continue
 
-                    chan_x_min, chan_x_max = None, None
-                    chan_y_min, chan_y_max = None, None
-
-                    # Determine trials/data to check based on plot mode
-                    trials_to_check = []
+                    chan_x_min, chan_x_max, chan_y_min, chan_y_max = None, None, None, None
                     data_sources = [] # Tuples of (time_vec, data_vec)
 
                     if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
                         trial_idx = self.current_trial_index
                         if 0 <= trial_idx < channel.num_trials:
                            data, time_vec = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
-                           if time_vec is not None and data is not None:
-                               data_sources.append((time_vec, data))
+                           if time_vec is not None and data is not None: data_sources.append((time_vec, data))
                     else: # OVERLAY_AVG
-                        # Check all trials
                         for i in range(channel.num_trials):
-                            if 0 <= i < channel.num_trials:
-                                data, time_vec = channel.get_data(i), channel.get_relative_time_vector(i)
-                                if time_vec is not None and data is not None:
-                                    data_sources.append((time_vec, data))
-                        # Also check the average trace
+                             data, time_vec = channel.get_data(i), channel.get_relative_time_vector(i)
+                             if time_vec is not None and data is not None: data_sources.append((time_vec, data))
                         avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
-                        if avg_data is not None and avg_time is not None:
-                            data_sources.append((avg_time, avg_data))
+                        if avg_data is not None and avg_time is not None: data_sources.append((avg_time, avg_data))
 
-                    # Calculate min/max from collected data sources for this channel
                     for time_vec, data in data_sources:
                         if time_vec is not None and len(time_vec) > 0:
                             t_min, t_max = np.min(time_vec), np.max(time_vec)
                             chan_x_min = min(chan_x_min, t_min) if chan_x_min is not None else t_min
                             chan_x_max = max(chan_x_max, t_max) if chan_x_max is not None else t_max
                         if data is not None and len(data) > 0:
-                            # Filter out NaNs or Infs if they might occur
                             valid_data = data[np.isfinite(data)]
                             if len(valid_data) > 0:
                                 d_min, d_max = np.min(valid_data), np.max(valid_data)
                                 chan_y_min = min(chan_y_min, d_min) if chan_y_min is not None else d_min
                                 chan_y_max = max(chan_y_max, d_max) if chan_y_max is not None else d_max
 
-                    # Update overall bounds
-                    if chan_x_min is not None:
-                        x_min = min(x_min, chan_x_min) if x_min is not None else chan_x_min
-                    if chan_x_max is not None:
-                        x_max = max(x_max, chan_x_max) if x_max is not None else chan_x_max
-                    if chan_y_min is not None:
-                        y_mins[chan_id] = chan_y_min
-                    if chan_y_max is not None:
-                        y_maxs[chan_id] = chan_y_max
+                    if chan_x_min is not None: x_min = min(x_min, chan_x_min) if x_min is not None else chan_x_min
+                    if chan_x_max is not None: x_max = max(x_max, chan_x_max) if x_max is not None else chan_x_max
+                    if chan_y_min is not None: y_mins[chan_id] = chan_y_min
+                    if chan_y_max is not None: y_maxs[chan_id] = chan_y_max
+                log.info(f"[EXPLORER-RESET] Manual bounds: X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
                 # --- End Manual Calculation ---
 
-                log.info(f"[EXPLORER-RESET] Manual bounds: X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
-
-                # --- TEMPORARILY HIDE ITEMS ---
-                log.debug("[EXPLORER-RESET] Temporarily hiding plot items BEFORE setRange...")
-                for chan_id, plot_widget in vis_map.items(): # Use vis_map from outer scope
-                    plot_items_list = self.channel_plot_data_items.get(chan_id, []) # Use current items
-                    for item in plot_items_list:
-                         if isinstance(item, pg.PlotDataItem) and item.isVisible():
-                             item.hide()
-                             items_to_hide.append(item)
-                log.debug(f"[EXPLORER-RESET] Hid {len(items_to_hide)} items.")
-                # --- END HIDE ---
-
-                # --- Apply Manually Calculated Ranges (Potentially Blocking Step) ---
+                # --- Apply Manually Calculated Ranges Directly ---
                 final_x_range = None
-                if x_min is not None and x_max is not None and x_min < x_max:
-                    padding_x = (x_max - x_min) * 0.02 # Add 2% padding
-                    if padding_x == 0: padding_x = 0.1 # Add minimal padding if range is zero
+                if x_min is not None and x_max is not None:
+                    padding_x = (x_max - x_min) * 0.02 if x_min < x_max else 0.1
                     final_x_range = [x_min - padding_x, x_max + padding_x]
-                elif x_min is not None and x_max is not None: # Handle case where min == max
-                    final_x_range = [x_min - 0.1, x_max + 0.1]
 
-                first_plot = next(iter(vis_map.values()))
                 if final_x_range:
                     log.info(f"[EXPLORER-RESET] Setting manual X range: {final_x_range}")
-                    first_plot.getViewBox().setXRange(*final_x_range, padding=0) # Set X
+                    first_plot = next(iter(vis_map.values()))
+                    first_plot.getViewBox().setXRange(*final_x_range, padding=0)
 
                 for chan_id, plot_widget in vis_map.items():
                     vb = plot_widget.getViewBox()
-                    y_min = y_mins.get(chan_id)
-                    y_max = y_maxs.get(chan_id)
+                    y_min, y_max = y_mins.get(chan_id), y_maxs.get(chan_id)
                     final_y_range = None
-                    if y_min is not None and y_max is not None and y_min < y_max:
-                         padding_y = (y_max - y_min) * 0.02
-                         if padding_y == 0: padding_y = 0.1
+                    if y_min is not None and y_max is not None:
+                         padding_y = (y_max - y_min) * 0.02 if y_min < y_max else 0.1
                          final_y_range = [y_min - padding_y, y_max + padding_y]
-                    elif y_min is not None and y_max is not None: # Handle min == max
-                         final_y_range = [y_min - 0.1, y_max + 0.1]
 
                     if final_y_range:
                          log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: {final_y_range}")
-                         vb.setYRange(*final_y_range, padding=0) # Set Y
+                         vb.setYRange(*final_y_range, padding=0)
                     else:
-                         log.warning(f"[EXPLORER-RESET] Manual Y range calculation failed or invalid for {chan_id}, skipping setYRange.")
-                         # Optionally add a fallback, e.g., vb.setYRange(-1, 1)
+                         log.warning(f"[EXPLORER-RESET] Manual Y range calculation failed/invalid for {chan_id}, skipping setYRange.")
                 log.info("[EXPLORER-RESET] Finished applying manual ranges.")
                 # --- End Apply Ranges ---
 
             except Exception as e:
                 log.error(f"[EXPLORER-RESET] Error during deferred manual range setting: {e}", exc_info=True)
             finally:
-                # --- ALWAYS RESTORE VISIBILITY ---
-                log.debug("[EXPLORER-RESET] Restoring item visibility AFTER setRange...")
-                for item in items_to_hide:
-                    try: # Try/Except for safety
-                        item.show()
-                    except Exception as show_err:
-                        log.warning(f"Error showing item: {show_err}")
-                log.debug(f"[EXPLORER-RESET] Restored visibility attempt for {len(items_to_hide)} items.")
-
-                # Schedule the capture AFTER restoring visibility
+                # Schedule capture immediately after setRange attempts
                 QtCore.QTimer.singleShot(0, self._capture_base_ranges_after_reset)
-                log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set and visibility restore.")
+                log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set.")
 
-        # Schedule the manual range function itself using a 0ms timer.
+        # Schedule the manual range function itself
         QtCore.QTimer.singleShot(0, do_deferred_manual_range_and_capture)
         log.info("[EXPLORER-RESET] Scheduled manual range operation via QTimer(0).")
-        # --- END REPLACEMENT of nested function ---
+
+        # Reset sliders etc. immediately
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
 
     def _capture_base_ranges_after_reset(self):
@@ -3100,37 +3051,96 @@ class ExplorerTab(QtWidgets.QWidget):
             )
 
     def update_plot_pens(self):
-        """Efficiently updates the pens of all existing plot data items."""
-        log.info("[PEN-UPDATE] Starting efficient pen-only update.")
-        if not self.current_recording or not self.channel_plot_data_items:
-            log.info("[PEN-UPDATE] No data or plot items to update.")
+        """
+        Applies updated plot customizations by selectively replotting data items
+        while preserving view ranges (zoom/pan). This is fast but the subsequent
+        _reset_view might be slow if complex styles were chosen.
+        """
+        log.info("[PEN-UPDATE] Starting selective replotting to apply new styles.")
+        if not self.current_recording or not self.channel_plots:
+            log.info("[PEN-UPDATE] No recording or plots to update.")
             return
 
-        # Import the fast, cached pen functions
-        from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+        if self.graphics_layout_widget:
+            self.graphics_layout_widget.setUpdatesEnabled(False)
+
+        new_items_per_plot: Dict[pg.PlotItem, List[pg.PlotDataItem]] = {}
 
         try:
-            # Get the pens ONCE. This reads from the global manager's memory cache.
-            avg_pen = get_average_pen()
-            trial_pen = get_single_trial_pen()
-        except Exception as e:
-            log.error(f"[PEN-UPDATE] Failed to get cached pens: {e}")
-            return
+            from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+            new_avg_pen = get_average_pen()
+            new_trial_pen = get_single_trial_pen()
+            ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
 
-        for channel_id, plot_items in self.channel_plot_data_items.items():
-            for item in plot_items:
-                # Determine if the item is an average or a single trial
-                is_average = 'avg' in item.opts.get('name', '')
-                
-                # Apply the pre-fetched pen. This is just an in-memory pointer assignment.
-                if is_average:
-                    item.setPen(avg_pen)
-                else:
-                    item.setPen(trial_pen)
-        
-        # CRITICAL FIX: Force the graphics view to redraw with the new pens.
-        if self.graphics_layout_widget:
-            self.graphics_layout_widget.update()
-            log.info("[PEN-UPDATE] Graphics view explicitly updated to show new styles.")
-            
-        log.info(f"[PEN-UPDATE] Pen update completed for {len(self.channel_plot_data_items)} channels.")
+            for channel_id, plot_widget in self.channel_plots.items():
+                if not plot_widget or not plot_widget.isVisible():
+                    if channel_id not in self.channel_plot_data_items: self.channel_plot_data_items[channel_id] = [] # Ensure key exists
+                    continue
+
+                items_to_remove = []
+                data_to_replot = [] # (x_data, y_data, is_average, name, opts)
+
+                for item in plot_widget.items:
+                    if isinstance(item, pg.PlotDataItem):
+                        items_to_remove.append(item)
+                        try:
+                            x_data, y_data = item.getData()
+                            if x_data is not None and y_data is not None:
+                                is_average = 'avg' in item.opts.get('name', '').lower()
+                                name = item.opts.get('name', '')
+                                opts = item.opts.copy()
+                                data_to_replot.append((x_data, y_data, is_average, name, opts))
+                        except Exception as e:
+                            log.warning(f"[PEN-UPDATE] Error getting data from item {item.opts.get('name', '')}: {e}")
+
+                log.debug(f"[PEN-UPDATE] Removing {len(items_to_remove)} old items from channel {channel_id}")
+                for item in items_to_remove:
+                    try:
+                        plot_widget.removeItem(item)
+                    except Exception as e:
+                        log.warning(f"[PEN-UPDATE] Error removing item: {e}")
+
+                self.channel_plot_data_items[channel_id] = []
+                new_items_for_this_plot = []
+
+                log.debug(f"[PEN-UPDATE] Preparing {len(data_to_replot)} new items for channel {channel_id}.")
+                for x_data, y_data, is_average, name, opts in data_to_replot:
+                    pen = new_avg_pen if is_average else new_trial_pen
+                    try:
+                        new_item = pg.PlotDataItem(x_data, y_data, pen=pen, name=name)
+                        new_item.setDownsampling(auto=ds_enabled, method='peak')
+                        new_item.setClipToView(True)
+                        if 'trial_index' in opts:
+                             new_item.opts['trial_index'] = opts['trial_index']
+                        new_items_for_this_plot.append(new_item)
+                        self.channel_plot_data_items[channel_id].append(new_item) # Keep track
+                    except Exception as e:
+                         log.error(f"[PEN-UPDATE] Error creating new item {name} for channel {channel_id}: {e}")
+                new_items_per_plot[plot_widget] = new_items_for_this_plot
+
+            log.info(f"[PEN-UPDATE] Adding newly created items to plots...")
+            for plot_widget, new_items in new_items_per_plot.items():
+                for new_item in new_items:
+                    try:
+                        plot_widget.addItem(new_item)
+                    except Exception as e:
+                        log.error(f"[PEN-UPDATE] Error adding new item back to plot {plot_widget}: {e}")
+            log.info(f"[PEN-UPDATE] Finished adding new items.")
+
+            # CRITICAL: Trigger a reset view AFTER replotting completes
+            # This ensures view ranges are calculated based on the *new* items.
+            log.info("[PEN-UPDATE] Scheduling reset view after selective replotting.")
+            QtCore.QTimer.singleShot(0, self._reset_view) # Use the existing (now faster) reset logic
+
+        except Exception as e:
+            log.error(f"[PEN-UPDATE] Critical error during selective replot: {e}", exc_info=True)
+            # Ensure reset view is still attempted even if replot fails
+            QtCore.QTimer.singleShot(0, self._reset_view)
+        finally:
+            if self.graphics_layout_widget:
+                self.graphics_layout_widget.setUpdatesEnabled(True)
+                # Optional: Force repaint immediately after adding items
+                # QtWidgets.QApplication.processEvents()
+                # self.graphics_layout_widget.update()
+
+        log.info(f"[PEN-UPDATE] Selective replotting complete.")
