@@ -4,12 +4,13 @@
 Analysis functions related to action potential detection and characterization.
 """
 import logging
-from typing import Tuple
+from typing import Tuple, List, Dict, Any
 import numpy as np
+from Synaptipy.core.results import SpikeTrainResult
 
 log = logging.getLogger('Synaptipy.core.analysis.spike_analysis')
 
-def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float, refractory_samples: int) -> Tuple[np.ndarray, np.ndarray]:
+def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float, refractory_samples: int) -> SpikeTrainResult:
     """
     Detects spikes based on a simple voltage threshold crossing with refractory period.
 
@@ -20,30 +21,27 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
         refractory_samples: Minimum number of samples between detected spikes (applied based on threshold crossings).
 
     Returns:
-        A tuple containing:
-            - peak_indices: NumPy array of sample indices where spike PEAKS were detected.
-            - peak_times: NumPy array of corresponding spike peak times (seconds).
-        Returns empty arrays if no spikes are detected or an error occurs.
+        SpikeTrainResult object containing spike times and indices.
     """
     if not isinstance(data, np.ndarray) or data.ndim != 1 or data.size < 2:
         log.warning("detect_spikes_threshold: Invalid data array provided.")
-        return np.array([]), np.array([])
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Invalid data array")
     if not isinstance(time, np.ndarray) or time.shape != data.shape:
         log.warning("detect_spikes_threshold: Time and data array shapes mismatch.")
-        return np.array([]), np.array([])
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Time and data mismatch")
     if not isinstance(threshold, (int, float)):
          log.warning("detect_spikes_threshold: Threshold must be numeric.")
-         return np.array([]), np.array([])
+         return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Threshold must be numeric")
     if not isinstance(refractory_samples, int) or refractory_samples < 0:
          log.warning("detect_spikes_threshold: refractory_samples must be a non-negative integer.")
-         return np.array([]), np.array([])
+         return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Invalid refractory period")
 
     try:
         # 1. Find indices where the data crosses the threshold upwards
         crossings = np.where((data[:-1] < threshold) & (data[1:] >= threshold))[0] + 1
         if crossings.size == 0:
             log.debug("No threshold crossings found.")
-            return np.array([]), np.array([])
+            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array([]), spike_indices=np.array([]))
 
         # 2. Apply refractory period based on crossings
         if refractory_samples <= 0:
@@ -58,7 +56,7 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
             valid_crossing_indices = np.array(valid_crossings_list)
 
         if valid_crossing_indices.size == 0: 
-             return np.array([]), np.array([])
+             return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array([]), spike_indices=np.array([]))
              
         # 3. Find peak index after each valid crossing
         peak_indices_list = []
@@ -88,15 +86,29 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
         # 4. Get corresponding times for the peaks
         peak_times_arr = time[peak_indices_arr]
         log.debug(f"Detected {len(peak_indices_arr)} spike peaks.")
-        return peak_indices_arr, peak_times_arr
+        
+        mean_freq = 0.0
+        if len(peak_times_arr) > 1:
+             duration = time[-1] - time[0]
+             if duration > 0:
+                mean_freq = len(peak_times_arr) / duration
+
+        return SpikeTrainResult(
+            value=len(peak_indices_arr),
+            unit="spikes",
+            spike_times=peak_times_arr,
+            spike_indices=peak_indices_arr,
+            mean_frequency=mean_freq
+        )
 
     except IndexError as e:
          # This might happen if indexing goes wrong, e.g., with peak_indices_arr
          log.error(f"IndexError during spike detection: {e}. Indices={peak_indices_arr if 'peak_indices_arr' in locals() else 'N/A'}", exc_info=True)
-         return np.array([]), np.array([])
+         return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e))
     except Exception as e:
         log.error(f"Error during spike detection: {e}", exc_info=True)
-        return np.array([]), np.array([])
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e))
+
 
 # --- Add other spike analysis functions here later ---
 def calculate_spike_features(data, time, spike_indices):

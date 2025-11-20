@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from typing import Optional, Tuple
 from scipy.optimize import curve_fit
+from Synaptipy.core.results import RinResult
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ def calculate_rin(
     current_amplitude: float, # Assume user provides this (e.g., in pA)
     baseline_window: Tuple[float, float],
     response_window: Tuple[float, float]
-) -> Optional[float]:
+) -> RinResult:
     """
     Calculates Input Resistance (Rin) from a voltage trace response to a current step.
 
@@ -31,12 +32,11 @@ def calculate_rin(
         response_window: Tuple (start_time, end_time) for the steady-state voltage response calculation.
 
     Returns:
-        Calculated input resistance (e.g., in MOhms if V is mV and I is pA),
-        or None if calculation is not possible (e.g., invalid windows, zero current).
+        RinResult object.
     """
     if current_amplitude == 0:
         log.warning("Cannot calculate Rin: Current amplitude is zero.")
-        return None
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message="Current amplitude is zero")
 
     try:
         # Find indices for baseline and response windows
@@ -45,24 +45,33 @@ def calculate_rin(
 
         if not np.any(baseline_mask) or not np.any(response_mask):
             log.warning("Cannot calculate Rin: Time windows yielded no data points.")
-            return None
+            return RinResult(value=None, unit="MOhm", is_valid=False, error_message="No data in windows")
 
         # Calculate mean baseline and response voltages
         baseline_voltage = np.mean(voltage_trace[baseline_mask])
         response_voltage = np.mean(voltage_trace[response_mask])
 
         delta_v = response_voltage - baseline_voltage
-        rin = delta_v / current_amplitude # V=IR -> R = V/I
+        rin = delta_v / (current_amplitude / 1000.0) # V=IR -> R = V/I. If V is mV, I is pA. We want MOhm.
+        # mV / nA = MOhm. pA / 1000 = nA.
 
         log.info(f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}")
-        return rin
+        
+        return RinResult(
+            value=rin,
+            unit="MOhm",
+            voltage_deflection=delta_v,
+            current_injection=current_amplitude,
+            baseline_voltage=baseline_voltage,
+            steady_state_voltage=response_voltage
+        )
 
     except IndexError:
         log.exception("IndexError during Rin calculation. Check trace/time vector alignment and window validity.")
-        return None
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message="IndexError during calculation")
     except Exception as e:
         log.exception(f"Unexpected error during Rin calculation: {e}")
-        return None
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
 
 def _exp_growth(t, V_ss, V_0, tau):
     """Exponential growth function for fitting."""

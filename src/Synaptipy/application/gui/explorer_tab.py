@@ -26,6 +26,7 @@ from .dummy_classes import (
 )
 # --- Other Imports ---
 from .nwb_dialog import NwbMetadataDialog
+from Synaptipy.application.session_manager import SessionManager
 
 # Import Z_ORDER constant with fallback
 try:
@@ -76,6 +77,12 @@ class ExplorerTab(QtWidgets.QWidget):
         self.neo_adapter = neo_adapter
         self.nwb_exporter = nwb_exporter
         self.status_bar = status_bar
+
+        # --- Session Manager ---
+        self.session_manager = SessionManager()
+        self.session_manager.current_recording_changed.connect(self._on_recording_changed_from_session)
+        # We also need to listen for analysis items changes if we want to keep UI in sync (e.g. buttons)
+        # self.session_manager.selected_analysis_items_changed.connect(self._on_analysis_items_changed_from_session)
 
         # --- Data State ---
         self.current_recording: Optional[Recording] = None
@@ -665,6 +672,23 @@ class ExplorerTab(QtWidgets.QWidget):
              self._update_ui_state()
              if self.manual_limits_enabled: self._apply_manual_limits()
 
+    def _on_recording_changed_from_session(self, recording: Optional[Recording]):
+        """Handler for SessionManager.current_recording_changed."""
+        log.debug(f"[_on_recording_changed_from_session] Received recording update.")
+        if recording == self.current_recording:
+            return # Avoid redundant updates/loops
+
+        # Sync file list and index from session manager
+        self.file_list = self.session_manager.file_list
+        self.current_file_index = self.session_manager.current_file_index
+        
+        if recording:
+             # Use _display_recording directly
+             self._display_recording(recording)
+        else:
+             # Handle unloading if needed - maybe clear UI?
+             pass
+
     def load_recording_data(self, data_or_filepath, file_list: List[Path], current_index: int):
         """
         Handles loading data. Accepts either a pre-loaded Recording object (to display)
@@ -1186,6 +1210,12 @@ class ExplorerTab(QtWidgets.QWidget):
             
             self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
             log.info(f"File loading complete: {filepath.name}")
+
+            # Update SessionManager
+            if self.session_manager:
+                 self.session_manager.set_file_context(self.file_list, self.current_file_index)
+                 self.session_manager.current_recording = self.current_recording
+
         except (FileNotFoundError, UnsupportedFormatError, FileReadError, SynaptipyError) as e:
              log.error(f"Load fail '{filepath.name}': {e}", exc_info=False)
              QtWidgets.QMessageBox.critical(self, "Loading Error", f"Could not load:\n{filepath.name}\n\nError: {e}")
@@ -1643,14 +1673,26 @@ class ExplorerTab(QtWidgets.QWidget):
         self._analysis_items.append(analysis_item); log.info(f"Added to analysis set: {analysis_item}")
         self.status_bar.showMessage(f"Added Recording '{file_path.name}' to the analysis set.", 3000)
         # --- END UPDATE --- 
-        self._update_analysis_set_display(); self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
+        self._update_analysis_set_display()
+        
+        # Update SessionManager
+        if self.session_manager:
+             self.session_manager.selected_analysis_items = self._analysis_items[:]
+             
+        self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
 
     def _clear_analysis_set(self):
         """Clears the analysis set."""
         if not self._analysis_items: return
         confirm = QtWidgets.QMessageBox.question(self, "Confirm Clear", f"Clear all {len(self._analysis_items)} items from the analysis set?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
         if confirm == QtWidgets.QMessageBox.StandardButton.Yes:
-            self._analysis_items = []; log.info("Analysis set cleared."); self._update_analysis_set_display(); self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
+            self._analysis_items = []; log.info("Analysis set cleared."); self._update_analysis_set_display()
+            
+            # Update SessionManager
+            if self.session_manager:
+                 self.session_manager.selected_analysis_items = []
+                 
+            self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
 
 
     # =========================================================================
