@@ -279,8 +279,15 @@ class MainWindow(QtWidgets.QMainWindow):
         from Synaptipy.shared.plot_customization import get_force_opaque_trials
         log.info(f"[_on_plot_preferences_updated] Handling signal. Force opaque state: {get_force_opaque_trials()}")
         
+        # CRITICAL FIX: Use the optimized _update_plot_pens_only() method instead of the slow update_plot_pens()
+        # This updates pen properties in-place without removing/recreating plot items
         if hasattr(self, 'explorer_tab') and self.explorer_tab:
-            self.explorer_tab.update_plot_pens() # This new method will only update styles
+            if hasattr(self.explorer_tab, '_update_plot_pens_only'):
+                self.explorer_tab._update_plot_pens_only()  # Fast in-place pen update
+                log.info("Updated explorer tab plots using optimized pen-only update")
+            else:
+                log.warning("Optimized pen update method not found, using fallback")
+                self.explorer_tab.update_plot_pens()  # Fallback to full replot
         if hasattr(self, 'analyser_tab') and self.analyser_tab:
              # Add logic here to update analyser tab plots if they exist
              pass
