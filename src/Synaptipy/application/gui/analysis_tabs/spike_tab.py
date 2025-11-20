@@ -240,7 +240,6 @@ class SpikeAnalysisTab(BaseAnalysisTab):
     # This method was replaced by the template method pattern (_execute_core_analysis)
     # and is no longer connected to the UI.
 
-
     # --- Base Class Method Implementation --- 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         # Gathers the specific Spike analysis details for saving.
