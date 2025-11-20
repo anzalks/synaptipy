@@ -1058,12 +1058,55 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"Final result data to save: {final_result}")
 
+        # --- Check for Existing Result ---
+        existing_index = -1
+        if hasattr(main_window, 'saved_results'):
+            for i, res in enumerate(main_window.saved_results):
+                # Define what "same result" means.
+                # Usually: Same file, same analysis type, same data source (trial/avg)
+                if (res.get('source_file_path') == final_result.get('source_file_path') and
+                    res.get('analysis_type') == final_result.get('analysis_type') and
+                    res.get('data_source_used') == final_result.get('data_source_used') and
+                    res.get('trial_index_used') == final_result.get('trial_index_used')):
+                    existing_index = i
+                    break
+        
+        if existing_index >= 0:
+            reply = QtWidgets.QMessageBox.question(
+                self, 
+                "Overwrite Result?",
+                f"A result for '{analysis_type}' on this data already exists.\nDo you want to overwrite it?",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No
+            )
+            if reply == QtWidgets.QMessageBox.StandardButton.No:
+                log.info("Save cancelled by user (overwrite denied).")
+                return
+
         # --- Call MainWindow Method --- 
         try:
-            main_window.add_saved_result(final_result)
-            # Optional: Give user feedback within the tab
-            # e.g., self.save_status_label.setText("Result saved!")
+            # If overwriting, we might need a way to tell MainWindow to replace.
+            # If add_saved_result just appends, we might have duplicates.
+            # Let's assume we can replace if we have the index, OR we just append and let the user manage (but user asked to "rewrite").
+            # If MainWindow has 'update_saved_result', use it. Else, maybe 'saved_results[i] = ...' ?
+            # Safest is to check if we can replace.
+            
+            if existing_index >= 0 and hasattr(main_window, 'saved_results'):
+                 main_window.saved_results[existing_index] = final_result
+                 # We also need to refresh the results view in MainWindow if it exists
+                 if hasattr(main_window, 'results_tab') and hasattr(main_window.results_tab, 'refresh_results'):
+                     main_window.results_tab.refresh_results()
+                 elif hasattr(main_window, 'refresh_results_display'):
+                     main_window.refresh_results_display()
+                 log.info(f"Overwrote existing result at index {existing_index}")
+                 if hasattr(self, 'status_label') and self.status_label:
+                    self.status_label.setText("Status: Result overwritten successfully")
+            else:
+                main_window.add_saved_result(final_result)
+                if hasattr(self, 'status_label') and self.status_label:
+                    self.status_label.setText("Status: Result saved successfully")
+            
         except Exception as e:
-            log.error(f"Error calling main_window.add_saved_result: {e}", exc_info=True)
+            log.error(f"Error saving result: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Save Error", f"Failed to save result:\n{e}")
     # --- END ADDED ---

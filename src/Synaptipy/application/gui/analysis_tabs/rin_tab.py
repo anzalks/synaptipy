@@ -809,8 +809,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         
         log.debug(f"Updating mode dependent UI: Mode text='{mode_text}', _MODE_MANUAL='{self._MODE_MANUAL}', is_manual={is_manual}")
 
-        # Determine if we have data plotted (use plot_item as indicator)
-        has_data_plotted = self.plot_item is not None
+        # Determine if we have data plotted (check _current_plot_data)
+        has_data_plotted = self._current_plot_data is not None and 'time' in self._current_plot_data
 
         log.debug(f"Updating mode dependent UI: Mode='{mode_text}', HasDataPlotted={has_data_plotted}")
 
