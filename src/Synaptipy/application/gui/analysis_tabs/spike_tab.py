@@ -236,135 +236,10 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         except (ValueError, TypeError):
             return False
 
-    @QtCore.Slot()
-    def _run_spike_analysis(self):
-        """Runs Spike Detection analysis on the currently plotted trace."""
-        log.debug("Run Spike Analysis clicked.")
-        
-        # 1. Check if data is plotted
-        if not self._current_plot_data:
-            log.warning("Cannot run spike analysis: No data plotted.")
-            self.results_textedit.setText("Plot data first.")
-            return
-            
-        # 2. Validate parameters
-        if not self._validate_params():
-            log.warning("Invalid spike detection parameters.")
-            QtWidgets.QMessageBox.warning(self, "Invalid Parameters", "Threshold and Refractory period must be valid numbers (Refractory >= 0).")
-            return
-            
-        threshold = float(self.threshold_edit.text())
-        refractory_ms = float(self.refractory_edit.text())
-        refractory_s = refractory_ms / 1000.0
-        
-        voltage = self._current_plot_data.get('voltage')
-        time = self._current_plot_data.get('time')
-        rate = self._current_plot_data.get('rate')
-        units = self._current_plot_data.get('units', 'V')
-        
-        if voltage is None or time is None or rate is None or rate <= 0:
-            log.error("Cannot run spike analysis: Missing voltage, time, or valid rate in plotted data.")
-            self.results_textedit.setText("Error: Invalid plotted data.")
-            return
-            
-        # Add threshold line to plot? (Optional)
-        # Could add/update a pg.InfiniteLineItem here
-            
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
-        self.results_textedit.clear()
-        self.spike_markers_item.setData([]) # Clear previous markers
-        self.spike_markers_item.setVisible(False)
-        self.threshold_line.setVisible(True)
-        run_successful = False
-        spike_indices = None
-        spike_times = None
-        results_str = f"--- Spike Detection Results ---\nThreshold: {threshold:.3f} {units}\nRefractory: {refractory_ms:.2f} ms\n\n"
-        
-        try:
-            # 3. Call the detection function (adjust function name/args as needed)
-            log.info(f"Running spike detection: Threshold={threshold:.3f}, Refractory={refractory_s:.4f}s")
-            # CORRECTED: Pass arguments positionally according to function definition
-            # detect_spikes_threshold(data, time, threshold, refractory_samples)
-            refractory_period_samples = int(refractory_s * rate)
-            spike_indices, spike_times_from_func = spike_analysis.detect_spikes_threshold(
-                voltage,            # data
-                time,               # time
-                threshold,          # threshold
-                refractory_period_samples # refractory_samples
-            )
-            
-            if spike_indices is None: # Function might return None on error
-                raise ValueError("Spike detection function returned None")
-                
-            num_spikes = len(spike_indices)
-            log.info(f"Detected {num_spikes} spikes.")
-            
-            # 4. Process and Display Results
-            if num_spikes > 0:
-                spike_times = time[spike_indices] # Get actual times
-                duration = time[-1] - time[0]
-                avg_rate = num_spikes / duration if duration > 0 else 0
-                results_str += f"Number of Spikes: {num_spikes}\n"
-                results_str += f"Average Firing Rate: {avg_rate:.2f} Hz\n"
-                
-                # --- NEW: Calculate and display spike features ---
-                features_list = spike_analysis.calculate_spike_features(voltage, time, spike_indices)
-                if features_list:
-                    # Calculate mean and SD for each feature
-                    amplitudes = [f['amplitude'] for f in features_list if not np.isnan(f['amplitude'])]
-                    half_widths = [f['half_width'] for f in features_list if not np.isnan(f['half_width'])]
-                    ahp_depths = [f['ahp_depth'] for f in features_list if not np.isnan(f['ahp_depth'])]
-                    
-                    results_str += "\n--- Spike Features (Mean ± SD) ---\n"
-                    if amplitudes:
-                        results_str += f"Amplitude: {np.mean(amplitudes):.2f} ± {np.std(amplitudes):.2f} {units}\n"
-                    if half_widths:
-                        results_str += f"Half-width: {np.mean(half_widths):.3f} ± {np.std(half_widths):.3f} ms\n"
-                    if ahp_depths:
-                        results_str += f"AHP Depth: {np.mean(ahp_depths):.2f} ± {np.std(ahp_depths):.2f} {units}\n"
-                
-                isis = spike_analysis.calculate_isi(spike_times)
-                if isis.size > 0:
-                    results_str += f"Mean ISI: {np.mean(isis)*1000:.2f} ± {np.std(isis)*1000:.2f} ms\n"
+    # --- REMOVED: _run_spike_analysis (Dead Code) ---
+    # This method was replaced by the template method pattern (_execute_core_analysis)
+    # and is no longer connected to the UI.
 
-
-                # Store results for saving and plotting
-                self._current_plot_data['spike_indices'] = spike_indices
-                self._current_plot_data['spike_times'] = spike_times
-                self._current_plot_data['spike_features'] = features_list
-                
-                # 5. Update Plot Markers
-                # Plot markers at the threshold crossing time, using threshold as Y
-                # Or, if detection function returns peaks, plot at peaks.
-                self.spike_markers_item.setData(x=spike_times, y=voltage[spike_indices]) # Plot at detected point Y value
-                # CRITICAL: Force pen/brush application (Windows PyQtGraph bug fix)
-                red_brush = pg.mkBrush(255, 0, 0, 150)
-                self.spike_markers_item.setBrush(red_brush)
-                log.info(f"[SPIKE-DEBUG] Spike markers brush applied: {red_brush}")
-                self.spike_markers_item.setVisible(True)
-                
-            else:
-                results_str += "Number of Spikes: 0\n"
-                self._current_plot_data['spike_indices'] = np.array([])
-                self._current_plot_data['spike_times'] = np.array([])
-                self._current_plot_data['spike_features'] = []
-            
-            run_successful = True
-            
-        except AttributeError as ae:
-             log.error(f"Spike detection function not found or attribute error: {ae}. Is 'spike_analysis.detect_spikes_threshold' correct?", exc_info=True)
-             results_str += "Error: Spike detection function not found."
-             self.results_textedit.setText(results_str)
-        except Exception as e:
-            log.error(f"Error during spike detection: {e}", exc_info=True)
-            results_str += f"Error during analysis: {e}"
-            self.results_textedit.setText(results_str)
-            
-        finally:
-            self.results_textedit.setText(results_str)
-            QtWidgets.QApplication.restoreOverrideCursor()
-            # Enable save button only if spikes were detected successfully?
-            if self.save_button: self.save_button.setEnabled(run_successful)
 
     # --- Base Class Method Implementation --- 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
@@ -472,9 +347,18 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         rate = data.get('rate')
         units = data.get('units', 'V')
         
-        if voltage is None or time is None or rate is None or rate <= 0:
-            log.error("Missing voltage, time, or valid rate in plotted data")
+        if voltage is None or time is None:
+            log.error("Missing voltage or time in plotted data")
             return None
+
+        # Calculate rate if missing
+        if rate is None or rate <= 0:
+            if len(time) > 1:
+                rate = 1.0 / (time[1] - time[0])
+                log.warning(f"Sampling rate missing, calculated from time vector: {rate:.2f} Hz")
+            else:
+                log.error("Cannot calculate sampling rate from time vector (length <= 1)")
+                return None
         
         # Get parameters
         threshold = params.get('threshold')
