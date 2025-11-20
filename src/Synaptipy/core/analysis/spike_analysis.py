@@ -99,5 +99,89 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
         return np.array([]), np.array([])
 
 # --- Add other spike analysis functions here later ---
-# def calculate_spike_features(data, time, spike_indices): ...
-# def calculate_isi(spike_times): ...
+def calculate_spike_features(data, time, spike_indices):
+    """
+    Calculates detailed features for each spike.
+    Returns:
+        A list of dictionaries, where each dictionary contains features
+        for a single spike (e.g., amplitude, half_width, ahp_depth, dvdt_max).
+    """
+    if spike_indices.size == 0:
+        return []
+
+    dt = time[1] - time[0]
+    dvdt = np.gradient(data, dt)
+    features_list = []
+
+    for peak_idx in spike_indices:
+        # 1. Find Action Potential Threshold (20 V/s is a common value)
+        search_end = peak_idx
+        search_start = max(0, peak_idx - int(0.005 / dt))  # 5ms before peak
+        try:
+            dvdt_slice = dvdt[search_start:search_end]
+            data_slice = data[search_start:search_end]
+            threshold_crossings = np.where(dvdt_slice > 20000)[0] # dV/dt in V/s, data in mV
+            if threshold_crossings.size > 0:
+                thresh_idx = search_start + threshold_crossings[0]
+                ap_threshold = data[thresh_idx]
+            else:
+                thresh_idx = search_start # Fallback
+                ap_threshold = data[thresh_idx]
+        except:
+            thresh_idx = peak_idx - 2 # fallback
+            ap_threshold = data[thresh_idx]
+
+
+        # 2. Spike Amplitude (from threshold to peak)
+        amplitude = data[peak_idx] - ap_threshold
+
+        # 3. Spike Width at half-maximal amplitude
+        half_amp = ap_threshold + amplitude / 2
+        
+        # Find rising and falling half-amp crossings
+        pre_peak_slice = data[thresh_idx:peak_idx+1]
+        post_peak_slice = data[peak_idx:peak_idx + int(0.01/dt)] # 10ms after peak
+
+        try:
+            rising_half_idx = thresh_idx + np.where(pre_peak_slice > half_amp)[0][0]
+            falling_half_idx = peak_idx + np.where(post_peak_slice < half_amp)[0][0]
+            half_width = (falling_half_idx - rising_half_idx) * dt * 1000  # in ms
+        except IndexError:
+            half_width = np.nan
+
+        # 4. Afterhyperpolarization (AHP) depth
+        ahp_search_end = min(len(data), peak_idx + int(0.02 / dt)) # 20ms after peak
+        ahp_slice = data[peak_idx:ahp_search_end]
+        try:
+            ahp_min_val = np.min(ahp_slice)
+            ahp_depth = ap_threshold - ahp_min_val
+        except ValueError:
+            ahp_depth = np.nan
+
+        # 5. Maximum rise and fall slopes (max/min dV/dt)
+        dvdt_search_end = min(len(dvdt), peak_idx + int(0.005 / dt)) # 5ms after peak
+        dvdt_search_slice = dvdt[thresh_idx:dvdt_search_end]
+
+        try:
+            max_dvdt = np.max(dvdt_search_slice)
+            min_dvdt = np.min(dvdt_search_slice)
+        except ValueError:
+            max_dvdt, min_dvdt = np.nan, np.nan
+            
+        features_list.append({
+            'ap_threshold': ap_threshold,
+            'amplitude': amplitude,
+            'half_width': half_width,
+            'ahp_depth': ahp_depth,
+            'max_dvdt': max_dvdt,
+            'min_dvdt': min_dvdt
+        })
+
+    return features_list
+
+
+def calculate_isi(spike_times):
+    """Calculates inter-spike intervals from a list of spike times."""
+    if len(spike_times) < 2:
+        return np.array([])
+    return np.diff(spike_times)
