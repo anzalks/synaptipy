@@ -450,6 +450,10 @@ class RinAnalysisTab(BaseAnalysisTab):
         if self.tau_button: self.tau_button.clicked.connect(self._calculate_tau)
         if self.sag_button: self.sag_button.clicked.connect(self._calculate_sag_ratio)
 
+        # Connect other properties buttons
+        if self.tau_button: self.tau_button.clicked.connect(self._calculate_tau)
+        if self.sag_button: self.sag_button.clicked.connect(self._calculate_sag_ratio)
+
         # Ensure plot regions update triggers analysis in interactive mode
         if self.baseline_region: self.baseline_region.sigRegionChanged.connect(self._trigger_analysis_if_interactive)
         if self.response_region: self.response_region.sigRegionChanged.connect(self._trigger_analysis_if_interactive)
@@ -1126,7 +1130,11 @@ class RinAnalysisTab(BaseAnalysisTab):
 
     @QtCore.Slot()
     def _calculate_tau(self):
-        if not self._current_plot_data: return
+        if not self._current_plot_data:
+            return
+        if not self.response_region:
+            self.tau_result_label.setText("Tau: Regions not initialized")
+            return
         # NOTE: Support both base class and old format
         time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
         data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
@@ -1144,7 +1152,11 @@ class RinAnalysisTab(BaseAnalysisTab):
 
     @QtCore.Slot()
     def _calculate_sag_ratio(self):
-        if not self._current_plot_data: return
+        if not self._current_plot_data:
+            return
+        if not self.baseline_region or not self.response_region:
+            self.sag_result_label.setText("Sag Ratio: Regions not initialized")
+            return
         # NOTE: Support both base class and old format
         time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
         data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
@@ -1410,7 +1422,6 @@ class RinAnalysisTab(BaseAnalysisTab):
             
             log.debug(f"Updated visualization lines: baseline={mean_baseline:.3f}, response={mean_response:.3f}")
     # --- END PHASE 2 ---
-
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
 ANALYSIS_TAB_CLASS = RinAnalysisTab 
