@@ -82,7 +82,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.session_manager = SessionManager()
         self.session_manager.current_recording_changed.connect(self._on_recording_changed_from_session)
         # We also need to listen for analysis items changes if we want to keep UI in sync (e.g. buttons)
-        # self.session_manager.selected_analysis_items_changed.connect(self._on_analysis_items_changed_from_session)
+        self.session_manager.selected_analysis_items_changed.connect(self._on_analysis_items_changed_from_session)
 
         # --- Data State ---
         self.current_recording: Optional[Recording] = None
@@ -738,6 +738,23 @@ class ExplorerTab(QtWidgets.QWidget):
         else:
              # Handle unloading if needed - maybe clear UI?
              pass
+
+    def _on_analysis_items_changed_from_session(self, items: List[Dict[str, Any]]):
+        """
+        Slot called when the SessionManager reports a change in the selected analysis items.
+        This keeps ExplorerTab synchronized with updates that occur outside this tab
+        (e.g., drag-and-drop actions inside AnalyserTab).
+        """
+        log.debug(f"ExplorerTab received analysis set update from SessionManager: {len(items)} items")
+
+        # 1. Sync internal state
+        self._analysis_items = items
+
+        # 2. Refresh displayed summary text
+        self._update_analysis_set_display()
+
+        # 3. Update UI elements (button enablement, etc.)
+        self._update_ui_state()
 
     def load_recording_data(self, data_or_filepath, file_list: List[Path], current_index: int):
         """
