@@ -54,12 +54,15 @@ def calculate_rin(
         delta_v = response_voltage - baseline_voltage
         rin = delta_v / (current_amplitude / 1000.0) # V=IR -> R = V/I. If V is mV, I is pA. We want MOhm.
         # mV / nA = MOhm. pA / 1000 = nA.
+        
+        conductance_us = 1000.0 / rin if rin != 0 else 0.0 # G = 1/R. 1/MOhm = uS.
 
-        log.info(f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}")
+        log.info(f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}")
         
         return RinResult(
             value=rin,
             unit="MOhm",
+            conductance=conductance_us,
             voltage_deflection=delta_v,
             current_injection=current_amplitude,
             baseline_voltage=baseline_voltage,
@@ -71,6 +74,76 @@ def calculate_rin(
         return RinResult(value=None, unit="MOhm", is_valid=False, error_message="IndexError during calculation")
     except Exception as e:
         log.exception(f"Unexpected error during Rin calculation: {e}")
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
+
+def calculate_conductance(
+    current_trace: np.ndarray,
+    time_vector: np.ndarray,
+    voltage_step: float, # Delta V in mV
+    baseline_window: Tuple[float, float],
+    response_window: Tuple[float, float]
+) -> RinResult:
+    """
+    Calculates Conductance (G) from a current trace response to a voltage step.
+    
+    G = delta_I / delta_V
+    
+    Args:
+        current_trace: 1D NumPy array of the current recording (pA).
+        time_vector: 1D NumPy array of corresponding time points.
+        voltage_step: The amplitude of the voltage step (delta_V) in mV.
+        baseline_window: Tuple (start_time, end_time) for baseline current.
+        response_window: Tuple (start_time, end_time) for steady-state current.
+        
+    Returns:
+        RinResult object (value is Rin in MOhm, but conductance field is populated).
+    """
+    if voltage_step == 0:
+        log.warning("Cannot calculate Conductance: Voltage step is zero.")
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message="Voltage step is zero")
+
+    try:
+        # Find indices
+        baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
+        response_mask = (time_vector >= response_window[0]) & (time_vector < response_window[1])
+
+        if not np.any(baseline_mask) or not np.any(response_mask):
+            log.warning("Cannot calculate Conductance: Time windows yielded no data points.")
+            return RinResult(value=None, unit="MOhm", is_valid=False, error_message="No data in windows")
+
+        # Calculate mean baseline and response currents
+        baseline_current = np.mean(current_trace[baseline_mask])
+        response_current = np.mean(current_trace[response_mask])
+
+        delta_i = response_current - baseline_current # pA
+        
+        # G = I / V
+        # pA / mV = nS (nano-Siemens)
+        # We want uS (micro-Siemens)
+        # pA = 1e-12 A, mV = 1e-3 V -> 1e-9 S = nS.
+        # uS = nS / 1000.
+        
+        conductance_ns = delta_i / voltage_step # nS
+        conductance_us = conductance_ns / 1000.0 # uS
+        
+        # Calculate Rin (Resistance)
+        # R = 1/G. 1/uS = MOhm.
+        rin_megaohms = 1.0 / conductance_us if conductance_us != 0 else float('inf')
+
+        log.info(f"Calculated Conductance: dI={delta_i:.3f}, dV={voltage_step:.3f}, G={conductance_us:.3f} uS, Rin={rin_megaohms:.3f} MOhm")
+        
+        return RinResult(
+            value=rin_megaohms,
+            unit="MOhm",
+            conductance=conductance_us,
+            voltage_deflection=voltage_step,
+            current_injection=delta_i,
+            baseline_voltage=None, # Not applicable for current trace
+            steady_state_voltage=None # Not applicable
+        )
+
+    except Exception as e:
+        log.exception(f"Unexpected error during Conductance calculation: {e}")
         return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
 
 def _exp_growth(t, V_ss, V_0, tau):
@@ -162,4 +235,4 @@ def calculate_sag_ratio(
         return sag_ratio
     except Exception as e:
         log.exception(f"Unexpected error during Sag calculation: {e}")
-        return None 
+        return None

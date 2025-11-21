@@ -208,7 +208,8 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug("Instantiating AnalyserTab...")
         # --- THIS IS THE LINE TO FIX ---
         # Pass the actual ExplorerTab instance, not self (MainWindow)
-        self.analyser_tab = AnalyserTab(explorer_tab_ref=self.explorer_tab, parent=self)
+        # Pass the neo_adapter instance
+        self.analyser_tab = AnalyserTab(neo_adapter=self.neo_adapter, parent=self)
         # --- END FIX ---
         log.debug("Instantiating ExporterTab...")
         self.exporter_tab = ExporterTab(
@@ -416,11 +417,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.exporter_tab.update_state()
                 except Exception as e_export_update: 
                     log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
-            if hasattr(self, 'analyser_tab') and self.analyser_tab:
-                try: 
-                    self.analyser_tab.update_state(self.explorer_tab._analysis_items)
-                except Exception as e_analyse_update: 
-                    log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+            # if hasattr(self, 'analyser_tab') and self.analyser_tab:
+            #     try: 
+            #         self.analyser_tab.update_state(self.explorer_tab._analysis_items)
+            #     except Exception as e_analyse_update: 
+            #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
     
     def _on_data_error(self, error_message: str):
         """Handle data loading errors."""
@@ -441,11 +442,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.exporter_tab.update_state()
             except Exception as e_export_update: 
                 log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
-        if hasattr(self, 'analyser_tab') and self.analyser_tab:
-            try: 
-                self.analyser_tab.update_state(self.explorer_tab._analysis_items)
-            except Exception as e_analyse_update: 
-                log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+        # if hasattr(self, 'analyser_tab') and self.analyser_tab:
+        #     try: 
+        #         self.analyser_tab.update_state(self.explorer_tab._analysis_items)
+        #     except Exception as e_analyse_update: 
+        #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
 
     # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same as previous answer ---
     # V V V (Keep methods from previous answer here) V V V
@@ -590,10 +591,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 try: self.exporter_tab.update_state()
                 except Exception as e_export_update: log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
             else: log.warning("Cannot update exporter tab state: Exporter tab not found.")
-            if hasattr(self, 'analyser_tab') and self.analyser_tab:
-                try: self.analyser_tab.update_state(self.explorer_tab._analysis_items) # Pass analysis items explicitly
-                except Exception as e_analyse_update: log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
-            else: log.warning("Cannot update analyser tab state: Analyser tab not found.")
+            # if hasattr(self, 'analyser_tab') and self.analyser_tab:
+            #     try: self.analyser_tab.update_state(self.explorer_tab._analysis_items) # Pass analysis items explicitly
+            #     except Exception as e_analyse_update: log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+            # else: log.warning("Cannot update analyser tab state: Analyser tab not found.")
 
 
     def _export_to_nwb(self):

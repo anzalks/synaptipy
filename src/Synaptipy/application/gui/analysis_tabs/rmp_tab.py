@@ -14,38 +14,15 @@ from .base import BaseAnalysisTab
 # Import needed core components using absolute paths
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.core.analysis import basic_features # Use standardized analysis
 # from Synaptipy.core.analysis import basic_features # We might create our own here
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.baseline_tab')
 
 # --- Baseline Calculation Function ---
-def calculate_baseline_stats(time: np.ndarray, voltage: np.ndarray, start_time: float, end_time: float) -> Optional[Tuple[float, float]]:
-    # Calculates the Mean and Standard Deviation of a signal
-    # over a specified time window.
-    # Args:
-    #     time: 1D numpy array of time values.
-    #     voltage: 1D numpy array of signal values.
-    #     start_time: Start time for the baseline window.
-    #     end_time: End time for the baseline window.
-    # Returns:
-    #     A tuple containing (mean_value, std_dev_value) or None if the window
-    #     is invalid or no data points are found.
-    if time is None or voltage is None or start_time >= end_time:
-        return None
-    try:
-        # Find indices corresponding to the time window
-        indices = np.where((time >= start_time) & (time <= end_time))[0]
-        if len(indices) == 0:
-            log.warning(f"No data points found between {start_time}s and {end_time}s.")
-            return None
-        # Calculate the mean and standard deviation voltage within the window
-        baseline_values = voltage[indices]
-        baseline_mean = np.mean(baseline_values)
-        baseline_sd = np.std(baseline_values)
-        return baseline_mean, baseline_sd
-    except Exception as e:
-        log.error(f"Error calculating Baseline Mean/SD between {start_time}s and {end_time}s: {e}", exc_info=True)
-        return None
+# def calculate_baseline_stats(time: np.ndarray, voltage: np.ndarray, start_time: float, end_time: float) -> Optional[Tuple[float, float]]:
+#     # ... replaced by basic_features.calculate_rmp
+#     pass
 
 # --- Baseline Analysis Tab Class ---
 class BaselineAnalysisTab(BaseAnalysisTab):

@@ -21,14 +21,63 @@ from Synaptipy.application.session_manager import SessionManager
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
 
+class AnalysisSourceListWidget(QtWidgets.QListWidget):
+    """Custom ListWidget that accepts file drops for analysis."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.DropOnly)
+        self.session_manager = SessionManager() # Access singleton
+
+    def dragEnterEvent(self, event: QtGui.QDragEnterEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QtGui.QDragMoveEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QtGui.QDropEvent):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            new_items = []
+            current_items = self.session_manager.selected_analysis_items
+            
+            for url in urls:
+                file_path = Path(url.toLocalFile())
+                if file_path.is_file():
+                    # Create analysis item
+                    item = {'path': file_path, 'target_type': 'Recording', 'trial_index': None}
+                    
+                    # Check for duplicates
+                    is_duplicate = any(existing.get('path') == file_path and existing.get('target_type') == 'Recording' for existing in current_items)
+                    if not is_duplicate:
+                        new_items.append(item)
+                        log.info(f"Dropped file added to analysis: {file_path.name}")
+            
+            if new_items:
+                # Update SessionManager (append new items)
+                updated_list = current_items + new_items
+                self.session_manager.selected_analysis_items = updated_list
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
 class AnalyserTab(QtWidgets.QWidget):
     """Main Analyser Widget containing dynamically loaded sub-tabs."""
 
-    def __init__(self, explorer_tab_ref: ExplorerTab, parent=None):
+    def __init__(self, neo_adapter: NeoAdapter, parent=None):
         super().__init__(parent)
         log.debug("Initializing Main AnalyserTab (dynamic loading)")
         self.session_manager = SessionManager()
-        self._explorer_tab = explorer_tab_ref
+        self._neo_adapter = neo_adapter
         self._analysis_items: List[Dict[str, Any]] = []
         self._loaded_analysis_tabs: List[BaseAnalysisTab] = []
 
@@ -36,6 +85,7 @@ class AnalyserTab(QtWidgets.QWidget):
         # self.source_file_label: Optional[QtWidgets.QLabel] = None # Replaced by list
         self.source_list_widget: Optional[QtWidgets.QListWidget] = None
         self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
+        self.central_analysis_item_combo: Optional[QtWidgets.QComboBox] = None
 
         self._setup_ui()
         self._load_analysis_tabs()
@@ -45,52 +95,82 @@ class AnalyserTab(QtWidgets.QWidget):
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
 
     def _setup_ui(self):
+        """Setup UI with horizontal splitter: left=analysis tabs, right=sidebar."""
         main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(5)
 
-        # --- Source Selection Display ---
-        source_group = QtWidgets.QGroupBox("Analysis Input Set")
-        source_group.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Maximum
-        )
-        source_layout = QtWidgets.QVBoxLayout(source_group)
-        source_layout.setContentsMargins(10, 10, 10, 10)
-        source_layout.setSpacing(5)
+        # --- Create Horizontal Splitter ---
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         
-        self.source_list_widget = QtWidgets.QListWidget()
-        self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
-        self.source_list_widget.setMinimumHeight(50)
-        self.source_list_widget.setMaximumHeight(100) # Limit height
-        self.source_list_widget.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Preferred
-        )
-        source_layout.addWidget(self.source_list_widget)
-        main_layout.addWidget(source_group)
-
-        # --- Sub-Tab Widget ---
+        # --- LEFT PANE: Sub-Tab Widget (Analysis Tabs) ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
         self.sub_tab_widget.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding
         )
-        # Set tab position to north (top)
         self.sub_tab_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
-        # Make tabs movable
         self.sub_tab_widget.setMovable(True)
-        # Remove custom styling to use native OS style that matches the main tabs
         
-        main_layout.addWidget(self.sub_tab_widget, 1)  # Give it a stretch factor of 1
-
+        # Add to splitter
+        splitter.addWidget(self.sub_tab_widget)
+        
+        # --- RIGHT PANE: Sidebar with controls ---
+        sidebar_widget = QtWidgets.QWidget()
+        sidebar_layout = QtWidgets.QVBoxLayout(sidebar_widget)
+        sidebar_layout.setContentsMargins(5, 5, 5, 5)
+        sidebar_layout.setSpacing(10)
+        
+        # Source Selection Display
+        source_group = QtWidgets.QGroupBox("Analysis Input Set")
+        source_layout = QtWidgets.QVBoxLayout(source_group)
+        source_layout.setContentsMargins(5, 5, 5, 5)
+        source_layout.setSpacing(5)
+        
+        self.source_list_widget = AnalysisSourceListWidget(self)
+        self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
+        self.source_list_widget.setMinimumHeight(80)
+        self.source_list_widget.setMaximumHeight(150)
+        source_layout.addWidget(self.source_list_widget)
+        
+        sidebar_layout.addWidget(source_group)
+        
+        # Centralized Analysis Item Selector
+        selector_group = QtWidgets.QGroupBox("Analyze Item")
+        selector_layout = QtWidgets.QVBoxLayout(selector_group)
+        selector_layout.setContentsMargins(5, 5, 5, 5)
+        selector_layout.setSpacing(5)
+        
+        selector_label = QtWidgets.QLabel("Select item to analyze:")
+        selector_layout.addWidget(selector_label)
+        
+        self.central_analysis_item_combo = QtWidgets.QComboBox()
+        self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
+        self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
+        selector_layout.addWidget(self.central_analysis_item_combo)
+        
+        sidebar_layout.addWidget(selector_group)
+        
+        # Add stretch to push controls to top
+        sidebar_layout.addStretch()
+        
+        # Add sidebar to splitter
+        splitter.addWidget(sidebar_widget)
+        
+        # Set initial splitter sizes (70% left, 30% right)
+        splitter.setStretchFactor(0, 7)
+        splitter.setStretchFactor(1, 3)
+        
+        # Add splitter to main layout
+        main_layout.addWidget(splitter)
+        
+        # Connect tab change signal
+        self.sub_tab_widget.currentChanged.connect(self._on_tab_changed)
+        
         self.setLayout(main_layout)
-        log.debug("Main AnalyserTab UI setup complete.")
+        log.debug("Main AnalyserTab UI setup complete with sidebar layout.")
 
-    def _connect_explorer_signals(self):
-        """Connect to signals from the Explorer tab."""
-        log.debug("Connecting AnalyserTab to ExplorerTab signals...")
-        self._explorer_tab.analysis_set_changed.connect(self.update_analysis_sources)
+    # _connect_explorer_signals removed as we use SessionManager now
 
     def _load_analysis_tabs(self):
         # ... (Dynamic loading logic remains exactly the same as the previous correct version) ...
@@ -99,7 +179,7 @@ class AnalyserTab(QtWidgets.QWidget):
         analysis_pkg_path = ["Synaptipy", "application", "gui", "analysis_tabs"]
         analysis_module_prefix = ".".join(analysis_pkg_path) + "."
         # --- Get NeoAdapter instance --- 
-        neo_adapter_instance = self._explorer_tab.neo_adapter
+        neo_adapter_instance = self._neo_adapter
         if neo_adapter_instance is None:
              log.error("Cannot load analysis tabs: NeoAdapter not available from ExplorerTab.")
              # Show error in tab area
@@ -149,7 +229,7 @@ class AnalyserTab(QtWidgets.QWidget):
     def update_analysis_sources(self, analysis_items: List[Dict[str, Any]]):
         """
         Called when the analysis set changes in the ExplorerTab.
-        Updates the list widget and internal state.
+        Updates the list widget, central combo box, and internal state.
         """
         log.info(f"Received updated analysis set with {len(analysis_items)} items.")
         self._analysis_items = analysis_items # Store the latest list
@@ -171,8 +251,71 @@ class AnalyserTab(QtWidgets.QWidget):
                 list_item.setToolTip(str(item['path'])) # Show full path on hover
                 self.source_list_widget.addItem(list_item)
 
+        # Update the Central ComboBox
+        self.central_analysis_item_combo.blockSignals(True)
+        self.central_analysis_item_combo.clear()
+        if not analysis_items:
+            self.central_analysis_item_combo.addItem("No Analysis Items Available")
+            self.central_analysis_item_combo.setEnabled(False)
+        else:
+            self.central_analysis_item_combo.setEnabled(True)
+            for i, item in enumerate(analysis_items):
+                path_name = item.get('path', Path("Unknown")).name
+                target = item.get('target_type', 'Unknown')
+                display_text = f"Item {i+1}: "
+                if target == 'Recording': 
+                    display_text += f"File: {path_name}"
+                elif target == 'Current Trial': 
+                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get('trial_index') is not None else ""
+                    display_text += f"{path_name} [{target}{trial_info}]"
+                else: 
+                    display_text += f"{path_name} [{target}]"
+                self.central_analysis_item_combo.addItem(display_text)
+        self.central_analysis_item_combo.blockSignals(False)
+
         # Trigger state update for all sub-tabs
         self.update_state()
+        
+        # Trigger initial selection if items exist
+        if analysis_items:
+            self._on_central_item_selected(0)
+
+    # --- Central Item Selection Handler ---
+    @QtCore.Slot(int)
+    def _on_central_item_selected(self, index: int):
+        """
+        Called when user changes selection in the central analysis item combo box.
+        Forwards the selection to the currently active analysis tab.
+        """
+        log.debug(f"Central combo item selected: index={index}")
+        current_tab = self.sub_tab_widget.currentWidget()
+        if current_tab and isinstance(current_tab, BaseAnalysisTab):
+            try:
+                current_tab._on_analysis_item_selected(index)
+                log.debug(f"Forwarded selection to {current_tab.get_display_name()}")
+            except Exception as e:
+                log.error(f"Error forwarding selection to tab: {e}", exc_info=True)
+    
+    @QtCore.Slot(int)
+    def _on_tab_changed(self, tab_index: int):
+        """
+        Called when user switches between analysis tabs.
+        Updates the newly visible tab with the current combo selection.
+        """
+        log.debug(f"Analysis tab changed to index: {tab_index}")
+        if tab_index < 0:
+            return
+        
+        current_tab = self.sub_tab_widget.widget(tab_index)
+        if current_tab and isinstance(current_tab, BaseAnalysisTab):
+            # Get current selection from central combo
+            selected_index = self.central_analysis_item_combo.currentIndex()
+            if selected_index >= 0:
+                try:
+                    current_tab._on_analysis_item_selected(selected_index)
+                    log.debug(f"Updated {current_tab.get_display_name()} with selection index {selected_index}")
+                except Exception as e:
+                    log.error(f"Error updating tab on switch: {e}", exc_info=True)
 
     # --- Update State Method ---
     def update_state(self, _=None): # Can ignore argument if called directly or by simple signals

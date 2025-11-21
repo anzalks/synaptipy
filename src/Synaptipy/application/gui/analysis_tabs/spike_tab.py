@@ -16,6 +16,7 @@ from .base import BaseAnalysisTab
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.core.analysis import spike_analysis # Import the analysis function
 from Synaptipy.infrastructure.file_readers import NeoAdapter # <<< ADDED
+from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.shared.styling import style_button  # Import styling functions
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.spike_tab')
@@ -40,6 +41,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.voltage_plot_item: Optional[pg.PlotDataItem] = None
         self.spike_markers_item: Optional[pg.ScatterPlotItem] = None
         self._current_plot_data: Optional[Dict[str, Any]] = None # To store time, voltage, spikes
+        self._last_spike_result: Optional[Dict[str, Any]] = None # Store last result for saving
         # Keep internal list of items to analyse (inherited from BaseAnalysisTab)
         # REMOVED: self._analysis_items_for_spike: List[Dict[str, Any]] = [] # Use inherited _analysis_items
         # REMOVED: self._current_recording_for_ui: Optional[Recording] = None # Use inherited _selected_item_recording
@@ -163,6 +165,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         
         # Clear previous results (but NOT _current_plot_data - base class manages it)
         self.results_textedit.setText("")
+        self._last_spike_result = None
         if self.detect_button:
             self.detect_button.setEnabled(False)
         if self.save_button:
@@ -244,77 +247,12 @@ class SpikeAnalysisTab(BaseAnalysisTab):
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         # Gathers the specific Spike analysis details for saving.
         
-        # 1. Check if analysis was run and results exist
-        if not self._current_plot_data or 'spike_times' not in self._current_plot_data:
+        if not self._last_spike_result:
             log.debug("_get_specific_result_data (Spike): No spike analysis results available.")
             return None
             
-        spike_times = self._current_plot_data.get('spike_times')
-        spike_indices = self._current_plot_data.get('spike_indices')
-        voltage = self._current_plot_data.get('voltage') # Needed for peak values
-        features = self._current_plot_data.get('spike_features')
-        
-        # Check if spike_times is valid (e.g., a non-empty numpy array)
-        if spike_times is None or not isinstance(spike_times, np.ndarray):
-             log.debug(f"_get_specific_result_data (Spike): spike_times is invalid or empty ({type(spike_times)}).")
-             # Allow saving even if 0 spikes were detected, just need parameters
-             # return None 
-             pass # Continue to save parameters even if no spikes
-
-        # 2. Get parameters used for the analysis
-        try:
-            threshold = float(self.threshold_edit.text())
-            refractory_ms = float(self.refractory_edit.text())
-        except (ValueError, TypeError):
-            log.error("_get_specific_result_data (Spike): Could not read parameters from UI for saving.")
-            return None # Cannot save without valid parameters
-
-        # 3. Get data source information
-        channel_id = self.signal_channel_combobox.currentData()
-        channel_name = self.signal_channel_combobox.currentText().split(' (')[0] # Extract name before ID
-        data_source = self.data_source_combobox.currentData() # "average" or trial index (int)
-        data_source_text = self.data_source_combobox.currentText()
-
-        if channel_id is None or data_source is None:
-            log.warning("Cannot get specific Spike data: Missing channel or data source selection.")
-            return None
-            
-        # 4. Gather results
-        num_spikes = len(spike_times) if spike_times is not None else 0
-        avg_rate = 0.0
-        spike_peak_values = []
-        if num_spikes > 0 and voltage is not None and spike_indices is not None:
-             time_full = self._current_plot_data.get('time')
-             if time_full is not None and time_full.size > 1:
-                 duration = time_full[-1] - time_full[0]
-                 avg_rate = num_spikes / duration if duration > 0 else 0
-             # Get peak voltage values using the indices
-             try:
-                 spike_peak_values = voltage[spike_indices].tolist()
-             except IndexError:
-                  log.warning("Spike indices out of bounds for voltage array when getting peaks.")
-                  spike_peak_values = [] # Set empty if indices are bad
-        
-        specific_data = {
-            # Analysis Parameters
-            'threshold': threshold,
-            'threshold_units': self._current_plot_data.get('units', 'unknown'),
-            'refractory_period_ms': refractory_ms,
-            # Results
-            'spike_count': num_spikes,
-            'average_firing_rate_hz': avg_rate,
-            'spike_times_s': spike_times.tolist() if spike_times is not None else [],
-            'spike_peak_values': spike_peak_values, # Add peak values
-            'spike_features': features,
-            # Data Source Info (for base class)
-            'channel_id': channel_id,
-            'channel_name': channel_name,
-            'data_source': data_source, 
-            'data_source_label': data_source_text # Add readable label
-            # Note: Base class adds file path etc.
-        }
-        log.debug(f"_get_specific_result_data (Spike) returning: {specific_data}")
-        return specific_data
+        # Return a copy of the stored result
+        return self._last_spike_result.copy()
 
     # --- PHASE 2: Template Method Pattern Implementation ---
     def _gather_analysis_parameters(self) -> Dict[str, Any]:
@@ -335,7 +273,7 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         log.debug(f"Gathered spike parameters: {params}")
         return params
     
-    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[SpikeTrainResult]:
         """Execute spike detection analysis."""
         if not params:
             return None
@@ -354,7 +292,6 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         if rate is None or rate <= 0:
             if len(time) > 1:
                 rate = 1.0 / (time[1] - time[0])
-                log.warning(f"Sampling rate missing, calculated from time vector: {rate:.2f} Hz")
             else:
                 log.error("Cannot calculate sampling rate from time vector (length <= 1)")
                 return None
@@ -377,7 +314,6 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                 raise ValueError(f"Spike detection function returned error: {result_obj.error_message}")
             
             spike_indices = result_obj.spike_indices
-            # spike_times_from_func = result_obj.spike_times # Not strictly needed as we recalc from indices later but good to have
             
             if spike_indices is None:
                 spike_indices = np.array([])
@@ -385,29 +321,16 @@ class SpikeAnalysisTab(BaseAnalysisTab):
             num_spikes = len(spike_indices)
             log.info(f"Detected {num_spikes} spikes")
             
-            # Calculate results
-            results = {
-                'num_spikes': num_spikes,
-                'spike_indices': spike_indices,
-                'threshold': threshold,
-                'refractory_ms': params.get('refractory_ms'),
-                'units': units,
-                'result_object': result_obj # Store the full object if needed
-            }
+            # Store parameters in metadata
+            result_obj.metadata['threshold'] = threshold
+            result_obj.metadata['refractory_ms'] = params.get('refractory_ms')
+            result_obj.metadata['units'] = units
             
             if num_spikes > 0:
-                spike_times = time[spike_indices]
-                duration = time[-1] - time[0]
-                avg_rate = num_spikes / duration if duration > 0 else 0
-                
-                results['spike_times'] = spike_times
-                results['avg_rate'] = avg_rate
-                results['duration'] = duration
-                
                 # Calculate spike features
                 features_list = spike_analysis.calculate_spike_features(voltage, time, spike_indices)
                 if features_list:
-                    results['spike_features'] = features_list
+                    result_obj.metadata['spike_features'] = features_list
                     
                     # Calculate mean and SD for each feature
                     amplitudes = [f['amplitude'] for f in features_list if not np.isnan(f['amplitude'])]
@@ -415,64 +338,80 @@ class SpikeAnalysisTab(BaseAnalysisTab):
                     ahp_depths = [f['ahp_depth'] for f in features_list if not np.isnan(f['ahp_depth'])]
                     
                     if amplitudes:
-                        results['amplitude_mean'] = np.mean(amplitudes)
-                        results['amplitude_std'] = np.std(amplitudes)
+                        result_obj.metadata['amplitude_mean'] = np.mean(amplitudes)
+                        result_obj.metadata['amplitude_std'] = np.std(amplitudes)
                     if half_widths:
-                        results['half_width_mean'] = np.mean(half_widths)
-                        results['half_width_std'] = np.std(half_widths)
+                        result_obj.metadata['half_width_mean'] = np.mean(half_widths)
+                        result_obj.metadata['half_width_std'] = np.std(half_widths)
                     if ahp_depths:
-                        results['ahp_depth_mean'] = np.mean(ahp_depths)
-                        results['ahp_depth_std'] = np.std(ahp_depths)
+                        result_obj.metadata['ahp_depth_mean'] = np.mean(ahp_depths)
+                        result_obj.metadata['ahp_depth_std'] = np.std(ahp_depths)
                 
                 # Calculate ISI
-                isis = spike_analysis.calculate_isi(spike_times)
-                if isis.size > 0:
-                    results['isi_mean_ms'] = np.mean(isis) * 1000
-                    results['isi_std_ms'] = np.std(isis) * 1000
+                spike_times = result_obj.spike_times
+                if spike_times is not None:
+                    isis = spike_analysis.calculate_isi(spike_times)
+                    if isis.size > 0:
+                        result_obj.metadata['isi_mean_ms'] = np.mean(isis) * 1000
+                        result_obj.metadata['isi_std_ms'] = np.std(isis) * 1000
                 
                 # Get spike voltages for plotting
-                results['spike_voltages'] = voltage[spike_indices]
+                result_obj.metadata['spike_voltages'] = voltage[spike_indices]
             
-            return results
+            return result_obj
             
         except Exception as e:
             log.error(f"Spike detection failed: {e}", exc_info=True)
             return None
     
-    def _display_analysis_results(self, results: Dict[str, Any]):
+    def _display_analysis_results(self, result: SpikeTrainResult):
         """Display spike detection results in text edit."""
-        threshold = results.get('threshold')
-        refractory_ms = results.get('refractory_ms')
-        units = results.get('units', 'V')
-        num_spikes = results.get('num_spikes', 0)
+        if not result or not result.is_valid:
+            self.results_textedit.setText("Analysis failed.")
+            self._last_spike_result = None
+            return
+
+        threshold = result.metadata.get('threshold')
+        refractory_ms = result.metadata.get('refractory_ms')
+        units = result.metadata.get('units', 'V')
+        
+        spike_times = result.spike_times
+        num_spikes = len(spike_times) if spike_times is not None else 0
         
         results_str = f"--- Spike Detection Results ---\nThreshold: {threshold:.3f} {units}\nRefractory: {refractory_ms:.2f} ms\n\n"
         results_str += f"Number of Spikes: {num_spikes}\n"
         
         if num_spikes > 0:
-            avg_rate = results.get('avg_rate', 0)
+            avg_rate = result.mean_frequency if result.mean_frequency else 0
             results_str += f"Average Firing Rate: {avg_rate:.2f} Hz\n"
             
             results_str += "\n--- Spike Features (Mean ± SD) ---\n"
-            if 'amplitude_mean' in results:
-                results_str += f"Amplitude: {results['amplitude_mean']:.2f} ± {results['amplitude_std']:.2f} {units}\n"
-            if 'half_width_mean' in results:
-                results_str += f"Half-width: {results['half_width_mean']:.3f} ± {results['half_width_std']:.3f} ms\n"
-            if 'ahp_depth_mean' in results:
-                results_str += f"AHP Depth: {results['ahp_depth_mean']:.2f} ± {results['ahp_depth_std']:.2f} {units}\n"
-            if 'isi_mean_ms' in results:
-                results_str += f"Mean ISI: {results['isi_mean_ms']:.2f} ± {results['isi_std_ms']:.2f} ms\n"
+            if 'amplitude_mean' in result.metadata:
+                results_str += f"Amplitude: {result.metadata['amplitude_mean']:.2f} ± {result.metadata['amplitude_std']:.2f} {units}\n"
+            if 'half_width_mean' in result.metadata:
+                results_str += f"Half-width: {result.metadata['half_width_mean']:.3f} ± {result.metadata['half_width_std']:.3f} ms\n"
+            if 'ahp_depth_mean' in result.metadata:
+                results_str += f"AHP Depth: {result.metadata['ahp_depth_mean']:.2f} ± {result.metadata['ahp_depth_std']:.2f} {units}\n"
+            if 'isi_mean_ms' in result.metadata:
+                results_str += f"Mean ISI: {result.metadata['isi_mean_ms']:.2f} ± {result.metadata['isi_std_ms']:.2f} ms\n"
         
         self.results_textedit.setText(results_str)
         log.info(f"Spike detection results displayed: {num_spikes} spikes")
         
-        # Store results in current_plot_data for saving
-        if self._current_plot_data:
-            self._current_plot_data['spike_indices'] = results.get('spike_indices', np.array([]))
-            self._current_plot_data['spike_times'] = results.get('spike_times', np.array([]))
-            self._current_plot_data['spike_features'] = results.get('spike_features', [])
+        # Store results for saving (convert to dict)
+        self._last_spike_result = {
+            'threshold': threshold,
+            'threshold_units': units,
+            'refractory_period_ms': refractory_ms,
+            'spike_count': num_spikes,
+            'average_firing_rate_hz': result.mean_frequency,
+            'spike_times_s': result.spike_times.tolist() if result.spike_times is not None else [],
+            'spike_features': result.metadata.get('spike_features', []),
+            'analysis_type': 'Spike Detection',
+            'source_file_name': self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
+        }
     
-    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+    def _plot_analysis_visualizations(self, result: SpikeTrainResult):
         """Update plot with spike markers and threshold line."""
         # Clear previous markers
         if self.spike_markers_item:
@@ -480,23 +419,25 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         
         # Show threshold line
         if self.threshold_line:
-            threshold = results.get('threshold')
+            threshold = result.metadata.get('threshold') if result else None
             if threshold is not None:
                 self.threshold_line.setValue(threshold)
                 self.threshold_line.setVisible(True)
         
+        if not result or not result.is_valid:
+            return
+
         # Plot spike markers if spikes detected
-        num_spikes = results.get('num_spikes', 0)
-        if num_spikes > 0 and self.spike_markers_item:
-            spike_times = results.get('spike_times')
-            spike_voltages = results.get('spike_voltages')
-            
-            if spike_times is not None and spike_voltages is not None:
+        spike_times = result.spike_times
+        spike_voltages = result.metadata.get('spike_voltages')
+        
+        if spike_times is not None and len(spike_times) > 0 and self.spike_markers_item:
+            if spike_voltages is not None:
                 self.spike_markers_item.setData(x=spike_times, y=spike_voltages)
                 red_brush = pg.mkBrush(255, 0, 0, 150)
                 self.spike_markers_item.setBrush(red_brush)
                 self.spike_markers_item.setVisible(True)
-                log.debug(f"Plotted {num_spikes} spike markers")
+                log.debug(f"Plotted {len(spike_times)} spike markers")
     # --- END PHASE 2 ---
 
 # --- END CLASS SpikeAnalysisTab ---

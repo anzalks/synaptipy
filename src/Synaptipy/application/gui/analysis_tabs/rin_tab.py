@@ -16,6 +16,7 @@ from .base import BaseAnalysisTab
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis import intrinsic_properties as ip
+from Synaptipy.core.results import RinResult
 from Synaptipy.shared.styling import (
     style_button, 
     style_label, 
@@ -27,72 +28,7 @@ from Synaptipy.shared.styling import (
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rin_tab')
 
-# --- Rin Calculation Function (REVERTED to use manual delta_i) ---
-def calculate_rin(
-    time_v: np.ndarray, voltage: np.ndarray,
-    baseline_window: Tuple[float, float],
-    response_window: Tuple[float, float],
-    delta_i_pa: float # RE-ADDED manual delta I
-) -> Optional[Tuple[float, float]]: # Return Rin, dV (dI is now input)
-    """
-    Calculates Input Resistance (Rin) based on voltage trace within defined windows
-    and a provided current step amplitude (delta_i).
 
-    Args:
-        time_v: 1D numpy array of time values for voltage trace.
-        voltage: 1D numpy array of voltage values.
-        baseline_window: Tuple (start_time, end_time) for baseline measurement.
-        response_window: Tuple (start_time, end_time) for response measurement.
-        delta_i_pa: The change in current amplitude (I_response - I_baseline) in picoamps (pA).
-
-    Returns:
-        A tuple containing (rin_megaohms, delta_v_millivolts) 
-        or None if calculation fails (e.g., invalid windows, no data, zero delta_i).
-    """
-    # Basic validations
-    if time_v is None or voltage is None or \
-       baseline_window is None or response_window is None or \
-       baseline_window[0] >= baseline_window[1] or response_window[0] >= response_window[1]:
-        log.error("Calculate Rin: Invalid input arrays or window times.")
-        return None
-    
-    # Validate delta_i
-    if np.isclose(delta_i_pa, 0.0):
-        log.warning(f"Provided Delta I is zero or close to zero ({delta_i_pa:.4f} pA). Cannot calculate Rin.")
-        return None
-
-    try:
-        # --- Calculate Mean Baseline Voltage ---
-        bl_indices_v = np.where((time_v >= baseline_window[0]) & (time_v <= baseline_window[1]))[0]
-        if len(bl_indices_v) == 0:
-            log.warning(f"No voltage data points found in baseline window: {baseline_window}")
-            return None
-        mean_baseline_v = np.mean(voltage[bl_indices_v])
-
-        # --- Calculate Mean Response Voltage ---
-        resp_indices_v = np.where((time_v >= response_window[0]) & (time_v <= response_window[1]))[0]
-        if len(resp_indices_v) == 0:
-            log.warning(f"No voltage data points found in response window: {response_window}")
-            return None
-        mean_response_v = np.mean(voltage[resp_indices_v])
-
-        # --- Calculate Delta V ---
-        delta_v = mean_response_v - mean_baseline_v # mV (assuming input V is mV)
-
-        log.debug(f"Rin Calc: Mean Baseline V={mean_baseline_v:.3f} mV, Mean Response V={mean_response_v:.3f} mV => dV={delta_v:.3f} mV")
-        log.debug(f"Rin Calc: Using provided dI = {delta_i_pa:.3f} pA")
-
-        # --- Calculate Rin using provided delta_i --- 
-        # Rin (MΩ) = Delta V (mV) / Delta I (nA)
-        # Convert delta_i from pA to nA by dividing by 1000
-        rin_megaohms = delta_v / (delta_i_pa / 1000.0)
-
-        log.info(f"Calculated Rin = {rin_megaohms:.2f} MΩ (dV={delta_v:.3f}mV, using provided dI={delta_i_pa:.3f}pA)")
-        return rin_megaohms, delta_v # Return Rin and the calculated dV
-
-    except Exception as e:
-        log.error(f"Error calculating Rin: {e}", exc_info=True)
-        return None
 
 # --- Rin Analysis Tab Class ---
 class RinAnalysisTab(BaseAnalysisTab):
@@ -1221,7 +1157,7 @@ class RinAnalysisTab(BaseAnalysisTab):
         log.debug(f"Gathered Rin parameters: {params}")
         return params
     
-    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[RinResult]:
         """
         Execute Rin/conductance analysis.
         
@@ -1230,7 +1166,7 @@ class RinAnalysisTab(BaseAnalysisTab):
             data: Current plot data
         
         Returns:
-            Dictionary with analysis results or None on failure.
+            RinResult object or None on failure.
         """
         # Validate data
         if not data:
@@ -1239,7 +1175,6 @@ class RinAnalysisTab(BaseAnalysisTab):
         
         # Get data vectors (support both formats)
         time_vec = data.get("time") if data.get("time") is not None else data.get("time_vec")
-
         data_vec = data.get("data") if data.get("data") is not None else data.get("data_vec")   
         
         if time_vec is None or data_vec is None:
@@ -1255,7 +1190,6 @@ class RinAnalysisTab(BaseAnalysisTab):
         # Validate windows
         if not baseline_window or not response_window:
             log.warning("_execute_core_analysis: Missing baseline/response windows")
-            self.status_label.setText("Status: Please set baseline and response windows.")
             return None
         
         try:
@@ -1265,32 +1199,20 @@ class RinAnalysisTab(BaseAnalysisTab):
                 
                 if not delta_i_pa or np.isclose(delta_i_pa, 0.0):
                     log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
-                    self.status_label.setText("Status: Please provide a non-zero ΔI value.")
-                    return None
+                    return RinResult(value=None, unit="MOhm", is_valid=False, error_message="Missing or zero delta I")
                 
-                result = calculate_rin(
-                    time_v=time_vec,
-                    voltage=data_vec,
+                result = ip.calculate_rin(
+                    voltage_trace=data_vec,
+                    time_vector=time_vec,
+                    current_amplitude=delta_i_pa,
                     baseline_window=baseline_window,
-                    response_window=response_window,
-                    delta_i_pa=delta_i_pa
+                    response_window=response_window
                 )
-                
-                if result is None:
-                    return None
-                
-                rin_megaohms, delta_v = result
-                
-                return {
-                    'analysis_type': 'Input Resistance',
-                    'rin_megaohms': rin_megaohms,
-                    'conductance_us': 1000 / rin_megaohms,
-                    'delta_v_mv': delta_v,
-                    'delta_i_pa': delta_i_pa,
-                    'baseline_window': baseline_window,
-                    'response_window': response_window,
-                    'is_voltage': True
-                }
+                # Add metadata about windows used
+                result.metadata['baseline_window'] = baseline_window
+                result.metadata['response_window'] = response_window
+                result.metadata['analysis_type'] = 'Input Resistance'
+                return result
             
             elif is_current:
                 # Calculate conductance from current trace
@@ -1298,35 +1220,20 @@ class RinAnalysisTab(BaseAnalysisTab):
                 
                 if not delta_v_mv or np.isclose(delta_v_mv, 0.0):
                     log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
-                    self.status_label.setText("Status: Please provide a non-zero ΔV value.")
-                    return None
+                    return RinResult(value=None, unit="MOhm", is_valid=False, error_message="Missing or zero delta V")
                 
-                # Calculate mean baseline and response current
-                bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
-                resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
-                
-                if len(bl_indices) == 0 or len(resp_indices) == 0:
-                    log.warning("_execute_core_analysis: No data points in windows")
-                    return None
-                
-                mean_baseline_i = np.mean(data_vec[bl_indices])
-                mean_response_i = np.mean(data_vec[resp_indices])
-                delta_i_pa = mean_response_i - mean_baseline_i
-                
-                # Calculate conductance: G = ΔI / ΔV
-                conductance_us = abs(delta_i_pa) / abs(delta_v_mv) if delta_v_mv != 0 else 0
-                rin_megaohms = 1000 / conductance_us if conductance_us != 0 else float('inf')
-                
-                return {
-                    'analysis_type': 'Conductance',
-                    'rin_megaohms': rin_megaohms,
-                    'conductance_us': conductance_us,
-                    'delta_v_mv': delta_v_mv,
-                    'delta_i_pa': delta_i_pa,
-                    'baseline_window': baseline_window,
-                    'response_window': response_window,
-                    'is_voltage': False
-                }
+                result = ip.calculate_conductance(
+                    current_trace=data_vec,
+                    time_vector=time_vec,
+                    voltage_step=delta_v_mv,
+                    baseline_window=baseline_window,
+                    response_window=response_window
+                )
+                # Add metadata about windows used
+                result.metadata['baseline_window'] = baseline_window
+                result.metadata['response_window'] = response_window
+                result.metadata['analysis_type'] = 'Conductance'
+                return result
             
             else:
                 log.warning("_execute_core_analysis: Unknown signal type")
@@ -1336,21 +1243,32 @@ class RinAnalysisTab(BaseAnalysisTab):
             log.error(f"_execute_core_analysis: Analysis failed: {e}", exc_info=True)
             return None
     
-    def _display_analysis_results(self, results: Dict[str, Any]):
+    def _display_analysis_results(self, result: RinResult):
         """
         Display analysis results in UI labels.
         
         Args:
-            results: Analysis results dictionary
+            result: RinResult object
         """
-        rin_megaohms = results.get('rin_megaohms')
-        conductance_us = results.get('conductance_us')
-        delta_v = results.get('delta_v_mv')
-        delta_i = results.get('delta_i_pa')
+        if not result or not result.is_valid:
+            msg = result.error_message if result else "Unknown error"
+            self.status_label.setText(f"Status: Calculation failed. {msg}")
+            self._last_rin_result = None
+            return
+
+        rin_megaohms = result.value
+        conductance_us = result.conductance
+        delta_v = result.voltage_deflection
+        delta_i = result.current_injection
         
-        if rin_megaohms is not None and conductance_us is not None:
+        if rin_megaohms is not None:
+            # Handle conductance if not explicitly set (fallback)
+            if conductance_us is None and rin_megaohms != 0:
+                conductance_us = 1000.0 / rin_megaohms
+            
+            g_str = f"{conductance_us:.4f}" if conductance_us is not None else "--"
             self.rin_result_label.setText(
-                f"Input Resistance (Rin): {rin_megaohms:.2f} MΩ | Conductance: {conductance_us:.4f} μS"
+                f"Input Resistance (Rin): {rin_megaohms:.2f} MΩ | Conductance: {g_str} μS"
             )
             
             if delta_v is not None:
@@ -1359,68 +1277,78 @@ class RinAnalysisTab(BaseAnalysisTab):
             if delta_i is not None:
                 self.delta_i_label.setText(f"Current Change (ΔI): {delta_i:.2f} pA")
             
-            analysis_type = results.get('analysis_type', 'Analysis')
+            analysis_type = result.metadata.get('analysis_type', 'Analysis')
             self.status_label.setText(f"Status: {analysis_type} calculation successful")
             
-            # Store result for saving
+            # Store result for saving (convert dataclass to dict for now, or keep object)
+            # For compatibility with existing save logic, we'll create a dict
             self._last_rin_result = {
                 "Rin (MΩ)": rin_megaohms,
                 "Conductance (μS)": conductance_us,
                 "ΔV (mV)": delta_v,
                 "ΔI (pA)": delta_i,
-                "Baseline Window (s)": results.get('baseline_window'),
-                "Response Window (s)": results.get('response_window'),
+                "Baseline Window (s)": result.metadata.get('baseline_window'),
+                "Response Window (s)": result.metadata.get('response_window'),
                 "analysis_type": analysis_type,
                 "source_file_name": self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
             }
             
-            log.info(f"{analysis_type} result: Rin={rin_megaohms:.2f} MΩ, G={conductance_us:.4f} μS")
+            log.info(f"{analysis_type} result: Rin={rin_megaohms:.2f} MΩ")
         else:
-            self.status_label.setText("Status: Calculation failed. Check input values.")
+            self.status_label.setText("Status: Calculation failed (No value).")
             self._last_rin_result = None
     
-    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
+    def _plot_analysis_visualizations(self, result: RinResult):
         """
         Update plot visualizations with baseline and response lines.
         
         Args:
-            results: Analysis results dictionary
+            result: RinResult object
         """
-        # Get data to calculate mean levels
-        if not self._current_plot_data:
+        if not result or not result.is_valid:
             return
+
+        # Get data to calculate mean levels (or use values from result if available)
+        # The result object has baseline_voltage and steady_state_voltage, but only for Rin calc
+        # For conductance, we might need to recalculate or store them in result
         
-        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
-        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
-        
-        if time_vec is None or data_vec is None:
-            return
-        
-        baseline_window = results.get('baseline_window')
-        response_window = results.get('response_window')
+        # Let's use the windows from metadata to update lines on the plot
+        baseline_window = result.metadata.get('baseline_window')
+        response_window = result.metadata.get('response_window')
         
         if not baseline_window or not response_window:
             return
+
+        # We can use the values from the result if they exist, otherwise recalculate from data
+        # RinResult has baseline_voltage and steady_state_voltage
         
-        # Calculate mean levels
-        bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
-        resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
+        val_baseline = result.baseline_voltage
+        val_response = result.steady_state_voltage
         
-        if len(bl_indices) > 0 and len(resp_indices) > 0:
-            mean_baseline = np.mean(data_vec[bl_indices])
-            mean_response = np.mean(data_vec[resp_indices])
+        # If values are missing (e.g. conductance calc might not set them yet, though we should), 
+        # we can recalculate from plot data as fallback
+        if val_baseline is None or val_response is None:
+             if self._current_plot_data:
+                time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+                data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
+                
+                if time_vec is not None and data_vec is not None:
+                    bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
+                    resp_indices = np.where((time_vec >= response_window[0]) & (time_vec <= response_window[1]))[0]
+                    
+                    if len(bl_indices) > 0: val_baseline = np.mean(data_vec[bl_indices])
+                    if len(resp_indices) > 0: val_response = np.mean(data_vec[resp_indices])
+
+        # Update lines
+        if val_baseline is not None and self.baseline_line:
+            self.baseline_line.setValue(val_baseline)
+            self.baseline_line.setVisible(True)
+        
+        if val_response is not None and self.response_line:
+            self.response_line.setValue(val_response)
+            self.response_line.setVisible(True)
             
-            # Update baseline line
-            if self.baseline_line:
-                self.baseline_line.setValue(mean_baseline)
-                self.baseline_line.setVisible(True)
-            
-            # Update response line
-            if self.response_line:
-                self.response_line.setValue(mean_response)
-                self.response_line.setVisible(True)
-            
-            log.debug(f"Updated visualization lines: baseline={mean_baseline:.3f}, response={mean_response:.3f}")
+        log.debug(f"Updated visualization lines: baseline={val_baseline}, response={val_response}")
     # --- END PHASE 2 ---
 
 # This constant is used by AnalyserTab to dynamically load the analysis tabs
