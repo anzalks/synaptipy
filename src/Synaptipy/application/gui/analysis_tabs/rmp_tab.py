@@ -15,7 +15,7 @@ from .base import BaseAnalysisTab
 from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis import basic_features # Use standardized analysis
-# from Synaptipy.core.analysis import basic_features # We might create our own here
+from Synaptipy.core.analysis.basic_features import calculate_baseline_stats
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.baseline_tab')
 
@@ -91,9 +91,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         data_selection_layout.setContentsMargins(5, 10, 5, 5)
         data_selection_layout.setSpacing(5)
         data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        # 1a. Analysis Item Selector (inherited)
-        self._setup_analysis_item_selector(data_selection_layout)
-        # 1b. Signal Channel & Data Source (now handled by base class)
+        # Signal Channel & Data Source (now handled by base class)
         self._setup_data_selection_ui(data_selection_layout)
         # Set size policy for Col 1
         data_selection_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)

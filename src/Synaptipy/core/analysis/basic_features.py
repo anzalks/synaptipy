@@ -83,6 +83,32 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
         log.error(f"Error during RMP calculation: {e}", exc_info=True)
         return RmpResult(value=None, unit="mV", is_valid=False, error_message=str(e))
 
+def calculate_baseline_stats(
+    time: np.ndarray,
+    voltage: np.ndarray,
+    start_time: float,
+    end_time: float
+) -> Optional[Tuple[float, float]]:
+    """
+    Calculates baseline statistics (mean and standard deviation) from a time window.
+    
+    This is a convenience function that provides a simple tuple return format
+    for compatibility with existing code.
+    
+    Args:
+        time: 1D NumPy array of corresponding time points (seconds).
+        voltage: 1D NumPy array of voltage data.
+        start_time: Start time of the baseline window (seconds).
+        end_time: End time of the baseline window (seconds).
+    
+    Returns:
+        Tuple of (mean, std_dev) if successful, None otherwise.
+    """
+    result = calculate_rmp(voltage, time, (start_time, end_time))
+    if result.is_valid and result.value is not None:
+        return (result.value, result.std_dev if result.std_dev is not None else 0.0)
+    return None
+
 # --- Add other basic features here later ---
 # def calculate_input_resistance(voltage_trace, current_step, time, baseline_window, step_window): ...
 # def calculate_tau(voltage_trace, time, fit_window): ...

@@ -90,10 +90,6 @@ class EventDetectionTab(BaseAnalysisTab):
         shared_controls_layout = QtWidgets.QVBoxLayout(shared_controls_group)
         shared_controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        item_selector_layout = QtWidgets.QFormLayout()
-        self._setup_analysis_item_selector(item_selector_layout)
-        shared_controls_layout.addLayout(item_selector_layout)
-
         # Channel & Data Source (now handled by base class)
         channel_source_layout = QtWidgets.QFormLayout()
         self._setup_data_selection_ui(channel_source_layout)

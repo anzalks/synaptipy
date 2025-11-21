@@ -71,11 +71,6 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         controls_layout = QtWidgets.QVBoxLayout(self.controls_group)
         controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        # Analysis Item Selector (inherited)
-        item_selector_layout = QtWidgets.QFormLayout()
-        self._setup_analysis_item_selector(item_selector_layout)
-        controls_layout.addLayout(item_selector_layout)
-
         # Channel/Data Source (now handled by base class)
         channel_layout = QtWidgets.QFormLayout()
         self._setup_data_selection_ui(channel_layout)
