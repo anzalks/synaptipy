@@ -63,6 +63,7 @@ class ExplorerTab(QtWidgets.QWidget):
     MIN_ZOOM_FACTOR = 0.01; SCROLLBAR_MAX_RANGE = 10000
     _selected_avg_pen_width = (VisConstants.DEFAULT_PLOT_PEN_WIDTH + 1) if (VisConstants and hasattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH')) else 2
     SELECTED_AVG_PEN = pg.mkPen('g', width=_selected_avg_pen_width, name="Selected Avg")  # Original green color
+    Y_AXIS_FIXED_WIDTH = 65  # Fixed width in pixels to align stacked plots
 
     # --- Signals ---
     open_file_requested = QtCore.Signal()
@@ -979,6 +980,8 @@ class ExplorerTab(QtWidgets.QWidget):
             
             # Y-axis label with units if available
             plot_item.setLabel('left', text=channel.get_primary_data_label(), units=channel.units)
+            # Anchor the left axis width to align vertical lines across all stacked plots
+            plot_item.getAxis('left').setWidth(self.Y_AXIS_FIXED_WIDTH)
             
             # Don't label every plot with the same X-axis label, only the bottom one
             if i == len(channel_keys) - 1:
