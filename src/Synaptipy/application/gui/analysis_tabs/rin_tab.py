@@ -138,9 +138,6 @@ class RinAnalysisTab(BaseAnalysisTab):
         data_selection_layout.setContentsMargins(10, 10, 10, 10)
         data_selection_layout.setVerticalSpacing(8)
 
-        # Use Base Class Item Combobox
-        self._setup_analysis_item_selector(data_selection_layout)
-
         # Signal Channel & Data Source (now handled by base class)
         self._setup_data_selection_ui(data_selection_layout)
 
@@ -500,8 +497,10 @@ class RinAnalysisTab(BaseAnalysisTab):
         
         # Get data vectors from current data
         # NOTE: Base class stores as 'time' and 'data', support both formats
-        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
-        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
+        t_vec = self._current_plot_data.get("time")
+        time_vec = t_vec if t_vec is not None else self._current_plot_data.get("time_vec")
+        d_vec = self._current_plot_data.get("data")
+        data_vec = d_vec if d_vec is not None else self._current_plot_data.get("data_vec")
         units = self._current_plot_data.get("units", "unknown")
         
         # Determine if we're dealing with voltage or current signal
@@ -578,34 +577,43 @@ class RinAnalysisTab(BaseAnalysisTab):
         try:
             if is_voltage:  # Voltage clamp mode - calculate Rin
                 # Call the calculate_rin function with appropriate parameters
-                result = calculate_rin(
-                    time_v=time_vec,
-                    voltage=data_vec,
+                result = ip.calculate_rin(
+                    voltage_trace=data_vec,
+                    time_vector=time_vec,
+                    current_amplitude=delta_i_pa,
                     baseline_window=baseline_window,
-                    response_window=response_window,
-                    delta_i_pa=delta_i_pa
+                    response_window=response_window
                 )
                 
-                if result is not None:
-                    rin_megaohms, delta_v = result
+                if result is not None and result.is_valid:
+                    # Ensure Rin is always positive (magnitude)
+                    rin_megaohms = abs(result.value) if result.value is not None else None
+                    delta_v = result.voltage_deflection
+                    conductance_us = result.conductance if result.conductance is not None else (1000.0 / rin_megaohms if rin_megaohms and rin_megaohms != 0 else None)
                     
-                    # Display results
-                    self.rin_result_label.setText(f"Input Resistance (Rin): {rin_megaohms:.2f} MΩ | Conductance: {1000/rin_megaohms:.4f} μS")
-                    self.delta_v_label.setText(f"Voltage Change (ΔV): {delta_v:.2f} mV")
-                    self.delta_i_label.setText(f"Current Change (ΔI): {delta_i_pa:.2f} pA")
-                    self.status_label.setText("Status: Rin calculation successful")
-                    
-                    # Store result for potential saving
-                    self._last_rin_result = {
-                        "Rin (MΩ)": rin_megaohms,
-                        "Conductance (μS)": 1000/rin_megaohms,
-                        "ΔV (mV)": delta_v,
-                        "ΔI (pA)": delta_i_pa,
-                        "Baseline Window (s)": baseline_window,
-                        "Response Window (s)": response_window,
-                        "analysis_type": "Input Resistance",  # Add analysis type for better reporting
-                        "source_file_name": self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
-                    }
+                    if rin_megaohms is not None:
+                        # Display results
+                        g_str = f"{conductance_us:.4f}" if conductance_us is not None else "--"
+                        self.rin_result_label.setText(f"Input Resistance (Rin): {rin_megaohms:.2f} MΩ | Conductance: {g_str} μS")
+                        if delta_v is not None:
+                            self.delta_v_label.setText(f"Voltage Change (ΔV): {delta_v:.2f} mV")
+                        self.delta_i_label.setText(f"Current Change (ΔI): {delta_i_pa:.2f} pA")
+                        self.status_label.setText("Status: Rin calculation successful")
+                        
+                        # Store result for potential saving
+                        self._last_rin_result = {
+                            "Rin (MΩ)": rin_megaohms,
+                            "Conductance (μS)": conductance_us,
+                            "ΔV (mV)": delta_v,
+                            "ΔI (pA)": delta_i_pa,
+                            "Baseline Window (s)": baseline_window,
+                            "Response Window (s)": response_window,
+                            "analysis_type": "Input Resistance",  # Add analysis type for better reporting
+                            "source_file_name": self._selected_item_recording.source_file.name if self._selected_item_recording else "Unknown"
+                        }
+                    else:
+                        self.status_label.setText(f"Status: Rin calculation failed. {result.error_message if result else 'Unknown error'}")
+                        log.warning("Rin calculation returned invalid result.")
                     
                     # Update lines showing the mean levels
                     bl_indices = np.where((time_vec >= baseline_window[0]) & (time_vec <= baseline_window[1]))[0]
@@ -651,12 +659,13 @@ class RinAnalysisTab(BaseAnalysisTab):
                 # Calculate delta I (in pA)
                 delta_i = mean_response_i - mean_baseline_i
                 
-                # Calculate conductance: G = ΔI/ΔV
+                # Calculate conductance: G = |ΔI|/|ΔV|
                 # If ΔV is in mV and ΔI is in pA, G will be in μS (micro-Siemens)
-                conductance_us = delta_i / delta_v_mv
+                # Use absolute values to ensure positive conductance
+                conductance_us = abs(delta_i) / abs(delta_v_mv) if delta_v_mv != 0 else 0.0
                 
-                # Calculate resistance (in MΩ)
-                resistance_mohm = 1000 / conductance_us  # 1000 is to convert from μS to nS
+                # Calculate resistance (in MΩ) - always positive
+                resistance_mohm = abs(1000 / conductance_us) if conductance_us != 0 else float('inf')  # 1000 is to convert from μS to nS
                 
                 # Display results
                 self.rin_result_label.setText(f"Input Resistance (Rin): {resistance_mohm:.2f} MΩ | Conductance: {conductance_us:.4f} μS")
@@ -932,7 +941,8 @@ class RinAnalysisTab(BaseAnalysisTab):
             return
             
         # Get the time vector (support both base class and old format)
-        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+        t_vec = self._current_plot_data.get("time")
+        time_vec = t_vec if t_vec is not None else self._current_plot_data.get("time_vec")
         if time_vec is None or len(time_vec) == 0:
             return
             
@@ -1072,8 +1082,10 @@ class RinAnalysisTab(BaseAnalysisTab):
             self.tau_result_label.setText("Tau: Regions not initialized")
             return
         # NOTE: Support both base class and old format
-        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
-        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
+        t_vec = self._current_plot_data.get("time")
+        time_vec = t_vec if t_vec is not None else self._current_plot_data.get("time_vec")
+        d_vec = self._current_plot_data.get("data")
+        data_vec = d_vec if d_vec is not None else self._current_plot_data.get("data_vec")
         
         # Use response window for stim start and duration
         response_window = self.response_region.getRegion()
@@ -1094,8 +1106,10 @@ class RinAnalysisTab(BaseAnalysisTab):
             self.sag_result_label.setText("Sag Ratio: Regions not initialized")
             return
         # NOTE: Support both base class and old format
-        time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
-        data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
+        t_vec = self._current_plot_data.get("time")
+        time_vec = t_vec if t_vec is not None else self._current_plot_data.get("time_vec")
+        d_vec = self._current_plot_data.get("data")
+        data_vec = d_vec if d_vec is not None else self._current_plot_data.get("data_vec")
 
         baseline_window = self.baseline_region.getRegion()
         response_window = self.response_region.getRegion()
@@ -1262,6 +1276,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         delta_i = result.current_injection
         
         if rin_megaohms is not None:
+            # Ensure Rin is always positive (magnitude)
+            rin_megaohms = abs(rin_megaohms)
             # Handle conductance if not explicitly set (fallback)
             if conductance_us is None and rin_megaohms != 0:
                 conductance_us = 1000.0 / rin_megaohms
@@ -1329,7 +1345,8 @@ class RinAnalysisTab(BaseAnalysisTab):
         # we can recalculate from plot data as fallback
         if val_baseline is None or val_response is None:
              if self._current_plot_data:
-                time_vec = self._current_plot_data.get("time") or self._current_plot_data.get("time_vec")
+                t_vec = self._current_plot_data.get("time")
+                time_vec = t_vec if t_vec is not None else self._current_plot_data.get("time_vec")
                 data_vec = self._current_plot_data.get("data") or self._current_plot_data.get("data_vec")
                 
                 if time_vec is not None and data_vec is not None:

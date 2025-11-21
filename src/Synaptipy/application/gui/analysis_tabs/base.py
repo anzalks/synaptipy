@@ -84,8 +84,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._analysis_debounce_timer.setSingleShot(True)
         self._analysis_debounce_timer.timeout.connect(self._trigger_analysis)
         
-        self._analysis_debounce_timer.timeout.connect(self._trigger_analysis)
-        
         # --- PHASE 2: Threading ---
         self.thread_pool = QtCore.QThreadPool()
         log.debug(f"BaseAnalysisTab initialized with ThreadPool max count: {self.thread_pool.maxThreadCount()}")
@@ -463,26 +461,33 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if item_type == 'Recording' and item_path:
             try:
                 log.info(f"{self.__class__.__name__}: Loading recording for analysis item: {item_path.name}")
+                # Force process events to flush logs and update UI before blocking read
+                QtWidgets.QApplication.processEvents()
+                
                 # Use the NeoAdapter passed during init
                 self._selected_item_recording = self.neo_adapter.read_recording(item_path)
-                log.info(f"{self.__class__.__name__}: Successfully loaded {item_path.name}")
+                
+                if self._selected_item_recording:
+                    log.info(f"{self.__class__.__name__}: Successfully loaded {item_path.name} with {len(self._selected_item_recording.channels)} channels.")
+                else:
+                    log.error(f"{self.__class__.__name__}: read_recording returned None for {item_path.name}")
+                    
             except (FileNotFoundError, FileReadError, SynaptipyError) as e:
                 log.error(f"{self.__class__.__name__}: Failed to load recording {item_path.name}: {e}")
                 QtWidgets.QMessageBox.warning(self, "Load Error", f"Could not load data for selected item:\n{item_path.name}\n\nError: {e}")
-                self._selected_item_recording = None # Ensure it's None on error
+                self._selected_item_recording = None
             except Exception as e:
                 log.exception(f"{self.__class__.__name__}: Unexpected error loading recording {item_path.name}")
                 QtWidgets.QMessageBox.critical(self, "Load Error", f"Unexpected error loading:\n{item_path.name}\n\n{e}")
                 self._selected_item_recording = None
         elif item_type in ["Current Trial", "Average Trace", "All Trials"]:
-            # For these types, the data isn't stored directly in the item yet.
-            # Option 1: Load the recording anyway (like 'Recording' type)
-            # Option 2: Modify ExplorerTab to pass actual data arrays (more complex)
-            # Let's use Option 1 for now for simplicity. Load the source file.
             if item_path:
                 try:
                     log.info(f"{self.__class__.__name__}: Loading source recording for item: {item_path.name}")
+                    QtWidgets.QApplication.processEvents()
                     self._selected_item_recording = self.neo_adapter.read_recording(item_path)
+                    if not self._selected_item_recording:
+                        log.error(f"{self.__class__.__name__}: read_recording returned None for source {item_path.name}")
                 except Exception as e:
                     log.error(f"{self.__class__.__name__}: Failed to load source recording {item_path.name} for item type {item_type}: {e}")
                     self._selected_item_recording = None
@@ -759,6 +764,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 has_channels = True
         
         if not has_channels:
+            log.warning(f"{self.__class__.__name__}: No channels found in loaded recording!")
             self.signal_channel_combobox.addItem("No Channels Found")
             self.signal_channel_combobox.setEnabled(False)
             self.data_source_combobox.addItem("N/A")
@@ -804,15 +810,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.data_source_combobox.count() > 0:
             self.data_source_combobox.setEnabled(True)
         else:
+            log.warning(f"{self.__class__.__name__}: No trials or average data found.")
             self.data_source_combobox.addItem("No Data Available")
             self.data_source_combobox.setEnabled(False)
         
         self.signal_channel_combobox.blockSignals(False)
         self.data_source_combobox.blockSignals(False)
         
-        log.debug(f"{self.__class__.__name__}: Comboboxes populated - {self.signal_channel_combobox.count()} channels, {self.data_source_combobox.count()} sources")
-        
-        # Trigger initial plot
+        log.debug(f"{self.__class__.__name__}: Comboboxes populated - triggering plot")
         self._plot_selected_data()
     
     @QtCore.Slot()
@@ -822,43 +827,32 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         plots it, and calls the _on_data_plotted hook for subclass-specific additions.
         """
         log.debug(f"{self.__class__.__name__}: Plotting selected data")
-        
-        # Clear current plot data
         self._current_plot_data = None
         
-        # Validate UI elements
-        if not self.plot_widget or not self.signal_channel_combobox or not self.data_source_combobox:
-            log.warning(f"{self.__class__.__name__}: Plot widget or comboboxes not initialized")
+        if not self.plot_widget:
+            log.error(f"{self.__class__.__name__}: Plot widget is None!")
             return
-        
-        # Validate selections
+            
         if not self.signal_channel_combobox.isEnabled() or not self.data_source_combobox.isEnabled():
             log.debug(f"{self.__class__.__name__}: Comboboxes disabled, skipping plot")
-            if self.plot_widget:
-                self.plot_widget.clear()
+            self.plot_widget.clear()
             return
         
-        # Get selected channel and data source
         chan_id = self.signal_channel_combobox.currentData()
         data_source = self.data_source_combobox.currentData()
         
         if chan_id is None or data_source is None:
-            log.debug(f"{self.__class__.__name__}: No valid selection")
-            if self.plot_widget:
-                self.plot_widget.clear()
+            log.debug(f"{self.__class__.__name__}: Invalid selection (chan={chan_id}, source={data_source})")
+            self.plot_widget.clear()
             return
         
-        # Validate recording
         if not self._selected_item_recording or chan_id not in self._selected_item_recording.channels:
-            log.warning(f"{self.__class__.__name__}: Channel {chan_id} not found in recording")
-            if self.plot_widget:
-                self.plot_widget.clear()
+            log.error(f"{self.__class__.__name__}: Channel {chan_id} not found in recording")
+            self.plot_widget.clear()
             return
         
-        # Get channel
         channel = self._selected_item_recording.channels[chan_id]
         
-        # Fetch data
         try:
             if data_source == "average":
                 data_vec = channel.get_averaged_data()
@@ -869,18 +863,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 time_vec = channel.get_relative_time_vector(data_source)
                 data_label = f"Trial {data_source + 1}"
             else:
-                log.error(f"{self.__class__.__name__}: Invalid data source: {data_source}")
-                if self.plot_widget:
-                    self.plot_widget.clear()
+                log.error(f"{self.__class__.__name__}: Invalid data source value: {data_source}")
+                self.plot_widget.clear()
                 return
             
             if data_vec is None or time_vec is None:
-                log.warning(f"{self.__class__.__name__}: No data available for {data_label}")
-                if self.plot_widget:
-                    self.plot_widget.clear()
+                log.warning(f"{self.__class__.__name__}: No data vectors returned for {data_label}")
+                self.plot_widget.clear()
                 return
             
-            # Store current plot data
             self._current_plot_data = {
                 'data': data_vec,
                 'time': time_vec,
@@ -891,41 +882,31 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 'channel_name': channel.name or f'Ch {chan_id}'
             }
             
-            # Clear plot
             self.plot_widget.clear()
             
-            # Plot data
             try:
                 from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
-                if data_source == "average":
-                    pen = get_average_pen()
-                else:
-                    pen = get_single_trial_pen()
+                pen = get_average_pen() if data_source == "average" else get_single_trial_pen()
             except ImportError:
                 pen = pg.mkPen(color=(0, 0, 0), width=1)
             
             self.plot_widget.plot(time_vec, data_vec, pen=pen, name=data_label)
             
-            # Set labels
             self.plot_widget.setLabel('bottom', 'Time', units='s')
             self.plot_widget.setLabel('left', channel.name or f'Ch {chan_id}', units=channel.units)
             self.plot_widget.setTitle(f"{channel.name or f'Channel {chan_id}'} - {data_label}")
             
-            # Set data ranges for zoom sync
-            if time_vec is not None and data_vec is not None and len(time_vec) > 0 and len(data_vec) > 0:
+            if len(time_vec) > 0 and len(data_vec) > 0:
                 x_range = (float(np.min(time_vec)), float(np.max(time_vec)))
                 y_range = (float(np.min(data_vec)), float(np.max(data_vec)))
                 self.set_data_ranges(x_range, y_range)
             
             log.info(f"{self.__class__.__name__}: Successfully plotted {data_label} from channel {chan_id}")
-            
-            # Call hook for subclass-specific plot items
             self._on_data_plotted()
             
         except Exception as e:
             log.error(f"{self.__class__.__name__}: Error plotting data: {e}", exc_info=True)
-            if self.plot_widget:
-                self.plot_widget.clear()
+            self.plot_widget.clear()
             self._current_plot_data = None
     
     def _on_data_plotted(self):

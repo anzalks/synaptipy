@@ -52,7 +52,9 @@ def calculate_rin(
         response_voltage = np.mean(voltage_trace[response_mask])
 
         delta_v = response_voltage - baseline_voltage
-        rin = delta_v / (current_amplitude / 1000.0) # V=IR -> R = V/I. If V is mV, I is pA. We want MOhm.
+        # Calculate Rin as magnitude (always positive) since resistance is a scalar property
+        # Rin = |delta_V| / |delta_I|
+        rin = abs(delta_v) / (abs(current_amplitude) / 1000.0) # V=IR -> R = V/I. If V is mV, I is pA. We want MOhm.
         # mV / nA = MOhm. pA / 1000 = nA.
         
         conductance_us = 1000.0 / rin if rin != 0 else 0.0 # G = 1/R. 1/MOhm = uS.

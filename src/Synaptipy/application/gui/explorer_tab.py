@@ -1793,7 +1793,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if plot and plot.getViewBox():
             vb=plot.getViewBox(); self._updating_viewranges=True
             try:
-                vb.setXRange(new_x[0], new_x[1], padding=0)
+                vb.setXRange(float(new_x[0]), float(new_x[1]), padding=0)
             finally:
                  self._updating_viewranges=False
                  # Update scrollbar immediately after applying zoom
@@ -1812,7 +1812,7 @@ class ExplorerTab(QtWidgets.QWidget):
             bs=max(abs(self.base_x_range[1]-self.base_x_range[0]), 1e-12)
             sr=max(0, bs-cs); f=float(value)/max(1, self.x_scrollbar.maximum()) if self.x_scrollbar.maximum() > 0 else 0.0
             nm=self.base_x_range[0]+f*sr; nM=nm+cs
-            vb.setXRange(nm, nM, padding=0)
+            vb.setXRange(float(nm), float(nM), padding=0)
         except Exception as e: log.error(f"Error in _apply_debounced_x_scroll: {e}")
         finally: self._updating_viewranges=False
 
@@ -1831,7 +1831,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     if base is None: continue
                     new_y = self._calculate_new_range(base, value)
                     if new_y:
-                        plot_item.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
+                        plot_item.getViewBox().setYRange(float(new_y[0]), float(new_y[1]), padding=0)
                         # Capture first valid base/new range for scrollbar update
                         if base_ref is None:
                             base_ref, new_ref = base, new_y
@@ -1873,7 +1873,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     current_plot_y_range = vb.viewRange()[1]
                     new_min_y = current_plot_y_range[0] + y_offset
                     new_max_y = current_plot_y_range[1] + y_offset
-                    vb.setYRange(new_min_y, new_max_y, padding=0)
+                    vb.setYRange(float(new_min_y), float(new_max_y), padding=0)
         except Exception as e: log.error(f"Error applying debounced global Y scroll: {e}", exc_info=True)
         finally: self._updating_viewranges = False
         # No need to update scrollbar here
@@ -2004,7 +2004,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     if base is None: continue
                     new_y=self._calculate_new_range(base, value)
                     if new_y:
-                        p.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
+                        p.getViewBox().setYRange(float(new_y[0]), float(new_y[1]), padding=0)
                         if b_ref is None and new_y is not None: b_ref, n_ref = base, new_y
         except Exception as e: log.error(f"Error applying global Y zoom: {e}")
         finally:
@@ -2062,7 +2062,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     new_min_y = current_plot_y_range[0] + y_offset
                     new_max_y = current_plot_y_range[1] + y_offset
                     # Apply the new range by shifting the current range
-                    vb.setYRange(new_min_y, new_max_y, padding=0)
+                    vb.setYRange(float(new_min_y), float(new_max_y), padding=0)
                     log.debug(f"  Applied offset to {cid}: new range=({new_min_y:.4g}, {new_max_y:.4g})")
 
         except Exception as e:
@@ -2119,7 +2119,7 @@ class ExplorerTab(QtWidgets.QWidget):
             # Apply the zoom
             self._updating_viewranges=True
             try: 
-                p.getViewBox().setYRange(new_y[0], new_y[1], padding=0)
+                p.getViewBox().setYRange(float(new_y[0]), float(new_y[1]), padding=0)
             except Exception as e: 
                 log.error(f"Error setting individual Y zoom {chan_id}: {e}")
             finally: 
@@ -2168,7 +2168,7 @@ class ExplorerTab(QtWidgets.QWidget):
             log.debug(f"Individual Y scroll for channel {chan_id}: value={value}, fraction={scroll_fraction:.3f}, new range=({new_min_y:.4g}, {new_max_y:.4g})")
             
             # Set the new range
-            vb.setYRange(new_min_y, new_max_y, padding=0)
+            vb.setYRange(float(new_min_y), float(new_max_y), padding=0)
         except Exception as e: 
             log.error(f"Error handling individual Y scroll {chan_id}: {e}")
         finally: 
@@ -2284,7 +2284,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 if final_x_range:
                     log.info(f"[EXPLORER-RESET] Setting manual X range: {final_x_range}")
                     first_plot = next(iter(vis_map.values()))
-                    first_plot.getViewBox().setXRange(*final_x_range, padding=0)
+                    first_plot.getViewBox().setXRange(float(final_x_range[0]), float(final_x_range[1]), padding=0)
 
                 for chan_id, plot_widget in vis_map.items():
                     vb = plot_widget.getViewBox()
@@ -2296,7 +2296,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                     if final_y_range:
                          log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: {final_y_range}")
-                         vb.setYRange(*final_y_range, padding=0)
+                         vb.setYRange(float(final_y_range[0]), float(final_y_range[1]), padding=0)
                     else:
                          log.warning(f"[EXPLORER-RESET] Manual Y range calculation failed/invalid for {chan_id}, skipping setYRange.")
                 log.info("[EXPLORER-RESET] Finished applying manual ranges.")
@@ -2392,7 +2392,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 if y_bounds and len(y_bounds) == 2 and y_bounds[0] != y_bounds[1]:
                     y_padding = (y_bounds[1] - y_bounds[0]) * 0.02  # 2% padding
                     manual_y_range = [y_bounds[0] - y_padding, y_bounds[1] + y_padding]
-                    plot.getViewBox().setYRange(*manual_y_range, padding=0)
+                    plot.getViewBox().setYRange(float(manual_y_range[0]), float(manual_y_range[1]), padding=0)
                     log.info(f"[EXPLORER-RESET-SINGLE] Set manual Y range for {chan_id}: {manual_y_range}")
                 else:
                     log.warning(f"[EXPLORER-RESET-SINGLE] Invalid Y bounds for {chan_id}: {y_bounds}")
@@ -2728,7 +2728,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     vb=plot.getViewBox(); vb.disableAutoRange()
                     # Apply shared X limit
                     if manual_x: 
-                        vb.setXRange(manual_x[0], manual_x[1], padding=0); applied_any=True
+                        vb.setXRange(float(manual_x[0]), float(manual_x[1]), padding=0); applied_any=True
                         # Log only once if applied
                         if chan_id == next(iter(self.channel_plots.keys())): 
                              log.debug(f"Applied shared X limits {manual_x}")
@@ -2739,7 +2739,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                 x_bounds = vb.childrenBounds()[0]
                                 if x_bounds and len(x_bounds) == 2 and x_bounds[0] != x_bounds[1]:
                                     x_padding = (x_bounds[1] - x_bounds[0]) * 0.02
-                                    vb.setXRange(x_bounds[0] - x_padding, x_bounds[1] + x_padding, padding=0)
+                                    vb.setXRange(float(x_bounds[0] - x_padding), float(x_bounds[1] + x_padding), padding=0)
                                     log.debug(f"Applied manual X auto-range for {chan_id} (Windows)")
                             except Exception:
                                 vb.enableAutoRange(axis=pg.ViewBox.XAxis)  # Fallback
@@ -2749,7 +2749,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     # Apply per-channel Y limit
                     channel_y_limits = self.manual_channel_limits.get(chan_id, {}).get('y')
                     if channel_y_limits:
-                        vb.setYRange(channel_y_limits[0], channel_y_limits[1], padding=0); applied_any=True
+                        vb.setYRange(float(channel_y_limits[0]), float(channel_y_limits[1]), padding=0); applied_any=True
                         log.debug(f"Applied Y limits {channel_y_limits} to {chan_id}")
                     else:
                         # Auto-range Y if no manual Y - use manual calculation on Windows
@@ -2758,7 +2758,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                 y_bounds = vb.childrenBounds()[1]
                                 if y_bounds and len(y_bounds) == 2 and y_bounds[0] != y_bounds[1]:
                                     y_padding = (y_bounds[1] - y_bounds[0]) * 0.02
-                                    vb.setYRange(y_bounds[0] - y_padding, y_bounds[1] + y_padding, padding=0)
+                                    vb.setYRange(float(y_bounds[0] - y_padding), float(y_bounds[1] + y_padding), padding=0)
                                     log.debug(f"Applied manual Y auto-range for {chan_id} (Windows)")
                             except Exception:
                                 vb.enableAutoRange(axis=pg.ViewBox.YAxis)  # Fallback
