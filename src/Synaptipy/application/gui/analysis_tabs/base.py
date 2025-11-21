@@ -24,6 +24,7 @@ from Synaptipy.shared.styling import (
     style_button,
 )
 from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker # Import Worker
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.base')
 
@@ -51,8 +52,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._selected_item_index: int = -1
         # Store the currently loaded recording corresponding to the selected item (if it's a 'Recording' type)
         self._selected_item_recording: Optional[Recording] = None 
-        # UI element for selecting the analysis item
-        self.analysis_item_combo: Optional[QtWidgets.QComboBox] = None
+        # UI element for selecting the analysis item - REMOVED: Now centralized in parent AnalyserTab
+        # self.analysis_item_combo: Optional[QtWidgets.QComboBox] = None
         # --- ADDED: Plot Widget --- 
         self.plot_widget: Optional[pg.PlotWidget] = None
         # --- END ADDED --- 
@@ -83,28 +84,27 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._analysis_debounce_timer.setSingleShot(True)
         self._analysis_debounce_timer.timeout.connect(self._trigger_analysis)
         
+        self._analysis_debounce_timer.timeout.connect(self._trigger_analysis)
+        
+        # --- PHASE 2: Threading ---
+        self.thread_pool = QtCore.QThreadPool()
+        log.debug(f"BaseAnalysisTab initialized with ThreadPool max count: {self.thread_pool.maxThreadCount()}")
+
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
     # --- Methods for UI setup to be called by subclasses ---
-    def _setup_analysis_item_selector(self, layout: QtWidgets.QLayout):
-        """Adds the analysis item selection combo box to the provided layout."""
-        self.analysis_item_combo = QtWidgets.QComboBox()
-        self.analysis_item_combo.setToolTip("Select the specific file or data item to analyze from the set defined in Explorer.")
-        # Add to layout - assumes QFormLayout is common, but works with others
-        if isinstance(layout, QtWidgets.QFormLayout):
-            layout.insertRow(0, "Analyze Item:", self.analysis_item_combo)
-        else:
-            # Fallback for other layouts (e.g., QVBoxLayout)
-            hbox = QtWidgets.QHBoxLayout()
-            hbox.addWidget(QtWidgets.QLabel("Analyze Item:"))
-            hbox.addWidget(self.analysis_item_combo, stretch=1)
-            # Try inserting at the top if possible
-            if hasattr(layout, 'insertLayout'):
-                layout.insertLayout(0, hbox)
-            else:
-                layout.addLayout(hbox)
+    # REMOVED: _setup_analysis_item_selector - now centralized in parent AnalyserTab
+    # Subclasses no longer need to call this method
 
-        self.analysis_item_combo.currentIndexChanged.connect(self._on_analysis_item_selected)
+    def create_double_input(self, default_value: str, min_val: float = -float('inf'), max_val: float = float('inf'), decimals: int = 2, tooltip: str = "") -> QtWidgets.QLineEdit:
+        """Helper to create a QLineEdit with QDoubleValidator."""
+        line_edit = QtWidgets.QLineEdit(default_value)
+        validator = QtGui.QDoubleValidator(min_val, max_val, decimals)
+        validator.setNotation(QtGui.QDoubleValidator.Notation.StandardNotation)
+        line_edit.setValidator(validator)
+        if tooltip:
+            line_edit.setToolTip(tooltip)
+        return line_edit
 
     def _update_plot_pens_only(self):
         """Efficiently update only the pen properties of existing plot items without recreating data."""
@@ -425,43 +425,19 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def update_state(self, analysis_items: List[Dict[str, Any]]):
         """
         Update the state based on the list of analysis items provided by AnalyserTab.
-        Populates the item selection combo box.
+        Now simplified - only updates internal data without managing combo box.
         """
         log.debug(f"{self.__class__.__name__}: Updating state with {len(analysis_items)} items.")
         self._analysis_items = analysis_items
         # Clear currently loaded data when the list changes
         self._selected_item_recording = None 
         self._selected_item_index = -1
-
-        if not self.analysis_item_combo:
-            log.warning(f"{self.__class__.__name__}: analysis_item_combo not setup. Call _setup_analysis_item_selector in _setup_ui.")
-            return
-
-        self.analysis_item_combo.blockSignals(True)
-        try:
-            self.analysis_item_combo.clear()
-            if not analysis_items:
-                self.analysis_item_combo.addItem("No Analysis Items Available")
-                self.analysis_item_combo.setEnabled(False)
-            else:
-                self.analysis_item_combo.setEnabled(True)
-                for i, item in enumerate(analysis_items):
-                    # Create descriptive text for combo box
-                    path_name = item.get('path', Path("Unknown")).name
-                    target = item.get('target_type', 'Unknown')
-                    display_text = f"Item {i+1}: "
-                    if target == 'Recording': display_text += f"File: {path_name}"
-                    elif target == 'Current Trial': trial_info = f" (Trial {item['trial_index'] + 1})" if item.get('trial_index') is not None else ""; display_text += f"{path_name} [{target}{trial_info}]"
-                    else: display_text += f"{path_name} [{target}]"
-                    self.analysis_item_combo.addItem(display_text)
-        finally:
-            self.analysis_item_combo.blockSignals(False)
         
-        # Trigger update based on the potentially new first item (or lack thereof)
-        # Clear plot when items change before selecting new one
+        # Clear plot when items change
         if self.plot_widget:
             self.plot_widget.clear()
-        self._on_analysis_item_selected(0 if analysis_items else -1)
+        
+        log.debug(f"{self.__class__.__name__}: State updated, ready for item selection from parent.")
 
     # --- Internal Slot for Item Selection Change ---
     @QtCore.Slot(int)
@@ -571,9 +547,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _setup_ui(self):
         """
         Set up the UI for this analysis tab.
-        Subclass implementation MUST call self._setup_analysis_item_selector(layout) somewhere appropriate.
         Subclass implementation SHOULD call self._setup_plot_area(layout) somewhere appropriate.
         Subclass implementation CAN call self._setup_save_button(layout) to add the save button.
+        NOTE: Item selector is now centralized in parent AnalyserTab, no need to add it here.
         """
         raise NotImplementedError(f"Subclass {self.__class__.__name__} must implement _setup_ui()")
 
@@ -605,6 +581,72 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # or raise NotImplementedError explicitly if button setup *requires* implementation
         log.warning(f"{self.__class__.__name__}._get_specific_result_data() is not implemented.")
         return None
+
+    # --- PHASE 2: Threaded Analysis Execution ---
+    @QtCore.Slot()
+    def _trigger_analysis(self):
+        """
+        Triggers the analysis process.
+        Gathers parameters and starts the worker thread.
+        """
+        log.debug(f"{self.__class__.__name__}: Triggering analysis...")
+        
+        # 1. Gather Parameters (UI Thread)
+        params = self._gather_analysis_parameters()
+        if not params:
+            log.debug("Analysis aborted: Invalid parameters.")
+            return
+
+        # 2. Get Data (UI Thread)
+        # We need to pass a copy of data to the worker to avoid thread safety issues
+        # Assuming _current_plot_data is a dict of numpy arrays/primitives which is fine to read
+        if not self._current_plot_data:
+             log.debug("Analysis aborted: No data available.")
+             return
+        
+        data_copy = self._current_plot_data.copy() 
+
+        # 3. Start Worker (Background Thread)
+        worker = AnalysisWorker(self._execute_core_analysis, params, data_copy)
+        worker.signals.result.connect(self._on_analysis_result)
+        worker.signals.error.connect(self._on_analysis_error)
+        
+        # Show busy state
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.setText("Status: Analyzing...")
+        
+        self.thread_pool.start(worker)
+
+    @QtCore.Slot(object)
+    def _on_analysis_result(self, results):
+        """Handle successful analysis results from worker."""
+        if results is None:
+            log.warning("Analysis returned None.")
+            if hasattr(self, 'status_label') and self.status_label:
+                self.status_label.setText("Status: Analysis failed (no result).")
+            return
+
+        log.debug(f"{self.__class__.__name__}: Analysis finished successfully.")
+        
+        # 4. Update UI (UI Thread)
+        self._display_analysis_results(results)
+        self._plot_analysis_visualizations(results)
+        
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.setText("Status: Analysis complete.")
+            
+        # Enable save button if we have results
+        self._set_save_button_enabled(True)
+
+    @QtCore.Slot(tuple)
+    def _on_analysis_error(self, error_info):
+        """Handle analysis errors."""
+        exctype, value, traceback_str = error_info
+        log.error(f"{self.__class__.__name__}: Analysis error: {value}\n{traceback_str}")
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.setText(f"Status: Error: {value}")
+        
+        QtWidgets.QMessageBox.critical(self, "Analysis Error", f"An error occurred during analysis:\n{value}")
     
     # --- PHASE 2: Abstract Methods for Template Method Pattern ---
     # BUG 2 FIX: These are the ONLY declarations of these methods - no duplicates

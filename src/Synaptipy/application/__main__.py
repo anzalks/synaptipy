@@ -83,10 +83,27 @@ def run_gui():
     if not SYNAPTIPY_AVAILABLE:
         log.warning("*"*30 + "\n Running with DUMMY Synaptipy classes! \n" + "*"*30)
 
-    # Create Qt Application
+    # Create Qt Application with High DPI support
     app = QtWidgets.QApplication.instance()
     if app is None:
+        # Enable High DPI scaling before creating QApplication
+        # Check if HighDpiScaleFactorRoundingPolicy is available (Qt 6.0+)
+        if hasattr(QtCore.Qt, 'HighDpiScaleFactorRoundingPolicy'):
+            try:
+                QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(
+                    QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+                )
+                log.debug("High DPI PassThrough policy set successfully")
+            except Exception as e:
+                log.warning(f"Could not set High DPI policy: {e}")
+        
         app = QtWidgets.QApplication(sys.argv)
+        
+        # Enable High DPI pixmaps (for better icon rendering)
+        try:
+            app.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+        except Exception as e:
+            log.warning(f"Could not enable High DPI pixmaps: {e}")
 
     # Create startup manager and begin loading process
     try:

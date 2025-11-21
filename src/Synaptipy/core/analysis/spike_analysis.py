@@ -197,3 +197,37 @@ def calculate_isi(spike_times):
     if len(spike_times) < 2:
         return np.array([])
     return np.diff(spike_times)
+
+def analyze_multi_sweep_spikes(
+    data_trials: List[np.ndarray],
+    time_vector: np.ndarray,
+    threshold: float,
+    refractory_samples: int
+) -> List[SpikeTrainResult]:
+    """
+    Analyzes spikes across multiple sweeps (trials).
+
+    Args:
+        data_trials: List of 1D NumPy arrays, each representing a sweep.
+        time_vector: 1D NumPy array of time points (assumed same for all sweeps).
+        threshold: Voltage threshold.
+        refractory_samples: Refractory period in samples.
+
+    Returns:
+        List of SpikeTrainResult objects, one for each sweep.
+    """
+    results = []
+    for i, trial_data in enumerate(data_trials):
+        try:
+            result = detect_spikes_threshold(trial_data, time_vector, threshold, refractory_samples)
+            # Add trial index to metadata
+            result.metadata['sweep_index'] = i
+            results.append(result)
+        except Exception as e:
+            log.error(f"Error analyzing sweep {i}: {e}")
+            # Return an error result for this sweep
+            error_result = SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=f"Sweep {i}: {str(e)}")
+            error_result.metadata['sweep_index'] = i
+            results.append(error_result)
+            
+    return results

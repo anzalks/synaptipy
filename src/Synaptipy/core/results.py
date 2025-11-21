@@ -40,6 +40,7 @@ class RinResult(AnalysisResult):
     Primary 'value' is the Input Resistance in MOhm.
     """
     tau: Optional[float] = None  # Membrane time constant in seconds (or ms)
+    conductance: Optional[float] = None # Conductance in uS (micro-Siemens)
     sag_ratio: Optional[float] = None # Ratio (0-1 or %)
     voltage_deflection: Optional[float] = None # Delta V in mV
     current_injection: Optional[float] = None # Delta I in pA

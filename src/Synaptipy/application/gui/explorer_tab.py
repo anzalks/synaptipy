@@ -66,7 +66,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
     # --- Signals ---
     open_file_requested = QtCore.Signal()
-    analysis_set_changed = QtCore.Signal(list)
+    # analysis_set_changed signal removed as we use SessionManager now
 
     # --- Initialization ---
     def __init__(self, neo_adapter: NeoAdapter, nwb_exporter: NWBExporter, status_bar: QtWidgets.QStatusBar, parent=None):
@@ -258,6 +258,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Keep references for the global enable checkbox and set button
         self.enable_manual_limits_checkbox: Optional[QtWidgets.QCheckBox] = None
         self.set_manual_limits_button: Optional[QtWidgets.QPushButton] = None
+        # --- File Tree References ---
+        self.file_tree: Optional[QtWidgets.QTreeView] = None
+        self.file_model: Optional[QtWidgets.QFileSystemModel] = None
         # --- End UI References ---
 
         # --- Setup ---
@@ -289,12 +292,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Remove fixed minimum width for better scaling on Windows
         # left_panel_widget.setMinimumWidth(200) # <<< REMOVED FOR WINDOWS SCALING
 
-        # File Op Group
-        file_op_group = QtWidgets.QGroupBox("Load Data")
-        file_op_layout = QtWidgets.QHBoxLayout(file_op_group)
-        self.open_button_ui = QtWidgets.QPushButton("Open File...")
-        file_op_layout.addWidget(self.open_button_ui)
-        left_panel_layout.addWidget(file_op_group)
+        # File Op Group (Moved to Right Panel)
+        # ...
+
 
         # Display Options Group
         display_group = QtWidgets.QGroupBox("Display Options")
@@ -417,40 +417,8 @@ class ExplorerTab(QtWidgets.QWidget):
         meta_layout.addRow("Channels / Trials:", self.channels_label)
         left_panel_layout.addWidget(meta_group)
 
-        # Analysis Selection Group
-        analysis_group = QtWidgets.QGroupBox("Analysis Selection")
-        analysis_layout = QtWidgets.QVBoxLayout(analysis_group)
-        analysis_layout.setSpacing(5)
-        # --- REMOVE Target Selection Layout ---
-        # target_layout = QtWidgets.QHBoxLayout()
-        # target_layout.addWidget(QtWidgets.QLabel("Add:"))
-        # self.analysis_target_combo = QtWidgets.QComboBox()
-        # self.analysis_target_combo.addItems(["Current Trial", "Average Trace", "All Trials"])
-        # self.analysis_target_combo.setToolTip("Select data from current file for analysis set.")
-        # target_layout.addWidget(self.analysis_target_combo, stretch=1)
-        # analysis_layout.addLayout(target_layout)
-        # --- END REMOVE ---
-
-        # Buttons
-        analysis_buttons_layout = QtWidgets.QHBoxLayout()
-        # Rename button to reflect fixed action
-        self.add_analysis_button = QtWidgets.QPushButton("Add Recording to Set")
-        self.add_analysis_button.setToolTip("Add the entire currently loaded recording to the analysis set.")
-        self.add_analysis_button.setEnabled(False)
-        analysis_buttons_layout.addWidget(self.add_analysis_button)
-
-        # --- ADD: Add Clear button to this layout ---
-        self.clear_analysis_button = QtWidgets.QPushButton("Clear Analysis Set")
-        self.clear_analysis_button.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
-        self.clear_analysis_button.setToolTip("Remove all items from analysis set.")
-        analysis_buttons_layout.addWidget(self.clear_analysis_button) # Add it here
-        # --- END ADD ---
-
-        self.analysis_set_label = QtWidgets.QLabel("Analysis Set: 0 items")
-        self.analysis_set_label.setWordWrap(True)
-        analysis_layout.addWidget(self.analysis_set_label)
-        analysis_layout.addLayout(analysis_buttons_layout)
-        left_panel_layout.addWidget(analysis_group)
+        # Analysis Selection Group - MOVED TO RIGHT PANEL
+        # (See right panel section below)
 
         left_panel_layout.addStretch()
         main_layout.addWidget(left_panel_widget, stretch=0)
@@ -512,11 +480,81 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # --- Right Panel ---
         y_controls_panel_widget = QtWidgets.QWidget()
-        y_controls_panel_layout = QtWidgets.QHBoxLayout(y_controls_panel_widget)
-        # Remove fixed minimum width for better scaling on Windows  
-        # y_controls_panel_widget.setMinimumWidth(180) # <<< REMOVED FOR WINDOWS SCALING
+        # Change main layout of right panel to Vertical to stack File List on top of Y Controls
+        right_main_layout = QtWidgets.QVBoxLayout(y_controls_panel_widget)
+        
+        # --- MOVED: File Op Group (Load Data) ---
+        file_op_group = QtWidgets.QGroupBox("Load Data")
+        file_op_layout = QtWidgets.QHBoxLayout(file_op_group)
+        self.open_button_ui = QtWidgets.QPushButton("Open File...")
+        file_op_layout.addWidget(self.open_button_ui)
+        right_main_layout.addWidget(file_op_group)
+
+        # --- MOVED: File Tree Group (File Explorer) ---
+        tree_group = QtWidgets.QGroupBox("File Explorer")
+        tree_layout = QtWidgets.QVBoxLayout(tree_group)
+        tree_layout.setContentsMargins(5, 5, 5, 5)
+        
+        self.file_model = QtWidgets.QFileSystemModel()
+        self.file_model.setRootPath(QtCore.QDir.rootPath())
+        # Filter for supported files
+        self.file_model.setNameFilters(["*.h5", "*.nwb", "*.abf", "*.dat"]) 
+        self.file_model.setNameFilterDisables(False)
+        
+        self.file_tree = QtWidgets.QTreeView()
+        self.file_tree.setModel(self.file_model)
+        # Set initial directory from settings or default
+        last_dir = QtCore.QSettings("Synaptipy", "Viewer").value("lastDirectory", str(Path.home()), type=str)
+        self.file_tree.setRootIndex(self.file_model.index(last_dir))
+        
+        self.file_tree.setDragEnabled(True) # Enable Drag
+        self.file_tree.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.DragOnly)
+        self.file_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.file_tree.setHeaderHidden(True)
+        # Hide columns other than Name (Size, Type, Date) to save space
+        for i in range(1, 4):
+            self.file_tree.setColumnHidden(i, True)
+            
+        tree_layout.addWidget(self.file_tree)
+        right_main_layout.addWidget(tree_group, stretch=0)  # Reduce stretch to accommodate Analysis section
+
+        # --- MOVED: Analysis Selection Group ---
+        analysis_group = QtWidgets.QGroupBox("Analysis Selection")
+        analysis_layout = QtWidgets.QVBoxLayout(analysis_group)
+        analysis_layout.setContentsMargins(5, 5, 5, 5)
+        analysis_layout.setSpacing(5)
+
+        # Buttons
+        analysis_buttons_layout = QtWidgets.QHBoxLayout()
+        # Rename button to reflect fixed action
+        self.add_analysis_button = QtWidgets.QPushButton("Add Recording to Set")
+        self.add_analysis_button.setToolTip("Add the entire currently loaded recording to the analysis set.")
+        self.add_analysis_button.setEnabled(False)
+        analysis_buttons_layout.addWidget(self.add_analysis_button)
+
+        # --- ADD: Add Clear button to this layout ---
+        self.clear_analysis_button = QtWidgets.QPushButton("Clear Analysis Set")
+        self.clear_analysis_button.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
+        self.clear_analysis_button.setToolTip("Remove all items from analysis set.")
+        analysis_buttons_layout.addWidget(self.clear_analysis_button) # Add it here
+        # --- END ADD ---
+
+        self.analysis_set_label = QtWidgets.QLabel("Analysis Set: 0 items")
+        self.analysis_set_label.setWordWrap(True)
+        analysis_layout.addWidget(self.analysis_set_label)
+        analysis_layout.addLayout(analysis_buttons_layout)
+        right_main_layout.addWidget(analysis_group)
+        # --- END MOVED SECTION ---
+
+        # --- Container for existing Y Controls (Scrollbars/Sliders) ---
+        y_controls_container = QtWidgets.QWidget()
+        # Reuse variable name 'y_controls_panel_layout' so subsequent code works without change
+        y_controls_panel_layout = QtWidgets.QHBoxLayout(y_controls_container)
         y_controls_panel_layout.setContentsMargins(0, 0, 0, 0)
         y_controls_panel_layout.setSpacing(5)
+        
+        # Add the Y controls container to the main right layout
+        right_main_layout.addWidget(y_controls_container, stretch=0)
         y_scroll_widget = QtWidgets.QWidget()
         y_scroll_layout = QtWidgets.QVBoxLayout(y_scroll_widget)
         y_scroll_layout.setContentsMargins(0,0,0,0)
@@ -587,6 +625,8 @@ class ExplorerTab(QtWidgets.QWidget):
     def _connect_signals(self):
         log.debug("Connecting ExplorerTab signals...")
         self.open_button_ui.clicked.connect(self.open_file_requested)
+        if self.file_tree:
+            self.file_tree.doubleClicked.connect(self._on_tree_double_clicked)
         self.downsample_checkbox.stateChanged.connect(self._trigger_plot_update)
         self.plot_mode_combobox.currentIndexChanged.connect(self._on_plot_mode_changed)
         self.reset_view_button.clicked.connect(self._reset_view)
@@ -621,6 +661,16 @@ class ExplorerTab(QtWidgets.QWidget):
     # =========================================================================
     # Public Methods for Interaction
     # =========================================================================
+    def _on_tree_double_clicked(self, index: QtCore.QModelIndex):
+        """Handle double click on file tree to load file."""
+        file_path = Path(self.file_model.filePath(index))
+        if file_path.is_file():
+            log.info(f"Tree double-click: Loading {file_path}")
+            # Use the existing load logic (single file mode for simplicity via tree)
+            self.load_recording_data(file_path, [file_path], 0)
+            # Also update settings
+            QtCore.QSettings("Synaptipy", "Viewer").setValue("lastDirectory", str(file_path.parent))
+
     def load_file(self, filepath: Path, file_list: List[Path] = None, selected_index: int = -1):
         """Legacy method - redirects to load_recording_data"""
         if file_list is None:
@@ -1679,7 +1729,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.session_manager:
              self.session_manager.selected_analysis_items = self._analysis_items[:]
              
-        self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
+        self._update_ui_state()
 
     def _clear_analysis_set(self):
         """Clears the analysis set."""
@@ -1692,7 +1742,7 @@ class ExplorerTab(QtWidgets.QWidget):
             if self.session_manager:
                  self.session_manager.selected_analysis_items = []
                  
-            self.analysis_set_changed.emit(self._analysis_items); self._update_ui_state()
+            self._update_ui_state()
 
 
     # =========================================================================
