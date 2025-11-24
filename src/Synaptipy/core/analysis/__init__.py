@@ -4,13 +4,32 @@ Synaptipy Analysis Sub-package.
 
 Provides functions for analysing electrophysiology data represented
 by the core data models.
+
+This module also imports all analysis modules to trigger registration
+of analysis functions with the AnalysisRegistry for batch processing.
 """
-# Optionally expose key functions for easier import
+# Import registry first
+from .registry import AnalysisRegistry
+
+# Import analysis modules to trigger registration
+# Each module registers its functions via @AnalysisRegistry.register decorator
+from . import basic_features  # noqa: F401 - registers: rmp_analysis
+from . import spike_analysis  # noqa: F401 - registers: spike_detection
+from . import intrinsic_properties  # noqa: F401 - registers: rin_analysis, tau_analysis
+from . import event_detection  # noqa: F401 - registers: mini_detection, event_detection_threshold, etc.
+
+# Expose key functions for easier import
 from .basic_features import calculate_rmp
 from .spike_analysis import detect_spikes_threshold
+from .intrinsic_properties import calculate_rin, calculate_tau
+from .event_detection import detect_minis_threshold
 
-# Define what `from Synaptipy.core.analysis import *` imports (optional)
+# Define what `from Synaptipy.core.analysis import *` imports
 __all__ = [
+    'AnalysisRegistry',
     'calculate_rmp',
     'detect_spikes_threshold',
+    'calculate_rin',
+    'calculate_tau',
+    'detect_minis_threshold',
 ]

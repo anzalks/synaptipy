@@ -12,6 +12,60 @@ from scipy.stats import median_abs_deviation
 log = logging.getLogger('Synaptipy.core.analysis.event_detection')
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
+
+# --- Registry Wrapper for Batch Processing (Mini Detection) ---
+@AnalysisRegistry.register("mini_detection")
+def run_mini_detection_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper function for miniature event detection that conforms to the registry interface.
+    
+    Args:
+        data: 1D NumPy array of current/voltage data
+        time: 1D NumPy array of corresponding time points (seconds)
+        sampling_rate: Sampling rate in Hz
+        **kwargs: Additional parameters:
+            - threshold: Absolute amplitude threshold (default: 5.0)
+            - direction: 'negative' or 'positive' (default: 'negative')
+            
+    Returns:
+        Dictionary containing results suitable for DataFrame rows.
+    """
+    try:
+        threshold = kwargs.get('threshold', 5.0)
+        direction = kwargs.get('direction', 'negative')
+        
+        result = detect_minis_threshold(data, time, threshold, direction)
+        
+        if result is not None:
+            return {
+                'event_count': result.get('event_count', 0),
+                'frequency_hz': result.get('frequency_hz', 0.0),
+                'mean_amplitude': result.get('mean_amplitude', 0.0),
+                'amplitude_sd': result.get('amplitude_sd', 0.0),
+                'detection_method': result.get('detection_method', 'threshold'),
+                'threshold_value': result.get('threshold_value', threshold),
+                'direction': result.get('direction', direction),
+            }
+        else:
+            return {
+                'event_count': 0,
+                'frequency_hz': 0.0,
+                'event_error': "Detection failed"
+            }
+            
+    except Exception as e:
+        log.error(f"Error in run_mini_detection_wrapper: {e}", exc_info=True)
+        return {
+            'event_count': 0,
+            'frequency_hz': 0.0,
+            'event_error': str(e)
+        }
+
 def detect_minis_threshold(
     data: np.ndarray, 
     time: np.ndarray, 
@@ -137,6 +191,7 @@ def detect_minis_automatic_mad(
     # --- END IMPLEMENTATION NEEDED ---
     return None 
 
+# --- Registry Wrapper for Batch Processing (Threshold Method) ---
 @AnalysisRegistry.register("event_detection_threshold")
 def detect_events_threshold_crossing(data: np.ndarray, threshold: float, direction: str) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Detects events by simple threshold crossing.

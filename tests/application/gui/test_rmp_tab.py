@@ -69,7 +69,8 @@ def test_has_data_selection_widgets(rmp_tab):
     # These should exist either in base class or subclass
     assert hasattr(rmp_tab, 'signal_channel_combobox')
     assert hasattr(rmp_tab, 'data_source_combobox')
-    assert hasattr(rmp_tab, 'analysis_item_combo')
+    # Note: analysis_item_combo is now in the parent AnalyserTab, not in individual tabs
+    assert hasattr(rmp_tab, 'global_controls_layout')  # For receiving global controls
 
 
 def test_mode_selection(rmp_tab, qtbot):
@@ -112,8 +113,9 @@ def test_update_state_with_items(rmp_tab, mock_neo_adapter):
     # Call update_state (this is called by parent AnalyserTab)
     rmp_tab.update_state(test_items)
     
-    # Check that analysis_item_combo was populated
-    assert rmp_tab.analysis_item_combo.count() > 0
+    # Check that internal analysis items list was updated
+    # Note: analysis_item_combo is now managed by parent AnalyserTab
+    assert rmp_tab._analysis_items == test_items
 
 
 def test_baseline_result_storage(rmp_tab):

@@ -4,7 +4,7 @@ import logging
 import pkgutil
 import importlib
 from pathlib import Path
-from typing import Optional, List, Dict, Any # Add Dict, Any
+from typing import Optional, List, Dict, Any, Set
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -17,6 +17,7 @@ from .analysis_tabs.rin_tab import RinAnalysisTab
 from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
 from Synaptipy.application.session_manager import SessionManager
+from Synaptipy.shared.styling import style_button
 
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
@@ -102,6 +103,30 @@ class AnalyserTab(QtWidgets.QWidget):
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
+
+        # --- Top Toolbar with Batch Analysis Button ---
+        toolbar_layout = QtWidgets.QHBoxLayout()
+        toolbar_layout.setContentsMargins(0, 0, 0, 5)
+        
+        # Batch Analysis Button
+        self.batch_analysis_btn = QtWidgets.QPushButton("Run Batch Analysis...")
+        self.batch_analysis_btn.setToolTip(
+            "Run a configurable pipeline of analyses on all loaded files.\n"
+            "Useful for processing multiple files with the same protocol."
+        )
+        self.batch_analysis_btn.setIcon(QtGui.QIcon.fromTheme("system-run"))
+        style_button(self.batch_analysis_btn, 'primary')
+        self.batch_analysis_btn.clicked.connect(self._on_batch_analysis_clicked)
+        toolbar_layout.addWidget(self.batch_analysis_btn)
+        
+        toolbar_layout.addStretch()
+        
+        # Info label showing number of files
+        self.files_info_label = QtWidgets.QLabel("No files loaded")
+        self.files_info_label.setStyleSheet("color: gray;")
+        toolbar_layout.addWidget(self.files_info_label)
+        
+        main_layout.addLayout(toolbar_layout)
 
         # Create Global Controls widgets (they will be injected into the active tab)
         self.source_list_widget = AnalysisSourceListWidget(self)
@@ -201,6 +226,36 @@ class AnalyserTab(QtWidgets.QWidget):
                     log.error(f"Failed to inject global controls into first tab: {e}", exc_info=True)
 
 
+    # --- Batch Analysis Handler ---
+    @QtCore.Slot()
+    def _on_batch_analysis_clicked(self):
+        """Open the batch analysis dialog with all unique files from the analysis set."""
+        # Collect unique file paths from the analysis items
+        unique_files: Set[Path] = set()
+        for item in self._analysis_items:
+            file_path = item.get('path')
+            if file_path and isinstance(file_path, Path) and file_path.is_file():
+                unique_files.add(file_path)
+        
+        if not unique_files:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Files Available",
+                "No files are currently loaded for batch analysis.\n\n"
+                "Please add files from the Explorer tab first."
+            )
+            return
+        
+        # Import the batch dialog here to avoid circular imports
+        from .batch_dialog import BatchAnalysisDialog
+        
+        # Create and show the batch analysis dialog
+        files_list = sorted(list(unique_files), key=lambda p: p.name)
+        dialog = BatchAnalysisDialog(files_list, parent=self)
+        dialog.exec()
+        
+        log.info(f"Batch analysis dialog closed. Processed {len(files_list)} files.")
+
     # --- Slot for Explorer Signal ---
     @QtCore.Slot(list)
     def update_analysis_sources(self, analysis_items: List[Dict[str, Any]]):
@@ -210,6 +265,20 @@ class AnalyserTab(QtWidgets.QWidget):
         """
         log.info(f"Received updated analysis set with {len(analysis_items)} items.")
         self._analysis_items = analysis_items # Store the latest list
+
+        # Update files info label
+        unique_files: Set[Path] = set()
+        for item in analysis_items:
+            file_path = item.get('path')
+            if file_path and isinstance(file_path, Path):
+                unique_files.add(file_path)
+        
+        if unique_files:
+            self.files_info_label.setText(f"{len(unique_files)} file(s) loaded")
+            self.files_info_label.setStyleSheet("")  # Reset to default color
+        else:
+            self.files_info_label.setText("No files loaded")
+            self.files_info_label.setStyleSheet("color: gray;")
 
         # Update the List Widget display
         self.source_list_widget.clear()
