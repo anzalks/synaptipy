@@ -167,6 +167,18 @@ class NeoAdapter:
         log.debug(f"Generated filter string using IODict: {' ;; '.join(filters)}")
         return ";;".join(filters)
 
+    def get_supported_extensions(self) -> List[str]:
+        """
+        Returns a list of all supported file extensions (e.g. ['abf', 'dat', ...]).
+        Used for filtering file views.
+        """
+        all_exts = set()
+        for exts in IODict.values():
+            for ext in exts:
+                if ext and isinstance(ext, str):
+                    all_exts.add(ext.lower())
+        return sorted(list(all_exts))
+
     def _extract_axon_metadata(self, reader: nIO.AxonIO) -> Tuple[Optional[str], Optional[float]]:
         """Extracts protocol name and estimated injected current range specifically for AxonIO."""
         protocol_name: Optional[str] = None

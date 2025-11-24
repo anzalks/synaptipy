@@ -42,9 +42,9 @@ class RinAnalysisTab(BaseAnalysisTab):
     _RESULT_RIN_KOHM = "Input Resistance (kOhm)"
     _RESULT_STD_DEV = "Baseline Std Dev"
 
-    def __init__(self, neo_adapter: NeoAdapter, parent=None):
+    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
         # Initialize the base class FIRST
-        super().__init__(neo_adapter=neo_adapter, parent=parent)
+        super().__init__(neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
         # Explicitly initialize attributes needed before _on_mode_changed is called
         self._selected_item_recording = None # Initialize base class attribute
 

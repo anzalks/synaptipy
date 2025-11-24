@@ -10,6 +10,7 @@ from scipy import signal
 from scipy.stats import median_abs_deviation
 
 log = logging.getLogger('Synaptipy.core.analysis.event_detection')
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 def detect_minis_threshold(
     data: np.ndarray, 
@@ -136,6 +137,7 @@ def detect_minis_automatic_mad(
     # --- END IMPLEMENTATION NEEDED ---
     return None 
 
+@AnalysisRegistry.register("event_detection_threshold")
 def detect_events_threshold_crossing(data: np.ndarray, threshold: float, direction: str) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Detects events by simple threshold crossing.
 
@@ -188,6 +190,7 @@ def _mad_to_std(mad_value: float) -> float:
     return mad_value * 1.4826
 
 
+@AnalysisRegistry.register("event_detection_deconvolution")
 def detect_events_deconvolution_custom(
     data: np.ndarray,
     sample_rate: float,
@@ -449,6 +452,7 @@ def _calculate_simplified_kinetics(data: np.ndarray, peak_index: int, baseline_v
     return kinetics
 
 
+@AnalysisRegistry.register("event_detection_baseline_peak")
 def detect_events_baseline_peak_kinetics(
     data: np.ndarray,
     sample_rate: float,

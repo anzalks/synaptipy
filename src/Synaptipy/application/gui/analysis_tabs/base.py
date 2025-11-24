@@ -38,16 +38,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     # Removed TRIAL_MODES as it's less relevant now
 
-    def __init__(self, neo_adapter: NeoAdapter, parent=None):
+    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
         """
         Initialize the base analysis tab.
 
         Args:
             neo_adapter: Instance of the NeoAdapter for loading data.
+            settings_ref: Reference to QSettings for state persistence.
             parent: Parent widget.
         """
         super().__init__(parent)
         self.neo_adapter = neo_adapter
+        self._settings = settings_ref
         self._analysis_items: List[Dict[str, Any]] = [] # Store the full list from AnalyserTab
         self._selected_item_index: int = -1
         # Store the currently loaded recording corresponding to the selected item (if it's a 'Recording' type)

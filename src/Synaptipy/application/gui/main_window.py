@@ -209,7 +209,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- THIS IS THE LINE TO FIX ---
         # Pass the actual ExplorerTab instance, not self (MainWindow)
         # Pass the neo_adapter instance
-        self.analyser_tab = AnalyserTab(neo_adapter=self.neo_adapter, parent=self)
+        self.analyser_tab = AnalyserTab(neo_adapter=self.neo_adapter, settings_ref=self.settings, parent=self)
         # --- END FIX ---
         log.debug("Instantiating ExporterTab...")
         self.exporter_tab = ExporterTab(
@@ -738,6 +738,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self, 'explorer_tab') and hasattr(self.explorer_tab, 'cleanup'): # Define cleanup() in ExplorerTab if needed
             try: log.debug("Calling cleanup for ExplorerTab..."); self.explorer_tab.cleanup()
             except Exception as e: log.warning(f"Error during ExplorerTab cleanup: {e}")
+        
+        if hasattr(self, 'analyser_tab') and hasattr(self.analyser_tab, 'cleanup'):
+            try: log.debug("Calling cleanup for AnalyserTab..."); self.analyser_tab.cleanup()
+            except Exception as e: log.warning(f"Error during AnalyserTab cleanup: {e}")
         # Clear graphics layout explicitly before closing
         if hasattr(self, 'explorer_tab') and hasattr(self.explorer_tab, 'graphics_layout_widget') and self.explorer_tab.graphics_layout_widget:
             try: self.explorer_tab.graphics_layout_widget.clear(); log.debug("Cleared explorer tab graphics.")

@@ -268,6 +268,12 @@ PLOT_COLORS = [
     '#e67e22',  # Darker orange
 ]
 
+from .zoom_theme import (
+    apply_theme_to_plot_widget,
+    apply_theme_with_custom_selection as customize_viewbox_selection_colors,
+    get_system_accent_color
+)
+
 # Expose main functions
 __all__ = [
     'apply_stylesheet', 'configure_plot_widget', 'configure_pyqtgraph_globally',
