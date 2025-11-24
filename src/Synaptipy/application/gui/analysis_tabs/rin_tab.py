@@ -133,6 +133,9 @@ class RinAnalysisTab(BaseAnalysisTab):
         controls_layout.setContentsMargins(5, 5, 5, 5)
         controls_layout.setSpacing(10)
 
+        # Store reference for global controls injection
+        self.global_controls_layout = controls_layout
+
         # 1. Data Selection Group
         self.data_selection_group = QtWidgets.QGroupBox("Data Selection")
         data_selection_layout = QtWidgets.QFormLayout(self.data_selection_group)

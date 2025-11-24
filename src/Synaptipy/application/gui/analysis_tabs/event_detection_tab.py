@@ -83,6 +83,9 @@ class EventDetectionTab(BaseAnalysisTab):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(10)
         
+        # Store reference for global controls injection
+        self.global_controls_layout = left_layout
+        
         # Data Selection Group (Shared)
         shared_controls_group = QtWidgets.QGroupBox("Data Selection")
         shared_controls_layout = QtWidgets.QFormLayout(shared_controls_group)

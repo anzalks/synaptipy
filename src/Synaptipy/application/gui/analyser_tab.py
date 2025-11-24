@@ -98,15 +98,22 @@ class AnalyserTab(QtWidgets.QWidget):
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
 
     def _setup_ui(self):
-        """Setup UI with horizontal splitter: left=analysis tabs, right=sidebar."""
+        """Setup UI with sub-tabs only. Global controls are injected into each tab's left panel."""
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
-        # --- Create Horizontal Splitter ---
-        # self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        # Create Global Controls widgets (they will be injected into the active tab)
+        self.source_list_widget = AnalysisSourceListWidget(self)
+        self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
+        self.source_list_widget.setMinimumHeight(60)
+        self.source_list_widget.setMaximumHeight(120)
         
-        # --- LEFT PANE: Sub-Tab Widget (Analysis Tabs) ---
+        self.central_analysis_item_combo = QtWidgets.QComboBox()
+        self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
+        self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
+        
+        # --- Sub-Tab Widget (Analysis Tabs) - Takes full width ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
         self.sub_tab_widget.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -115,31 +122,14 @@ class AnalyserTab(QtWidgets.QWidget):
         self.sub_tab_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
         self.sub_tab_widget.setMovable(True)
         
-        # Add to splitter
-        # self.splitter.addWidget(self.sub_tab_widget)
-        
-        # --- RIGHT PANE: Sidebar with controls ---
-        # Removed Sidebar Widget creation
-        
-        # Source Selection Display - Create but don't add to layout yet
-        self.source_list_widget = AnalysisSourceListWidget(self)
-        self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
-        self.source_list_widget.setMinimumHeight(80)
-        self.source_list_widget.setMaximumHeight(150)
-        
-        # Centralized Analysis Item Selector - Create but don't add to layout yet
-        self.central_analysis_item_combo = QtWidgets.QComboBox()
-        self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
-        self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
-        
-        # Add sub_tab_widget directly to main layout
+        # Add sub_tab_widget directly to main layout (no splitter at this level)
         main_layout.addWidget(self.sub_tab_widget)
         
         # Connect tab change signal
         self.sub_tab_widget.currentChanged.connect(self._on_tab_changed)
         
         self.setLayout(main_layout)
-        log.debug("Main AnalyserTab UI setup complete (Redesigned for integrated sidebar).")
+        log.debug("Main AnalyserTab UI setup complete (Global controls will be injected into tabs).")
 
     # _connect_explorer_signals removed as we use SessionManager now
 
@@ -200,6 +190,15 @@ class AnalyserTab(QtWidgets.QWidget):
             self.sub_tab_widget.blockSignals(False)
         if not self._loaded_analysis_tabs:
              log.warning("No analysis sub-tabs loaded."); placeholder = QtWidgets.QLabel("No analysis modules found."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Info")
+        else:
+            # Inject global controls into the first tab
+            first_tab = self._loaded_analysis_tabs[0]
+            if hasattr(first_tab, 'set_global_controls'):
+                try:
+                    first_tab.set_global_controls(self.source_list_widget, self.central_analysis_item_combo)
+                    log.debug(f"Injected global controls into first tab: {first_tab.get_display_name()}")
+                except Exception as e:
+                    log.error(f"Failed to inject global controls into first tab: {e}", exc_info=True)
 
 
     # --- Slot for Explorer Signal ---
@@ -286,11 +285,14 @@ class AnalyserTab(QtWidgets.QWidget):
         
         current_tab = self.sub_tab_widget.widget(tab_index)
         
-        # Check if we need to inject controls (if this logic is even needed here anymore)
-        # It seems like this part was causing the NameError because current_tab wasn't defined yet in the try block
-        # Removing the injection logic from here as it seems to be a remnant of a failed refactor
-        
+        # Inject global controls into the current tab
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
+            try:
+                current_tab.set_global_controls(self.source_list_widget, self.central_analysis_item_combo)
+                log.debug(f"Injected global controls into {current_tab.get_display_name()}")
+            except Exception as e:
+                log.error(f"Error injecting global controls: {e}", exc_info=True)
+            
             # Only forward selection if combo box is enabled (has valid items) and has items
             # This prevents forwarding invalid indices during initialization before
             # update_analysis_sources() populates the combo box
