@@ -19,6 +19,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from .dummy_classes import Recording, NWBExporter, SynaptipyError, ExportError, Channel # Import Channel
 from .explorer_tab import ExplorerTab # Need reference to get recording
 from .nwb_dialog import NwbMetadataDialog # Need the metadata dialog
+from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 
 try:
     import tzlocal
@@ -45,7 +46,11 @@ class ExporterTab(QtWidgets.QWidget):
         self._explorer_tab = explorer_tab_ref
         self._nwb_exporter = nwb_exporter_ref
         self._settings = settings_ref
+        self._settings = settings_ref
         self._status_bar = status_bar_ref
+        
+        # --- Exporters ---
+        self._csv_exporter = CSVExporter()
 
         # --- UI Widget References ---
         self.source_file_label: Optional[QtWidgets.QLabel] = None
@@ -413,63 +418,17 @@ class ExporterTab(QtWidgets.QWidget):
         self._status_bar.showMessage(f"Exporting CSV files to '{output_dir.name}'...", 0)
         QtWidgets.QApplication.processEvents()
 
-        export_counter = 0
-        export_errors = 0
-        source_stem = current_recording.source_file.stem # Base name without extension
-
         try:
-            for chan_id, channel in current_recording.channels.items():
-                if not isinstance(channel, Channel) or not channel.data_trials:
-                    log.warning(f"Skipping CSV export for invalid channel: {chan_id}")
-                    continue
-
-                chan_name_safe = channel.name.replace(" ", "_").replace("/", "-") # Sanitize name for filename
-
-                for trial_idx, trial_data in enumerate(channel.data_trials):
-                    if not isinstance(trial_data, np.ndarray) or trial_data.ndim != 1 or trial_data.size == 0:
-                        log.warning(f"Skipping invalid trial data for CSV: Ch='{channel_name_safe}', Trial={trial_idx}")
-                        continue
-
-                    # Get relative time vector for this trial
-                    time_vec = channel.get_relative_time_vector(trial_idx)
-                    if time_vec is None:
-                        log.error(f"Could not get time vector for CSV: Ch='{channel_name_safe}', Trial={trial_idx}. Skipping trial.")
-                        export_errors += 1
-                        continue
-
-                    # Prepare data for saving (time, data columns)
-                    if time_vec.shape != trial_data.shape:
-                         log.error(f"Time ({time_vec.shape}) and data ({trial_data.shape}) shape mismatch for CSV: Ch='{channel_name_safe}', Trial={trial_idx}. Skipping.")
-                         export_errors += 1
-                         continue
-                    data_to_save = np.column_stack((time_vec, trial_data))
-
-                    # Construct filename
-                    csv_filename = f"{source_stem}_chan_{chan_id}_trial_{trial_idx:03d}.csv"
-                    csv_filepath = output_dir / csv_filename
-
-                    # Define header
-                    header = f"Time (s),Data ({channel.units if channel.units else 'unknown'})"
-
-                    # Save using numpy.savetxt
-                    try:
-                        log.debug(f"Saving CSV: {csv_filepath}")
-                        np.savetxt(csv_filepath, data_to_save, delimiter=",", header=header, comments='') # comments='' prevents '#' before header
-                        export_counter += 1
-                    except Exception as e_save:
-                        log.error(f"Failed to save CSV file '{csv_filepath}': {e_save}", exc_info=True)
-                        export_errors += 1
-
-                    QtWidgets.QApplication.processEvents() # Keep UI responsive during loop
+            success_count, error_count = self._csv_exporter.export_recording(current_recording, output_dir)
 
             # --- Report Outcome ---
-            if export_errors > 0:
-                msg = f"CSV export completed with {export_errors} errors. {export_counter} files saved to '{output_dir.name}'."
+            if error_count > 0:
+                msg = f"CSV export completed with {error_count} errors. {success_count} files saved to '{output_dir.name}'."
                 log.warning(msg)
                 self._status_bar.showMessage(msg, 8000)
                 QtWidgets.QMessageBox.warning(self, "CSV Export Warning", f"{msg}\n\nCheck logs for details.")
-            elif export_counter > 0:
-                msg = f"Successfully exported {export_counter} CSV files to '{output_dir.name}'."
+            elif success_count > 0:
+                msg = f"Successfully exported {success_count} CSV files to '{output_dir.name}'."
                 log.info(msg)
                 self._status_bar.showMessage(msg, 5000)
                 QtWidgets.QMessageBox.information(self, "CSV Export Successful", msg)
@@ -484,7 +443,6 @@ class ExporterTab(QtWidgets.QWidget):
             log.error(f"Unexpected error during CSV export: {e}", exc_info=True)
             self._status_bar.showMessage("Unexpected CSV Export error occurred.", 5000)
             QtWidgets.QMessageBox.critical(self, "CSV Export Error", f"An unexpected error occurred:\n{e}")
-            export_errors +=1 # Indicate failure
         finally:
             self.update_state() # Re-enable buttons etc.
 
@@ -839,17 +797,24 @@ class ExporterTab(QtWidgets.QWidget):
             return
             
         try:
-            # Write to CSV
-            self._write_results_to_csv(results_to_export, output_path)
+            # Write to CSV using the exporter
+            success = self._csv_exporter.export_analysis_results(results_to_export, Path(output_path))
             
-            # Show success message
-            QtWidgets.QMessageBox.information(
-                self, 
-                "Export Successful", 
-                f"Successfully exported {len(results_to_export)} analysis results to:\n{output_path}"
-            )
-            
-            self._status_bar.showMessage(f"Exported {len(results_to_export)} analysis results to {Path(output_path).name}", 5000)
+            if success:
+                # Show success message
+                QtWidgets.QMessageBox.information(
+                    self, 
+                    "Export Successful", 
+                    f"Successfully exported {len(results_to_export)} analysis results to:\n{output_path}"
+                )
+                
+                self._status_bar.showMessage(f"Exported {len(results_to_export)} analysis results to {Path(output_path).name}", 5000)
+            else:
+                QtWidgets.QMessageBox.critical(
+                    self, 
+                    "Export Error", 
+                    f"Failed to export analysis results to CSV. Check logs for details."
+                )
             
         except Exception as e:
             log.error(f"Error exporting analysis results to CSV: {e}", exc_info=True)
@@ -858,156 +823,3 @@ class ExporterTab(QtWidgets.QWidget):
                 "Export Error", 
                 f"Failed to export analysis results to CSV:\n{e}"
             )
-            
-    def _write_results_to_csv(self, results, output_path):
-        """Writes the list of result dictionaries to a CSV file."""
-        log.info(f"Writing {len(results)} analysis results to CSV: {output_path}")
-        
-        # Determine all possible fields across all results
-        all_fields = set()
-        
-        # First pass to identify all fields, including nested ones
-        for result in results:
-            for key, value in result.items():
-                if isinstance(value, dict):
-                    # For nested dictionaries, add flattened keys
-                    for nested_key in value.keys():
-                        flat_key = f"{key}.{nested_key}"
-                        all_fields.add(flat_key)
-                else:
-                    all_fields.add(key)
-            
-        # Sort fields in a logical order
-        # First, specify key fields that should appear first
-        priority_fields = [
-            'analysis_type', 
-            'source_file_name', 
-            'source_file_path',
-            'data_source_used', 
-            'trial_index_used', 
-            'channel_id',
-            'channel_name',
-            'timestamp_saved'
-        ]
-        
-        # Then add analysis-specific fields by type
-        rin_fields = [
-            'Input Resistance (kOhm)', 
-            'Rin (MΩ)',
-            'Input Conductance (nS)', 
-            'delta_mV', 
-            'ΔV (mV)',
-            'delta_pA', 
-            'ΔI (pA)',
-            'baseline_mean', 
-            'response_mean', 
-            'mode'
-        ]
-        
-        baseline_fields = [
-            'baseline_mean', 
-            'baseline_sd', 
-            'baseline_units', 
-            'calculation_method'
-        ]
-        
-        spike_fields = [
-            'spike_count', 
-            'average_firing_rate_hz', 
-            'threshold', 
-            'threshold_units',
-            'refractory_period_ms',
-            'spike_times',
-            'spike_amplitudes'
-        ]
-        
-        event_fields = [
-            'method', 
-            'parameters.direction',
-            'parameters.filter',
-            'parameters.prominence',
-            'parameters.sampling_rate_hz',
-            'summary_stats.count', 
-            'summary_stats.frequency_hz',
-            'summary_stats.baseline_mean',
-            'summary_stats.baseline_sd',
-            'summary_stats.threshold',
-            'summary_stats.mean_amplitude',
-            'summary_stats.amplitude_sd',
-            'summary_stats.mean_rise_time_ms',
-            'summary_stats.rise_time_sd_ms',
-            'summary_stats.mean_decay_half_time_ms',
-            'summary_stats.decay_half_time_sd_ms'
-        ]
-        
-        # Create ordered list of fields
-        ordered_fields = priority_fields.copy()
-        
-        # Add analysis-specific fields from each type
-        for field_list in [rin_fields, baseline_fields, spike_fields, event_fields]:
-            for field in field_list:
-                if field in all_fields and field not in ordered_fields:
-                    ordered_fields.append(field)
-        
-        # Add any remaining fields not already included
-        for field in sorted(all_fields):
-            if field not in ordered_fields:
-                ordered_fields.append(field)
-        
-        # Helper function to convert numpy values to Python native types
-        def convert_value(val):
-            """Convert numpy types to Python native types for CSV compatibility."""
-            if val is None:
-                return ""
-            
-            # Convert numpy arrays to lists
-            if hasattr(val, 'tolist') and callable(getattr(val, 'tolist')):
-                try:
-                    return str(val.tolist())
-                except (ValueError, AttributeError):
-                    return str(val)
-                    
-            # Convert numpy scalar types to native Python types
-            if hasattr(val, 'item') and callable(getattr(val, 'item')):
-                try:
-                    return val.item()
-                except (ValueError, AttributeError):
-                    return str(val)
-            
-            # Handle other types
-            if isinstance(val, (list, tuple)):
-                return str(val)
-            
-            return val
-                
-        # Create the CSV file
-        with open(output_path, 'w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=ordered_fields)
-            writer.writeheader()
-            
-            # Process each result to handle nested dictionaries
-            for result in results:
-                # Create a flattened copy of the result
-                flat_result = {}
-                
-                # Process each key-value pair in the result dictionary
-                for key, value in result.items():
-                    if isinstance(value, dict):
-                        # For nested dictionaries (like summary_stats or parameters)
-                        for nested_key, nested_value in value.items():
-                            flat_key = f"{key}.{nested_key}"
-                            if flat_key in ordered_fields:
-                                flat_result[flat_key] = convert_value(nested_value)
-                    else:
-                        if key in ordered_fields:
-                            flat_result[key] = convert_value(value)
-                
-                # Fill in missing fields with empty strings
-                for field in ordered_fields:
-                    if field not in flat_result:
-                        flat_result[field] = ""
-                            
-                # Write the flattened result
-                writer.writerow(flat_result)
-                
-        log.info(f"Successfully wrote analysis results to CSV: {output_path}")

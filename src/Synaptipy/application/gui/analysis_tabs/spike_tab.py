@@ -24,8 +24,8 @@ log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.spike_tab')
 class SpikeAnalysisTab(BaseAnalysisTab):
     """QWidget for Threshold-based Spike Detection."""
 
-    def __init__(self, neo_adapter: NeoAdapter, parent=None):
-        super().__init__(neo_adapter=neo_adapter, parent=parent)
+    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
+        super().__init__(neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
 
         # --- UI References specific to Spike ---
         # NOTE: channel_combobox and data_source_combobox are now inherited from BaseAnalysisTab

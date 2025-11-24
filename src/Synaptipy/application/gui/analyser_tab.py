@@ -73,11 +73,12 @@ class AnalysisSourceListWidget(QtWidgets.QListWidget):
 class AnalyserTab(QtWidgets.QWidget):
     """Main Analyser Widget containing dynamically loaded sub-tabs."""
 
-    def __init__(self, neo_adapter: NeoAdapter, parent=None):
+    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
         super().__init__(parent)
         log.debug("Initializing Main AnalyserTab (dynamic loading)")
         self.session_manager = SessionManager()
         self._neo_adapter = neo_adapter
+        self._settings = settings_ref
         self._analysis_items: List[Dict[str, Any]] = []
         self._loaded_analysis_tabs: List[BaseAnalysisTab] = []
 
@@ -86,8 +87,10 @@ class AnalyserTab(QtWidgets.QWidget):
         self.source_list_widget: Optional[QtWidgets.QListWidget] = None
         self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
         self.central_analysis_item_combo: Optional[QtWidgets.QComboBox] = None
+        self.splitter: Optional[QtWidgets.QSplitter] = None
 
         self._setup_ui()
+        self._restore_state() # Restore splitter state
         self._load_analysis_tabs()
         # Connect the signal from SessionManager
         self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
@@ -101,7 +104,7 @@ class AnalyserTab(QtWidgets.QWidget):
         main_layout.setSpacing(5)
 
         # --- Create Horizontal Splitter ---
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         
         # --- LEFT PANE: Sub-Tab Widget (Analysis Tabs) ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
@@ -113,7 +116,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.sub_tab_widget.setMovable(True)
         
         # Add to splitter
-        splitter.addWidget(self.sub_tab_widget)
+        self.splitter.addWidget(self.sub_tab_widget)
         
         # --- RIGHT PANE: Sidebar with controls ---
         sidebar_widget = QtWidgets.QWidget()
@@ -155,14 +158,14 @@ class AnalyserTab(QtWidgets.QWidget):
         sidebar_layout.addStretch()
         
         # Add sidebar to splitter
-        splitter.addWidget(sidebar_widget)
+        self.splitter.addWidget(sidebar_widget)
         
         # Set initial splitter sizes (70% left, 30% right)
-        splitter.setStretchFactor(0, 7)
-        splitter.setStretchFactor(1, 3)
+        self.splitter.setStretchFactor(0, 7)
+        self.splitter.setStretchFactor(1, 3)
         
         # Add splitter to main layout
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(self.splitter)
         
         # Connect tab change signal
         self.sub_tab_widget.currentChanged.connect(self._on_tab_changed)
@@ -212,7 +215,7 @@ class AnalyserTab(QtWidgets.QWidget):
                              log.debug(f"Found analysis tab class via ANALYSIS_TAB_CLASS: {tab_class.__name__}")
                              try:
                                  # --- UPDATED: Pass neo_adapter directly --- 
-                                 tab_instance = tab_class(neo_adapter=neo_adapter_instance, parent=self)
+                                 tab_instance = tab_class(neo_adapter=neo_adapter_instance, settings_ref=self._settings, parent=self)
                                  tab_name = tab_instance.get_display_name()
                                  self.sub_tab_widget.addTab(tab_instance, tab_name)
                                  self._loaded_analysis_tabs.append(tab_instance); log.info(f"Loaded analysis tab: '{tab_name}'"); found_tab = True
@@ -348,7 +351,29 @@ class AnalyserTab(QtWidgets.QWidget):
     # --- Cleanup ---
     def cleanup(self):
         log.debug("Cleaning up main AnalyserTab and sub-tabs.")
+        self._save_state() # Save splitter state
         for tab in self._loaded_analysis_tabs:
             try: tab.cleanup()
             except Exception as e_cleanup: log.error(f"Error during cleanup for tab '{tab.get_display_name()}': {e_cleanup}")
         self._loaded_analysis_tabs = []
+
+    # --- State Persistence ---
+    def _save_state(self):
+        """Save UI state (splitter position) to settings."""
+        if self._settings and self.splitter:
+            try:
+                self._settings.setValue("AnalyserTab/splitterState", self.splitter.saveState())
+                log.debug("Saved AnalyserTab splitter state.")
+            except Exception as e:
+                log.error(f"Failed to save AnalyserTab state: {e}")
+
+    def _restore_state(self):
+        """Restore UI state (splitter position) from settings."""
+        if self._settings and self.splitter:
+            try:
+                state = self._settings.value("AnalyserTab/splitterState")
+                if state:
+                    self.splitter.restoreState(state)
+                    log.debug("Restored AnalyserTab splitter state.")
+            except Exception as e:
+                log.error(f"Failed to restore AnalyserTab state: {e}")

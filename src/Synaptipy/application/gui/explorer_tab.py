@@ -498,8 +498,9 @@ class ExplorerTab(QtWidgets.QWidget):
         
         self.file_model = QtWidgets.QFileSystemModel()
         self.file_model.setRootPath(QtCore.QDir.rootPath())
-        # Filter for supported files
-        self.file_model.setNameFilters(["*.h5", "*.nwb", "*.abf", "*.dat"]) 
+        # Filter for supported files using NeoAdapter
+        supported_exts = self.neo_adapter.get_supported_extensions()
+        self.file_model.setNameFilters([f"*.{ext}" for ext in supported_exts])
         self.file_model.setNameFilterDisables(False)
         
         self.file_tree = QtWidgets.QTreeView()
@@ -667,8 +668,33 @@ class ExplorerTab(QtWidgets.QWidget):
         file_path = Path(self.file_model.filePath(index))
         if file_path.is_file():
             log.info(f"Tree double-click: Loading {file_path}")
-            # Use the existing load logic (single file mode for simplicity via tree)
-            self.load_recording_data(file_path, [file_path], 0)
+            
+            # --- FIX: Populate file_list for navigation ---
+            # Get the parent directory index
+            parent_index = index.parent()
+            # Get number of rows (files) in the directory
+            num_rows = self.file_model.rowCount(parent_index)
+            
+            file_list = []
+            selected_index = 0
+            
+            # Iterate through siblings to build file list
+            for i in range(num_rows):
+                child_index = self.file_model.index(i, 0, parent_index)
+                child_path = Path(self.file_model.filePath(child_index))
+                
+                # Check if it's a file and matches supported extensions (optional, but good practice)
+                # The model is already filtered, so we can trust it mostly, but is_file check is safe
+                if child_path.is_file():
+                    file_list.append(child_path)
+                    if child_path == file_path:
+                        selected_index = len(file_list) - 1
+            
+            log.info(f"Context loaded: {len(file_list)} files in directory. Selected index: {selected_index}")
+            
+            # Load with context
+            self.load_recording_data(file_path, file_list, selected_index)
+            
             # Also update settings
             QtCore.QSettings("Synaptipy", "Viewer").setValue("lastDirectory", str(file_path.parent))
 

@@ -32,9 +32,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
     MODE_INTERACTIVE = 0
     MODE_MANUAL = 1
 
-    def __init__(self, neo_adapter: NeoAdapter, parent=None): # Corrected signature
+    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None): # Corrected signature
         # Pass neo_adapter to superclass constructor
-        super().__init__(neo_adapter=neo_adapter, parent=parent)
+        super().__init__(neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
 
         # --- UI References specific to Baseline ---
         # NOTE: signal_channel_combobox and data_source_combobox are now inherited from BaseAnalysisTab
