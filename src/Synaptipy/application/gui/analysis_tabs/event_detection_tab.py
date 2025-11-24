@@ -76,12 +76,12 @@ class EventDetectionTab(BaseAnalysisTab):
 
         # --- Use a Splitter for flexible layout ---
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        splitter = self.splitter
         
-        # --- Left Side: Controls ---
+        # --- Left Side: Controls (Analysis Params, Results) ---
         left_widget = QtWidgets.QWidget()
         left_layout = QtWidgets.QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
         
         # Data Selection Group (Shared)
         shared_controls_group = QtWidgets.QGroupBox("Data Selection")
@@ -120,50 +120,44 @@ class EventDetectionTab(BaseAnalysisTab):
         # Create Parameter Groups
         self._create_parameter_groups()
         
-        # Analysis Action Button (using base class button if desired, or custom)
-        # We'll use a custom button here that calls _trigger_analysis
+        # Analysis Action Button
         self.analyze_button = QtWidgets.QPushButton("Detect Events")
         self.analyze_button.setToolTip("Run event detection with current parameters")
         analysis_controls_layout.addWidget(self.analyze_button)
         
         left_layout.addWidget(analysis_controls_group)
-        left_layout.addStretch() # Push controls up
         
-        # Add left widget to splitter
-        splitter.addWidget(left_widget)
-        
-        # --- Right Side: Results & Plot ---
-        right_widget = QtWidgets.QWidget()
-        right_layout = QtWidgets.QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Results Text Area
+        # Results Group (Moved to Left)
         results_group = QtWidgets.QGroupBox("Results")
         results_layout = QtWidgets.QVBoxLayout(results_group)
         self.mini_results_textedit = QtWidgets.QTextEdit()
         self.mini_results_textedit.setReadOnly(True)
         self.mini_results_textedit.setMaximumHeight(150)
         results_layout.addWidget(self.mini_results_textedit)
-        right_layout.addWidget(results_group)
+        left_layout.addWidget(results_group)
         
-        # Plot Area
+        # Save Button (Moved to Left)
+        self._setup_save_button(left_layout)
+        
+        left_layout.addStretch() # Push everything up
+        
+        # Add left widget to splitter
+        self.splitter.addWidget(left_widget)
+        
+        # --- Right Side: Plot Area ---
         plot_container = QtWidgets.QWidget()
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
-        right_layout.addWidget(plot_container, stretch=1)
-        
-        # Save Button
-        self._setup_save_button(right_layout)
         
         # Add right widget to splitter
-        splitter.addWidget(right_widget)
+        self.splitter.addWidget(plot_container)
         
-        # Set initial splitter sizes (30% left, 70% right)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 7)
+        # Set initial splitter sizes (33% left, 67% right)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 2)
         
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(self.splitter)
         
         # Create event markers item
         if self.plot_widget:

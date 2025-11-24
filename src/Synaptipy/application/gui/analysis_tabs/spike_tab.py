@@ -55,19 +55,23 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         return "Spike Detection (Threshold)"
 
     def _setup_ui(self):
-        """Create UI elements for Spike analysis."""
+        """Create UI elements for Spike analysis with 2-column horizontal layout."""
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
-        # --- Top Horizontal Section ---
-        top_section_layout = QtWidgets.QHBoxLayout()
-        top_section_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        # --- Create Horizontal Splitter ---
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
 
-        # --- Left: Controls Group ---
+        # --- Left Pane: Configuration & Results ---
+        left_widget = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+        left_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+
+        # 1. Configuration Group
         self.controls_group = QtWidgets.QGroupBox("Configuration")
-        # Limit width and vertical expansion
-        self.controls_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
         controls_layout = QtWidgets.QVBoxLayout(self.controls_group)
         controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
@@ -82,58 +86,63 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.threshold_edit.setValidator(QtGui.QDoubleValidator())
         self.threshold_edit.setToolTip("Signal threshold for spike/event detection.")
         self.threshold_edit.setEnabled(False)
-        # Store the label widget itself to update its text later
         self.threshold_label = QtWidgets.QLabel("Threshold (?):")
         threshold_layout.addRow(self.threshold_label, self.threshold_edit)
-        # ADDED: Refractory Period Input
-        self.refractory_edit = QtWidgets.QLineEdit("2.0") # Default 2 ms
-        self.refractory_edit.setValidator(QtGui.QDoubleValidator(0.1, 1000.0, 2)) # Min 0.1ms, Max 1s
+        
+        # Refractory Period Input
+        self.refractory_edit = QtWidgets.QLineEdit("2.0") 
+        self.refractory_edit.setValidator(QtGui.QDoubleValidator(0.1, 1000.0, 2))
         self.refractory_edit.setToolTip("Minimum time between detected spikes (refractory period in ms).")
         self.refractory_edit.setEnabled(False)
         threshold_layout.addRow("Refractory (ms):", self.refractory_edit)
-        # END ADDED
         controls_layout.addLayout(threshold_layout)
 
-        # Run Button
+        # Detect Button
         self.detect_button = QtWidgets.QPushButton("Detect Spikes")
         self.detect_button.setEnabled(False)
         self.detect_button.setToolTip("Detect spikes on the currently plotted trace using specified parameters.")
-        style_button(self.detect_button, 'primary')  # Apply consistent styling directly
+        style_button(self.detect_button, 'primary')
         controls_layout.addWidget(self.detect_button)
 
-        controls_layout.addStretch(1)
-        top_section_layout.addWidget(self.controls_group) # Add controls to left
+        left_layout.addWidget(self.controls_group)
 
-        # --- Right: Results Group ---
+        # 2. Results Group (Below Configuration)
         self.results_group = QtWidgets.QGroupBox("Results")
-        self.results_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
         results_layout = QtWidgets.QVBoxLayout(self.results_group)
+        
         self.results_textedit = QtWidgets.QTextEdit()
         self.results_textedit.setReadOnly(True)
-        self.results_textedit.setFixedHeight(150) # Make it larger for more features
+        self.results_textedit.setFixedHeight(150) 
         self.results_textedit.setPlaceholderText("Spike counts, rates, and features will appear here...")
         results_layout.addWidget(self.results_textedit)
-        self._setup_save_button(results_layout) # Add save button here
-        results_layout.addStretch(1)
-        top_section_layout.addWidget(self.results_group) # Add results to right
+        
+        self._setup_save_button(results_layout)
+        
+        left_layout.addWidget(self.results_group)
+        left_layout.addStretch() # Push content up
 
-        # Add top section to main layout
-        main_layout.addLayout(top_section_layout)
+        # Add Left Widget to Splitter
+        splitter.addWidget(left_widget)
 
-        # --- Bottom: Plot Area ---
+        # --- Right Pane: Plot Area ---
         plot_container = QtWidgets.QWidget()
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
         
-        main_layout.addWidget(plot_container, stretch=1)
-        
+        # Add Right Widget to Splitter
+        splitter.addWidget(plot_container)
+
+        # Set Splitter Sizes (1/3 Left, 2/3 Right)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+
+        main_layout.addWidget(splitter)
+
         # Create spike-specific plot items but don't add to plot yet
-        # They will be added when data is loaded to prevent Qt graphics errors
         if self.plot_widget:
             self.spike_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150))
             self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
-            # Items will be added to plot when data is loaded
 
         self.setLayout(main_layout)
 
