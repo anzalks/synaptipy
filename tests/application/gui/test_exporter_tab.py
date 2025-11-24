@@ -122,7 +122,16 @@ def test_export_to_csv(exporter_tab, qtbot, mock_main_window):
         with patch('builtins.open', create=True) as mock_open:
             # Use the correct method name
             exporter_tab._do_export_analysis_results()
-            mock_open.assert_called_once_with(csv_path, 'w', newline='')
+            # Check that open was called with the correct path
+            # The actual call may include encoding parameter which is fine
+            mock_open.assert_called_once()
+            call_args = mock_open.call_args
+            # First positional arg should be the path (as string or Path)
+            assert str(call_args[0][0]) == csv_path
+            # Should have 'w' mode
+            assert call_args[0][1] == 'w'
+            # Should have newline='' for CSV
+            assert call_args[1].get('newline') == ''
         
         # Skip checking if the file exists since we're using a mock for the file operations
 

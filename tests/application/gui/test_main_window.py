@@ -120,9 +120,6 @@ def test_background_file_loading(main_window, qtbot, mock_recording, mocker):
     mock_adapter = mocker.patch.object(main_window.data_loader, 'neo_adapter')
     mock_adapter.read_recording.return_value = mock_recording
     
-    # Mock the explorer tab's load_recording_data method
-    load_spy = mocker.patch.object(main_window.explorer_tab, 'load_recording_data')
-    
     # Set up pending state as if _load_in_explorer was called
     main_window._pending_file_list = [mock_recording.source_file]
     main_window._pending_current_index = 0
@@ -131,8 +128,9 @@ def test_background_file_loading(main_window, qtbot, mock_recording, mocker):
     with qtbot.waitSignal(main_window.data_loader.data_ready, timeout=1000):
         main_window.data_loader.data_ready.emit(mock_recording)
     
-    # Assert: Check that the explorer tab was updated
-    load_spy.assert_called_once()
+    # Assert: Check that SessionManager was updated with the recording
+    # The new implementation uses SessionManager instead of calling load_recording_data directly
+    assert main_window.session_manager.current_recording == mock_recording
     
     # Check that pending state was cleared
     assert not hasattr(main_window, '_pending_file_list')

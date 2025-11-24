@@ -64,6 +64,64 @@ python -m Synaptipy.application
 synaptipy-gui
 ```
 
+## 🔬 **Batch Analysis System**
+
+Synaptipy includes a powerful batch analysis system for processing multiple files with configurable analysis pipelines.
+
+### **Features**
+- **Registry-Based Architecture**: Analysis functions register themselves via decorators, enabling flexible pipeline configuration
+- **Multi-File Processing**: Apply the same analysis pipeline to multiple files sharing the same protocol
+- **Configurable Scopes**: Analyze average traces, all trials, or first trial only
+- **Background Processing**: Batch analysis runs in a background thread to keep the UI responsive
+- **CSV Export**: Export aggregated results to CSV for further analysis
+
+### **Available Analysis Types**
+| Analysis | Description | Key Parameters |
+|----------|-------------|----------------|
+| `spike_detection` | Detect action potentials | `threshold`, `refractory_ms` |
+| `rmp_analysis` | Resting membrane potential | `baseline_start`, `baseline_end` |
+| `rin_analysis` | Input resistance | `current_amplitude`, time windows |
+| `tau_analysis` | Membrane time constant | `stim_start_time`, `fit_duration` |
+| `mini_detection` | Miniature event detection | `threshold`, `direction` |
+
+### **Programmatic Usage**
+```python
+from pathlib import Path
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+
+engine = BatchAnalysisEngine()
+files = [Path("file1.abf"), Path("file2.abf")]
+
+pipeline = [
+    {
+        'analysis': 'spike_detection',
+        'scope': 'all_trials',
+        'params': {'threshold': -20.0, 'refractory_ms': 2.0}
+    },
+    {
+        'analysis': 'rmp_analysis',
+        'scope': 'average',
+        'params': {'baseline_start': 0.0, 'baseline_end': 0.1}
+    }
+]
+
+results_df = engine.run_batch(files, pipeline)
+results_df.to_csv("batch_results.csv", index=False)
+```
+
+### **Adding Custom Analyses**
+```python
+from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+@AnalysisRegistry.register("my_custom_analysis")
+def my_analysis(data, time, sampling_rate, **kwargs):
+    # Your analysis logic here
+    return {
+        'result_value': 42.0,
+        'other_metric': 'success'
+    }
+```
+
 ## 📦 **What's Included**
 
 ### **Core Scientific Libraries**

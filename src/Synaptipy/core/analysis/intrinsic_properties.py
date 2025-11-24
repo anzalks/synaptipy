@@ -5,9 +5,10 @@ Analysis functions for intrinsic membrane properties.
 """
 import logging
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from scipy.optimize import curve_fit
 from Synaptipy.core.results import RinResult
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
@@ -238,3 +239,117 @@ def calculate_sag_ratio(
     except Exception as e:
         log.exception(f"Unexpected error during Sag calculation: {e}")
         return None
+
+
+# --- Registry Wrappers for Batch Processing ---
+@AnalysisRegistry.register("rin_analysis")
+def run_rin_analysis_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper function for Input Resistance (Rin) analysis that conforms to the registry interface.
+    
+    Args:
+        data: 1D NumPy array of voltage data
+        time: 1D NumPy array of corresponding time points (seconds)
+        sampling_rate: Sampling rate in Hz
+        **kwargs: Additional parameters:
+            - current_amplitude: Current step amplitude in pA (required)
+            - baseline_start: Start time of baseline window (default: 0.0)
+            - baseline_end: End time of baseline window (default: 0.1)
+            - response_start: Start time of response window (default: 0.3)
+            - response_end: End time of response window (default: 0.4)
+            
+    Returns:
+        Dictionary containing results suitable for DataFrame rows.
+    """
+    try:
+        current_amplitude = kwargs.get('current_amplitude', 0.0)
+        baseline_start = kwargs.get('baseline_start', 0.0)
+        baseline_end = kwargs.get('baseline_end', 0.1)
+        response_start = kwargs.get('response_start', 0.3)
+        response_end = kwargs.get('response_end', 0.4)
+        
+        if current_amplitude == 0:
+            return {
+                'rin_mohm': None,
+                'conductance_us': None,
+                'rin_error': "Current amplitude is zero"
+            }
+        
+        result = calculate_rin(
+            data, time, current_amplitude,
+            (baseline_start, baseline_end),
+            (response_start, response_end)
+        )
+        
+        if result.is_valid and result.value is not None:
+            return {
+                'rin_mohm': result.value,
+                'conductance_us': result.conductance if result.conductance is not None else 0.0,
+                'voltage_deflection_mv': result.voltage_deflection if result.voltage_deflection is not None else 0.0,
+                'baseline_voltage_mv': result.baseline_voltage if result.baseline_voltage is not None else 0.0,
+                'steady_state_voltage_mv': result.steady_state_voltage if result.steady_state_voltage is not None else 0.0,
+            }
+        else:
+            return {
+                'rin_mohm': None,
+                'conductance_us': None,
+                'rin_error': result.error_message or "Unknown error"
+            }
+            
+    except Exception as e:
+        log.error(f"Error in run_rin_analysis_wrapper: {e}", exc_info=True)
+        return {
+            'rin_mohm': None,
+            'conductance_us': None,
+            'rin_error': str(e)
+        }
+
+
+@AnalysisRegistry.register("tau_analysis")
+def run_tau_analysis_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper function for Membrane Time Constant (Tau) analysis.
+    
+    Args:
+        data: 1D NumPy array of voltage data
+        time: 1D NumPy array of corresponding time points (seconds)
+        sampling_rate: Sampling rate in Hz
+        **kwargs: Additional parameters:
+            - stim_start_time: Time when stimulus starts (default: 0.1)
+            - fit_duration: Duration of fit window in seconds (default: 0.05)
+            
+    Returns:
+        Dictionary containing results suitable for DataFrame rows.
+    """
+    try:
+        stim_start_time = kwargs.get('stim_start_time', 0.1)
+        fit_duration = kwargs.get('fit_duration', 0.05)
+        
+        tau_ms = calculate_tau(data, time, stim_start_time, fit_duration)
+        
+        if tau_ms is not None:
+            return {
+                'tau_ms': tau_ms,
+            }
+        else:
+            return {
+                'tau_ms': None,
+                'tau_error': "Tau calculation failed"
+            }
+            
+    except Exception as e:
+        log.error(f"Error in run_tau_analysis_wrapper: {e}", exc_info=True)
+        return {
+            'tau_ms': None,
+            'tau_error': str(e)
+        }

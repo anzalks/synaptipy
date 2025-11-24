@@ -1,18 +1,25 @@
 """
 Batch Analysis Engine for Synaptipy.
 Handles processing multiple files and aggregating results using a flexible registry-based pipeline.
+
+The engine uses a registry-based architecture where analysis functions register
+themselves via decorators, and the pipeline configuration defines what analyses
+to run on which data scopes.
+
+Author: Anzal KS <anzal.ks@gmail.com>
 """
 import logging
 import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Union
 import numpy as np
+from datetime import datetime
 
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
-# Import analysis modules to trigger registration
-import Synaptipy.core.analysis.spike_analysis  # noqa: F401 - Import triggers registration
+# Import analysis package to trigger all registrations
+import Synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
 
 log = logging.getLogger(__name__)
 
@@ -24,15 +31,76 @@ class BatchAnalysisEngine:
     The engine uses a registry-based architecture where analysis functions register
     themselves via decorators, and the pipeline configuration defines what analyses
     to run on which data scopes.
+    
+    Example Usage:
+        engine = BatchAnalysisEngine()
+        files = [Path("file1.abf"), Path("file2.abf")]
+        pipeline = [
+            {
+                'analysis': 'spike_detection',
+                'scope': 'all_trials',
+                'params': {'threshold': -15.0, 'refractory_ms': 2.0}
+            },
+            {
+                'analysis': 'rmp_analysis',
+                'scope': 'average',
+                'params': {'baseline_start': 0.0, 'baseline_end': 0.1}
+            }
+        ]
+        results_df = engine.run_batch(files, pipeline)
     """
     
-    def __init__(self):
-        self.neo_adapter = NeoAdapter()
+    def __init__(self, neo_adapter: Optional[NeoAdapter] = None):
+        """
+        Initialize the batch analysis engine.
+        
+        Args:
+            neo_adapter: Optional NeoAdapter instance. If None, creates a new one.
+        """
+        self.neo_adapter = neo_adapter if neo_adapter else NeoAdapter()
+        self._cancelled = False
+    
+    def cancel(self):
+        """Request cancellation of the current batch run."""
+        self._cancelled = True
+        log.info("Batch analysis cancellation requested.")
+    
+    @staticmethod
+    def list_available_analyses() -> List[str]:
+        """
+        Get a list of all registered analysis function names.
+        
+        Returns:
+            List of available analysis names.
+        """
+        return AnalysisRegistry.list_registered()
+    
+    @staticmethod
+    def get_analysis_info(name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get information about a registered analysis function.
+        
+        Args:
+            name: The registered name of the analysis function.
+            
+        Returns:
+            Dictionary with function info (docstring, etc.) or None if not found.
+        """
+        func = AnalysisRegistry.get_function(name)
+        if func is None:
+            return None
+        
+        return {
+            'name': name,
+            'docstring': func.__doc__ or "No documentation available.",
+            'module': func.__module__,
+        }
         
     def run_batch(self, 
                   files: List[Path], 
                   pipeline_config: List[Dict[str, Any]],
-                  progress_callback: Optional[Callable[[int, int, str], None]] = None) -> pd.DataFrame:
+                  progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                  channel_filter: Optional[List[str]] = None) -> pd.DataFrame:
         """
         Run analysis on a list of files using a flexible pipeline configuration.
         
@@ -45,6 +113,7 @@ class BatchAnalysisEngine:
                     'params': dict    # Parameters to pass to the analysis function
                 }
             progress_callback: Optional callback (current, total, status_msg).
+            channel_filter: Optional list of channel names/IDs to process. If None, all channels are processed.
             
         Returns:
             pandas DataFrame containing aggregated results with metadata.
@@ -57,12 +126,13 @@ class BatchAnalysisEngine:
                     'params': {'threshold': -15.0, 'refractory_ms': 2.0}
                 },
                 {
-                    'analysis': 'spike_detection',
+                    'analysis': 'rmp_analysis',
                     'scope': 'average',
-                    'params': {'threshold': -10.0, 'refractory_ms': 2.0}
+                    'params': {'baseline_start': 0.0, 'baseline_end': 0.1}
                 }
             ]
         """
+        self._cancelled = False
         results_list = []
         total_files = len(files)
         
@@ -71,7 +141,17 @@ class BatchAnalysisEngine:
             log.warning("Empty pipeline_config provided. No analyses will be run.")
             return pd.DataFrame()
         
+        # Add batch metadata
+        batch_start_time = datetime.now()
+        
         for i, file_path in enumerate(files):
+            # Check for cancellation
+            if self._cancelled:
+                log.info("Batch analysis cancelled by user.")
+                if progress_callback:
+                    progress_callback(i, total_files, "Cancelled")
+                break
+                
             if progress_callback:
                 progress_callback(i, total_files, f"Processing {file_path.name}...")
                 
@@ -80,12 +160,32 @@ class BatchAnalysisEngine:
                 recording = self.neo_adapter.read_recording(file_path)
                 if not recording:
                     log.warning(f"Failed to load {file_path}")
+                    results_list.append({
+                        'file_name': file_path.name,
+                        'file_path': str(file_path),
+                        'error': "Failed to load recording"
+                    })
                     continue
                 
+                # Filter channels if specified
+                channels_to_process = recording.channels.items()
+                if channel_filter:
+                    channels_to_process = [
+                        (name, ch) for name, ch in recording.channels.items()
+                        if name in channel_filter or str(name) in channel_filter
+                    ]
+                
                 # Iterate through channels
-                for channel_name, channel in recording.channels.items():
+                for channel_name, channel in channels_to_process:
+                    # Check for cancellation
+                    if self._cancelled:
+                        break
+                        
                     # Process each task in the pipeline
                     for task in pipeline_config:
+                        if self._cancelled:
+                            break
+                            
                         try:
                             task_results = self._process_task(
                                 task=task,
@@ -112,13 +212,22 @@ class BatchAnalysisEngine:
                 # Add error row
                 results_list.append({
                     'file_name': file_path.name,
+                    'file_path': str(file_path),
                     'error': str(e)
                 })
         
         if progress_callback:
-            progress_callback(total_files, total_files, "Batch analysis complete.")
+            if self._cancelled:
+                progress_callback(i, total_files, "Batch analysis cancelled.")
+            else:
+                progress_callback(total_files, total_files, "Batch analysis complete.")
+        
+        # Create DataFrame and add batch metadata
+        df = pd.DataFrame(results_list)
+        if not df.empty:
+            df['batch_timestamp'] = batch_start_time.isoformat()
             
-        return pd.DataFrame(results_list)
+        return df
     
     def _process_task(self, 
                      task: Dict[str, Any],

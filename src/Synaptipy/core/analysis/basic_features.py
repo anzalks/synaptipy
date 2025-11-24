@@ -4,9 +4,10 @@
 Analysis functions for basic electrophysiological features from single traces.
 """
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 import numpy as np
 from Synaptipy.core.results import RmpResult
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger('Synaptipy.core.analysis.basic_features')
 
@@ -108,6 +109,75 @@ def calculate_baseline_stats(
     if result.is_valid and result.value is not None:
         return (result.value, result.std_dev if result.std_dev is not None else 0.0)
     return None
+
+# --- Registry Wrapper for Batch Processing ---
+@AnalysisRegistry.register("rmp_analysis")
+def run_rmp_analysis_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper function for RMP analysis that conforms to the registry interface.
+    
+    This function is registered with the AnalysisRegistry and can be called
+    dynamically by the batch engine.
+    
+    Args:
+        data: 1D NumPy array of voltage data
+        time: 1D NumPy array of corresponding time points (seconds)
+        sampling_rate: Sampling rate in Hz
+        **kwargs: Additional parameters:
+            - baseline_start: Start time of baseline window (default: 0.0)
+            - baseline_end: End time of baseline window (default: 0.1)
+            
+    Returns:
+        Dictionary containing results suitable for DataFrame rows:
+        {
+            'rmp_mv': float,
+            'rmp_std': float,
+            'rmp_drift': float (optional),
+            'rmp_error': str (if error occurred)
+        }
+    """
+    try:
+        # Extract parameters from kwargs
+        baseline_start = kwargs.get('baseline_start', 0.0)
+        baseline_end = kwargs.get('baseline_end', 0.1)
+        
+        # Validate window is within data range
+        if len(time) > 0:
+            if baseline_end > time[-1]:
+                baseline_end = time[-1]
+            if baseline_start < time[0]:
+                baseline_start = time[0]
+        
+        # Call the actual RMP calculation function
+        result = calculate_rmp(data, time, (baseline_start, baseline_end))
+        
+        if result.is_valid and result.value is not None:
+            return {
+                'rmp_mv': result.value,
+                'rmp_std': result.std_dev if result.std_dev is not None else 0.0,
+                'rmp_drift': result.drift if result.drift is not None else 0.0,
+                'rmp_duration': result.duration if result.duration is not None else 0.0,
+            }
+        else:
+            return {
+                'rmp_mv': None,
+                'rmp_std': None,
+                'rmp_error': result.error_message or "Unknown error"
+            }
+            
+    except Exception as e:
+        log.error(f"Error in run_rmp_analysis_wrapper: {e}", exc_info=True)
+        return {
+            'rmp_mv': None,
+            'rmp_std': None,
+            'rmp_error': str(e)
+        }
+
 
 # --- Add other basic features here later ---
 # def calculate_input_resistance(voltage_trace, current_step, time, baseline_window, step_window): ...

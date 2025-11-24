@@ -171,10 +171,10 @@ class NWBExporter:
                 electrode_name = f"electrode_{chan_id}" # Use a consistent, unique name
 
                 # --- Check for existing electrode by name (optional but safer) ---
-                # Access existing electrodes via nwbfile.ic_electrodes if added (check first)
+                # Access existing electrodes via nwbfile.icephys_electrodes (pynwb >= 2.0)
                 ic_electrode: Optional[IntracellularElectrode] = None
-                if electrode_name in nwbfile.ic_electrodes: # Check if the attribute exists and name is in it
-                    ic_electrode = nwbfile.ic_electrodes[electrode_name]
+                if electrode_name in nwbfile.icephys_electrodes:
+                    ic_electrode = nwbfile.icephys_electrodes[electrode_name]
                     log.warning(f"Intracellular electrode '{electrode_name}' already exists. Reusing.")
 
                 # If not found, create it
@@ -197,8 +197,8 @@ class NWBExporter:
                             resistance=ic_resistance, # Expects float in Ohms or None
                             seal=ic_seal            # Expects float in Ohms or None
                         )
-                        # Add the created electrode to the NWB file
-                        nwbfile.add_ic_electrode(ic_electrode)
+                        # Add the created electrode to the NWB file (pynwb >= 2.0)
+                        nwbfile.add_icephys_electrode(ic_electrode)
                         log.debug(f"Created and added IntracellularElectrode: {electrode_name}")
                     except Exception as e_elec:
                          log.error(f"Failed to create or add IntracellularElectrode '{electrode_name}': {e_elec}", exc_info=True)
@@ -223,8 +223,17 @@ class NWBExporter:
 
                     # Assume data is already in physical units from neo/adapter
                     ts_gain = 1.0
-                    ts_offset = getattr(channel, 'electrode_offset', np.nan)
-                    ts_offset = 0.0 if np.isnan(ts_offset) else float(ts_offset) # Use 0.0 if NaN
+                    ts_offset_raw = getattr(channel, 'electrode_offset', None)
+                    # Handle various offset types safely
+                    if ts_offset_raw is None:
+                        ts_offset = 0.0
+                    elif isinstance(ts_offset_raw, (int, float)):
+                        ts_offset = 0.0 if np.isnan(ts_offset_raw) else float(ts_offset_raw)
+                    else:
+                        try:
+                            ts_offset = float(ts_offset_raw)
+                        except (ValueError, TypeError):
+                            ts_offset = 0.0
 
                     try:
                         time_series = PatchClampSeries(
