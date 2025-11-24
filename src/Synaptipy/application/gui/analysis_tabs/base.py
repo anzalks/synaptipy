@@ -95,45 +95,55 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     # --- ADDED: Method to set global controls ---
     def set_global_controls(self, source_list_widget: QtWidgets.QListWidget, item_combo: QtWidgets.QComboBox):
         """
-        Receives global control widgets from AnalyserTab and places them in the
-        tab-specific layout. Subclasses must ensure they have a placeholder layout
-        or define how to handle this.
+        Receives global control widgets from AnalyserTab and places them at the top
+        of the tab's left panel. Subclasses must have 'global_controls_layout' attribute.
         """
-        # Default implementation assumes subclass has 'global_controls_layout'
-        if hasattr(self, 'global_controls_layout') and isinstance(self.global_controls_layout, QtWidgets.QLayout):
-            # Remove from previous parent layout if necessary (Qt handles reparenting automatically on addWidget)
-            
-            # Add Source List Group
-            # We need to wrap them in GroupBoxes to match previous look
-            # Since we are passed raw widgets, we might need to manage containers.
-            # AnalyserTab creates them raw.
-            
-            # Check if we already have containers for them? 
-            # If we add them directly, they might look bare.
-            # Let's create GroupBoxes if they don't exist in the layout.
-            
-            # Actually, simpler: AnalyserTab passed the raw widgets.
-            # We should check if they are already in our layout.
-            if self.global_controls_layout.indexOf(source_list_widget) == -1:
-                # Wrap list widget
-                group = QtWidgets.QGroupBox("Analysis Input Set")
-                layout = QtWidgets.QVBoxLayout(group)
-                layout.setContentsMargins(5,5,5,5)
-                layout.addWidget(source_list_widget)
-                self.global_controls_layout.addWidget(group)
-                # Store reference to keep alive? No, layout ownership.
-                
-            if self.global_controls_layout.indexOf(item_combo) == -1:
-                # Wrap combo
-                group = QtWidgets.QGroupBox("Analyze Item")
-                layout = QtWidgets.QVBoxLayout(group)
-                layout.setContentsMargins(5,5,5,5)
-                layout.addWidget(item_combo)
-                self.global_controls_layout.addWidget(group)
-                
-            log.debug(f"{self.__class__.__name__}: Global controls set.")
-        else:
+        if not hasattr(self, 'global_controls_layout') or self.global_controls_layout is None:
             log.warning(f"{self.__class__.__name__}: 'global_controls_layout' not found. Global controls not added.")
+            return
+            
+        layout = self.global_controls_layout
+        
+        # Check if widgets are already in this layout (avoid duplicates when switching tabs)
+        # We need to check if the widgets' parent is already part of our layout
+        source_parent = source_list_widget.parent()
+        combo_parent = item_combo.parent()
+        
+        # If widgets already have a parent that's in our layout, they're already set up
+        # We just need to make sure they're visible
+        if source_parent and combo_parent:
+            # Check if they're already in our layout structure
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                if item and item.widget():
+                    if item.widget() == source_parent or item.widget() == combo_parent:
+                        # Already in our layout, just ensure visible
+                        source_list_widget.setVisible(True)
+                        item_combo.setVisible(True)
+                        log.debug(f"{self.__class__.__name__}: Global controls already present, ensuring visible.")
+                        return
+        
+        # Need to reparent widgets - first remove from current parent's layout
+        # Qt handles this automatically when we add to new layout
+        
+        # Create container groups for the widgets if they don't have one
+        # First, wrap source list
+        source_group = QtWidgets.QGroupBox("Analysis Input Set")
+        source_layout_inner = QtWidgets.QVBoxLayout(source_group)
+        source_layout_inner.setContentsMargins(5, 5, 5, 5)
+        source_layout_inner.addWidget(source_list_widget)
+        
+        # Wrap combo
+        combo_group = QtWidgets.QGroupBox("Analyze Item")
+        combo_layout_inner = QtWidgets.QVBoxLayout(combo_group)
+        combo_layout_inner.setContentsMargins(5, 5, 5, 5)
+        combo_layout_inner.addWidget(item_combo)
+        
+        # Insert at the beginning of the layout (index 0)
+        layout.insertWidget(0, source_group)
+        layout.insertWidget(1, combo_group)
+        
+        log.debug(f"{self.__class__.__name__}: Global controls injected at top of left panel.")
 
     # --- END ADDED ---
 

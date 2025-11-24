@@ -70,6 +70,9 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         left_layout.setSpacing(10)
         left_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
+        # Store reference for global controls injection
+        self.global_controls_layout = left_layout
+
         # 1. Configuration Group
         self.controls_group = QtWidgets.QGroupBox("Configuration")
         controls_layout = QtWidgets.QVBoxLayout(self.controls_group)

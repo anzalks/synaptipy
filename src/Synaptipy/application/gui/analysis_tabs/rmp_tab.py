@@ -88,6 +88,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         left_layout.setSpacing(10)
         left_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
+        # Store reference for global controls injection
+        self.global_controls_layout = left_layout
+
         # 1. Data Selection Group
         data_selection_group = QtWidgets.QGroupBox("Data Selection")
         data_selection_layout = QtWidgets.QFormLayout(data_selection_group)
