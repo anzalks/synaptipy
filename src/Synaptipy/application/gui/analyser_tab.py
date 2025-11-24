@@ -175,6 +175,9 @@ class AnalyserTab(QtWidgets.QWidget):
     def _load_analysis_tabs(self):
         # ... (Dynamic loading logic remains exactly the same as the previous correct version) ...
         log.info("Loading analysis sub-tabs...")
+        # Block signals during tab loading to prevent premature currentChanged signals
+        # before central_analysis_item_combo is populated
+        self.sub_tab_widget.blockSignals(True)
         self._loaded_analysis_tabs = []
         analysis_pkg_path = ["Synaptipy", "application", "gui", "analysis_tabs"]
         analysis_module_prefix = ".".join(analysis_pkg_path) + "."
@@ -184,6 +187,7 @@ class AnalyserTab(QtWidgets.QWidget):
              log.error("Cannot load analysis tabs: NeoAdapter not available from ExplorerTab.")
              # Show error in tab area
              placeholder = QtWidgets.QLabel("Error: Core NeoAdapter missing."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Error")
+             self.sub_tab_widget.blockSignals(False)  # Re-enable signals before returning
              return 
         # --- END Get NeoAdapter --- 
         try:
@@ -220,6 +224,9 @@ class AnalyserTab(QtWidgets.QWidget):
                      except Exception as e_load: log.error(f"Failed load/process module '{module_name}': {e_load}", exc_info=True)
         except ModuleNotFoundError: log.error(f"Could not find analysis pkg path: {'.'.join(analysis_pkg_path)}")
         except Exception as e_pkg: log.error(f"Failed discovery analysis tabs: {e_pkg}", exc_info=True)
+        finally:
+            # Re-enable signals after all tabs are loaded
+            self.sub_tab_widget.blockSignals(False)
         if not self._loaded_analysis_tabs:
              log.warning("No analysis sub-tabs loaded."); placeholder = QtWidgets.QLabel("No analysis modules found."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Info")
 
@@ -308,14 +315,23 @@ class AnalyserTab(QtWidgets.QWidget):
         
         current_tab = self.sub_tab_widget.widget(tab_index)
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
-            # Get current selection from central combo
-            selected_index = self.central_analysis_item_combo.currentIndex()
-            if selected_index >= 0:
-                try:
-                    current_tab._on_analysis_item_selected(selected_index)
-                    log.debug(f"Updated {current_tab.get_display_name()} with selection index {selected_index}")
-                except Exception as e:
-                    log.error(f"Error updating tab on switch: {e}", exc_info=True)
+            # Only forward selection if combo box is enabled (has valid items) and has items
+            # This prevents forwarding invalid indices during initialization before
+            # update_analysis_sources() populates the combo box
+            if (self.central_analysis_item_combo.isEnabled() and 
+                self.central_analysis_item_combo.count() > 0 and
+                len(self._analysis_items) > 0):
+                selected_index = self.central_analysis_item_combo.currentIndex()
+                if selected_index >= 0 and selected_index < len(self._analysis_items):
+                    try:
+                        current_tab._on_analysis_item_selected(selected_index)
+                        log.debug(f"Updated {current_tab.get_display_name()} with selection index {selected_index}")
+                    except Exception as e:
+                        log.error(f"Error updating tab on switch: {e}", exc_info=True)
+                else:
+                    log.debug(f"Skipping tab update: invalid combo index {selected_index} (items count: {len(self._analysis_items)})")
+            else:
+                log.debug(f"Skipping tab update: combo box not ready (enabled={self.central_analysis_item_combo.isEnabled()}, count={self.central_analysis_item_combo.count()}, items={len(self._analysis_items)})")
 
     # --- Update State Method ---
     def update_state(self, _=None): # Can ignore argument if called directly or by simple signals

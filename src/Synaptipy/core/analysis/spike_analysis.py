@@ -7,6 +7,7 @@ import logging
 from typing import Tuple, List, Dict, Any
 import numpy as np
 from Synaptipy.core.results import SpikeTrainResult
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger('Synaptipy.core.analysis.spike_analysis')
 
@@ -231,3 +232,68 @@ def analyze_multi_sweep_spikes(
             results.append(error_result)
             
     return results
+
+
+# --- Registry Wrapper for Batch Processing ---
+@AnalysisRegistry.register("spike_detection")
+def run_spike_detection_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper function for spike detection that conforms to the registry interface.
+    
+    This function is registered with the AnalysisRegistry and can be called
+    dynamically by the batch engine.
+    
+    Args:
+        data: 1D NumPy array of voltage data
+        time: 1D NumPy array of corresponding time points (seconds)
+        sampling_rate: Sampling rate in Hz
+        **kwargs: Additional parameters:
+            - threshold: Voltage threshold for detection (default: 0.0)
+            - refractory_ms: Refractory period in milliseconds (default: 2.0)
+            
+    Returns:
+        Dictionary containing results suitable for DataFrame rows:
+        {
+            'spike_count': int,
+            'mean_freq_hz': float,
+            'spike_times': np.ndarray (optional, may be excluded for DataFrame),
+            'spike_error': str (if error occurred)
+        }
+    """
+    try:
+        # Extract parameters from kwargs
+        threshold = kwargs.get('threshold', 0.0)
+        refractory_ms = kwargs.get('refractory_ms', 2.0)
+        
+        # Convert refractory period from ms to samples
+        refractory_samples = int((refractory_ms / 1000.0) * sampling_rate)
+        
+        # Call the actual detection function
+        result = detect_spikes_threshold(data, time, threshold, refractory_samples)
+        
+        if result.is_valid:
+            return {
+                'spike_count': len(result.spike_indices) if result.spike_indices is not None else 0,
+                'mean_freq_hz': result.mean_frequency if result.mean_frequency is not None else 0.0,
+                # Note: spike_times and spike_indices are arrays, may not be suitable for DataFrame
+                # Include them only if needed, or convert to string representation
+            }
+        else:
+            return {
+                'spike_count': 0,
+                'mean_freq_hz': 0.0,
+                'spike_error': result.error_message or "Unknown error"
+            }
+            
+    except Exception as e:
+        log.error(f"Error in run_spike_detection_wrapper: {e}", exc_info=True)
+        return {
+            'spike_count': 0,
+            'mean_freq_hz': 0.0,
+            'spike_error': str(e)
+        }

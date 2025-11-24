@@ -1,6 +1,6 @@
 """
 Batch Analysis Engine for Synaptipy.
-Handles processing multiple files and aggregating results.
+Handles processing multiple files and aggregating results using a flexible registry-based pipeline.
 """
 import logging
 import pandas as pd
@@ -9,14 +9,21 @@ from typing import List, Dict, Any, Optional, Callable
 import numpy as np
 
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.core.analysis import spike_analysis, intrinsic_properties as ip
-from Synaptipy.core.results import AnalysisResult, SpikeTrainResult, RinResult
+from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+# Import analysis modules to trigger registration
+import Synaptipy.core.analysis.spike_analysis  # noqa: F401 - Import triggers registration
 
 log = logging.getLogger(__name__)
 
+
 class BatchAnalysisEngine:
     """
-    Engine for running analysis across multiple files/recordings.
+    Engine for running analysis across multiple files/recordings using a flexible pipeline.
+    
+    The engine uses a registry-based architecture where analysis functions register
+    themselves via decorators, and the pipeline configuration defines what analyses
+    to run on which data scopes.
     """
     
     def __init__(self):
@@ -24,26 +31,45 @@ class BatchAnalysisEngine:
         
     def run_batch(self, 
                   files: List[Path], 
-                  analysis_config: Dict[str, Any],
+                  pipeline_config: List[Dict[str, Any]],
                   progress_callback: Optional[Callable[[int, int, str], None]] = None) -> pd.DataFrame:
         """
-        Run analysis on a list of files.
+        Run analysis on a list of files using a flexible pipeline configuration.
         
         Args:
             files: List of file paths to process.
-            analysis_config: Dictionary defining what analysis to run and parameters.
-                             Example:
-                             {
-                                 'spike_detection': {'enabled': True, 'threshold': -20, 'refractory_ms': 2},
-                                 'rin': {'enabled': False}
-                             }
+            pipeline_config: List of task dictionaries, each defining:
+                {
+                    'analysis': str,  # Name of registered analysis function (e.g., 'spike_detection')
+                    'scope': str,     # 'average', 'all_trials', or 'first_trial'
+                    'params': dict    # Parameters to pass to the analysis function
+                }
             progress_callback: Optional callback (current, total, status_msg).
             
         Returns:
-            pandas DataFrame containing aggregated results.
+            pandas DataFrame containing aggregated results with metadata.
+            
+        Example:
+            pipeline_config = [
+                {
+                    'analysis': 'spike_detection',
+                    'scope': 'all_trials',
+                    'params': {'threshold': -15.0, 'refractory_ms': 2.0}
+                },
+                {
+                    'analysis': 'spike_detection',
+                    'scope': 'average',
+                    'params': {'threshold': -10.0, 'refractory_ms': 2.0}
+                }
+            ]
         """
         results_list = []
         total_files = len(files)
+        
+        # Validate pipeline config
+        if not pipeline_config:
+            log.warning("Empty pipeline_config provided. No analyses will be run.")
+            return pd.DataFrame()
         
         for i, file_path in enumerate(files):
             if progress_callback:
@@ -56,28 +82,30 @@ class BatchAnalysisEngine:
                     log.warning(f"Failed to load {file_path}")
                     continue
                 
-                # Iterate through channels (or specific ones if config says so)
-                # For now, process all analog signals
+                # Iterate through channels
                 for channel_name, channel in recording.channels.items():
-                    # Base result row
-                    row = {
-                        'file_name': file_path.name,
-                        'file_path': str(file_path),
-                        'channel': channel_name,
-                        'sampling_rate': channel.sampling_rate
-                    }
-                    
-                    # --- Spike Detection ---
-                    spike_cfg = analysis_config.get('spike_detection', {})
-                    if spike_cfg.get('enabled', False):
-                        self._run_spike_detection(channel, spike_cfg, row)
-                        
-                    # --- Rin / Intrinsic Properties ---
-                    rin_cfg = analysis_config.get('rin', {})
-                    if rin_cfg.get('enabled', False):
-                        self._run_rin_analysis(channel, rin_cfg, row)
-                    
-                    results_list.append(row)
+                    # Process each task in the pipeline
+                    for task in pipeline_config:
+                        try:
+                            task_results = self._process_task(
+                                task=task,
+                                channel=channel,
+                                channel_name=channel_name,
+                                file_path=file_path
+                            )
+                            # Extend results list with all results from this task
+                            results_list.extend(task_results)
+                        except Exception as e:
+                            log.error(f"Error processing task {task.get('analysis', 'unknown')} on {file_path.name}/{channel_name}: {e}", exc_info=True)
+                            # Add error row
+                            results_list.append({
+                                'file_name': file_path.name,
+                                'file_path': str(file_path),
+                                'channel': channel_name,
+                                'analysis': task.get('analysis', 'unknown'),
+                                'scope': task.get('scope', 'unknown'),
+                                'error': str(e)
+                            })
                     
             except Exception as e:
                 log.error(f"Error processing batch file {file_path}: {e}", exc_info=True)
@@ -91,40 +119,183 @@ class BatchAnalysisEngine:
             progress_callback(total_files, total_files, "Batch analysis complete.")
             
         return pd.DataFrame(results_list)
-
-    def _run_spike_detection(self, channel, config: Dict, row: Dict):
-        """Helper to run spike detection and update result row."""
-        try:
-            # Concatenate all trials for simple continuous analysis or handle per-trial?
-            # For batch, usually we want per-sweep or average. Let's do per-sweep stats?
-            # Or just treat first trial for simplicity in this prototype.
-            if not channel.data_trials:
-                return
-
-            # Use first trial for now (TODO: Multi-sweep support)
-            data = channel.data_trials[0]
-            time = channel.get_time_vector(0)
-            fs = channel.sampling_rate
+    
+    def _process_task(self, 
+                     task: Dict[str, Any],
+                     channel,
+                     channel_name: str,
+                     file_path: Path) -> List[Dict[str, Any]]:
+        """
+        Process a single analysis task on a channel.
+        
+        Args:
+            task: Task configuration dict with 'analysis', 'scope', and 'params'
+            channel: Channel object to analyze
+            channel_name: Name/ID of the channel
+            file_path: Path to the source file
             
-            threshold = config.get('threshold', 0.0)
-            refractory_ms = config.get('refractory_ms', 2.0)
-            refractory_samples = int((refractory_ms / 1000.0) * fs)
+        Returns:
+            List of result dictionaries (one per trial if scope is 'all_trials')
+        """
+        analysis_name = task.get('analysis')
+        scope = task.get('scope', 'first_trial')
+        params = task.get('params', {})
+        
+        # Get the registered analysis function
+        analysis_func = AnalysisRegistry.get_function(analysis_name)
+        if analysis_func is None:
+            log.error(f"Analysis function '{analysis_name}' not found in registry")
+            return [{
+                'file_name': file_path.name,
+                'file_path': str(file_path),
+                'channel': channel_name,
+                'analysis': analysis_name,
+                'scope': scope,
+                'error': f"Analysis function '{analysis_name}' not registered"
+            }]
+        
+        results = []
+        sampling_rate = channel.sampling_rate
+        
+        # Determine data scope and extract data
+        if scope == 'average':
+            # Analyze the averaged trace
+            data = channel.get_averaged_data()
+            time = channel.get_relative_averaged_time_vector()
             
-            result = spike_analysis.detect_spikes_threshold(data, time, threshold, refractory_samples)
+            if data is None or time is None:
+                log.warning(f"No averaged data available for {channel_name} in {file_path.name}")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': "No averaged data available"
+                }]
             
-            if result.is_valid:
-                row['spike_count'] = len(result.spike_indices)
-                row['mean_freq_hz'] = result.mean_frequency
-                # Add more features if needed
-            else:
-                row['spike_error'] = result.error_message
+            # Run analysis
+            try:
+                result_dict = analysis_func(data, time, sampling_rate, **params)
+                # Add metadata
+                result_dict.update({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'trial_index': None,  # Average has no trial index
+                    'sampling_rate': sampling_rate
+                })
+                results.append(result_dict)
+            except Exception as e:
+                log.error(f"Error running {analysis_name} on average trace: {e}", exc_info=True)
+                results.append({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': str(e)
+                })
                 
-        except Exception as e:
-            log.error(f"Batch spike detection error: {e}")
-            row['spike_error'] = str(e)
-
-    def _run_rin_analysis(self, channel, config: Dict, row: Dict):
-        """Helper to run Rin analysis."""
-        # Requires knowing windows, which is hard in batch without metadata.
-        # This is a placeholder for now.
-        pass
+        elif scope == 'all_trials':
+            # Analyze each trial separately
+            num_trials = channel.num_trials
+            if num_trials == 0:
+                log.warning(f"No trials available for {channel_name} in {file_path.name}")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': "No trials available"
+                }]
+            
+            for trial_idx in range(num_trials):
+                data = channel.get_data(trial_idx)
+                time = channel.get_relative_time_vector(trial_idx)
+                
+                if data is None or time is None:
+                    log.warning(f"No data available for trial {trial_idx} of {channel_name} in {file_path.name}")
+                    continue
+                
+                # Run analysis
+                try:
+                    result_dict = analysis_func(data, time, sampling_rate, **params)
+                    # Add metadata
+                    result_dict.update({
+                        'file_name': file_path.name,
+                        'file_path': str(file_path),
+                        'channel': channel_name,
+                        'analysis': analysis_name,
+                        'scope': scope,
+                        'trial_index': trial_idx,
+                        'sampling_rate': sampling_rate
+                    })
+                    results.append(result_dict)
+                except Exception as e:
+                    log.error(f"Error running {analysis_name} on trial {trial_idx}: {e}", exc_info=True)
+                    results.append({
+                        'file_name': file_path.name,
+                        'file_path': str(file_path),
+                        'channel': channel_name,
+                        'analysis': analysis_name,
+                        'scope': scope,
+                        'trial_index': trial_idx,
+                        'error': str(e)
+                    })
+                    
+        elif scope == 'first_trial':
+            # Analyze only the first trial
+            data = channel.get_data(0)
+            time = channel.get_relative_time_vector(0)
+            
+            if data is None or time is None:
+                log.warning(f"No data available for first trial of {channel_name} in {file_path.name}")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': "No data available for first trial"
+                }]
+            
+            # Run analysis
+            try:
+                result_dict = analysis_func(data, time, sampling_rate, **params)
+                # Add metadata
+                result_dict.update({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'trial_index': 0,
+                    'sampling_rate': sampling_rate
+                })
+                results.append(result_dict)
+            except Exception as e:
+                log.error(f"Error running {analysis_name} on first trial: {e}", exc_info=True)
+                results.append({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': str(e)
+                })
+        else:
+            log.warning(f"Unknown scope '{scope}' for analysis '{analysis_name}'. Skipping.")
+            results.append({
+                'file_name': file_path.name,
+                'file_path': str(file_path),
+                'channel': channel_name,
+                'analysis': analysis_name,
+                'scope': scope,
+                'error': f"Unknown scope: {scope}"
+            })
+        
+        return results
