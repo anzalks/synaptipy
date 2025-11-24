@@ -111,59 +111,41 @@ class RinAnalysisTab(BaseAnalysisTab):
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
-        # Create a scroll area for the controls to handle overflow
+        # Create a Splitter
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+
+        # --- Left Side: Controls & Results ---
+        left_widget = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+
+        # Create a scroll area for the controls
         controls_scroll_area = QtWidgets.QScrollArea()
         controls_scroll_area.setWidgetResizable(True)
         controls_scroll_area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         controls_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         controls_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         
-        # Create a widget to hold the controls
         controls_container = QtWidgets.QWidget()
         controls_scroll_area.setWidget(controls_container)
-        
-        # --- Top: Controls Area ---
-        top_controls_layout = QtWidgets.QHBoxLayout(controls_container)
-        top_controls_layout.setContentsMargins(5, 5, 5, 5)
-        top_controls_layout.setSpacing(10)
+        controls_layout = QtWidgets.QVBoxLayout(controls_container)
+        controls_layout.setContentsMargins(5, 5, 5, 5)
+        controls_layout.setSpacing(10)
 
-        # --- Column 1: Data Selection --- 
+        # 1. Data Selection Group
         self.data_selection_group = QtWidgets.QGroupBox("Data Selection")
-        self.data_selection_group.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Maximum
-        )
         data_selection_layout = QtWidgets.QFormLayout(self.data_selection_group)
-        data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        data_selection_layout.setContentsMargins(10, 10, 10, 10)
-        data_selection_layout.setVerticalSpacing(8)
-
-        # Signal Channel & Data Source (now handled by base class)
         self._setup_data_selection_ui(data_selection_layout)
+        controls_layout.addWidget(self.data_selection_group)
 
-        top_controls_layout.addWidget(self.data_selection_group)
-
-        # --- Column 2: Analysis Parameters ---
+        # 2. Analysis Parameters Group
         self.analysis_params_group = QtWidgets.QGroupBox("Analysis Parameters")
-        self.analysis_params_group.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred, 
-            QtWidgets.QSizePolicy.Policy.Maximum
-        )
         analysis_params_layout = QtWidgets.QVBoxLayout(self.analysis_params_group)
-        analysis_params_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        analysis_params_layout.setContentsMargins(10, 10, 10, 10)
-        analysis_params_layout.setSpacing(8)
-
-        # Mode Selection (Interactive/Manual)
-        mode_layout = QtWidgets.QHBoxLayout()
-        mode_layout.setSpacing(10)
-        mode_label = QtWidgets.QLabel("Analysis Mode:")
-        mode_label.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Maximum,
-            QtWidgets.QSizePolicy.Policy.Preferred
-        )
-        mode_layout.addWidget(mode_label)
         
+        # Mode Selection
+        mode_layout = QtWidgets.QHBoxLayout()
+        mode_layout.addWidget(QtWidgets.QLabel("Analysis Mode:"))
         self.mode_combobox = QtWidgets.QComboBox()
         self.mode_combobox.addItem("Interactive (Regions)", userData=self._MODE_INTERACTIVE)
         self.mode_combobox.addItem("Manual (Time Windows)", userData=self._MODE_MANUAL)
@@ -171,89 +153,68 @@ class RinAnalysisTab(BaseAnalysisTab):
         mode_layout.addWidget(self.mode_combobox)
         analysis_params_layout.addLayout(mode_layout)
 
-        # --- Interactive Regions Info ---
+        # Interactive Info
         self.interactive_info_label = QtWidgets.QLabel("Drag blue (baseline) and red (response) regions on the plot.")
         self.interactive_info_label.setWordWrap(True)
-        self.interactive_info_label.setVisible(True) # Initially visible
         analysis_params_layout.addWidget(self.interactive_info_label)
 
-        # --- Manual Time Windows Group ---
+        # Manual Time Windows
         self.manual_time_group = QtWidgets.QGroupBox("Manual Time Windows")
-        self.manual_time_group.setVisible(False) # Initially hidden
+        self.manual_time_group.setVisible(False)
         manual_time_layout = QtWidgets.QFormLayout(self.manual_time_group)
-        manual_time_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        manual_time_layout.setContentsMargins(10, 10, 10, 10)
-        manual_time_layout.setVerticalSpacing(8)
-
+        
         self.manual_baseline_start_spinbox = QtWidgets.QDoubleSpinBox()
         self.manual_baseline_end_spinbox = QtWidgets.QDoubleSpinBox()
         self.manual_response_start_spinbox = QtWidgets.QDoubleSpinBox()
         self.manual_response_end_spinbox = QtWidgets.QDoubleSpinBox()
+        
         for spinbox in [self.manual_baseline_start_spinbox, self.manual_baseline_end_spinbox,
                         self.manual_response_start_spinbox, self.manual_response_end_spinbox]:
             spinbox.setSuffix(" s")
             spinbox.setDecimals(3)
             spinbox.setSingleStep(0.01)
-            spinbox.setRange(0, 9999.999) # Arbitrarily large range
+            spinbox.setRange(0, 9999.999)
             spinbox.setMinimumWidth(100)
-        manual_time_layout.addRow("Baseline Start (s):", self.manual_baseline_start_spinbox)
-        manual_time_layout.addRow("Baseline End (s):", self.manual_baseline_end_spinbox)
-        manual_time_layout.addRow("Response Start (s):", self.manual_response_start_spinbox)
-        manual_time_layout.addRow("Response End (s):", self.manual_response_end_spinbox)
+            
+        manual_time_layout.addRow("Baseline Start:", self.manual_baseline_start_spinbox)
+        manual_time_layout.addRow("Baseline End:", self.manual_baseline_end_spinbox)
+        manual_time_layout.addRow("Response Start:", self.manual_response_start_spinbox)
+        manual_time_layout.addRow("Response End:", self.manual_response_end_spinbox)
         analysis_params_layout.addWidget(self.manual_time_group)
 
-        # --- Manual Delta Input Group ---
-        # Contains either Delta I or Delta V input depending on channel type
+        # Manual Delta Input Group
         self.delta_input_group = QtWidgets.QGroupBox("Step Amplitude Input")
-        self.delta_input_group.setToolTip("Enter the amplitude of the current or voltage step")
         self.delta_i_form_layout = QtWidgets.QFormLayout(self.delta_input_group)
-        self.delta_i_form_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        self.delta_i_form_layout.setContentsMargins(10, 10, 10, 10)
-        self.delta_i_form_layout.setVerticalSpacing(8)
-
-        # Manual Delta I (for Voltage Clamp primary signal)
+        
         self.manual_delta_i_label = QtWidgets.QLabel("Manual ΔI (pA):")
         self.manual_delta_i_spinbox = QtWidgets.QDoubleSpinBox()
-        self.manual_delta_i_spinbox.setToolTip("Enter the known current step amplitude (ΔI) in pA.")
-        self.manual_delta_i_spinbox.setDecimals(1)
-        self.manual_delta_i_spinbox.setRange(-1e6, 1e6) # Large range
-        self.manual_delta_i_spinbox.setValue(0.0)
-        self.manual_delta_i_spinbox.setMinimumWidth(100)
-        self.delta_i_input_row_widgets = (self.manual_delta_i_label, self.manual_delta_i_spinbox) # Store widgets
+        self.manual_delta_i_spinbox.setRange(-1e6, 1e6); self.manual_delta_i_spinbox.setDecimals(1)
+        self.delta_i_input_row_widgets = (self.manual_delta_i_label, self.manual_delta_i_spinbox)
         self.delta_i_form_layout.addRow(self.manual_delta_i_label, self.manual_delta_i_spinbox)
-        self.manual_delta_i_label.setVisible(False) # Initially hidden
-        self.manual_delta_i_spinbox.setVisible(False)
+        self.manual_delta_i_label.setVisible(False); self.manual_delta_i_spinbox.setVisible(False)
 
-        # Manual Delta V (for Current Clamp primary signal) - ADDED
         self.manual_delta_v_label = QtWidgets.QLabel("Manual ΔV (mV):")
         self.manual_delta_v_spinbox = QtWidgets.QDoubleSpinBox()
-        self.manual_delta_v_spinbox.setToolTip("Enter the known voltage step amplitude (ΔV) in mV.")
-        self.manual_delta_v_spinbox.setDecimals(1)
-        self.manual_delta_v_spinbox.setRange(-1000, 1000) # Large range
-        self.manual_delta_v_spinbox.setValue(0.0)
-        self.manual_delta_v_spinbox.setMinimumWidth(100)
-        self.delta_v_input_row_widgets = (self.manual_delta_v_label, self.manual_delta_v_spinbox) # Store widgets
+        self.manual_delta_v_spinbox.setRange(-1000, 1000); self.manual_delta_v_spinbox.setDecimals(1)
+        self.delta_v_input_row_widgets = (self.manual_delta_v_label, self.manual_delta_v_spinbox)
         self.delta_i_form_layout.addRow(self.manual_delta_v_label, self.manual_delta_v_spinbox)
-        self.manual_delta_v_label.setVisible(False) # Initially hidden
-        self.manual_delta_v_spinbox.setVisible(False)
-
+        self.manual_delta_v_label.setVisible(False); self.manual_delta_v_spinbox.setVisible(False)
+        
         analysis_params_layout.addWidget(self.delta_input_group)
 
-        # Run button to manually execute analysis
+        # Run Button
         self.run_button = QtWidgets.QPushButton("Calculate Rin")
-        self.run_button.setToolTip("Use current window settings to calculate input resistance")
-        style_button(self.run_button, 'primary')  # Apply consistent styling directly
-        self.run_button.setVisible(False) # Initially hidden
+        style_button(self.run_button, 'primary')
+        self.run_button.setVisible(False)
         analysis_params_layout.addWidget(self.run_button)
 
-        # Info label for guidance
+        # Info Label
         self.info_label = QtWidgets.QLabel("Info will appear here.")
         self.info_label.setWordWrap(True)
-        # Use styling module instead of inline style
         style_info_label(self.info_label)
         analysis_params_layout.addWidget(self.info_label)
 
-        # Other properties buttons
+        # Other Properties
         other_props_group = QtWidgets.QGroupBox("Other Properties")
         other_props_layout = QtWidgets.QHBoxLayout(other_props_group)
         self.tau_button = QtWidgets.QPushButton("Calculate Tau")
@@ -262,24 +223,14 @@ class RinAnalysisTab(BaseAnalysisTab):
         other_props_layout.addWidget(self.sag_button)
         analysis_params_layout.addWidget(other_props_group)
 
+        controls_layout.addWidget(self.analysis_params_group)
 
-        analysis_params_layout.addStretch(1)
-        top_controls_layout.addWidget(self.analysis_params_group)
-
-        # --- Column 3: Results (Add Conductance) ---
+        # 3. Results Group (Moved below params)
         self.results_group = QtWidgets.QGroupBox("Results")
-        self.results_group.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, 
-            QtWidgets.QSizePolicy.Policy.Maximum
-        )
         results_layout = QtWidgets.QVBoxLayout(self.results_group)
-        results_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        results_layout.setContentsMargins(10, 10, 10, 10)
-        results_layout.setSpacing(8)
         
         self.rin_result_label = QtWidgets.QLabel("Resistance (Rin) / Conductance (G): --")
         self.rin_result_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
-        # Use styling module instead of inline style
         style_result_display(self.rin_result_label)
         results_layout.addWidget(self.rin_result_label)
         
@@ -291,9 +242,9 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.delta_i_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
         results_layout.addWidget(self.delta_i_label)
 
-        # Other properties
         self.tau_result_label = QtWidgets.QLabel("Tau: --")
         results_layout.addWidget(self.tau_result_label)
+        
         self.sag_result_label = QtWidgets.QLabel("Sag Ratio: --")
         results_layout.addWidget(self.sag_result_label)
 
@@ -301,52 +252,47 @@ class RinAnalysisTab(BaseAnalysisTab):
         self.status_label.setWordWrap(True)
         results_layout.addWidget(self.status_label)
         
-        # Add a horizontal separator line
-        line = QtWidgets.QFrame()
-        line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        results_layout.addWidget(line)
-        
-        # Call the base class method to set up the save button
+        # Save Button
         self._setup_save_button(results_layout)
         
-        results_layout.addStretch(1)
-        top_controls_layout.addWidget(self.results_group)
+        controls_layout.addWidget(self.results_group)
+        controls_layout.addStretch() # Push everything to top
 
-        # Add the scroll area to the main layout
-        main_layout.addWidget(controls_scroll_area, 0)
+        left_layout.addWidget(controls_scroll_area)
+        splitter.addWidget(left_widget)
 
-        # --- Bottom: Plot Area (Unchanged) ---
+        # --- Right Side: Plot Area ---
         plot_container = QtWidgets.QWidget()
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
-        
-        main_layout.addWidget(plot_container, 1)
+        splitter.addWidget(plot_container)
 
-        # Add RIN-specific plot items - simple approach
+        # Set splitter sizes (33% left, 67% right)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+
+        main_layout.addWidget(splitter)
+
+        # Add RIN-specific plot items
         if self.plot_widget:
             plot_item = self.plot_widget.getPlotItem()
             if plot_item:
                 from PySide6 import QtGui
                 from Synaptipy.shared.styling import get_baseline_pen, get_response_pen
                 
-                # Create regions and lines with consistent styling
-                baseline_brush = QtGui.QBrush(QtGui.QColor(46, 204, 113, 50))  # Green with alpha
-                response_brush = QtGui.QBrush(QtGui.QColor(243, 156, 18, 50))  # Orange with alpha
+                baseline_brush = QtGui.QBrush(QtGui.QColor(46, 204, 113, 50))
+                response_brush = QtGui.QBrush(QtGui.QColor(243, 156, 18, 50))
                 
                 self.baseline_region = pg.LinearRegionItem(values=[0.0, 0.1], brush=baseline_brush, movable=True, bounds=[0, 1])
                 self.response_region = pg.LinearRegionItem(values=[0.2, 0.3], brush=response_brush, movable=True, bounds=[0, 1])
                 self.baseline_line = pg.InfiniteLine(angle=0, movable=False, pen=get_baseline_pen())
                 self.response_line = pg.InfiniteLine(angle=0, movable=False, pen=get_response_pen())
-                
-                # Plot items will be added when data is loaded to prevent Qt graphics errors
 
         self.setLayout(main_layout)
-        log.debug("Rin/G Analysis Tab UI setup complete (Generalized).")
+        log.debug("Rin/G Analysis Tab UI setup complete (Splitter Layout).")
         
-        # Set initial UI state
-        self._on_mode_changed()  # Ensure proper initial UI setup
+        self._on_mode_changed()
 
     def _connect_signals(self):
         # Connect signals for widgets common to all tabs

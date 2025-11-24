@@ -92,6 +92,51 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
+    # --- ADDED: Method to set global controls ---
+    def set_global_controls(self, source_list_widget: QtWidgets.QListWidget, item_combo: QtWidgets.QComboBox):
+        """
+        Receives global control widgets from AnalyserTab and places them in the
+        tab-specific layout. Subclasses must ensure they have a placeholder layout
+        or define how to handle this.
+        """
+        # Default implementation assumes subclass has 'global_controls_layout'
+        if hasattr(self, 'global_controls_layout') and isinstance(self.global_controls_layout, QtWidgets.QLayout):
+            # Remove from previous parent layout if necessary (Qt handles reparenting automatically on addWidget)
+            
+            # Add Source List Group
+            # We need to wrap them in GroupBoxes to match previous look
+            # Since we are passed raw widgets, we might need to manage containers.
+            # AnalyserTab creates them raw.
+            
+            # Check if we already have containers for them? 
+            # If we add them directly, they might look bare.
+            # Let's create GroupBoxes if they don't exist in the layout.
+            
+            # Actually, simpler: AnalyserTab passed the raw widgets.
+            # We should check if they are already in our layout.
+            if self.global_controls_layout.indexOf(source_list_widget) == -1:
+                # Wrap list widget
+                group = QtWidgets.QGroupBox("Analysis Input Set")
+                layout = QtWidgets.QVBoxLayout(group)
+                layout.setContentsMargins(5,5,5,5)
+                layout.addWidget(source_list_widget)
+                self.global_controls_layout.addWidget(group)
+                # Store reference to keep alive? No, layout ownership.
+                
+            if self.global_controls_layout.indexOf(item_combo) == -1:
+                # Wrap combo
+                group = QtWidgets.QGroupBox("Analyze Item")
+                layout = QtWidgets.QVBoxLayout(group)
+                layout.setContentsMargins(5,5,5,5)
+                layout.addWidget(item_combo)
+                self.global_controls_layout.addWidget(group)
+                
+            log.debug(f"{self.__class__.__name__}: Global controls set.")
+        else:
+            log.warning(f"{self.__class__.__name__}: 'global_controls_layout' not found. Global controls not added.")
+
+    # --- END ADDED ---
+
     # --- Methods for UI setup to be called by subclasses ---
     # REMOVED: _setup_analysis_item_selector - now centralized in parent AnalyserTab
     # Subclasses no longer need to call this method

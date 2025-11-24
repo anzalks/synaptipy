@@ -73,37 +73,36 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         return "Baseline Analysis"
 
     def _setup_ui(self):
-        """Recreate Baseline analysis UI with a 3-column top layout."""
-        main_layout = QtWidgets.QVBoxLayout(self) # Main layout is Vertical
+        """Recreate Baseline analysis UI with a 2-column horizontal layout (Left: Controls, Right: Plot)."""
+        main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(5)
 
-        # --- Top Controls Area (3 Columns) ---
-        top_controls_widget = QtWidgets.QWidget()
-        top_controls_layout = QtWidgets.QHBoxLayout(top_controls_widget)
-        top_controls_layout.setContentsMargins(0,0,0,0)
-        top_controls_layout.setSpacing(8)
-        top_controls_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        # --- Create Horizontal Splitter ---
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
 
-        # --- Column 1: Data Selection ---
+        # --- Left Pane: Controls & Results ---
+        left_widget = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+        left_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+
+        # 1. Data Selection Group
         data_selection_group = QtWidgets.QGroupBox("Data Selection")
         data_selection_layout = QtWidgets.QFormLayout(data_selection_group)
         data_selection_layout.setContentsMargins(5, 10, 5, 5)
         data_selection_layout.setSpacing(5)
-        data_selection_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        # Signal Channel & Data Source (now handled by base class)
         self._setup_data_selection_ui(data_selection_layout)
-        # Set size policy for Col 1
-        data_selection_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
-        top_controls_layout.addWidget(data_selection_group)
+        left_layout.addWidget(data_selection_group)
 
-        # --- Column 2: Analysis Mode & Parameters ---
+        # 2. Analysis Mode & Parameters Group
         analysis_params_group = QtWidgets.QGroupBox("Analysis Mode & Parameters")
         analysis_params_layout = QtWidgets.QVBoxLayout(analysis_params_group)
         analysis_params_layout.setContentsMargins(5, 10, 5, 5)
         analysis_params_layout.setSpacing(5)
-        analysis_params_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        # 2a. Analysis Mode
+        
+        # Mode Selection
         mode_layout = QtWidgets.QHBoxLayout()
         mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
         self.mode_combobox = QtWidgets.QComboBox()
@@ -114,7 +113,8 @@ class BaselineAnalysisTab(BaseAnalysisTab):
             "Manual: Enter specific time window.")
         mode_layout.addWidget(self.mode_combobox, stretch=1)
         analysis_params_layout.addLayout(mode_layout)
-        # 2b. Manual Time Window Group (nested)
+        
+        # Manual Time Window
         self.manual_time_group = QtWidgets.QGroupBox("Manual Time Window (s)")
         manual_layout = QtWidgets.QHBoxLayout(self.manual_time_group)
         self.manual_start_time_spinbox = QtWidgets.QDoubleSpinBox()
@@ -127,7 +127,8 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         manual_layout.addWidget(self.manual_end_time_spinbox)
         self.manual_time_group.setVisible(False)
         analysis_params_layout.addWidget(self.manual_time_group)
-        # 2c. Automatic Threshold Group (nested)
+        
+        # Auto Threshold Group
         self.auto_threshold_group = QtWidgets.QGroupBox("Auto - Baseline SD Threshold")
         auto_thresh_layout = QtWidgets.QHBoxLayout(self.auto_threshold_group)
         self.auto_sd_threshold_spinbox = QtWidgets.QDoubleSpinBox()
@@ -136,24 +137,22 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         auto_thresh_layout.addWidget(self.auto_sd_threshold_spinbox)
         self.auto_threshold_group.setVisible(False)
         analysis_params_layout.addWidget(self.auto_threshold_group)
-        # 2d. Run Button
+        
+        # Run Button
         self.run_button = QtWidgets.QPushButton("Run Manual/Auto Analysis")
         self.run_button.setVisible(False)
         self.run_button.setEnabled(False)
         self.run_button.setMinimumHeight(30)
         analysis_params_layout.addWidget(self.run_button)
-        analysis_params_layout.addStretch(1)
-        # Set size policy for Col 2
-        self.analysis_params_group = analysis_params_group # Assign to self
-        analysis_params_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Preferred)
-        top_controls_layout.addWidget(analysis_params_group)
+        
+        self.analysis_params_group = analysis_params_group
+        left_layout.addWidget(analysis_params_group)
 
-        # --- Column 3: Results ---
+        # 3. Results Group
         self.results_group = QtWidgets.QGroupBox("Results")
         results_layout = QtWidgets.QVBoxLayout(self.results_group)
         results_layout.setContentsMargins(5, 10, 5, 5)
         results_layout.setSpacing(5)
-        results_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         self.mean_sd_result_label = QtWidgets.QLabel("Mean ± SD: --")
         self.mean_sd_result_label.setToolTip("Calculated Baseline Mean ± Standard Deviation")
         results_layout.addWidget(self.mean_sd_result_label)
@@ -161,40 +160,41 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         self.status_label.setWordWrap(True)
         results_layout.addWidget(self.status_label)
         self._setup_save_button(results_layout)
-        results_layout.addStretch(1)
-        # Set size policy for Col 3
-        self.results_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
-        top_controls_layout.addWidget(self.results_group)
+        left_layout.addWidget(self.results_group)
 
-        # Add top controls area to main layout
-        main_layout.addWidget(top_controls_widget)
+        left_layout.addStretch() # Push content up
+        
+        # Add Left Widget to Splitter
+        splitter.addWidget(left_widget)
 
-        # --- Bottom Plot Area --- 
+        # --- Right Pane: Plot Area ---
         plot_container = QtWidgets.QWidget()
         plot_layout = QtWidgets.QVBoxLayout(plot_container)
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
         
-        main_layout.addWidget(plot_container, stretch=1) # Plot stretches vertically
+        # Add Right Widget to Splitter
+        splitter.addWidget(plot_container)
+
+        # Set Splitter Sizes (1/3 Left, 2/3 Right)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+
+        main_layout.addWidget(splitter)
 
         # Create baseline-specific plot items but don't add to plot yet
-        # They will be added when data is loaded to prevent Qt graphics errors
         if self.plot_widget:
             self.interactive_region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, 1], movable=True)
             self.interactive_region.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 30)))
 
-            # Create InfiniteLine objects for showing baseline statistics
             self.baseline_mean_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', width=2))
             self.baseline_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
             self.baseline_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
             
-            # Automatic and manual mode lines (gray dashed)
             self.auto_plus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
             self.auto_minus_sd_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(color=(128, 128, 128), style=QtCore.Qt.PenStyle.DashLine))
-            
-            # Plot items will be added when data is loaded
 
-        log.debug("Baseline Analysis Tab UI setup complete (3-Column Top Layout).")
+        log.debug("Baseline Analysis Tab UI setup complete (Splitter Layout).")
         self._on_mode_changed(initial_call=True)
 
     # --- ADDED: Method to clear auto-calculation visualization lines ---

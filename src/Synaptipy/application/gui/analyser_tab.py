@@ -104,7 +104,7 @@ class AnalyserTab(QtWidgets.QWidget):
         main_layout.setSpacing(5)
 
         # --- Create Horizontal Splitter ---
-        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        # self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         
         # --- LEFT PANE: Sub-Tab Widget (Analysis Tabs) ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
@@ -116,62 +116,30 @@ class AnalyserTab(QtWidgets.QWidget):
         self.sub_tab_widget.setMovable(True)
         
         # Add to splitter
-        self.splitter.addWidget(self.sub_tab_widget)
+        # self.splitter.addWidget(self.sub_tab_widget)
         
         # --- RIGHT PANE: Sidebar with controls ---
-        sidebar_widget = QtWidgets.QWidget()
-        sidebar_layout = QtWidgets.QVBoxLayout(sidebar_widget)
-        sidebar_layout.setContentsMargins(5, 5, 5, 5)
-        sidebar_layout.setSpacing(10)
+        # Removed Sidebar Widget creation
         
-        # Source Selection Display
-        source_group = QtWidgets.QGroupBox("Analysis Input Set")
-        source_layout = QtWidgets.QVBoxLayout(source_group)
-        source_layout.setContentsMargins(5, 5, 5, 5)
-        source_layout.setSpacing(5)
-        
+        # Source Selection Display - Create but don't add to layout yet
         self.source_list_widget = AnalysisSourceListWidget(self)
         self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
         self.source_list_widget.setMinimumHeight(80)
         self.source_list_widget.setMaximumHeight(150)
-        source_layout.addWidget(self.source_list_widget)
         
-        sidebar_layout.addWidget(source_group)
-        
-        # Centralized Analysis Item Selector
-        selector_group = QtWidgets.QGroupBox("Analyze Item")
-        selector_layout = QtWidgets.QVBoxLayout(selector_group)
-        selector_layout.setContentsMargins(5, 5, 5, 5)
-        selector_layout.setSpacing(5)
-        
-        selector_label = QtWidgets.QLabel("Select item to analyze:")
-        selector_layout.addWidget(selector_label)
-        
+        # Centralized Analysis Item Selector - Create but don't add to layout yet
         self.central_analysis_item_combo = QtWidgets.QComboBox()
         self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
         self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
-        selector_layout.addWidget(self.central_analysis_item_combo)
         
-        sidebar_layout.addWidget(selector_group)
-        
-        # Add stretch to push controls to top
-        sidebar_layout.addStretch()
-        
-        # Add sidebar to splitter
-        self.splitter.addWidget(sidebar_widget)
-        
-        # Set initial splitter sizes (70% left, 30% right)
-        self.splitter.setStretchFactor(0, 7)
-        self.splitter.setStretchFactor(1, 3)
-        
-        # Add splitter to main layout
-        main_layout.addWidget(self.splitter)
+        # Add sub_tab_widget directly to main layout
+        main_layout.addWidget(self.sub_tab_widget)
         
         # Connect tab change signal
         self.sub_tab_widget.currentChanged.connect(self._on_tab_changed)
         
         self.setLayout(main_layout)
-        log.debug("Main AnalyserTab UI setup complete with sidebar layout.")
+        log.debug("Main AnalyserTab UI setup complete (Redesigned for integrated sidebar).")
 
     # _connect_explorer_signals removed as we use SessionManager now
 
@@ -317,6 +285,11 @@ class AnalyserTab(QtWidgets.QWidget):
             return
         
         current_tab = self.sub_tab_widget.widget(tab_index)
+        
+        # Check if we need to inject controls (if this logic is even needed here anymore)
+        # It seems like this part was causing the NameError because current_tab wasn't defined yet in the try block
+        # Removing the injection logic from here as it seems to be a remnant of a failed refactor
+        
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
             # Only forward selection if combo box is enabled (has valid items) and has items
             # This prevents forwarding invalid indices during initialization before
