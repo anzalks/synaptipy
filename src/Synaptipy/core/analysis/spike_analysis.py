@@ -235,7 +235,29 @@ def analyze_multi_sweep_spikes(
 
 
 # --- Registry Wrapper for Batch Processing ---
-@AnalysisRegistry.register("spike_detection")
+@AnalysisRegistry.register(
+    "spike_detection",
+    ui_params=[
+        {
+            "name": "threshold",
+            "label": "Threshold (mV):",
+            "type": "float",
+            "default": -20.0,
+            "min": -100.0,
+            "max": 100.0,
+            "decimals": 1
+        },
+        {
+            "name": "refractory_ms",
+            "label": "Refractory (ms):",
+            "type": "float",
+            "default": 2.0,
+            "min": 0.1,
+            "max": 100.0,
+            "decimals": 1
+        }
+    ]
+)
 def run_spike_detection_wrapper(
     data: np.ndarray,
     time: np.ndarray,

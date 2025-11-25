@@ -262,12 +262,43 @@ class AddStepDialog(QtWidgets.QDialog):
     
     def _add_parameter_widgets(self, analysis_name: str):
         """Add parameter widgets based on the analysis type."""
-        # Common parameters for different analysis types
-        if analysis_name == "spike_detection":
-            self._add_param("threshold", "Threshold (mV):", -20.0, -100.0, 100.0, 1)
-            self._add_param("refractory_ms", "Refractory (ms):", 2.0, 0.1, 100.0, 1)
-            
-        elif analysis_name == "rmp_analysis":
+        # Get metadata from registry
+        metadata = AnalysisRegistry.get_metadata(analysis_name)
+        ui_params = metadata.get('ui_params', [])
+        
+        if ui_params:
+            for param in ui_params:
+                param_type = param.get('type', 'float')
+                name = param.get('name')
+                label = param.get('label', name)
+                
+                if param_type == 'float':
+                    default = param.get('default', 0.0)
+                    min_val = param.get('min', -10000.0)
+                    max_val = param.get('max', 10000.0)
+                    decimals = param.get('decimals', 2)
+                    self._add_param(name, label, default, min_val, max_val, decimals)
+                    
+                elif param_type == 'choice':
+                    choices = param.get('choices', [])
+                    default = param.get('default')
+                    
+                    combo = QtWidgets.QComboBox()
+                    combo.addItems(choices)
+                    if default and default in choices:
+                        combo.setCurrentText(default)
+                        
+                    self.params_layout.addRow(label, combo)
+                    self.param_widgets[name] = combo
+                    
+        else:
+            # Fallback for legacy/unmigrated analysis types
+            # This ensures we don't break existing analyses that haven't been migrated yet
+            self._add_legacy_parameter_widgets(analysis_name)
+
+    def _add_legacy_parameter_widgets(self, analysis_name: str):
+        """Fallback for analysis types not yet migrated to metadata system."""
+        if analysis_name == "rmp_analysis":
             self._add_param("baseline_start", "Baseline Start (s):", 0.0, 0.0, 10.0, 3)
             self._add_param("baseline_end", "Baseline End (s):", 0.1, 0.0, 10.0, 3)
             

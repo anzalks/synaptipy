@@ -21,20 +21,22 @@ class AnalysisRegistry:
     """
     
     _registry: Dict[str, Callable] = {}
+    _metadata: Dict[str, Dict[str, Any]] = {}
     
     @classmethod
-    def register(cls, name: str) -> Callable:
+    def register(cls, name: str, **kwargs) -> Callable:
         """
         Decorator to register an analysis function.
         
         Args:
             name: Unique identifier for the analysis function (e.g., "spike_detection")
+            **kwargs: Additional metadata to store with the function (e.g., ui_params)
             
         Returns:
             Decorator function
             
         Example:
-            @AnalysisRegistry.register("spike_detection")
+            @AnalysisRegistry.register("spike_detection", ui_params=[...])
             def run_spike_detection(data, time, sampling_rate, **kwargs):
                 # ... analysis logic ...
                 return results_dict
@@ -43,7 +45,8 @@ class AnalysisRegistry:
             if name in cls._registry:
                 log.warning(f"Analysis function '{name}' is already registered. Overwriting.")
             cls._registry[name] = func
-            log.debug(f"Registered analysis function: {name}")
+            cls._metadata[name] = kwargs
+            log.debug(f"Registered analysis function: {name} with metadata: {list(kwargs.keys())}")
             return func
         return decorator
     
@@ -62,6 +65,19 @@ class AnalysisRegistry:
         if func is None:
             log.warning(f"Analysis function '{name}' not found in registry. Available: {list(cls._registry.keys())}")
         return func
+
+    @classmethod
+    def get_metadata(cls, name: str) -> Dict[str, Any]:
+        """
+        Retrieve metadata for a registered analysis function.
+
+        Args:
+            name: The registered name of the function
+
+        Returns:
+            Dictionary of metadata, or empty dict if not found
+        """
+        return cls._metadata.get(name, {})
     
     @classmethod
     def list_registered(cls) -> list:
