@@ -242,7 +242,62 @@ def calculate_sag_ratio(
 
 
 # --- Registry Wrappers for Batch Processing ---
-@AnalysisRegistry.register("rin_analysis")
+@AnalysisRegistry.register(
+    "rin_analysis",
+    ui_params=[
+        {
+            "name": "current_amplitude",
+            "label": "Current Step (pA):",
+            "type": "float",
+            "default": -50.0,
+            "min": -1000.0,
+            "max": 1000.0,
+            "decimals": 1
+        },
+        {
+            "name": "auto_detect_pulse",
+            "label": "Auto-Detect Pulse",
+            "type": "bool",
+            "default": True
+        },
+        {
+            "name": "baseline_start",
+            "label": "Baseline Start (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 3
+        },
+        {
+            "name": "baseline_end",
+            "label": "Baseline End (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 3
+        },
+        {
+            "name": "response_start",
+            "label": "Response Start (s):",
+            "type": "float",
+            "default": 0.3,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 3
+        },
+        {
+            "name": "response_end",
+            "label": "Response End (s):",
+            "type": "float",
+            "default": 0.4,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 3
+        }
+    ]
+)
 def run_rin_analysis_wrapper(
     data: np.ndarray,
     time: np.ndarray,
@@ -258,6 +313,7 @@ def run_rin_analysis_wrapper(
         sampling_rate: Sampling rate in Hz
         **kwargs: Additional parameters:
             - current_amplitude: Current step amplitude in pA (required)
+            - auto_detect_pulse: Whether to auto-detect pulse windows (default: True)
             - baseline_start: Start time of baseline window (default: 0.0)
             - baseline_end: End time of baseline window (default: 0.1)
             - response_start: Start time of response window (default: 0.3)
@@ -268,6 +324,8 @@ def run_rin_analysis_wrapper(
     """
     try:
         current_amplitude = kwargs.get('current_amplitude', 0.0)
+        auto_detect_pulse = kwargs.get('auto_detect_pulse', True)
+        
         baseline_start = kwargs.get('baseline_start', 0.0)
         baseline_end = kwargs.get('baseline_end', 0.1)
         response_start = kwargs.get('response_start', 0.3)
@@ -279,6 +337,50 @@ def run_rin_analysis_wrapper(
                 'conductance_us': None,
                 'rin_error': "Current amplitude is zero"
             }
+            
+        # Auto-detection logic
+        if auto_detect_pulse:
+            # Detect sharp transitions in voltage (proxy for current step start/end)
+            # A better way would be to use the stimulus trace if available, but here we only have voltage.
+            # We look for the largest derivatives.
+            
+            # Smooth slightly to reduce noise
+            # simple moving average
+            window_size = int(0.001 * sampling_rate) # 1ms
+            if window_size > 1:
+                kernel = np.ones(window_size) / window_size
+                smoothed_data = np.convolve(data, kernel, mode='same')
+            else:
+                smoothed_data = data
+                
+            dv = np.diff(smoothed_data)
+            
+            # Find start (largest change)
+            # If current is negative (hyperpolarizing), we look for min dv, else max dv
+            if current_amplitude < 0:
+                start_idx = np.argmin(dv)
+                # For end, we look for the opposite change (max dv) after start
+                end_idx = start_idx + np.argmax(dv[start_idx:])
+            else:
+                start_idx = np.argmax(dv)
+                end_idx = start_idx + np.argmin(dv[start_idx:])
+                
+            start_time = time[start_idx]
+            end_time = time[end_idx]
+            
+            # Define windows relative to pulse
+            # Baseline: 100ms before pulse start
+            baseline_end = start_time - 0.005 # 5ms buffer
+            baseline_start = max(time[0], baseline_end - 0.1)
+            
+            # Response: End of pulse (steady state)
+            # Take last 100ms of the pulse
+            response_end = end_time - 0.005 # 5ms buffer
+            response_start = max(start_time, response_end - 0.1)
+            
+            log.info(f"Auto-detected pulse: Start={start_time:.3f}s, End={end_time:.3f}s. "
+                     f"Baseline=[{baseline_start:.3f}, {baseline_end:.3f}], "
+                     f"Response=[{response_start:.3f}, {response_end:.3f}]")
         
         result = calculate_rin(
             data, time, current_amplitude,
@@ -293,6 +395,7 @@ def run_rin_analysis_wrapper(
                 'voltage_deflection_mv': result.voltage_deflection if result.voltage_deflection is not None else 0.0,
                 'baseline_voltage_mv': result.baseline_voltage if result.baseline_voltage is not None else 0.0,
                 'steady_state_voltage_mv': result.steady_state_voltage if result.steady_state_voltage is not None else 0.0,
+                'auto_detected': auto_detect_pulse
             }
         else:
             return {

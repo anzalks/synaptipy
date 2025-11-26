@@ -15,6 +15,7 @@ from datetime import datetime
 
 from PySide6 import QtCore, QtGui, QtWidgets
 import pandas as pd
+import numpy as np
 
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -199,6 +200,7 @@ class AddStepDialog(QtWidgets.QDialog):
             ("average", "Average Trace", "Analyze the averaged trace across all trials"),
             ("all_trials", "All Trials", "Analyze each trial separately"),
             ("first_trial", "First Trial Only", "Analyze only the first trial"),
+            ("channel_set", "Channel Set", "Analyze all trials together (e.g. F-I Curve)"),
         ]
         
         for scope_id, scope_name, scope_desc in scope_options:
@@ -397,10 +399,11 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
     - Export results to CSV
     """
     
-    def __init__(self, files: List[Path], parent=None):
+    def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
         super().__init__(parent)
         self.files = files
         self.pipeline_steps: List[Dict[str, Any]] = []
+        self.default_channels = default_channels # List of channel names to pre-fill
         self.result_df: Optional[pd.DataFrame] = None
         self.worker: Optional[BatchWorker] = None
         self.engine = BatchAnalysisEngine()
@@ -410,6 +413,11 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.resize(800, 700)
         
         self._setup_ui()
+        
+        # Pre-populate pipeline if config provided
+        if pipeline_config:
+            for step in pipeline_config:
+                self._add_pipeline_step(step)
     
     def _setup_ui(self):
         """Setup the dialog UI."""
@@ -430,6 +438,22 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         files_layout.addWidget(self.files_list)
         
         main_layout.addWidget(files_group)
+        
+        # ==== Channel Selection Section ====
+        channel_group = QtWidgets.QGroupBox("Channels to Process")
+        channel_layout = QtWidgets.QVBoxLayout(channel_group)
+        
+        self.channel_input = QtWidgets.QLineEdit()
+        self.channel_input.setPlaceholderText("e.g. Vm_1, Im_1 (Leave empty to process all channels)")
+        if self.default_channels:
+            self.channel_input.setText(", ".join(self.default_channels))
+        channel_layout.addWidget(self.channel_input)
+        
+        channel_help = QtWidgets.QLabel("Enter comma-separated channel names. Leave empty to process all channels found in each file.")
+        channel_help.setStyleSheet("color: gray; font-style: italic; font-size: 10pt;")
+        channel_layout.addWidget(channel_help)
+        
+        main_layout.addWidget(channel_group)
         
         # ==== Pipeline Section ====
         pipeline_group = QtWidgets.QGroupBox("Analysis Pipeline")
@@ -631,15 +655,24 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.progress_bar.setValue(0)
         self.status_label.setText("Starting batch analysis...")
         
+        # Parse channel filter
+        channel_filter_text = self.channel_input.text().strip()
+        channel_filter = None
+        if channel_filter_text:
+            channel_filter = [c.strip() for c in channel_filter_text.split(',') if c.strip()]
+        
         # Create and start worker
         self.worker = BatchWorker(
             engine=self.engine,
             files=self.files,
-            pipeline_config=self.pipeline_steps
+            pipeline_config=self.pipeline_steps,
+            channel_filter=channel_filter
         )
         self.worker.signals.progress.connect(self._on_progress)
         self.worker.signals.finished.connect(self._on_finished)
         self.worker.signals.error.connect(self._on_error)
+        # Connect built-in finished signal for cleanup
+        self.worker.finished.connect(self._cleanup_worker)
         self.worker.start()
     
     def _on_progress(self, current: int, total: int, message: str):
@@ -652,7 +685,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
     def _on_finished(self, result_df: pd.DataFrame):
         """Handle batch analysis completion."""
         self.result_df = result_df
-        self.worker = None
+        # Don't set self.worker = None here, wait for thread to finish
         
         # Re-enable UI
         self.run_btn.setEnabled(True)
@@ -663,13 +696,14 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             self.progress_bar.setValue(100)
             self.status_label.setText(f"Completed: {len(result_df)} result rows")
             self._display_results(result_df)
+            self._save_results_to_main_window(result_df)
         else:
             self.status_label.setText("Completed with no results")
             self.results_info_label.setText("No results generated")
     
     def _on_error(self, error_message: str):
         """Handle batch analysis error."""
-        self.worker = None
+        # Don't set self.worker = None here, wait for thread to finish
         
         # Re-enable UI
         self.run_btn.setEnabled(True)
@@ -702,6 +736,11 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             # Close dialog
             self.accept()
     
+    def _cleanup_worker(self):
+        """Cleanup worker reference after thread has truly finished."""
+        self.worker = None
+        log.debug("Batch worker thread cleaned up.")
+
     def _display_results(self, df: pd.DataFrame):
         """Display results in the table widget."""
         self.results_table.clear()
@@ -719,7 +758,14 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         for row_idx in range(min(100, len(df))):
             for col_idx, col_name in enumerate(df.columns):
                 value = df.iloc[row_idx, col_idx]
-                if pd.isna(value):
+                # Handle arrays/lists safely
+                if isinstance(value, (list, np.ndarray)):
+                    # For arrays, show summary or short representation
+                    if hasattr(value, 'shape'):
+                        display_value = f"Array {value.shape}"
+                    else:
+                        display_value = f"List [{len(value)}]"
+                elif pd.isna(value):
                     display_value = ""
                 elif isinstance(value, float):
                     display_value = f"{value:.4g}"
@@ -752,17 +798,26 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"batch_analysis_{timestamp}.csv"
         
-        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+        file_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
             self,
-            "Export Results to CSV",
+            "Export Results",
             default_name,
-            "CSV Files (*.csv);;All Files (*)"
+            "CSV Files (*.csv);;JSON Files (*.json);;All Files (*)"
         )
         
         if file_path:
             try:
-                self.result_df.to_csv(file_path, index=False)
-                log.info(f"Exported batch results to: {file_path}")
+                if file_path.lower().endswith('.json'):
+                    # JSON Export
+                    # Use orient='records' for a list of dicts, which is standard
+                    # Use default_handler=str to handle non-serializable types (like some numpy objects)
+                    # although pandas handles most numpy types well.
+                    self.result_df.to_json(file_path, orient='records', indent=2, default_handler=str)
+                    log.info(f"Exported batch results to JSON: {file_path}")
+                else:
+                    # CSV Export (Default)
+                    self.result_df.to_csv(file_path, index=False)
+                    log.info(f"Exported batch results to CSV: {file_path}")
                 
                 QtWidgets.QMessageBox.information(
                     self,
@@ -796,4 +851,44 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 event.ignore()
         else:
             event.accept()
+    def _save_results_to_main_window(self, df: pd.DataFrame):
+        """
+        Saves the batch analysis results to the MainWindow's global list
+        so they appear in the Exporter Tab.
+        """
+        main_window = self.parent()
+        while main_window and not hasattr(main_window, 'add_saved_result'):
+            main_window = main_window.parent()
+            
+        if not main_window or not hasattr(main_window, 'add_saved_result'):
+            log.warning("Could not find MainWindow to save batch results.")
+            return
 
+        log.info(f"Saving {len(df)} batch results to MainWindow...")
+        
+        for _, row in df.iterrows():
+            # Convert row to dict
+            result_data = row.to_dict()
+            
+            # Ensure required keys for Exporter Tab exist
+            # Map 'file' -> 'source_file_name' if needed
+            if 'file' in result_data and 'source_file_name' not in result_data:
+                result_data['source_file_name'] = Path(str(result_data['file'])).name
+                
+            # Map 'analysis_type' if missing
+            if 'analysis_type' not in result_data:
+                # Use the first step's analysis name, or a joined string if multiple
+                if self.pipeline_steps:
+                    analyses = [s.get('analysis', 'Unknown') for s in self.pipeline_steps]
+                    result_data['analysis_type'] = "+".join(analyses)
+                else:
+                    result_data['analysis_type'] = "Batch Analysis"
+                
+            # Add timestamp if missing
+            if 'timestamp_saved' not in result_data:
+                result_data['timestamp_saved'] = datetime.now().isoformat()
+                
+            # Add to main window
+            main_window.add_saved_result(result_data)
+            
+        log.info("Batch results saved to MainWindow successfully.")

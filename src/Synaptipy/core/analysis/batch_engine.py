@@ -170,10 +170,16 @@ class BatchAnalysisEngine:
                 # Filter channels if specified
                 channels_to_process = recording.channels.items()
                 if channel_filter:
+                    log.debug(f"Applying channel filter: {channel_filter}")
+                    log.debug(f"Available channels: {list(recording.channels.keys())}")
                     channels_to_process = [
                         (name, ch) for name, ch in recording.channels.items()
                         if name in channel_filter or str(name) in channel_filter
                     ]
+                    if not channels_to_process:
+                        log.warning(f"Channel filter {channel_filter} matched no channels in {file_path.name}. Available: {list(recording.channels.keys())}")
+                
+                log.debug(f"Processing {len(channels_to_process)} channels: {[n for n, c in channels_to_process]}")
                 
                 # Iterate through channels
                 for channel_name, channel in channels_to_process:
@@ -396,6 +402,72 @@ class BatchAnalysisEngine:
                     'scope': scope,
                     'error': str(e)
                 })
+        elif scope == 'channel_set':
+            # Analyze all trials together as a set
+            num_trials = channel.num_trials
+            if num_trials == 0:
+                log.warning(f"No trials available for {channel_name} in {file_path.name}")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': "No trials available"
+                }]
+            
+            # Aggregate data from all trials
+            data_list = []
+            time_list = []
+            valid_trials = []
+            
+            for trial_idx in range(num_trials):
+                data = channel.get_data(trial_idx)
+                time = channel.get_relative_time_vector(trial_idx)
+                
+                if data is not None and time is not None:
+                    data_list.append(data)
+                    time_list.append(time)
+                    valid_trials.append(trial_idx)
+            
+            if not data_list:
+                log.warning(f"No valid data found for any trial of {channel_name} in {file_path.name}")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': "No valid data found"
+                }]
+                
+            # Run analysis on the aggregated set
+            try:
+                # The analysis function is expected to handle lists of arrays
+                result_dict = analysis_func(data_list, time_list, sampling_rate, **params)
+                
+                # Add metadata
+                result_dict.update({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'trial_count': len(valid_trials),
+                    'sampling_rate': sampling_rate
+                })
+                results.append(result_dict)
+            except Exception as e:
+                log.error(f"Error running {analysis_name} on channel set: {e}", exc_info=True)
+                results.append({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': str(e)
+                })
+
         else:
             log.warning(f"Unknown scope '{scope}' for analysis '{analysis_name}'. Skipping.")
             results.append({

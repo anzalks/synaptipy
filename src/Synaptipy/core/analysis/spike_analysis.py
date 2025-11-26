@@ -299,12 +299,29 @@ def run_spike_detection_wrapper(
         result = detect_spikes_threshold(data, time, threshold, refractory_samples)
         
         if result.is_valid:
-            return {
+            # Calculate spike features
+            features_list = calculate_spike_features(data, time, result.spike_indices)
+            
+            # Aggregate features (Mean and Std Dev)
+            stats = {}
+            if features_list:
+                # Convert list of dicts to dict of lists for easier aggregation
+                feature_keys = features_list[0].keys()
+                for key in feature_keys:
+                    values = [f[key] for f in features_list if not np.isnan(f[key])]
+                    if values:
+                        stats[f'{key}_mean'] = np.mean(values)
+                        stats[f'{key}_std'] = np.std(values)
+                    else:
+                        stats[f'{key}_mean'] = np.nan
+                        stats[f'{key}_std'] = np.nan
+            
+            output = {
                 'spike_count': len(result.spike_indices) if result.spike_indices is not None else 0,
                 'mean_freq_hz': result.mean_frequency if result.mean_frequency is not None else 0.0,
-                # Note: spike_times and spike_indices are arrays, may not be suitable for DataFrame
-                # Include them only if needed, or convert to string representation
             }
+            output.update(stats)
+            return output
         else:
             return {
                 'spike_count': 0,

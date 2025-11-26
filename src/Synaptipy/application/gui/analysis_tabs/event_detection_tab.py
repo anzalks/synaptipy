@@ -68,6 +68,13 @@ class EventDetectionTab(BaseAnalysisTab):
     def get_display_name(self) -> str:
         return "Event Detection"
 
+    def get_registry_name(self) -> str:
+        """Return registry name based on selected method."""
+        if not self.mini_method_combobox:
+            return "event_detection_threshold" # Default
+        selected_method_display = self.mini_method_combobox.currentText()
+        return self.method_map.get(selected_method_display, "event_detection_threshold")
+
     def _setup_ui(self):
         """Create UI elements for the Event Detection tab."""
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -127,6 +134,9 @@ class EventDetectionTab(BaseAnalysisTab):
         self.analyze_button = QtWidgets.QPushButton("Detect Events")
         self.analyze_button.setToolTip("Run event detection with current parameters")
         analysis_controls_layout.addWidget(self.analyze_button)
+        
+        # Batch Button
+        self._setup_batch_button(analysis_controls_layout)
         
         left_layout.addWidget(analysis_controls_group)
         
@@ -333,8 +343,10 @@ class EventDetectionTab(BaseAnalysisTab):
             
         signal_data = data.get('data')
         sample_rate = data.get('sampling_rate')
+        time_vec = data.get('time') # Get time vector
         
-        if signal_data is None or sample_rate is None:
+        if signal_data is None or sample_rate is None or time_vec is None:
+            log.error("Missing data, time, or sampling rate for event detection.")
             return None
             
         # Prepare arguments based on function signature (simplified here)
@@ -349,14 +361,27 @@ class EventDetectionTab(BaseAnalysisTab):
             # Note: The registered functions return different tuple structures
             # We need to handle them uniformly or check key
             
+            # ALL registered functions are now WRAPPERS with signature:
+            # (data, time, sampling_rate, **kwargs)
+            
             if registry_key == "event_detection_threshold":
-                indices, stats = func(signal_data, kwargs['threshold'], kwargs['direction'])
+                # Wrapper returns dict with 'event_indices', 'summary_stats'
+                result = func(signal_data, time_vec, sample_rate, **kwargs)
+                indices = result.get('event_indices')
+                stats = result.get('summary_stats')
                 details = None
             elif registry_key == "event_detection_deconvolution":
-                indices, stats = func(signal_data, sample_rate, **kwargs)
+                # Wrapper returns dict
+                result = func(signal_data, time_vec, sample_rate, **kwargs)
+                indices = result.get('event_indices')
+                stats = result.get('summary_stats')
                 details = None
             elif registry_key == "event_detection_baseline_peak":
-                indices, stats, details = func(signal_data, sample_rate, **kwargs)
+                # Wrapper returns dict
+                result = func(signal_data, time_vec, sample_rate, **kwargs)
+                indices = result.get('event_indices')
+                stats = result.get('summary_stats')
+                details = result.get('event_details')
             else:
                 return None
                 

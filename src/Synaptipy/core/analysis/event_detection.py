@@ -192,7 +192,6 @@ def detect_minis_automatic_mad(
     return None 
 
 # --- Registry Wrapper for Batch Processing (Threshold Method) ---
-@AnalysisRegistry.register("event_detection_threshold")
 def detect_events_threshold_crossing(data: np.ndarray, threshold: float, direction: str) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Detects events by simple threshold crossing.
 
@@ -237,6 +236,37 @@ def detect_events_threshold_crossing(data: np.ndarray, threshold: float, directi
     return event_starts, stats
 
 
+@AnalysisRegistry.register("event_detection_threshold")
+def run_event_detection_threshold_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper for threshold event detection.
+    """
+    try:
+        threshold = kwargs.get('threshold', 5.0)
+        direction = kwargs.get('direction', 'negative')
+        
+        indices, stats = detect_events_threshold_crossing(data, threshold, direction)
+        
+        return {
+            'event_count': stats['count'],
+            'mean_val': stats.get('mean_val', np.nan),
+            'std_val': stats.get('std_val', np.nan),
+            'threshold': threshold,
+            'direction': direction,
+            # Extra data for UI
+            'event_indices': indices,
+            'summary_stats': stats
+        }
+    except Exception as e:
+        log.error(f"Error in run_event_detection_threshold_wrapper: {e}", exc_info=True)
+        return {'event_error': str(e)}
+
+
 def _mad_to_std(mad_value: float) -> float:
     """Converts Median Absolute Deviation (MAD) to Standard Deviation (SD).
     Assumes underlying normal distribution.
@@ -245,7 +275,6 @@ def _mad_to_std(mad_value: float) -> float:
     return mad_value * 1.4826
 
 
-@AnalysisRegistry.register("event_detection_deconvolution")
 def detect_events_deconvolution_custom(
     data: np.ndarray,
     sample_rate: float,
@@ -389,7 +418,48 @@ def detect_events_deconvolution_custom(
         # Add more stats later if needed (e.g., based on original data at peak_indices)
     }
 
-    return peak_indices, stats 
+    return peak_indices, stats
+
+
+@AnalysisRegistry.register("event_detection_deconvolution")
+def run_event_detection_deconvolution_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper for deconvolution event detection.
+    """
+    try:
+        tau_rise_ms = kwargs.get('tau_rise_ms', 0.5)
+        tau_decay_ms = kwargs.get('tau_decay_ms', 5.0)
+        threshold_sd = kwargs.get('threshold_sd', 4.0)
+        filter_freq_hz = kwargs.get('filter_freq_hz', None)
+        min_event_separation_ms = kwargs.get('min_event_separation_ms', 2.0)
+        
+        indices, stats = detect_events_deconvolution_custom(
+            data=data,
+            sample_rate=sampling_rate,
+            tau_rise_ms=tau_rise_ms,
+            tau_decay_ms=tau_decay_ms,
+            threshold_sd=threshold_sd,
+            filter_freq_hz=filter_freq_hz,
+            min_event_separation_ms=min_event_separation_ms
+        )
+        
+        return {
+            'event_count': stats['count'],
+            'tau_rise_ms': tau_rise_ms,
+            'tau_decay_ms': tau_decay_ms,
+            'threshold_sd': threshold_sd,
+            # Extra data for UI
+            'event_indices': indices,
+            'summary_stats': stats
+        }
+    except Exception as e:
+        log.error(f"Error in run_event_detection_deconvolution_wrapper: {e}", exc_info=True)
+        return {'event_error': str(e)} 
 
 # Function adapted from rmp_analysis - might need refinement
 def _find_stable_baseline_segment(data: np.ndarray, sample_rate: float,
@@ -507,7 +577,6 @@ def _calculate_simplified_kinetics(data: np.ndarray, peak_index: int, baseline_v
     return kinetics
 
 
-@AnalysisRegistry.register("event_detection_baseline_peak")
 def detect_events_baseline_peak_kinetics(
     data: np.ndarray,
     sample_rate: float,
@@ -627,4 +696,51 @@ def detect_events_baseline_peak_kinetics(
     }
     # Could add mean amplitude, freq etc. to summary stats if needed
    
-    return peak_indices, summary_stats, event_details 
+    return peak_indices, summary_stats, event_details
+
+
+@AnalysisRegistry.register("event_detection_baseline_peak")
+def run_event_detection_baseline_peak_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper for baseline peak event detection.
+    """
+    try:
+        direction = kwargs.get('direction', 'negative')
+        baseline_window_s = kwargs.get('baseline_window_s', 0.5)
+        baseline_step_s = kwargs.get('baseline_step_s', 0.1)
+        threshold_sd_factor = kwargs.get('threshold_sd_factor', 3.0)
+        filter_freq_hz = kwargs.get('filter_freq_hz', None)
+        min_event_separation_ms = kwargs.get('min_event_separation_ms', 5.0)
+        peak_prominence_factor = kwargs.get('peak_prominence_factor', None)
+        
+        indices, stats, details = detect_events_baseline_peak_kinetics(
+            data=data,
+            sample_rate=sampling_rate,
+            direction=direction,
+            baseline_window_s=baseline_window_s,
+            baseline_step_s=baseline_step_s,
+            threshold_sd_factor=threshold_sd_factor,
+            filter_freq_hz=filter_freq_hz,
+            min_event_separation_ms=min_event_separation_ms,
+            peak_prominence_factor=peak_prominence_factor
+        )
+        
+        return {
+            'event_count': stats['count'],
+            'baseline_mean': stats.get('baseline_mean', np.nan),
+            'baseline_sd': stats.get('baseline_sd', np.nan),
+            'threshold': stats.get('threshold', np.nan),
+            'direction': direction,
+            # Extra data for UI
+            'event_indices': indices,
+            'summary_stats': stats,
+            'event_details': details
+        }
+    except Exception as e:
+        log.error(f"Error in run_event_detection_baseline_peak_wrapper: {e}", exc_info=True)
+        return {'event_error': str(e)} 
