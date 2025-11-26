@@ -104,6 +104,9 @@ class RinAnalysisTab(BaseAnalysisTab):
     def get_display_name(self) -> str:
         return "Resistance/Conductance"
 
+    def get_registry_name(self) -> str:
+        return "rin_analysis"
+
     def _setup_ui(self):
         """Set up the UI elements for the Rin/G Analysis tab (Generalized)."""
         log.debug("Setting up Rin/G Analysis Tab UI (Generalized)...")
@@ -227,6 +230,9 @@ class RinAnalysisTab(BaseAnalysisTab):
         analysis_params_layout.addWidget(other_props_group)
 
         controls_layout.addWidget(self.analysis_params_group)
+
+        # Batch Button
+        self._setup_batch_button(controls_layout)
 
         # 3. Results Group (Moved below params)
         self.results_group = QtWidgets.QGroupBox("Results")

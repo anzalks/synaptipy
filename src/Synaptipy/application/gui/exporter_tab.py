@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 import uuid
 from datetime import datetime, timezone
+import pandas as pd  # Added missing import
 import csv
 
 import numpy as np # Needed for CSV export
@@ -55,13 +56,11 @@ class ExporterTab(QtWidgets.QWidget):
         # --- UI Widget References ---
         self.source_file_label: Optional[QtWidgets.QLabel] = None
         # NWB Sub-tab elements
+        # NWB Sub-tab elements
         self.nwb_output_path_edit: Optional[QtWidgets.QLineEdit] = None
         self.nwb_browse_button: Optional[QtWidgets.QPushButton] = None
         self.nwb_export_button: Optional[QtWidgets.QPushButton] = None
-        # CSV Sub-tab elements
-        self.csv_output_dir_edit: Optional[QtWidgets.QLineEdit] = None
-        self.csv_browse_dir_button: Optional[QtWidgets.QPushButton] = None
-        self.csv_export_button: Optional[QtWidgets.QPushButton] = None
+        
         # Main sub-tab widget
         self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
 
@@ -88,12 +87,10 @@ class ExporterTab(QtWidgets.QWidget):
         main_layout.addWidget(self.sub_tab_widget)
 
         # --- Create and Add Sub-Tabs ---
+        # --- Create and Add Sub-Tabs ---
         nwb_sub_tab_widget = self._create_nwb_sub_tab()
         self.sub_tab_widget.addTab(nwb_sub_tab_widget, "Export to NWB")
 
-        csv_sub_tab_widget = self._create_csv_sub_tab() # Create CSV tab
-        self.sub_tab_widget.addTab(csv_sub_tab_widget, "Export to CSV") # Add CSV tab
-        
         analysis_results_tab_widget = self._create_analysis_results_sub_tab() # Create Analysis Results export tab
         self.sub_tab_widget.addTab(analysis_results_tab_widget, "Export Analysis Results") # Add Analysis Results tab
 
@@ -128,48 +125,7 @@ class ExporterTab(QtWidgets.QWidget):
         nwb_widget.setLayout(nwb_layout)
         return nwb_widget
 
-    def _create_csv_sub_tab(self) -> QtWidgets.QWidget:
-        """Creates the QWidget containing the UI for the CSV export sub-tab."""
-        csv_widget = QtWidgets.QWidget()
-        csv_layout = QtWidgets.QVBoxLayout(csv_widget)
-        csv_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        csv_group = QtWidgets.QGroupBox("CSV Export Options")
-        csv_group_layout = QtWidgets.QVBoxLayout(csv_group)
-
-        # Output Directory Selection
-        dir_layout = QtWidgets.QHBoxLayout()
-        dir_layout.addWidget(QtWidgets.QLabel("Output Directory:"))
-        self.csv_output_dir_edit = QtWidgets.QLineEdit()
-        self.csv_output_dir_edit.setPlaceholderText("Select directory to save CSV files...")
-        self.csv_output_dir_edit.setClearButtonEnabled(True)
-        dir_layout.addWidget(self.csv_output_dir_edit, stretch=1)
-        self.csv_browse_dir_button = QtWidgets.QPushButton("Browse...")
-        self.csv_browse_dir_button.setToolTip("Choose directory for CSV output")
-        dir_layout.addWidget(self.csv_browse_dir_button)
-        csv_group_layout.addLayout(dir_layout)
-
-        # --- Placeholder for future CSV options ---
-        # options_layout = QtWidgets.QFormLayout()
-        # self.csv_format_combo = QtWidgets.QComboBox()
-        # self.csv_format_combo.addItems(["One file per Channel/Trial", "One file per Channel (Trials as columns)"])
-        # options_layout.addRow("File Structure:", self.csv_format_combo)
-        # self.csv_delimiter_edit = QtWidgets.QLineEdit(",")
-        # options_layout.addRow("Delimiter:", self.csv_delimiter_edit)
-        # csv_group_layout.addLayout(options_layout)
-        # --- End Placeholder ---
-
-        # Export Action Button
-        self.csv_export_button = QtWidgets.QPushButton("Export to CSV(s)")
-        self.csv_export_button.setIcon(QtGui.QIcon.fromTheme("document-save")) # Optional icon
-        self.csv_export_button.setToolTip("Export data as CSV files (one per channel/trial)")
-        self.csv_export_button.setEnabled(False) # Disabled initially
-        csv_group_layout.addWidget(self.csv_export_button, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-
-        csv_layout.addWidget(csv_group)
-        csv_layout.addStretch()
-        csv_widget.setLayout(csv_layout)
-        return csv_widget
 
     def _create_analysis_results_sub_tab(self) -> QtWidgets.QWidget:
         """Creates the QWidget containing the UI for exporting analysis results to CSV."""
@@ -178,16 +134,17 @@ class ExporterTab(QtWidgets.QWidget):
         layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         
         # Group for output file selection
-        file_group = QtWidgets.QGroupBox("Output CSV File")
+        # Group for output file selection
+        file_group = QtWidgets.QGroupBox("Output File")
         file_layout = QtWidgets.QHBoxLayout(file_group)
         
         self.analysis_results_path_edit = QtWidgets.QLineEdit()
-        self.analysis_results_path_edit.setPlaceholderText("Select CSV file path for analysis results...")
+        self.analysis_results_path_edit.setPlaceholderText("Select file path for analysis results (CSV or JSON)...")
         self.analysis_results_path_edit.setClearButtonEnabled(True)
         file_layout.addWidget(self.analysis_results_path_edit, stretch=1)
         
         self.analysis_results_browse_button = QtWidgets.QPushButton("Browse...")
-        self.analysis_results_browse_button.setToolTip("Choose where to save the analysis results CSV file")
+        self.analysis_results_browse_button.setToolTip("Choose where to save the analysis results file")
         file_layout.addWidget(self.analysis_results_browse_button)
         
         layout.addWidget(file_group)
@@ -235,9 +192,9 @@ class ExporterTab(QtWidgets.QWidget):
         export_layout = QtWidgets.QHBoxLayout()
         export_layout.addStretch(1)
         
-        self.analysis_results_export_button = QtWidgets.QPushButton("Export Selected Results to CSV")
+        self.analysis_results_export_button = QtWidgets.QPushButton("Export Selected Results")
         self.analysis_results_export_button.setIcon(QtGui.QIcon.fromTheme("document-save"))
-        self.analysis_results_export_button.setToolTip("Export the selected analysis results to a CSV file")
+        self.analysis_results_export_button.setToolTip("Export the selected analysis results to a file")
         self.analysis_results_export_button.setEnabled(False)  # Disabled initially
         export_layout.addWidget(self.analysis_results_export_button)
         
@@ -256,11 +213,8 @@ class ExporterTab(QtWidgets.QWidget):
         if self.nwb_export_button: self.nwb_export_button.clicked.connect(self._do_export_nwb)
         if self.nwb_output_path_edit: self.nwb_output_path_edit.textChanged.connect(self.update_state)
 
-        # CSV signals
-        if self.csv_browse_dir_button: self.csv_browse_dir_button.clicked.connect(self._browse_csv_output_dir)
-        if self.csv_export_button: self.csv_export_button.clicked.connect(self._do_export_csv)
-        if self.csv_output_dir_edit: self.csv_output_dir_edit.textChanged.connect(self.update_state)
-        
+        if self.nwb_output_path_edit: self.nwb_output_path_edit.textChanged.connect(self.update_state)
+
         # Analysis Results export signals
         if self.analysis_results_browse_button: self.analysis_results_browse_button.clicked.connect(self._browse_analysis_results_output_path)
         if self.analysis_results_export_button: self.analysis_results_export_button.clicked.connect(self._do_export_analysis_results)
@@ -268,6 +222,7 @@ class ExporterTab(QtWidgets.QWidget):
         if self.analysis_results_refresh_button: self.analysis_results_refresh_button.clicked.connect(self._refresh_analysis_results)
         if self.analysis_results_select_all_button: self.analysis_results_select_all_button.clicked.connect(self._select_all_results)
         if self.analysis_results_deselect_all_button: self.analysis_results_deselect_all_button.clicked.connect(self._deselect_all_results)
+        if self.analysis_results_table: self.analysis_results_table.itemSelectionChanged.connect(self.update_state)
 
     # --- Public Method for MainWindow to Call ---
     def update_state(self):
@@ -292,18 +247,13 @@ class ExporterTab(QtWidgets.QWidget):
         if self.nwb_export_button:
             self.nwb_export_button.setEnabled(has_data and nwb_output_path_ok)
 
-        # Update CSV Export Button
-        csv_output_dir_ok = bool(self.csv_output_dir_edit.text().strip()) if self.csv_output_dir_edit else False
-        if self.csv_export_button:
-            self.csv_export_button.setEnabled(has_data and csv_output_dir_ok)
-            
         # Update Analysis Results Export Button
-        analysis_results_path_ok = bool(self.analysis_results_path_edit.text().strip()) if self.analysis_results_path_edit else False
+        # Enable if we have selected results, even if path is not set yet (we'll prompt)
         has_selected_results = (hasattr(self, 'analysis_results_table') and 
                                self.analysis_results_table and 
                                len(self._get_selected_results_indices()) > 0)
         if self.analysis_results_export_button:
-            self.analysis_results_export_button.setEnabled(analysis_results_path_ok and has_selected_results)
+            self.analysis_results_export_button.setEnabled(has_selected_results)
 
     # --- Handlers ---
 
@@ -373,78 +323,7 @@ class ExporterTab(QtWidgets.QWidget):
             self.update_state()
 
     # --- NEW CSV Handlers ---
-    def _browse_csv_output_dir(self):
-        """Opens a directory dialog to select the CSV output folder."""
-        # Use lastExportDirectory setting, or source file dir, or home dir
-        current_recording = self._explorer_tab.get_current_recording()
-        last_dir = self._settings.value("lastExportDirectory", "", type=str)
-        if not last_dir and current_recording:
-            last_dir = str(current_recording.source_file.parent)
-        if not last_dir:
-            last_dir = str(Path.home()) # Fallback to home
 
-        dir_path_str = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select Output Directory for CSV Files", dir=last_dir
-        )
-
-        if dir_path_str:
-            dir_path = Path(dir_path_str)
-            self.csv_output_dir_edit.setText(str(dir_path))
-            # Optionally save this directory setting separately if needed
-            # self._settings.setValue("lastCsvExportDirectory", str(dir_path))
-            log.info(f"Output CSV directory selected: {dir_path}")
-            self.update_state()
-
-    def _do_export_csv(self):
-        """Exports loaded data to CSV files (one per channel/trial)."""
-        log.debug("CSV Export button clicked.")
-        current_recording = self._explorer_tab.get_current_recording()
-        output_dir_str = self.csv_output_dir_edit.text().strip()
-
-        # --- Validation ---
-        if not current_recording:
-            log.warning("Export CSV ignored: No data."); QtWidgets.QMessageBox.warning(self, "Export Error", "No data loaded."); self.update_state(); return
-        if not output_dir_str:
-            log.warning("Export CSV ignored: No output directory."); QtWidgets.QMessageBox.warning(self, "Export Error", "Select output directory."); self.update_state(); return
-
-        output_dir = Path(output_dir_str)
-        try:
-            output_dir.mkdir(parents=True, exist_ok=True) # Ensure directory exists
-        except OSError as e:
-            log.error(f"Failed create output dir {output_dir}: {e}"); QtWidgets.QMessageBox.critical(self, "Directory Error", f"Could not create directory:\n{output_dir}\n\nError: {e}"); return
-
-        # --- Perform Export ---
-        self.csv_export_button.setEnabled(False)
-        self._status_bar.showMessage(f"Exporting CSV files to '{output_dir.name}'...", 0)
-        QtWidgets.QApplication.processEvents()
-
-        try:
-            success_count, error_count = self._csv_exporter.export_recording(current_recording, output_dir)
-
-            # --- Report Outcome ---
-            if error_count > 0:
-                msg = f"CSV export completed with {error_count} errors. {success_count} files saved to '{output_dir.name}'."
-                log.warning(msg)
-                self._status_bar.showMessage(msg, 8000)
-                QtWidgets.QMessageBox.warning(self, "CSV Export Warning", f"{msg}\n\nCheck logs for details.")
-            elif success_count > 0:
-                msg = f"Successfully exported {success_count} CSV files to '{output_dir.name}'."
-                log.info(msg)
-                self._status_bar.showMessage(msg, 5000)
-                QtWidgets.QMessageBox.information(self, "CSV Export Successful", msg)
-            else:
-                msg = "No valid data found to export to CSV."
-                log.warning(msg)
-                self._status_bar.showMessage(msg, 5000)
-                QtWidgets.QMessageBox.information(self, "CSV Export Info", msg)
-
-        except Exception as e:
-            # Catch unexpected errors during the main loop
-            log.error(f"Unexpected error during CSV export: {e}", exc_info=True)
-            self._status_bar.showMessage("Unexpected CSV Export error occurred.", 5000)
-            QtWidgets.QMessageBox.critical(self, "CSV Export Error", f"An unexpected error occurred:\n{e}")
-        finally:
-            self.update_state() # Re-enable buttons etc.
 
     # Add methods for the analysis results export functionality
     def _browse_analysis_results_output_path(self):
@@ -453,15 +332,17 @@ class ExporterTab(QtWidgets.QWidget):
         default_filename = "analysis_results.csv"
         default_path = os.path.join(default_dir, default_filename)
         
-        filepath_str, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Save Analysis Results CSV File", 
+        filepath_str, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save Analysis Results", 
             dir=default_path, 
-            filter="CSV Files (*.csv)"
+            filter="CSV Files (*.csv);;JSON Files (*.json)"
         )
         
         if filepath_str:
-            # Ensure the file has .csv extension
-            if not filepath_str.lower().endswith('.csv'):
+            # Ensure the file has correct extension based on filter or user input
+            if selected_filter.startswith("JSON") and not filepath_str.lower().endswith('.json'):
+                filepath_str += '.json'
+            elif selected_filter.startswith("CSV") and not filepath_str.lower().endswith('.csv'):
                 filepath_str += '.csv'
                 
             self.analysis_results_path_edit.setText(filepath_str)
@@ -771,8 +652,14 @@ class ExporterTab(QtWidgets.QWidget):
         """Exports the selected analysis results to a CSV file."""
         # Get the output file path
         output_path = self.analysis_results_path_edit.text().strip()
+        
+        # If no path set, prompt for one
         if not output_path:
-            QtWidgets.QMessageBox.warning(self, "Export Error", "Please select an output file path.")
+            self._browse_analysis_results_output_path()
+            output_path = self.analysis_results_path_edit.text().strip()
+            
+        # If still no path (user cancelled), return
+        if not output_path:
             return
             
         # Get selected indices
@@ -797,7 +684,26 @@ class ExporterTab(QtWidgets.QWidget):
             return
             
         try:
-            # Write to CSV using the exporter
+            # Create DataFrame
+            df = pd.DataFrame(results_to_export)
+            
+            if output_path.lower().endswith('.json'):
+                # JSON Export
+                df.to_json(output_path, orient='records', indent=2, default_handler=str)
+                log.info(f"Exported analysis results to JSON: {output_path}")
+            else:
+                # CSV Export (Default)
+                # Flatten or stringify complex columns for CSV if needed, but pandas usually handles basic types.
+                # For complex types like arrays, we might want to stringify them explicitly if pandas doesn't.
+                # But for now, let's rely on pandas default behavior or string conversion.
+                df.to_csv(output_path, index=False)
+                log.info(f"Exported analysis results to CSV: {output_path}")
+            
+            QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
+            
+        except Exception as e:
+            log.error(f"Failed to export analysis results: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to export results:\n{e}")
             success = self._csv_exporter.export_analysis_results(results_to_export, Path(output_path))
             
             if success:

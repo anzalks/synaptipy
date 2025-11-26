@@ -72,6 +72,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         # Returns the name for the sub-tab.
         return "Baseline Analysis"
 
+    def get_registry_name(self) -> str:
+        return "rmp_analysis"
+
     def _setup_ui(self):
         """Recreate Baseline analysis UI with a 2-column horizontal layout (Left: Controls, Right: Plot)."""
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -150,6 +153,9 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         
         self.analysis_params_group = analysis_params_group
         left_layout.addWidget(analysis_params_group)
+
+        # Batch Button
+        self._setup_batch_button(left_layout)
 
         # 3. Results Group
         self.results_group = QtWidgets.QGroupBox("Results")

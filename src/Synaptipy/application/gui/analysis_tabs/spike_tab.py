@@ -54,6 +54,9 @@ class SpikeAnalysisTab(BaseAnalysisTab):
     def get_display_name(self) -> str:
         return "Spike Detection (Threshold)"
 
+    def get_registry_name(self) -> str:
+        return "spike_detection"
+
     def _setup_ui(self):
         """Create UI elements for Spike analysis with 2-column horizontal layout."""
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -106,6 +109,9 @@ class SpikeAnalysisTab(BaseAnalysisTab):
         self.detect_button.setToolTip("Detect spikes on the currently plotted trace using specified parameters.")
         style_button(self.detect_button, 'primary')
         controls_layout.addWidget(self.detect_button)
+
+        # Batch Button
+        self._setup_batch_button(controls_layout)
 
         left_layout.addWidget(self.controls_group)
 
