@@ -84,7 +84,9 @@ def test_mode_selection(rin_tab, qtbot):
     
     # Verify tab has the necessary structure
     assert hasattr(rin_tab, 'plot_widget')
-    assert hasattr(rin_tab, 'run_button')
+    # Verify tab has the necessary structure
+    assert hasattr(rin_tab, 'plot_widget')
+    # assert hasattr(rin_tab, 'run_button') # Removed in refactor
     
     # Test mode switching works
     initial_mode = rin_tab.mode_combobox.currentText()
@@ -114,15 +116,14 @@ def test_manual_calculation(rin_tab, qtbot, mock_neo_adapter):
         rin_tab.mode_combobox.setCurrentText(manual_mode)
     
     # Check that essential UI elements exist
-    assert hasattr(rin_tab, 'run_button')
-    assert isinstance(rin_tab.run_button, QtWidgets.QPushButton)
+    # assert hasattr(rin_tab, 'run_button') # Removed in refactor (reactive)
     assert hasattr(rin_tab, 'save_button')
     assert isinstance(rin_tab.save_button, QtWidgets.QPushButton)
 
 def test_get_specific_result_data(rin_tab):
     """Test that the specific result data method returns the correct format"""
     # Set mock results
-    rin_tab._last_rin_result = {
+    rin_tab._last_analysis_result = {
         "Rin (MΩ)": 200.0,
         "Conductance (μS)": 5.0,
         "ΔV (mV)": 10.0,

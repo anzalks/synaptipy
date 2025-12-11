@@ -51,7 +51,7 @@ def test_spike_detection_metadata():
     ui_params = metadata["ui_params"]
     param_names = [p["name"] for p in ui_params]
     assert "threshold" in param_names
-    assert "refractory_ms" in param_names
+    assert "refractory_period" in param_names
     
     # Check specific values for threshold
     threshold_param = next(p for p in ui_params if p["name"] == "threshold")

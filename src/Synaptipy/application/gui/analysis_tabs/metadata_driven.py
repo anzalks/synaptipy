@@ -64,6 +64,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Global controls container (will be populated by AnalyserTab)
         self.global_controls_layout = QtWidgets.QVBoxLayout()
         control_layout.addLayout(self.global_controls_layout)
+
+        # Hook for subclasses to add controls (e.g. Method Selector)
+        self._setup_additional_controls(control_layout)
         
         # Channel Selection (Standard for all tabs)
         # Use BaseAnalysisTab's setup method for universal selection (Channel + Data Source)
@@ -129,6 +132,15 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Basic plot setup
         if self.plot_widget:
             self.plot_widget.showGrid(x=True, y=True)
+            self._setup_custom_plot_items()
+
+    def _setup_additional_controls(self, layout: QtWidgets.QVBoxLayout):
+        """Hook for subclasses to add extra controls (e.g., method selector)."""
+        pass
+
+    def _setup_custom_plot_items(self):
+        """Hook for subclasses to add extra plot items (e.g., regions)."""
+        pass
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         """Return the last analysis result for saving."""
