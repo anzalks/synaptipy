@@ -200,6 +200,7 @@ class AddStepDialog(QtWidgets.QDialog):
             ("average", "Average Trace", "Analyze the averaged trace across all trials"),
             ("all_trials", "All Trials", "Analyze each trial separately"),
             ("first_trial", "First Trial Only", "Analyze only the first trial"),
+            ("specific_trial", "Specific Trial", "Analyze a specific trial index"),
             ("channel_set", "Channel Set", "Analyze all trials together (e.g. F-I Curve)"),
         ]
         
@@ -210,8 +211,23 @@ class AddStepDialog(QtWidgets.QDialog):
             scope_layout.addWidget(radio)
             if scope_id == "average":
                 radio.setChecked(True)
+            self.scope_group.buttonClicked.connect(self._on_scope_changed)
         
         layout.addWidget(scope_group)
+
+        # Specific Trial Input (Hidden by default)
+        self.trial_index_group = QtWidgets.QWidget()
+        self.trial_index_layout = QtWidgets.QHBoxLayout(self.trial_index_group)
+        self.trial_index_layout.setContentsMargins(0, 0, 0, 0)
+        self.trial_index_spin = QtWidgets.QSpinBox()
+        self.trial_index_spin.setRange(0, 9999)
+        self.trial_index_spin.setValue(0)
+        self.trial_index_spin.setToolTip("Index of the trial to analyze (0-based)")
+        self.trial_index_layout.addWidget(QtWidgets.QLabel("Trial Index:"))
+        self.trial_index_layout.addWidget(self.trial_index_spin)
+        self.trial_index_layout.addStretch()
+        self.trial_index_group.setVisible(False)
+        layout.addWidget(self.trial_index_group)
         
         # Parameters Section
         params_group = QtWidgets.QGroupBox("Parameters")
@@ -298,6 +314,11 @@ class AddStepDialog(QtWidgets.QDialog):
             # This ensures we don't break existing analyses that haven't been migrated yet
             self._add_legacy_parameter_widgets(analysis_name)
 
+    def _on_scope_changed(self, button):
+        """Show/hide trial index input based on scope selection."""
+        scope_id = button.property("scope_id")
+        self.trial_index_group.setVisible(scope_id == "specific_trial")
+
     def _add_legacy_parameter_widgets(self, analysis_name: str):
         """Fallback for analysis types not yet migrated to metadata system."""
         if analysis_name == "rmp_analysis":
@@ -361,6 +382,11 @@ class AddStepDialog(QtWidgets.QDialog):
         
         # Gather parameters
         params = {}
+        
+        # Add trial index if specific trial scope
+        if selected_scope == "specific_trial":
+            params['trial_index'] = self.trial_index_spin.value()
+
         for name, widget in self.param_widgets.items():
             if name.startswith("_"):
                 continue
@@ -434,8 +460,22 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         for f in self.files:
             item = QtWidgets.QListWidgetItem(f.name)
             item.setToolTip(str(f))
+            item.setData(QtCore.Qt.UserRole, f)  # Store full path
             self.files_list.addItem(item)
         files_layout.addWidget(self.files_list)
+        
+        # File Action Buttons
+        files_btn_layout = QtWidgets.QHBoxLayout()
+        self.add_files_btn = QtWidgets.QPushButton("Add Files...")
+        self.add_files_btn.clicked.connect(self._on_add_files)
+        files_btn_layout.addWidget(self.add_files_btn)
+        
+        self.remove_files_btn = QtWidgets.QPushButton("Remove Selected")
+        self.remove_files_btn.clicked.connect(self._on_remove_files)
+        files_btn_layout.addWidget(self.remove_files_btn)
+        
+        files_btn_layout.addStretch()
+        files_layout.addLayout(files_btn_layout)
         
         main_layout.addWidget(files_group)
         
@@ -587,6 +627,50 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         
         log.info(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
     
+    def _on_add_files(self):
+        """Open file dialog to add files to the list."""
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, "Select Recording Files", "", "All Files (*.*)"
+        )
+        if file_paths:
+            added_count = 0
+            for path_str in file_paths:
+                path = Path(path_str)
+                # Check duplication
+                if path not in self.files:
+                    self.files.append(path)
+                    item = QtWidgets.QListWidgetItem(path.name)
+                    item.setToolTip(str(path))
+                    item.setData(QtCore.Qt.UserRole, path)
+                    self.files_list.addItem(item)
+                    added_count += 1
+            
+            if added_count > 0:
+                # Update group box title
+                self.findChild(QtWidgets.QGroupBox).setTitle(f"Files to Process ({len(self.files)} files)")
+
+    def _on_remove_files(self):
+        """Remove selected files from list."""
+        selected_items = self.files_list.selectedItems()
+        if not selected_items:
+            return
+            
+        for item in selected_items:
+            path = item.data(QtCore.Qt.UserRole)
+            if path in self.files:
+                self.files.remove(path)
+            self.files_list.takeItem(self.files_list.row(item))
+            
+        # Update group box title
+        # Use findChild approach or better, store reference to groupbox in init
+        # For now, simplistic approach since we know the structure, but finding by title is risky if title changes.
+        # But we just want to update the displayed count.
+        # Let's just find all GroupBoxes and update the one starting with "Files"
+        for gb in self.findChildren(QtWidgets.QGroupBox):
+            if gb.title().startswith("Files to Process"):
+                gb.setTitle(f"Files to Process ({len(self.files)} files)")
+                break
+
     def _on_remove_step(self, step_widget: PipelineStepWidget):
         """Remove a step from the pipeline."""
         # Find and remove the step
@@ -873,28 +957,74 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         log.info(f"Saving {len(df)} batch results to MainWindow...")
         
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        
         for _, row in df.iterrows():
             # Convert row to dict
             result_data = row.to_dict()
             
-            # Ensure required keys for Exporter Tab exist
-            # Map 'file' -> 'source_file_name' if needed
-            if 'file' in result_data and 'source_file_name' not in result_data:
+            # --- 1. Map File Name ---
+            if 'file_name' in result_data and 'source_file_name' not in result_data:
+                 result_data['source_file_name'] = result_data['file_name']
+            elif 'file' in result_data and 'source_file_name' not in result_data:
                 result_data['source_file_name'] = Path(str(result_data['file'])).name
-                
-            # Map 'analysis_type' if missing
+            
+            # --- 2. Map Analysis Type (Registry Key -> Display Name) ---
+            if 'analysis' in result_data:
+                registry_key = result_data['analysis']
+                # Try to get display label from metadata
+                try:
+                    metadata = AnalysisRegistry.get_metadata(registry_key)
+                    label = metadata.get('label')
+                    
+                    # If label is generic or not helpful for ExporterTab matching, use specific overrides
+                    # ExporterTab expects specific strings to format values correctly
+                    if registry_key == 'spike_detection':
+                         label = "Spike Detection (Threshold)"
+                    elif registry_key == 'rmp_analysis':
+                         label = "Baseline Analysis"
+                    elif registry_key == 'rin_analysis':
+                         label = "Input Resistance/Conductance"
+                    elif registry_key.startswith('event_detection'):
+                         label = "Event Detection"
+                    
+                    if label:
+                        result_data['analysis_type'] = label
+                    else:
+                        result_data['analysis_type'] = registry_key.replace('_', ' ').title()
+                except Exception:
+                     result_data['analysis_type'] = registry_key.replace('_', ' ').title()
+            
+            # Fallback if analysis_type still missing
             if 'analysis_type' not in result_data:
-                # Use the first step's analysis name, or a joined string if multiple
-                if self.pipeline_steps:
+                 if self.pipeline_steps:
                     analyses = [s.get('analysis', 'Unknown') for s in self.pipeline_steps]
                     result_data['analysis_type'] = "+".join(analyses)
-                else:
+                 else:
                     result_data['analysis_type'] = "Batch Analysis"
-                
-            # Add timestamp if missing
+            
+            # --- 3. Map Scope -> Data Source ---
+            if 'scope' in result_data:
+                scope = result_data['scope']
+                if scope == 'average':
+                    result_data['data_source_used'] = 'Average'
+                elif scope in ['specific_trial', 'all_trials', 'first_trial']:
+                    result_data['data_source_used'] = 'Trial'
+                elif scope == 'channel_set':
+                    result_data['data_source_used'] = 'Channel Set'
+                else:
+                    result_data['data_source_used'] = scope.capitalize()
+            
+            # --- 4. Map Trial Index ---
+            if 'trial_index' in result_data:
+                result_data['trial_index_used'] = result_data['trial_index']
+            # Implicit trial index for all_trials/first_trial if the engine didn't provide it explicitly,
+            # but usually engine provides it in the row if iterating.
+            
+            # --- 5. Add Timestamp ---
             if 'timestamp_saved' not in result_data:
                 result_data['timestamp_saved'] = datetime.now().isoformat()
-                
+            
             # Add to main window
             main_window.add_saved_result(result_data)
             

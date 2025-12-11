@@ -272,10 +272,63 @@ class AnalyserTab(QtWidgets.QWidget):
 
         from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog
         
-        # Extract Path objects
-        recording_paths = [item['path'] for item in recording_items]
+        # Extract Path objects, ensuring uniqueness
+        recording_paths = list(set([item['path'] for item in recording_items]))
         
-        dialog = BatchAnalysisDialog(recording_paths, self._neo_adapter, self)
+        # Gather current configuration from active tab if possible
+        pipeline_config = None
+        default_channels = None
+        
+        current_tab = self.sub_tab_widget.currentWidget()
+        if current_tab and isinstance(current_tab, BaseAnalysisTab):
+            try:
+                # 1. Gather current parameters
+                params = current_tab._gather_analysis_parameters()
+                if params:
+                    # 2. Get registry name
+                    registry_name = getattr(current_tab, 'get_registry_name', lambda: None)()
+                    
+                    if not registry_name:
+                         # Attempt to get from metadata if it's a metadata tab
+                         if hasattr(current_tab, 'analysis_name'):
+                             registry_name = current_tab.analysis_name
+                    
+                    # Handle special case for EventDetectionTab which returns registry_key in params
+                    if 'registry_key' in params:
+                        registry_name = params.pop('registry_key')
+                    
+                    # Remove internal keys
+                    params.pop('method_display', None)
+                    
+                    if registry_name:
+                        pipeline_config = [{
+                            'analysis': registry_name,
+                            'scope': 'all_trials', # Default scope
+                            'params': params
+                        }]
+                        log.info(f"Pre-filling batch pipeline with settings from {current_tab.get_display_name()}")
+                
+                # 3. Get channel selection
+                if hasattr(current_tab, 'signal_channel_combobox') and current_tab.signal_channel_combobox:
+                    channel_id = current_tab.signal_channel_combobox.currentData()
+                    if channel_id is not None:
+                        default_channels = [str(channel_id)]
+                        
+            except Exception as e:
+                log.warning(f"Could not gather batch parameters from current tab: {e}")
+        
+        # Open dialog with pre-filled config
+        # Note: The init signature of BatchAnalysisDialog is (files, pipeline_config, default_channels, parent)
+        # We need to make sure we match it. 
+        # Checking previous files... BatchAnalysisDialog declaration was:
+        # def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
+        
+        dialog = BatchAnalysisDialog(
+            files=recording_paths, 
+            pipeline_config=pipeline_config,
+            default_channels=default_channels, 
+            parent=self
+        )
         dialog.exec()
 
     # --- Slot for Explorer Signal ---

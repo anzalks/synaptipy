@@ -111,8 +111,7 @@ class BaselineAnalysisTab(BaseAnalysisTab):
         self.calc_button.clicked.connect(self._trigger_analysis)
         left_layout.addWidget(self.calc_button)
         
-        # Batch Button
-        self._setup_batch_button(left_layout)
+
         
         # Results
         results_group = QtWidgets.QGroupBox("Results")

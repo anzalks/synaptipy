@@ -120,8 +120,7 @@ class EventDetectionTab(BaseAnalysisTab):
         self.analyze_button.setToolTip("Run event detection with current parameters")
         analysis_controls_layout.addWidget(self.analyze_button)
         
-        # Batch Button
-        self._setup_batch_button(analysis_controls_layout)
+
         
         left_layout.addWidget(analysis_controls_group)
         

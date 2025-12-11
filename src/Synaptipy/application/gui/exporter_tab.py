@@ -286,22 +286,20 @@ class ExporterTab(QtWidgets.QWidget):
         except OSError as e: log.error(f"Failed create output dir {output_filepath.parent}: {e}"); QtWidgets.QMessageBox.critical(self, "Directory Error", f"Could not create dir:\n{output_filepath.parent}\n\nError: {e}"); return
 
         log.info(f"Preparing NWB metadata for: {current_recording.source_file.name}")
-        default_identifier = str(uuid.uuid4())
-        default_start_time_naive = getattr(current_recording, 'session_start_time_dt', datetime.now())
-        aware_start_time = timezone.utc
-        if default_start_time_naive.tzinfo is None:
-            log.warning("Rec time naive. Assuming local/UTC.");
-            if tzlocal:
-                try: aware_start_time = default_start_time_naive.replace(tzinfo=tzlocal.get_localzone())
-                except Exception as e: log.warning(f"tzlocal failed: {e}. Using UTC."); aware_start_time = default_start_time_naive.replace(tzinfo=timezone.utc)
-            else: aware_start_time = default_start_time_naive.replace(tzinfo=timezone.utc)
-        else: aware_start_time = default_start_time_naive
-
-        dialog = NwbMetadataDialog(default_identifier, aware_start_time, self)
+        
+        # New Dialog accepts recording for pre-fill
+        dialog = NwbMetadataDialog(recording=current_recording, parent=self)
+        
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             nwb_metadata = dialog.get_metadata()
-            if nwb_metadata is None: log.error("Metadata dialog None."); self._status_bar.showMessage("Metadata validation failed.", 4000); return
-        else: log.info("NWB export cancelled."); self._status_bar.showMessage("NWB export cancelled.", 3000); return
+            if nwb_metadata is None: # Should be handled by dialog validation but safety check
+                 log.error("Metadata validation failed (returned None).")
+                 self._status_bar.showMessage("Metadata validation failed.", 4000)
+                 return
+        else: 
+            log.info("NWB export cancelled by user.")
+            self._status_bar.showMessage("NWB export cancelled.", 3000)
+            return
 
         self.nwb_export_button.setEnabled(False)
         self._status_bar.showMessage(f"Exporting NWB to '{output_filepath.name}'...", 0)
@@ -607,6 +605,153 @@ class ExporterTab(QtWidgets.QWidget):
                     channel = result.get('channel_name', '')
                     if channel:
                         details.append(f"Channel: {channel}")
+                    channel = result.get('channel_name', '')
+                    if channel:
+                        details.append(f"Channel: {channel}")
+                
+                # --- NEW: Phase Plane Analysis ---
+                elif analysis_type in ["Phase Plane Analysis", "phase_plane_analysis"]:
+                     max_dvdt = result.get('max_dvdt')
+                     if max_dvdt is not None:
+                         try:
+                             val = float(max_dvdt if isinstance(max_dvdt, (int, float)) else max_dvdt.item() if hasattr(max_dvdt, 'item') else max_dvdt)
+                             value_str = f"Max dV/dt: {val:.2f} V/s"
+                         except Exception:
+                             value_str = f"Max dV/dt: {max_dvdt}"
+                     
+                     thresh = result.get('threshold_mean')
+                     if thresh is not None:
+                         try:
+                             val = float(thresh if isinstance(thresh, (int, float)) else thresh.item() if hasattr(thresh, 'item') else thresh)
+                             details.append(f"Mean Thresh: {val:.2f} mV")
+                         except Exception:
+                             pass
+                             
+                # --- NEW: Excitability Analysis (F-I Curve) ---
+                elif analysis_type in ["Excitability Analysis", "excitability_analysis"]:
+                    slope = result.get('fi_slope')
+                    if slope is not None:
+                        try:
+                            val = float(slope if isinstance(slope, (int, float)) else slope.item() if hasattr(slope, 'item') else slope)
+                            value_str = f"Slope: {val:.3f} Hz/pA"
+                        except Exception:
+                             value_str = f"Slope: {slope}"
+                    
+                    rheo = result.get('rheobase_pa')
+                    if rheo is not None:
+                        details.append(f"Rheobase: {rheo} pA")
+                        
+                    max_freq = result.get('max_freq_hz')
+                    if max_freq is not None:
+                         try:
+                             val = float(max_freq if isinstance(max_freq, (int, float)) else max_freq.item() if hasattr(max_freq, 'item') else max_freq)
+                             details.append(f"Max Freq: {val:.2f} Hz")
+                         except Exception:
+                             pass
+
+                # --- NEW: Membrane Time Constant (Tau) ---
+                elif analysis_type in ["Membrane Time Constant (Tau)", "tau_analysis"]:
+                    tau = result.get('tau_ms')
+                    if tau is not None:
+                        try:
+                            val = float(tau if isinstance(tau, (int, float)) else tau.item() if hasattr(tau, 'item') else tau)
+                            value_str = f"{val:.2f} ms"
+                        except Exception:
+                            value_str = f"{tau} ms"
+                            
+                # --- FIX: Mismatched keys for RMP ---
+                # Check if it was RMP analysis but handled by Baseline block above or missed
+                # Note: The block above checks "Baseline Analysis". If name is "rmp_analysis" it might need handling here if not mapped.
+                # Since we mapped it in batch_dialog, check if keys were found.
+                # If value_str is still N/A, try finding rmp_mv
+                if value_str == "N/A" and (analysis_type in ["Baseline Analysis", "rmp_analysis"]):
+                     rmp = result.get('rmp_mv')
+                     if rmp is not None:
+                         try:
+                             val = float(rmp if isinstance(rmp, (int, float)) else rmp.item() if hasattr(rmp, 'item') else rmp)
+                             value_str = f"{val:.2f} mV"
+                             
+                             std = result.get('rmp_std')
+                             if std is not None:
+                                  try:
+                                      video_std = float(std if isinstance(std, (int, float)) else std.item())
+                                      value_str += f" ± {video_std:.2f}"
+                                  except: pass
+                             
+                             drift = result.get('rmp_drift')
+                             if drift is not None:
+                                 details.append(f"Drift: {drift} mV/s")
+                         except Exception:
+                             pass
+
+                # --- FIX: Mismatched keys for Rin ---
+                elif value_str == "N/A" and (analysis_type in ["Input Resistance", "Input Resistance/Conductance", "rin_analysis"]):
+                     rin = result.get('rin_mohm')
+                     if rin is not None:
+                         try:
+                             val = float(rin if isinstance(rin, (int, float)) else rin.item() if hasattr(rin, 'item') else rin)
+                             value_str = f"{val:.2f} MΩ"
+                             
+                             g = result.get('conductance_us')
+                             if g is not None:
+                                  try:
+                                      g_val = float(g if isinstance(g, (int, float)) else g.item())
+                                      details.append(f"Cond: {g_val:.2f} uS")
+                                  except: pass
+                         except Exception:
+                             pass
+                
+                # --- Burst Analysis ---
+                elif analysis_type in ["Burst Analysis", "burst_analysis"]:
+                    burst_count = result.get('burst_count')
+                    if burst_count is not None:
+                        try:
+                            count = int(burst_count if isinstance(burst_count, (int, float)) else
+                                       burst_count.item() if hasattr(burst_count, 'item') else burst_count)
+                            value_str = f"{count} bursts"
+                            freq = result.get('burst_freq_hz')
+                            if freq is not None:
+                                try:
+                                    freq_float = float(freq if isinstance(freq, (int, float)) else
+                                                     freq.item() if hasattr(freq, 'item') else freq)
+                                    value_str += f" ({freq_float:.2f} Hz)"
+                                except (ValueError, TypeError, AttributeError):
+                                    pass
+                        except (ValueError, TypeError, AttributeError):
+                             value_str = f"{burst_count} bursts"
+                    
+                    spb = result.get('spikes_per_burst_avg')
+                    if spb is not None:
+                         try:
+                             spb_float = float(spb if isinstance(spb, (int, float)) else spb.item() if hasattr(spb, 'item') else spb)
+                             details.append(f"Avg Spikes/Burst: {spb_float:.1f}")
+                         except Exception: pass
+                             
+                    dur = result.get('burst_duration_avg')
+                    if dur is not None:
+                         try:
+                             dur_float = float(dur if isinstance(dur, (int, float)) else dur.item() if hasattr(dur, 'item') else dur)
+                             details.append(f"Avg Duration: {dur_float*1000:.1f} ms" if dur_float < 1.0 else f"Avg Duration: {dur_float:.3f} s")
+                         except Exception: pass
+
+                # --- GENERIC FALLBACK ---
+                # Check for any remaining N/A values or empty details
+                if not details:
+                     ignored_keys = {'file_name', 'file_path', 'source_file_name', 'analysis_type', 'data_source_used', 'timestamp_saved', 'trial_index_used', 'trial_index', 'scope', 'analysis', 'file'}
+                     for k, v in result.items():
+                         if k not in ignored_keys and v is not None:
+                             # Try to format floats nice
+                             display_v = str(v)
+                             if isinstance(v, (float, np.floating)):
+                                 display_v = f"{v:.4g}"
+                             if len(display_v) < 20: # Skip long arrays
+                                details.append(f"{k}: {display_v}")
+                                
+                if value_str == "N/A":
+                    for valid_key in ['value', 'mean', 'average', 'result']:
+                        if valid_key in result:
+                            value_str = str(result[valid_key])
+                            break
             
             except Exception as e:
                 log.warning(f"Error formatting details for {analysis_type}: {e}")
