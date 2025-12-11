@@ -468,6 +468,68 @@ class BatchAnalysisEngine:
                     'error': str(e)
                 })
 
+        elif scope == 'specific_trial':
+            # Analyze a specific trial index
+            params = task.get('params', {})
+            trial_target = int(params.get('trial_index', 0)) # Default to 0 if not specified
+
+            num_trials = channel.num_trials
+            if trial_target >= num_trials or trial_target < 0:
+                log.warning(f"Trial {trial_target} not available for {channel_name} in {file_path.name} (Max: {num_trials-1})")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': f"Trial {trial_target} out of range (Total: {num_trials})"
+                }]
+            
+            data = channel.get_data(trial_target)
+            time = channel.get_relative_time_vector(trial_target)
+            
+            if data is None or time is None:
+                log.warning(f"No data available for trial {trial_target} of {channel_name} in {file_path.name}")
+                return [{
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': f"No data available for trial {trial_target}"
+                }]
+            
+            # Run analysis
+            try:
+                # Remove trial_index from params before passing to analysis func so we don't pass unexpected kwargs
+                # copy params first
+                analysis_params = params.copy()
+                analysis_params.pop('trial_index', None)
+                
+                result_dict = analysis_func(data, time, sampling_rate, **analysis_params)
+                # Add metadata
+                result_dict.update({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'trial_index': trial_target,
+                    'sampling_rate': sampling_rate
+                })
+                results.append(result_dict)
+            except Exception as e:
+                log.error(f"Error running {analysis_name} on specific trial {trial_target}: {e}", exc_info=True)
+                results.append({
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'channel': channel_name,
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'trial_index': trial_target,
+                    'error': str(e)
+                })
+
         else:
             log.warning(f"Unknown scope '{scope}' for analysis '{analysis_name}'. Skipping.")
             results.append({

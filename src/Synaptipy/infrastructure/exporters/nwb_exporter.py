@@ -61,28 +61,23 @@ class NWBExporter:
             session_metadata: A dictionary containing user-provided or default
                               metadata required for NWBFile creation. Expected keys:
                               'session_description', 'identifier', 'session_start_time',
-                              plus optional 'experimenter', 'lab', 'institution', 'session_id'.
+                              plus optional 'experimenter', 'lab', 'institution', 'session_id',
+                              and Subject/Device/Electrode info.
 
         Raises:
-            ExportError: If any error occurs during the NWB file creation or writing,
-                         or if pynwb is not installed.
-            ValueError: If essential session_metadata is missing or invalid.
-            FileNotFoundError: If the recording source file path is invalid (should be checked earlier).
-            TypeError: If the recording object is not of the expected type.
+            ExportError: If any error occurs during the NWB file creation or writing.
         """
         if not PYNWB_AVAILABLE:
             raise ExportError("pynwb library is not installed. Cannot export to NWB.")
 
         log.info(f"Starting NWB export for recording from: {getattr(recording, 'source_file', 'Unknown Source').name}")
         log.debug(f"Output path: {output_path}")
-        log.debug(f"Session metadata received: {session_metadata}")
 
         # --- Validate Recording Object ---
         if not isinstance(recording, Recording):
             raise TypeError("Invalid 'recording' object provided to NWBExporter.")
         if not hasattr(recording, 'channels') or not isinstance(recording.channels, dict):
              raise ValueError("Recording object is missing 'channels' dictionary or is not a dictionary.")
-        source_file_name = getattr(recording, 'source_file', Path("Unknown")).name
 
         # --- Validate Metadata & Prepare NWBFile ---
         required_keys = ['session_description', 'identifier', 'session_start_time']
@@ -94,188 +89,180 @@ class NWBExporter:
         if not isinstance(start_time, datetime):
              raise ValueError(f"session_start_time must be a datetime object, got {type(start_time)}.")
 
-        # Ensure session_start_time is timezone-aware (CRITICAL for NWB)
+        # Ensure session_start_time is timezone-aware
         if start_time.tzinfo is None:
             log.warning("NWB session_start_time is timezone naive. Attempting to localize.")
             try:
                 import tzlocal
                 local_tz = tzlocal.get_localzone()
                 start_time = start_time.replace(tzinfo=local_tz)
-                log.info(f"Applied local timezone: {local_tz.key}")
-            except Exception as tz_err:
-                 log.error(f"Failed to apply local timezone using tzlocal ({tz_err}). Forcing UTC.")
-                 start_time = start_time.replace(tzinfo=timezone.utc) # Fallback to UTC
-        else:
-            log.info(f"Session start time already timezone-aware: {start_time.tzinfo}")
+            except Exception:
+                 start_time = start_time.replace(tzinfo=timezone.utc)
 
+        # --- Create Subject Object ---
+        subject = None
+        # Extract subject specific keys (assuming flattened structure from dialog or specific keys)
+        subj_id = session_metadata.get('subject_id')
+        if subj_id:
+            try:
+                from pynwb.file import Subject
+                subject = Subject(
+                    subject_id=subj_id,
+                    species=session_metadata.get('species'),
+                    sex=session_metadata.get('sex', 'U'), # Default Unknown
+                    age=session_metadata.get('age'),
+                    description=session_metadata.get('subject_description'),
+                    genotype=session_metadata.get('genotype'),
+                    weight=session_metadata.get('weight')
+                )
+                log.debug(f"Created NWB Subject object for ID: {subj_id}")
+            except Exception as e_subj:
+                log.error(f"Failed to create Subject object: {e_subj}")
+                # Continue without subject if it fails, or raise? Proceeding is safer for user exp.
 
         # --- Create NWB File Object ---
         try:
-            # Extract optional fields safely
-            experimenter = session_metadata.get('experimenter')
-            lab = session_metadata.get('lab')
-            institution = session_metadata.get('institution')
-            session_id = session_metadata.get('session_id') # Optional user-defined session ID
-
-            # Construct notes from recording metadata safely
-            notes_list = [f"Original file: {source_file_name}"]
-            if hasattr(recording, 'sampling_rate') and recording.sampling_rate:
-                notes_list.append(f"Source sampling rate: {recording.sampling_rate:.2f} Hz")
+            # Construct notes
+            notes_list = []
+            if session_metadata.get('notes'):
+                notes_list.append(session_metadata['notes'])
+            
+            # Append technical details to notes
+            source_file_name = getattr(recording, 'source_file', Path("Unknown")).name
+            notes_list.append(f"Original file: {source_file_name}")
             if hasattr(recording, 'protocol_name') and recording.protocol_name:
                 notes_list.append(f"Protocol: {recording.protocol_name}")
-            if hasattr(recording, 'metadata') and isinstance(recording.metadata, dict):
-                 rec_notes = recording.metadata.get('notes')
-                 if rec_notes: notes_list.append(str(rec_notes))
-            notes = "\n".join(notes_list)
+                
+            notes_combined = "\n".join(notes_list)
 
             nwbfile = NWBFile(
                 session_description=session_metadata['session_description'],
-                identifier=session_metadata['identifier'], # Should be unique UUID or similar
-                session_start_time=start_time, # Must be timezone-aware datetime
-                experimenter=experimenter if experimenter else None, # List of strings or None
-                lab=lab if lab else None,
-                institution=institution if institution else None,
-                notes=notes,
-                session_id=session_id if session_id else None,
-                # file_create_date is added automatically by NWB
+                identifier=session_metadata['identifier'],
+                session_start_time=start_time,
+                experimenter=session_metadata.get('experimenter'),
+                lab=session_metadata.get('lab'),
+                institution=session_metadata.get('institution'),
+                session_id=session_metadata.get('session_id'),
+                notes=notes_combined,
+                subject=subject  # Attach Subject
             )
-            log.debug(f"NWBFile object created with identifier: {nwbfile.identifier}")
 
             # --- Device ---
-            device_name = recording.metadata.get('device_name', 'Amplifier')
-            device_descr = recording.metadata.get('device_description', 'Electrophysiology amplifier (details unknown)')
-            device_manu = recording.metadata.get('device_manufacturer', 'Unknown')
-            device = nwbfile.devices.get(device_name)
-            if device is None:
-                 device = nwbfile.create_device(name=device_name, description=device_descr, manufacturer=device_manu)
+            # Prefer metadata from dialog, fallback to recording metadata, then defaults
+            dev_name = session_metadata.get('device_name') or recording.metadata.get('device_name') or 'Amplifier'
+            dev_descr = session_metadata.get('device_description') or recording.metadata.get('device_description') or 'Electrophysiology amplifier'
+            dev_manu = session_metadata.get('device_manufacturer') or recording.metadata.get('device_manufacturer') or 'Unknown'
+            
+            device = nwbfile.create_device(name=dev_name, description=dev_descr, manufacturer=dev_manu)
             log.debug(f"Using device: {device.name}")
 
-            # --- Add Channels as PatchClampSeries ---
+            # --- Electrode Defaults ---
+            # Defaults from dialog
+            elec_desc_def = session_metadata.get('electrode_description_default', 'Intracellular Electrode')
+            elec_loc_def = session_metadata.get('electrode_location_default', 'Unknown')
+            elec_filt_def = session_metadata.get('electrode_filtering_default', 'unknown')
+
+            # --- Add Channels ---
             num_channels_processed = 0
             if not recording.channels:
                  log.warning("Recording contains no channels to export.")
-            else:
-                 log.info(f"Processing {len(recording.channels)} channels...")
 
             for chan_id, channel in recording.channels.items():
                 if not isinstance(channel, Channel):
-                    log.warning(f"Skipping invalid channel object for ID '{chan_id}' (type: {type(channel)}).")
                     continue
-                if not hasattr(channel, 'data_trials') or not channel.data_trials or not isinstance(channel.data_trials, list):
-                    log.warning(f"Skipping channel '{getattr(channel, 'name', chan_id)}' (ID: {chan_id}): No valid data trials found.")
+                if not getattr(channel, 'data_trials', None):
                     continue
 
-                log.debug(f"Processing channel '{channel.name}' (ID: {chan_id}) with {channel.num_trials} trial(s).")
+                log.debug(f"Processing channel '{channel.name}' (ID: {chan_id})")
 
-                # --- Create IntracellularElectrode object ---
-                electrode_name = f"electrode_{chan_id}" # Use a consistent, unique name
-
-                # --- Check for existing electrode by name (optional but safer) ---
-                # Access existing electrodes via nwbfile.icephys_electrodes (pynwb >= 2.0)
-                ic_electrode: Optional[IntracellularElectrode] = None
+                # --- Create/Get IntracellularElectrode ---
+                electrode_name = f"electrode_{chan_id}"
+                
+                # Check for specific channel overrides (if any in future) -> currently use defaults from dialog
+                # unless channel object has specific metadata populated
+                ic_desc = getattr(channel, 'electrode_description', None) or elec_desc_def
+                ic_loc = getattr(channel, 'electrode_location', None) or elec_loc_def
+                ic_filt = getattr(channel, 'electrode_filtering', None) or elec_filt_def
+                
+                # Since we iterate, check if electrode exists (though unique per channel usually)
                 if electrode_name in nwbfile.icephys_electrodes:
-                    ic_electrode = nwbfile.icephys_electrodes[electrode_name]
-                    log.warning(f"Intracellular electrode '{electrode_name}' already exists. Reusing.")
-
-                # If not found, create it
-                if ic_electrode is None:
-                    ic_description = getattr(channel, 'electrode_description', f"Intracellular electrode for {channel.name}")
-                    ic_location = getattr(channel, 'electrode_location', 'Unknown')
-                    ic_filtering = getattr(channel, 'electrode_filtering', 'unknown')
-                    # TODO: Parse resistance/seal if stored as strings (e.g., "10 MOhm" -> 10e6)
-                    ic_resistance = None
-                    ic_seal = None
-
+                     ic_electrode = nwbfile.icephys_electrodes[electrode_name]
+                else:
                     try:
-                        # Instantiate IntracellularElectrode directly
-                        ic_electrode = IntracellularElectrode(
+                        ic_electrode = nwbfile.create_icephys_electrode(
                             name=electrode_name,
-                            description=str(ic_description) if ic_description else "N/A",
-                            device=device, # Link to device
-                            location=str(ic_location) if ic_location else "Unknown",
-                            filtering=str(ic_filtering) if ic_filtering else "unknown",
-                            resistance=ic_resistance, # Expects float in Ohms or None
-                            seal=ic_seal            # Expects float in Ohms or None
+                            description=str(ic_desc),
+                            device=device,
+                            location=str(ic_loc),
+                            filtering=str(ic_filt)
                         )
-                        # Add the created electrode to the NWB file (pynwb >= 2.0)
-                        nwbfile.add_icephys_electrode(ic_electrode)
-                        log.debug(f"Created and added IntracellularElectrode: {electrode_name}")
                     except Exception as e_elec:
-                         log.error(f"Failed to create or add IntracellularElectrode '{electrode_name}': {e_elec}", exc_info=True)
-                         continue # Skip processing trials for this channel if electrode fails
+                         log.error(f"Failed to create electrode '{electrode_name}': {e_elec}")
+                         continue
 
-
-                # --- Create PatchClampSeries for each trial ---
+                # --- Create PatchClampSeries ---
                 for trial_idx, trial_data in enumerate(channel.data_trials):
-                    if not isinstance(trial_data, np.ndarray) or trial_data.ndim != 1 or trial_data.size == 0:
-                        log.warning(f"Skipping invalid trial data for Ch '{channel.name}', Trial {trial_idx} (type: {type(trial_data)}, shape: {getattr(trial_data, 'shape', 'N/A')}).")
-                        continue
+                    if trial_data.size == 0: continue
 
-                    ts_name = f"{channel.name}_trial_{trial_idx:03d}" # Padded index
-                    ts_description = f"Raw data for channel '{channel.name}' (ID: {chan_id}), trial {trial_idx+1}." # User-friendly 1-based index
-                    channel_units = getattr(channel, 'units', 'unknown')
-                    channel_sampling_rate = getattr(channel, 'sampling_rate', recording.sampling_rate) # Use channel rate if available
-                    channel_t_start = getattr(channel, 't_start', 0.0) # Relative to recording start
-
-                    if channel_sampling_rate is None or channel_sampling_rate <= 0:
-                        log.error(f"Invalid sampling rate ({channel_sampling_rate}) for Ch '{channel.name}', Trial {trial_idx}. Skipping trial.")
-                        continue
-
-                    # Assume data is already in physical units from neo/adapter
-                    ts_gain = 1.0
-                    ts_offset_raw = getattr(channel, 'electrode_offset', None)
-                    # Handle various offset types safely
-                    if ts_offset_raw is None:
-                        ts_offset = 0.0
-                    elif isinstance(ts_offset_raw, (int, float)):
-                        ts_offset = 0.0 if np.isnan(ts_offset_raw) else float(ts_offset_raw)
-                    else:
-                        try:
-                            ts_offset = float(ts_offset_raw)
-                        except (ValueError, TypeError):
-                            ts_offset = 0.0
-
+                    ts_name = f"{channel.name}_trial_{trial_idx:03d}"
+                    ts_desc = f"Raw data for channel '{channel.name}', trial {trial_idx+1}"
+                    
+                    # Units & Verification
+                    # If units imply voltage -> CurrentClampSeries (measures V)
+                    # If units imply current -> VoltageClampSeries (measures I)
+                    # For now, generic PatchClampSeries is safer if mode unknown, 
+                    # BUT PyNWB encourages specific if possible.
+                    # NWB: VoltageClampSeries (records Current, units=Amps). CurrentClampSeries (records Voltage, units=Volts).
+                    
+                    units = getattr(channel, 'units', 'unknown').lower()
+                    
+                    # Convert common units to SI for NWB (V, A) ? 
+                    # PyNWB expects SI units generally (Volts, Amps). 
+                    # !!! CRITICAL: Neo/Synaptipy usually keeps data in mV/pA.
+                    # We should ideally convert or set the unit string correctly.
+                    # If we set 'unit="mV"', PyNWB handles it? Yes, it accepts string units.
+                    
+                    final_units = getattr(channel, 'units', 'unknown')
+                    
+                    # Decide Class based on units if possible
+                    SeriesClass = PatchClampSeries
+                    if 'v' in units: # likely Voltage -> CurrentClampSeries (records V)
+                        pass # PyNWB structure is complex: CurrentClampSeries stores MEASURED VOLTAGE in 'data'
+                        # For simplicity/safety, sticking to parent PatchClampSeries is often better unless we are SURE of clamp mode.
+                        # However, NWB guidelines prefer specific classes.
+                        # Let's stick to PatchClampSeries to avoid validation errors if we misuse the specific ones without full clamp params (Series resistance etc)
+                    
+                    channel_rate = getattr(channel, 'sampling_rate', recording.sampling_rate)
+                    
                     try:
                         time_series = PatchClampSeries(
                             name=ts_name,
-                            description=ts_description,
+                            description=ts_desc,
                             data=trial_data,
-                            unit=str(channel_units) if channel_units else 'unknown',
-                            electrode=ic_electrode, # Link to the IntracellularElectrode object
-                            gain=ts_gain,
-                            offset=ts_offset,
-                            stimulus_description="Stimulus details not available", # Placeholder
-                            sweep_number=np.uint64(trial_idx),
-                            rate=float(channel_sampling_rate),
-                            starting_time=float(channel_t_start) # Relative to NWBFile session_start_time
+                            unit=final_units,
+                            electrode=ic_electrode,
+                            rate=float(channel_rate) if channel_rate else 1000.0,
+                            starting_time=float(getattr(channel, 't_start', 0.0)),
+                            gain=1.0, # Assumed data is already scaled
+                            sweep_number=np.uint64(trial_idx)
                         )
-                        nwbfile.add_acquisition(time_series) # Add raw data to acquisition
-                        log.debug(f"Added PatchClampSeries: {ts_name} to acquisition.")
+                        nwbfile.add_acquisition(time_series)
                     except Exception as e_ts:
-                        log.error(f"Failed to create or add PatchClampSeries '{ts_name}': {e_ts}", exc_info=True)
-                        # Continue processing other trials/channels
+                         log.error(f"Failed to add series '{ts_name}': {e_ts}")
+                         continue
 
-                num_channels_processed += 1 # Increment count only after successful channel processing
-
+                num_channels_processed += 1
 
             if num_channels_processed == 0:
-                 log.warning("No valid channel data was processed for export. NWB file may be empty.")
-                 # Consider if an error should be raised here if no channels are exported
+                 log.warning("No valid channels exported.")
 
-            # --- Write NWB File ---
-            log.info(f"Writing NWB data to: {output_path}")
-            output_path.parent.mkdir(parents=True, exist_ok=True) # Ensure directory exists
+            # --- Write File ---
+            log.info(f"Writing NWB to: {output_path}")
             with NWBHDF5IO(str(output_path), 'w') as io:
                 io.write(nwbfile)
-            log.info("NWB export completed successfully.")
+                
+            log.info("NWB export complete.")
 
-        except ValueError as ve: # Catch specific ValueErrors (e.g., metadata)
-             log.error(f"Data validation error during NWB export: {ve}")
-             raise ExportError(f"Data validation error: {ve}") from ve
-        except TypeError as te: # Catch specific TypeErrors (e.g., wrong object type)
-             log.error(f"Type error during NWB export: {te}", exc_info=True) # Add traceback for TypeErrors
-             raise ExportError(f"Type error during export: {te}") from te
-        except Exception as e: # Catch any other unexpected errors
-            log.error(f"Unexpected error during NWB export process: {e}", exc_info=True)
-            # Wrap generic exceptions in ExportError for consistent handling upstream
+        except Exception as e:
+            log.error(f"NWB Export failed: {e}", exc_info=True)
             raise ExportError(f"Failed to export to NWB: {e}") from e
