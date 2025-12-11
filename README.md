@@ -43,8 +43,8 @@ conda env create -f environment.yml
 # 3. Activate the environment
 conda activate synaptipy
 
-# 4. Install the application
-pip install -e .
+# 4. Install the application (use ".[dev]" for development tools like flake8)
+pip install -e ".[dev]"
 ```
 
 ### Quick Verification

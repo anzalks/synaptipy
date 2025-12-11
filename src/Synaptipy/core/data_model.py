@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any # Added Any for metadata dict
 import numpy as np
+import uuid
 from datetime import datetime, timezone # Required for Recording timestamp
 
 # Configure logger for this module
