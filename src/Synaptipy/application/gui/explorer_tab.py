@@ -13,6 +13,7 @@ from typing import List, Optional, Dict, Any, Tuple, Set, Union
 import uuid
 from datetime import datetime, timezone
 from functools import partial
+import time
 
 import numpy as np
 import pyqtgraph as pg
@@ -665,6 +666,10 @@ class ExplorerTab(QtWidgets.QWidget):
     # =========================================================================
     def _on_tree_double_clicked(self, index: QtCore.QModelIndex):
         """Handle double click on file tree to load file."""
+        if getattr(self, '_is_loading', False):
+            log.info("Navigation ignored - loading in progress")
+            return
+
         file_path = Path(self.file_model.filePath(index))
         if file_path.is_file():
             log.info(f"Tree double-click: Loading {file_path}")
@@ -841,18 +846,20 @@ class ExplorerTab(QtWidgets.QWidget):
                     log.debug(f"Signal for checkbox {i} was not connected or already disconnected: {e}")
                     pass
 
-        # Clear lists of dynamic widgets
+        # --- FULL RESET: Clear widgets to prevent ghost data ---
         self.plot_widgets.clear()
 
-        for checkbox in self.channel_checkboxes.values():
-            try: checkbox.stateChanged.disconnect(self._trigger_plot_update)
-            except (TypeError, RuntimeError): pass
+        # Explicit disconnect is redundant if widgets are deleted, and causes warnings if already disconnected.
+        # for checkbox in self.channel_checkboxes.values():
+        #     try: checkbox.stateChanged.disconnect(self._trigger_plot_update)
+        #     except (TypeError, RuntimeError): pass
 
         if hasattr(self, 'channel_checkbox_layout') and self.channel_checkbox_layout:
             while self.channel_checkbox_layout.count():
                 item = self.channel_checkbox_layout.takeAt(0); widget = item.widget()
                 if widget: widget.deleteLater()
         self.channel_checkboxes.clear()
+        
         if self.channel_select_group: self.channel_select_group.setEnabled(False)
 
         for plot in self.channel_plots.values():
@@ -864,6 +871,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 except (TypeError, RuntimeError): pass
         if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
              self.graphics_layout_widget.clear()
+             pass
         self.channel_plots.clear(); self.channel_plot_data_items.clear()
 
         for slider in self.individual_y_sliders.values():
@@ -940,21 +948,120 @@ class ExplorerTab(QtWidgets.QWidget):
             log.warning("No channels in recording to create UI for.")
             return
 
+        # Get current channel keys from recording (as strings)
+        channel_keys = list(self.current_recording.channels.keys())
+        num_channels = len(channel_keys)
+        
+        # --- RECYCLING CHECKS ---
+        # can_recycle = (len(self.plot_widgets) == num_channels and 
+        #                self.channel_checkbox_layout.count() == num_channels)
+        can_recycle = False # Force Full Rebuild for Correctness
+        
+        if can_recycle:
+            log.info(f"[EXPLORER-CREATE-UI] Recycling existing UI widgets for {num_channels} channels.")
+            
+            # Clear mappings but keep widgets
+            self.channel_checkboxes.clear()
+            self.channel_plots.clear()
+            self.channel_plot_data_items.clear()
+            self.selected_average_plot_items.clear()
+            self.global_y_range_base = None
+            self.channel_y_range_bases.clear()
+            
+            checkbox_group = QtWidgets.QButtonGroup()
+            checkbox_group.setExclusive(False)
+            first_plot_item = None
+
+            for i, chan_key in enumerate(channel_keys):
+                channel = self.current_recording.channels[chan_key]
+                display_name = f"{channel.name}" if hasattr(channel, 'name') and channel.name else f"Ch {chan_key}"
+                
+                # Recycle Checkbox
+                item = self.channel_checkbox_layout.itemAt(i)
+                checkbox = item.widget()
+                if isinstance(checkbox, QtWidgets.QCheckBox):
+                    checkbox.setText(display_name)
+                    checkbox.setToolTip(f"Show/hide {display_name}")
+                    # Ensure checked state if desired, or keep user pref? 
+                    # For file cycling, usually reset to Checked is safer
+                    checkbox.setChecked(True)
+                    self.channel_checkboxes[chan_key] = checkbox
+                    checkbox_group.addButton(checkbox)
+                
+                # Recycle PlotItem
+                plot_item = self.plot_widgets[i]
+                
+                # --- EXPLICIT CLEARING ---
+                # Manually remove all items to ensure no "ghost" items persist
+                # plot_item.clear() sometimes misses items managed by ViewBox or other mixins
+                for item in plot_item.listDataItems():
+                     plot_item.removeItem(item)
+                # Also clear any other graphics items (text, infinite lines, etc)
+                plot_item.clear()
+                
+                # Reset ViewBox state
+                vb = plot_item.getViewBox()
+                if vb:
+                    # vb.clearAutoRange() # METHOD DOES NOT EXIST
+                    vb.enableAutoRange(x=False, y=False)
+                self.channel_plots[chan_key] = plot_item
+                
+                # --- Update Plot Metadata (Labels, Units, IDs) ---
+                plot_item.getViewBox()._synaptipy_chan_id = chan_key
+                plot_item.setLabel('left', text=channel.get_primary_data_label(), units=channel.units)
+                
+                # Update bottom axis visibility (Time label only on last plot)
+                if i == num_channels - 1:
+                    plot_item.setLabel('bottom', 'Time', units='s')
+                    plot_item.getAxis('bottom').showLabel(True)
+                else:
+                    plot_item.setLabel('bottom', None) # Clear label
+                    plot_item.getAxis('bottom').showLabel(False)
+                
+                # Checkbox signal re-connect
+                # Use UniqueConnection - robustly handles re-connection without disconnecting first
+                checkbox.setProperty("synaptipy_channel_id", chan_key)
+                checkbox.toggled.connect(self._trigger_plot_update, QtCore.Qt.UniqueConnection)
+                checkbox.toggled.connect(self._on_channel_checkbox_toggled, QtCore.Qt.UniqueConnection)
+                
+                if first_plot_item is None:
+                    first_plot_item = plot_item
+            
+            # --- Recreate/Reconnect Dependent UI Components ---
+            self._create_y_controls_for_channels()
+            self._connect_viewbox_signals()
+            self._update_manual_limits_ui()
+
+            log.info("[EXPLORER-CREATE-UI] Updating UI state...")
+            self._update_ui_state()
+            log.info("[EXPLORER-CREATE-UI] Channel UI recycling complete")
+            return
+        
+        # --- FULL REBUILD ---
+        log.info(f"[EXPLORER-CREATE-UI] Full UI rebuild required (Channels: {len(self.plot_widgets)} -> {num_channels})")
+        
+        # 1. Clear Plot Widgets (GL Layout)
+        self.channel_plots.clear() # Clear dict
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+            self.graphics_layout_widget.clear() # Remove all items from layout
+        self.plot_widgets.clear() # Clear list ref
+        
+        # 2. Clear Checkboxes
         self.channel_checkboxes.clear()
-        self.channel_plots.clear()
+        if hasattr(self, 'channel_checkbox_layout') and self.channel_checkbox_layout:
+             while self.channel_checkbox_layout.count():
+                 item = self.channel_checkbox_layout.takeAt(0); widget = item.widget()
+                 if widget: widget.deleteLater()
+        
+        # 3. Clear Data Items
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
         self.global_y_range_base = None
         self.channel_y_range_bases.clear()
 
-        # Simple plotting approach matching analysis tabs
-        
         # Set white background on the GraphicsLayoutWidget (parent of all plot items)
         if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
             self.graphics_layout_widget.setBackground('white')
-
-        # Get current channel keys from recording (as strings)
-        channel_keys = list(self.current_recording.channels.keys())
 
         # Loop through channels and create UI elements
         checkbox_group = QtWidgets.QButtonGroup()
@@ -1006,6 +1113,7 @@ class ExplorerTab(QtWidgets.QWidget):
             # Store this association
             plot_item.getViewBox()._synaptipy_chan_id = chan_key  # Attach ID to viewbox
             self.channel_plots[chan_key] = plot_item
+            self.plot_widgets.append(plot_item)  # Crucial for recycling logic
             
             # Y-axis label with units if available
             plot_item.setLabel('left', text=channel.get_primary_data_label(), units=channel.units)
@@ -1030,8 +1138,9 @@ class ExplorerTab(QtWidgets.QWidget):
         
         # Hook up checkbox signals at the end
         for chan_key, checkbox in self.channel_checkboxes.items():
-            checkbox.toggled.connect(self._trigger_plot_update)
-            checkbox.toggled.connect(lambda checked, k=chan_key: self._update_channel_visibility(k, checked))
+            checkbox.setProperty("synaptipy_channel_id", chan_key)
+            checkbox.toggled.connect(self._trigger_plot_update, QtCore.Qt.UniqueConnection)
+            checkbox.toggled.connect(self._on_channel_checkbox_toggled, QtCore.Qt.UniqueConnection)
         
         # Create Y control sliders and scrollbars for each channel
         self._create_y_controls_for_channels()
@@ -1282,41 +1391,73 @@ class ExplorerTab(QtWidgets.QWidget):
     # File Loading & Display Options
     # =========================================================================
     def _load_and_display_file(self, filepath: Path):
+        t_start_total = time.time()
         if not filepath or not filepath.exists():
              log.error(f"Invalid file: {filepath}")
              QtWidgets.QMessageBox.critical(self, "File Error", f"File not found: {filepath}")
              self._reset_ui_and_state_for_new_file(); self._update_ui_state(); return
-        self.status_bar.showMessage(f"Loading '{filepath.name}'..."); QtWidgets.QApplication.processEvents()
-        self._reset_ui_and_state_for_new_file(); self.current_recording = None
-        # Clear data cache when loading new recording
-        self._clear_data_cache()
-        try:
-            log.info(f"Reading: {filepath}")
-            self.current_recording = self.neo_adapter.read_recording(filepath)
-            log.info(f"Loaded: {filepath.name}")
-            self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
-            log.info(f"Creating channel UI for {len(self.current_recording.channels) if self.current_recording else 0} channels...")
-            self._create_channel_ui()
-            log.info(f"Updating metadata display...")
-            self._update_metadata_display()
-            log.info(f"Starting plot update...")
-            self._update_plot()
-            log.info(f"Resetting view...")
-            self._reset_view()
-            
-            # Automatically select some trials to show average plots by default
-            self._auto_select_trials_for_average()
-            
-            # Update file explorer to show this file
-            self._sync_file_explorer(filepath)
-            
-            self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
-            log.info(f"File loading complete: {filepath.name}")
+        
+        if getattr(self, '_is_loading', False):
+             log.warning("Load request ignored - already loading.")
+             return
 
-            # Update SessionManager
-            if self.session_manager:
-                 self.session_manager.set_file_context(self.file_list, self.current_file_index)
-                 self.session_manager.current_recording = self.current_recording
+        self._is_loading = True
+        self.status_bar.showMessage(f"Loading '{filepath.name}'..."); QtWidgets.QApplication.processEvents()
+        
+        try:
+             t0 = time.time()
+             self._reset_ui_and_state_for_new_file(); self.current_recording = None
+             self._clear_data_cache()
+             
+             # Optimization: Suspend layout updates during full rebuild
+             if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                 self.graphics_layout_widget.setUpdatesEnabled(False)
+
+             log.info(f"Reading: {filepath}")
+             t1 = time.time()
+             log.info(f"[PROFILE] UI Reset & Cache Clear took: {t1 - t0:.4f}s")
+             
+             self.current_recording = self.neo_adapter.read_recording(filepath)
+             t2 = time.time()
+             log.info(f"[PROFILE] neo_adapter.read_recording took: {t2 - t1:.4f}s")
+             
+             log.info(f"Loaded: {filepath.name}")
+             self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
+             log.info(f"Creating channel UI for {len(self.current_recording.channels) if self.current_recording else 0} channels...")
+             
+             self._create_channel_ui()
+             t3 = time.time()
+             log.info(f"[PROFILE] _create_channel_ui took: {t3 - t2:.4f}s")
+             
+             log.info(f"Updating metadata display...")
+             self._update_metadata_display()
+             t4 = time.time()
+             
+             log.info(f"Starting plot update...")
+             self._update_plot()
+             t5 = time.time()
+             log.info(f"[PROFILE] _update_plot took: {t5 - t4:.4f}s")
+             
+             log.info(f"Resetting view...")
+             self._reset_view()
+             t6 = time.time()
+             log.info(f"[PROFILE] _reset_view (schedule) took: {t6 - t5:.4f}s")
+             
+             # Automatically select some trials to show average plots by default
+             self._auto_select_trials_for_average()
+             
+             # Update file explorer to show this file
+             self._sync_file_explorer(filepath)
+             t7 = time.time()
+             
+             self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
+             log.info(f"File loading complete: {filepath.name}")
+             log.info(f"[PROFILE] Total load time: {t7 - t_start_total:.4f}s")
+
+             # Update SessionManager
+             if self.session_manager:
+                  self.session_manager.set_file_context(self.file_list, self.current_file_index)
+                  self.session_manager.current_recording = self.current_recording
 
         except (FileNotFoundError, UnsupportedFormatError, FileReadError, SynaptipyError) as e:
              log.error(f"Load fail '{filepath.name}': {e}", exc_info=False)
@@ -1327,8 +1468,23 @@ class ExplorerTab(QtWidgets.QWidget):
              QtWidgets.QMessageBox.critical(self, "Unexpected Error", f"Error loading:\n{filepath.name}\n\n{e}")
              self._clear_metadata_display(); self.status_bar.showMessage(f"Unexpected error loading {filepath.name}.", 5000)
         finally:
+             if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                 self.graphics_layout_widget.setUpdatesEnabled(True)
+             
+             self._is_loading = False
              self._update_zoom_scroll_enable_state(); self._update_ui_state()
              if self.manual_limits_enabled: self._apply_manual_limits()
+
+    def _on_channel_checkbox_toggled(self, checked: bool):
+        """Handle channel checkbox toggles dynamically."""
+        sender = self.sender()
+        if isinstance(sender, QtWidgets.QCheckBox):
+            chan_key = sender.property("synaptipy_channel_id")
+            if chan_key is not None:
+                self._update_channel_visibility(chan_key, checked)
+                # Ensure plot update is triggered
+                self._trigger_plot_update()
+
 
     def _sync_file_explorer(self, file_path: Path):
         """
@@ -1550,7 +1706,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # Mark cache as dirty since we're clearing plots
         self._mark_cache_dirty()
 
-    def _update_plot_pens_only(self):
+    def update_plot_pens(self):
         """Efficiently update only the pen properties of existing plot items using a batch update."""
         if not self._needs_pen_update():
             log.debug("[EXPLORER-PLOT] No pen changes detected - skipping pen update")
@@ -1613,79 +1769,124 @@ class ExplorerTab(QtWidgets.QWidget):
         log.info("[EXPLORER-PEN] Pen update complete.")
 
     def _update_plot(self):
-        """
-        Clears and redraws plots based on the current recording AND plot mode.
-        """
-        if not self.current_recording:
-            log.warning("[_update_plot] Aborting: No recording loaded.")
+        """Standard plot update - Adds items for current plot mode."""
+        mode_str = 'CYCLE_SINGLE' if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else 'OVERLAY_AVG'
+        log.info(f"[_update_plot] Starting plot update. Mode: {mode_str}")
+        if not self.current_recording or not self.channel_plots:
+            log.info("[_update_plot] No recording or plots.")
             return
 
-        log.info(f"[_update_plot] Starting plot update. Mode: {'CYCLE_SINGLE' if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else 'OVERLAY_AVG'}")
+        # BATCHING: Disable updates during heavy adding
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+            self.graphics_layout_widget.setUpdatesEnabled(False)
 
-        for plot_widget in self.channel_plots.values():
-            if plot_widget: plot_widget.clear()
-        self.channel_plot_data_items.clear()
+        try:
+            # Need to clear items first? Or does _setup_ui do it?
+            # Typically _update_plot assumes plots are empty or needs to clear them.
+            # But the caller usually handles clearing. Let's check.
+            # Actually, to be safe, we should clear previous data items here if not already done.
+            # But based on flow, let's assume valid state or clear existing data items.
+            for cid, items in self.channel_plot_data_items.items():
+                p = self.channel_plots.get(cid)
+                if p:
+                    for item in items:
+                        try: p.removeItem(item)
+                        except: pass
+            self.channel_plot_data_items.clear()
+            self.selected_average_plot_items.clear() # Clear manual overlays too
 
-        # --- OPTIMIZATION: Import and get cached pens ONCE ---
-        from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
-        
-        # Get the globally cached pens. This is extremely fast.
-        single_trial_pen = get_single_trial_pen()
-        average_pen = get_average_pen()
-        # --- END OPTIMIZATION ---
+            # Get pen preferences
+            from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen, get_grid_pen
+            avg_pen = get_average_pen()
+            current_trial_pen = get_single_trial_pen()
+            
+            # --- AGGRESSIVE OPTIMIZATION SETTINGS ---
+            ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
+            # Force aggressive threshold if enabled (e.g. 3000 points) to prevent freezes
+            ds_avg_threshold = 3000 
+            ds_method = 'peak' # 'peak' is best for Ephys, 'subsample' is faster
+            clip_view = True
 
-        ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
+            for i, chan_key in enumerate(self.current_recording.channels.keys()):
+                plot_item = self.channel_plots.get(chan_key)
+                if not plot_item or not plot_item.isVisible():
+                    continue
+                
+                channel = self.current_recording.channels[chan_key]
+                self.channel_plot_data_items[chan_key] = []
 
-        for channel_id, channel in self.current_recording.channels.items():
-            plot_widget = self.channel_plots.get(channel_id)
-            if not plot_widget or not channel: continue
+                # Plot Grid if enabled (this is usually handled by plot item settings, skipping for now)
 
-            self.channel_plot_data_items[channel_id] = []
-
-            # --- FIX: Respect Plot Mode ---
-            if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
-                log.debug(f"[_update_plot] CYCLE_SINGLE mode for channel {channel_id}: Plotting trial {self.current_trial_index}.")
-                trial_idx = self.current_trial_index
-                if 0 <= trial_idx < channel.num_trials:
-                    trial_data, time_vector = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
-                    if time_vector is not None and trial_data is not None:
-                        # --- OPTIMIZATION: Use cached pen ---
-                        plot_item = plot_widget.plot(time_vector, trial_data, pen=single_trial_pen, name=f"trial_{trial_idx}")
-                        
-                        # PERFORMANCE: Optimized downsampling settings
-                        plot_item.setDownsampling(auto=ds_enabled, method='peak')
-                        plot_item.setClipToView(True)
-                        plot_item.opts['trial_index'] = trial_idx
-                        log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{trial_idx}'")
-                        self.channel_plot_data_items[channel_id].append(plot_item)
-            else: # OVERLAY_AVG mode
-                log.debug(f"[_update_plot] OVERLAY_AVG mode for channel {channel_id}: Plotting {channel.num_trials} trials and average.")
-                for i in range(channel.num_trials):
-                    trial_data, time_vector = channel.get_data(i), channel.get_relative_time_vector(i)
-                    if time_vector is None or trial_data is None: continue
-
-                    # --- OPTIMIZATION: Use cached pen ---
-                    plot_item = plot_widget.plot(time_vector, trial_data, pen=single_trial_pen, name=f"trial_{i}")
-
-                    # PERFORMANCE: Optimized downsampling settings
-                    plot_item.setDownsampling(auto=ds_enabled, method='peak')
-                    plot_item.setClipToView(True)
-                    plot_item.opts['trial_index'] = i
-                    log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'trial_{i}'")
-                    self.channel_plot_data_items[channel_id].append(plot_item)
-
-                avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
-                if avg_data is not None and avg_time is not None:
-
-                    # --- OPTIMIZATION: Use cached pen ---
-                    avg_item = plot_widget.plot(avg_time, avg_data, pen=average_pen, name="avg_trace")
+                if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
+                    # Plot Single Trial
+                    if 0 <= self.current_trial_index < channel.num_trials:
+                        try:
+                            data = channel.get_data(self.current_trial_index)
+                            t = channel.get_relative_time_vector(self.current_trial_index)
+                            if data is not None and t is not None:
+                                item = plot_item.plot(t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1}")
+                                # Apply Optimizations
+                                item.setDownsampling(auto=ds_enabled, method=ds_method)
+                                item.opts['autoDownsample'] = ds_enabled
+                                if ds_enabled: item.opts['autoDownsampleThreshold'] = ds_avg_threshold
+                                item.setClipToView(clip_view)
+                                item.opts['trial_index'] = self.current_trial_index
+                                self.channel_plot_data_items[chan_key].append(item)
+                        except Exception as e:
+                            log.error(f"Error plotting trial {self.current_trial_index}: {e}")
+                
+                else: # OVERLAY_AVG
+                    # 1. Overlay ALL trials
+                    # WARNING: This causes massive object overhead (N items).
+                    # Optimization: Consider using ONE MultiPlotItem in future, but for now apply strict DS.
+                    for trial_idx in range(channel.num_trials):
+                         try:
+                            # Optimization: Use 'subsample' method for background traces to save CPU, 'peak' for avg
+                            bg_ds_method = 'subsample' if ds_enabled else 'peak' 
+                            
+                            data = channel.get_data(trial_idx)
+                            t = channel.get_relative_time_vector(trial_idx)
+                            if data is not None and t is not None:
+                                # Use a lighter pen or user pref? Using same pen for now.
+                                item = plot_item.plot(t, data, pen=current_trial_pen)
+                                
+                                # Apply Strict Optimizations
+                                item.setDownsampling(auto=ds_enabled, method=bg_ds_method)
+                                item.opts['autoDownsample'] = ds_enabled
+                                if ds_enabled: item.opts['autoDownsampleThreshold'] = ds_avg_threshold # Aggressive
+                                item.setClipToView(clip_view)
+                                item.opts['trial_index'] = trial_idx
+                                self.channel_plot_data_items[chan_key].append(item)
+                         except Exception as e:
+                             pass # Skip bad trials
                     
-                    # PERFORMANCE: Optimized downsampling settings
-                    avg_item.setDownsampling(auto=ds_enabled, method='peak')
-                    avg_item.setClipToView(True)
-                    log.debug(f"[_update_plot] Applied optimized downsampling (mode='peak', clip=True, auto={ds_enabled}) to item 'avg_trace'")
-                    self.channel_plot_data_items[channel_id].append(avg_item)
-        log.info(f"[_update_plot] Plot update complete for {len(self.channel_plot_data_items)} channels.")
+                    # 2. Plot Average on Top
+                    try:
+                        avg_data = channel.get_averaged_data()
+                        avg_t = channel.get_relative_averaged_time_vector()
+                        if avg_data is not None and avg_t is not None:
+                             item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average")
+                             item.setDownsampling(auto=ds_enabled, method='peak') # Always peak for avg
+                             item.opts['autoDownsample'] = ds_enabled
+                             if ds_enabled: item.opts['autoDownsampleThreshold'] = ds_avg_threshold
+                             item.setClipToView(clip_view)
+                             item.setZValue(10) # Ensure average is on top
+                             item.opts['name'] = 'avg'
+                             self.channel_plot_data_items[chan_key].append(item)
+                    except Exception as e:
+                        log.error(f"Error plotting avg: {e}")
+
+            # Plot selection overlay if exists
+            if self.selected_average_plot_items:
+                pass # Already handled or needs re-add? Usually manual add handles it.
+
+        except Exception as e:
+            log.error(f"[_update_plot] Error updating plot: {e}", exc_info=True)
+        finally:
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                self.graphics_layout_widget.setUpdatesEnabled(True)
+
+        log.info(f"[_update_plot] Plot update complete for {len(self.channel_plots)} channels.")
 
     def _update_metadata_display(self):
         if self.current_recording and all(hasattr(self, w) and getattr(self, w) for w in ['filename_label','sampling_rate_label','duration_label','channels_label']):
@@ -2285,6 +2486,12 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _reset_view(self):
         log.info(f"[EXPLORER-RESET] Reset view called - has_recording={self.current_recording is not None}, manual_limits={self.manual_limits_enabled}")
+        
+        # STOP TIMER: Cancel any pending reset timers to prevent overlapping calls
+        if hasattr(self, '_reset_timer') and self._reset_timer and self._reset_timer.isActive():
+            self._reset_timer.stop()
+            log.info("[EXPLORER-RESET] Cancelled pending reset timer")
+        
         if not self.current_recording:
             log.info(f"[EXPLORER-RESET] No recording - calling reset UI and state")
             self._reset_ui_and_state_for_new_file(); self._update_ui_state(); return
@@ -2293,7 +2500,7 @@ class ExplorerTab(QtWidgets.QWidget):
             self._apply_manual_limits(); self._update_ui_state(); return
 
         log.info(f"[EXPLORER-RESET] Scheduling manual range setting...")
-        vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
+        vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
         vis_map={k:v for k,v in vis_map.items() if k is not None}
         if not vis_map:
             log.warning(f"[EXPLORER-RESET] No visible plots found for range setting")
@@ -2302,47 +2509,43 @@ class ExplorerTab(QtWidgets.QWidget):
         # --- Define function for deferred manual range calculation and application ---
         def do_deferred_manual_range_and_capture():
             log.info(f"[EXPLORER-RESET] Performing deferred manual range setting...")
+            if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                self.graphics_layout_widget.setUpdatesEnabled(False)
+            
             try:
-                # --- Manually Calculate Bounds ---
+                # --- Manually Calculate Bounds Efficiently ---
+                # optimization: Use pyqtgraph's internal bounds calculation (childrenBounds)
+                # instead of iterating raw data which is extremely slow (O(N) data access).
                 x_min, x_max = None, None
                 y_mins, y_maxs = {}, {} # Store per channel_id
 
                 for chan_id, plot_widget in vis_map.items():
-                    channel = self.current_recording.channels.get(chan_id)
-                    if not channel: continue
+                    try:
+                        vb = plot_widget.getViewBox()
+                        if not vb: continue
+                        
+                        # efficient bounds calculation from existing items
+                        # returns [[xmin, xmax], [ymin, ymax]]
+                        bounds = vb.childrenBounds()
+                        
+                        if bounds:
+                            xb = bounds[0]
+                            yb = bounds[1]
+                            
+                            # Update Global X
+                            if xb is not None and len(xb) == 2 and xb[0] is not None:
+                                cx_min, cx_max = xb[0], xb[1]
+                                x_min = min(x_min, cx_min) if x_min is not None else cx_min
+                                x_max = max(x_max, cx_max) if x_max is not None else cx_max
+                                
+                            # Update Channel Y
+                            if yb is not None and len(yb) == 2 and yb[0] is not None:
+                                y_mins[chan_id] = yb[0]
+                                y_maxs[chan_id] = yb[1]
+                    except Exception as e:
+                        log.warning(f"[EXPLORER-RESET] Error getting bounds for channel {chan_id}: {e}")
 
-                    chan_x_min, chan_x_max, chan_y_min, chan_y_max = None, None, None, None
-                    data_sources = [] # Tuples of (time_vec, data_vec)
-
-                    if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
-                        trial_idx = self.current_trial_index
-                        if 0 <= trial_idx < channel.num_trials:
-                           data, time_vec = channel.get_data(trial_idx), channel.get_relative_time_vector(trial_idx)
-                           if time_vec is not None and data is not None: data_sources.append((time_vec, data))
-                    else: # OVERLAY_AVG
-                        for i in range(channel.num_trials):
-                             data, time_vec = channel.get_data(i), channel.get_relative_time_vector(i)
-                             if time_vec is not None and data is not None: data_sources.append((time_vec, data))
-                        avg_data, avg_time = channel.get_averaged_data(), channel.get_relative_averaged_time_vector()
-                        if avg_data is not None and avg_time is not None: data_sources.append((avg_time, avg_data))
-
-                    for time_vec, data in data_sources:
-                        if time_vec is not None and len(time_vec) > 0:
-                            t_min, t_max = np.min(time_vec), np.max(time_vec)
-                            chan_x_min = min(chan_x_min, t_min) if chan_x_min is not None else t_min
-                            chan_x_max = max(chan_x_max, t_max) if chan_x_max is not None else t_max
-                        if data is not None and len(data) > 0:
-                            valid_data = data[np.isfinite(data)]
-                            if len(valid_data) > 0:
-                                d_min, d_max = np.min(valid_data), np.max(valid_data)
-                                chan_y_min = min(chan_y_min, d_min) if chan_y_min is not None else d_min
-                                chan_y_max = max(chan_y_max, d_max) if chan_y_max is not None else d_max
-
-                    if chan_x_min is not None: x_min = min(x_min, chan_x_min) if x_min is not None else chan_x_min
-                    if chan_x_max is not None: x_max = max(x_max, chan_x_max) if x_max is not None else chan_x_max
-                    if chan_y_min is not None: y_mins[chan_id] = chan_y_min
-                    if chan_y_max is not None: y_maxs[chan_id] = chan_y_max
-                log.info(f"[EXPLORER-RESET] Manual bounds: X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
+                log.info(f"[EXPLORER-RESET] Manual bounds (Optimized): X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
                 # --- End Manual Calculation ---
 
                 # --- Apply Manually Calculated Ranges Directly ---
@@ -2353,35 +2556,44 @@ class ExplorerTab(QtWidgets.QWidget):
 
                 if final_x_range:
                     log.info(f"[EXPLORER-RESET] Setting manual X range: {final_x_range}")
-                    first_plot = next(iter(vis_map.values()))
-                    first_plot.getViewBox().setXRange(float(final_x_range[0]), float(final_x_range[1]), padding=0)
-
+                    # Apply to the first plot in the list (master X link)
+                    if self.plot_widgets:
+                        self.plot_widgets[0].getViewBox().setXRange(float(final_x_range[0]), float(final_x_range[1]), padding=0)
+                
                 for chan_id, plot_widget in vis_map.items():
-                    vb = plot_widget.getViewBox()
-                    y_min, y_max = y_mins.get(chan_id), y_maxs.get(chan_id)
-                    final_y_range = None
+                    y_min, y_max = None, None
+                    if chan_id in y_mins and chan_id in y_maxs:
+                         y_min, y_max = y_mins[chan_id], y_maxs[chan_id]
+                    
                     if y_min is not None and y_max is not None:
-                         padding_y = (y_max - y_min) * 0.02 if y_min < y_max else 0.1
-                         final_y_range = [y_min - padding_y, y_max + padding_y]
-
-                    if final_y_range:
-                         log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: {final_y_range}")
-                         vb.setYRange(float(final_y_range[0]), float(final_y_range[1]), padding=0)
+                         padding_y = (y_max - y_min) * 0.05 if y_min < y_max else 0.1
+                         log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: [{y_min - padding_y}, {y_max + padding_y}]")
+                         plot_widget.getViewBox().setYRange(float(y_min - padding_y), float(y_max + padding_y), padding=0)
                     else:
-                         log.warning(f"[EXPLORER-RESET] Manual Y range calculation failed/invalid for {chan_id}, skipping setYRange.")
-                log.info("[EXPLORER-RESET] Finished applying manual ranges.")
-                # --- End Apply Ranges ---
+                         # Fallback: if we can't calculate bounds (e.g. empty channel?), reset to default 0-1 or similar
+                         # to avoid showing stale data ranges.
+                         log.warning(f"[EXPLORER-RESET] Could not calc Y bounds for {chan_id}. Resetting to default.")
+                         plot_widget.getViewBox().setYRange(0, 1, padding=0)
+                
+                log.info(f"[EXPLORER-RESET] Finished applying manual ranges.")
+                # --- End Application ---
+                
+                # --- Defer Capture ---
+                log.info(f"[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set.")
+                QtCore.QTimer.singleShot(0, self._capture_base_ranges_after_reset)
 
             except Exception as e:
-                log.error(f"[EXPLORER-RESET] Error during deferred manual range setting: {e}", exc_info=True)
+                log.error(f"[EXPLORER-RESET] Error in deferred reset: {e}", exc_info=True)
             finally:
-                # Schedule capture immediately after setRange attempts
-                QtCore.QTimer.singleShot(0, self._capture_base_ranges_after_reset)
-                log.info("[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set.")
+                if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                    self.graphics_layout_widget.setUpdatesEnabled(True)
 
-        # Schedule the manual range function itself
-        QtCore.QTimer.singleShot(0, do_deferred_manual_range_and_capture)
-        log.info("[EXPLORER-RESET] Scheduled manual range operation via QTimer(0).")
+        # Use a stored timer so we can cancel it if reset is called again rapidly
+        self._reset_timer = QtCore.QTimer()
+        self._reset_timer.setSingleShot(True)
+        self._reset_timer.timeout.connect(do_deferred_manual_range_and_capture)
+        self._reset_timer.start(0)
+        log.info(f"[EXPLORER-RESET] Scheduled manual range operation via stored QTimer(0).")
 
         # Reset sliders etc. immediately
         self._reset_all_sliders(); self._update_limit_fields(); self._update_y_controls_visibility(); self._update_zoom_scroll_enable_state(); self._update_ui_state()
@@ -2389,7 +2601,11 @@ class ExplorerTab(QtWidgets.QWidget):
     def _capture_base_ranges_after_reset(self):
         log.info(f"[EXPLORER-CAPTURE] Capturing base ranges...")
         
-        vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.isVisible() and p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
+        if hasattr(self, '_reset_timer') and self._reset_timer.isActive():
+             log.warning("[EXPLORER-CAPTURE] Reset timer active - aborting capture to prevent race condition.")
+             return
+
+        vis_map={ getattr(p.getViewBox(),'_synaptipy_chan_id',None):p for p in self.channel_plots.values() if p.getViewBox() and hasattr(p.getViewBox(),'_synaptipy_chan_id')}
         vis_map={k:v for k,v in vis_map.items() if k is not None}
         if not vis_map: 
             log.warning(f"[EXPLORER-CAPTURE] No visible plots for base range capture")
@@ -2531,6 +2747,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_trial_label()
 
     def _next_file_folder(self):
+        if getattr(self, '_is_loading', False):
+            log.info("Navigation ignored - loading in progress")
+            return
         if len(self.file_list) <= 1: return
         self.current_file_index = (self.current_file_index + 1) % len(self.file_list)
         filepath_to_load = self.file_list[self.current_file_index]
@@ -2539,6 +2758,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self._load_and_display_file(filepath_to_load)
 
     def _prev_file_folder(self):
+        if getattr(self, '_is_loading', False):
+            log.info("Navigation ignored - loading in progress")
+            return
         if len(self.file_list) <= 1: return
         self.current_file_index = (self.current_file_index - 1 + len(self.file_list)) % len(self.file_list)
         filepath_to_load = self.file_list[self.current_file_index]
@@ -3246,98 +3468,3 @@ class ExplorerTab(QtWidgets.QWidget):
                 "Save Error", 
                 f"Failed to save plot:\n{str(e)}"
             )
-
-    def update_plot_pens(self):
-        """
-        Applies updated plot customizations by selectively replotting data items
-        while preserving view ranges (zoom/pan). This is fast but the subsequent
-        _reset_view might be slow if complex styles were chosen.
-        """
-        log.info("[PEN-UPDATE] Starting selective replotting to apply new styles.")
-        if not self.current_recording or not self.channel_plots:
-            log.info("[PEN-UPDATE] No recording or plots to update.")
-            return
-
-        if self.graphics_layout_widget:
-            self.graphics_layout_widget.setUpdatesEnabled(False)
-
-        new_items_per_plot: Dict[pg.PlotItem, List[pg.PlotDataItem]] = {}
-
-        try:
-            from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
-            new_avg_pen = get_average_pen()
-            new_trial_pen = get_single_trial_pen()
-            ds_enabled = self.downsample_checkbox.isChecked() if self.downsample_checkbox else False
-
-            for channel_id, plot_widget in self.channel_plots.items():
-                if not plot_widget or not plot_widget.isVisible():
-                    if channel_id not in self.channel_plot_data_items: self.channel_plot_data_items[channel_id] = [] # Ensure key exists
-                    continue
-
-                items_to_remove = []
-                data_to_replot = [] # (x_data, y_data, is_average, name, opts)
-
-                for item in plot_widget.items:
-                    if isinstance(item, pg.PlotDataItem):
-                        items_to_remove.append(item)
-                        try:
-                            x_data, y_data = item.getData()
-                            if x_data is not None and y_data is not None:
-                                is_average = 'avg' in item.opts.get('name', '').lower()
-                                name = item.opts.get('name', '')
-                                opts = item.opts.copy()
-                                data_to_replot.append((x_data, y_data, is_average, name, opts))
-                        except Exception as e:
-                            log.warning(f"[PEN-UPDATE] Error getting data from item {item.opts.get('name', '')}: {e}")
-
-                log.debug(f"[PEN-UPDATE] Removing {len(items_to_remove)} old items from channel {channel_id}")
-                for item in items_to_remove:
-                    try:
-                        plot_widget.removeItem(item)
-                    except Exception as e:
-                        log.warning(f"[PEN-UPDATE] Error removing item: {e}")
-
-                self.channel_plot_data_items[channel_id] = []
-                new_items_for_this_plot = []
-
-                log.debug(f"[PEN-UPDATE] Preparing {len(data_to_replot)} new items for channel {channel_id}.")
-                for x_data, y_data, is_average, name, opts in data_to_replot:
-                    pen = new_avg_pen if is_average else new_trial_pen
-                    try:
-                        new_item = pg.PlotDataItem(x_data, y_data, pen=pen, name=name)
-                        new_item.setDownsampling(auto=ds_enabled, method='peak')
-                        new_item.setClipToView(True)
-                        if 'trial_index' in opts:
-                             new_item.opts['trial_index'] = opts['trial_index']
-                        new_items_for_this_plot.append(new_item)
-                        self.channel_plot_data_items[channel_id].append(new_item) # Keep track
-                    except Exception as e:
-                         log.error(f"[PEN-UPDATE] Error creating new item {name} for channel {channel_id}: {e}")
-                new_items_per_plot[plot_widget] = new_items_for_this_plot
-
-            log.info(f"[PEN-UPDATE] Adding newly created items to plots...")
-            for plot_widget, new_items in new_items_per_plot.items():
-                for new_item in new_items:
-                    try:
-                        plot_widget.addItem(new_item)
-                    except Exception as e:
-                        log.error(f"[PEN-UPDATE] Error adding new item back to plot {plot_widget}: {e}")
-            log.info(f"[PEN-UPDATE] Finished adding new items.")
-
-            # CRITICAL: Trigger a reset view AFTER replotting completes
-            # This ensures view ranges are calculated based on the *new* items.
-            log.info("[PEN-UPDATE] Scheduling reset view after selective replotting.")
-            QtCore.QTimer.singleShot(0, self._reset_view) # Use the existing (now faster) reset logic
-
-        except Exception as e:
-            log.error(f"[PEN-UPDATE] Critical error during selective replot: {e}", exc_info=True)
-            # Ensure reset view is still attempted even if replot fails
-            QtCore.QTimer.singleShot(0, self._reset_view)
-        finally:
-            if self.graphics_layout_widget:
-                self.graphics_layout_widget.setUpdatesEnabled(True)
-                # Optional: Force repaint immediately after adding items
-                # QtWidgets.QApplication.processEvents()
-                # self.graphics_layout_widget.update()
-
-        log.info(f"[PEN-UPDATE] Selective replotting complete.")
