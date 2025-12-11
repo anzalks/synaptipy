@@ -1176,13 +1176,21 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug(f"{self.__class__.__name__}: Triggering analysis")
         
         # Validate data
+        # Validate data
         if not self._current_plot_data:
             log.warning(f"{self.__class__.__name__}: No data available for analysis")
-            QtWidgets.QMessageBox.warning(
-                self,
-                "No Data",
-                "Please load and plot data before running analysis."
-            )
+            
+            # Check if triggered automatically (by timer) vs manually (button)
+            # We don't want to annoy the user with popups during initialization or reactive updates
+            sender = self.sender()
+            is_auto_triggered = (sender == self._analysis_debounce_timer) or isinstance(sender, QtCore.QTimer)
+            
+            if not is_auto_triggered:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "No Data",
+                    "Please load and plot data before running analysis."
+                )
             return
         
         # Set wait cursor

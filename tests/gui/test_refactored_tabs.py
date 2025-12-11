@@ -40,7 +40,8 @@ def test_event_detection_tab_init(qtbot, neo_adapter):
     assert 'threshold' in params
     
     # Change method
-    tab.mini_method_combobox.setCurrentIndex(1) # Deconvolution
+    # Change method
+    tab.method_combobox.setCurrentIndex(1) # Deconvolution
     assert tab.get_registry_name() == "event_detection_deconvolution"
     params = tab._gather_analysis_parameters()
     assert 'tau_rise_ms' in params

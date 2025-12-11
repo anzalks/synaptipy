@@ -29,22 +29,23 @@ def test_metadata_tab_creation(app):
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
     
     # Check if widgets were created
-    assert 'param1' in tab.param_widgets
-    assert 'param2' in tab.param_widgets
-    assert 'param3' in tab.param_widgets
-    assert 'param4' in tab.param_widgets
+    widgets = tab.param_generator.widgets
+    assert 'param1' in widgets
+    assert 'param2' in widgets
+    assert 'param3' in widgets
+    assert 'param4' in widgets
     
     # Check widget types
-    assert isinstance(tab.param_widgets['param1'], QtWidgets.QDoubleSpinBox)
-    assert isinstance(tab.param_widgets['param2'], QtWidgets.QSpinBox)
-    assert isinstance(tab.param_widgets['param3'], QtWidgets.QComboBox)
-    assert isinstance(tab.param_widgets['param4'], QtWidgets.QCheckBox)
+    assert isinstance(widgets['param1'], QtWidgets.QDoubleSpinBox)
+    assert isinstance(widgets['param2'], QtWidgets.QSpinBox)
+    assert isinstance(widgets['param3'], QtWidgets.QComboBox)
+    assert isinstance(widgets['param4'], QtWidgets.QCheckBox)
     
     # Check default values
-    assert tab.param_widgets['param1'].value() == 1.0
-    assert tab.param_widgets['param2'].value() == 5
-    assert tab.param_widgets['param3'].currentText() == 'A'
-    assert tab.param_widgets['param4'].isChecked() == True
+    assert widgets['param1'].value() == 1.0
+    assert widgets['param2'].value() == 5
+    assert widgets['param3'].currentText() == 'A'
+    assert widgets['param4'].isChecked() == True
 
 def test_parameter_gathering(app):
     """Test that parameters are correctly gathered from widgets."""
@@ -52,10 +53,11 @@ def test_parameter_gathering(app):
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
     
     # Modify values
-    tab.param_widgets['param1'].setValue(2.5)
-    tab.param_widgets['param2'].setValue(10)
-    tab.param_widgets['param3'].setCurrentText('B')
-    tab.param_widgets['param4'].setChecked(False)
+    widgets = tab.param_generator.widgets
+    widgets['param1'].setValue(2.5)
+    widgets['param2'].setValue(10)
+    widgets['param3'].setCurrentText('B')
+    widgets['param4'].setChecked(False)
     
     params = tab._gather_analysis_parameters()
     

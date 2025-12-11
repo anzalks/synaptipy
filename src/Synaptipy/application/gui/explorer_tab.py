@@ -739,6 +739,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
             self._auto_select_trials_for_average()
 
+            # Update file explorer to show this file
+            self._sync_file_explorer(recording.source_file)
+
             self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'. Ready.", 5000)
             log.info(f"[_display_recording] Display of '{recording.source_file.name}' complete.")
         except Exception as e:
@@ -1304,6 +1307,9 @@ class ExplorerTab(QtWidgets.QWidget):
             # Automatically select some trials to show average plots by default
             self._auto_select_trials_for_average()
             
+            # Update file explorer to show this file
+            self._sync_file_explorer(filepath)
+            
             self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
             log.info(f"File loading complete: {filepath.name}")
 
@@ -1323,6 +1329,41 @@ class ExplorerTab(QtWidgets.QWidget):
         finally:
              self._update_zoom_scroll_enable_state(); self._update_ui_state()
              if self.manual_limits_enabled: self._apply_manual_limits()
+
+    def _sync_file_explorer(self, file_path: Path):
+        """
+        Updates the file explorer tree to show the directory of the given file
+        and selects the file itself.
+        """
+        if not self.file_tree or not self.file_model:
+            return
+
+        # Ensure the file path is absolute
+        file_path = file_path.resolve()
+        parent_dir = file_path.parent
+
+        # prevent recursive signals if we are just responding to a click
+        self.file_tree.blockSignals(True)
+        try:
+            # Set the root index of the tree view to the parent directory
+            # This makes the view "enter" that directory
+            root_index = self.file_model.index(str(parent_dir))
+            if root_index.isValid():
+                self.file_tree.setRootIndex(root_index)
+                
+                # Select the file
+                file_index = self.file_model.index(str(file_path))
+                if file_index.isValid():
+                    self.file_tree.setCurrentIndex(file_index)
+                    self.file_tree.scrollTo(file_index)
+            
+            # Save the new location
+            QtCore.QSettings("Synaptipy", "Viewer").setValue("lastDirectory", str(parent_dir))
+            
+        except Exception as e:
+            log.error(f"Error syncing file explorer: {e}")
+        finally:
+            self.file_tree.blockSignals(False)
 
     def _auto_select_trials_for_average(self):
         """Automatically select some trials to show average plots by default."""
