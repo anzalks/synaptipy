@@ -48,7 +48,7 @@ def _build_cached_pen_brush():
 
 def get_cached_pen_brush():
     """Return cached pen/brush, building them if needed."""
-    global _CACHED_PEN, _CACHED_BRUSH
+    # global _CACHED_PEN, _CACHED_BRUSH
     if _CACHED_PEN is None or _CACHED_BRUSH is None:
         _build_cached_pen_brush()
     return _CACHED_PEN, _CACHED_BRUSH

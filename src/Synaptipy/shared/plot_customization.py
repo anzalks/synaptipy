@@ -260,7 +260,7 @@ class PlotCustomizationManager:
         alpha = opacity / 100.0
         
         # PERFORMANCE: Override alpha if force opaque mode is enabled
-        global _force_opaque_trials
+        # global _force_opaque_trials
         if _force_opaque_trials:
             log.debug("[get_single_trial_pen] Performance mode ON: Forcing alpha to 1.0")
             alpha = 1.0
