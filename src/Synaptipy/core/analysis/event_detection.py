@@ -11,10 +11,32 @@ from scipy.stats import median_abs_deviation
 
 log = logging.getLogger('Synaptipy.core.analysis.event_detection')
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.analysis.basic_features import find_stable_baseline
 
 
 # --- Registry Wrapper for Batch Processing (Mini Detection) ---
-@AnalysisRegistry.register("mini_detection")
+@AnalysisRegistry.register(
+    "mini_detection",
+    label="Miniature Event Detection",
+    ui_params=[
+        {
+            "name": "threshold",
+            "label": "Threshold (pA/mV):",
+            "type": "float",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "direction",
+            "label": "Direction:",
+            "type": "choice",
+            "choices": ["negative", "positive"],
+            "default": "negative"
+        }
+    ]
+)
 def run_mini_detection_wrapper(
     data: np.ndarray,
     time: np.ndarray,
@@ -236,7 +258,28 @@ def detect_events_threshold_crossing(data: np.ndarray, threshold: float, directi
     return event_starts, stats
 
 
-@AnalysisRegistry.register("event_detection_threshold")
+@AnalysisRegistry.register(
+    "event_detection_threshold",
+    label="Event Detection (Threshold)",
+    ui_params=[
+        {
+            "name": "threshold",
+            "label": "Threshold:",
+            "type": "float",
+            "default": 5.0,
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "direction",
+            "label": "Direction:",
+            "type": "choice",
+            "choices": ["negative", "positive"],
+            "default": "negative"
+        }
+    ]
+)
 def run_event_detection_threshold_wrapper(
     data: np.ndarray,
     time: np.ndarray,
@@ -421,7 +464,48 @@ def detect_events_deconvolution_custom(
     return peak_indices, stats
 
 
-@AnalysisRegistry.register("event_detection_deconvolution")
+@AnalysisRegistry.register(
+    "event_detection_deconvolution",
+    label="Event Detection (Deconvolution)",
+    ui_params=[
+        {
+            "name": "tau_rise_ms",
+            "label": "Tau Rise (ms):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "tau_decay_ms",
+            "label": "Tau Decay (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "threshold_sd",
+            "label": "Threshold (SD):",
+            "type": "float",
+            "default": 4.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "min_event_separation_ms",
+            "label": "Min Separation (ms):",
+            "type": "float",
+            "default": 2.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        }
+    ]
+)
 def run_event_detection_deconvolution_wrapper(
     data: np.ndarray,
     time: np.ndarray,
@@ -577,6 +661,12 @@ def _calculate_simplified_kinetics(data: np.ndarray, peak_index: int, baseline_v
     return kinetics
 
 
+from Synaptipy.core.analysis.basic_features import find_stable_baseline
+
+# ... (existing imports)
+
+# ... (keep detect_minis_threshold and other functions as is until detect_events_baseline_peak_kinetics)
+
 def detect_events_baseline_peak_kinetics(
     data: np.ndarray,
     sample_rate: float,
@@ -586,7 +676,9 @@ def detect_events_baseline_peak_kinetics(
     threshold_sd_factor: float = 3.0,
     filter_freq_hz: Optional[float] = None,
     min_event_separation_ms: float = 5.0,
-    peak_prominence_factor: Optional[float] = None # Optional: Require peak prominence relative to threshold_sd*noise_sd
+    peak_prominence_factor: Optional[float] = None, # Optional: Require peak prominence relative to threshold_sd*noise_sd
+    auto_baseline: bool = False,
+    auto_window_s: float = 0.5
 ) -> Tuple[np.ndarray, Dict[str, Any], Optional[List[Dict[str, Any]]]]:
     """Detects events by finding peaks relative to a stable baseline,
        and calculates simplified kinetics.
@@ -595,19 +687,20 @@ def detect_events_baseline_peak_kinetics(
         data: 1D numpy array of the signal.
         sample_rate: Sampling rate in Hz.
         direction: 'negative' or 'positive' peak detection.
-        baseline_window_s: Duration of the window to find stable baseline.
+        baseline_window_s: Duration of the window to find stable baseline (manual mode).
         baseline_step_s: Step size for the baseline window.
         threshold_sd_factor: Threshold for peak detection in multiples of baseline SD.
         filter_freq_hz: Optional cutoff frequency for low-pass filtering before peak detection.
         min_event_separation_ms: Minimum time between detected peaks.
-        peak_prominence_factor: Optional factor. If set, peaks must have a prominence of at least
-                                 peak_prominence_factor * threshold_sd_factor * baseline_sd.
+        peak_prominence_factor: Optional factor. If set, peaks must have a prominence.
+        auto_baseline: If True, automatically find the most stable baseline segment.
+        auto_window_s: Window duration for auto baseline detection.
 
     Returns:
         A tuple containing:
             - indices: Numpy array of detected event peak indices.
-            - summary_stats: Dictionary with summary statistics ('count', 'baseline_mean', 'baseline_sd', 'threshold').
-            - event_details: List of dictionaries, one per event, with 'index', 'amplitude', 'rise_time_ms', 'decay_half_time_ms'. (or None if error)
+            - summary_stats: Dictionary with summary statistics.
+            - event_details: List of dictionaries, one per event.
     """
     if direction not in ['negative', 'positive']:
         raise ValueError("Direction must be 'negative' or 'positive'")
@@ -616,9 +709,22 @@ def detect_events_baseline_peak_kinetics(
     signal_to_process = -data if is_negative else data # Always look for positive peaks
 
     # --- 1. Find Stable Baseline --- 
-    baseline_mean_orig, baseline_sd_orig, _ = _find_stable_baseline_segment(
-        data, sample_rate, baseline_window_s, baseline_step_s
-    )
+    if auto_baseline:
+        baseline_mean_orig, baseline_sd_orig, _ = find_stable_baseline(
+            data, sample_rate, window_duration_s=auto_window_s
+        )
+        if baseline_mean_orig is None:
+             log.warning("Auto-baseline failed. Falling back to manual window or full trace.")
+             # Fallback to full trace or default manual logic? 
+             # Let's try manual logic with default window at start
+             baseline_mean_orig, baseline_sd_orig, _ = _find_stable_baseline_segment(
+                data, sample_rate, baseline_window_s, baseline_step_s
+            )
+    else:
+        baseline_mean_orig, baseline_sd_orig, _ = _find_stable_baseline_segment(
+            data, sample_rate, baseline_window_s, baseline_step_s
+        )
+
     if baseline_mean_orig is None or baseline_sd_orig is None:
         log.error("Failed to find stable baseline. Cannot proceed.")
         return np.array([]), {'count': 0}, None
@@ -632,7 +738,69 @@ def detect_events_baseline_peak_kinetics(
         baseline_sd = 1e-12
 
     # --- 2. Set Adaptive Threshold --- 
-    threshold_abs_deviation = threshold_sd_factor * baseline_sd
+    # Use MAD of the entire signal (or filtered signal) for robust noise estimation
+    # This avoids the issue where "stable baseline" picks a flat artifact with 0 variance.
+    try:
+        # Estimate noise from the raw signal
+        # We subtract the baseline mean first
+        centered_signal = signal_to_process - baseline_mean_processed
+        
+        # Refinement: If there are significant flat segments (artifacts), they will pull MAD down.
+        # We can try to exclude points that are exactly equal to the median (if they are artifacts)?
+        # Or better: Use the non-zero part of the signal if it's sparse?
+        # But real noise crosses zero.
+        # If we have a large flat artifact (e.g. 0), centered_signal will have many 0s.
+        # If >50% is flat, MAD is 0.
+        # If <50% is flat, MAD is affected but non-zero.
+        
+        # Alternative: Sliding Window Median SD
+        # This is robust against non-stationary noise (e.g. quiet artifacts vs noisy recording).
+        # We calculate SD in small windows and take the median of those SDs.
+        
+        # Window size: 100ms or similar. 
+        # If sample_rate is high, we can step.
+        win_size_samples = int(0.1 * sample_rate) # 100ms window
+        if win_size_samples < 10:
+            win_size_samples = 10
+            
+        # Step size: 100ms (non-overlapping is fine for estimation)
+        step_size_samples = win_size_samples
+        
+        if len(centered_signal) > win_size_samples:
+            # Efficient sliding window SD?
+            # We can just reshape if length is multiple, or loop.
+            # Truncate to multiple of window
+            n_windows = len(centered_signal) // win_size_samples
+            truncated_len = n_windows * win_size_samples
+            reshaped = centered_signal[:truncated_len].reshape(n_windows, win_size_samples)
+            
+            # SD of each window
+            window_sds = np.std(reshaped, axis=1)
+            
+            # Median of SDs
+            # Filter out near-zero SDs (flat artifacts) before taking median?
+            # If we have 50% flat, median will be 0.
+            # So yes, filter out zero SDs.
+            non_zero_sds = window_sds[window_sds > 1e-9]
+            
+            if len(non_zero_sds) > 0:
+                noise_sd = np.median(non_zero_sds)
+            else:
+                noise_sd = 0.0
+                
+            log.debug(f"Estimated noise SD using Median Window SD: {noise_sd:.3g} (Baseline SD was {baseline_sd_orig:.3g})")
+        else:
+            # Fallback for short traces
+            noise_sd = np.std(centered_signal)
+            
+    except Exception as e:
+        log.warning(f"Failed to calculate noise estimate: {e}. Using baseline SD.")
+        noise_sd = baseline_sd_orig
+
+    if noise_sd < 1e-12:
+         noise_sd = 1e-12
+
+    threshold_abs_deviation = threshold_sd_factor * noise_sd
     detection_threshold = baseline_mean_processed + threshold_abs_deviation
     log.debug(f"Baseline Peak Detection: Threshold set at {detection_threshold:.3g} (Baseline={baseline_mean_processed:.3g}, ThrSD={threshold_abs_deviation:.3g})")
 
@@ -699,7 +867,44 @@ def detect_events_baseline_peak_kinetics(
     return peak_indices, summary_stats, event_details
 
 
-@AnalysisRegistry.register("event_detection_baseline_peak")
+@AnalysisRegistry.register(
+    "event_detection_baseline_peak",
+    label="Event Detection (Baseline Peak)",
+    ui_params=[
+        {
+            "name": "direction",
+            "label": "Direction:",
+            "type": "choice",
+            "choices": ["negative", "positive"],
+            "default": "negative"
+        },
+        {
+            "name": "auto_baseline",
+            "label": "Auto-Detect Baseline",
+            "type": "bool",
+            "default": True
+        },
+        {
+            "name": "threshold_sd_factor",
+            "label": "Threshold (SD Factor):",
+            "type": "float",
+            "default": 3.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "min_event_separation_ms",
+            "label": "Min Separation (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4, # Changed from 41 to 4
+            "hidden": True # Hide as per user request to simplify
+        }
+    ]
+)
 def run_event_detection_baseline_peak_wrapper(
     data: np.ndarray,
     time: np.ndarray,
@@ -711,23 +916,25 @@ def run_event_detection_baseline_peak_wrapper(
     """
     try:
         direction = kwargs.get('direction', 'negative')
-        baseline_window_s = kwargs.get('baseline_window_s', 0.5)
-        baseline_step_s = kwargs.get('baseline_step_s', 0.1)
+        # baseline_window_s = kwargs.get('baseline_window_s', 0.5) # Not used if auto
+        # baseline_step_s = kwargs.get('baseline_step_s', 0.1)
         threshold_sd_factor = kwargs.get('threshold_sd_factor', 3.0)
         filter_freq_hz = kwargs.get('filter_freq_hz', None)
         min_event_separation_ms = kwargs.get('min_event_separation_ms', 5.0)
         peak_prominence_factor = kwargs.get('peak_prominence_factor', None)
+        auto_baseline = kwargs.get('auto_baseline', True)
         
         indices, stats, details = detect_events_baseline_peak_kinetics(
             data=data,
             sample_rate=sampling_rate,
             direction=direction,
-            baseline_window_s=baseline_window_s,
-            baseline_step_s=baseline_step_s,
+            # baseline_window_s=baseline_window_s,
+            # baseline_step_s=baseline_step_s,
             threshold_sd_factor=threshold_sd_factor,
             filter_freq_hz=filter_freq_hz,
             min_event_separation_ms=min_event_separation_ms,
-            peak_prominence_factor=peak_prominence_factor
+            peak_prominence_factor=peak_prominence_factor,
+            auto_baseline=auto_baseline
         )
         
         return {

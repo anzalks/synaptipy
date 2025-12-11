@@ -125,27 +125,27 @@ def calculate_fi_curve(
             "label": "Threshold (mV):",
             "type": "float",
             "default": -20.0,
-            "min": -100.0,
-            "max": 100.0,
-            "decimals": 1
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "start_current",
             "label": "Start Current (pA):",
             "type": "float",
             "default": 0.0,
-            "min": -1000.0,
-            "max": 1000.0,
-            "decimals": 1
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "step_current",
             "label": "Step Current (pA):",
             "type": "float",
             "default": 10.0,
-            "min": -100.0,
-            "max": 100.0,
-            "decimals": 1
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
         }
     ]
 )
@@ -159,8 +159,8 @@ def run_excitability_analysis_wrapper(
     Wrapper for Excitability Analysis (F-I Curve).
     
     Args:
-        data_list: List of voltage traces (sweeps).
-        time_list: List of time vectors.
+        data_list: List of voltage traces (sweeps), OR a single voltage trace (1D array).
+        time_list: List of time vectors, OR a single time vector (1D array).
         sampling_rate: Sampling rate (Hz).
         **kwargs:
             - threshold: Spike threshold (mV).
@@ -174,6 +174,26 @@ def run_excitability_analysis_wrapper(
         threshold = kwargs.get('threshold', -20.0)
         start_current = kwargs.get('start_current', 0.0)
         step_current = kwargs.get('step_current', 10.0)
+        
+        # Handle both single array inputs and list inputs
+        # If a single 1D array is passed, wrap it in a list
+        if isinstance(data_list, np.ndarray):
+            if data_list.ndim == 1:
+                # Single sweep passed as 1D array - wrap in list
+                data_list = [data_list]
+                time_list = [time_list] if isinstance(time_list, np.ndarray) else time_list
+            elif data_list.ndim == 2:
+                # Multiple sweeps passed as 2D array - convert to list of 1D arrays
+                data_list = [data_list[i] for i in range(data_list.shape[0])]
+                if isinstance(time_list, np.ndarray) and time_list.ndim == 1:
+                    # Same time vector for all sweeps
+                    time_list = [time_list for _ in range(len(data_list))]
+                elif isinstance(time_list, np.ndarray) and time_list.ndim == 2:
+                    time_list = [time_list[i] for i in range(time_list.shape[0])]
+        
+        # Ensure time_list is also a list
+        if isinstance(time_list, np.ndarray):
+            time_list = [time_list]
         
         # Infer current steps based on start/step and number of sweeps
         num_sweeps = len(data_list)
@@ -194,8 +214,8 @@ def run_excitability_analysis_wrapper(
             'fi_slope': results['fi_slope'],
             'fi_r_squared': results['fi_r_squared'],
             'max_freq_hz': results['max_freq'],
-            # We can't easily return lists in a flat dict for CSV, so we summarize
-            # or we could return a JSON string if needed, but for now keep it scalar
+            'frequencies': results['frequencies'],
+            'current_steps': results['current_steps']
         }
         
     except Exception as e:

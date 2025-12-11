@@ -90,6 +90,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.thread_pool = QtCore.QThreadPool()
         log.debug(f"BaseAnalysisTab initialized with ThreadPool max count: {self.thread_pool.maxThreadCount()}")
 
+        # --- PHASE 4: Session Accumulation ---
+        self._accumulated_results: List[Dict[str, Any]] = []
+        self.add_to_session_button: Optional[QtWidgets.QPushButton] = None
+        self.view_session_button: Optional[QtWidgets.QPushButton] = None
+
+        # --- PHASE 5: Popup Windows and Thread Management ---
+        self._popup_windows: List[QtWidgets.QWidget] = []  # Track popup windows for cleanup
+        self._analysis_thread: Optional[QtCore.QThread] = None  # Track analysis thread for cleanup
+
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
     # --- ADDED: Method to set global controls ---
@@ -104,52 +113,199 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             
         layout = self.global_controls_layout
         
-        # Check if widgets are already in this layout (avoid duplicates when switching tabs)
+        # Check if widgets are already in this layout
         # We need to check if the widgets' parent is already part of our layout
         source_parent = source_list_widget.parent()
         combo_parent = item_combo.parent()
         
-        # If widgets already have a parent that's in our layout, they're already set up
-        # We just need to make sure they're visible
-        if source_parent and combo_parent:
-            # Check if they're already in our layout structure
-            for i in range(layout.count()):
-                item = layout.itemAt(i)
-                if item and item.widget():
-                    if item.widget() == source_parent or item.widget() == combo_parent:
-                        # Already in our layout, just ensure visible
-                        source_list_widget.setVisible(True)
-                        item_combo.setVisible(True)
-                        log.debug(f"{self.__class__.__name__}: Global controls already present, ensuring visible.")
-                        return
+        # If widgets are already in our layout (via their container groups), we are good.
+        # But since we reuse the widgets, their parent might be a container group from ANOTHER tab 
+        # if we didn't reparent the widgets themselves.
+        # Actually, we should probably reparent the widgets to NEW container groups in THIS tab, 
+        # or move the container groups?
+        # Moving container groups is risky if they are destroyed.
+        # Better: The widgets (List/Combo) are passed. We should put them into the layout.
+        # If they are already in a group box, we might need to take them out?
+        # Or we can just add them to the layout directly?
+        # The previous implementation wrapped them in GroupBoxes.
+        # If we wrap them in new GroupBoxes every time, the old GroupBoxes (in other tabs) will be empty.
+        # That's fine.
         
-        # Need to reparent widgets - first remove from current parent's layout
-        # Qt handles this automatically when we add to new layout
+        # Ensure widgets are visible
+        source_list_widget.setVisible(True)
+        item_combo.setVisible(True)
         
-        # Create container groups for the widgets if they don't have one
-        # First, wrap source list
+        # Create container groups for the widgets
+        # We create NEW groups for THIS tab.
         source_group = QtWidgets.QGroupBox("Analysis Input Set")
         source_layout_inner = QtWidgets.QVBoxLayout(source_group)
         source_layout_inner.setContentsMargins(5, 5, 5, 5)
-        source_layout_inner.addWidget(source_list_widget)
+        source_layout_inner.addWidget(source_list_widget) # This reparents the list widget
         
-        # Wrap combo
         combo_group = QtWidgets.QGroupBox("Analyze Item")
         combo_layout_inner = QtWidgets.QVBoxLayout(combo_group)
         combo_layout_inner.setContentsMargins(5, 5, 5, 5)
-        combo_layout_inner.addWidget(item_combo)
+        combo_layout_inner.addWidget(item_combo) # This reparents the combo
         
         # Insert at the beginning of the layout (index 0)
-        layout.insertWidget(0, source_group)
-        layout.insertWidget(1, combo_group)
+        # We need to be careful not to keep adding groups if we call this multiple times for the SAME tab.
+        # But we only call it when switching tabs.
+        # However, if we switch back to a tab, we will add NEW groups.
+        # We should check if we already have these groups?
+        # Or better: The tab should have PERMANENT placeholders (GroupBoxes) and we just put the widgets in them.
+        # But `BaseAnalysisTab` doesn't know about the layout structure of subclasses easily.
         
-        log.debug(f"{self.__class__.__name__}: Global controls injected at top of left panel.")
+        # Alternative: Just insert them. If we switch back, we might have duplicate groups?
+        # No, because the widgets can only be in one place.
+        # The OLD groups in this tab (from previous visit) will now be empty.
+        # We should probably clean up empty groups?
+        # Or simpler: Just add them to the layout directly without groups?
+        # The user likes the groups (titles).
+        
+        # Let's try to find if we already have groups with these titles?
+        # Or just clear the first 2 items if they are our groups?
+        # This is brittle.
+        
+        # Better approach:
+        # `BaseAnalysisTab` creates the groups ONCE in `__init__` (or `_setup_ui`).
+        # And `set_global_controls` just adds the widgets to those existing groups.
+        # But `BaseAnalysisTab` doesn't control the layout creation (subclasses do).
+        
+        # Let's stick to the previous implementation but check if we already added them.
+        # If we switch back to Tab A, `layout` still has the old groups (now empty).
+        # We can reuse them!
+        
+        found_source_group = None
+        found_combo_group = None
+        
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            widget = item.widget()
+            if isinstance(widget, QtWidgets.QGroupBox):
+                if widget.title() == "Analysis Input Set":
+                    found_source_group = widget
+                elif widget.title() == "Analyze Item":
+                    found_combo_group = widget
+                    
+        if found_source_group and found_combo_group:
+            # Reuse existing groups
+            found_source_group.layout().addWidget(source_list_widget)
+            found_combo_group.layout().addWidget(item_combo)
+            log.debug(f"{self.__class__.__name__}: Reused existing global control groups.")
+        else:
+            # Create new groups
+            source_group = QtWidgets.QGroupBox("Analysis Input Set")
+            source_layout_inner = QtWidgets.QVBoxLayout(source_group)
+            source_layout_inner.setContentsMargins(5, 5, 5, 5)
+            source_layout_inner.addWidget(source_list_widget)
+            
+            combo_group = QtWidgets.QGroupBox("Analyze Item")
+            combo_layout_inner = QtWidgets.QVBoxLayout(combo_group)
+            combo_layout_inner.setContentsMargins(5, 5, 5, 5)
+            combo_layout_inner.addWidget(item_combo)
+            
+            layout.insertWidget(0, source_group)
+            layout.insertWidget(1, combo_group)
+            log.debug(f"{self.__class__.__name__}: Created new global control groups.")
+
+    def _setup_toolbar(self, parent_layout: QtWidgets.QLayout):
+        """
+        Setup the toolbar with common actions (Reset View, Save Plot).
+        
+        Args:
+            parent_layout: The layout to add the toolbar to.
+        """
+        toolbar_layout = QtWidgets.QHBoxLayout()
+        
+        # Reset View Button
+        self.reset_view_button = QtWidgets.QPushButton("Reset View")
+        style_button(self.reset_view_button)
+        self.reset_view_button.clicked.connect(self._reset_plot_view)
+        toolbar_layout.addWidget(self.reset_view_button)
+        
+        # Save Plot Button
+        self.save_plot_button = QtWidgets.QPushButton("Save Plot")
+        style_button(self.save_plot_button)
+        self.save_plot_button.clicked.connect(self._save_plot)
+        toolbar_layout.addWidget(self.save_plot_button)
+        
+        toolbar_layout.addStretch()
+        
+        parent_layout.addLayout(toolbar_layout)
+
+    def _reset_plot_view(self):
+        """Reset the plot view to default range."""
+        if self.plot_widget:
+            self.plot_widget.autoRange()
+
+    def _save_plot(self):
+        """Save the current plot as an image."""
+        if not self.plot_widget:
+            return
+            
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save Plot", "", "Images (*.png *.jpg *.svg)"
+        )
+        
+        if file_path:
+            # Use pyqtgraph exporter
+            import pyqtgraph.exporters
+            exporter = pyqtgraph.exporters.ImageExporter(self.plot_widget.plotItem)
+            exporter.export(file_path)
 
     # --- END ADDED ---
 
     # --- Methods for UI setup to be called by subclasses ---
     # REMOVED: _setup_analysis_item_selector - now centralized in parent AnalyserTab
     # Subclasses no longer need to call this method
+
+    # --- ADDED: Method to set global controls ---
+    def set_global_controls(self, source_list_widget: QtWidgets.QListWidget, item_combo: QtWidgets.QComboBox):
+        """
+        Receives global control widgets from AnalyserTab and places them at the top
+        of the tab's left panel. Subclasses must have 'global_controls_layout' attribute.
+        """
+        if not hasattr(self, 'global_controls_layout') or self.global_controls_layout is None:
+            log.warning(f"{self.__class__.__name__}: 'global_controls_layout' not found. Global controls not added.")
+            return
+            
+        layout = self.global_controls_layout
+        
+        # Initialize references to containers if they don't exist
+        if not hasattr(self, '_global_source_group'):
+            self._global_source_group = None
+        if not hasattr(self, '_global_combo_group'):
+            self._global_combo_group = None
+
+        # 1. Handle Source List Widget
+        if self._global_source_group is None:
+            # Create container
+            self._global_source_group = QtWidgets.QGroupBox("Analysis Input Set")
+            layout_inner = QtWidgets.QVBoxLayout(self._global_source_group)
+            layout_inner.setContentsMargins(5, 5, 5, 5)
+            # Insert at top
+            layout.insertWidget(0, self._global_source_group)
+        
+        # Reparent source list to our container
+        # Note: addWidget automatically reparents
+        self._global_source_group.layout().addWidget(source_list_widget)
+        source_list_widget.setVisible(True)
+
+        # 2. Handle Combo Widget
+        if self._global_combo_group is None:
+            # Create container
+            self._global_combo_group = QtWidgets.QGroupBox("Analyze Item")
+            layout_inner = QtWidgets.QVBoxLayout(self._global_combo_group)
+            layout_inner.setContentsMargins(5, 5, 5, 5)
+            # Insert after source group
+            layout.insertWidget(1, self._global_combo_group)
+            
+        # Reparent combo to our container
+        self._global_combo_group.layout().addWidget(item_combo)
+        item_combo.setVisible(True)
+        
+        log.debug(f"{self.__class__.__name__}: Global controls injected/reparented.")
+    # --- END ADDED ---
 
     def create_double_input(self, default_value: str, min_val: float = -float('inf'), max_val: float = float('inf'), decimals: int = 2, tooltip: str = "") -> QtWidgets.QLineEdit:
         """Helper to create a QLineEdit with QDoubleValidator."""
@@ -229,6 +385,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
+        
+        # Add Toolbar below the plot
+        self._setup_toolbar(layout)
 
         # Normal grid configuration with customization support
         try:
@@ -259,9 +418,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 log.debug(f"[ANALYSIS-BASE] Default grid configuration successful for {self.__class__.__name__}")
         except Exception as e:
             log.warning(f"[ANALYSIS-BASE] Grid configuration warning for {self.__class__.__name__}: {e}")
-
-        # Add reset view button below plot
-        self._setup_reset_view_button(layout)
 
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
@@ -296,8 +452,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if hasattr(self, 'save_button') and self.save_button:
             was_enabled = self.save_button.isEnabled()
             self.save_button.setEnabled(enabled)
-            if was_enabled != enabled:
-                log.debug(f"{self.__class__.__name__}: Save button enabled changed from {was_enabled} to {enabled}")
+            log.info(f"{self.__class__.__name__}: Save button set to enabled={enabled} (was={was_enabled})")
+        else:
+            log.warning(f"{self.__class__.__name__}: Cannot set save button enabled={enabled} - save_button not found or None")
     # --- END ADDED ---
 
     # --- END ADDED ---
@@ -712,10 +869,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     @abstractmethod
     def get_registry_name(self) -> str:
         """
-        Return the registry name for the analysis type.
-        Used for batch processing integration.
+        Return the unique name used to register the analysis function in AnalysisRegistry.
+        Must be implemented by subclasses if they correspond to a specific analysis.
         """
-        raise NotImplementedError(f"Subclass {self.__class__.__name__} must implement get_registry_name()")
+        return "unknown_analysis"
+
+    def get_covered_analysis_names(self) -> List[str]:
+        """
+        Return a list of all registry names covered by this tab.
+        Used by AnalyserTab to prevent loading duplicate generic tabs.
+        """
+        return [self.get_registry_name()]
 
     @abstractmethod
     def get_display_name(self) -> str:
@@ -803,9 +967,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             log.warning("Analysis returned None.")
             if hasattr(self, 'status_label') and self.status_label:
                 self.status_label.setText("Status: Analysis failed (no result).")
+            self._set_save_button_enabled(False)
             return
 
         log.debug(f"{self.__class__.__name__}: Analysis finished successfully.")
+        
+        # CRITICAL FIX: Store the results so save button can access them
+        self._last_analysis_result = results
         
         # 4. Update UI (UI Thread)
         self._display_analysis_results(results)
@@ -816,6 +984,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             
         # Enable save button if we have results
         self._set_save_button_enabled(True)
+        
+        # Update Accumulation UI state
+        self._update_accumulation_ui_state()
 
     @QtCore.Slot(tuple)
     def _on_analysis_error(self, error_info):
@@ -1145,17 +1316,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 self._set_save_button_enabled(False)
                 return
             
-            # Store results for saving
-            self._last_analysis_result = results
-            
-            # Step 3: Display results in UI
-            self._display_analysis_results(results)
-            
-            # Step 4: Update plot visualizations
-            self._plot_analysis_visualizations(results)
-            
-            # Enable save button
-            self._set_save_button_enabled(True)
+            # CRITICAL FIX: Call _on_analysis_result to allow subclasses to properly
+            # store results in their own variables (e.g., _last_spike_result, _last_event_result)
+            # This delegates to subclass implementations that know how to handle results
+            self._on_analysis_result(results)
             
             log.info(f"{self.__class__.__name__}: Analysis completed successfully")
             
@@ -1186,8 +1350,65 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         pass # Optional
 
     def cleanup(self):
+        """Cleanup resources, stop threads, close popups."""
         log.debug(f"Cleaning up {self.__class__.__name__}")
-        pass # Optional
+        
+        # Close all popup windows
+        for win in self._popup_windows:
+            try:
+                win.close()
+            except Exception as e:
+                log.warning(f"Error closing popup window: {e}")
+        self._popup_windows.clear()
+        
+        # Stop worker thread if running
+        if self._analysis_thread and self._analysis_thread.isRunning():
+            self._analysis_thread.quit()
+            self._analysis_thread.wait()
+
+    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:
+        """
+        Create a separate popup window with a PlotWidget.
+        The window is tracked and will be closed when the tab is cleaned up.
+        
+        Args:
+            title: Window title.
+            x_label: Label for X axis.
+            y_label: Label for Y axis.
+            
+        Returns:
+            pg.PlotWidget: The plot widget in the new window.
+        """
+        # Create a new window (QMainWindow or QWidget)
+        popup = QtWidgets.QMainWindow(self) # Parented to self so it closes with app, but we track it too
+        popup.setWindowTitle(title)
+        popup.resize(600, 400)
+        
+        # Prevent window from being destroyed when closed - it will just hide
+        # User can restore it via View > Show Analysis Popup Windows
+        popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        
+        # Create central widget and layout
+        central_widget = QtWidgets.QWidget()
+        popup.setCentralWidget(central_widget)
+        layout = QtWidgets.QVBoxLayout(central_widget)
+        
+        # Create PlotWidget
+        plot_widget = pg.PlotWidget()
+        plot_widget.setBackground('white')
+        if x_label:
+            plot_widget.setLabel('bottom', x_label)
+        if y_label:
+            plot_widget.setLabel('left', y_label)
+        plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        
+        layout.addWidget(plot_widget)
+        
+        # Show and track
+        popup.show()
+        self._popup_windows.append(popup)
+        
+        return plot_widget
 
     # --- ADDED: Helper for Saving Results ---
     def _request_save_result(self, specific_result_data: Dict[str, Any]):
@@ -1306,4 +1527,74 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         except Exception as e:
             log.error(f"Error saving result: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Save Error", f"Failed to save result:\n{e}")
+
+    # --- PHASE 4: Session Accumulation Methods ---
+
+    def _setup_accumulation_ui(self, layout: QtWidgets.QLayout):
+        """
+        Adds 'Add to Session' and 'View Session' buttons to the layout.
+        """
+        group = QtWidgets.QGroupBox("Session Accumulation")
+        group_layout = QtWidgets.QHBoxLayout(group)
+        group_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.add_to_session_button = QtWidgets.QPushButton("Add to Session")
+        self.add_to_session_button.setToolTip("Add current result to session statistics.")
+        self.add_to_session_button.clicked.connect(self._on_add_to_session_clicked)
+        self.add_to_session_button.setEnabled(False) # Enabled only when result exists
+        style_button(self.add_to_session_button)
+
+        self.view_session_button = QtWidgets.QPushButton("View Session")
+        self.view_session_button.setToolTip("View accumulated results and statistics.")
+        self.view_session_button.clicked.connect(self._on_view_session_clicked)
+        self.view_session_button.setEnabled(False) # Enabled when list not empty
+        style_button(self.view_session_button)
+
+        group_layout.addWidget(self.add_to_session_button)
+        group_layout.addWidget(self.view_session_button)
+
+        layout.addWidget(group)
+
+    def _on_add_to_session_clicked(self):
+        """Add the current result to the accumulated list."""
+        if not self._last_analysis_result:
+            return
+
+        # Get specific data (value, units, etc.)
+        specific_data = self._get_specific_result_data()
+        if not specific_data:
+            return
+
+        # Add metadata about source
+        entry = specific_data.copy()
+        
+        # Add trial info
+        if self.data_source_combobox and self.data_source_combobox.isEnabled():
+            entry['source_label'] = self.data_source_combobox.currentText()
+        else:
+            entry['source_label'] = "Current"
+
+        self._accumulated_results.append(entry)
+        
+        # Update UI
+        self.view_session_button.setEnabled(True)
+        self.view_session_button.setText(f"View Session ({len(self._accumulated_results)})")
+        
+        # Feedback
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.setText(f"Status: Added to session ({len(self._accumulated_results)} items)")
+
+    def _on_view_session_clicked(self):
+        """Show the session summary dialog."""
+        if not self._accumulated_results:
+            return
+
+        from Synaptipy.application.gui.session_summary_dialog import SessionSummaryDialog
+        dialog = SessionSummaryDialog(self._accumulated_results, parent=self)
+        dialog.exec()
+
+    def _update_accumulation_ui_state(self):
+        """Enable/Disable Add button based on result availability."""
+        if self.add_to_session_button:
+            self.add_to_session_button.setEnabled(self._last_analysis_result is not None)
     # --- END ADDED ---

@@ -2,27 +2,27 @@
 # -*- coding: utf-8 -*-
 """
 Analysis sub-tab for detecting synaptic events (Miniature and Evoked).
-Refactored to use Template Method pattern and AnalysisRegistry.
+Refactored to use MetadataDrivenAnalysisTab architecture and ParameterWidgetGenerator.
 """
 import logging
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, Dict, Any, List
 import numpy as np
-
-from PySide6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 
 from .base import BaseAnalysisTab
-from Synaptipy.core.data_model import Recording, Channel
-from Synaptipy.core.analysis import event_detection as ed
-from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-                             QPushButton, QDoubleSpinBox, QFormLayout, QGroupBox, QSizePolicy, QSplitter)
+from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.application.gui.ui_generator import ParameterWidgetGenerator
+import Synaptipy.core.analysis.event_detection # Ensure registration
 
 log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.event_detection_tab')
 
 class EventDetectionTab(BaseAnalysisTab):
-    """QWidget for Synaptic Event Detection (Miniature and Evoked)."""
+    """
+    QWidget for Synaptic Event Detection (Miniature and Evoked).
+    Uses ParameterWidgetGenerator to dynamically create UI for selected method.
+    """
 
     # Define the class constant for dynamic loading
     ANALYSIS_TAB_CLASS = True
@@ -31,35 +31,24 @@ class EventDetectionTab(BaseAnalysisTab):
         super().__init__(neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
 
         # --- UI References --- 
-        self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
         self.splitter: Optional[QtWidgets.QSplitter] = None
-
-        # Miniature Event Controls
         self.mini_method_combobox: Optional[QtWidgets.QComboBox] = None
         self.mini_results_textedit: Optional[QtWidgets.QTextEdit] = None
         
-        # Parameter Groups (will be added to a stacked widget)
+        # Parameter Stack
         self.mini_params_stack: Optional[QtWidgets.QStackedWidget] = None
-        self._mini_params_group_map: Dict[str, QtWidgets.QWidget] = {} # To map method name to widget
+        self._param_generators: Dict[str, ParameterWidgetGenerator] = {} # Map method name to generator
 
-        self.mini_threshold_group: Optional[QtWidgets.QGroupBox] = None
-        self.mini_deconvolution_group: Optional[QtWidgets.QGroupBox] = None
-        self.mini_baseline_peak_group: Optional[QtWidgets.QGroupBox] = None
+        # Map display names to registry keys
+        self.method_map = {
+            "Threshold Based": "event_detection_threshold",
+            "Deconvolution (Custom)": "event_detection_deconvolution",
+            "Baseline + Peak + Kinetics": "event_detection_baseline_peak"
+        }
 
-        # Specific Parameter Widgets
-        self.mini_threshold_edit: Optional[QtWidgets.QLineEdit] = None # For Threshold Based
-        self.mini_direction_combo: Optional[QtWidgets.QComboBox] = None # For Threshold, Baseline+Peak
-        
-        self.mini_deconv_tau_rise_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
-        self.mini_deconv_tau_decay_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
-        self.mini_deconv_filter_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
-        self.mini_deconv_threshold_sd_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
-
-        self.mini_baseline_filter_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None
-        self.mini_baseline_prominence_spinbox: Optional[QtWidgets.QDoubleSpinBox] = None 
-
-        # Plotting related (Shared)
+        # Plotting related
         self.event_markers_item: Optional[pg.ScatterPlotItem] = None
+        self._last_event_result: Optional[Dict[str, Any]] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -74,6 +63,10 @@ class EventDetectionTab(BaseAnalysisTab):
             return "event_detection_threshold" # Default
         selected_method_display = self.mini_method_combobox.currentText()
         return self.method_map.get(selected_method_display, "event_detection_threshold")
+
+    def get_covered_analysis_names(self) -> List[str]:
+        """Return all registry names covered by this tab."""
+        return list(self.method_map.values())
 
     def _setup_ui(self):
         """Create UI elements for the Event Detection tab."""
@@ -106,31 +99,23 @@ class EventDetectionTab(BaseAnalysisTab):
         # Method Selection
         method_layout = QtWidgets.QFormLayout()
         self.mini_method_combobox = QtWidgets.QComboBox()
-        # Map display names to registry keys
-        self.method_map = {
-            "Threshold Based": "event_detection_threshold",
-            "Deconvolution (Custom)": "event_detection_deconvolution",
-            "Baseline + Peak + Kinetics": "event_detection_baseline_peak"
-        }
         self.mini_method_combobox.addItems(list(self.method_map.keys()))
         self.mini_method_combobox.setToolTip("Choose the miniature event detection algorithm.")
         method_layout.addRow("Method:", self.mini_method_combobox)
-        
-        # Shared Direction ComboBox
-        self.mini_direction_combo = QtWidgets.QComboBox()
-        self.mini_direction_combo.addItems(["negative", "positive"])
-        self.mini_direction_combo.setToolTip("Detect events (peaks or threshold crossings) in this direction.")
-        method_layout.addRow("Direction:", self.mini_direction_combo)
         analysis_controls_layout.addLayout(method_layout)
         
         # Stacked Widget for Parameter Groups
         self.mini_params_stack = QtWidgets.QStackedWidget()
         analysis_controls_layout.addWidget(self.mini_params_stack)
         
-        # Create Parameter Groups
+        # Create Parameter Groups using Generator
         self._create_parameter_groups()
         
-        # Analysis Action Button
+        # Analysis Action Button (Optional, but useful for explicit run)
+        # Note: MetadataDrivenAnalysisTab uses reactive updates. 
+        # Here we can keep the button or make it reactive.
+        # Let's keep the button for consistency with previous behavior, 
+        # but also hook up reactive changes if desired.
         self.analyze_button = QtWidgets.QPushButton("Detect Events")
         self.analyze_button.setToolTip("Run event detection with current parameters")
         analysis_controls_layout.addWidget(self.analyze_button)
@@ -140,7 +125,7 @@ class EventDetectionTab(BaseAnalysisTab):
         
         left_layout.addWidget(analysis_controls_group)
         
-        # Results Group (Moved to Left)
+        # Results Group
         results_group = QtWidgets.QGroupBox("Results")
         results_layout = QtWidgets.QVBoxLayout(results_group)
         self.mini_results_textedit = QtWidgets.QTextEdit()
@@ -149,7 +134,7 @@ class EventDetectionTab(BaseAnalysisTab):
         results_layout.addWidget(self.mini_results_textedit)
         left_layout.addWidget(results_group)
         
-        # Save Button (Moved to Left)
+        # Save Button
         self._setup_save_button(left_layout)
         
         left_layout.addStretch() # Push everything up
@@ -163,6 +148,16 @@ class EventDetectionTab(BaseAnalysisTab):
         plot_layout.setContentsMargins(0,0,0,0)
         self._setup_plot_area(plot_layout)
         
+        # Initialize Plot Items
+        if self.plot_widget:
+            self.event_markers_item = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150))
+            self.plot_widget.addItem(self.event_markers_item)
+            self.event_markers_item.setVisible(False)
+            
+            self.threshold_line = pg.InfiniteLine(angle=0, movable=True, pen=pg.mkPen('b', style=QtCore.Qt.PenStyle.DashLine))
+            self.plot_widget.addItem(self.threshold_line)
+            self.threshold_line.setVisible(False)
+        
         # Add right widget to splitter
         self.splitter.addWidget(plot_container)
         
@@ -172,305 +167,246 @@ class EventDetectionTab(BaseAnalysisTab):
         
         main_layout.addWidget(self.splitter)
         
-        # Create event markers item
-        if self.plot_widget:
-            self.event_markers_item = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush(0, 0, 255, 150))
-            # Markers will be added to plot when data is loaded
-        
         self.setLayout(main_layout)
-        self._restore_state() # Restore splitter state
-        self._on_mini_method_changed() # Set initial visibility
+        # self._restore_state() # Restore splitter state - Not available in BaseAnalysisTab yet
+        
+        # Initial setup
+        self._on_mini_method_changed()
 
     def _create_parameter_groups(self):
-        """Create parameter widgets for each method."""
-        self._mini_params_group_map = {} 
-
-        # 1. Threshold Based Parameters
-        self.mini_threshold_group = QtWidgets.QGroupBox("Threshold Parameters")
-        thresh_layout = QtWidgets.QFormLayout(self.mini_threshold_group)
-        self.mini_threshold_edit = QtWidgets.QLineEdit("-5.0") 
-        self.mini_threshold_label = QtWidgets.QLabel("Threshold:") 
-        thresh_layout.addRow(self.mini_threshold_label, self.mini_threshold_edit)
-        self.mini_params_stack.addWidget(self.mini_threshold_group)
-        self._mini_params_group_map["Threshold Based"] = self.mini_threshold_group
-
-        # 2. Deconvolution Parameters
-        self.mini_deconvolution_group = QtWidgets.QGroupBox("Deconvolution Parameters")
-        deconv_layout = QtWidgets.QFormLayout(self.mini_deconvolution_group)
-        self.mini_deconv_tau_rise_spinbox = QtWidgets.QDoubleSpinBox()
-        self.mini_deconv_tau_rise_spinbox.setRange(0.1, 1000.0); self.mini_deconv_tau_rise_spinbox.setValue(1.0); self.mini_deconv_tau_rise_spinbox.setSuffix(" ms")
-        deconv_layout.addRow("Tau Rise:", self.mini_deconv_tau_rise_spinbox)
-        self.mini_deconv_tau_decay_spinbox = QtWidgets.QDoubleSpinBox()
-        self.mini_deconv_tau_decay_spinbox.setRange(0.1, 5000.0); self.mini_deconv_tau_decay_spinbox.setValue(5.0); self.mini_deconv_tau_decay_spinbox.setSuffix(" ms")
-        deconv_layout.addRow("Tau Decay:", self.mini_deconv_tau_decay_spinbox)
-        self.mini_deconv_filter_spinbox = QtWidgets.QDoubleSpinBox()
-        self.mini_deconv_filter_spinbox.setRange(0, 20000.0); self.mini_deconv_filter_spinbox.setValue(1000.0); self.mini_deconv_filter_spinbox.setSuffix(" Hz")
-        deconv_layout.addRow("Filter Cutoff:", self.mini_deconv_filter_spinbox)
-        self.mini_deconv_threshold_sd_spinbox = QtWidgets.QDoubleSpinBox()
-        self.mini_deconv_threshold_sd_spinbox.setRange(0.1, 20.0); self.mini_deconv_threshold_sd_spinbox.setValue(3.0); self.mini_deconv_threshold_sd_spinbox.setSuffix(" *SD")
-        deconv_layout.addRow("Detection Thr:", self.mini_deconv_threshold_sd_spinbox)
-        self.mini_params_stack.addWidget(self.mini_deconvolution_group)
-        self._mini_params_group_map["Deconvolution (Custom)"] = self.mini_deconvolution_group
-
-        # 3. Baseline + Peak Parameters
-        self.mini_baseline_peak_group = QtWidgets.QGroupBox("Baseline+Peak Parameters")
-        basepk_layout = QtWidgets.QFormLayout(self.mini_baseline_peak_group)
-        self.mini_baseline_filter_spinbox = QtWidgets.QDoubleSpinBox()
-        self.mini_baseline_filter_spinbox.setRange(0, 20000.0); self.mini_baseline_filter_spinbox.setValue(500.0); self.mini_baseline_filter_spinbox.setSuffix(" Hz")
-        basepk_layout.addRow("Filter Cutoff:", self.mini_baseline_filter_spinbox)
-        self.mini_baseline_prominence_spinbox = QtWidgets.QDoubleSpinBox()
-        self.mini_baseline_prominence_spinbox.setRange(0, 10.0); self.mini_baseline_prominence_spinbox.setValue(0.0); self.mini_baseline_prominence_spinbox.setSuffix(" * ThrSD")
-        basepk_layout.addRow("Min Prominence:", self.mini_baseline_prominence_spinbox)
-        self.mini_params_stack.addWidget(self.mini_baseline_peak_group)
-        self._mini_params_group_map["Baseline + Peak + Kinetics"] = self.mini_baseline_peak_group
-
-    def _connect_signals(self):
-        """Connect signals for Event Detection tab widgets."""
-        # Use template method trigger
-        self.analyze_button.clicked.connect(self._trigger_analysis)
-        self.mini_method_combobox.currentIndexChanged.connect(self._on_mini_method_changed)
+        """Create parameter widgets for each method using ParameterWidgetGenerator."""
+        self._param_generators = {}
         
-        # Connect parameter changes to debounced analysis
-        if hasattr(self, 'mini_threshold_edit'):
-            self.mini_threshold_edit.textChanged.connect(self._on_parameter_changed)
-        if hasattr(self, 'mini_direction_combo'):
-            self.mini_direction_combo.currentIndexChanged.connect(self._on_parameter_changed)
-        if hasattr(self, 'mini_deconv_tau_rise_spinbox'):
-            self.mini_deconv_tau_rise_spinbox.valueChanged.connect(self._on_parameter_changed)
-        if hasattr(self, 'mini_deconv_tau_decay_spinbox'):
-            self.mini_deconv_tau_decay_spinbox.valueChanged.connect(self._on_parameter_changed)
-        if hasattr(self, 'mini_deconv_threshold_sd_spinbox'):
-            self.mini_deconv_threshold_sd_spinbox.valueChanged.connect(self._on_parameter_changed)
-        if hasattr(self, 'mini_baseline_filter_spinbox'):
-            self.mini_baseline_filter_spinbox.valueChanged.connect(self._on_parameter_changed)
-        if hasattr(self, 'mini_baseline_prominence_spinbox'):
-            self.mini_baseline_prominence_spinbox.valueChanged.connect(self._on_parameter_changed)
-
-    @QtCore.Slot()
-    def _on_mini_method_changed(self):
-        """Show the correct parameter group in the stack based on selected method."""
-        if not self.mini_method_combobox or not self.mini_params_stack:
-             return
-             
-        selected_method_display = self.mini_method_combobox.currentText()
-        target_widget = self._mini_params_group_map.get(selected_method_display)
-
-        if target_widget:
-             self.mini_params_stack.setCurrentWidget(target_widget)
-        
-        # Handle Direction ComboBox Visibility
-        # Direction is needed for Threshold and Baseline+Peak, but implicitly handled in Deconvolution (usually negative)
-        is_deconv = (selected_method_display == "Deconvolution (Custom)")
-        if self.mini_direction_combo:
-            self.mini_direction_combo.setEnabled(not is_deconv)
+        for method_display, registry_key in self.method_map.items():
+            # Get metadata
+            metadata = AnalysisRegistry.get_metadata(registry_key)
+            ui_params = metadata.get('ui_params', [])
             
-        # Trigger re-analysis if auto-update is desired, or just let user click button
-        # self._trigger_analysis()
+            # Create GroupBox and Layout
+            group = QtWidgets.QGroupBox(f"{method_display} Parameters")
+            layout = QtWidgets.QFormLayout(group)
+            
+            # Create Generator
+            generator = ParameterWidgetGenerator(layout)
+            generator.generate_widgets(ui_params, self._on_param_changed)
+            
+            # Store
+            self._param_generators[registry_key] = generator
+            self.mini_params_stack.addWidget(group)
 
     def _update_ui_for_selected_item(self):
         """Update UI when a new item is selected."""
-        # Base class handles data loading. We just update control enablement.
-        can_analyze = (self._selected_item_recording is not None and 
-                      bool(self._selected_item_recording.channels))
-        
-        self.analyze_button.setEnabled(can_analyze)
-        self.mini_method_combobox.setEnabled(can_analyze)
-        
-        if can_analyze and self._selected_item_recording.channels:
-            first_channel = next(iter(self._selected_item_recording.channels.values()), None)
-            if first_channel:
-                units = first_channel.units or '?'
-                if hasattr(self, 'mini_threshold_label') and self.mini_threshold_label:
-                    self.mini_threshold_label.setText(f"Threshold ({units}):")
+        if not self._selected_item_recording:
+            self.signal_channel_combobox.clear()
+            if self.plot_widget:
+                self.plot_widget.clear()
+            return
 
-    def _on_data_plotted(self):
-        """Hook called after plotting data."""
-        # Clear previous markers
-        if self.event_markers_item:
-            self.event_markers_item.setData([])
-            self.event_markers_item.setVisible(False)
-            
-        # Add marker item to plot if not already there
-        if self.plot_widget and self.event_markers_item and self.event_markers_item not in self.plot_widget.items():
-            self.plot_widget.addItem(self.event_markers_item)
-            
-        # Enable analyze button
-        self.analyze_button.setEnabled(True)
-
-    # --- Template Method Implementation ---
-
-    def _gather_analysis_parameters(self) -> Dict[str, Any]:
-        """Gather parameters from UI."""
-        selected_method_display = self.mini_method_combobox.currentText()
-        registry_key = self.method_map.get(selected_method_display)
+        self.signal_channel_combobox.blockSignals(True)
+        self.signal_channel_combobox.clear()
         
-        params = {
-            'method_display': selected_method_display,
-            'registry_key': registry_key
-        }
+        for channel in self._selected_item_recording.channels.values():
+            name = channel.name or f"Channel {channel.id}"
+            self.signal_channel_combobox.addItem(name, userData=channel.id)
+            
+        self.signal_channel_combobox.blockSignals(False)
         
-        try:
-            if selected_method_display == "Threshold Based":
-                params['threshold'] = float(self.mini_threshold_edit.text())
-                params['direction'] = self.mini_direction_combo.currentText()
-            
-            elif selected_method_display == "Deconvolution (Custom)":
-                params['tau_rise_ms'] = self.mini_deconv_tau_rise_spinbox.value()
-                params['tau_decay_ms'] = self.mini_deconv_tau_decay_spinbox.value()
-                params['filter_freq_hz'] = self.mini_deconv_filter_spinbox.value()
-                params['threshold_sd'] = self.mini_deconv_threshold_sd_spinbox.value()
-            
-            elif selected_method_display == "Baseline + Peak + Kinetics":
-                params['direction'] = self.mini_direction_combo.currentText()
-                params['filter_freq_hz'] = self.mini_baseline_filter_spinbox.value()
-                params['peak_prominence_factor'] = self.mini_baseline_prominence_spinbox.value()
-                
-            return params
-        except ValueError:
-            log.warning("Invalid parameter input")
-            return {}
+        if self.signal_channel_combobox.count() > 0:
+            self.signal_channel_combobox.setCurrentIndex(0)
+            self._on_channel_changed(0)
+        
+        # Analyze button
+        self.analyze_button.clicked.connect(self._trigger_analysis)
+        
+        # Note: Parameter changes are connected via generator callback to _on_param_changed
 
-    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Execute analysis using Registry."""
-        registry_key = params.get('registry_key')
-        if not registry_key:
-            return None
+    def _on_channel_changed(self, index):
+        """Handle channel selection change."""
+        if index < 0 or not self._selected_item_recording:
+            return
             
-        func = AnalysisRegistry.get_function(registry_key)
-        if not func:
-            log.error(f"Analysis function {registry_key} not found")
-            return None
+        channel_id = self.signal_channel_combobox.itemData(index)
+        if channel_id is None:
+            return
             
-        signal_data = data.get('data')
-        sample_rate = data.get('sampling_rate')
-        time_vec = data.get('time') # Get time vector
-        
-        if signal_data is None or sample_rate is None or time_vec is None:
-            log.error("Missing data, time, or sampling rate for event detection.")
-            return None
+        channel = self._selected_item_recording.channels.get(channel_id)
+        if not channel:
+            log.error(f"Channel ID {channel_id} not found.")
+            return
             
-        # Prepare arguments based on function signature (simplified here)
-        # In a robust system, we might inspect signature or use **params
-        try:
-            # Common args
-            kwargs = params.copy()
-            kwargs.pop('method_display', None)
-            kwargs.pop('registry_key', None)
+        # Extract data
+        if channel.data_trials and len(channel.data_trials) > 0:
+            data = channel.data_trials[0].flatten()
+            sampling_rate = self._selected_item_recording.sampling_rate
             
-            # Call function
-            # Note: The registered functions return different tuple structures
-            # We need to handle them uniformly or check key
+            # Create time array
+            time = np.arange(len(data)) / sampling_rate
             
-            # ALL registered functions are now WRAPPERS with signature:
-            # (data, time, sampling_rate, **kwargs)
-            
-            if registry_key == "event_detection_threshold":
-                # Wrapper returns dict with 'event_indices', 'summary_stats'
-                result = func(signal_data, time_vec, sample_rate, **kwargs)
-                indices = result.get('event_indices')
-                stats = result.get('summary_stats')
-                details = None
-            elif registry_key == "event_detection_deconvolution":
-                # Wrapper returns dict
-                result = func(signal_data, time_vec, sample_rate, **kwargs)
-                indices = result.get('event_indices')
-                stats = result.get('summary_stats')
-                details = None
-            elif registry_key == "event_detection_baseline_peak":
-                # Wrapper returns dict
-                result = func(signal_data, time_vec, sample_rate, **kwargs)
-                indices = result.get('event_indices')
-                stats = result.get('summary_stats')
-                details = result.get('event_details')
-            else:
-                return None
-                
-            return {
-                'method': params.get('method_display'),
-                'parameters': params,
-                'event_indices': indices,
-                'summary_stats': stats,
-                'event_details': details,
-                'num_events': len(indices) if indices is not None else 0
+            self._current_plot_data = {
+                'time': time,
+                'data': data,
+                'sampling_rate': sampling_rate
             }
             
-        except Exception as e:
-            log.error(f"Analysis execution failed: {e}", exc_info=True)
-            return None
-
-    def _display_analysis_results(self, results: Dict[str, Any]):
-        """Display results in text area."""
-        method = results.get('method')
-        num_events = results.get('num_events', 0)
-        stats = results.get('summary_stats', {})
-        
-        text = f"--- {method} Results ---\n"
-        text += f"Detected Events: {num_events}\n"
-        
-        if 'frequency_hz' in stats:
-            text += f"Frequency: {stats['frequency_hz']:.2f} Hz\n"
-        if 'mean_amplitude' in stats:
-            text += f"Mean Amplitude: {stats['mean_amplitude']:.2f}\n"
-            
-        # Add more details as needed
-        self.mini_results_textedit.setText(text)
-        
-        # Store for saving
-        self._last_analysis_result = results
-
-    def _plot_analysis_visualizations(self, results: Dict[str, Any]):
-        """Plot event markers."""
-        indices = results.get('event_indices')
-        if indices is not None and len(indices) > 0 and self._current_plot_data:
-            time_vec = self._current_plot_data.get('time')
-            data_vec = self._current_plot_data.get('data')
-            
-            if time_vec is not None and data_vec is not None:
-                event_times = time_vec[indices]
-                event_values = data_vec[indices]
+            # Plot
+            if self.plot_widget:
+                self.plot_widget.clear()
+                self.plot_widget.plot(time, data, pen='k')
                 
-                if self.event_markers_item:
-                    self.event_markers_item.setData(x=event_times, y=event_values)
-                    self.event_markers_item.setVisible(True)
+                # Re-create and add markers to ensure they are valid and on top
+                self.event_markers_item = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 200))
+                self.event_markers_item.setZValue(100) # Ensure on top
+                self.plot_widget.addItem(self.event_markers_item)
+                self.event_markers_item.setVisible(False)
+                
+                # Re-create and add threshold line
+                self.threshold_line = pg.InfiniteLine(angle=0, movable=True, pen=pg.mkPen('b', style=QtCore.Qt.PenStyle.DashLine, width=2))
+                self.threshold_line.setZValue(90) # Below markers, above trace
+                self.plot_widget.addItem(self.threshold_line)
+                self.threshold_line.setVisible(False)
+                    
+            # Trigger analysis
+            self._trigger_analysis()
         else:
+            log.warning(f"No data for channel {channel.name}")
+
+    def _connect_signals(self):
+        """Connect signals."""
+        # Method selection
+        self.mini_method_combobox.currentIndexChanged.connect(self._on_mini_method_changed)
+        
+        # Analyze button
+        self.analyze_button.clicked.connect(self._trigger_analysis)
+        
+        # Note: Parameter changes are connected via generator callback to _on_param_changed
+
+    def _on_mini_method_changed(self):
+        """Handle method change."""
+        idx = self.mini_method_combobox.currentIndex()
+        if idx >= 0:
+            self.mini_params_stack.setCurrentIndex(idx)
+            # Clear results on method change
+            self.mini_results_textedit.clear()
             if self.event_markers_item:
                 self.event_markers_item.setData([])
                 self.event_markers_item.setVisible(False)
 
-    def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
-        """Return data for export."""
-        if not self._last_analysis_result:
-            return None
+    def _on_param_changed(self):
+        """Handle parameter changes (debounce)."""
+        if self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
+
+    def _gather_analysis_parameters(self) -> Dict[str, Any]:
+        """Gather parameters from the currently active generator."""
+        registry_key = self.get_registry_name()
+        generator = self._param_generators.get(registry_key)
+        if generator:
+            return generator.gather_params()
+        return {}
+
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the registered analysis function."""
+        registry_key = self.get_registry_name()
+        func = AnalysisRegistry.get_function(registry_key)
+        
+        if not func:
+            raise ValueError(f"Analysis function '{registry_key}' not found.")
             
-        # Convert numpy types to python types for JSON serialization if needed
-        # For now, just return the dict
-        return self._last_analysis_result
+        voltage = data['data']
+        time = data['time']
+        fs = data['sampling_rate']
+        
+        try:
+            # Call the function
+            results = func(voltage, time, fs, **params)
+            return results
+        except Exception as e:
+            log.error(f"Analysis execution failed: {e}")
+            raise
 
-    # --- State Persistence ---
-    def _save_state(self):
-        """Save UI state (splitter position) to settings."""
-        if self._settings and self.splitter:
-            try:
-                self._settings.setValue("EventDetectionTab/splitterState", self.splitter.saveState())
-                log.debug("Saved EventDetectionTab splitter state.")
-            except Exception as e:
-                log.error(f"Failed to save EventDetectionTab state: {e}")
+    def _on_analysis_result(self, results: Any):
+        """Handle analysis results."""
+        if isinstance(results, dict) and 'result' in results:
+             result_data = results['result']
+        else:
+             result_data = results
 
-    def _restore_state(self):
-        """Restore UI state (splitter position) from settings."""
-        if self._settings and self.splitter:
-            try:
-                state = self._settings.value("EventDetectionTab/splitterState")
-                if state:
-                    self.splitter.restoreState(state)
-                    log.debug("Restored EventDetectionTab splitter state.")
-            except Exception as e:
-                log.error(f"Failed to restore EventDetectionTab state: {e}")
+        self._last_event_result = result_data
+        
+        # Display Text
+        self._display_analysis_results(result_data)
+        
+        # Update Plot
+        self._plot_analysis_visualizations(result_data)
+        
+        # Enable save button
+        self._set_save_button_enabled(True)
+        
+        # Update Accumulation UI
+        self._update_accumulation_ui_state()
 
-    def cleanup(self):
-        """Cleanup resources and save state."""
-        self._save_state()
-        super().cleanup()
+    def _plot_analysis_visualizations(self, result_data: Any):
+        """Visualize analysis results on the plot."""
+        if not isinstance(result_data, dict):
+            return
+            
+        event_indices = result_data.get('event_indices')
+        if event_indices is not None and len(event_indices) > 0 and self._current_plot_data:
+            times = self._current_plot_data['time'][event_indices]
+            voltages = self._current_plot_data['data'][event_indices]
+            
+            log.info(f"Plotting {len(event_indices)} events. First time: {times[0]:.4f}, Voltage: {voltages[0]:.4f}")
+            
+            if self.event_markers_item:
+                # Use explicit keyword arguments for safety
+                self.event_markers_item.setData(x=times, y=voltages)
+                self.event_markers_item.setVisible(True)
+                # Ensure it's added to the plot if it was somehow removed
+                if self.event_markers_item not in self.plot_widget.listDataItems():
+                     self.plot_widget.addItem(self.event_markers_item)
+        else:
+            if self.event_markers_item:
+                self.event_markers_item.setVisible(False)
+                
+        # Update Threshold Line if available
+        threshold_val = result_data.get('threshold') or result_data.get('threshold_value')
+        if threshold_val is not None and self.threshold_line:
+            self.threshold_line.setValue(threshold_val)
+            self.threshold_line.setVisible(True)
+        elif self.threshold_line:
+            self.threshold_line.setVisible(False)
 
-# Expose the class for dynamic loading
+    def _display_analysis_results(self, result: Dict[str, Any]):
+        """Display results in text edit."""
+        if not result or 'event_error' in result:
+            self.mini_results_textedit.setText(f"Analysis failed: {result.get('event_error', 'Unknown error')}")
+            return
+
+        count = result.get('event_count', 0)
+        freq = result.get('frequency_hz')
+        mean_amp = result.get('mean_amplitude')
+        amp_sd = result.get('amplitude_sd')
+        
+        text = f"--- Event Detection Results ---\n"
+        text += f"Method: {self.mini_method_combobox.currentText()}\n"
+        text += f"Count: {count}\n"
+        
+        if freq is not None:
+            text += f"Frequency: {freq:.2f} Hz\n"
+        
+        if mean_amp is not None:
+            text += f"Mean Amplitude: {mean_amp:.2f} ± {amp_sd:.2f}\n"
+            
+        # Add specific details based on method
+        if 'threshold' in result:
+            text += f"Threshold Used: {result['threshold']}\n"
+        if 'baseline_mean' in result:
+            text += f"Baseline: {result['baseline_mean']:.2f} ± {result['baseline_sd']:.2f}\n"
+            
+        self.mini_results_textedit.setHtml(text)
+
+    def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
+        return self._last_event_result
+
+# Export the class for dynamic loading
 ANALYSIS_TAB_CLASS = EventDetectionTab

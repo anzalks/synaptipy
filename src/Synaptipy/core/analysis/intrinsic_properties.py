@@ -250,9 +250,18 @@ def calculate_sag_ratio(
             "label": "Current Step (pA):",
             "type": "float",
             "default": -50.0,
-            "min": -1000.0,
-            "max": 1000.0,
-            "decimals": 1
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "voltage_step",
+            "label": "Voltage Step (mV):",
+            "type": "float",
+            "default": -10.0,
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "auto_detect_pulse",
@@ -266,8 +275,8 @@ def calculate_sag_ratio(
             "type": "float",
             "default": 0.0,
             "min": 0.0,
-            "max": 10.0,
-            "decimals": 3
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "baseline_end",
@@ -275,8 +284,8 @@ def calculate_sag_ratio(
             "type": "float",
             "default": 0.1,
             "min": 0.0,
-            "max": 10.0,
-            "decimals": 3
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "response_start",
@@ -284,8 +293,8 @@ def calculate_sag_ratio(
             "type": "float",
             "default": 0.3,
             "min": 0.0,
-            "max": 10.0,
-            "decimals": 3
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "response_end",
@@ -293,8 +302,8 @@ def calculate_sag_ratio(
             "type": "float",
             "default": 0.4,
             "min": 0.0,
-            "max": 10.0,
-            "decimals": 3
+            "max": 1e9,
+            "decimals": 4
         }
     ]
 )
@@ -331,12 +340,16 @@ def run_rin_analysis_wrapper(
         response_start = kwargs.get('response_start', 0.3)
         response_end = kwargs.get('response_end', 0.4)
         
-        if current_amplitude == 0:
+        if current_amplitude == 0 and kwargs.get('voltage_step', 0.0) == 0:
             return {
                 'rin_mohm': None,
                 'conductance_us': None,
-                'rin_error': "Current amplitude is zero"
+                'rin_error': "Current amplitude and Voltage step are zero"
             }
+            
+        # Determine mode (IC or VC)
+        is_voltage_clamp = current_amplitude == 0 and kwargs.get('voltage_step', 0.0) != 0
+        voltage_step = kwargs.get('voltage_step', 0.0)
             
         # Auto-detection logic
         if auto_detect_pulse:
@@ -382,11 +395,18 @@ def run_rin_analysis_wrapper(
                      f"Baseline=[{baseline_start:.3f}, {baseline_end:.3f}], "
                      f"Response=[{response_start:.3f}, {response_end:.3f}]")
         
-        result = calculate_rin(
-            data, time, current_amplitude,
-            (baseline_start, baseline_end),
-            (response_start, response_end)
-        )
+        if is_voltage_clamp:
+             result = calculate_conductance(
+                data, time, voltage_step,
+                (baseline_start, baseline_end),
+                (response_start, response_end)
+            )
+        else:
+            result = calculate_rin(
+                data, time, current_amplitude,
+                (baseline_start, baseline_end),
+                (response_start, response_end)
+            )
         
         if result.is_valid and result.value is not None:
             return {
@@ -413,7 +433,30 @@ def run_rin_analysis_wrapper(
         }
 
 
-@AnalysisRegistry.register("tau_analysis")
+@AnalysisRegistry.register(
+    "tau_analysis",
+    label="Membrane Time Constant (Tau)",
+    ui_params=[
+        {
+            "name": "stim_start_time",
+            "label": "Stim Start (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "fit_duration",
+            "label": "Fit Duration (s):",
+            "type": "float",
+            "default": 0.05,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        }
+    ]
+)
 def run_tau_analysis_wrapper(
     data: np.ndarray,
     time: np.ndarray,

@@ -161,6 +161,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot_customization_action.setToolTip("Customize plot colors, widths, and transparency")
         self.plot_customization_action.triggered.connect(self._show_plot_customization)
         
+        view_menu.addSeparator()
+        
+        # Show Popup Windows Action
+        self.show_popup_windows_action = view_menu.addAction("Show Analysis &Popup Windows...")
+        self.show_popup_windows_action.setToolTip("Show or restore any analysis popup windows (F-I curve, etc.)")
+        self.show_popup_windows_action.triggered.connect(self._show_popup_windows)
+        
         log.debug("Menu bar and status bar setup complete.")
         
         # Connect to plot customization signals
@@ -350,6 +357,42 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.error(f"Failed to show plot customization dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open plot customization:\n{e}")
+
+    def _show_popup_windows(self):
+        """Show/restore all popup windows from analysis tabs."""
+        log.debug("Show popup windows action triggered")
+        
+        popup_count = 0
+        
+        # Check if analyser_tab exists and has tabs
+        if hasattr(self, 'analyser_tab') and self.analyser_tab:
+            # AnalyserTab is a QTabWidget containing analysis tabs
+            if hasattr(self.analyser_tab, 'count'):
+                for i in range(self.analyser_tab.count()):
+                    analysis_tab = self.analyser_tab.widget(i)
+                    if hasattr(analysis_tab, '_popup_windows'):
+                        for popup in analysis_tab._popup_windows:
+                            if popup and not popup.isVisible():
+                                popup.show()
+                                popup_count += 1
+                            elif popup and popup.isVisible():
+                                # Bring to front if already visible
+                                popup.raise_()
+                                popup.activateWindow()
+                                popup_count += 1
+        
+        if popup_count > 0:
+            self.status_bar.showMessage(f"Restored {popup_count} popup window(s)", 3000)
+            log.info(f"Restored {popup_count} popup windows")
+        else:
+            QtWidgets.QMessageBox.information(
+                self, 
+                "No Popup Windows", 
+                "No analysis popup windows are currently open.\n\n"
+                "Popup windows are created when you run analyses that display\n"
+                "additional visualizations (like F-I curves, phase planes, etc.)."
+            )
+            log.info("No popup windows to restore")
 
     # --- Background Data Loading Signal Handlers ---
     

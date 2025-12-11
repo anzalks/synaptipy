@@ -18,6 +18,7 @@ from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
 from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.shared.styling import style_button
+# from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog # Imported locally to avoid circular imports?
 
 
 log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
@@ -108,10 +109,12 @@ class AnalyserTab(QtWidgets.QWidget):
         toolbar_layout = QtWidgets.QHBoxLayout()
         toolbar_layout.setContentsMargins(0, 0, 0, 5)
         
-        # Batch Analysis Button - REMOVED (Moved to individual tabs)
-        # self.batch_analysis_btn = QtWidgets.QPushButton("Run Batch Analysis...")
-        # ...
-        # toolbar_layout.addWidget(self.batch_analysis_btn)
+        # Batch Analysis Button
+        self.batch_analysis_btn = QtWidgets.QPushButton("Run Batch Analysis...")
+        self.batch_analysis_btn.setToolTip("Run analysis on multiple files.")
+        self.batch_analysis_btn.clicked.connect(self._on_batch_analysis_clicked)
+        style_button(self.batch_analysis_btn, style='primary')
+        toolbar_layout.addWidget(self.batch_analysis_btn)
         
         toolbar_layout.addStretch()
         
@@ -133,7 +136,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.central_analysis_item_combo = QtWidgets.QComboBox()
         self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
         self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
-        
+
         # --- Sub-Tab Widget (Analysis Tabs) - Takes full width ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
         self.sub_tab_widget.setSizePolicy(
@@ -143,7 +146,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.sub_tab_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
         self.sub_tab_widget.setMovable(True)
         
-        # Add sub_tab_widget directly to main layout (no splitter at this level)
+        # Add sub_tab_widget directly to main layout
         main_layout.addWidget(self.sub_tab_widget)
         
         # Connect tab change signal
@@ -209,10 +212,40 @@ class AnalyserTab(QtWidgets.QWidget):
         finally:
             # Re-enable signals after all tabs are loaded
             self.sub_tab_widget.blockSignals(False)
+        # --- NEW: Load Metadata-Driven Tabs for remaining registered analyses ---
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+
+        registered_analyses = AnalysisRegistry.list_registered()
+        
+        # Collect all covered analysis names from loaded manual tabs
+        loaded_registry_names = set()
+        for tab in self._loaded_analysis_tabs:
+            loaded_registry_names.add(tab.get_registry_name())
+            if hasattr(tab, 'get_covered_analysis_names'):
+                loaded_registry_names.update(tab.get_covered_analysis_names())
+
+        for analysis_name in registered_analyses:
+            if analysis_name not in loaded_registry_names:
+                log.info(f"Loading metadata-driven tab for: {analysis_name}")
+                try:
+                    tab_instance = MetadataDrivenAnalysisTab(
+                        analysis_name=analysis_name,
+                        neo_adapter=self._neo_adapter,
+                        settings_ref=self._settings,
+                        parent=self
+                    )
+                    self.sub_tab_widget.addTab(tab_instance, tab_instance.get_display_name())
+                    self._loaded_analysis_tabs.append(tab_instance)
+
+                except Exception as e:
+                    log.error(f"Failed to load metadata-driven tab for {analysis_name}: {e}", exc_info=True)
+        # ------------------------------------------------------------------------
+
         if not self._loaded_analysis_tabs:
              log.warning("No analysis sub-tabs loaded."); placeholder = QtWidgets.QLabel("No analysis modules found."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Info")
         else:
-            # Inject global controls into the first tab
+            # Inject global controls into the first tab initially
             first_tab = self._loaded_analysis_tabs[0]
             if hasattr(first_tab, 'set_global_controls'):
                 try:
@@ -222,10 +255,28 @@ class AnalyserTab(QtWidgets.QWidget):
                     log.error(f"Failed to inject global controls into first tab: {e}", exc_info=True)
 
 
-    # --- Batch Analysis Handler - REMOVED ---
-    # @QtCore.Slot()
-    # def _on_batch_analysis_clicked(self):
-    #     ...
+
+    # --- Batch Analysis Handler ---
+    @QtCore.Slot()
+    def _on_batch_analysis_clicked(self):
+        """Open the Batch Analysis Dialog."""
+        if not self._analysis_items:
+            QtWidgets.QMessageBox.warning(self, "No Files", "Please load files in the Explorer tab first.")
+            return
+            
+        # Filter for Recording items only
+        recording_items = [item for item in self._analysis_items if item['target_type'] == 'Recording']
+        if not recording_items:
+             QtWidgets.QMessageBox.warning(self, "No Recordings", "No valid recording files selected for batch analysis.")
+             return
+
+        from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog
+        
+        # Extract Path objects
+        recording_paths = [item['path'] for item in recording_items]
+        
+        dialog = BatchAnalysisDialog(recording_paths, self._neo_adapter, self)
+        dialog.exec()
 
     # --- Slot for Explorer Signal ---
     @QtCore.Slot(list)
