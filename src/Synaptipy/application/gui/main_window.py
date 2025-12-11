@@ -292,12 +292,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # CRITICAL FIX: Use the optimized _update_plot_pens_only() method instead of the slow update_plot_pens()
         # This updates pen properties in-place without removing/recreating plot items
         if hasattr(self, 'explorer_tab') and self.explorer_tab:
-            if hasattr(self.explorer_tab, '_update_plot_pens_only'):
-                self.explorer_tab._update_plot_pens_only()  # Fast in-place pen update
-                log.info("Updated explorer tab plots using optimized pen-only update")
+            # Use the optimized update_plot_pens() method
+            # This updates pen properties in-place immediately
+            if hasattr(self.explorer_tab, 'update_plot_pens'):
+                self.explorer_tab.update_plot_pens()
+                log.info("Updated explorer tab plots using optimized update_plot_pens")
             else:
-                log.warning("Optimized pen update method not found, using fallback")
-                self.explorer_tab.update_plot_pens()  # Fallback to full replot
+                log.warning("Explorer tab missing update_plot_pens method")
         if hasattr(self, 'analyser_tab') and self.analyser_tab:
              # Add logic here to update analyser tab plots if they exist
              pass
@@ -310,9 +311,9 @@ class MainWindow(QtWidgets.QMainWindow):
             # Update explorer tab plot pens
             if hasattr(self, 'explorer_tab') and self.explorer_tab:
                 try:
-                    if hasattr(self.explorer_tab, '_update_plot_pens_only'):
+                    if hasattr(self.explorer_tab, 'update_plot_pens'):
                         # Use explorer tab's own pen update method for better performance
-                        self.explorer_tab._update_plot_pens_only()
+                        self.explorer_tab.update_plot_pens()
                         log.info("Updated plot pens for explorer tab plots (using tab's method)")
                     else:
                         # Fallback to generic method if tab doesn't have its own
