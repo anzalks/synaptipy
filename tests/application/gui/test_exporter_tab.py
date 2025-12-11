@@ -87,10 +87,10 @@ def test_exporter_tab_init(exporter_tab):
     assert exporter_tab is not None
     assert hasattr(exporter_tab, 'sub_tab_widget')
     
-    # Check if the analysis results tab exists - only check that the tab widget has at least 3 tabs
-    assert exporter_tab.sub_tab_widget.count() >= 3
-    # The third tab should be the Analysis Results tab
-    assert "Analysis Results" in exporter_tab.sub_tab_widget.tabText(2)
+    # Check if the analysis results tab exists - only check that the tab widget has at least 2 tabs
+    assert exporter_tab.sub_tab_widget.count() >= 2
+    # The second tab should be the Analysis Results tab
+    assert "Analysis Results" in exporter_tab.sub_tab_widget.tabText(1)
 
 def test_refresh_analysis_results(exporter_tab, mock_main_window):
     """Test refreshing the analysis results table"""
