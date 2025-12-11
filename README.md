@@ -91,10 +91,10 @@ print(results)
 | Component | Technology | Description |
 |-----------|------------|-------------|
 | **Core** | Python 3.11 | Logic and Computation |
-| **GUI** | PySide6 (Qt6) | Modern UI Framework |
-| **Plotting** | PyQtGraph | High-performance GPU-accelerated plotting |
-| **Data** | Neo / PyNWB | Electrophysiology Data Standards |
-| **Analysis** | SciPy / NumPy | Scientific Computing |
+| **GUI** | PySide6 (>= 6.7.0) | Modern Qt6 Framework |
+| **Plotting** | PyQtGraph (>= 0.13.0) | High-performance plotting |
+| **Data** | Neo (>= 0.14.0) / PyNWB (>= 3.1.0) | Electrophysiology Standards |
+| **Analysis** | SciPy (>= 1.13.0) / NumPy (>= 2.0.0) | Scientific Computing |
 
 ## 🤝 Contributing
 
@@ -102,7 +102,7 @@ We welcome contributions! Please check the [Developer Guide](docs/developer_guid
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3 (AGPLv3) - see the [LICENSE](LICENSE) file for details.
 
 ---
 **Made with ❤️ by the Synaptipy Team**
