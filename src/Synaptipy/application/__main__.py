@@ -105,6 +105,11 @@ def run_gui():
         except Exception as e:
             log.warning(f"Could not enable High DPI pixmaps: {e}")
 
+    # Force locale to English/US to ensure dot decimal separators
+    # This fixes issues where European locales force comma separators in spinboxes
+    QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
+    log.info("Forced application locale to English/US (dot decimal separator)")
+
     # Create startup manager and begin loading process
     try:
         startup_manager = StartupManager(app)

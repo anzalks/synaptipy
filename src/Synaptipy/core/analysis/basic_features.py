@@ -110,8 +110,111 @@ def calculate_baseline_stats(
         return (result.value, result.std_dev if result.std_dev is not None else 0.0)
     return None
 
+def find_stable_baseline(
+    data: np.ndarray, 
+    sample_rate: float,
+    window_duration_s: float = 0.5,
+    step_duration_s: float = 0.1
+) -> Tuple[Optional[float], Optional[float], Optional[Tuple[float, float]]]:
+    """
+    Finds the most stable baseline segment based on minimum variance.
+
+    Args:
+        data: 1D numpy array of the signal.
+        sample_rate: Sampling rate in Hz.
+        window_duration_s: Duration of the sliding window in seconds.
+        step_duration_s: Step size for sliding the window in seconds.
+
+    Returns:
+        A tuple containing:
+            - baseline_mean: Mean of the most stable segment (or None).
+            - baseline_sd: Standard deviation of the most stable segment (or None).
+            - time_window: Tuple of (start_time, end_time) for the segment (or None).
+    """
+    if len(data) == 0:
+        return None, None, None
+
+    n_points = len(data)
+    window_samples = int(window_duration_s * sample_rate)
+    step_samples = int(step_duration_s * sample_rate)
+
+    if window_samples < 2 or step_samples < 1:
+        log.warning(f"Baseline window ({window_samples}) or step ({step_samples}) too small. Adjust parameters.")
+        window_samples = max(2, window_samples)
+        step_samples = max(1, step_samples)
+       
+    if window_samples >= n_points:
+        # log.warning("Baseline window duration >= data length. Using full trace.")
+        segment_data = data
+        mean_val = np.mean(segment_data)
+        sd_val = np.std(segment_data)
+        return mean_val, sd_val, (0.0, n_points / sample_rate)
+
+    min_variance = np.inf
+    best_start_idx = None
+    best_mean = None
+    best_sd = None
+
+    # Limit search for very long traces to avoid freezing? 
+    # For now, full search is fine for typical traces.
+    for i in range(0, n_points - window_samples + 1, step_samples):
+        segment = data[i : i + window_samples]
+        variance = np.var(segment)
+        if variance < min_variance:
+            min_variance = variance
+            best_start_idx = i
+            best_mean = np.mean(segment)
+            best_sd = np.sqrt(variance)
+           
+    if best_start_idx is None:
+         return None, None, None
+        
+    start_time = best_start_idx / sample_rate
+    end_time = (best_start_idx + window_samples) / sample_rate
+    
+    return best_mean, best_sd, (start_time, end_time)
+
+
 # --- Registry Wrapper for Batch Processing ---
-@AnalysisRegistry.register("rmp_analysis")
+@AnalysisRegistry.register(
+    "rmp_analysis",
+    label="Resting Membrane Potential",
+    ui_params=[
+        {
+            "name": "baseline_start",
+            "label": "Start Time (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "baseline_end",
+            "label": "End Time (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        },
+        {
+            "name": "auto_detect",
+            "label": "Auto-Detect Stable Segment",
+            "type": "bool",
+            "default": False
+        },
+        {
+            "name": "window_duration",
+            "label": "Auto Window (s):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
+        }
+    ]
+)
 def run_rmp_analysis_wrapper(
     data: np.ndarray,
     time: np.ndarray,
@@ -120,31 +223,25 @@ def run_rmp_analysis_wrapper(
 ) -> Dict[str, Any]:
     """
     Wrapper function for RMP analysis that conforms to the registry interface.
-    
-    This function is registered with the AnalysisRegistry and can be called
-    dynamically by the batch engine.
-    
-    Args:
-        data: 1D NumPy array of voltage data
-        time: 1D NumPy array of corresponding time points (seconds)
-        sampling_rate: Sampling rate in Hz
-        **kwargs: Additional parameters:
-            - baseline_start: Start time of baseline window (default: 0.0)
-            - baseline_end: End time of baseline window (default: 0.1)
-            
-    Returns:
-        Dictionary containing results suitable for DataFrame rows:
-        {
-            'rmp_mv': float,
-            'rmp_std': float,
-            'rmp_drift': float (optional),
-            'rmp_error': str (if error occurred)
-        }
     """
     try:
         # Extract parameters from kwargs
         baseline_start = kwargs.get('baseline_start', 0.0)
         baseline_end = kwargs.get('baseline_end', 0.1)
+        auto_detect = kwargs.get('auto_detect', False)
+        
+        if auto_detect:
+            window_duration = kwargs.get('window_duration', 0.5)
+            # Use shared helper
+            mean, sd, window = find_stable_baseline(data, sampling_rate, window_duration_s=window_duration)
+            
+            if window:
+                baseline_start, baseline_end = window
+                log.info(f"Auto-detected stable baseline: {baseline_start:.3f} - {baseline_end:.3f} s")
+            else:
+                log.warning("Auto-detection failed or data too short. Using full trace.")
+                baseline_start = time[0]
+                baseline_end = time[-1]
         
         # Validate window is within data range
         if len(time) > 0:

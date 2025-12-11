@@ -82,7 +82,7 @@ def main():
     
     # Import GUI components here to avoid circular imports
     try:
-        from Synaptipy.application.app import launch_gui
+        from Synaptipy.application.__main__ import run_gui
         
         # Launch the GUI
         initial_file = Path(args.file) if args.file else None
@@ -91,7 +91,7 @@ def main():
             print(f"Error: File not found: {initial_file}")
             return 1
             
-        return launch_gui(initial_file=initial_file)
+        return run_gui()
     except ImportError as e:
         logger.error(f"Failed to import GUI components: {e}")
         print(f"Error: Failed to import GUI components: {e}")

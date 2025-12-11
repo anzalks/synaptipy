@@ -89,7 +89,8 @@ def detect_bursts(
         'burst_count': num_bursts,
         'spikes_per_burst_avg': np.mean(spikes_per_burst),
         'burst_duration_avg': np.mean(burst_durations),
-        'burst_freq_hz': burst_freq
+        'burst_freq_hz': burst_freq,
+        'bursts': bursts # List of lists of spike times in each burst
     }
 
 
@@ -101,27 +102,27 @@ def detect_bursts(
             "label": "Threshold (mV):",
             "type": "float",
             "default": -20.0,
-            "min": -100.0,
-            "max": 100.0,
-            "decimals": 1
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "max_isi_start",
             "label": "Max ISI Start (s):",
             "type": "float",
             "default": 0.01,
-            "min": 0.001,
-            "max": 1.0,
-            "decimals": 3
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
         },
         {
             "name": "max_isi_end",
             "label": "Max ISI End (s):",
             "type": "float",
             "default": 0.1,
-            "min": 0.001,
-            "max": 1.0,
-            "decimals": 3
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4
         }
     ]
 )
@@ -152,8 +153,7 @@ def run_burst_analysis_wrapper(
         max_isi_end = kwargs.get('max_isi_end', 0.1)
         
         # 1. Detect spikes first
-        # We need spike times for burst analysis
-        refractory_ms = 2.0 # Hardcoded or could be param
+        refractory_ms = 2.0 
         refractory_samples = int((refractory_ms / 1000.0) * sampling_rate)
         
         spike_result = detect_spikes_threshold(data, time, threshold, refractory_samples)
@@ -165,11 +165,21 @@ def run_burst_analysis_wrapper(
             }
             
         # 2. Detect bursts
+        # Note: detect_bursts returns stats, but we need the actual bursts list.
+        # We need to modify detect_bursts or just call the logic here?
+        # detect_bursts returns a dict. It calculates 'bursts' internally but doesn't return them.
+        # Let's modify detect_bursts to return the raw bursts too? 
+        # Or just re-implement the call here since we can't easily change the inner function signature without breaking others?
+        # Actually, let's modify detect_bursts to return 'bursts' list in the dict.
+        
         burst_stats = detect_bursts(
             spike_result.spike_times,
             max_isi_start=max_isi_start,
             max_isi_end=max_isi_end
         )
+        
+        # Wait, I need to modify detect_bursts to return the list.
+        # Let's assume I will modify detect_bursts in the same file.
         
         return burst_stats
         

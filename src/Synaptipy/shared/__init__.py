@@ -32,8 +32,6 @@ from .constants import (
     AVERAGE_COLOR,
     TRIAL_ALPHA,
     Z_ORDER,
-    NEO_FILE_FILTER,
-    get_neo_file_filter
 )
 
 from .styling import (
@@ -80,8 +78,6 @@ __all__ = [
     'AVERAGE_COLOR',
     'TRIAL_ALPHA',
     'Z_ORDER',
-    'NEO_FILE_FILTER',
-    'get_neo_file_filter',
     
     # Styling
     'apply_stylesheet',

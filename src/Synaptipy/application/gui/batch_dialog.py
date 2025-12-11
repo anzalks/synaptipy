@@ -446,7 +446,14 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.channel_input = QtWidgets.QLineEdit()
         self.channel_input.setPlaceholderText("e.g. Vm_1, Im_1 (Leave empty to process all channels)")
         if self.default_channels:
-            self.channel_input.setText(", ".join(self.default_channels))
+            # Ensure it's a list of strings
+            channels = self.default_channels
+            if isinstance(channels, str):
+                channels = [channels]
+            elif not isinstance(channels, (list, tuple)):
+                channels = [str(channels)]
+            
+            self.channel_input.setText(", ".join([str(c) for c in channels]))
         channel_layout.addWidget(self.channel_input)
         
         channel_help = QtWidgets.QLabel("Enter comma-separated channel names. Leave empty to process all channels found in each file.")
