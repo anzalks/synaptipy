@@ -12,7 +12,7 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger('Synaptipy.core.analysis.spike_analysis')
 
-def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float, refractory_samples: int) -> SpikeTrainResult:
+def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float, refractory_samples: int, peak_search_window_samples: int = None) -> SpikeTrainResult:
     """
     Detects spikes based on a simple voltage threshold crossing with refractory period.
 
@@ -21,6 +21,8 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
         time: 1D NumPy array of corresponding time points (seconds).
         threshold: Voltage threshold for detection.
         refractory_samples: Minimum number of samples between detected spikes (applied based on threshold crossings).
+        peak_search_window_samples: Optional. Number of samples to search for peak after crossing. 
+                                    Defaults to refractory_samples (or 5ms if refractory is 0).
 
     Returns:
         SpikeTrainResult object containing spike times and indices.
@@ -62,9 +64,9 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
              
         # 3. Find peak index after each valid crossing
         peak_indices_list = []
-        # Define search window for peak (e.g., next refractory_samples, or fixed ms)
-        # Let's use refractory_samples as a simple window limit for now
-        peak_search_window_samples = refractory_samples if refractory_samples > 0 else int(0.005 / (time[1]-time[0])) # Default to 5ms if no refractory
+        # Define search window for peak
+        if peak_search_window_samples is None:
+             peak_search_window_samples = refractory_samples if refractory_samples > 0 else int(0.005 / (time[1]-time[0])) # Default to 5ms if no refractory
         
         for crossing_idx in valid_crossing_indices:
             search_start = crossing_idx
@@ -113,7 +115,14 @@ def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float
 
 
 # --- Add other spike analysis functions here later ---
-def calculate_spike_features(data, time, spike_indices):
+def calculate_spike_features(
+    data: np.ndarray, 
+    time: np.ndarray, 
+    spike_indices: np.ndarray, 
+    dvdt_threshold: float = 20.0,
+    ahp_window_sec: float = 0.05,
+    onset_lookback: float = 0.01
+) -> List[Dict[str, Any]]:
     """
     Calculates detailed features for each spike.
     Returns:
@@ -130,11 +139,16 @@ def calculate_spike_features(data, time, spike_indices):
     for peak_idx in spike_indices:
         # 1. Find Action Potential Threshold (20 V/s is a common value)
         search_end = peak_idx
-        search_start = max(0, peak_idx - int(0.005 / dt))  # 5ms before peak
+        search_start = max(0, peak_idx - int(onset_lookback / dt))  # Look back window
         try:
             dvdt_slice = dvdt[search_start:search_end]
             data_slice = data[search_start:search_end]
-            threshold_crossings = np.where(dvdt_slice > 20000)[0] # dV/dt in V/s, data in mV
+            # Convert dvdt_threshold to V/s if it's not already (it is treated as V/s)
+            # data is in mV, time in s, so dvdt is mV/s. 
+            # 20 V/s = 20000 mV/s.
+            threshold_val_mvs = dvdt_threshold * 1000.0
+            
+            threshold_crossings = np.where(dvdt_slice > threshold_val_mvs)[0]
             if threshold_crossings.size > 0:
                 thresh_idx = search_start + threshold_crossings[0]
                 ap_threshold = data[thresh_idx]
@@ -196,7 +210,7 @@ def calculate_spike_features(data, time, spike_indices):
             decay_time_90_10 = np.nan
 
         # 4. Afterhyperpolarization (AHP) depth & Duration
-        ahp_search_end = min(len(data), peak_idx + int(0.05 / dt)) # Extended to 50ms after peak for AHP
+        ahp_search_end = min(len(data), peak_idx + int(ahp_window_sec / dt))
         ahp_slice = data[peak_idx:ahp_search_end]
         try:
             ahp_min_idx_rel = np.argmin(ahp_slice)
@@ -362,6 +376,44 @@ def analyze_multi_sweep_spikes(
             "min": 0.0,
             "max": 1e9,
             "decimals": 4
+        },
+        {
+            "name": "peak_search_window",
+            "label": "Peak Search (s):",
+            "type": "float",
+            "default": 0.005,
+            "min": 0.0,
+            "max": 1.0,
+            "decimals": 4
+        },
+        {
+            "name": "dvdt_threshold",
+            "label": "dV/dt Thresh (V/s):",
+            "type": "float",
+            "default": 20.0,
+            "min": 0.0,
+            "max": 1e6,
+            "decimals": 1
+        },
+        {
+            "name": "ahp_window",
+            "label": "AHP Window (s):",
+            "type": "float",
+            "default": 0.05,
+            "min": 0.0,
+            "default": 0.05,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 3
+        },
+        {
+            "name": "onset_lookback",
+            "label": "Onset Lookback (s):",
+            "type": "float",
+            "default": 0.01,
+            "min": 0.0,
+            "max": 0.1,
+            "decimals": 3
         }
     ]
 )
@@ -371,6 +423,10 @@ def run_spike_detection_wrapper(
     sampling_rate: float,
     threshold: float = -20.0,
     refractory_period: float = 0.002,
+    peak_search_window: float = 0.005,
+    dvdt_threshold: float = 20.0,
+    ahp_window: float = 0.05,
+    onset_lookback: float = 0.01,
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -388,13 +444,21 @@ def run_spike_detection_wrapper(
     """
     try:
         refractory_samples = int(refractory_period * sampling_rate)
+        peak_window_samples = int(peak_search_window * sampling_rate)
         
         # Run detection
-        result = detect_spikes_threshold(data, time, threshold, refractory_samples)
+        result = detect_spikes_threshold(data, time, threshold, refractory_samples, peak_search_window_samples=peak_window_samples)
         
         if result.is_valid:
             # Calculate spike features
-            features_list = calculate_spike_features(data, time, result.spike_indices)
+            features_list = calculate_spike_features(
+                data, 
+                time, 
+                result.spike_indices,
+                dvdt_threshold=dvdt_threshold,
+                ahp_window_sec=ahp_window,
+                onset_lookback=onset_lookback
+            )
             
             # Aggregate features (Mean and Std Dev)
             stats = {}

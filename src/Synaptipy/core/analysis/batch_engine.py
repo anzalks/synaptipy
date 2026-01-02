@@ -13,6 +13,7 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable, Union
 import numpy as np
+import traceback # Added for stack trace logging
 from datetime import datetime
 
 from Synaptipy.infrastructure.file_readers import NeoAdapter
@@ -210,7 +211,10 @@ class BatchAnalysisEngine:
                                 'channel': channel_name,
                                 'analysis': task.get('analysis', 'unknown'),
                                 'scope': task.get('scope', 'unknown'),
-                                'error': str(e)
+                                'analysis': task.get('analysis', 'unknown'),
+                                'scope': task.get('scope', 'unknown'),
+                                'error': str(e),
+                                'debug_trace': traceback.format_exc()
                             })
                     
             except Exception as e:
@@ -219,7 +223,10 @@ class BatchAnalysisEngine:
                 results_list.append({
                     'file_name': file_path.name,
                     'file_path': str(file_path),
-                    'error': str(e)
+                    'file_name': file_path.name,
+                    'file_path': str(file_path),
+                    'error': str(e),
+                    'debug_trace': traceback.format_exc()
                 })
         
         if progress_callback:
@@ -311,7 +318,10 @@ class BatchAnalysisEngine:
                     'channel': channel_name,
                     'analysis': analysis_name,
                     'scope': scope,
-                    'error': str(e)
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': str(e),
+                    'debug_trace': traceback.format_exc()
                 })
                 
         elif scope == 'all_trials':
@@ -359,7 +369,9 @@ class BatchAnalysisEngine:
                         'analysis': analysis_name,
                         'scope': scope,
                         'trial_index': trial_idx,
-                        'error': str(e)
+                        'trial_index': trial_idx,
+                        'error': str(e),
+                        'debug_trace': traceback.format_exc()
                     })
                     
         elif scope == 'first_trial':
@@ -400,7 +412,9 @@ class BatchAnalysisEngine:
                     'channel': channel_name,
                     'analysis': analysis_name,
                     'scope': scope,
-                    'error': str(e)
+                    'scope': scope,
+                    'error': str(e),
+                    'debug_trace': traceback.format_exc()
                 })
         elif scope == 'channel_set':
             # Analyze all trials together as a set
@@ -429,6 +443,10 @@ class BatchAnalysisEngine:
                     data_list.append(data)
                     time_list.append(time)
                     valid_trials.append(trial_idx)
+            
+            # Memory Safety Check
+            if len(data_list) > 500: # Heuristic warning
+                log.warning(f"Batch processing channel set with {len(data_list)} trials. This uses significant memory. Proceeding...")
             
             if not data_list:
                 log.warning(f"No valid data found for any trial of {channel_name} in {file_path.name}")
@@ -465,7 +483,10 @@ class BatchAnalysisEngine:
                     'channel': channel_name,
                     'analysis': analysis_name,
                     'scope': scope,
-                    'error': str(e)
+                    'analysis': analysis_name,
+                    'scope': scope,
+                    'error': str(e),
+                    'debug_trace': traceback.format_exc()
                 })
 
         elif scope == 'specific_trial':
@@ -527,7 +548,9 @@ class BatchAnalysisEngine:
                     'analysis': analysis_name,
                     'scope': scope,
                     'trial_index': trial_target,
-                    'error': str(e)
+                    'trial_index': trial_target,
+                    'error': str(e),
+                    'debug_trace': traceback.format_exc()
                 })
 
         else:
