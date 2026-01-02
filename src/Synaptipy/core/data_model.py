@@ -91,7 +91,10 @@ class Channel:
     def num_samples(self) -> int:
         """
         Returns the number of samples in the first trial.
-        Warns if trials have different lengths. Assumes at least one trial exists.
+        
+        WARNING: This property only checks the first trial. If trials have variable lengths,
+        this value may be misleading. Use `get_consistent_samples()` for strict validation.
+        
         Returns 0 if no trials are present.
         """
         if not self.data_trials:
@@ -120,6 +123,27 @@ class Channel:
             log.warning(f"Channel '{self.name}' has trials with varying lengths: {lengths}. `num_samples` returning length of first trial ({first_trial_len}).")
         # Return length of first valid trial if lengths are consistent or vary
         return first_trial_len if lengths else 0
+
+    def get_consistent_samples(self) -> int:
+        """
+        Returns the number of samples per trial, ensuring all trials have the same length.
+        Raises ValueError if trials have different lengths.
+        Returns 0 if no trials.
+        """
+        if not self.data_trials:
+            return 0
+            
+        lengths = set()
+        for arr in self.data_trials:
+             if isinstance(arr, np.ndarray) and arr.ndim > 0:
+                 lengths.add(arr.shape[0])
+        
+        if len(lengths) == 0:
+            return 0
+        if len(lengths) > 1:
+            raise ValueError(f"Channel '{self.name}' has inconsistent trial lengths: {lengths}")
+            
+        return list(lengths)[0]
 
     # --- Data Retrieval Methods ---
     def get_data(self, trial_index: int) -> Optional[np.ndarray]:

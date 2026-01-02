@@ -221,6 +221,13 @@ def calculate_sag_ratio(
         peak_mask = (time_vector >= response_peak_window[0]) & (time_vector < response_peak_window[1])
         if not np.any(peak_mask): return None
         v_peak = np.min(voltage_trace[peak_mask])
+        
+        # Robustness Check: If peak is outlier, use percentile
+        # Use 1st percentile for hyperpolarizing peak to avoid single-point noise
+        if len(voltage_trace[peak_mask]) > 10:
+             v_peak = np.percentile(voltage_trace[peak_mask], 1)
+        else:
+             v_peak = np.min(voltage_trace[peak_mask])
 
         # Steady-state hyperpolarization
         ss_mask = (time_vector >= response_steady_state_window[0]) & (time_vector < response_steady_state_window[1])
