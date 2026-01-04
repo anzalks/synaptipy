@@ -248,11 +248,24 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         
         # Display text results
         text_output = []
-        for k, v in results.items():
+        
+        # robust extraction of items
+        items = []
+        if isinstance(results, dict):
+            items = list(results.items())
+        elif hasattr(results, '__dict__'):
+            items = [(k, v) for k, v in results.__dict__.items() if not k.startswith('_')]
+        else:
+             # Fallback
+             text_output.append(str(results))
+        
+        for k, v in items:
             if isinstance(v, (float, int)):
                 text_output.append(f"{k}: {v:.4g}")
             elif isinstance(v, list):
                 text_output.append(f"{k}: {len(v)} items")
+            elif isinstance(v, np.ndarray):
+                 text_output.append(f"{k}: Array shape {v.shape}")
             else:
                 text_output.append(f"{k}: {str(v)}")
         

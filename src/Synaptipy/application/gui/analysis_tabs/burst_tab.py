@@ -40,6 +40,12 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
             self.plot_widget.addItem(self.spike_markers)
             self.spike_markers.setVisible(False)
 
+    def _on_channel_changed(self, index):
+        """Re-add items to plot if cleared."""
+        super()._on_channel_changed(index)
+        if self.plot_widget and self.spike_markers and self.spike_markers not in self.plot_widget.items():
+            self.plot_widget.addItem(self.spike_markers)
+
     def _clear_burst_visualizations(self):
         """Remove old burst lines."""
         if self.plot_widget:

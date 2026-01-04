@@ -133,6 +133,7 @@ def test_baseline_result_storage(rmp_tab):
     assert rmp_tab._last_baseline_result['baseline_mean'] == -70.0
 
 
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 

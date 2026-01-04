@@ -30,7 +30,8 @@ class SpikeTrainResult(AnalysisResult):
     def __repr__(self):
         if self.is_valid:
             count = len(self.spike_times) if self.spike_times is not None else 0
-            return f"SpikeTrainResult(count={count}, mean_freq={self.mean_frequency:.2f} Hz)"
+            freq_str = f"{self.mean_frequency:.2f}" if self.mean_frequency is not None else "N/A"
+            return f"SpikeTrainResult(count={count}, mean_freq={freq_str} Hz)"
         return f"SpikeTrainResult(Error: {self.error_message})"
 
 @dataclass
@@ -83,7 +84,8 @@ class BurstResult(AnalysisResult):
 
     def __repr__(self):
         if self.is_valid:
-            return f"BurstResult(count={self.burst_count}, freq={self.burst_freq_hz:.2f} Hz)"
+            freq_str = f"{self.burst_freq_hz:.2f}" if self.burst_freq_hz is not None else "N/A"
+            return f"BurstResult(count={self.burst_count}, freq={freq_str} Hz)"
         return f"BurstResult(Error: {self.error_message})"
 
 
@@ -111,5 +113,6 @@ class EventDetectionResult(AnalysisResult):
 
     def __repr__(self):
         if self.is_valid:
-            return f"EventDetectionResult(count={self.event_count}, freq={self.frequency_hz:.2f} Hz)"
+            freq_str = f"{self.frequency_hz:.2f}" if self.frequency_hz is not None else "N/A"
+            return f"EventDetectionResult(count={self.event_count}, freq={freq_str} Hz)"
         return f"EventDetectionResult(Error: {self.error_message})"

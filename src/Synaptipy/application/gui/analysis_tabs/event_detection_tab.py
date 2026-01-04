@@ -80,7 +80,17 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.threshold_line = pg.InfiniteLine(angle=0, movable=True, pen=pg.mkPen('b', style=QtCore.Qt.PenStyle.DashLine))
         self.plot_widget.addItem(self.threshold_line)
         self.threshold_line.setVisible(False)
+        self.threshold_line.setVisible(False)
         self.threshold_line.setZValue(90)
+
+    def _on_channel_changed(self, index):
+        """Re-add items to plot if cleared."""
+        super()._on_channel_changed(index)
+        if self.plot_widget:
+            if self.event_markers_item and self.event_markers_item not in self.plot_widget.items():
+                self.plot_widget.addItem(self.event_markers_item)
+            if self.threshold_line and self.threshold_line not in self.plot_widget.items():
+                self.plot_widget.addItem(self.threshold_line)
 
     def _on_method_changed(self):
         """Handle method switching."""
@@ -120,18 +130,10 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         else:
              result_data = results
              
-        if not isinstance(result_data, dict):
-            return
-
-        event_indices = result_data.get('event_indices')
+        # Support both object and dict
+        is_obj = hasattr(result_data, 'event_indices')
         
-        # We need generic access to current plot data. 
-        # Base class stores it in self._current_plot_data? 
-        # Wait, MetadataDrivenAnalysisTab doesn't explicitly store _current_plot_data in _on_channel_changed?
-        # Actually BaseAnalysisTab does. Let's check BaseAnalysisTab.
-        # Yes, RinTab used self._current_plot_data.
-        # MetadataDrivenAnalysisTab inherits BaseAnalysisTab.
-        # BaseAnalysisTab stores self._current_plot_data in _plot_selected_data.
+        event_indices = result_data.event_indices if is_obj else (result_data.get('event_indices') if isinstance(result_data, dict) else None)
         
         if event_indices is not None and len(event_indices) > 0 and hasattr(self, '_current_plot_data') and self._current_plot_data:
             times = self._current_plot_data['time'][event_indices]
@@ -145,7 +147,13 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
                 self.event_markers_item.setVisible(False)
                 
         # Threshold line
-        threshold_val = result_data.get('threshold') or result_data.get('threshold_value')
+        if is_obj:
+            threshold_val = getattr(result_data, 'threshold', None) or getattr(result_data, 'threshold_value', None)
+        else:
+            threshold_val = result_data.get('threshold') if isinstance(result_data, dict) else None
+            if threshold_val is None and isinstance(result_data, dict):
+                threshold_val = result_data.get('threshold_value')
+
         if threshold_val is not None and self.threshold_line:
             self.threshold_line.setValue(threshold_val)
             self.threshold_line.setVisible(True)
@@ -166,10 +174,18 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         if not result_data:
             return
 
-        count = result_data.get('event_count', 0)
-        freq = result_data.get('frequency_hz')
-        mean_amp = result_data.get('mean_amplitude')
-        amp_sd = result_data.get('amplitude_sd')
+        # Support both object and dict access for robustness
+        def get_val(key, default=None):
+            if hasattr(result_data, key):
+                return getattr(result_data, key)
+            elif isinstance(result_data, dict):
+                return result_data.get(key, default)
+            return default
+
+        count = get_val('event_count', 0)
+        freq = get_val('frequency_hz')
+        mean_amp = get_val('mean_amplitude')
+        amp_sd = get_val('amplitude_sd')
         
         text = f"<h3>Event Detection Results</h3>"
         text += f"<b>Method:</b> {self.method_combobox.currentText()}<br>"
@@ -181,8 +197,9 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         if mean_amp is not None:
             text += f"<b>Mean Amplitude:</b> {mean_amp:.2f} ± {amp_sd:.2f}<br>"
             
-        if 'threshold' in result_data:
-            text += f"<b>Threshold:</b> {result_data['threshold']}<br>"
+        thresh = get_val('threshold')
+        if thresh is not None:
+            text += f"<b>Threshold:</b> {thresh}<br>"
             
         if hasattr(self, 'results_text'): # MetadataDriven uses results_text (TextEdit)
             self.results_text.setHtml(text)
