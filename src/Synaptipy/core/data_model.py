@@ -59,7 +59,10 @@ class Channel:
                  self.data_trials: List[np.ndarray] = [np.asarray(t) for t in data_trials]
              else:
                  # Lazy loading case: empty data_trials
-                 self.data_trials: List[np.ndarray] = []
+                 # Ensure it's a list so we can append later. 
+                 # Crucially, we might want to pre-allocate None slots if we know num_trials (from metadata?)
+                 # But for now, empty list is safer than [[]] which implies 1 empty trial.
+                 self.data_trials: List[Optional[np.ndarray]] = []
 
         # --- ADDED: Attributes for Associated Current Data --- 
         self.current_data_trials: List[np.ndarray] = [] # Populated by adapter if current signal found
@@ -153,12 +156,15 @@ class Channel:
         """
         # Check if data is already loaded
         if self.data_trials and 0 <= trial_index < len(self.data_trials):
-            return self.data_trials[trial_index]
+            data = self.data_trials[trial_index]
+            if data is not None:
+                return data
         
         # For lazy loading, try to load data from neo Block
         if hasattr(self, 'lazy_info') and self.lazy_info:
             try:
-                return self._load_trial_data_lazy(trial_index)
+                data = self._load_trial_data_lazy(trial_index)
+                return data
             except Exception as e:
                 log.error(f"Failed to load trial {trial_index} data lazily for channel {self.id}: {e}")
                 return None
@@ -203,8 +209,20 @@ class Channel:
                     return None
             
             # Load the actual data from the lazy AnalogSignal
-            log.debug(f"Loading trial {trial_index} data for channel {self.id}")
-            data = np.ravel(analog_signal_ref.magnitude)
+            
+            real_signal = analog_signal_ref
+            # Neo proxies (Lazy Loading) usually have a 'load' method to fetch the actual data
+            if hasattr(analog_signal_ref, 'load'):
+                real_signal = analog_signal_ref.load()
+
+            # Ensure we have the magnitude (remove units if Quantity)
+            if hasattr(real_signal, 'magnitude'):
+                raw_data = real_signal.magnitude
+            else:
+                raw_data = real_signal
+                
+            # robustly convert to flat numpy array
+            data = np.array(raw_data).ravel()
             
             # Store the loaded data in data_trials for future access
             # Ensure data_trials list is long enough

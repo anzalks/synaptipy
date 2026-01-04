@@ -18,9 +18,10 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 # Assuming these are correctly structured now
 from .dummy_classes import Recording, NWBExporter, SynaptipyError, ExportError, Channel # Import Channel
-from .explorer_tab import ExplorerTab # Need reference to get recording
+from .dummy_classes import Recording, NWBExporter, SynaptipyError, ExportError, Channel # Import Channel
 from .nwb_dialog import NwbMetadataDialog # Need the metadata dialog
 from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
+from Synaptipy.application.session_manager import SessionManager
 
 try:
     import tzlocal
@@ -35,7 +36,6 @@ class ExporterTab(QtWidgets.QWidget):
     """
 
     def __init__(self,
-                 explorer_tab_ref: ExplorerTab,
                  nwb_exporter_ref: NWBExporter,
                  settings_ref: QtCore.QSettings,
                  status_bar_ref: QtWidgets.QStatusBar,
@@ -44,7 +44,6 @@ class ExporterTab(QtWidgets.QWidget):
         log.debug("Initializing ExporterTab")
 
         # Store references from MainWindow
-        self._explorer_tab = explorer_tab_ref
         self._nwb_exporter = nwb_exporter_ref
         self._settings = settings_ref
         self._settings = settings_ref
@@ -66,6 +65,13 @@ class ExporterTab(QtWidgets.QWidget):
 
         self._setup_ui()
         self._connect_signals()
+        self._setup_ui()
+        self._connect_signals()
+        
+        # Connect to SessionManager
+        self._session_manager = SessionManager()
+        self._session_manager.current_recording_changed.connect(self._on_recording_changed)
+        
         self.update_state() # Set initial state
 
     def _setup_ui(self):
@@ -224,13 +230,17 @@ class ExporterTab(QtWidgets.QWidget):
         if self.analysis_results_deselect_all_button: self.analysis_results_deselect_all_button.clicked.connect(self._deselect_all_results)
         if self.analysis_results_table: self.analysis_results_table.itemSelectionChanged.connect(self.update_state)
 
+    def _on_recording_changed(self, recording: Optional[Recording]):
+        """Slot for when the session recording changes."""
+        self.update_state()
+
     # --- Public Method for MainWindow to Call ---
     def update_state(self):
         """
         Updates the enabled state of UI elements based on data availability
         and path/directory selection. Also updates source label.
         """
-        current_recording = self._explorer_tab.get_current_recording()
+        current_recording = self._session_manager.current_recording
         has_data = current_recording is not None
 
         # Update Source Label
@@ -259,7 +269,7 @@ class ExporterTab(QtWidgets.QWidget):
 
     # NWB Handlers
     def _browse_nwb_output_path(self):
-        current_recording = self._explorer_tab.get_current_recording()
+        current_recording = self._session_manager.current_recording
         default_dir = self._settings.value("lastExportDirectory", "", type=str)
         default_filename = "exported_data.nwb"
         if current_recording:
@@ -277,7 +287,7 @@ class ExporterTab(QtWidgets.QWidget):
     def _do_export_nwb(self):
         # --- NWB Export logic remains the same as previous correct version ---
         log.debug("NWB Export button clicked.")
-        current_recording = self._explorer_tab.get_current_recording()
+        current_recording = self._session_manager.current_recording
         output_path_str = self.nwb_output_path_edit.text().strip()
         if not current_recording: log.warning("Export NWB ignored: No data."); QtWidgets.QMessageBox.warning(self, "Export Error", "No data loaded."); self.update_state(); return
         if not output_path_str: log.warning("Export NWB ignored: No output path."); QtWidgets.QMessageBox.warning(self, "Export Error", "Select output file path."); self.update_state(); return

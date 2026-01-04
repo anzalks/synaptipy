@@ -220,7 +220,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- END FIX ---
         log.debug("Instantiating ExporterTab...")
         self.exporter_tab = ExporterTab(
-            explorer_tab_ref=self.explorer_tab, nwb_exporter_ref=self.nwb_exporter,
+            nwb_exporter_ref=self.nwb_exporter,
             settings_ref=self.settings, status_bar_ref=self.status_bar, parent=self
         )
 

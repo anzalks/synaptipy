@@ -18,6 +18,7 @@ from datetime import datetime
 
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.data_model import Recording
 
 # Import analysis package to trigger all registrations
 import Synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
@@ -98,40 +99,21 @@ class BatchAnalysisEngine:
         }
         
     def run_batch(self, 
-                  files: List[Path], 
+                  files: List[Union[Path, 'Recording']], 
                   pipeline_config: List[Dict[str, Any]],
                   progress_callback: Optional[Callable[[int, int, str], None]] = None,
                   channel_filter: Optional[List[str]] = None) -> pd.DataFrame:
         """
-        Run analysis on a list of files using a flexible pipeline configuration.
+        Run analysis on a list of files/recordings using a flexible pipeline configuration.
         
         Args:
-            files: List of file paths to process.
-            pipeline_config: List of task dictionaries, each defining:
-                {
-                    'analysis': str,  # Name of registered analysis function (e.g., 'spike_detection')
-                    'scope': str,     # 'average', 'all_trials', or 'first_trial'
-                    'params': dict    # Parameters to pass to the analysis function
-                }
+            files: List of file paths OR Recording objects to process.
+            pipeline_config: List of task dictionaries.
             progress_callback: Optional callback (current, total, status_msg).
-            channel_filter: Optional list of channel names/IDs to process. If None, all channels are processed.
+            channel_filter: Optional list of channel names/IDs to process.
             
         Returns:
             pandas DataFrame containing aggregated results with metadata.
-            
-        Example:
-            pipeline_config = [
-                {
-                    'analysis': 'spike_detection',
-                    'scope': 'all_trials',
-                    'params': {'threshold': -15.0, 'refractory_ms': 2.0}
-                },
-                {
-                    'analysis': 'rmp_analysis',
-                    'scope': 'average',
-                    'params': {'baseline_start': 0.0, 'baseline_end': 0.1}
-                }
-            ]
         """
         self._cancelled = False
         results_list = []
@@ -145,40 +127,66 @@ class BatchAnalysisEngine:
         # Add batch metadata
         batch_start_time = datetime.now()
         
-        for i, file_path in enumerate(files):
+        for i, item in enumerate(files):
             # Check for cancellation
             if self._cancelled:
                 log.info("Batch analysis cancelled by user.")
                 if progress_callback:
                     progress_callback(i, total_files, "Cancelled")
                 break
-                
-            if progress_callback:
-                progress_callback(i, total_files, f"Processing {file_path.name}...")
-                
+            
+            file_name = "Unknown"
+            file_path_str = "InMemory"
+            file_path = None # Initialize file_path
+            
             try:
-                # Load recording
-                recording = self.neo_adapter.read_recording(file_path)
-                if not recording:
-                    log.warning(f"Failed to load {file_path}")
-                    results_list.append({
-                        'file_name': file_path.name,
-                        'file_path': str(file_path),
-                        'error': "Failed to load recording"
-                    })
-                    continue
+                # Determine if item is Path or Recording
+                recording = None
+                if isinstance(item, (str, Path)):
+                    file_path = Path(item)
+                    file_name = file_path.name
+                    file_path_str = str(file_path)
+                    
+                    if progress_callback:
+                        progress_callback(i, total_files, f"Processing {file_name}...")
+                        
+                    # Load recording from disk with whitelist (Memory Optimization)
+                    recording = self.neo_adapter.read_recording(file_path, channel_whitelist=channel_filter)
+                    if not recording:
+                        log.warning(f"Failed to load {file_path}")
+                        results_list.append({
+                            'file_name': file_name,
+                            'file_path': file_path_str,
+                            'error': "Failed to load recording"
+                        })
+                        continue
+                        
+                else:
+                    # Assume it is a Recording object
+                    recording = item
+                    if hasattr(recording, 'source_file') and recording.source_file:
+                         file_path = recording.source_file
+                         file_name = recording.source_file.name
+                         file_path_str = str(recording.source_file)
+                    else:
+                         # Fallback for purely in-memory recordings
+                         file_path = Path(f"InMemory_Recording_{i}")
+                         file_name = file_path.name
+                         file_path_str = str(file_path)
+
+                    if progress_callback:
+                        progress_callback(i, total_files, f"Processing {file_name}...")
                 
                 # Filter channels if specified
                 channels_to_process = recording.channels.items()
                 if channel_filter:
                     log.debug(f"Applying channel filter: {channel_filter}")
-                    log.debug(f"Available channels: {list(recording.channels.keys())}")
                     channels_to_process = [
                         (name, ch) for name, ch in recording.channels.items()
                         if name in channel_filter or str(name) in channel_filter
                     ]
                     if not channels_to_process:
-                        log.warning(f"Channel filter {channel_filter} matched no channels in {file_path.name}. Available: {list(recording.channels.keys())}")
+                        log.warning(f"Channel filter {channel_filter} matched no channels in {file_name}.")
                 
                 log.debug(f"Processing {len(channels_to_process)} channels: {[n for n, c in channels_to_process]}")
                 

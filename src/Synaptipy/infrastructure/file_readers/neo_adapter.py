@@ -240,12 +240,12 @@ class NeoAdapter:
 
         return protocol_name, injected_current
 
-    def read_recording(self, filepath: Path, lazy: bool = False) -> Recording:
+    def read_recording(self, filepath: Path, lazy: bool = False, channel_whitelist: Optional[List[str]] = None) -> Recording:
         """
         Reads any neo-supported electrophysiology file and translates it into a
         robust Recording object. This is the definitive, file-format-agnostic implementation.
         """
-        log.info(f"Attempting to read file: {filepath} (lazy mode: {lazy})")
+        log.info(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
         filepath = Path(filepath)
         io_class = self._get_neo_io_class(filepath)
         reader = io_class(filename=str(filepath))
@@ -311,51 +311,125 @@ class NeoAdapter:
                 map_key = f"id_{anasig_id}"
                 log.debug(f"Processing analogsignal {anasig_idx} -> channel ID '{anasig_id}' (map_key: {map_key})")
                 
+                # Check channel whitelist to avoid unnecessary loading (Memory Optimization)
+                # We check against ID and Name (if known)
+                should_load = True
+                if channel_whitelist:
+                    should_load = False
+                    # Check ID match
+                    if anasig_id in channel_whitelist:
+                         should_load = True
+                    else:
+                        # Check Name match if available in metadata map
+                        if map_key in channel_metadata_map:
+                            meta_name = channel_metadata_map[map_key]['name']
+                            if meta_name in channel_whitelist:
+                                should_load = True
+                
+                if not should_load:
+                    log.debug(f"Skipping channel '{anasig_id}' (not in whitelist)")
+                    continue
+
                 if map_key not in channel_metadata_map:
                     log.warning(f"Data for channel ID '{anasig_id}' not in header; creating fallback channel.")
                     channel_metadata_map[map_key] = {
                         'id': anasig_id, 
                         'name': f"Channel {anasig_id}", 
-                        'data_trials': []
+                        'data_trials': [],
+                        'lazy_trials': []  # Store lazy references here
                     }
+                elif 'lazy_trials' not in channel_metadata_map[map_key]:
+                    channel_metadata_map[map_key]['lazy_trials'] = []
                 
-                # Extract and append the signal data for THIS specific channel
-                signal_data = np.array(anasig.magnitude).ravel()
-                channel_metadata_map[map_key]['data_trials'].append(signal_data)
-                log.debug(f"Appended {len(signal_data)} samples to channel '{anasig_id}' from segment {seg_idx}")
+                # --- DATA EXTRACTION (Eager vs Lazy) ---
+                if lazy:
+                    # Store reference to the proxy/object for later loading
+                    channel_metadata_map[map_key]['lazy_trials'].append({'analog_signal_ref': anasig})
+                    log.debug(f"Lazily stored reference for channel '{anasig_id}' from segment {seg_idx}")
+                else:
+                    # Extract and append the signal data immediately
+                    signal_data = np.array(anasig.magnitude).ravel()
+                    channel_metadata_map[map_key]['data_trials'].append(signal_data)
+                    log.debug(f"Appended {len(signal_data)} samples to channel '{anasig_id}' from segment {seg_idx}")
                 
-                # Store metadata on first encounter
+                # Store metadata on first encounter (works for both lazy proxy and eager objects)
                 if 'sampling_rate' not in channel_metadata_map[map_key]:
-                    channel_metadata_map[map_key].update({
-                        'units': str(anasig.units.dimensionality),
-                        'sampling_rate': float(anasig.sampling_rate),
-                        't_start': float(anasig.t_start)
-                    })
-                    log.debug(f"Stored metadata for channel '{anasig_id}': {channel_metadata_map[map_key]['sampling_rate']} Hz")
+                    try:
+                         # Proxy objects usually expose these metadata attributes
+                        channel_metadata_map[map_key].update({
+                            'units': str(anasig.units.dimensionality),
+                            'sampling_rate': float(anasig.sampling_rate),
+                            't_start': float(anasig.t_start)
+                        })
+                        log.debug(f"Stored metadata for channel '{anasig_id}': {channel_metadata_map[map_key]['sampling_rate']} Hz")
+                    except Exception as e:
+                        log.warning(f"Failed to extract metadata from channel '{anasig_id}' (Lazy: {lazy}): {e}")
 
-        # Stage 3: Create Channel objects ONLY for channels that actually have data.
+        # Stage 3: Create Channel objects ONLY for channels that actually have data (or lazy refs).
         created_channels: List[Channel] = []
         for meta in channel_metadata_map.values():
-            if not meta['data_trials'] or meta.get('sampling_rate') is None:
-                log.info(f"Channel '{meta['name']}' discovered but contained no data; skipping.")
+            has_data = len(meta['data_trials']) > 0
+            has_lazy = len(meta.get('lazy_trials', [])) > 0
+            
+            if not has_data and not has_lazy and meta.get('sampling_rate') is None:
+                log.info(f"Channel '{meta['name']}' discovered but contained no data/refs; skipping.")
                 continue
-                
+            
+            # If lazy, data_trials will be empty. Channel class handles this if we provide lazy_info.
             channel = Channel(
-                id=meta['id'], name=meta['name'], units=meta['units'],
-                sampling_rate=meta['sampling_rate'], data_trials=meta['data_trials']
+                id=meta['id'], name=meta['name'], units=meta.get('units', 'unknown'),
+                sampling_rate=meta.get('sampling_rate', 0.0), 
+                data_trials=meta['data_trials'] if not lazy else []
             )
             channel.t_start = meta.get('t_start', 0.0)
+            
+            # Populate lazy_info if applicable
+            if lazy and has_lazy:
+                lazy_trials = meta['lazy_trials']
+                if lazy_trials:
+                    # Conform to Channel's expected structure:
+                    # 'analog_signal_ref' for trial 0
+                    # 'trials' list for subsequent trials (index 0 in list = trial 1 in channel)
+                    
+                    channel.lazy_info = {
+                        'analog_signal_ref': lazy_trials[0]['analog_signal_ref'],
+                        'trials': lazy_trials[1:] if len(lazy_trials) > 1 else []
+                    }
+                    channel.metadata['num_trials'] = len(lazy_trials) # Help generic properties
+                    # Keep a ref to the recording/block if needed? 
+                    # Channel lazy loader uses `self.lazy_info` directly, doesn't strictly need block ref 
+                    # if the proxy holds the file handle.
+                    
             created_channels.append(channel)
 
-        recording.channels = {ch.id: ch for ch in created_channels}
         if created_channels:
+            # Link channels to parent recording for lazy loading access
+            for ch in created_channels:
+                ch._recording_ref = recording
+                
             first_ch = created_channels[0]
             recording.sampling_rate = first_ch.sampling_rate
             recording.t_start = first_ch.t_start
-            if first_ch.data_trials and first_ch.sampling_rate > 0:
+            
+            # Duration calculation attempt
+            if not lazy and first_ch.data_trials and first_ch.sampling_rate > 0:
                 recording.duration = len(first_ch.data_trials[0]) / first_ch.sampling_rate
+            elif lazy and first_ch.lazy_info:
+                # Estimate duration from lazy info? Proxy might have shape/duration
+                try:
+                    ref = first_ch.lazy_info['analog_signal_ref']
+                    if hasattr(ref, 'duration'):
+                         recording.duration = float(ref.duration)
+                    elif hasattr(ref, 'shape'):
+                         recording.duration = ref.shape[0] / first_ch.sampling_rate
+                except:
+                    pass
 
-        log.info(f"Translation complete. Loaded {len(recording.channels)} data-containing channel(s).")
+        # Store block reference on recording (Crucial for keeping lazy file handles alive/accessible)
+        recording.neo_block = block
+        recording.channels = {ch.id: ch for ch in created_channels}
+
+        log.info(f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}")
         return recording
 
 # =============================================================================

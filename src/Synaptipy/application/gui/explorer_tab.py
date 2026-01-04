@@ -28,6 +28,8 @@ from .dummy_classes import (
 # --- Other Imports ---
 from .nwb_dialog import NwbMetadataDialog
 from Synaptipy.application.session_manager import SessionManager
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from functools import partial
 
 # Import Z_ORDER constant with fallback
 try:
@@ -79,6 +81,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self.neo_adapter = neo_adapter
         self.nwb_exporter = nwb_exporter
         self.status_bar = status_bar
+
+        # --- Thread Pool for Async Loading ---
+        self.thread_pool = QtCore.QThreadPool()
+        log.debug(f"ExplorerTab initialized with ThreadPool max count: {self.thread_pool.maxThreadCount()}")
 
         # --- Session Manager ---
         self.session_manager = SessionManager()
@@ -1391,7 +1397,10 @@ class ExplorerTab(QtWidgets.QWidget):
     # File Loading & Display Options
     # =========================================================================
     def _load_and_display_file(self, filepath: Path):
-        t_start_total = time.time()
+        """
+        Load file asynchronously to prevent UI blocking.
+        Standardizes threading model using AnalysisWorker (QRunnable).
+        """
         if not filepath or not filepath.exists():
              log.error(f"Invalid file: {filepath}")
              QtWidgets.QMessageBox.critical(self, "File Error", f"File not found: {filepath}")
@@ -1402,78 +1411,97 @@ class ExplorerTab(QtWidgets.QWidget):
              return
 
         self._is_loading = True
-        self.status_bar.showMessage(f"Loading '{filepath.name}'..."); QtWidgets.QApplication.processEvents()
+        self.status_bar.showMessage(f"Loading '{filepath.name}'...", 0) 
+        QtWidgets.QApplication.processEvents()
         
         try:
-             t0 = time.time()
-             self._reset_ui_and_state_for_new_file(); self.current_recording = None
-             self._clear_data_cache()
-             
-             # Optimization: Suspend layout updates during full rebuild
+             # Prepare UI: Clear old data
              if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
                  self.graphics_layout_widget.setUpdatesEnabled(False)
 
-             log.info(f"Reading: {filepath}")
-             t1 = time.time()
-             log.info(f"[PROFILE] UI Reset & Cache Clear took: {t1 - t0:.4f}s")
+             self._reset_ui_and_state_for_new_file()
+             self.current_recording = None
+             self._clear_data_cache()
              
-             self.current_recording = self.neo_adapter.read_recording(filepath)
-             t2 = time.time()
-             log.info(f"[PROFILE] neo_adapter.read_recording took: {t2 - t1:.4f}s")
+             log.info(f"Starting async load for: {filepath.name}")
              
-             log.info(f"Loaded: {filepath.name}")
-             self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
-             log.info(f"Creating channel UI for {len(self.current_recording.channels) if self.current_recording else 0} channels...")
+             # Create Worker using standardized AnalysisWorker
+             # We pass read_recording method and the filepath
+             # UPDATED: Enable lazy loading by default for better performance
+             worker = AnalysisWorker(self.neo_adapter.read_recording, filepath, lazy=True)
              
-             self._create_channel_ui()
-             t3 = time.time()
-             log.info(f"[PROFILE] _create_channel_ui took: {t3 - t2:.4f}s")
+             # Store worker reference to prevent garbage collection before signal emission
+             self._current_worker = worker
              
-             log.info(f"Updating metadata display...")
-             self._update_metadata_display()
-             t4 = time.time()
+             # Connect signals using partial to pass context (filepath)
+             # Note: AnalysisWorker emits result(object) and error(tuple)
+             worker.signals.result.connect(partial(self._on_file_load_success, filepath=filepath))
+             worker.signals.error.connect(partial(self._on_file_load_error, filepath=filepath))
              
-             log.info(f"Starting plot update...")
-             self._update_plot()
-             t5 = time.time()
-             log.info(f"[PROFILE] _update_plot took: {t5 - t4:.4f}s")
+             self.thread_pool.start(worker)
              
-             log.info(f"Resetting view...")
-             self._reset_view()
-             t6 = time.time()
-             log.info(f"[PROFILE] _reset_view (schedule) took: {t6 - t5:.4f}s")
-             
-             # Automatically select some trials to show average plots by default
-             self._auto_select_trials_for_average()
-             
-             # Update file explorer to show this file
-             self._sync_file_explorer(filepath)
-             t7 = time.time()
-             
-             self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
-             log.info(f"File loading complete: {filepath.name}")
-             log.info(f"[PROFILE] Total load time: {t7 - t_start_total:.4f}s")
-
-             # Update SessionManager
-             if self.session_manager:
-                  self.session_manager.set_file_context(self.file_list, self.current_file_index)
-                  self.session_manager.current_recording = self.current_recording
-
-        except (FileNotFoundError, UnsupportedFormatError, FileReadError, SynaptipyError) as e:
-             log.error(f"Load fail '{filepath.name}': {e}", exc_info=False)
-             QtWidgets.QMessageBox.critical(self, "Loading Error", f"Could not load:\n{filepath.name}\n\nError: {e}")
-             self._clear_metadata_display(); self.status_bar.showMessage(f"Error loading {filepath.name}.", 5000)
         except Exception as e:
-             log.error(f"Unexpected load error '{filepath.name}': {e}", exc_info=True)
-             QtWidgets.QMessageBox.critical(self, "Unexpected Error", f"Error loading:\n{filepath.name}\n\n{e}")
-             self._clear_metadata_display(); self.status_bar.showMessage(f"Unexpected error loading {filepath.name}.", 5000)
-        finally:
-             if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
-                 self.graphics_layout_widget.setUpdatesEnabled(True)
-             
+             log.error(f"Failed to initiate file load: {e}", exc_info=True)
              self._is_loading = False
-             self._update_zoom_scroll_enable_state(); self._update_ui_state()
-             if self.manual_limits_enabled: self._apply_manual_limits()
+             if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+                  self.graphics_layout_widget.setUpdatesEnabled(True)
+             QtWidgets.QMessageBox.critical(self, "Error", f"Could not start loading:\n{e}")
+
+    def _on_file_load_success(self, recording, filepath=None):
+        """Slot to handle successful file load from worker."""
+        log.info(f"Async load success for: {filepath}")
+        try:
+            if not recording:
+                raise FileReadError("Loader returned None (empty result).")
+
+            self.current_recording = recording
+            self.max_trials_current_recording = getattr(self.current_recording, 'max_trials', 0)
+            
+            log.info(f"Creating channel UI for {len(self.current_recording.channels)} channels...")
+            self._create_channel_ui()
+            
+            self._update_metadata_display()
+            self._update_plot()
+            
+            self.status_bar.showMessage(f"Loaded '{filepath.name}'. Ready.", 5000)
+            
+            # Update SessionManager state
+            if self.session_manager:
+                self.session_manager.set_file_context(self.file_list, self.current_file_index)
+                self.session_manager.current_recording = self.current_recording
+
+            # Trigger sync to ensure file explorer matches
+            if filepath:
+                 self._sync_file_explorer(filepath)
+
+        except Exception as e:
+            log.error(f"Error processing loaded file {filepath}: {e}", exc_info=True)
+            self._on_file_load_error((type(e), e, None), filepath=filepath)
+        finally:
+            # Ensure view is reset (auto-ranged/manual limits initialized) after new data plotted
+            self._reset_view()
+            self._finalize_loading_state()
+
+    def _on_file_load_error(self, error_info, filepath=None):
+        """Slot to handle file load error from worker."""
+        exctype, value, tb = error_info
+        log.error(f"Async load failed for {filepath}: {value}")
+        
+        self.status_bar.showMessage(f"Error loading {filepath.name}.", 5000)
+        QtWidgets.QMessageBox.critical(self, "Loading Error", f"Could not load:\n{filepath.name}\n\nError: {value}")
+        
+        self._clear_metadata_display()
+        self._finalize_loading_state()
+
+    def _finalize_loading_state(self):
+        """Common cleanup after load attempt."""
+        if hasattr(self, 'graphics_layout_widget') and self.graphics_layout_widget:
+             self.graphics_layout_widget.setUpdatesEnabled(True)
+        
+        self._is_loading = False
+        self._update_zoom_scroll_enable_state()
+        self._update_ui_state()
+        if self.manual_limits_enabled: self._apply_manual_limits()
 
     def _on_channel_checkbox_toggled(self, checked: bool):
         """Handle channel checkbox toggles dynamically."""
@@ -1998,7 +2026,13 @@ class ExplorerTab(QtWidgets.QWidget):
         trial_index = None
         
         # --- ADD: Define analysis_item here ---
-        analysis_item = {'path': file_path, 'target_type': target_type, 'trial_index': trial_index}
+        # Include reference to current recording object to prevent Split-Brain (passing in-memory modifications)
+        analysis_item = {
+            'path': file_path, 
+            'target_type': target_type, 
+            'trial_index': trial_index,
+            'recording_ref': self.current_recording
+        }
         # --- END ADD ---
         
         # Prevent adding exact duplicate (same path and type)
@@ -2513,70 +2547,54 @@ class ExplorerTab(QtWidgets.QWidget):
                 self.graphics_layout_widget.setUpdatesEnabled(False)
             
             try:
-                # --- Manually Calculate Bounds Efficiently ---
-                # optimization: Use pyqtgraph's internal bounds calculation (childrenBounds)
-                # instead of iterating raw data which is extremely slow (O(N) data access).
-                x_min, x_max = None, None
-                y_mins, y_maxs = {}, {} # Store per channel_id
-
-                for chan_id, plot_widget in vis_map.items():
-                    try:
-                        vb = plot_widget.getViewBox()
-                        if not vb: continue
-                        
-                        # efficient bounds calculation from existing items
-                        # returns [[xmin, xmax], [ymin, ymax]]
-                        bounds = vb.childrenBounds()
-                        
-                        if bounds:
-                            xb = bounds[0]
-                            yb = bounds[1]
-                            
-                            # Update Global X
-                            if xb is not None and len(xb) == 2 and xb[0] is not None:
-                                cx_min, cx_max = xb[0], xb[1]
-                                x_min = min(x_min, cx_min) if x_min is not None else cx_min
-                                x_max = max(x_max, cx_max) if x_max is not None else cx_max
-                                
-                            # Update Channel Y
-                            if yb is not None and len(yb) == 2 and yb[0] is not None:
-                                y_mins[chan_id] = yb[0]
-                                y_maxs[chan_id] = yb[1]
-                    except Exception as e:
-                        log.warning(f"[EXPLORER-RESET] Error getting bounds for channel {chan_id}: {e}")
-
-                log.info(f"[EXPLORER-RESET] Manual bounds (Optimized): X=({x_min}, {x_max}), Y calculated for {len(y_mins)} channels.")
-                # --- End Manual Calculation ---
-
-                # --- Apply Manually Calculated Ranges Directly ---
-                final_x_range = None
-                if x_min is not None and x_max is not None:
-                    padding_x = (x_max - x_min) * 0.02 if x_min < x_max else 0.1
-                    final_x_range = [x_min - padding_x, x_max + padding_x]
-
-                if final_x_range:
-                    log.info(f"[EXPLORER-RESET] Setting manual X range: {final_x_range}")
-                    # Apply to the first plot in the list (master X link)
+                # --- ROBUST RESET: Explicit X + Auto Y ---
+                # Fixes "one step zoom" by forcing X range to full duration first.
+                # This ensures all data is "in view" for clipping, allowing Y auto-range to work correctly.
+                
+                # 1. Force X Range to Full Duration
+                rec = self.current_recording
+                if rec and hasattr(rec, 'duration') and rec.duration and self.plot_widgets:
+                    x_min, x_max = 0.0, float(rec.duration)
+                    # Add 2% padding
+                    pad = (x_max - x_min) * 0.02
+                    # Apply to master plot (index 0)
+                    self.plot_widgets[0].getViewBox().setXRange(x_min - pad, x_max + pad, padding=0)
+                    log.info(f"[EXPLORER-RESET] Explicitly set X range to full duration: {x_min}-{x_max}")
+                else:
+                    # Fallback if no duration
                     if self.plot_widgets:
-                        self.plot_widgets[0].getViewBox().setXRange(float(final_x_range[0]), float(final_x_range[1]), padding=0)
-                
+                        self.plot_widgets[0].getViewBox().autoRange(padding=0.02)
+
+                # 2. Force Y Auto-Range (One-Shot)
+                # By enabling and then disabling auto-range, we force it to calculate based on the new (full) X view.
                 for chan_id, plot_widget in vis_map.items():
-                    y_min, y_max = None, None
-                    if chan_id in y_mins and chan_id in y_maxs:
-                         y_min, y_max = y_mins[chan_id], y_maxs[chan_id]
+                    vb = plot_widget.getViewBox()
+                    # Enable Auto Y
+                    vb.enableAutoRange(axis=vb.YAxis, enable=True)
+                    # Force update (optional, but good for one-shot)
+                    # vb.autoRange() # Don't call this, it resets X
                     
-                    if y_min is not None and y_max is not None:
-                         padding_y = (y_max - y_min) * 0.05 if y_min < y_max else 0.1
-                         log.info(f"[EXPLORER-RESET] Setting manual Y range for {chan_id}: [{y_min - padding_y}, {y_max + padding_y}]")
-                         plot_widget.getViewBox().setYRange(float(y_min - padding_y), float(y_max + padding_y), padding=0)
-                    else:
-                         # Fallback: if we can't calculate bounds (e.g. empty channel?), reset to default 0-1 or similar
-                         # to avoid showing stale data ranges.
-                         log.warning(f"[EXPLORER-RESET] Could not calc Y bounds for {chan_id}. Resetting to default.")
-                         plot_widget.getViewBox().setYRange(0, 1, padding=0)
-                
-                log.info(f"[EXPLORER-RESET] Finished applying manual ranges.")
-                # --- End Application ---
+                    # Immediately disable to lock it (standard "Reset" behavior)
+                    # We might need to process events or let the loop finish, but usually enable(True) triggers the update.
+                    # We schedule the disable to happen after a brief moment or assume it updates immediately?
+                    # PyQtGraph usually updates on paint. If we disable immediately, it might not stick?
+                    # Safer: Leave it enabled? No, user wants manual control.
+                    # Best approach: setYRange to auto-calculated bounds?
+                    # Or just leave it auto-ranged for a split second?
+                    
+                    # WORKAROUND: PyqtGraph auto-range calculation happens on update.
+                    # Calling autoRange(padding=0.05) essentially does: enable -> update -> disable.
+                    # But since we just set X, we want Y to respect that X.
+                    # autoRange() resets X too.
+                    
+                    # We will use setYRange with data bounds? No, too slow.
+                    # We will rely on enableAutoRange(Y) remaining True for this frame?
+                    # Let's try explicit enable(True) then disable(False) which usually triggers the calc.
+                    vb.enableAutoRange(axis=vb.YAxis, enable=True)
+                    vb.enableAutoRange(axis=vb.YAxis, enable=False) 
+
+                log.info(f"[EXPLORER-RESET] Performed robust reset (Explicit X + Axis Auto Y).")
+                # --- End Robust Reset ---
                 
                 # --- Defer Capture ---
                 log.info(f"[EXPLORER-RESET] Scheduled _capture_base_ranges_after_reset via QTimer(0) after manual range set.")
@@ -3434,6 +3452,9 @@ class ExplorerTab(QtWidgets.QWidget):
             return
             
         try:
+            from Synaptipy.application.gui.dialogs.global_settings_dialog import GlobalSettingsDialog
+            from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+            from functools import partial
             from Synaptipy.application.gui.plot_save_dialog import save_plot_with_dialog
             
             # Get the first visible plot widget for saving
