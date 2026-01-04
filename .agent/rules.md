@@ -74,3 +74,28 @@ All analysis features must be split into two distinct parts:
 * **The Visualization Factory**:
     * **File:** `src/Synaptipy/shared/plot_factory.py`
     * **Action:** Use `create_plot_widget` for all plotting.
+
+## IV. CI/CD & QUALITY ASSURANCE
+
+**1. Linting Compliance (Flake8)**
+* **Line Length**: Strictly < 120 characters (matches `.flake8`).
+* **Complexity**: Keep function cyclomatic complexity under 10. Refactor if logic gets too nested.
+* **Unused Imports**: Remove them. (Exception: `__init__.py` files).
+* **Command**: Before finalizing code, the Agent should verify with: `flake8 src tests`
+
+**2. Cross-Platform Compatibility (The "Windows" Rule)**
+* **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).
+    * **Requirement**: ALWAYS use `pathlib.Path` (e.g., `Path("data") / filename`).
+    * *Reason*: The CI pipeline runs on `windows-latest`, which will fail on hardcoded forward slashes.
+* **Encoding**: Always specify `encoding='utf-8'` when opening text files. Windows defaults to `cp1252` and will crash on special characters.
+
+**3. Headless Testing Protocol**
+* **Context**: The CI environment runs with `QT_QPA_PLATFORM: offscreen`.
+* **Constraint**: Tests must NEVER require a physical window to be visible.
+    * *Bad:* `widget.show()` (in a test without a fixture handling it).
+    * *Good:* Instantiate widgets, verify state, but do not rely on rendering frames.
+* **Qt Mocking**: Use `pytest-qt` fixtures (`qtbot`) for all GUI interactions in tests. Do not use `time.sleep()`; use `qtbot.wait()`.
+
+**4. Dependency Management**
+* **Lockfile Integrity**: If you import a new third-party library, you **MUST** explicitly tell the user to add it to `requirements.txt`.
+* *Reason*: The CI pipeline installs dependencies strictly from `requirements.txt`. If you skip this, the build fails.

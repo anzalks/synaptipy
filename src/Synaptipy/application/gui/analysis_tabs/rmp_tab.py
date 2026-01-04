@@ -30,14 +30,14 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
     _MODE_AUTOMATIC = "Automatic"
 
     def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
-        # We need to init MetadataDriven with the registry name
-        super().__init__(analysis_name="rmp_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
-        
-        # Plotting items
+        # Plotting items - Initialize BEFORE super().__init__ incase setup_ui uses them
         self.interactive_region: Optional[pg.LinearRegionItem] = None
         self.baseline_mean_line: Optional[pg.InfiniteLine] = None
         self.baseline_plus_sd_line: Optional[pg.InfiniteLine] = None
         self.baseline_minus_sd_line: Optional[pg.InfiniteLine] = None
+
+        # We need to init MetadataDriven with the registry name
+        super().__init__(analysis_name="rmp_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
         
         # Initialize custom controls
         self._on_mode_changed()
@@ -137,6 +137,40 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
             params['auto_detect'] = (mode == self._MODE_AUTOMATIC)
             
         return params
+
+    def _on_channel_changed(self, channel_index: int):
+        """Handle channel switch to update interactive region."""
+        super()._on_channel_changed(channel_index)
+        
+        # Auto-scale region if it's currently at default [0, 0.1] or out of bounds
+        if self.interactive_region and self._current_plot_data:
+            time_vec = self._current_plot_data['time']
+            if len(time_vec) > 1:
+                t_start = time_vec[0]
+                t_end = time_vec[-1]
+                duration = t_end - t_start
+                
+                # Check if current region is "default-like" or invalid
+                curr_min, curr_max = self.interactive_region.getRegion()
+                if (curr_min == 0 and curr_max == 0.1) or (curr_max > t_end) or (curr_min < t_start):
+                     # Reset to 10% or 200ms, whichever is smaller/sane
+                     default_width = min(duration * 0.2, 0.5) # Max 500ms default
+                     self.interactive_region.setRegion([t_start, t_start + default_width])
+                
+                # Update bounds
+                self.interactive_region.setBounds([t_start, t_end])
+                
+                # Check if items are attached to the plot (BaseAnalysisTab might clear plot)
+                if self.plot_widget:
+                    if self.interactive_region not in self.plot_widget.items():
+                         self.plot_widget.addItem(self.interactive_region)
+                    
+                    for line in [self.baseline_mean_line, self.baseline_plus_sd_line, self.baseline_minus_sd_line]:
+                        if line and line not in self.plot_widget.items():
+                            self.plot_widget.addItem(line)
+                
+                # Ensure visibility if in interactive mode
+                self._on_mode_changed()
 
     def _plot_analysis_visualizations(self, results: Any):
         """Visualize RMP results."""

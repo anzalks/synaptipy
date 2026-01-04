@@ -5,25 +5,37 @@ from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDriv
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from unittest.mock import MagicMock
 
-# Register a dummy analysis for testing
-@AnalysisRegistry.register(
-    "test_analysis",
-    label="Test Analysis",
-    ui_params=[
-        {'name': 'param1', 'type': 'float', 'default': 1.0, 'label': 'Param 1'},
-        {'name': 'param2', 'type': 'int', 'default': 5, 'label': 'Param 2'},
-        {'name': 'param3', 'type': 'choice', 'choices': ['A', 'B'], 'default': 'A', 'label': 'Param 3'},
-        {'name': 'param4', 'type': 'bool', 'default': True, 'label': 'Param 4'}
-    ]
-)
+# Register a dummy analysis for testing - MOVED TO FIXTURE
 def dummy_analysis_func(data, time, fs, **kwargs):
     return {'result': 'success', 'kwargs': kwargs}
+
+@pytest.fixture
+def registered_analysis():
+    """Register the dummy analysis for the duration of the test."""
+    # Register
+    decorator = AnalysisRegistry.register(
+        "test_analysis",
+        label="Test Analysis",
+        ui_params=[
+            {'name': 'param1', 'type': 'float', 'default': 1.0, 'label': 'Param 1'},
+            {'name': 'param2', 'type': 'int', 'default': 5, 'label': 'Param 2'},
+            {'name': 'param3', 'type': 'choice', 'choices': ['A', 'B'], 'default': 'A', 'label': 'Param 3'},
+            {'name': 'param4', 'type': 'bool', 'default': True, 'label': 'Param 4'}
+        ]
+    )
+    decorator(dummy_analysis_func)
+    
+    yield
+    
+    # Cleanup helps if other tests rely on clean state, though not strictly required if everything registers what it needs
+    # AnalysisRegistry._registry.pop("test_analysis", None)
+    # AnalysisRegistry._metadata.pop("test_analysis", None)
 
 @pytest.fixture
 def app(qapp):
     return qapp
 
-def test_metadata_tab_creation(app):
+def test_metadata_tab_creation(app, registered_analysis):
     """Test that the tab creates widgets based on metadata."""
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
@@ -47,7 +59,7 @@ def test_metadata_tab_creation(app):
     assert widgets['param3'].currentText() == 'A'
     assert widgets['param4'].isChecked() == True
 
-def test_parameter_gathering(app):
+def test_parameter_gathering(app, registered_analysis):
     """Test that parameters are correctly gathered from widgets."""
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
