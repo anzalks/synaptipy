@@ -69,3 +69,47 @@ class RmpResult(AnalysisResult):
             return f"RmpResult(RMP={val_str} {self.unit})"
         return f"RmpResult(Error: {self.error_message})"
 
+
+@dataclass
+class BurstResult(AnalysisResult):
+    """
+    Result of Burst Analysis.
+    """
+    burst_count: int = 0
+    spikes_per_burst_avg: float = 0.0
+    burst_duration_avg: float = 0.0
+    burst_freq_hz: float = 0.0
+    bursts: List[List[float]] = field(default_factory=list)  # List of lists of spike times
+
+    def __repr__(self):
+        if self.is_valid:
+            return f"BurstResult(count={self.burst_count}, freq={self.burst_freq_hz:.2f} Hz)"
+        return f"BurstResult(Error: {self.error_message})"
+
+
+@dataclass
+class EventDetectionResult(AnalysisResult):
+    """
+    Result of Event/Mini Detection.
+    """
+    event_count: int = 0
+    frequency_hz: Optional[float] = None
+    mean_amplitude: Optional[float] = None
+    amplitude_sd: Optional[float] = None
+    event_indices: Optional[np.ndarray] = None
+    event_times: Optional[np.ndarray] = None
+    event_amplitudes: Optional[np.ndarray] = None
+    detection_method: str = "threshold"
+    threshold_value: Optional[float] = None
+    direction: str = "negative"
+    summary_stats: Dict[str, Any] = field(default_factory=dict)
+    
+    # Deconvolution specific
+    tau_rise_ms: Optional[float] = None
+    tau_decay_ms: Optional[float] = None
+    threshold_sd: Optional[float] = None
+
+    def __repr__(self):
+        if self.is_valid:
+            return f"EventDetectionResult(count={self.event_count}, freq={self.frequency_hz:.2f} Hz)"
+        return f"EventDetectionResult(Error: {self.error_message})"

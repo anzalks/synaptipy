@@ -57,15 +57,21 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         """
         self._clear_burst_visualizations()
         
+        # Handle different result structures (Dict wrapper or Result Object)
         if isinstance(results, dict) and 'result' in results:
-             result_data = results['result']
+             result_item = results['result']
         else:
-             result_data = results
+             result_item = results
              
-        if not isinstance(result_data, dict):
+        # Extract bursts list safely from Dict or Object
+        bursts = []
+        if hasattr(result_item, 'bursts'):
+             bursts = result_item.bursts
+        elif isinstance(result_item, dict):
+             bursts = result_item.get('bursts', [])
+        
+        if not bursts:
             return
-
-        bursts = result_data.get('bursts') # List of lists of spike times
         
         if bursts:
             # We want to draw a line above the burst.

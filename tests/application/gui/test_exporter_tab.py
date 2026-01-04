@@ -70,7 +70,6 @@ def exporter_tab(qtbot, mock_main_window):
     
     # Create the tab
     tab = ExporterTab(
-        explorer_tab_ref=explorer_tab_ref,
         nwb_exporter_ref=nwb_exporter_ref,
         settings_ref=settings_ref,
         status_bar_ref=status_bar_ref

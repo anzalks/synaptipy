@@ -77,7 +77,24 @@ class SynaptipyPlotFactory:
         except Exception as e:
             log.error(f"Failed to create plot widget: {e}")
             # Return a basic plot widget as fallback
+            # Return a basic plot widget as fallback
             return pg.PlotWidget(parent=parent)
+
+    @staticmethod
+    def create_graphics_layout(parent: Optional[QtWidgets.QWidget] = None, 
+                             background: str = 'white') -> pg.GraphicsLayoutWidget:
+        """
+        Create a properly configured GraphicsLayoutWidget with Windows compatibility.
+        """
+        try:
+            widget = pg.GraphicsLayoutWidget(parent=parent)
+            widget.setBackground(background)
+            log.debug("Created GraphicsLayoutWidget successfully")
+            return widget
+        except Exception as e:
+            log.error(f"Failed to create GraphicsLayoutWidget: {e}")
+            return pg.GraphicsLayoutWidget(parent=parent)
+
     
     @staticmethod
     def get_average_pen() -> pg.mkPen:
