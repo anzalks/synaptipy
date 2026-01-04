@@ -8,10 +8,9 @@ from typing import Optional, List, Dict, Any, Set
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .analysis_tabs.base import BaseAnalysisTab
-from .explorer_tab import ExplorerTab
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
+from .analysis_tabs.base import BaseAnalysisTab
 from .analysis_tabs.rmp_tab import BaselineAnalysisTab
 from .analysis_tabs.rin_tab import RinAnalysisTab
 from .analysis_tabs.event_detection_tab import EventDetectionTab
@@ -272,8 +271,23 @@ class AnalyserTab(QtWidgets.QWidget):
 
         from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog
         
-        # Extract Path objects, ensuring uniqueness
-        recording_paths = list(set([item['path'] for item in recording_items]))
+        # Extract files to process (Recording objects or Paths)
+        # Prefer in-memory Recording objects to fix Split-Brain issues
+        files_to_process = []
+        for item in recording_items:
+            if item.get('recording_ref'):
+                files_to_process.append(item['recording_ref'])
+            else:
+                files_to_process.append(item['path'])
+        
+        # Ensure uniqueness (though ExplorerTab largely handles this)
+        # We invoke set() but Recording objects are hashable by id, Paths by value.
+        # Given ExplorerTab prevents duplicate Paths for same target type, this list should be unique per file.
+        # But to be safe if multiple sources add items:
+        # actually, simply passing the list is fine as BatchDialog handles list. 
+        # But let's keep the set() behavior for safety if logic changes elsewhere, 
+        # BUT set() might lose order. List is better for order.
+        # Let's trust ExplorerTab uniqueness for now.
         
         # Gather current configuration from active tab if possible
         pipeline_config = None
@@ -324,7 +338,7 @@ class AnalyserTab(QtWidgets.QWidget):
         # def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
         
         dialog = BatchAnalysisDialog(
-            files=recording_paths, 
+            files=files_to_process, 
             pipeline_config=pipeline_config,
             default_channels=default_channels, 
             parent=self

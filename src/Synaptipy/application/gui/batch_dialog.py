@@ -425,7 +425,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
     - Export results to CSV
     """
     
-    def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
+    def __init__(self, files: List[Any], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
         super().__init__(parent)
         self.files = files
         self.pipeline_steps: List[Dict[str, Any]] = []
@@ -458,9 +458,23 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.files_list.setMaximumHeight(100)
         self.files_list.setAlternatingRowColors(True)
         for f in self.files:
-            item = QtWidgets.QListWidgetItem(f.name)
-            item.setToolTip(str(f))
-            item.setData(QtCore.Qt.UserRole, f)  # Store full path
+            # Handle Path or Recording object
+            if isinstance(f, (str, Path)):
+                f_path = Path(f)
+                name = f_path.name
+                tooltip = str(f_path)
+            else:
+                # Assume Recording object
+                if hasattr(f, 'source_file') and f.source_file:
+                    name = f.source_file.name
+                    tooltip = str(f.source_file)
+                else:
+                    name = "InMemory Recording"
+                    tooltip = "In-memory data object"
+            
+            item = QtWidgets.QListWidgetItem(name)
+            item.setToolTip(tooltip)
+            item.setData(QtCore.Qt.UserRole, f)  # Store object (Path or Recording)
             self.files_list.addItem(item)
         files_layout.addWidget(self.files_list)
         
