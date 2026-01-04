@@ -65,35 +65,18 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         if not isinstance(result_data, dict):
             return
 
-        # We need access to the raw data to plot lines at the right height
-        # But result_data usually just has stats.
-        # Wait, `burst_analysis.py` returns stats, but it doesn't return the burst indices/times explicitly in the final dict!
-        # Let's check `burst_analysis.py`.
-        # It returns: 'burst_count', 'spikes_per_burst_avg', 'burst_duration_avg', 'burst_freq_hz'.
-        # It DOES NOT return the actual burst start/end times in the wrapper output.
-        # This is a limitation of the current wrapper.
-        
-        # I need to modify `burst_analysis.py` wrapper to return the burst details (start/end times)
-        # so I can plot them.
-        
-        # For now, I will implement the plotting logic assuming the data is there,
-        # and then I will go fix `burst_analysis.py`.
-        
         bursts = result_data.get('bursts') # List of lists of spike times
         
         if bursts:
             # We want to draw a line above the burst.
-            # We need the Y-value. Let's use the max voltage in the burst + offset?
-            # Or just a fixed height if we don't have voltage easily accessible here?
-            # We have `self.plot_widget.listDataItems()`, but getting the data back is tricky if we don't store it.
-            # BaseAnalysisTab doesn't explicitly store the raw data in a way guaranteed to be here.
-            # BUT, MetadataDrivenAnalysisTab._on_channel_changed stores `self._current_plot_data`.
-            # Let's check if we can access it.
-            
+            # Get Y-offset from current data max or fallback
             y_offset = 0
             if hasattr(self, '_current_plot_data') and self._current_plot_data:
                 # Find max voltage to place markers above
-                y_offset = np.max(self._current_plot_data['data']) + 10
+                try:
+                    y_offset = float(np.max(self._current_plot_data['data'])) + 10
+                except:
+                    y_offset = 50
             else:
                 y_offset = 50 # Fallback
                 
@@ -103,16 +86,12 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
                     end_t = burst_spikes[-1]
                     
                     # Draw a line
-                    # Using PlotCurveItem
                     item = pg.PlotCurveItem([start_t, end_t], [y_offset, y_offset], pen=pg.mkPen('r', width=3))
                     self.plot_widget.addItem(item)
                     self.burst_lines.append(item)
                     
-        # Also plot individual spikes if available (we need to re-detect or get them from result)
-        # The wrapper doesn't return all spike times, only burst ones implicitly.
-        # But we can't easily plot all spikes unless we run detection again or the wrapper returns them.
-        # Let's skip individual spike markers for now unless requested, or just mark the burst spikes.
-        # Actually, let's mark the burst spikes.
+        # Mark spikes within bursts explicitly
+
         all_burst_spikes = []
         if bursts:
             for b in bursts:
