@@ -20,11 +20,15 @@ import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
 
 # --- Synaptipy Imports / Dummies ---
-from .dummy_classes import (
-    Recording, Channel, NeoAdapter, NWBExporter, VisConstants,
-    SynaptipyError, FileReadError, UnsupportedFormatError, ExportError,
-    SYNAPTIPY_AVAILABLE
-)
+# --- Synaptipy Imports ---
+from typing import TYPE_CHECKING
+from Synaptipy.core.data_model import Recording, Channel
+
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from Synaptipy.shared.error_handling import FileReadError, UnsupportedFormatError, ExportError
+from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION, Z_ORDER, DEFAULT_PLOT_PEN_WIDTH
+from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 # --- Other Imports ---
 from .nwb_dialog import NwbMetadataDialog
 from Synaptipy.application.session_manager import SessionManager
@@ -64,7 +68,7 @@ class ExplorerTab(QtWidgets.QWidget):
     SLIDER_RANGE_MIN = 1; SLIDER_RANGE_MAX = 100
     SLIDER_DEFAULT_VALUE = SLIDER_RANGE_MIN
     MIN_ZOOM_FACTOR = 0.01; SCROLLBAR_MAX_RANGE = 10000
-    _selected_avg_pen_width = (VisConstants.DEFAULT_PLOT_PEN_WIDTH + 1) if (VisConstants and hasattr(VisConstants, 'DEFAULT_PLOT_PEN_WIDTH')) else 2
+    _selected_avg_pen_width = DEFAULT_PLOT_PEN_WIDTH + 1
     SELECTED_AVG_PEN = pg.mkPen('g', width=_selected_avg_pen_width, name="Selected Avg")  # Original green color
     Y_AXIS_FIXED_WIDTH = 65  # Fixed width in pixels to align stacked plots
 
@@ -447,8 +451,8 @@ class ExplorerTab(QtWidgets.QWidget):
         center_panel_layout.addLayout(nav_layout)
         
         # Create and properly initialize the GraphicsLayoutWidget with white background
-        self.graphics_layout_widget = pg.GraphicsLayoutWidget()
-        self.graphics_layout_widget.setBackground('white')  # Ensure this is set during creation
+        # Create and properly initialize the GraphicsLayoutWidget with white background
+        self.graphics_layout_widget = SynaptipyPlotFactory.create_graphics_layout()
         
         center_panel_layout.addWidget(self.graphics_layout_widget, stretch=1)
         self.x_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Horizontal)
@@ -513,7 +517,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.file_tree = QtWidgets.QTreeView()
         self.file_tree.setModel(self.file_model)
         # Set initial directory from settings or default
-        last_dir = QtCore.QSettings("Synaptipy", "Viewer").value("lastDirectory", str(Path.home()), type=str)
+        last_dir = QtCore.QSettings(APP_NAME, SETTINGS_SECTION).value("lastDirectory", str(Path.home()), type=str)
         self.file_tree.setRootIndex(self.file_model.index(last_dir))
         
         self.file_tree.setDragEnabled(True) # Enable Drag
@@ -707,7 +711,7 @@ class ExplorerTab(QtWidgets.QWidget):
             self.load_recording_data(file_path, file_list, selected_index)
             
             # Also update settings
-            QtCore.QSettings("Synaptipy", "Viewer").setValue("lastDirectory", str(file_path.parent))
+            QtCore.QSettings(APP_NAME, SETTINGS_SECTION).setValue("lastDirectory", str(file_path.parent))
 
     def load_file(self, filepath: Path, file_list: List[Path] = None, selected_index: int = -1):
         """Legacy method - redirects to load_recording_data"""

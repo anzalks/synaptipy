@@ -41,4 +41,9 @@ __all__ = [
     'TRIAL_ALPHA',
     'Z_ORDER',
     'DOWNSAMPLING_THRESHOLD',
+    'APP_NAME',
+    'SETTINGS_SECTION',
 ]
+
+APP_NAME = "Synaptipy"
+SETTINGS_SECTION = "Viewer"

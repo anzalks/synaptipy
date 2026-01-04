@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from Synaptipy.core.analysis.excitability import calculate_fi_curve, run_excitability_analysis_wrapper
 from Synaptipy.core.analysis.spike_analysis import run_spike_detection_wrapper
-from Synaptipy.core.analysis.burst_analysis import detect_bursts, run_burst_analysis_wrapper
+from Synaptipy.core.analysis.burst_analysis import calculate_bursts_logic, run_burst_analysis_wrapper
 from Synaptipy.core.analysis.intrinsic_properties import run_rin_analysis_wrapper
 
 # --- 1. Batch Engine Update Tests ---
@@ -116,11 +116,11 @@ def test_burst_detection():
     # Create spike times: Burst 1 (0.1, 0.11, 0.12), Isolated (0.5), Burst 2 (0.8, 0.81)
     spikes = np.array([0.1, 0.11, 0.12, 0.5, 0.8, 0.81])
     
-    stats = detect_bursts(spikes, max_isi_start=0.02, max_isi_end=0.05, min_spikes=2)
+    stats = calculate_bursts_logic(spikes, max_isi_start=0.02, max_isi_end=0.05, min_spikes=2)
     
-    assert stats['burst_count'] == 2
+    assert stats.burst_count == 2
     # Burst 1: 3 spikes. Burst 2: 2 spikes. Avg = 2.5
-    assert stats['spikes_per_burst_avg'] == 2.5
+    assert stats.spikes_per_burst_avg == 2.5
 
 # --- 5. Auto-Windowing Tests ---
 def test_auto_windowing_rin():
