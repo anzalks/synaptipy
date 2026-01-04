@@ -22,3 +22,10 @@ six==1.17.0
 typing-extensions==4.14.1
 tzdata==2025.2
 tzlocal==5.3.1
+numpy>=2.0.0
+scipy>=1.13.0
+pyqtgraph>=0.13.0
+pyside6>=6.7.0
+pytest>=7.0.0
+pytest-qt>=4.0.0
+pytest-mock
