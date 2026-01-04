@@ -54,15 +54,10 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
         if not isinstance(result_data, dict):
             return
 
-        # Extract data
-        # The wrapper returns scalar stats but currently NOT the full arrays (frequencies, current_steps) needed for plotting!
-        # I need to check `excitability.py` wrapper again.
-        # It returns: 'rheobase_pa', 'fi_slope', 'fi_r_squared', 'max_freq_hz'.
-        # It DOES NOT return 'frequencies' or 'current_steps' lists in the wrapper output.
-        
-        # Similar to Burst Analysis, I need to modify the wrapper to return the full arrays.
-        # I will implement the plotting logic assuming they exist, then fix the wrapper.
-        
+        if not isinstance(result_data, dict):
+            return
+
+        # Extract data        
         currents = result_data.get('current_steps')
         freqs = result_data.get('frequencies')
         

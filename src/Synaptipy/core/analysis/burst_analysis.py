@@ -42,7 +42,8 @@ def detect_bursts(
             'burst_count': 0,
             'spikes_per_burst_avg': 0.0,
             'burst_duration_avg': 0.0,
-            'burst_freq_hz': 0.0
+            'burst_freq_hz': 0.0,
+            'bursts': []
         }
         
     isis = np.diff(spike_times)
@@ -76,7 +77,8 @@ def detect_bursts(
             'burst_count': 0,
             'spikes_per_burst_avg': 0.0,
             'burst_duration_avg': 0.0,
-            'burst_freq_hz': 0.0
+            'burst_freq_hz': 0.0,
+            'bursts': []
         }
         
     spikes_per_burst = [len(b) for b in bursts]
@@ -165,21 +167,11 @@ def run_burst_analysis_wrapper(
             }
             
         # 2. Detect bursts
-        # Note: detect_bursts returns stats, but we need the actual bursts list.
-        # We need to modify detect_bursts or just call the logic here?
-        # detect_bursts returns a dict. It calculates 'bursts' internally but doesn't return them.
-        # Let's modify detect_bursts to return the raw bursts too? 
-        # Or just re-implement the call here since we can't easily change the inner function signature without breaking others?
-        # Actually, let's modify detect_bursts to return 'bursts' list in the dict.
-        
         burst_stats = detect_bursts(
             spike_result.spike_times,
             max_isi_start=max_isi_start,
             max_isi_end=max_isi_end
         )
-        
-        # Wait, I need to modify detect_bursts to return the list.
-        # Let's assume I will modify detect_bursts in the same file.
         
         return burst_stats
         
