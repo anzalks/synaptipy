@@ -35,8 +35,15 @@ import quantities as pq
 from quantities import Quantity, s, ms, V, mV, A, pA, nA # Import base quantities
 
 # Import from our package structure
-from Synaptipy.core.data_model import Recording, Channel # Removed RecordingHeader
+from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.shared.error_handling import FileReadError, UnsupportedFormatError, SynaptipyFileNotFoundError
+
+# Apply Patches
+try:
+    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    apply_winwcp_patch()
+except Exception as e:
+    logging.getLogger('Synaptipy.infrastructure.file_readers.neo_adapter').warning(f"Failed to apply Neo patches: {e}")
 
 log = logging.getLogger('Synaptipy.infrastructure.file_readers.neo_adapter')
 
@@ -248,9 +255,26 @@ class NeoAdapter:
         log.info(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
         filepath = Path(filepath)
         io_class = self._get_neo_io_class(filepath)
-        reader = io_class(filename=str(filepath))
-        block = reader.read_block(lazy=lazy, signal_group_mode='split-all')
-        log.info(f"Successfully read neo Block using {io_class.__name__}.")
+        try:
+            reader = io_class(filename=str(filepath))
+            block = reader.read_block(lazy=lazy, signal_group_mode='split-all')
+            log.info(f"Successfully read neo Block using {io_class.__name__}.")
+        except Exception as e:
+            log.error(f"Failed to read block from {filepath} (Lazy: {lazy}): {e}", exc_info=True)
+            # If not lazy, maybe try lazy as fallback?
+            if not lazy:
+                log.info("Attempting lazy load fallback due to failure...")
+                try:
+                    reader = io_class(filename=str(filepath)) # Re-instantiate
+                    block = reader.read_block(lazy=True, signal_group_mode='split-all')
+                    log.info("Lazy load fallback succeeded.")
+                    # If we fallback, we must treat this as lazy=True for the rest of function
+                    lazy = True 
+                except Exception as e_lazy:
+                    log.error(f"Lazy fallback also failed: {e_lazy}")
+                    raise FileReadError(f"Could not read file (even lazily): {e}")
+            else:
+                 raise FileReadError(f"Could not read file: {e}")
         
         recording = Recording(source_file=filepath)
         if hasattr(block, 'rec_datetime') and block.rec_datetime:
