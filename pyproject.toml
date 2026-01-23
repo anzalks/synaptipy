@@ -40,7 +40,7 @@ dev = [
 ]
 
 [project.scripts]
-synaptipy-gui = "Synaptipy.application.__main__:run_gui"
+synaptipy = "Synaptipy.application.__main__:run_gui"
 
 [tool.setuptools.packages.find]
 where = ["src"]

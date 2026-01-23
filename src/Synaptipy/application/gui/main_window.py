@@ -25,7 +25,7 @@ from .dummy_classes import (
 from ..data_loader import DataLoader
 # --- Tab Imports ---
 # Use RELATIVE imports for tabs and dialogs within the gui package
-from .explorer_tab import ExplorerTab
+from .explorer import ExplorerTab
 from .analyser_tab import AnalyserTab
 from .exporter_tab import ExporterTab
 from .nwb_dialog import NwbMetadataDialog
@@ -548,11 +548,17 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info(f"File selected: {selected_filepath.name}. Scanning folder '{folder_path}' for files with extension '{selected_extension}'.")
         # --- END REVERT ---
 
-        # --- REINSTATED: Sibling file scanning logic --- 
+        # --- Robust Sibling Scan using iterdir() (No glob wildcards) --- 
         try:
-            sibling_files_all = list(folder_path.glob(f"*{selected_filepath.suffix}"))
-            # Filter by lower case suffix after glob, ensure it's a file
-            sibling_files = sorted([p for p in sibling_files_all if p.is_file() and p.suffix.lower() == selected_extension])
+            # List all files in directory and filter manually by suffix
+            # This avoids issues with special characters ([], etc.) in filenames that break glob
+            sibling_files = []
+            if folder_path.exists() and folder_path.is_dir():
+                for p in folder_path.iterdir():
+                    if p.is_file() and p.suffix.lower() == selected_extension:
+                        sibling_files.append(p)
+            sibling_files.sort()
+            
         except Exception as e:
             log.error(f"Error scanning folder {folder_path} for sibling files: {e}", exc_info=True)
             QtWidgets.QMessageBox.warning(self, "Folder Scan Error", f"Could not scan folder for similar files:\n{e}\nLoading selected file only.")
@@ -561,11 +567,9 @@ class MainWindow(QtWidgets.QMainWindow):
             current_index = 0
             self._load_in_explorer(selected_filepath, file_list, current_index, lazy_load_enabled)
             return
-        # --- END REINSTATED SCAN ---
 
-        # --- REINSTATED: Logic to handle found siblings --- 
         if not sibling_files:
-            log.warning(f"No files with extension '{selected_extension}' found in the folder. Loading selected file only.")
+            log.warning(f"No files with extension '{selected_extension}' found (including selected). Defaulting to selected.")
             file_list = [selected_filepath]
             current_index = 0
         else:
@@ -575,11 +579,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 current_index = file_list.index(selected_filepath)
                 log.info(f"Found {len(file_list)} file(s) with extension '{selected_extension}'. Selected file is at index {current_index}.")
             except ValueError:
-                log.error(f"Selected file '{selected_filepath.name}' not found in the scanned list? Defaulting to index 0.")
-                current_index = 0 # Fallback
-        # --- END REINSTATED SIBLING LOGIC ---
+                log.warning(f"Selected file '{selected_filepath.name}' not found in scanned list. Appending it.")
+                file_list.append(selected_filepath) # Should be there, but safety first
+                file_list.sort()
+                current_index = file_list.index(selected_filepath)
 
-        # --- Load the file at the determined index from the sibling list --- 
+        # --- Load the file at the determined index --- 
         if file_list:
             if 0 <= current_index < len(file_list):
                  self._load_in_explorer(file_list[current_index], file_list, current_index, lazy_load_enabled)
