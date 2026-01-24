@@ -32,7 +32,7 @@ from .y_controls import ExplorerYControls
 from .toolbar import ExplorerToolbar
 
 # Configure Logger
-log = logging.getLogger('Synaptipy.application.gui.explorer_tab')
+log = logging.getLogger(__name__)
 
 class ExplorerTab(QtWidgets.QWidget):
     """
@@ -398,8 +398,35 @@ class ExplorerTab(QtWidgets.QWidget):
         self.plot_canvas.selected_average_plot_items.clear()
 
     def update_plot_pens(self):
-        # Update pens logic
-        pass
+        """Update plot pens when customization preferences change."""
+        if not self.current_recording or not self.plot_canvas.channel_plots:
+            return
+            
+        try:
+            from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+            
+            avg_pen = get_average_pen()
+            trial_pen = get_single_trial_pen()
+            
+            # Update existing plot item pens
+            for cid, items in self.plot_canvas.channel_plot_data_items.items():
+                for item in items:
+                    try:
+                        # Check if this is an average plot (usually last item, higher Z value)
+                        if hasattr(item, 'name') and item.name() == "Average":
+                            item.setPen(avg_pen)
+                        else:
+                            item.setPen(trial_pen)
+                    except Exception:
+                        pass
+                        
+            # Force repaint
+            if self.plot_canvas.widget:
+                self.plot_canvas.widget.update()
+                
+            log.debug("Updated plot pens from customization preferences")
+        except Exception as e:
+            log.warning(f"Failed to update plot pens: {e}")
 
     # --- Interaction Logic (Zoom/Scroll) ---
     # Need to reimplement _calculate_new_range, _apply_x_zoom, etc.
@@ -462,7 +489,7 @@ class ExplorerTab(QtWidgets.QWidget):
              return
              
         self._analysis_items.append(analysis_item)
-        log.info(f"Added to analysis set: {analysis_item}")
+        log.debug(f"Added to analysis set: {analysis_item}")
         self.status_bar.showMessage(f"Added Recording '{file_path.name}' to the analysis set.", 3000)
         
         self._update_analysis_set_display()
@@ -477,7 +504,7 @@ class ExplorerTab(QtWidgets.QWidget):
         confirm = QtWidgets.QMessageBox.question(self, "Confirm Clear", f"Clear all {len(self._analysis_items)} items from the analysis set?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
         if confirm == QtWidgets.QMessageBox.StandardButton.Yes:
             self._analysis_items = []
-            log.info("Analysis set cleared.")
+            log.debug("Analysis set cleared.")
             self._update_analysis_set_display()
             
             if self.session_manager:

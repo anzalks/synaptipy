@@ -8,7 +8,7 @@ import logging
 # We import Recording only for type hinting if possible.
 from Synaptipy.core.data_model import Recording
 
-log = logging.getLogger('Synaptipy.application.session_manager')
+log = logging.getLogger(__name__)
 
 class SessionManager(QObject):
     """
@@ -39,7 +39,7 @@ class SessionManager(QObject):
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
         self._initialized = True
-        log.info("SessionManager initialized.")
+        log.debug("SessionManager initialized.")
 
     @property
     def current_recording(self) -> Optional[Recording]:

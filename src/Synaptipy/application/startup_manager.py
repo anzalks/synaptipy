@@ -17,7 +17,7 @@ from PySide6 import QtCore, QtWidgets
 from .gui.welcome_screen import WelcomeScreen
 from .gui.main_window import MainWindow
 
-log = logging.getLogger('Synaptipy.application.startup_manager')
+log = logging.getLogger(__name__)
 
 class StartupManager(QtCore.QObject):
     """
@@ -47,7 +47,7 @@ class StartupManager(QtCore.QObject):
         Returns:
             WelcomeScreen: The welcome screen widget to display
         """
-        log.info("Starting optimized application loading process")
+        log.debug("Starting optimized application loading process")
         
         # Create and setup welcome screen
         self.welcome_screen = WelcomeScreen()
@@ -60,7 +60,7 @@ class StartupManager(QtCore.QObject):
         
     def _begin_loading(self):
         """Begin the optimized loading process."""
-        log.info("Beginning optimized loading process")
+        log.debug("Beginning optimized loading process")
         
         # Step 0: Initial setup
         self._update_progress(0)
@@ -83,7 +83,7 @@ class StartupManager(QtCore.QObject):
                 step_info[1], 
                 step_info[2]
             )
-            log.info(f"Loading step {step}: {step_info[1]}")
+            log.debug(f"Loading step {step}: {step_info[1]}")
             
             # Force Qt to process events to update the UI immediately
             if self.app:
@@ -101,7 +101,7 @@ class StartupManager(QtCore.QObject):
             except Exception:
                 pass
                 
-            log.info("Main window created successfully")
+            log.debug("Main window created successfully")
             self._update_progress(1)
             
         except Exception as e:
@@ -114,7 +114,7 @@ class StartupManager(QtCore.QObject):
         try:
             from Synaptipy.shared.styling import configure_pyqtgraph_globally
             configure_pyqtgraph_globally()
-            log.info("PyQtGraph configuration complete")
+            log.debug("PyQtGraph configuration complete")
         except Exception as e:
             log.warning(f"PyQtGraph configuration failed: {e}")
         finally:
@@ -147,7 +147,7 @@ class StartupManager(QtCore.QObject):
             try:
                 # Calculate total loading time
                 total_time = time.time() - self._start_time
-                log.info(f"Total startup time: {total_time:.2f} seconds")
+                log.debug(f"Total startup time: {total_time:.2f} seconds")
                 
                 # Hide welcome screen
                 self.welcome_screen.hide()
@@ -159,7 +159,7 @@ class StartupManager(QtCore.QObject):
                 self.welcome_screen.deleteLater()
                 self.welcome_screen = None
                 
-                log.info("Successfully transitioned to main window")
+                log.debug("Successfully transitioned to main window")
                 
             except Exception as e:
                 log.error(f"Transition to main window failed: {e}", exc_info=True)

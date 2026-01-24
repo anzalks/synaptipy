@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone # Required for Recording timestamp
 
 # Configure logger for this module
-log = logging.getLogger('Synaptipy.core.data_model') # Use specific logger name
+log = logging.getLogger(__name__)
 
 
 class Channel:

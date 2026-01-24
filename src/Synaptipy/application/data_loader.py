@@ -19,7 +19,7 @@ from Synaptipy.core.data_model import Recording
 from Synaptipy.shared.error_handling import SynaptipyError
 from Synaptipy.shared.data_cache import DataCache
 
-log = logging.getLogger('Synaptipy.application.data_loader')
+log = logging.getLogger(__name__)
 
 
 class DataLoader(QtCore.QObject):
@@ -65,7 +65,7 @@ class DataLoader(QtCore.QObject):
             file_path: Path to the electrophysiology file to load
             lazy_load: Whether to use lazy loading mode (default: False)
         """
-        log.info(f"Starting background load of file: {file_path} (lazy_load: {lazy_load})")
+        log.debug(f"Starting background load of file: {file_path} (lazy_load: {lazy_load})")
         
         try:
             # Emit signal that loading has started
@@ -93,7 +93,7 @@ class DataLoader(QtCore.QObject):
             # Check cache first
             cached_recording = self.cache.get(file_path)
             if cached_recording is not None:
-                log.info(f"Cache hit for: {file_path.name}")
+                log.debug(f"Cache hit for: {file_path.name}")
                 self.loading_progress.emit(100)
                 self.data_ready.emit(cached_recording)
                 return
@@ -129,7 +129,7 @@ class DataLoader(QtCore.QObject):
             self.loading_progress.emit(100)
             
             # Emit success signal with the loaded data
-            log.info(f"Successfully loaded file: {file_path} ({len(recording_data.channels)} channels)")
+            log.debug(f"Successfully loaded file: {file_path} ({len(recording_data.channels)} channels)")
             self.data_ready.emit(recording_data)
             
         except SynaptipyError as e:

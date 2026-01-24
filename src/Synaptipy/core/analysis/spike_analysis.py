@@ -10,7 +10,7 @@ from scipy import signal
 from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
-log = logging.getLogger('Synaptipy.core.analysis.spike_analysis')
+log = logging.getLogger(__name__)
 
 def detect_spikes_threshold(data: np.ndarray, time: np.ndarray, threshold: float, refractory_samples: int, peak_search_window_samples: int = None) -> SpikeTrainResult:
     """

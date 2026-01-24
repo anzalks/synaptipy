@@ -17,7 +17,7 @@ Usage:
     # In other modules:
     from Synaptipy.shared.logging_config import get_logger
     log = get_logger(__name__)  # Get a logger for current module
-    log.info("This is a log message")
+    log.debug("This is a log message")
 """
 import os
 import sys

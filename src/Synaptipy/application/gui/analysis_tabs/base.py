@@ -25,8 +25,9 @@ from Synaptipy.shared.styling import (
 )
 from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
 from Synaptipy.application.gui.analysis_worker import AnalysisWorker # Import Worker
+from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 
-log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.base')
+log = logging.getLogger(__name__)
 
 # Custom metaclass to resolve Qt/ABC metaclass conflict
 class QABCMeta(type(QtWidgets.QWidget), type(ABC)):
@@ -360,27 +361,25 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     # --- ADDED: Method to setup plot area --- 
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
         """Adds a PlotWidget to the provided layout with normal configuration."""
-        log.info(f"[ANALYSIS-BASE] Setting up plot area for {self.__class__.__name__}")
+        log.debug(f"[ANALYSIS-BASE] Setting up plot area for {self.__class__.__name__}")
         
-        self.plot_widget = pg.PlotWidget()
+        # Add the plot widget using the factory pattern for compliance
+        self.plot_widget = SynaptipyPlotFactory.create_plot_widget(
+            parent=None,  # Parent handled by addWidget
+            background='white',
+            enable_grid=True,
+            mouse_mode='rect'
+        )
         log.debug(f"[ANALYSIS-BASE] Created plot widget for {self.__class__.__name__}")
 
-        # Set white background
-        self.plot_widget.setBackground('white')
-        log.debug(f"[ANALYSIS-BASE] Set white background for {self.__class__.__name__}")
-
-        # Configure mouse mode normally
+        # Add Windows signal protection to prevent rapid range changes
+        # This is already partly handled by factory but added here for extra safety if needed
         viewbox = self.plot_widget.getViewBox()
         if viewbox:
-            viewbox.setMouseMode(pg.ViewBox.RectMode)
-            viewbox.mouseEnabled = True
-            log.debug(f"[ANALYSIS-BASE] Configured mouse mode for {self.__class__.__name__}")
-            
-            # Add Windows signal protection to prevent rapid range changes
-            import sys
-            if sys.platform.startswith('win'):
-                log.debug(f"[ANALYSIS-BASE] Adding Windows signal protection for {self.__class__.__name__}")
-                self._setup_windows_signal_protection(viewbox)
+             import sys
+             if sys.platform.startswith('win'):
+                 log.debug(f"[ANALYSIS-BASE] Adding Windows signal protection for {self.__class__.__name__}")
+                 self._setup_windows_signal_protection(viewbox)
 
         # Add the plot widget to the layout
         layout.addWidget(self.plot_widget, stretch=stretch_factor)
@@ -422,7 +421,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Initialize zoom synchronization manager (for reset functionality only)
         self._setup_zoom_sync()
 
-        log.info(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
+        log.debug(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
 
     # --- END ADDED ---
 
@@ -452,7 +451,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if hasattr(self, 'save_button') and self.save_button:
             was_enabled = self.save_button.isEnabled()
             self.save_button.setEnabled(enabled)
-            log.info(f"{self.__class__.__name__}: Save button set to enabled={enabled} (was={was_enabled})")
+            log.debug(f"{self.__class__.__name__}: Save button set to enabled={enabled} (was={was_enabled})")
         else:
             log.warning(f"{self.__class__.__name__}: Cannot set save button enabled={enabled} - save_button not found or None")
     # --- END ADDED ---
@@ -499,13 +498,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _on_reset_view_clicked(self):
         """Handle reset view button click."""
-        log.info(f"[ANALYSIS-BASE] Reset view clicked for {self.__class__.__name__}")
+        log.debug(f"[ANALYSIS-BASE] Reset view clicked for {self.__class__.__name__}")
         self.auto_range_plot()
         log.debug(f"[ANALYSIS-BASE] Reset view triggered for {self.__class__.__name__}")
 
     def _on_save_plot_clicked(self):
         """Handle save plot button click."""
-        log.info(f"[ANALYSIS-BASE] Save plot clicked for {self.__class__.__name__}")
+        log.debug(f"[ANALYSIS-BASE] Save plot clicked for {self.__class__.__name__}")
         
         if not self.plot_widget:
             log.warning(f"[ANALYSIS-BASE] No plot widget available for saving")
@@ -525,7 +524,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             )
             
             if success:
-                log.info(f"[ANALYSIS-BASE] Plot saved successfully for {self.__class__.__name__}")
+                log.debug(f"[ANALYSIS-BASE] Plot saved successfully for {self.__class__.__name__}")
             else:
                 log.debug(f"[ANALYSIS-BASE] Plot save cancelled for {self.__class__.__name__}")
                 
@@ -573,7 +572,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     
     def auto_range_plot(self):
         """Auto-range the plot to fit all data."""
-        log.info(f"[ANALYSIS-BASE] Auto-ranging plot for {self.__class__.__name__}")
+        log.debug(f"[ANALYSIS-BASE] Auto-ranging plot for {self.__class__.__name__}")
         if self.zoom_sync:
             log.debug(f"[ANALYSIS-BASE] Using zoom sync auto-range")
             self.zoom_sync.auto_range()
@@ -678,7 +677,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # If the selected item is a whole recording, we need to load it
         if item_type == 'Recording' and item_path:
             try:
-                log.info(f"{self.__class__.__name__}: Loading recording for analysis item: {item_path.name}")
+                log.debug(f"{self.__class__.__name__}: Loading recording for analysis item: {item_path.name}")
                 # Force process events to flush logs and update UI before blocking read
                 QtWidgets.QApplication.processEvents()
                 
@@ -686,7 +685,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 self._selected_item_recording = self.neo_adapter.read_recording(item_path)
                 
                 if self._selected_item_recording:
-                    log.info(f"{self.__class__.__name__}: Successfully loaded {item_path.name} with {len(self._selected_item_recording.channels)} channels.")
+                    log.debug(f"{self.__class__.__name__}: Successfully loaded {item_path.name} with {len(self._selected_item_recording.channels)} channels.")
                 else:
                     log.error(f"{self.__class__.__name__}: read_recording returned None for {item_path.name}")
                     
@@ -701,7 +700,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         elif item_type in ["Current Trial", "Average Trace", "All Trials"]:
             if item_path:
                 try:
-                    log.info(f"{self.__class__.__name__}: Loading source recording for item: {item_path.name}")
+                    log.debug(f"{self.__class__.__name__}: Loading source recording for item: {item_path.name}")
                     QtWidgets.QApplication.processEvents()
                     self._selected_item_recording = self.neo_adapter.read_recording(item_path)
                     if not self._selected_item_recording:
@@ -1141,7 +1140,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 y_range = (float(np.min(data_vec)), float(np.max(data_vec)))
                 self.set_data_ranges(x_range, y_range)
             
-            log.info(f"{self.__class__.__name__}: Successfully plotted {data_label} from channel {chan_id}")
+            log.debug(f"{self.__class__.__name__}: Successfully plotted {data_label} from channel {chan_id}")
             self._on_data_plotted()
             
         except Exception as e:
@@ -1224,7 +1223,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # This delegates to subclass implementations that know how to handle results
             self._on_analysis_result(results)
             
-            log.info(f"{self.__class__.__name__}: Analysis completed successfully")
+            log.debug(f"{self.__class__.__name__}: Analysis completed successfully")
             
         except Exception as e:
             log.error(f"{self.__class__.__name__}: Analysis failed: {e}", exc_info=True)
@@ -1296,14 +1295,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         popup.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout(central_widget)
         
-        # Create PlotWidget
-        plot_widget = pg.PlotWidget()
-        plot_widget.setBackground('white')
+        # Create PlotWidget using Factory (§II.3 Visualization Safety)
+        from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
+        plot_widget = SynaptipyPlotFactory.create_plot_widget(parent=central_widget)
         if x_label:
             plot_widget.setLabel('bottom', x_label)
         if y_label:
             plot_widget.setLabel('left', y_label)
-        plot_widget.showGrid(x=True, y=True, alpha=0.3)
         
         layout.addWidget(plot_widget)
         
@@ -1401,7 +1399,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 QtWidgets.QMessageBox.StandardButton.No
             )
             if reply == QtWidgets.QMessageBox.StandardButton.No:
-                log.info("Save cancelled by user (overwrite denied).")
+                log.debug("Save cancelled by user (overwrite denied).")
                 return
 
         # --- Call MainWindow Method --- 
@@ -1419,7 +1417,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                      main_window.results_tab.refresh_results()
                  elif hasattr(main_window, 'refresh_results_display'):
                      main_window.refresh_results_display()
-                 log.info(f"Overwrote existing result at index {existing_index}")
+                 log.debug(f"Overwrote existing result at index {existing_index}")
                  if hasattr(self, 'status_label') and self.status_label:
                     self.status_label.setText("Status: Result overwritten successfully")
             else:

@@ -60,7 +60,7 @@ def calculate_rin(
         
         conductance_us = 1000.0 / rin if rin != 0 else 0.0 # G = 1/R. 1/MOhm = uS.
 
-        log.info(f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}")
+        log.debug(f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}")
         
         return RinResult(
             value=rin,
@@ -133,7 +133,7 @@ def calculate_conductance(
         # R = 1/G. 1/uS = MOhm.
         rin_megaohms = 1.0 / conductance_us if conductance_us != 0 else float('inf')
 
-        log.info(f"Calculated Conductance: dI={delta_i:.3f}, dV={voltage_step:.3f}, G={conductance_us:.3f} uS, Rin={rin_megaohms:.3f} MOhm")
+        log.debug(f"Calculated Conductance: dI={delta_i:.3f}, dV={voltage_step:.3f}, G={conductance_us:.3f} uS, Rin={rin_megaohms:.3f} MOhm")
         
         return RinResult(
             value=rin_megaohms,
@@ -188,7 +188,7 @@ def calculate_tau(
         popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds))
         
         tau_ms = popt[2] * 1000 # convert tau to ms
-        log.info(f"Calculated Tau: {tau_ms:.3f} ms")
+        log.debug(f"Calculated Tau: {tau_ms:.3f} ms")
         return tau_ms
     except RuntimeError:
         log.warning("Optimal parameters not found for Tau calculation.")
@@ -241,7 +241,7 @@ def calculate_sag_ratio(
             return None # Avoid division by zero
 
         sag_ratio = delta_v_peak / delta_v_ss
-        log.info(f"Calculated Sag Ratio: {sag_ratio:.3f}")
+        log.debug(f"Calculated Sag Ratio: {sag_ratio:.3f}")
         return sag_ratio
     except Exception as e:
         log.exception(f"Unexpected error during Sag calculation: {e}")
@@ -398,7 +398,7 @@ def run_rin_analysis_wrapper(
             response_end = end_time - 0.005 # 5ms buffer
             response_start = max(start_time, response_end - 0.1)
             
-            log.info(f"Auto-detected pulse: Start={start_time:.3f}s, End={end_time:.3f}s. "
+            log.debug(f"Auto-detected pulse: Start={start_time:.3f}s, End={end_time:.3f}s. "
                      f"Baseline=[{baseline_start:.3f}, {baseline_end:.3f}], "
                      f"Response=[{response_start:.3f}, {response_end:.3f}]")
         

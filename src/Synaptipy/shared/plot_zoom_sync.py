@@ -11,7 +11,7 @@ from typing import Optional, Tuple, Dict, Any, Callable
 from PySide6 import QtCore, QtWidgets
 import pyqtgraph as pg
 
-log = logging.getLogger('Synaptipy.shared.plot_zoom_sync')
+log = logging.getLogger(__name__)
 
 
 class PlotZoomSyncManager(QtCore.QObject):

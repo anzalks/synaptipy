@@ -10,7 +10,7 @@ from typing import Callable, Dict, Any, Optional
 
 from PySide6 import QtCore
 
-log = logging.getLogger('Synaptipy.application.gui.analysis_worker')
+log = logging.getLogger(__name__)
 
 class WorkerSignals(QtCore.QObject):
     """

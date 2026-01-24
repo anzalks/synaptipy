@@ -14,7 +14,7 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.shared.plot_customization import get_plot_customization_manager
 import Synaptipy.core.analysis.intrinsic_properties # Ensure registration
 
-log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rin_tab')
+log = logging.getLogger(__name__)
 
 class RinAnalysisTab(MetadataDrivenAnalysisTab):
     """

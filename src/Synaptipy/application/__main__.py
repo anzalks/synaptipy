@@ -29,7 +29,7 @@ from Synaptipy.application.gui.dummy_classes import SYNAPTIPY_AVAILABLE
 from Synaptipy.shared.logging_config import setup_logging
 
 # Log instance to be initialized after setting up logging
-log = logging.getLogger('Synaptipy.application')
+log = logging.getLogger(__name__)
 
 def parse_arguments():
     """
@@ -76,7 +76,7 @@ def run_gui():
         log_filename=args.log_file
     )
     
-    log.info(f"Application starting via run_gui... Synaptipy Library Available: {SYNAPTIPY_AVAILABLE}")
+    log.info(f"Application starting... Synaptipy Library Available: {SYNAPTIPY_AVAILABLE}")
     if dev_mode:
         log.info("Running in DEVELOPMENT mode with verbose logging")
     
@@ -108,7 +108,7 @@ def run_gui():
     # Force locale to English/US to ensure dot decimal separators
     # This fixes issues where European locales force comma separators in spinboxes
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
-    log.info("Forced application locale to English/US (dot decimal separator)")
+    log.debug("Forced application locale to English/US (dot decimal separator)")
 
     # Create startup manager and begin loading process
     try:
@@ -126,7 +126,7 @@ def run_gui():
         # Use the optimized display method
         welcome_screen.force_display()
         
-        log.info("Welcome screen displayed, beginning startup process")
+        log.debug("Welcome screen displayed, beginning startup process")
         
     except Exception as e:
         log.critical(f"Failed to create startup manager: {e}", exc_info=True)
@@ -138,9 +138,9 @@ def run_gui():
         sys.exit(1)
 
     # Start Qt Event Loop
-    log.info("Starting Qt event loop...")
+    log.debug("Starting Qt event loop...")
     exit_code = app.exec()
-    log.info(f"Qt event loop finished with exit code {exit_code}.")
+    log.debug(f"Qt event loop finished with exit code {exit_code}.")
     return exit_code
 
 # Allow direct execution for development and testing

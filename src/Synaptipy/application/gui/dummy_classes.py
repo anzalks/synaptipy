@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 # Use a specific logger
-log = logging.getLogger('Synaptipy.application.gui.dummy_classes')
+log = logging.getLogger(__name__)
 
 # --- Try importing real Synaptipy using ABSOLUTE paths ---
 try:
@@ -23,7 +23,7 @@ try:
         FileReadError, UnsupportedFormatError, ExportError, SynaptipyError, 
         SynaptipyFileNotFoundError)
     SYNAPTIPY_AVAILABLE = True
-    log.info("Successfully imported real Synaptipy modules.")
+    log.debug("Successfully imported real Synaptipy modules.")
 
 except Exception as e_import:
     # --- Synaptipy not found, set up dummy environment ---
@@ -69,7 +69,7 @@ except Exception as e_import:
     class DummyNeoAdapter:
         def get_supported_file_filter(self): return "Dummy Files (*.dummy);;All Files (*)"
         def read_recording(self, filepath):
-            log.info(f"DummyNeoAdapter: Simulating read for {filepath}")
+            log.debug(f"DummyNeoAdapter: Simulating read for {filepath}")
             if not Path(filepath).exists():
                 try: Path(filepath).touch()
                 except Exception as e: log.warning(f"Could not create dummy file {filepath}: {e}")
@@ -82,10 +82,10 @@ except Exception as e_import:
 
     class DummyNWBExporter:
         def export(self, recording, output_path, metadata):
-            log.info(f"DummyNWBExporter: Simulating export of '{recording.source_file.name}' to {output_path} with metadata {metadata}")
+            log.debug(f"DummyNWBExporter: Simulating export of '{recording.source_file.name}' to {output_path} with metadata {metadata}")
             try:
                 output_path.touch()
-                log.info(f"DummyNWBExporter: Touched output file {output_path}")
+                log.debug(f"DummyNWBExporter: Touched output file {output_path}")
             except Exception as e:
                 log.error(f"DummyNWBExporter: Failed to touch output file {output_path}: {e}")
                 # Need to define ExportError within this block if real one failed

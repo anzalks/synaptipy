@@ -15,7 +15,9 @@ from typing import Dict, Any, Optional, Tuple
 from PySide6 import QtCore, QtWidgets
 import pyqtgraph as pg
 
-log = logging.getLogger('Synaptipy.shared.plot_customization')
+from Synaptipy.shared.constants import APP_NAME
+
+log = logging.getLogger(__name__)
 
 # --- Performance Mode Flag ---
 _force_opaque_trials = False # Global flag
@@ -25,7 +27,7 @@ def set_force_opaque_trials(force_opaque: bool):
     global _force_opaque_trials
     if _force_opaque_trials == force_opaque: return # Avoid unnecessary updates
     _force_opaque_trials = force_opaque
-    log.info(f"Setting force_opaque_trials globally to: {_force_opaque_trials}")
+    log.debug(f"Setting force_opaque_trials globally to: {_force_opaque_trials}")
     # Trigger a preference update signal so plots refresh immediately
     manager = get_plot_customization_manager()
     manager._pen_cache.clear() # Clear cache to force pen regeneration
@@ -78,7 +80,7 @@ class PlotCustomizationManager:
 
     def __init__(self):
         """Initialize with default plotting preferences."""
-        self._settings = QtCore.QSettings("Synaptipy", "PlotCustomization")
+        self._settings = QtCore.QSettings(APP_NAME, "PlotCustomization")
         self._load_defaults()
         self._load_user_preferences()
         
@@ -153,13 +155,13 @@ class PlotCustomizationManager:
                     
                     # Check if this is an old preference that needs to be reset
                     if plot_type == 'average' and property_name == 'color' and value == 'orange':
-                        log.info("Detected old orange average color preference - will reset to defaults")
+                        log.debug("Detected old orange average color preference - will reset to defaults")
                         needs_reset = True
                     elif plot_type == 'single_trial' and property_name == 'color' and value == 'orange':
-                        log.info("Detected old orange single trial color preference - will reset to defaults")
+                        log.debug("Detected old orange single trial color preference - will reset to defaults")
                         needs_reset = True
                     elif plot_type == 'single_trial' and property_name == 'width' and value == 3:
-                        log.info("Detected old width 3 preference - will reset to defaults")
+                        log.debug("Detected old width 3 preference - will reset to defaults")
                         needs_reset = True
                     
                     self.defaults[plot_type][property_name] = value
@@ -167,7 +169,7 @@ class PlotCustomizationManager:
             
             # If we detected old preferences, reset to defaults
             if needs_reset:
-                log.info("Old preferences detected - resetting to new defaults")
+                log.debug("Old preferences detected - resetting to new defaults")
                 self._load_defaults()  # Reload the defaults
                 # Clear the old preferences from QSettings
                 for plot_type in self.defaults.keys():
@@ -175,7 +177,7 @@ class PlotCustomizationManager:
                         key = f"{plot_type}/{property_name}"
                         self._settings.remove(key)
                 self._settings.sync()
-                log.info("Old preferences cleared from QSettings")
+                log.debug("Old preferences cleared from QSettings")
                     
             log.debug("User plot preferences loaded successfully")
             log.debug(f"Final defaults: {self.defaults}")
@@ -353,7 +355,16 @@ class PlotCustomizationManager:
             except Exception:
                 pass
             self._cache_dirty = False
-            log.debug("Updated preferences in batch and reset pen cache")
+            
+            # Save to QSettings for persistence
+            for plot_type in self.defaults.keys():
+                for property_name in self.defaults[plot_type].keys():
+                    key = f"{plot_type}/{property_name}"
+                    value = self.defaults[plot_type][property_name]
+                    self._settings.setValue(key, value)
+            self._settings.sync()
+            
+            log.debug("Updated preferences in batch, saved to QSettings, and reset pen cache")
             
             # Emit signal if requested (queued to allow dialogs to close first)
             if emit_signal:
@@ -412,7 +423,7 @@ class PlotCustomizationManager:
         # Clear pen cache and mark as dirty
         self._pen_cache.clear()
         self._cache_dirty = True
-        log.info("Plot preferences reset to defaults")
+        log.debug("Plot preferences reset to defaults")
 
     def update_grid_visibility(self, plot_widgets: list):
         """Update grid visibility for a list of plot widgets."""

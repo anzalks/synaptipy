@@ -15,6 +15,8 @@ import logging
 import os
 from typing import Optional, Tuple
 
+from Synaptipy.shared.constants import APP_NAME
+
 log = logging.getLogger(__name__)
 
 
@@ -40,7 +42,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         """Load the last save location from QSettings."""
         try:
             from PySide6.QtCore import QSettings
-            settings = QSettings("Synaptipy", "PlotSaveDialog")
+            settings = QSettings(APP_NAME, "PlotSaveDialog")
             last_location = settings.value("last_save_location", "")
             
             log.debug(f"QSettings - Organization: {settings.organizationName()}, App: {settings.applicationName()}")
@@ -63,7 +65,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         """Save the last save location to QSettings."""
         try:
             from PySide6.QtCore import QSettings
-            settings = QSettings("Synaptipy", "PlotSaveDialog")
+            settings = QSettings(APP_NAME, "PlotSaveDialog")
             log.debug(f"QSettings - Organization: {settings.organizationName()}, App: {settings.applicationName()}")
             log.debug(f"QSettings - Setting last_save_location to: {path}")
             settings.setValue("last_save_location", path)
@@ -238,7 +240,7 @@ def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") ->
         if format_type.lower() == "png":
             # Save as PNG - works for both single plots and graphics layout widgets
             plot_widget.grab().save(file_path, "PNG")
-            log.info(f"Plot saved as PNG: {file_path}")
+            log.debug(f"Plot saved as PNG: {file_path}")
             return True
             
         elif format_type.lower() == "pdf":
@@ -294,7 +296,7 @@ def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") ->
                         )
                         
                         painter.end()
-                        log.info(f"Plot saved as high-quality PDF: {file_path}")
+                        log.debug(f"Plot saved as high-quality PDF: {file_path}")
                         return True
                         
                     except Exception as render_error:

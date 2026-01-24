@@ -16,7 +16,7 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.results import SpikeTrainResult
 import Synaptipy.core.analysis.spike_analysis # Ensure registration
 
-log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.spike_tab')
+log = logging.getLogger(__name__)
 
 class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
     """

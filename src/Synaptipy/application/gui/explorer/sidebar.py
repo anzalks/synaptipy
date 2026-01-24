@@ -64,7 +64,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         """Handle double click on file tree to load file."""
         file_path = Path(self.file_model.filePath(index))
         if file_path.is_file():
-            log.info(f"Tree double-click: Loading {file_path}")
+            log.debug(f"Tree double-click: Loading {file_path}")
             
             # --- Build file_list for navigation ---
             # Get the parent directory index
@@ -85,7 +85,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
                     if child_path == file_path:
                         selected_index = len(file_list) - 1
             
-            log.info(f"Context loaded: {len(file_list)} files in directory. Selected index: {selected_index}")
+            log.debug(f"Context loaded: {len(file_list)} files in directory. Selected index: {selected_index}")
             
             # Update settings
             QtCore.QSettings(APP_NAME, SETTINGS_SECTION).setValue("lastDirectory", str(file_path.parent))

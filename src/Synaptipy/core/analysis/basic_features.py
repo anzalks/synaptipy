@@ -9,7 +9,7 @@ import numpy as np
 from Synaptipy.core.results import RmpResult
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
-log = logging.getLogger('Synaptipy.core.analysis.basic_features')
+log = logging.getLogger(__name__)
 
 def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[float, float]) -> RmpResult:
     """
@@ -237,7 +237,7 @@ def run_rmp_analysis_wrapper(
             
             if window:
                 baseline_start, baseline_end = window
-                log.info(f"Auto-detected stable baseline: {baseline_start:.3f} - {baseline_end:.3f} s")
+                log.debug(f"Auto-detected stable baseline: {baseline_start:.3f} - {baseline_end:.3f} s")
             else:
                 log.warning("Auto-detection failed or data too short. Using full trace.")
                 baseline_start = time[0]

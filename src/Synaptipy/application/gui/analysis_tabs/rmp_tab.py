@@ -15,7 +15,7 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 import Synaptipy.core.analysis.basic_features # Ensure registration
 
-log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.rmp_tab')
+log = logging.getLogger(__name__)
 
 class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
     """

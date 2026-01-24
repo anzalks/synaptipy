@@ -29,7 +29,7 @@ def configure_pyqtgraph_globally():
         pg.setConfigOption('useOpenGL', False)  # Avoid OpenGL initialization delays
         pg.setConfigOption('foreground', 'k')   # Simple black foreground
         
-        log.info("PyQtGraph configured with minimal overhead")
+        log.debug("PyQtGraph configured with minimal overhead")
         
     except Exception as e:
         log.warning(f"PyQtGraph configuration failed: {e}")
@@ -43,11 +43,11 @@ def apply_stylesheet(app: QtWidgets.QApplication) -> QtWidgets.QApplication:
     try:
         # Minimal styling - let system handle theme automatically
         # No complex detection or palette manipulation during startup
-        log.info("Applied minimal styling - system theme preserved")
+        log.debug("Applied minimal styling - system theme preserved")
         
     except Exception as e:
         log.warning(f"Could not apply styling: {e}")
-        log.info("Keeping system default styling")
+        log.debug("Keeping system default styling")
         
     return app
 
