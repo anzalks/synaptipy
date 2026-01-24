@@ -14,7 +14,7 @@ from typing import Optional, Callable
 from PySide6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 
-log = logging.getLogger('Synaptipy.application.gui.welcome_screen')
+log = logging.getLogger(__name__)
 
 class WelcomeScreen(QtWidgets.QWidget):
     """

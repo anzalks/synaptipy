@@ -15,7 +15,7 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 import Synaptipy.core.analysis.event_detection # Ensure registration
 
-log = logging.getLogger('Synaptipy.application.gui.analysis_tabs.event_detection_tab')
+log = logging.getLogger(__name__)
 
 class EventDetectionTab(MetadataDrivenAnalysisTab):
     """

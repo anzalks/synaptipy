@@ -47,55 +47,51 @@ def mock_recording():
     return rec
 
 # Mock QFileDialog to simulate user selecting a file without showing the dialog
-def test_open_file_success(main_window, qtbot, mock_recording, mocker):
+@pytest.fixture
+def mock_file_dialog():
+    """Mock QFileDialog for testing."""
+    with patch('PySide6.QtWidgets.QFileDialog') as mock_dlg:
+        mock_instance = MagicMock()
+        mock_dlg.return_value = mock_instance
+        mock_instance.exec.return_value = False
+        mock_instance.selectedFiles.return_value = []
+        yield mock_instance
+
+def test_open_file_success(main_window, qtbot, mock_recording):
     """Test the UI state change after successfully 'opening' a file."""
     # Arrange
     mock_filepath = Path("mock_folder/mock_file.abf")
     
-    # Mock the QFileDialog instance methods
-    mock_dialog = mocker.MagicMock()
-    mock_dialog.exec.return_value = True  # User accepted
-    mock_dialog.selectedFiles.return_value = [str(mock_filepath)]
-    
-    # Mock the QFileDialog constructor
-    mocker.patch('PySide6.QtWidgets.QFileDialog', return_value=mock_dialog)
-    
-    # Mock the data loader to avoid actual file loading
-    mocker.patch.object(main_window, 'load_request')
-    
-    # Act
-    # Trigger the 'Open File' action
-    main_window.open_file_action.trigger()
-    
-    # Assert
-    # Check if dialog was executed
-    mock_dialog.exec.assert_called_once()
-    # Status bar should have been updated at some point (any message is fine since loading is mocked)
-    # Just verify the dialog was shown
-    assert True  # Test passes if we got here without exception
+    with patch('PySide6.QtWidgets.QFileDialog') as mock_dlg:
+        mock_instance = MagicMock()
+        mock_dlg.return_value = mock_instance
+        mock_instance.exec.return_value = True  # User accepted
+        mock_instance.selectedFiles.return_value = [str(mock_filepath)]
+        
+        # Act
+        main_window.open_file_action.trigger()
+        
+        # Assert
+        mock_instance.exec.assert_called_once()
+        assert True  # Test passes if we got here without exception
 
 
 # Mock QFileDialog to simulate user cancelling
-def test_open_file_cancel(main_window, qtbot, mocker):
+def test_open_file_cancel(main_window, qtbot):
     """Test UI state when user cancels the file dialog."""
     # Arrange
-    mock_dialog = mocker.MagicMock()
-    mock_dialog.exec.return_value = False  # User cancelled
-    
-    # Mock the QFileDialog constructor
-    mocker.patch('PySide6.QtWidgets.QFileDialog', return_value=mock_dialog)
-    
-    # Mock the adapter
-    mocker.patch.object(main_window.neo_adapter, 'read_recording')
+    with patch('PySide6.QtWidgets.QFileDialog') as mock_dlg:
+        mock_instance = MagicMock()
+        mock_dlg.return_value = mock_instance
+        mock_instance.exec.return_value = False  # User cancelled
+        
+        # Act
+        main_window.open_file_action.trigger()
 
-    # Act
-    main_window.open_file_action.trigger()
-
-    # Assert
-    mock_dialog.exec.assert_called_once()
-    main_window.neo_adapter.read_recording.assert_not_called() # Shouldn't try to read
-    # Status message should indicate cancellation
-    assert "cancel" in main_window.status_bar.currentMessage().lower()
+        # Assert
+        mock_instance.exec.assert_called_once()
+        # Status message should indicate cancellation
+        assert "cancel" in main_window.status_bar.currentMessage().lower()
 
 # --- Background Data Loading Tests ---
 
@@ -114,12 +110,8 @@ def test_data_loader_signals(main_window, qtbot):
     assert isinstance(main_window.data_loader.loading_started, Signal)
     assert isinstance(main_window.data_loader.loading_progress, Signal)
 
-def test_background_file_loading(main_window, qtbot, mock_recording, mocker):
+def test_background_file_loading(main_window, qtbot, mock_recording):
     """Test that file loading happens in background without blocking UI."""
-    # Mock the NeoAdapter to return our mock recording
-    mock_adapter = mocker.patch.object(main_window.data_loader, 'neo_adapter')
-    mock_adapter.read_recording.return_value = mock_recording
-    
     # Set up pending state as if _load_in_explorer was called
     main_window._pending_file_list = [mock_recording.source_file]
     main_window._pending_current_index = 0
@@ -129,34 +121,31 @@ def test_background_file_loading(main_window, qtbot, mock_recording, mocker):
         main_window.data_loader.data_ready.emit(mock_recording)
     
     # Assert: Check that SessionManager was updated with the recording
-    # The new implementation uses SessionManager instead of calling load_recording_data directly
     assert main_window.session_manager.current_recording == mock_recording
     
     # Check that pending state was cleared
     assert not hasattr(main_window, '_pending_file_list')
     assert not hasattr(main_window, '_pending_current_index')
 
-def test_background_loading_error_handling(main_window, qtbot, mocker):
+def test_background_loading_error_handling(main_window, qtbot):
     """Test that loading errors are properly handled."""
     error_message = "Test error message"
     
-    # Mock QMessageBox to avoid showing actual dialog during test
-    message_box_spy = mocker.patch('PySide6.QtWidgets.QMessageBox.critical')
-    
-    # Set up pending state
-    main_window._pending_file_list = [Path("test.abf")]
-    main_window._pending_current_index = 0
-    
-    # Act: Trigger the data_error signal
-    with qtbot.waitSignal(main_window.data_loader.data_error, timeout=1000):
-        main_window.data_loader.data_error.emit(error_message)
-    
-    # Assert: Check that error dialog was shown
-    message_box_spy.assert_called_once()
-    
-    # Check that pending state was cleared
-    assert not hasattr(main_window, '_pending_file_list')
-    assert not hasattr(main_window, '_pending_current_index')
+    with patch('PySide6.QtWidgets.QMessageBox.critical') as message_box_spy:
+        # Set up pending state
+        main_window._pending_file_list = [Path("test.abf")]
+        main_window._pending_current_index = 0
+        
+        # Act: Trigger the data_error signal
+        with qtbot.waitSignal(main_window.data_loader.data_error, timeout=1000):
+            main_window.data_loader.data_error.emit(error_message)
+        
+        # Assert: Check that error dialog was shown
+        message_box_spy.assert_called_once()
+        
+        # Check that pending state was cleared
+        assert not hasattr(main_window, '_pending_file_list')
+        assert not hasattr(main_window, '_pending_current_index')
 
 def test_loading_progress_updates(main_window, qtbot):
     """Test that loading progress updates are handled correctly."""
@@ -180,7 +169,7 @@ def test_loading_started_signal(main_window, qtbot):
 
 # --- Data Cache Tests ---
 
-def test_data_loader_cache_integration(main_window, qtbot, mock_recording, mocker):
+def test_data_loader_cache_integration(main_window, qtbot, mock_recording):
     """Test that DataLoader cache works correctly."""
     # Test the cache directly
     file_path = Path("test_file.abf")

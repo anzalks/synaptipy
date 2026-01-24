@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 from Synaptipy.core.data_model import Recording
 
-log = logging.getLogger('Synaptipy.shared.data_cache')
+log = logging.getLogger(__name__)
 
 
 class DataCache:

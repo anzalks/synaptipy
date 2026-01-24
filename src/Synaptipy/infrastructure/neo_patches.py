@@ -4,7 +4,7 @@ import numpy as np
 import struct
 from neo.rawio.winwcprawio import WinWcpRawIO, HeaderReader, AnalysisDescription
 
-log = logging.getLogger('Synaptipy.infrastructure.neo_patches')
+log = logging.getLogger(__name__)
 
 def apply_winwcp_patch():
     """
@@ -248,4 +248,4 @@ def apply_winwcp_patch():
 
     # Apply the patch
     WinWcpRawIO._parse_header = patched_parse_header
-    log.info("Successfully patched WinWcpRawIO._parse_header for robust loading.")
+    log.debug("Successfully patched WinWcpRawIO._parse_header for robust loading.")

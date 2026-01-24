@@ -9,7 +9,7 @@ to register themselves via decorators, enabling flexible pipeline configuration.
 import logging
 from typing import Dict, Callable, Any, Optional
 
-log = logging.getLogger('Synaptipy.core.analysis.registry')
+log = logging.getLogger(__name__)
 
 
 class AnalysisRegistry:

@@ -146,7 +146,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Return the last analysis result for saving."""
         # For metadata-driven tabs, the result is usually a dictionary or object
         # If it's an object, we might need to convert it to a dict
-        log.info(f"{self.__class__.__name__}._get_specific_result_data: _last_analysis_result is None? {self._last_analysis_result is None}")
+        log.debug(f"{self.__class__.__name__}._get_specific_result_data: _last_analysis_result is None? {self._last_analysis_result is None}")
         if not self._last_analysis_result:
             log.warning(f"{self.__class__.__name__}._get_specific_result_data: returning None because _last_analysis_result is falsy")
             return None
@@ -232,7 +232,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _on_analysis_result(self, results: Dict[str, Any]):
         """Update UI with results."""
-        log.info(f"{self.__class__.__name__}._on_analysis_result called with results type: {type(results)}")
+        log.debug(f"{self.__class__.__name__}._on_analysis_result called with results type: {type(results)}")
         
         if not self.plot_widget:
             log.warning(f"{self.__class__.__name__}._on_analysis_result: plot_widget is None, returning early")
@@ -240,7 +240,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         
         # Store results for save functionality
         self._last_analysis_result = results
-        log.info(f"{self.__class__.__name__}: Stored _last_analysis_result, is None? {self._last_analysis_result is None}")
+        log.debug(f"{self.__class__.__name__}: Stored _last_analysis_result, is None? {self._last_analysis_result is None}")
             
         # Do NOT clear the plot here, as it removes the raw trace!
         # The raw trace is plotted in _plot_selected_data.

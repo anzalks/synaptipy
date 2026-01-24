@@ -21,7 +21,7 @@ from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.shared.styling import style_button, style_label
 
-log = logging.getLogger('Synaptipy.application.gui.batch_dialog')
+log = logging.getLogger(__name__)
 
 
 # ==============================================================================
@@ -639,7 +639,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.pipeline_container_layout.addWidget(step_widget)
         self.pipeline_steps.append(step_config)
         
-        log.info(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
+        log.debug(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
     
     def _on_add_files(self):
         """Open file dialog to add files to the list."""
@@ -918,11 +918,11 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                     # Use default_handler=str to handle non-serializable types (like some numpy objects)
                     # although pandas handles most numpy types well.
                     self.result_df.to_json(file_path, orient='records', indent=2, default_handler=str)
-                    log.info(f"Exported batch results to JSON: {file_path}")
+                    log.debug(f"Exported batch results to JSON: {file_path}")
                 else:
                     # CSV Export (Default)
                     self.result_df.to_csv(file_path, index=False)
-                    log.info(f"Exported batch results to CSV: {file_path}")
+                    log.debug(f"Exported batch results to CSV: {file_path}")
                 
                 QtWidgets.QMessageBox.information(
                     self,
@@ -969,7 +969,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             log.warning("Could not find MainWindow to save batch results.")
             return
 
-        log.info(f"Saving {len(df)} batch results to MainWindow...")
+        log.debug(f"Saving {len(df)} batch results to MainWindow...")
         
         from Synaptipy.core.analysis.registry import AnalysisRegistry
         
@@ -1042,4 +1042,4 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             # Add to main window
             main_window.add_saved_result(result_data)
             
-        log.info("Batch results saved to MainWindow successfully.")
+        log.debug("Batch results saved to MainWindow successfully.")

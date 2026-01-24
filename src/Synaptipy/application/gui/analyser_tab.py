@@ -20,7 +20,7 @@ from Synaptipy.shared.styling import style_button
 # from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog # Imported locally to avoid circular imports?
 
 
-log = logging.getLogger('Synaptipy.application.gui.analyser_tab')
+log = logging.getLogger(__name__)
 
 class AnalysisSourceListWidget(QtWidgets.QListWidget):
     """Custom ListWidget that accepts file drops for analysis."""
@@ -59,7 +59,7 @@ class AnalysisSourceListWidget(QtWidgets.QListWidget):
                     is_duplicate = any(existing.get('path') == file_path and existing.get('target_type') == 'Recording' for existing in current_items)
                     if not is_duplicate:
                         new_items.append(item)
-                        log.info(f"Dropped file added to analysis: {file_path.name}")
+                        log.debug(f"Dropped file added to analysis: {file_path.name}")
             
             if new_items:
                 # Update SessionManager (append new items)
@@ -158,7 +158,7 @@ class AnalyserTab(QtWidgets.QWidget):
 
     def _load_analysis_tabs(self):
         # ... (Dynamic loading logic remains exactly the same as the previous correct version) ...
-        log.info("Loading analysis sub-tabs...")
+        log.debug("Loading analysis sub-tabs...")
         # Block signals during tab loading to prevent premature currentChanged signals
         # before central_analysis_item_combo is populated
         self.sub_tab_widget.blockSignals(True)
@@ -199,7 +199,7 @@ class AnalyserTab(QtWidgets.QWidget):
                                  tab_instance = tab_class(neo_adapter=neo_adapter_instance, settings_ref=self._settings, parent=self)
                                  tab_name = tab_instance.get_display_name()
                                  self.sub_tab_widget.addTab(tab_instance, tab_name)
-                                 self._loaded_analysis_tabs.append(tab_instance); log.info(f"Loaded analysis tab: '{tab_name}'"); found_tab = True
+                                 self._loaded_analysis_tabs.append(tab_instance); log.debug(f"Loaded analysis tab: '{tab_name}'"); found_tab = True
                              except NotImplementedError as nie: log.error(f"{tab_class.__name__} missing method: {nie}")
                              except Exception as e_inst: log.error(f"Failed instantiate/add tab {tab_class.__name__}: {e_inst}", exc_info=True)
                          # --- END UPDATE ---
@@ -226,7 +226,7 @@ class AnalyserTab(QtWidgets.QWidget):
 
         for analysis_name in registered_analyses:
             if analysis_name not in loaded_registry_names:
-                log.info(f"Loading metadata-driven tab for: {analysis_name}")
+                log.debug(f"Loading metadata-driven tab for: {analysis_name}")
                 try:
                     tab_instance = MetadataDrivenAnalysisTab(
                         analysis_name=analysis_name,
@@ -320,7 +320,7 @@ class AnalyserTab(QtWidgets.QWidget):
                             'scope': 'all_trials', # Default scope
                             'params': params
                         }]
-                        log.info(f"Pre-filling batch pipeline with settings from {current_tab.get_display_name()}")
+                        log.debug(f"Pre-filling batch pipeline with settings from {current_tab.get_display_name()}")
                 
                 # 3. Get channel selection
                 if hasattr(current_tab, 'signal_channel_combobox') and current_tab.signal_channel_combobox:
@@ -352,7 +352,7 @@ class AnalyserTab(QtWidgets.QWidget):
         Called when the analysis set changes in the ExplorerTab.
         Updates the list widget, central combo box, and internal state.
         """
-        log.info(f"Received updated analysis set with {len(analysis_items)} items.")
+        log.debug(f"Received updated analysis set with {len(analysis_items)} items.")
         self._analysis_items = analysis_items # Store the latest list
 
         # Update files info label

@@ -17,7 +17,7 @@ except ImportError:
     tzlocal = None
 
 # Use a specific logger if desired, or fallback to root
-log = logging.getLogger('Synaptipy.application.gui.nwb_dialog')
+log = logging.getLogger(__name__)
 
 class NwbMetadataDialog(QtWidgets.QDialog):
     """

@@ -17,8 +17,9 @@ import numpy as np # Needed for CSV export
 from PySide6 import QtCore, QtGui, QtWidgets
 
 # Assuming these are correctly structured now
-from .dummy_classes import Recording, NWBExporter, SynaptipyError, ExportError, Channel # Import Channel
-from .dummy_classes import Recording, NWBExporter, SynaptipyError, ExportError, Channel # Import Channel
+from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.infrastructure.exporters import NWBExporter
+from Synaptipy.shared.error_handling import SynaptipyError, ExportError
 from .nwb_dialog import NwbMetadataDialog # Need the metadata dialog
 from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 from Synaptipy.application.session_manager import SessionManager
@@ -28,7 +29,7 @@ try:
 except ImportError:
     tzlocal = None
 
-log = logging.getLogger('Synaptipy.application.gui.exporter_tab')
+log = logging.getLogger(__name__)
 
 class ExporterTab(QtWidgets.QWidget):
     """
@@ -281,7 +282,7 @@ class ExporterTab(QtWidgets.QWidget):
             output_filepath = Path(output_filepath_str)
             self.nwb_output_path_edit.setText(str(output_filepath))
             self._settings.setValue("lastExportDirectory", str(output_filepath.parent))
-            log.info(f"Output NWB path selected: {output_filepath}")
+            log.debug(f"Output NWB path selected: {output_filepath}")
             self.update_state()
 
     def _do_export_nwb(self):
@@ -295,7 +296,7 @@ class ExporterTab(QtWidgets.QWidget):
         try: output_filepath.parent.mkdir(parents=True, exist_ok=True)
         except OSError as e: log.error(f"Failed create output dir {output_filepath.parent}: {e}"); QtWidgets.QMessageBox.critical(self, "Directory Error", f"Could not create dir:\n{output_filepath.parent}\n\nError: {e}"); return
 
-        log.info(f"Preparing NWB metadata for: {current_recording.source_file.name}")
+        log.debug(f"Preparing NWB metadata for: {current_recording.source_file.name}")
         
         # New Dialog accepts recording for pre-fill
         dialog = NwbMetadataDialog(recording=current_recording, parent=self)
@@ -307,7 +308,7 @@ class ExporterTab(QtWidgets.QWidget):
                  self._status_bar.showMessage("Metadata validation failed.", 4000)
                  return
         else: 
-            log.info("NWB export cancelled by user.")
+            log.debug("NWB export cancelled by user.")
             self._status_bar.showMessage("NWB export cancelled.", 3000)
             return
 
@@ -316,7 +317,7 @@ class ExporterTab(QtWidgets.QWidget):
         QtWidgets.QApplication.processEvents()
         try:
             self._nwb_exporter.export(current_recording, output_filepath, nwb_metadata)
-            log.info(f"Success export NWB: {output_filepath}")
+            log.debug(f"Success export NWB: {output_filepath}")
             self._status_bar.showMessage(f"Export successful: {output_filepath.name}", 5000)
             QtWidgets.QMessageBox.information(self, "Export Successful", f"Data saved to:\n{output_filepath}")
         except (ValueError, ExportError, SynaptipyError) as e:
@@ -355,7 +356,7 @@ class ExporterTab(QtWidgets.QWidget):
                 
             self.analysis_results_path_edit.setText(filepath_str)
             self._settings.setValue("lastExportDirectory", str(Path(filepath_str).parent))
-            log.info(f"Selected analysis results output path: {filepath_str}")
+            log.debug(f"Selected analysis results output path: {filepath_str}")
             self.update_state()
     
     def _refresh_analysis_results(self):
@@ -845,14 +846,14 @@ class ExporterTab(QtWidgets.QWidget):
             if output_path.lower().endswith('.json'):
                 # JSON Export
                 df.to_json(output_path, orient='records', indent=2, default_handler=str)
-                log.info(f"Exported analysis results to JSON: {output_path}")
+                log.debug(f"Exported analysis results to JSON: {output_path}")
             else:
                 # CSV Export (Default)
                 # Flatten or stringify complex columns for CSV if needed, but pandas usually handles basic types.
                 # For complex types like arrays, we might want to stringify them explicitly if pandas doesn't.
                 # But for now, let's rely on pandas default behavior or string conversion.
                 df.to_csv(output_path, index=False)
-                log.info(f"Exported analysis results to CSV: {output_path}")
+                log.debug(f"Exported analysis results to CSV: {output_path}")
             
             QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
             

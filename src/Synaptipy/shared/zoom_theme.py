@@ -214,7 +214,7 @@ def apply_theme_with_monitoring(viewbox) -> None:
         if not viewbox:
             return
             
-        log.info("🔄 Applying theme with monitoring...")
+        log.debug("🔄 Applying theme with monitoring...")
         
         # Apply initial theme
         apply_theme_to_viewbox(viewbox)
@@ -261,7 +261,7 @@ def apply_theme_with_monitoring(viewbox) -> None:
         from PySide6.QtCore import QTimer
         QTimer.singleShot(10, monitor_and_reapply)
         
-        log.info("✅ Theme with monitoring applied successfully!")
+        log.debug("✅ Theme with monitoring applied successfully!")
         
     except Exception as e:
         log.error(f"❌ Failed to apply theme with monitoring: {e}")
@@ -305,7 +305,7 @@ def customize_pyqtgraph_selection(viewbox) -> None:
 
                 cls.updateScaleBox = _patched_updateScaleBox
                 _PATCHED_CLASSES.add(cls)
-                log.info("Installed global ViewBox.updateScaleBox patch for selection styling")
+                log.debug("Installed global ViewBox.updateScaleBox patch for selection styling")
             except Exception:
                 pass
 

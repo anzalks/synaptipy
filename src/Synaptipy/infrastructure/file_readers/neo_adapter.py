@@ -43,9 +43,9 @@ try:
     from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
     apply_winwcp_patch()
 except Exception as e:
-    logging.getLogger('Synaptipy.infrastructure.file_readers.neo_adapter').warning(f"Failed to apply Neo patches: {e}")
+    logging.getLogger(__name__).warning(f"Failed to apply Neo patches: {e}")
 
-log = logging.getLogger('Synaptipy.infrastructure.file_readers.neo_adapter')
+log = logging.getLogger(__name__)
 
 # --- Dictionary mapping IO Class Names to extensions (Source of truth) ---
 IODict = {
@@ -133,7 +133,7 @@ class NeoAdapter:
             else:
                  log.warning(f"Multiple Neo IOs support '.{extension}': {available_io_names}. Using first match: '{selected_io_name}'.")
         else:
-            log.info(f"Selected Neo IO: '{selected_io_name}' for file extension '.{extension}'.")
+            log.debug(f"Selected Neo IO: '{selected_io_name}' for file extension '.{extension}'.")
 
         try:
             io_class = getattr(nIO, selected_io_name)
@@ -203,11 +203,11 @@ class NeoAdapter:
                 if protocol_path and protocol_path.strip():
                     filename = protocol_path.split('\\')[-1].split('/')[-1]
                     protocol_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
-                    log.info(f"Extracted protocol name: {protocol_name}")
+                    log.debug(f"Extracted protocol name: {protocol_name}")
                 else:
-                    log.info("Axon header 'sProtocolPath' is present but empty.")
+                    log.debug("Axon header 'sProtocolPath' is present but empty.")
             else:
-                log.info("Axon header '_axon_info' or 'sProtocolPath' not found.")
+                log.debug("Axon header '_axon_info' or 'sProtocolPath' not found.")
         except Exception as e:
             log.warning(f"Protocol name extraction failed: {e}")
             protocol_name = "Extraction Error"
@@ -231,16 +231,16 @@ class NeoAdapter:
                         if all_command_points.size > 0:
                             current_range = np.ptp(all_command_points)
                             injected_current = np.around(current_range, decimals=3)
-                            log.info(f"Estimated injected current range (PTP): {injected_current}")
+                            log.debug(f"Estimated injected current range (PTP): {injected_current}")
                         else:
-                            log.info("Concatenated command signals were empty.") # Aligned with inner if
+                            log.debug("Concatenated command signals were empty.") # Aligned with inner if
                     else:
-                        log.info("No suitable command signals found in protocol structure.") # Aligned with 'if all_command_signals'
+                        log.debug("No suitable command signals found in protocol structure.") # Aligned with 'if all_command_signals'
                     # --- Corrected Indentation for Current Calculation --- END ---
                 else:
-                     log.info("'read_raw_protocol()' returned empty list or non-list structure.") # Aligned with outer if
+                     log.debug("'read_raw_protocol()' returned empty list or non-list structure.") # Aligned with outer if
             else:
-                log.info("AxonIO reader instance does not have 'read_raw_protocol()' method.") # Aligned with hasattr
+                log.debug("AxonIO reader instance does not have 'read_raw_protocol()' method.") # Aligned with hasattr
         except Exception as e:
             log.warning(f"Failed during injected current estimation: {e}", exc_info=True)
             injected_current = None
@@ -252,22 +252,22 @@ class NeoAdapter:
         Reads any neo-supported electrophysiology file and translates it into a
         robust Recording object. This is the definitive, file-format-agnostic implementation.
         """
-        log.info(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
+        log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
         filepath = Path(filepath)
         io_class = self._get_neo_io_class(filepath)
         try:
             reader = io_class(filename=str(filepath))
             block = reader.read_block(lazy=lazy, signal_group_mode='split-all')
-            log.info(f"Successfully read neo Block using {io_class.__name__}.")
+            log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
             log.error(f"Failed to read block from {filepath} (Lazy: {lazy}): {e}", exc_info=True)
             # If not lazy, maybe try lazy as fallback?
             if not lazy:
-                log.info("Attempting lazy load fallback due to failure...")
+                log.debug("Attempting lazy load fallback due to failure...")
                 try:
                     reader = io_class(filename=str(filepath)) # Re-instantiate
                     block = reader.read_block(lazy=True, signal_group_mode='split-all')
-                    log.info("Lazy load fallback succeeded.")
+                    log.debug("Lazy load fallback succeeded.")
                     # If we fallback, we must treat this as lazy=True for the rest of function
                     lazy = True 
                 except Exception as e_lazy:
@@ -279,7 +279,7 @@ class NeoAdapter:
         recording = Recording(source_file=filepath)
         if hasattr(block, 'rec_datetime') and block.rec_datetime:
             recording.session_start_time_dt = block.rec_datetime
-            log.info(f"Extracted session start time: {recording.session_start_time_dt}")
+            log.debug(f"Extracted session start time: {recording.session_start_time_dt}")
 
         # --- Definitive Universal Header-First Data Loading Strategy ---
         channel_metadata_map: Dict[str, Dict] = {}
@@ -287,7 +287,7 @@ class NeoAdapter:
         # Stage 1: Discover ALL potential channels from the header first.
         header_channels = reader.header.get('signal_channels') if hasattr(reader, 'header') else None
         if header_channels is not None and len(header_channels) > 0:
-            log.info(f"Header found. Discovering channels from {type(header_channels)}.")
+            log.debug(f"Header found. Discovering channels from {type(header_channels)}.")
             for i, ch_info in enumerate(header_channels):
                 ch_id = str(ch_info.get('id', i)) if isinstance(ch_info, dict) else str(ch_info['id']) if 'id' in ch_info.dtype.names else str(i)
                 if isinstance(ch_info, dict):
@@ -306,7 +306,7 @@ class NeoAdapter:
                 map_key = f"id_{ch_id}"
                 if map_key not in channel_metadata_map:
                     channel_metadata_map[map_key] = {'id': ch_id, 'name': ch_name, 'data_trials': []}
-            log.info(f"Discovered {len(channel_metadata_map)} channels from header.")
+            log.debug(f"Discovered {len(channel_metadata_map)} channels from header.")
         
         # Stage 2: Aggregate data into the discovered channels.
         for seg_idx, segment in enumerate(block.segments):
@@ -396,7 +396,7 @@ class NeoAdapter:
             has_lazy = len(meta.get('lazy_trials', [])) > 0
             
             if not has_data and not has_lazy and meta.get('sampling_rate') is None:
-                log.info(f"Channel '{meta['name']}' discovered but contained no data/refs; skipping.")
+                log.debug(f"Channel '{meta['name']}' discovered but contained no data/refs; skipping.")
                 continue
             
             # If lazy, data_trials will be empty. Channel class handles this if we provide lazy_info.
@@ -435,9 +435,11 @@ class NeoAdapter:
             recording.sampling_rate = first_ch.sampling_rate
             recording.t_start = first_ch.t_start
             
-            # Duration calculation attempt
-            if not lazy and first_ch.data_trials and first_ch.sampling_rate > 0:
-                recording.duration = len(first_ch.data_trials[0]) / first_ch.sampling_rate
+            # Duration calculation attempt (§II.4: use get_data instead of direct data_trials access)
+            if not lazy and first_ch.num_trials > 0 and first_ch.sampling_rate > 0:
+                first_trial_data = first_ch.get_data(0)
+                if first_trial_data is not None:
+                    recording.duration = len(first_trial_data) / first_ch.sampling_rate
             elif lazy and first_ch.lazy_info:
                 # Estimate duration from lazy info? Proxy might have shape/duration
                 try:
@@ -453,7 +455,7 @@ class NeoAdapter:
         recording.neo_block = block
         recording.channels = {ch.id: ch for ch in created_channels}
 
-        log.info(f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}")
+        log.debug(f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}")
         return recording
 
 # =============================================================================
@@ -462,7 +464,7 @@ class NeoAdapter:
 # =============================================================================
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s [%(levelname)s] %(message)s') # DEBUG for more info
-    log.info("="*30); log.info("Running NeoAdapter example (IODict lookup)..."); log.info("="*30)
+    log.debug("="*30); log.debug("Running NeoAdapter example (IODict lookup)..."); log.debug("="*30)
 
     adapter = NeoAdapter() # Create adapter instance first
 
@@ -471,7 +473,7 @@ if __name__ == '__main__':
         filter_string_raw = adapter.get_supported_file_filter()
         # Replace ;; with newline outside the f-string
         filter_string_formatted = filter_string_raw.replace(';;', '\n')
-        log.info(f"Supported filter string:\n{filter_string_formatted}") # Log the formatted string
+        log.debug(f"Supported filter string:\n{filter_string_formatted}") # Log the formatted string
     except Exception as e_filter:
         log.error(f"Error generating file filter: {e_filter}")
     # --- End Filter String Fix ---
@@ -483,7 +485,7 @@ if __name__ == '__main__':
         log.error(f"Test file not found or is not a file: {test_file_path}")
         log.error("Please update 'test_file_path' in the `if __name__ == '__main__':` block.")
     else:
-        log.info(f"\nAttempting to read: {test_file_path}")
+        log.debug(f"\nAttempting to read: {test_file_path}")
         try:
             recording_data = adapter.read_recording(test_file_path)
             # --- Print Summary (Remains the same) ---
@@ -513,4 +515,4 @@ if __name__ == '__main__':
                 print("-" * 20)
         except Exception as e:
             print(f"\n--- ERROR during example execution ---"); log.exception("Exception occurred in example usage block:"); print(f"Error Type: {type(e).__name__}"); print(f"Error Details: {e}")
-    log.info("="*30); log.info("NeoAdapter example finished."); log.info("="*30)
+    log.debug("="*30); log.debug("NeoAdapter example finished."); log.debug("="*30)

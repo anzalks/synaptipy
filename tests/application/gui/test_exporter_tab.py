@@ -9,7 +9,6 @@ from pathlib import Path
 import tempfile
 
 from Synaptipy.application.gui.exporter_tab import ExporterTab
-from Synaptipy.application.gui.explorer_tab import ExplorerTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.infrastructure.exporters import NWBExporter
 

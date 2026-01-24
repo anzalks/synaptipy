@@ -12,7 +12,7 @@ import numpy as np
 
 from Synaptipy.core.data_model import Recording, Channel
 
-log = logging.getLogger('Synaptipy.infrastructure.exporters.csv_exporter')
+log = logging.getLogger(__name__)
 
 class CSVExporter:
     """
@@ -84,7 +84,7 @@ class CSVExporter:
             return False
             
         try:
-            log.info(f"Writing {len(results)} analysis results to CSV: {output_path}")
+            log.debug(f"Writing {len(results)} analysis results to CSV: {output_path}")
             
             # Determine all possible fields across all results
             all_fields = set()

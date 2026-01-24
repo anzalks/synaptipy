@@ -45,7 +45,7 @@ except ImportError:
     class ExportError(IOError): pass
 
 # Configure logging (use specific logger for this module)
-log = logging.getLogger('Synaptipy.infrastructure.exporters.nwb_exporter')
+log = logging.getLogger(__name__)
 
 
 class NWBExporter:
@@ -70,7 +70,7 @@ class NWBExporter:
         if not PYNWB_AVAILABLE:
             raise ExportError("pynwb library is not installed. Cannot export to NWB.")
 
-        log.info(f"Starting NWB export for recording from: {getattr(recording, 'source_file', 'Unknown Source').name}")
+        log.debug(f"Starting NWB export for recording from: {getattr(recording, 'source_file', 'Unknown Source').name}")
         log.debug(f"Output path: {output_path}")
 
         # --- Validate Recording Object ---
@@ -257,7 +257,7 @@ class NWBExporter:
                  log.warning("No valid channels exported.")
 
             # --- Write File ---
-            log.info(f"Writing NWB to: {output_path}")
+            log.debug(f"Writing NWB to: {output_path}")
             with NWBHDF5IO(str(output_path), 'w') as io:
                 io.write(nwbfile)
                 

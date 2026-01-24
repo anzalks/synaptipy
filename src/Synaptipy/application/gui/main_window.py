@@ -16,11 +16,11 @@ from PySide6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg  # Add import for pyqtgraph
 
 # --- Synaptipy Imports / Dummies ---
-# Use RELATIVE import for dummy_classes within the same gui package
-from .dummy_classes import (
-    NeoAdapter, NWBExporter, Recording, SynaptipyError, ExportError,
-    SYNAPTIPY_AVAILABLE
-)
+# --- Synaptipy Imports ---
+from Synaptipy.core.data_model import Recording
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.infrastructure.exporters import NWBExporter
+from Synaptipy.shared.error_handling import SynaptipyError, ExportError
 # Import the new DataLoader for background file loading
 from ..data_loader import DataLoader
 # --- Tab Imports ---
@@ -40,9 +40,10 @@ except ImportError:
 from Synaptipy.shared.styling import (
     apply_stylesheet
 )
+from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 
 # Use a specific logger for this module
-log = logging.getLogger('Synaptipy.application.gui.main_window')
+log = logging.getLogger(__name__)
 
 class MainWindow(QtWidgets.QMainWindow):
     """Main application window managing different functional tabs."""
@@ -55,7 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
-        log.info("Initializing MainWindow...")
+        log.debug("Initializing MainWindow...")
         self.session_manager = SessionManager()
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
 
@@ -81,7 +82,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 available_geometry.left() + (available_geometry.width() - initial_width) // 2,
                 available_geometry.top() + (available_geometry.height() - initial_height) // 2
             )
-            log.info(f"Set initial size based on screen (70%): {initial_width}x{initial_height}")
+            log.debug(f"Set initial size based on screen (70%): {initial_width}x{initial_height}")
         else:
             log.warning("Could not get screen geometry, using default size.")
             # Fallback default geometry (smaller size)
@@ -92,7 +93,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
              self.neo_adapter = NeoAdapter()
              self.nwb_exporter = NWBExporter()
-             log.info("NeoAdapter and NWBExporter instantiated successfully.")
+             log.debug("NeoAdapter and NWBExporter instantiated successfully.")
         except Exception as e:
              log.critical(f"Failed to instantiate NeoAdapter or NWBExporter: {e}", exc_info=True)
              print(f"CRITICAL ERROR: Failed to instantiate adapters: {e}")
@@ -105,7 +106,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._setup_data_loader()
 
         # --- Settings ---
-        self.settings = QtCore.QSettings("Synaptipy", "Viewer") # Org name, App name
+        self.settings = QtCore.QSettings(APP_NAME, SETTINGS_SECTION)
 
         # --- Initialize State Variables (Specific to MainWindow) ---
         self.saved_analysis_results: List[Dict[str, Any]] = []
@@ -287,7 +288,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle plot preferences update signal by efficiently updating pens."""
         # Import the getter function (can be done at top of file too)
         from Synaptipy.shared.plot_customization import get_force_opaque_trials
-        log.info(f"[_on_plot_preferences_updated] Handling signal. Force opaque state: {get_force_opaque_trials()}")
+        log.debug(f"[_on_plot_preferences_updated] Handling signal. Force opaque state: {get_force_opaque_trials()}")
         
         # CRITICAL FIX: Use the optimized _update_plot_pens_only() method instead of the slow update_plot_pens()
         # This updates pen properties in-place without removing/recreating plot items
@@ -296,7 +297,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # This updates pen properties in-place immediately
             if hasattr(self.explorer_tab, 'update_plot_pens'):
                 self.explorer_tab.update_plot_pens()
-                log.info("Updated explorer tab plots using optimized update_plot_pens")
+                log.debug("Updated explorer tab plots using optimized update_plot_pens")
             else:
                 log.warning("Explorer tab missing update_plot_pens method")
         if hasattr(self, 'analyser_tab') and self.analyser_tab:
@@ -306,7 +307,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _update_plot_pens_only(self):
         """Update only plot pens when user changes preferences in dialog."""
         try:
-            log.info("=== UPDATING PLOT PENS ONLY ===")
+            log.debug("=== UPDATING PLOT PENS ONLY ===")
             
             # Update explorer tab plot pens
             if hasattr(self, 'explorer_tab') and self.explorer_tab:
@@ -314,7 +315,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     if hasattr(self.explorer_tab, 'update_plot_pens'):
                         # Use explorer tab's own pen update method for better performance
                         self.explorer_tab.update_plot_pens()
-                        log.info("Updated plot pens for explorer tab plots (using tab's method)")
+                        log.debug("Updated plot pens for explorer tab plots (using tab's method)")
                     else:
                         # Fallback to generic method if tab doesn't have its own
                         from Synaptipy.shared.plot_customization import update_plot_pens
@@ -322,7 +323,7 @@ class MainWindow(QtWidgets.QMainWindow):
                             plot_widgets = list(self.explorer_tab.channel_plots.values())
                             if plot_widgets:
                                 update_plot_pens(plot_widgets)
-                                log.info("Updated plot pens for explorer tab plots (using generic method)")
+                                log.debug("Updated plot pens for explorer tab plots (using generic method)")
                 except Exception as e:
                     log.debug(f"Could not update plot pens for explorer tab: {e}")
             
@@ -345,7 +346,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 except Exception as e:
                     log.debug(f"Could not update plot pens for analysis tabs: {e}")
             
-            log.info("Plot pen update complete")
+            log.debug("Plot pen update complete")
         except Exception as e:
             log.error(f"Failed to update plot pens: {e}")
 
@@ -384,7 +385,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         if popup_count > 0:
             self.status_bar.showMessage(f"Restored {popup_count} popup window(s)", 3000)
-            log.info(f"Restored {popup_count} popup windows")
+            log.debug(f"Restored {popup_count} popup windows")
         else:
             QtWidgets.QMessageBox.information(
                 self, 
@@ -393,13 +394,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Popup windows are created when you run analyses that display\n"
                 "additional visualizations (like F-I curves, phase planes, etc.)."
             )
-            log.info("No popup windows to restore")
+            log.debug("No popup windows to restore")
 
     # --- Background Data Loading Signal Handlers ---
     
     def _on_loading_started(self, file_path: str):
         """Handle signal when file loading starts."""
-        log.info(f"Background loading started for: {file_path}")
+        log.debug(f"Background loading started for: {file_path}")
         self.status_bar.showMessage(f"Loading {Path(file_path).name}...", 0)  # 0 = no timeout
     
     def _on_loading_progress(self, progress: int):
@@ -411,7 +412,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def _on_data_ready(self, recording_data: Recording):
         """Handle successful data loading."""
-        log.info(f"Background loading completed successfully for: {recording_data.source_file.name}")
+        log.debug(f"Background loading completed successfully for: {recording_data.source_file.name}")
         
         try:
             # Get the file list and current index from the current state
@@ -425,7 +426,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 delattr(self, '_pending_current_index')
                 
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
-                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager.")
+                log.debug(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager.")
                 
                 # Update SessionManager
                 self.session_manager.set_file_context(file_list, current_index)
@@ -440,7 +441,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 file_list = [recording_data.source_file]
                 current_index = 0
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
-                log.info(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager.")
+                log.debug(f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager.")
                 
                 # Update SessionManager
                 self.session_manager.set_file_context(file_list, current_index)
@@ -525,7 +526,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Execute the dialog and check for acceptance
         if not dialog.exec():
-            log.info("File open dialog cancelled.")
+            log.debug("File open dialog cancelled.")
             self.status_bar.showMessage("File open cancelled.", 3000)
             return
 
@@ -535,7 +536,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Check if file was selected
         if not filepath_str:
-            log.info("No file selected.")
+            log.debug("No file selected.")
             self.status_bar.showMessage("No file selected.", 3000)
             return
 
@@ -545,7 +546,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings.setValue("lastDirectory", str(folder_path))
 
         selected_extension = selected_filepath.suffix.lower()
-        log.info(f"File selected: {selected_filepath.name}. Scanning folder '{folder_path}' for files with extension '{selected_extension}'.")
+        log.debug(f"File selected: {selected_filepath.name}. Scanning folder '{folder_path}' for files with extension '{selected_extension}'.")
         # --- END REVERT ---
 
         # --- Robust Sibling Scan using iterdir() (No glob wildcards) --- 
@@ -577,7 +578,7 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 # Find the index of the originally selected file within the sibling list
                 current_index = file_list.index(selected_filepath)
-                log.info(f"Found {len(file_list)} file(s) with extension '{selected_extension}'. Selected file is at index {current_index}.")
+                log.debug(f"Found {len(file_list)} file(s) with extension '{selected_extension}'. Selected file is at index {current_index}.")
             except ValueError:
                 log.warning(f"Selected file '{selected_filepath.name}' not found in scanned list. Appending it.")
                 file_list.append(selected_filepath) # Should be there, but safety first
@@ -601,7 +602,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _load_in_explorer(self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int, lazy_load: bool):
         """Initiates background loading of the initial file and stores context for completion."""
         # CHANGE: Log using the clearer argument name
-        log.info(f"Requesting background load of initial file: {initial_filepath_to_load.name} (from list of {len(file_list)} siblings)")
+        log.debug(f"Requesting background load of initial file: {initial_filepath_to_load.name} (from list of {len(file_list)} siblings)")
         if not (hasattr(self, 'explorer_tab') and self.explorer_tab):
             log.error("Cannot load file: Explorer tab not found or not initialized yet.")
             QtWidgets.QMessageBox.critical(self, "Internal Error", "Explorer tab is missing. Cannot load file.")
@@ -660,7 +661,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Export Error", "No recording data loaded in Explorer tab to export.")
             return
 
-        log.info(f"Preparing to export recording from: {current_recording.source_file.name}")
+        log.debug(f"Preparing to export recording from: {current_recording.source_file.name}")
 
         # Suggest Filename & Get Save Location (using QSettings)
         default_filename = current_recording.source_file.with_suffix(".nwb").name
@@ -674,7 +675,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         if not output_filepath_str:
-            log.info("NWB export cancelled by user."); self.status_bar.showMessage("NWB export cancelled.", 3000); return
+            log.debug("NWB export cancelled by user."); self.status_bar.showMessage("NWB export cancelled.", 3000); return
 
         output_filepath = Path(output_filepath_str)
         # Save the chosen directory for next time
@@ -710,7 +711,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 log.error("Metadata dialog accepted but returned None (validation failed)."); self.status_bar.showMessage("Metadata validation failed.", 3000); return
             log.debug(f"NWB metadata collected: {nwb_metadata}")
         else:
-            log.info("NWB export cancelled during metadata input."); self.status_bar.showMessage("NWB export cancelled.", 3000); return
+            log.debug("NWB export cancelled during metadata input."); self.status_bar.showMessage("NWB export cancelled.", 3000); return
 
         # Perform Export (using self.nwb_exporter)
         self.status_bar.showMessage(f"Exporting NWB to '{output_filepath.name}'...")
@@ -719,7 +720,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             # nwb_exporter is already instantiated and available via self
             self.nwb_exporter.export(current_recording, output_filepath, nwb_metadata)
-            log.info(f"Successfully exported NWB file: {output_filepath}")
+            log.debug(f"Successfully exported NWB file: {output_filepath}")
             self.status_bar.showMessage(f"Export successful: {output_filepath.name}", 5000)
             QtWidgets.QMessageBox.information(self, "Export Successful", f"Data successfully saved to:\n{output_filepath}")
         except (ValueError, ExportError, SynaptipyError) as e:
@@ -757,7 +758,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent):
         """Handles the main window close event, saving state."""
-        log.info("Close event received. Cleaning up and saving state...")
+        log.debug("Close event received. Cleaning up and saving state...")
         
         # --- Cleanup Background Data Loader ---
         if hasattr(self, 'data_loader_thread') and self.data_loader_thread:
@@ -805,7 +806,7 @@ class MainWindow(QtWidgets.QMainWindow):
              log.debug("Saved window geometry and state.")
         except Exception as e:
             log.warning(f"Could not save settings on close: {e}")
-        log.info("Accepting close event.")
+        log.debug("Accepting close event.")
         event.accept()
 
     # --- ADDED: Method to store analysis results ---
@@ -819,7 +820,7 @@ class MainWindow(QtWidgets.QMainWindow):
         result_data['timestamp_saved'] = datetime.now(timezone.utc).isoformat()
         
         self.saved_analysis_results.append(result_data)
-        log.info(f"Saved analysis result ({result_data.get('analysis_type', '?')} from {result_data.get('source_file_name', '?')}). Total saved: {len(self.saved_analysis_results)}")
+        log.debug(f"Saved analysis result ({result_data.get('analysis_type', '?')} from {result_data.get('source_file_name', '?')}). Total saved: {len(self.saved_analysis_results)}")
         # Optional: Update status bar or emit signal
         self.status_bar.showMessage(f"Result saved ({result_data.get('analysis_type', '?')}). Total: {len(self.saved_analysis_results)}", 3000)
         # Example signal (define in class header if needed):

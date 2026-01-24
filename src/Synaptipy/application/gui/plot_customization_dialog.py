@@ -44,10 +44,10 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         # PERFORMANCE: Add checkbox attribute
         self.force_opaque_checkbox = None
         
-        log.info("=== DIALOG INITIALIZATION ===")
-        log.info(f"Manager preferences: {self.customization_manager.get_all_preferences()}")
-        log.info(f"Current preferences: {self.current_preferences}")
-        log.info(f"Original preferences: {self._original_preferences}")
+        log.debug("=== DIALOG INITIALIZATION ===")
+        log.debug(f"Manager preferences: {self.customization_manager.get_all_preferences()}")
+        log.debug(f"Current preferences: {self.current_preferences}")
+        log.debug(f"Original preferences: {self._original_preferences}")
         
         self._setup_ui()
         self._load_current_preferences()
@@ -370,13 +370,8 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
     def _on_average_color_changed(self):
         """Handle average color change."""
         color = self.average_color_combo.currentData()
-        log.info(f"=== AVERAGE COLOR CHANGED ===")
-        log.info(f"New color: {color}")
-        log.info(f"Before update - current_preferences: {self.current_preferences}")
+        log.debug(f"Average color changed to: {color}")
         self.current_preferences['average']['color'] = color
-        log.info(f"After update - current_preferences: {self.current_preferences}")
-        log.info(f"Original preferences: {self._original_preferences}")
-        log.info(f"Manager preferences: {self.customization_manager.get_all_preferences()}")
     
     def _on_average_width_changed(self):
         """Handle average width change."""
@@ -425,7 +420,7 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             self._load_current_preferences()
             # Reset the original preferences reference - use deep copy
             self._original_preferences = copy.deepcopy(self.current_preferences)
-            log.info("Preferences reset to defaults")
+            log.debug("Preferences reset to defaults")
         except Exception as e:
             log.error(f"Failed to reset preferences: {e}")
     
@@ -434,20 +429,20 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         try:
             # Only proceed if preferences have actually been modified
             if self._preferences_changed():
-                log.info("Changes detected, applying new plot preferences.")
+                log.debug("Changes detected, applying new plot preferences.")
                 # Use batch update for better performance
                 success = self.customization_manager.update_preferences_batch(
                     self.current_preferences,
                     emit_signal=True
                 )
                 if success:
-                    log.info("Plot preferences applied and saved via batch update.")
+                    log.debug("Plot preferences applied and saved via batch update.")
                     # Update the original preferences reference to prevent re-applying the same change
                     self._original_preferences = copy.deepcopy(self.current_preferences)
                 else:
                     log.warning("Batch update failed.")
             else:
-                log.info("No changes detected - skipping save and update signal.")
+                log.debug("No changes detected - skipping save and update signal.")
                 
         except Exception as e:
             log.error(f"Failed to apply preferences: {e}")
@@ -455,23 +450,16 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
     def _preferences_changed(self):
         """Check if preferences have actually changed from the original."""
         try:
-            log.info("=== CHECKING FOR PREFERENCE CHANGES ===")
-            log.info(f"Current preferences: {self.current_preferences}")
-            log.info(f"Original preferences: {self._original_preferences}")
-            
             # Compare current preferences with the original ones
             for plot_type in self.current_preferences:
                 for property_name in self.current_preferences[plot_type]:
                     current_value = self.current_preferences[plot_type][property_name]
                     original_value = self._original_preferences[plot_type][property_name]
                     
-                    log.info(f"Comparing {plot_type}.{property_name}: current='{current_value}' vs original='{original_value}'")
-                    
                     if current_value != original_value:
-                        log.info(f"Change detected: {plot_type}.{property_name} = '{current_value}' (was '{original_value}')")
+                        log.debug(f"Change detected: {plot_type}.{property_name} = '{current_value}' (was '{original_value}')")
                         return True
             
-            log.info("No changes detected in preferences comparison")
             return False
         except Exception as e:
             log.warning(f"Could not check preference changes: {e}")
@@ -497,5 +485,5 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         # Import the setter function (can be done at top of file too)
         from Synaptipy.shared.plot_customization import set_force_opaque_trials
         set_force_opaque_trials(is_checked)
-        log.info(f"Force opaque trials toggled via dialog to: {is_checked}")
+        log.debug(f"Force opaque trials toggled via dialog to: {is_checked}")
         # The set_force_opaque_trials function emits the signal to update plots automatically

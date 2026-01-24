@@ -65,7 +65,7 @@ class BatchAnalysisEngine:
     def cancel(self):
         """Request cancellation of the current batch run."""
         self._cancelled = True
-        log.info("Batch analysis cancellation requested.")
+        log.debug("Batch analysis cancellation requested.")
     
     @staticmethod
     def list_available_analyses() -> List[str]:
@@ -130,7 +130,7 @@ class BatchAnalysisEngine:
         for i, item in enumerate(files):
             # Check for cancellation
             if self._cancelled:
-                log.info("Batch analysis cancelled by user.")
+                log.debug("Batch analysis cancelled by user.")
                 if progress_callback:
                     progress_callback(i, total_files, "Cancelled")
                 break
