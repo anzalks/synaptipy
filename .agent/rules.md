@@ -82,6 +82,7 @@ All analysis features must be split into two distinct parts:
 * **Complexity**: Keep function cyclomatic complexity under 10. Refactor if logic gets too nested.
 * **Unused Imports**: Remove them. (Exception: `__init__.py` files).
 * **Command**: Before finalizing code, the Agent should verify with: `flake8 src tests`
+* **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures.
 
 **2. Cross-Platform Compatibility (The "Windows" Rule)**
 * **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).
@@ -103,9 +104,9 @@ All analysis features must be split into two distinct parts:
 ## V. DOCUMENTATION & PROFESSIONALISM
 
 **1. Professional Tone & Style**
-*   **No Emojis**: Emojis are strictly forbidden in all documentation (`README.md`, docs), commit messages, and code comments.
-    *   *Forbidden*: "🚀 Key Features", "Fixed bug 🐛"
-    *   *Required*: "Key Features", "Fixed bug in signal processor"
+*   **No Emojis**: Emojis are strictly forbidden in **ALL** files (Source Code, Documentation, Commit Messages).
+    *   *Forbidden*: "🚀 Key Features", "# TODO: Fix this 🐛", "print('Done! 🎉')"
+    *   *Required*: "Key Features", "# TODO: Fix this bug", "print('Done!')"
 *   **Objective Language**: Use formal, technical language. Avoid marketing fluff or casual slang.
     *   *Bad*: "This app is super fast and cool."
     *   *Good*: "The application utilizes optimized algorithms for high-performance signal processing."

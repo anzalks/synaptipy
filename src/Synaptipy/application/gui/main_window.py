@@ -61,6 +61,13 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug("Initializing MainWindow...")
         self.session_manager = SessionManager()
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
+        
+        # Set Window Icon
+        icon_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
+        if icon_path.exists():
+            app_icon = QtGui.QIcon(str(icon_path))
+            self.setWindowIcon(app_icon)
+            QtWidgets.QApplication.setWindowIcon(app_icon) # Set for taskbar/dock as well
 
         # --- Calculate initial size based on screen (70%) ---
         screen = QtWidgets.QApplication.primaryScreen()

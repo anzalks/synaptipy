@@ -3,7 +3,8 @@
 """
 Dialog for exporting plots with custom settings (Format, DPI).
 """
-from PySide6 import QtWidgets, QtCore, QtGui
+from PySide6 import QtWidgets
+
 
 class PlotExportDialog(QtWidgets.QDialog):
     """
@@ -37,7 +38,7 @@ class PlotExportDialog(QtWidgets.QDialog):
         self.dpi_spin.setSuffix(" dpi")
         dpi_layout.addWidget(self.dpi_spin, 1)
         layout.addLayout(dpi_layout)
-        
+
         # Info label
         self.info_label = QtWidgets.QLabel("Vector formats (SVG, PDF) support editable text.")
         self.info_label.setWordWrap(True)
@@ -49,10 +50,10 @@ class PlotExportDialog(QtWidgets.QDialog):
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
-        
+
         # Connect format change to update DPI availability/Info
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
-        
+
     def _on_format_changed(self, text):
         # DPI is mostly for rasterization, but sometimes used for PDF sizing.
         # Check text compatibility

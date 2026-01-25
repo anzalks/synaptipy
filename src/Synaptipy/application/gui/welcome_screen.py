@@ -11,6 +11,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 from typing import Optional, Callable
+from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 
@@ -52,12 +53,20 @@ class WelcomeScreen(QtWidgets.QWidget):
         # Application title and logo area
         title_layout = QtWidgets.QHBoxLayout()
 
-        # Logo placeholder (can be replaced with actual logo)
-        logo_label = QtWidgets.QLabel("🧠")
-        # Use system font size and colors for consistency
-        font = logo_label.font()
-        font.setPointSize(48)
-        logo_label.setFont(font)
+        # Logo
+        logo_label = QtWidgets.QLabel()
+        logo_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
+        if logo_path.exists():
+            pixmap = QtGui.QPixmap(str(logo_path))
+            # Scale logo to reasonable size (e.g., 100x100)
+            pixmap = pixmap.scaled(100, 100, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("[LOGO]")
+            font = logo_label.font()
+            font.setPointSize(48)
+            logo_label.setFont(font)
+        
         logo_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         title_layout.addWidget(logo_label)
 
