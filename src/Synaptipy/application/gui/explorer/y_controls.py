@@ -67,8 +67,8 @@ class ExplorerYControls(QtWidgets.QWidget):
         layout.setSpacing(5)
 
         # Scroll Group
-        y_scroll_widget = QtWidgets.QWidget()
-        y_scroll_layout = QtWidgets.QVBoxLayout(y_scroll_widget)
+        self.y_scroll_widget = QtWidgets.QWidget()
+        y_scroll_layout = QtWidgets.QVBoxLayout(self.y_scroll_widget)
         y_scroll_layout.setContentsMargins(0, 0, 0, 0)
         y_scroll_group = QtWidgets.QGroupBox("Y Scroll")
         y_scroll_group_layout = QtWidgets.QVBoxLayout(y_scroll_group)
@@ -94,15 +94,15 @@ class ExplorerYControls(QtWidgets.QWidget):
         self.individual_y_scrollbars_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         y_scroll_group_layout.addWidget(self.individual_y_scrollbars_container, 1)
 
-        layout.addWidget(y_scroll_widget, 1)
+        layout.addWidget(self.y_scroll_widget, 1)
 
         # Zoom Group
-        y_zoom_widget = QtWidgets.QWidget()
-        y_zoom_layout = QtWidgets.QVBoxLayout(y_zoom_widget)
+        self.y_zoom_widget = QtWidgets.QWidget()
+        y_zoom_layout = QtWidgets.QVBoxLayout(self.y_zoom_widget)
         y_zoom_layout.setContentsMargins(0, 0, 0, 0)
-        y_zoom_group = QtWidgets.QGroupBox("Amplitude Zoom (Y-Axis)")
-        y_zoom_group_layout = QtWidgets.QVBoxLayout(y_zoom_group)
-        y_zoom_layout.addWidget(y_zoom_group)
+        self.y_zoom_group = QtWidgets.QGroupBox("Amplitude Zoom (Y-Axis)")
+        y_zoom_layout.addWidget(self.y_zoom_group)
+        y_zoom_group_layout = QtWidgets.QVBoxLayout(self.y_zoom_group)
 
         # Lock Checkbox
         self.y_lock_checkbox = QtWidgets.QCheckBox("Lock Y Views")
@@ -112,27 +112,27 @@ class ExplorerYControls(QtWidgets.QWidget):
         y_zoom_group_layout.addWidget(self.y_lock_checkbox)
 
         # Global Slider
-        self.global_y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Vertical)
+        self.global_y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.global_y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)
         self.global_y_slider.setValue(self.SLIDER_DEFAULT_VALUE)
         self.global_y_slider.setToolTip("Y zoom (All)")
         self.global_y_slider.valueChanged.connect(self._on_global_zoom_changed)
 
-        gz_layout = QtWidgets.QVBoxLayout()
-        gz_layout.setSpacing(2)
-        gz_layout.addWidget(QtWidgets.QLabel("Global", alignment=QtCore.Qt.AlignmentFlag.AlignCenter))
+        gz_layout = QtWidgets.QHBoxLayout()
+        gz_layout.setSpacing(5)
+        gz_layout.addWidget(QtWidgets.QLabel("Global", alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter))
         gz_layout.addWidget(self.global_y_slider, 1)
-        y_zoom_group_layout.addLayout(gz_layout, 1)
+        y_zoom_group_layout.addLayout(gz_layout)
 
         # Individual Sliders Container
         self.individual_y_sliders_container = QtWidgets.QWidget()
         self.individual_y_sliders_layout = QtWidgets.QVBoxLayout(self.individual_y_sliders_container)
         self.individual_y_sliders_layout.setContentsMargins(0, 5, 0, 0)
-        self.individual_y_sliders_layout.setSpacing(10)
+        self.individual_y_sliders_layout.setSpacing(2)
         self.individual_y_sliders_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         y_zoom_group_layout.addWidget(self.individual_y_sliders_container, 1)
 
-        layout.addWidget(y_zoom_widget, 1)
+        layout.addWidget(self.y_zoom_widget, 1)
 
     def rebuild(self, recording: Optional[Recording]):
         """Rebuild individual controls for the recording channels."""
@@ -147,12 +147,12 @@ class ExplorerYControls(QtWidgets.QWidget):
 
             # Slider
             slider_container = QtWidgets.QWidget()
-            slider_layout = QtWidgets.QVBoxLayout(slider_container)
+            slider_layout = QtWidgets.QHBoxLayout(slider_container)
             slider_layout.setContentsMargins(0, 0, 0, 0)
-            slider_layout.setSpacing(2)
-            slider_layout.addWidget(QtWidgets.QLabel(display_name, alignment=QtCore.Qt.AlignmentFlag.AlignCenter))
+            slider_layout.setSpacing(5)
+            slider_layout.addWidget(QtWidgets.QLabel(display_name, alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter))
 
-            y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Vertical)
+            y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)
             y_slider.setValue(self.SLIDER_DEFAULT_VALUE)
             y_slider.setToolTip(f"Y zoom for {display_name}")
