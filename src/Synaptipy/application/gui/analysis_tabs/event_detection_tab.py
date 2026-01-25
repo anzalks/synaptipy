@@ -174,12 +174,20 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         elif self.threshold_line:
             self.threshold_line.setVisible(False)
 
-    def _on_analysis_result(self, results: Any):
+    def _display_analysis_results(self, results: Any):
         """Override to provide custom HTML result summary."""
-        # Call super to handle storage, plot hook, save button
-        super()._on_analysis_result(results)
+        # Base logic (BaseAnalysisTab._on_analysis_result) handles storage, plot hook, save button.
+        # We just need to update the text display.
+        
+        # We also call super()._display_analysis_results(results) if we want the generic text 
+        # but here we seem to want to REPLACE it with HTML.
+        # So we won't call super() unless we want both (which would be messy in one text box).
+        # MetadataDrivenAnalysisTab._display_analysis_results sets generic text.
+        # If we mistakenly implemented _on_analysis_result before, we overrode everything.
+        # Now we override _display_analysis_results.
+        
+        # Let's just do our custom HTML and skip generic text.
 
-        # Now update the text with HTML summary
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:

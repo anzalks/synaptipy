@@ -236,23 +236,13 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             log.error(f"Analysis execution failed: {e}")
             raise
 
-    def _on_analysis_result(self, results: Dict[str, Any]):
-        """Update UI with results."""
-        log.debug(f"{self.__class__.__name__}._on_analysis_result called with results type: {type(results)}")
-
-        if not self.plot_widget:
-            log.warning(f"{self.__class__.__name__}._on_analysis_result: plot_widget is None, returning early")
+    def _display_analysis_results(self, results: Dict[str, Any]):
+        """
+        Display analysis results in text area.
+        Implements abstract method from BaseAnalysisTab.
+        """
+        if not self.results_text:
             return
-
-        # Store results for save functionality
-        self._last_analysis_result = results
-        log.debug(
-            f"{self.__class__.__name__}: Stored _last_analysis_result, is None? {self._last_analysis_result is None}"
-        )
-
-        # Do NOT clear the plot here, as it removes the raw trace!
-        # The raw trace is plotted in _plot_selected_data.
-        # self.plot_widget.clear()
 
         # Display text results
         text_output = []
@@ -278,15 +268,5 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 text_output.append(f"{k}: {str(v)}")
 
         self.results_text.setText("\n".join(text_output))
-        self.status_label.setText("Status: Analysis Complete")
-
-        # Enable save button
-        self._set_save_button_enabled(True)
-
-        # Call the visualization hook for subclasses (CRITICAL FIX)
-        self._plot_analysis_visualizations(results)
-
-        # Update Accumulation UI state
-        self._update_accumulation_ui_state()
 
 ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab

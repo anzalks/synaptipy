@@ -44,7 +44,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     # Removed TRIAL_MODES as it's less relevant now
 
-    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
+    def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent: Optional[QtWidgets.QWidget] = None):
         """
         Initialize the base analysis tab.
 
@@ -122,7 +122,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     # --- ADDED: Method to set global controls (Removed duplicate) ---
     # The actual implementation is further down in the file.
 
-    def _setup_toolbar(self, parent_layout: QtWidgets.QLayout):
+    def _setup_toolbar(self, parent_layout: QtWidgets.QLayout) -> None:
         """
         Setup the toolbar with common actions (Reset View, Save Plot).
 
@@ -147,7 +147,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         parent_layout.addLayout(toolbar_layout)
 
-    def _reset_plot_view(self):
+    def _reset_plot_view(self) -> None:
         """Reset the plot view to default range."""
         if self.plot_widget:
             self.plot_widget.autoRange()
@@ -1406,10 +1406,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             log.debug(f"{self.__class__.__name__}: Parameter changed, debounce timer started")
 
     # --- Optional Methods Subclasses Might Implement ---
-    def _connect_signals(self):
+    def _connect_signals(self) -> None:
         pass  # Optional
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Cleanup resources, stop threads, close popups."""
         log.debug(f"Cleaning up {self.__class__.__name__}")
 
