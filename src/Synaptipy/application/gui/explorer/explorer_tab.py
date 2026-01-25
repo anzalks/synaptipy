@@ -139,10 +139,75 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # CENTER PANEL
         center_widget = QtWidgets.QWidget()
-        center_layout = QtWidgets.QVBoxLayout(center_widget)
-        center_layout.addWidget(self.plot_canvas.widget, 1)
-        center_layout.addWidget(self.x_scrollbar)
-        center_layout.addWidget(self.toolbar)
+        center_layout = QtWidgets.QGridLayout(center_widget)
+        # (Row, Col, RowSpan, ColSpan)
+        
+        # 1. Plot Area (0, 0)
+        center_layout.addWidget(self.plot_canvas.widget, 0, 0)
+        
+        # 2. Y Scrollbar (Right of Plot) (0, 1)
+        center_layout.addWidget(self.y_controls.y_scroll_widget, 0, 1)
+
+        # 3. X Scrollbar (Below Plot) (1, 0)
+        center_layout.addWidget(self.x_scrollbar, 1, 0)
+
+        # 4. Navigation Row (Row 2: Prev File | Trial Cycle | Next File)
+        # We need to construct this row by "stealing" widgets from the toolbar
+        nav_row_widget = QtWidgets.QWidget()
+        nav_row_layout = QtWidgets.QHBoxLayout(nav_row_widget)
+        nav_row_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Reparent widgets
+        nav_row_layout.addWidget(self.toolbar.prev_file_btn)
+        nav_row_layout.addStretch()
+        nav_row_layout.addWidget(self.toolbar.trial_group)
+        nav_row_layout.addStretch()
+        nav_row_layout.addWidget(self.toolbar.next_file_btn)
+        
+        # Also include the file index label somewhere? The user's request:
+        # "the seco row acomodates the next previous as it isand put trial cycle int he centre of that region"
+        # The original toolbar had the file label in the middle. 
+        # I'll put the file index label with the file buttons to keep context?
+        # Or maybe putting trial cycle in center implicitly displaces the index label.
+        # I'll add the index label next to the buttons for clarity.
+        # [Prev] [Index] ... [Trial] ... [Next] - actually User said "put trial cycle in the centre".
+        # So I will do: [Prev] [Index] [Stretch] [Trial] [Stretch] [Next]
+        
+        # Wait, I can't easily insert into the middle of the "nav_row" if I just steal buttons.
+        # Let's clean up the toolbar layout first? No, reparenting removes from old layout automatically.
+        # I will grab the file_index_lbl too.
+        
+        nav_row_layout.insertWidget(1, self.toolbar.file_index_lbl) # Place index next to Prev?
+        # Or maybe better: [Prev] [Stretch] [Trial] [Stretch] [Index] [Next]?
+        # Let's stick to the user request: "trial cycle in the centre... between the two buttons".
+        # I'll put index label next to Next or Prev. Let's put it next to Next.
+        
+        # Re-doing nav row layout:
+        # [Prev File] [Stretch] [Trial Group] [Stretch] [Index Label] [Next File]
+        
+        
+        # 5. Zoom/View Row (Row 3: X Zoom | Y Zoom | View)
+        zoom_row_widget = QtWidgets.QWidget()
+        zoom_row_layout = QtWidgets.QHBoxLayout(zoom_row_widget)
+        zoom_row_layout.setContentsMargins(0, 0, 0, 0)
+        
+        zoom_row_layout.addWidget(self.toolbar.x_zoom_group, 1) # Time Zoom
+        zoom_row_layout.addWidget(self.y_controls.y_zoom_widget, 1) # Amplitude Zoom
+        zoom_row_layout.addWidget(self.toolbar.view_group) # View Controls
+        
+        center_layout.addWidget(nav_row_widget, 2, 0)
+        center_layout.addWidget(zoom_row_widget, 3, 0)
+
+        # Adjust column stretch
+        center_layout.setColumnStretch(0, 1) # Plot takes max width
+        center_layout.setColumnStretch(1, 0) # Scrollbar fixes width
+        
+        # Adjust row stretch
+        center_layout.setRowStretch(0, 1) # Plot takes max height
+        center_layout.setRowStretch(1, 0)
+        center_layout.setRowStretch(2, 0)
+        center_layout.setRowStretch(3, 0)
+
         layout.addWidget(center_widget, 1)
 
         # RIGHT PANEL
@@ -152,7 +217,7 @@ class ExplorerTab(QtWidgets.QWidget):
         right_layout.addWidget(self.open_file_btn)
         right_layout.addWidget(self.sidebar)
         right_layout.addWidget(self.analysis_group)
-        right_layout.addWidget(self.y_controls)
+        # right_layout.addWidget(self.y_controls) # Removed, integrated into center grid
 
         layout.addWidget(right_widget, 0)
 
@@ -777,7 +842,13 @@ class ExplorerTab(QtWidgets.QWidget):
             # Derived from ViewBox
             cmin, cmax = new_range
             tmin, tmax = self.base_x_range
-
+            
+            # Avoid division by zero
+            total_span = tmax - tmin
+            if total_span <= 0: 
+                total_span = 1
+            
+            # 1. Update Sliders/Scrollbars values
             z, s = self._calculate_controls_from_range(cmin, cmax, tmin, tmax)
 
             # Block signals to prevent loop
@@ -787,10 +858,18 @@ class ExplorerTab(QtWidgets.QWidget):
 
             self.x_scrollbar.blockSignals(True)
             self.x_scrollbar.setValue(s)
+            
+            # 2. Update Page Step (Handle Size)
+            current_span = cmax - cmin
+            ratio = max(0.0, min(1.0, current_span / total_span))
+            page_step = int(ratio * 10000)
+            if page_step < 1: page_step = 1
+            self.x_scrollbar.setPageStep(page_step)
+            
             self.x_scrollbar.blockSignals(False)
 
-        except Exception:
-            pass
+        except Exception as e:
+            log.error(f"Error updating X controls: {e}")
         finally:
             self._updating_viewranges = False
 
@@ -817,9 +896,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                 # ALSO Update individual controls to match global
                 self.y_controls.set_individual_scrollbar(cid, scroll_val)
-                # Note: Assuming individual sliders should also sync?
-                # y_controls.set_individual_slider... (not impl accessing private widget, let's skip for now or add method)
-
+                
         finally:
             self._updating_viewranges = False
 
@@ -829,6 +906,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._updating_viewranges = True
         try:
             zoom_val = self.y_controls.global_y_slider.value()
+            log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
 
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
@@ -912,6 +990,10 @@ class ExplorerTab(QtWidgets.QWidget):
 
             tmin, tmax = base_range
             cmin, cmax = new_range
+            
+            # Avoid division by zero
+            total_span = tmax - tmin
+            if total_span <= 0: total_span = 1
 
             z, s = self._calculate_controls_from_range(cmin, cmax, tmin, tmax)
 
@@ -919,14 +1001,22 @@ class ExplorerTab(QtWidgets.QWidget):
             # We need to access YControls methods to set these without triggering signals if possible
             # But here we want to update the UI
             self.y_controls.set_individual_scrollbar(chan_id, s)
+            
+            # Update Page Step (Handle Size) for individual scrollbar?
+            current_span = cmax - cmin
+            ratio = max(0.0, min(1.0, current_span / total_span))
+            page_step = int(ratio * 10000)
+            if page_step < 1: page_step = 1
+            
+            sb = self.y_controls.individual_y_scrollbars.get(chan_id)
+            if sb:
+                sb.setPageStep(page_step)
 
             # If Locked, update Global too?
-            # Logic: If I pan ONE plot, and they are locked... strictly speaking I should pan ALL plots?
-            # Or does locking just mean the sliders control all?
-            # Usually locking means "force all to same". So if I interact with Plot A, Plot B should move.
-
             if self.y_controls.y_lock_checkbox.isChecked():
                 self.y_controls.set_global_scrollbar(s)
+                self.y_controls.global_y_scrollbar.setPageStep(page_step)
+                
                 self.y_controls.global_y_slider.blockSignals(True)
                 self.y_controls.global_y_slider.setValue(z)
                 self.y_controls.global_y_slider.blockSignals(False)
@@ -946,6 +1036,11 @@ class ExplorerTab(QtWidgets.QWidget):
                         other_plot.setYRange(nm, nM, padding=0)
                         # Also update their individual scrollbars
                         self.y_controls.set_individual_scrollbar(other_cid, s)
+                        
+                        # And page steps
+                        other_sb = self.y_controls.individual_y_scrollbars.get(other_cid)
+                        if other_sb:
+                            other_sb.setPageStep(page_step)
 
         except Exception as e:
             log.warning(f"Error syncing Y range: {e}")
