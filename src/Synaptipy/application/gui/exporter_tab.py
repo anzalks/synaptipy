@@ -999,6 +999,3 @@ class ExporterTab(QtWidgets.QWidget):
                     self, "Export Error", f"Failed to export analysis results to CSV. Check logs for details."
                 )
 
-        except Exception as e:
-            log.error(f"Error exporting analysis results to CSV: {e}", exc_info=True)
-            QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to export analysis results to CSV:\n{e}")

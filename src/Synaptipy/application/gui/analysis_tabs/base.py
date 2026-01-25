@@ -58,6 +58,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._settings = settings_ref
         self._analysis_items: List[Dict[str, Any]] = []  # Store the full list from AnalyserTab
         self._selected_item_index: int = -1
+
+        # Popup Management
+        self._popup_windows: List[QtWidgets.QWidget] = []
+        self._analysis_thread: Optional[QtCore.QThread] = None
+
+        # Data placeholders
         # Store the currently loaded recording corresponding to the selected item (if it's a 'Recording' type)
         self._selected_item_recording: Optional[Recording] = None
         # UI element for selecting the analysis item - REMOVED: Now centralized in parent AnalyserTab
@@ -631,18 +637,43 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         try:
-            from Synaptipy.application.gui.plot_save_dialog import save_plot_with_dialog
+            from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+            from Synaptipy.shared.plot_exporter import PlotExporter
+            from PySide6.QtWidgets import QFileDialog
+            from pathlib import Path
 
             # Generate default filename based on tab name
             default_filename = f"{self.__class__.__name__.lower().replace('tab', '')}_plot"
 
-            # Show save dialog and save plot
-            success = save_plot_with_dialog(self.plot_widget, parent=self, default_filename=default_filename)
+            # 1. Config Dialog
+            dialog = PlotExportDialog(self)
+            if dialog.exec():
+                settings = dialog.get_settings()
+                fmt = settings["format"]
+                dpi = settings["dpi"]
 
-            if success:
-                log.debug(f"[ANALYSIS-BASE] Plot saved successfully for {self.__class__.__name__}")
+                # 2. File Dialog
+                filename, _ = QFileDialog.getSaveFileName(
+                    self, "Save Plot", str(Path.home() / f"{default_filename}.{fmt}"), f"Images (*.{fmt})"
+                )
+
+                if filename:
+                    # 3. Export
+                    exporter = PlotExporter(
+                        recording=self._selected_item_recording,  # Can be None as wrapper is None
+                        plot_canvas_widget=self.plot_widget
+                    )
+                    
+                    success = exporter.export(filename, fmt, dpi)
+
+                    if success:
+                        log.debug(f"[ANALYSIS-BASE] Plot saved successfully for {self.__class__.__name__}")
+                        if hasattr(self, "status_label") and self.status_label:
+                            self.status_label.setText(f"Status: Plot saved to {Path(filename).name}")
+                    else:
+                        log.warning(f"[ANALYSIS-BASE] Plot save failed for {self.__class__.__name__}")
             else:
-                log.debug(f"[ANALYSIS-BASE] Plot save cancelled for {self.__class__.__name__}")
+                log.debug(f"[ANALYSIS-BASE] Plot save cancelled")
 
         except Exception as e:
             log.error(f"[ANALYSIS-BASE] Failed to save plot for {self.__class__.__name__}: {e}")

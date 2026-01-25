@@ -97,7 +97,6 @@ class AnalyserTab(QtWidgets.QWidget):
         self.splitter: Optional[QtWidgets.QSplitter] = None
 
         self._setup_ui()
-        self._restore_state()  # Restore splitter state
         self._load_analysis_tabs()
         # Connect the signal from SessionManager
         self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
@@ -517,7 +516,6 @@ class AnalyserTab(QtWidgets.QWidget):
     # --- Cleanup ---
     def cleanup(self):
         log.debug("Cleaning up main AnalyserTab and sub-tabs.")
-        self._save_state()  # Save splitter state
         for tab in self._loaded_analysis_tabs:
             try:
                 tab.cleanup()
@@ -526,22 +524,4 @@ class AnalyserTab(QtWidgets.QWidget):
         self._loaded_analysis_tabs = []
 
     # --- State Persistence ---
-    def _save_state(self):
-        """Save UI state (splitter position) to settings."""
-        if self._settings and self.splitter:
-            try:
-                self._settings.setValue("AnalyserTab/splitterState", self.splitter.saveState())
-                log.debug("Saved AnalyserTab splitter state.")
-            except Exception as e:
-                log.error(f"Failed to save AnalyserTab state: {e}")
-
-    def _restore_state(self):
-        """Restore UI state (splitter position) from settings."""
-        if self._settings and self.splitter:
-            try:
-                state = self._settings.value("AnalyserTab/splitterState")
-                if state:
-                    self.splitter.restoreState(state)
-                    log.debug("Restored AnalyserTab splitter state.")
-            except Exception as e:
-                log.error(f"Failed to restore AnalyserTab state: {e}")
+    # Methods removed as splitter is no longer used in this version of AnalyserTab
