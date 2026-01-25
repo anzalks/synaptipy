@@ -2,77 +2,128 @@
 
 **Electrophysiology Visualization & Analysis Suite**
 
+Synaptipy is a high-performance graphical user interface (GUI) designed for the visualization and analysis of electrophysiological data, specifically focusing on Patch Clamp and intracellular recordings. Built on Python and the Qt6 framework, it provides a robust, cross-platform solution for managing complex datasets and executing batch analysis pipelines.
 
+## Key Features
 
-Synaptipy is a modern, high-performance GUI application designed for visualizing and analyzing electrophysiological data (Patch Clamp, intracellular recordings). Built with Python and Qt6, it offers a seamless cross-platform experience with powerful batch processing capabilities.
+### Advanced Signal Visualization
+The application leverages hardware-accelerated plotting to handle high-frequency sampling data with minimal latency.
+- **High-Performance Rendering**: Capable of displaying traces with millions of data points at 60 fps using OpenGL-based rendering.
+- **Interactive Navigation**: Seamless zooming, panning, and scaling of waveforms.
+- **Multi-File Explorer**: A tree-based file management system that synchronizes with the analysis view, allowing for rapid dataset traversal.
 
-## 🚀 Key Features
+### Analysis Modules
+Synaptipy includes a comprehensive suite of analysis tools designed for neuronal characterization.
 
-### 📊 Advanced Visualization
+#### Spike Detection & Analysis
+Automated detection and parameterization of Action Potentials (APs).
+- **Detection Logic**: Configurable threshold-based detection with refractory period filtering.
+- **Metrics**: Calculates AP amplitude, half-width, rise time, decay time, and after-hyperpolarization (AHP).
 
-- **High-Performance Plotting**: Smoothly handle large datasets with interactive zoom and pan (60fps).
-- **Multi-File Explorer**: Navigate your data easily with a tree-based file explorer.
-- **Rich Analysis Modules**: Built-in tools for:
-    - **Phase Plane Analysis**: dV/dt vs V plots with cycle detection.
-    - **Spike Detection**: Automated AP detection with customizable thresholds.
-    - **Passive Properties**: Calculate RMP, Input Resistance (Rin), and Tau.
-    - **Event Detection**: Detect miniature events with template matching or thresholding.
+#### Burst Analysis
+Identification of firing bursts based on inter-spike intervals (ISI).
+- **Algorithms**: Implements standard burst detection algorithms (e.g., Poisson Surprise or max interval methods).
+- **Metrics**: Burst duration, spike count per burst, intra-burst frequency.
 
-### ⚡ Batch Processing System
+#### Intrinsic Properties
+Automated extraction of sub-threshold membrane properties.
+- **Resting Membrane Potential (RMP)**: Statistical calculation of baseline voltage.
+- **Input Resistance (Rin)**: Derived from voltage responses to hyperpolarizing current steps.
+- **Membrane Time Constant (Tau)**: Exponential fitting of the voltage decay.
 
-- **Automated Pipelines**: Create analysis pipelines to process hundreds of files automatically.
-- **Background Processing**: Heavy computations run in the background, keeping the UI responsive.
-- **Metadata Integration**: Automatically extract and use metadata for analysis grouping.
-- **Result Export**: One-click export to CSV for statistical analysis in Python/R/Matlab.
+#### Event Detection (Miniature Analysis)
+Detection of spontaneous synaptic events in voltage or current clamp.
+- **Methods**: Template matching and threshold-crossing detection algorithms.
+- **Filtering**: Integrated digital filters (Low-pass, High-pass, Notch) for signal conditioning prior to detection.
 
-## 🛠️ Installation
+#### Phase Plane Analysis
+Visualization of Action Potential dynamics in phase space.
+- **Plotting**: Generates dV/dt versus Voltage plots for analyzing initiation dynamics and threshold voltages.
 
-**Supported OS**: Windows, macOS, Linux
-**Prerequisites**: [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+### Batch Processing Engine
+A dedicated engine for processing large datasets without manual intervention.
+- **Pipeline Architecture**: Users can define sequential analysis steps (e.g., Filter -> Spike Detect -> Burst Analysis).
+- **Background Execution**: Analysis tasks run in separate threads to maintain GUI responsiveness.
+- **Metadata Handling**: Automatic extraction of recording metadata (Gain, Sampling Rate, DateTime) for structured results.
+- **Data Export**: Aggregated results are exported to CSV formats compatible with statistical software (Python/Pandas, R, MATLAB).
 
-The recommended installation method uses `pip` inside a `conda` environment to ensure maximum compatibility.
+## Technical Architecture
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/anzalks/synaptipy.git
-cd synaptipy
+Synaptipy adheres to a strict "Separation of Concerns" architecture for maintainability and scientific accuracy.
 
-# 2. Create the environment (installs system deps)
-conda env create -f environment.yml
+- **Core Layer**: Contains pure Python logic for signal processing and analysis. It is strictly decoupled from the GUI, ensuring that analysis algorithms can be tested and verified independently.
+- **Application Layer**: Manages the PySide6 (Qt6) based user interface, handling user interactions and visualization state.
+- **Infrastructure Layer**: Handles file I/O operations using the Neo and PyNWB libraries, ensuring broad compatibility with electrophysiology file formats (ABF, NWB, etc.).
 
-# 3. Activate the environment
-conda activate synaptipy
+| Component | Technology | Version Requirement |
+|-----------|------------|---------------------|
+| **Language** | Python | 3.11+ |
+| **GUI Framework** | PySide6 | >= 6.7.0 |
+| **Plotting Engine** | PyQtGraph | >= 0.13.0 |
+| **Data Standard** | Neo / PyNWB | >= 0.14.0 / >= 3.1.0 |
+| **Computation** | SciPy / NumPy | >= 1.13.0 / >= 2.0.0 |
 
-# 4. Install the application (use ".[dev]" for development tools like flake8)
-pip install -e ".[dev]"
-```
+## Installation
 
-### Quick Verification
-Run the test suite to ensure everything is set up correctly:
+Synaptipy is compatible with Windows, macOS, and Linux. The implementation relies on `conda` for environment management to handle system-level dependencies efficiently.
+
+### Prerequisites
+- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+
+### Setup Instructions
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/anzalks/synaptipy.git
+   cd synaptipy
+   ```
+
+2. **Create the Environment**
+   This step installs Python and all required system dependencies defined in `environment.yml`.
+   ```bash
+   conda env create -f environment.yml
+   ```
+
+3. **Activate the Environment**
+   ```bash
+   conda activate synaptipy
+   ```
+
+4. **Install the Application**
+   Install the package in editable mode to allow for local development.
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+### Verification
+To verify the installation, execute the comprehensive test suite:
 ```bash
 python -m pytest
 ```
 
-## 🖥️ Usage
+## Usage
 
-### Running the Application
+### Graphical Interface
+Launch the main application window:
 ```bash
 synaptipy-gui
-# OR
+```
+Alternatively, run the module directly:
+```bash
 python -m Synaptipy.application
 ```
 
-### Batch Analysis Example
-You can also run analyses programmatically:
+### Programmatic Analysis
+The core analysis engine can be utilized in scripts for headless processing:
 
 ```python
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from pathlib import Path
 
-# Initialize Engine
+# Initialize the Analysis Engine
 engine = BatchAnalysisEngine()
 
-# Define Pipeline
+# Define an Analysis Pipeline
 pipeline = [
     {
         'analysis': 'spike_detection',
@@ -81,28 +132,19 @@ pipeline = [
     }
 ]
 
-# Run
-results = engine.run_batch([Path("data/file1.abf")], pipeline)
+# Execute on Data Files
+file_path = Path("data/example_recording.abf")
+results = engine.run_batch([file_path], pipeline)
 print(results)
 ```
 
-## 📦 Tech Stack
+## Contributing
 
-| Component | Technology | Description |
-|-----------|------------|-------------|
-| **Core** | Python 3.11 | Logic and Computation |
-| **GUI** | PySide6 (>= 6.7.0) | Modern Qt6 Framework |
-| **Plotting** | PyQtGraph (>= 0.13.0) | High-performance plotting |
-| **Data** | Neo (>= 0.14.0) / PyNWB (>= 3.1.0) | Electrophysiology Standards |
-| **Analysis** | SciPy (>= 1.13.0) / NumPy (>= 2.0.0) | Scientific Computing |
+Contributions are welcome. Please refer to the documentation in the `docs/` directory for development standards. Use the `rules.md` file as the authoritative source for architectural compliance and code style.
 
-## 🤝 Contributing
+## License
 
-We welcome contributions! Please check the [Developer Guide](docs/developer_guide.md) for details on setting up your dev environment and the [Styling Guide](docs/development/styling_guide.md) for UI consistency.
-
-## 📄 License
-
-This project is licensed under the GNU Affero General Public License v3 (AGPLv3) - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for complete details.
 
 ---
-**Made with ❤️ by the Synaptipy Team**
+**Synaptipy Development Team**
