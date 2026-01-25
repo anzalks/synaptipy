@@ -1,4 +1,5 @@
 """Placeholder for event detection logic (e.g., spike detection)."""
+
 # Implement functions or classes for detecting events in Channel data.
 # Example:
 # import numpy as np

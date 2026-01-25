@@ -97,6 +97,7 @@ All analysis features must be split into two distinct parts:
 * **Qt Mocking**: Use `pytest-qt` fixtures (`qtbot`) for all GUI interactions in tests. Do not use `time.sleep()`; use `qtbot.wait()`.
 
 **4. Dependency Management**
+* **Lockfile Integrity**: If you import a new third-party library, you **MUST** explicitly tell the user to add it to `requirements.txt`.
 * *Reason*: The CI pipeline installs dependencies strictly from `requirements.txt`. If you skip this, the build fails.
 
 ## V. DOCUMENTATION & PROFESSIONALISM
