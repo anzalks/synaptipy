@@ -7,7 +7,7 @@ Contains the Left Panel widgets: Display Options, Manual Limits, Channel List, F
 import logging
 from typing import Dict, Any, Optional, Tuple
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 from Synaptipy.core.data_model import Recording
 from Synaptipy.shared.constants import APP_NAME
 
@@ -27,9 +27,9 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     clear_avg_selection_clicked = QtCore.Signal()
     show_selected_avg_toggled = QtCore.Signal(bool)
 
-    # Manual Limits signals
-    manual_limits_toggled = QtCore.Signal(bool)
-    set_manual_limits_clicked = QtCore.Signal(dict)  # Returns limits dict
+    # Trial Selection signals
+    trial_selection_requested = QtCore.Signal(int)
+    trial_selection_reset_requested = QtCore.Signal()
 
     # Channel signals
     channel_visibility_changed = QtCore.Signal(str, bool)
@@ -41,9 +41,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
-        self.manual_limit_edits: Dict[str, Dict[str, QtWidgets.QLineEdit]] = {}
-        self.manual_x_edits: Dict[str, QtWidgets.QLineEdit] = {}
-
+        
         self._setup_ui()
 
     def _setup_ui(self):
@@ -54,8 +52,8 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         # 1. Display Options
         self._setup_display_options(layout)
 
-        # 2. Manual Limits
-        self._setup_manual_limits(layout)
+        # 2. Trial Selection (Replaces Manual Limits)
+        self._setup_trial_selection(layout)
 
         # 3. Channels
         self._setup_channel_list(layout)
@@ -114,52 +112,32 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
 
         parent_layout.addWidget(group)
 
-    def _setup_manual_limits(self, parent_layout):
-        self.manual_limits_group = QtWidgets.QGroupBox("Manual Plot Limits")
-        layout = QtWidgets.QVBoxLayout(self.manual_limits_group)
+    def _setup_trial_selection(self, parent_layout):
+        group = QtWidgets.QGroupBox("Plot Selected Trials")
+        layout = QtWidgets.QVBoxLayout(group)
+        layout.setSpacing(10)
 
-        self.enable_limits_cb = QtWidgets.QCheckBox("Enable Manual Limits")
-        self.enable_limits_cb.toggled.connect(self._on_limits_toggled)
-        layout.addWidget(self.enable_limits_cb)
+        # Input Row
+        in_layout = QtWidgets.QHBoxLayout()
+        in_layout.addWidget(QtWidgets.QLabel("Every Nth Trial:"))
+        self.nth_trial_input = QtWidgets.QLineEdit()
+        self.nth_trial_input.setPlaceholderText("e.g. 2, 5")
+        self.nth_trial_input.setValidator(QtGui.QIntValidator(1, 9999))
+        in_layout.addWidget(self.nth_trial_input)
+        layout.addLayout(in_layout)
 
-        # Shared X
-        grid = QtWidgets.QGridLayout()
-        grid.addWidget(QtWidgets.QLabel("X Min:"), 0, 0)
-        self.xmin_edit = QtWidgets.QLineEdit()
-        self.xmin_edit.setPlaceholderText("Auto")
-        self.xmin_edit.setEnabled(False)
-        grid.addWidget(self.xmin_edit, 0, 1)
+        # Buttons
+        self.plot_selected_btn = QtWidgets.QPushButton("Plot Selected")
+        self.plot_selected_btn.clicked.connect(self._on_plot_selected_clicked)
+        self.plot_selected_btn.setToolTip("Filter trials to show only every Nth trial.")
+        layout.addWidget(self.plot_selected_btn)
 
-        grid.addWidget(QtWidgets.QLabel("X Max:"), 1, 0)
-        self.xmax_edit = QtWidgets.QLineEdit()
-        self.xmax_edit.setPlaceholderText("Auto")
-        self.xmax_edit.setEnabled(False)
-        grid.addWidget(self.xmax_edit, 1, 1)
+        self.reset_selection_btn = QtWidgets.QPushButton("Reset Trial Selection")
+        self.reset_selection_btn.clicked.connect(self.trial_selection_reset_requested.emit)
+        self.reset_selection_btn.setToolTip("Reset to show all trials (raw data).")
+        layout.addWidget(self.reset_selection_btn)
 
-        self.manual_x_edits = {"min": self.xmin_edit, "max": self.xmax_edit}
-
-        layout.addLayout(grid)
-        layout.addWidget(QtWidgets.QLabel("Y Limits:"))
-
-        # Scroll Area for Channels
-        self.y_limits_scroll = QtWidgets.QScrollArea()
-        self.y_limits_scroll.setWidgetResizable(True)
-        self.y_limits_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.y_limits_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self.y_limits_widget = QtWidgets.QWidget()
-        self.y_limits_layout = QtWidgets.QVBoxLayout(self.y_limits_widget)
-        self.y_limits_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-
-        self.y_limits_scroll.setWidget(self.y_limits_widget)
-        layout.addWidget(self.y_limits_scroll)
-
-        # Set Button
-        self.set_limits_btn = QtWidgets.QPushButton("Set Manual Limits from Fields")
-        self.set_limits_btn.clicked.connect(self._collect_and_emit_limits)
-        layout.addWidget(self.set_limits_btn)
-
-        parent_layout.addWidget(self.manual_limits_group)
+        parent_layout.addWidget(group)
 
     def _setup_channel_list(self, parent_layout):
         self.channel_group = QtWidgets.QGroupBox("Channels")
@@ -193,7 +171,6 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         parent_layout.addWidget(group)
 
     def rebuild(self, recording: Optional[Recording]):
-        self._rebuild_manual_limits(recording)
         self._rebuild_channel_list(recording)
 
         if recording:
@@ -210,53 +187,6 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
             self.lbl_rate.setText("N/A")
             self.lbl_duration.setText("N/A")
             self.lbl_channels.setText("N/A")
-
-    def _rebuild_manual_limits(self, recording):
-        # Clear
-        while self.y_limits_layout.count():
-            item = self.y_limits_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self.manual_limit_edits.clear()
-
-        if not recording:
-            self.y_limits_layout.addWidget(QtWidgets.QLabel("Load data..."))
-            return
-
-        # Rebuild
-        sorted_chans = sorted(recording.channels.items(), key=lambda x: str(x[0]))
-        first = True
-
-        for cid, chan in sorted_chans:
-            if not first:
-                sep = QtWidgets.QFrame()
-                sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-                self.y_limits_layout.addWidget(sep)
-            first = False
-
-            self.y_limits_layout.addWidget(QtWidgets.QLabel(f"{chan.name or cid}:"))
-            grid_w = QtWidgets.QWidget()
-            grid = QtWidgets.QGridLayout(grid_w)
-            grid.setContentsMargins(0, 0, 0, 0)
-
-            grid.addWidget(QtWidgets.QLabel("Y Min:"), 0, 0)
-            grid.addWidget(QtWidgets.QLabel("Y Max:"), 0, 1)
-
-            ymin = QtWidgets.QLineEdit()
-            ymin.setPlaceholderText("Auto")
-            ymax = QtWidgets.QLineEdit()
-            ymax.setPlaceholderText("Auto")
-
-            # Use current enabled state
-            enabled = self.enable_limits_cb.isChecked()
-            ymin.setEnabled(enabled)
-            ymax.setEnabled(enabled)
-
-            grid.addWidget(ymin, 1, 0)
-            grid.addWidget(ymax, 1, 1)
-
-            self.manual_limit_edits[cid] = {"ymin": ymin, "ymax": ymax}
-            self.y_limits_layout.addWidget(grid_w)
 
     def _rebuild_channel_list(self, recording):
         # Clear
@@ -278,21 +208,17 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
             self.channel_list_layout.addWidget(cb)
             self.channel_checkboxes[cid] = cb
 
-    def _on_limits_toggled(self, checked):
-        state = checked
-        self.xmin_edit.setEnabled(state)
-        self.xmax_edit.setEnabled(state)
-        for d in self.manual_limit_edits.values():
-            d["ymin"].setEnabled(state)
-            d["ymax"].setEnabled(state)
-        self.manual_limits_toggled.emit(state)
-
-    def _collect_and_emit_limits(self):
-        # Collect values
-        limits = {"x_min": self.xmin_edit.text(), "x_max": self.xmax_edit.text(), "channels": {}}
-        for cid, edits in self.manual_limit_edits.items():
-            limits["channels"][cid] = {"y_min": edits["ymin"].text(), "y_max": edits["ymax"].text()}
-        self.set_manual_limits_clicked.emit(limits)
+    def _on_plot_selected_clicked(self):
+        text = self.nth_trial_input.text().strip()
+        if not text:
+            return
+        
+        try:
+            n = int(text)
+            if n > 0:
+                self.trial_selection_requested.emit(n)
+        except ValueError:
+            pass  # Validator should prevent this but just in case
 
     def _update_visibility(self):
         # Toggle buttons based on mode if needed
