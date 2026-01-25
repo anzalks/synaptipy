@@ -12,6 +12,7 @@ from PySide6 import QtCore
 
 log = logging.getLogger(__name__)
 
+
 class WorkerSignals(QtCore.QObject):
     """
     Defines the signals available from a running worker thread.
@@ -23,9 +24,11 @@ class WorkerSignals(QtCore.QObject):
     result
         object data returned from processing, anything
     """
+
     finished = QtCore.Signal()
     error = QtCore.Signal(tuple)
     result = QtCore.Signal(object)
+
 
 class AnalysisWorker(QtCore.QRunnable):
     """

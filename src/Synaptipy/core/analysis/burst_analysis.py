@@ -12,81 +12,78 @@ from Synaptipy.core.results import BurstResult
 
 log = logging.getLogger(__name__)
 
+
 def calculate_bursts_logic(
-    spike_times: np.ndarray,
-    max_isi_start: float = 0.01,
-    max_isi_end: float = 0.2,
-    min_spikes: int = 2
+    spike_times: np.ndarray, max_isi_start: float = 0.01, max_isi_end: float = 0.2, min_spikes: int = 2
 ) -> BurstResult:
     """
     Detects bursts in a spike train (Pure Logic).
-    
+
     Args:
         spike_times: 1D array of spike times (seconds).
         max_isi_start: Max ISI to start a burst (seconds).
         max_isi_end: Max ISI to continue a burst (seconds).
         min_spikes: Minimum number of spikes to constitute a burst.
-        
+
     Returns:
         BurstResult object
     """
     if spike_times is None or len(spike_times) < min_spikes:
         return BurstResult(
-            value=0, unit='bursts', is_valid=True,
+            value=0,
+            unit="bursts",
+            is_valid=True,
             burst_count=0,
             spikes_per_burst_avg=0.0,
             burst_duration_avg=0.0,
             burst_freq_hz=0.0,
-            bursts=[]
+            bursts=[],
         )
-        
+
     isis = np.diff(spike_times)
     bursts = []
     current_burst = []
-    
+
     in_burst = False
-    
+
     for i, isi in enumerate(isis):
         if not in_burst:
             if isi <= max_isi_start:
                 in_burst = True
-                current_burst = [spike_times[i], spike_times[i+1]]
+                current_burst = [spike_times[i], spike_times[i + 1]]
         else:
             if isi <= max_isi_end:
-                current_burst.append(spike_times[i+1])
+                current_burst.append(spike_times[i + 1])
             else:
                 in_burst = False
                 if len(current_burst) >= min_spikes:
                     bursts.append(current_burst)
                 current_burst = []
-                
+
     # Check if last burst was valid
     if in_burst and len(current_burst) >= min_spikes:
         bursts.append(current_burst)
-        
+
     # Calculate stats
     num_bursts = len(bursts)
     if num_bursts == 0:
-        return BurstResult(
-            value=0, unit='bursts', is_valid=True,
-            burst_count=0, bursts=[]
-        )
-        
+        return BurstResult(value=0, unit="bursts", is_valid=True, burst_count=0, bursts=[])
+
     spikes_per_burst = [len(b) for b in bursts]
     burst_durations = [b[-1] - b[0] for b in bursts]
-    
+
     duration = spike_times[-1] - spike_times[0] if len(spike_times) > 0 else 0
     burst_freq = num_bursts / duration if duration > 0 else 0.0
-    
+
     return BurstResult(
         value=num_bursts,
-        unit='bursts',
+        unit="bursts",
         is_valid=True,
         burst_count=num_bursts,
         spikes_per_burst_avg=np.mean(spikes_per_burst),
         burst_duration_avg=np.mean(burst_durations),
         burst_freq_hz=burst_freq,
-        bursts=bursts
+        bursts=bursts,
     )
 
 
@@ -97,28 +94,24 @@ def analyze_spikes_and_bursts(
     threshold: float,
     max_isi_start: float,
     max_isi_end: float,
-    refractory_ms: float = 2.0
+    refractory_ms: float = 2.0,
 ) -> BurstResult:
     """
     Orchestration: Detects spikes then detects bursts.
     """
     refractory_samples = int((refractory_ms / 1000.0) * sampling_rate)
-    
+
     spike_result = detect_spikes_threshold(data, time, threshold, refractory_samples)
-    
+
     if not spike_result.is_valid:
-        res = BurstResult(value=0, unit='bursts', is_valid=False, error_message=spike_result.error_message)
+        res = BurstResult(value=0, unit="bursts", is_valid=False, error_message=spike_result.error_message)
         # Propagate error
         return res
-        
-    if spike_result.spike_times is None:
-         return BurstResult(value=0, unit='bursts', is_valid=True, burst_count=0, bursts=[])
 
-    return calculate_bursts_logic(
-        spike_result.spike_times,
-        max_isi_start=max_isi_start,
-        max_isi_end=max_isi_end
-    )
+    if spike_result.spike_times is None:
+        return BurstResult(value=0, unit="bursts", is_valid=True, burst_count=0, bursts=[])
+
+    return calculate_bursts_logic(spike_result.spike_times, max_isi_start=max_isi_start, max_isi_end=max_isi_end)
 
 
 @AnalysisRegistry.register(
@@ -131,7 +124,7 @@ def analyze_spikes_and_bursts(
             "default": -20.0,
             "min": -1e9,
             "max": 1e9,
-            "decimals": 4
+            "decimals": 4,
         },
         {
             "name": "max_isi_start",
@@ -140,7 +133,7 @@ def analyze_spikes_and_bursts(
             "default": 0.01,
             "min": 0.0,
             "max": 1e9,
-            "decimals": 4
+            "decimals": 4,
         },
         {
             "name": "max_isi_end",
@@ -149,24 +142,19 @@ def analyze_spikes_and_bursts(
             "default": 0.1,
             "min": 0.0,
             "max": 1e9,
-            "decimals": 4
-        }
-    ]
+            "decimals": 4,
+        },
+    ],
 )
-def run_burst_analysis_wrapper(
-    data: np.ndarray,
-    time: np.ndarray,
-    sampling_rate: float,
-    **kwargs
-) -> Dict[str, Any]:
+def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
     Wrapper for Burst Analysis.
     """
     # 1. Extract params (Wrapper Logic)
-    threshold = kwargs.get('threshold', -20.0) 
-    max_isi_start = kwargs.get('max_isi_start', 0.01)
-    max_isi_end = kwargs.get('max_isi_end', 0.1)
-    
+    threshold = kwargs.get("threshold", -20.0)
+    max_isi_start = kwargs.get("max_isi_start", 0.01)
+    max_isi_end = kwargs.get("max_isi_end", 0.1)
+
     # 2. Call Core Logic (Orchestrator)
     result = analyze_spikes_and_bursts(
         data=data,
@@ -174,19 +162,19 @@ def run_burst_analysis_wrapper(
         sampling_rate=sampling_rate,
         threshold=threshold,
         max_isi_start=max_isi_start,
-        max_isi_end=max_isi_end
+        max_isi_end=max_isi_end,
     )
-    
+
     # 3. Flattener (Result -> Dict)
     if not result.is_valid:
-        return {'burst_error': result.error_message}
+        return {"burst_error": result.error_message}
 
     return {
-        'burst_count': result.burst_count,
-        'spikes_per_burst_avg': result.spikes_per_burst_avg,
-        'burst_duration_avg': result.burst_duration_avg,
-        'burst_freq_hz': result.burst_freq_hz,
-        'bursts': result.bursts,
+        "burst_count": result.burst_count,
+        "spikes_per_burst_avg": result.spikes_per_burst_avg,
+        "burst_duration_avg": result.burst_duration_avg,
+        "burst_freq_hz": result.burst_freq_hz,
+        "bursts": result.bursts,
         # Pass the full object if GUI needs it for advanced visualization
-        'result': result 
+        "result": result,
     }

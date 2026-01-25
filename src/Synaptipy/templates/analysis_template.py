@@ -11,6 +11,7 @@ from Synaptipy.core.results import AnalysisResult  # Ensure this or specific Res
 
 log = logging.getLogger(__name__)  # Rule: Dynamic Logger
 
+
 # --- PART 1: PURE LOGIC (The Core) ---
 # Rule: Must return a Typed Object (AnalysisResult subclass), not a dict.
 # Rule: No **kwargs. Explicit arguments only.
@@ -20,22 +21,19 @@ def calculate_metric_logic(data: np.ndarray, sampling_rate: float, threshold: fl
     Returns a typed Result object.
     """
     if data.size == 0:
-        return AnalysisResult(value=None, unit='Hz', is_valid=False, error_message="Empty Data")
-    
+        return AnalysisResult(value=None, unit="Hz", is_valid=False, error_message="Empty Data")
+
     # ... perform math ...
     result_value = np.mean(data) > threshold
-    
-    return AnalysisResult(value=result_value, unit='Hz', is_valid=True)
+
+    return AnalysisResult(value=result_value, unit="Hz", is_valid=True)
+
 
 # --- PART 2: THE WRAPPER (The Bridge) ---
 # Rule: Decorated with Registry
 # Rule: Returns Dict[str, Any] for GUI
 @AnalysisRegistry.register(
-    name="template_metric",
-    label="Template Metric",
-    ui_params=[
-        {"name": "threshold", "type": "float", "default": 1.0}
-    ]
+    name="template_metric", label="Template Metric", ui_params=[{"name": "threshold", "type": "float", "default": 1.0}]
 )
 def run_metric_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
@@ -44,18 +42,18 @@ def run_metric_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float,
     """
     # Rule: Extract params with .get() to avoid hardcoding defaults.
     # Pass 'None' if missing to let Core Logic apply scientific defaults.
-    threshold = kwargs.get('threshold', None) 
-    
+    threshold = kwargs.get("threshold", None)
+
     # Rule: Call the logic function
     result = calculate_metric_logic(data, sampling_rate, threshold=threshold)
-    
+
     # Rule: Handle invalid results gracefully
     if not result.is_valid:
-        return {'error': result.error_message}
+        return {"error": result.error_message}
 
     # Rule: Flatten result for GUI consumption
     return {
-        'value': result.value,
-        'unit': result.unit,
+        "value": result.value,
+        "unit": result.unit,
         # Add other scalar metrics here
     }

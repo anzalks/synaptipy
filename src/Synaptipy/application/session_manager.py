@@ -10,18 +10,20 @@ from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
 
+
 class SessionManager(QObject):
     """
     Singleton class to manage the global state of the application.
     Holds the current recording, selected analysis items, and global settings.
     """
+
     _instance = None
 
     # Signals
     current_recording_changed = Signal(object)  # Emits Recording object or None
-    selected_analysis_items_changed = Signal(list) # Emits List[Dict[str, Any]]
-    global_settings_changed = Signal(dict) # Emits Dict[str, Any]
-    file_context_changed = Signal(list, int) # Emits file_list, current_index
+    selected_analysis_items_changed = Signal(list)  # Emits List[Dict[str, Any]]
+    global_settings_changed = Signal(dict)  # Emits Dict[str, Any]
+    file_context_changed = Signal(list, int)  # Emits file_list, current_index
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -30,7 +32,7 @@ class SessionManager(QObject):
 
     def __init__(self):
         # Only initialize once
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
         super().__init__()
         self._current_recording: Optional[Recording] = None
@@ -94,4 +96,3 @@ class SessionManager(QObject):
     @property
     def current_file_index(self) -> int:
         return self._current_file_index
-

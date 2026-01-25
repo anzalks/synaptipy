@@ -12,24 +12,27 @@ from PySide6 import QtWidgets, QtCore
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-import Synaptipy.core.analysis.excitability # Ensure registration
+import Synaptipy.core.analysis.excitability  # Ensure registration
 
 log = logging.getLogger(__name__)
+
 
 class ExcitabilityTab(MetadataDrivenAnalysisTab):
     """
     Tab for Excitability Analysis.
     Visualizes F-I Curve (Frequency vs Current) in a popup window.
     """
-    
+
     def __init__(self, neo_adapter: NeoAdapter, settings_ref=None, parent=None):
         # Popup plot items
         self.popup_plot = None
         self.fi_curve = None
         self.slope_line = None
         self.rheobase_marker = None
-        
-        super().__init__(analysis_name="excitability_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
+
+        super().__init__(
+            analysis_name="excitability_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent
+        )
 
     def get_display_name(self) -> str:
         return "Excitability Analysis"
@@ -46,36 +49,40 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
         """
         Visualize Excitability results (F-I Curve).
         """
-        if isinstance(results, dict) and 'result' in results:
-             result_data = results['result']
+        if isinstance(results, dict) and "result" in results:
+            result_data = results["result"]
         else:
-             result_data = results
-             
-        if not isinstance(result_data, dict):
-            return
+            result_data = results
 
         if not isinstance(result_data, dict):
             return
 
-        # Extract data        
-        currents = result_data.get('current_steps')
-        freqs = result_data.get('frequencies')
-        
+        if not isinstance(result_data, dict):
+            return
+
+        # Extract data
+        currents = result_data.get("current_steps")
+        freqs = result_data.get("frequencies")
+
         # Create popup if needed
         if self.popup_plot is None:
             self.popup_plot = self.create_popup_plot("F-I Curve", "Current (pA)", "Frequency (Hz)")
-            self.fi_curve = self.popup_plot.plot(pen='b', symbol='o', name="F-I Curve")
-            self.slope_line = self.popup_plot.plot(pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine), name="Slope Fit")
-            self.rheobase_marker = self.popup_plot.plot(pen=None, symbol='t', symbolBrush='g', symbolSize=12, name="Rheobase")
+            self.fi_curve = self.popup_plot.plot(pen="b", symbol="o", name="F-I Curve")
+            self.slope_line = self.popup_plot.plot(
+                pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine), name="Slope Fit"
+            )
+            self.rheobase_marker = self.popup_plot.plot(
+                pen=None, symbol="t", symbolBrush="g", symbolSize=12, name="Rheobase"
+            )
 
         # Plot Data
         if currents is not None and freqs is not None:
             self.fi_curve.setData(currents, freqs)
-            
+
             # Plot Slope Line
-            slope = result_data.get('fi_slope')
-            rheobase = result_data.get('rheobase_pa')
-            
+            slope = result_data.get("fi_slope")
+            rheobase = result_data.get("rheobase_pa")
+
             if slope is not None and rheobase is not None and slope > 0:
                 # Plot line from rheobase to max current
                 max_curr = max(currents)
@@ -85,10 +92,11 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
                 # We can estimate it or just plot a line starting from rheobase (approx 0 Hz or first spike freq).
                 # Ideally wrapper should return intercept too.
                 # For now, let's just mark Rheobase.
-                self.rheobase_marker.setData([rheobase], [0]) # Plot at 0 Hz for visibility
+                self.rheobase_marker.setData([rheobase], [0])  # Plot at 0 Hz for visibility
             else:
                 self.rheobase_marker.setData([], [])
                 self.slope_line.setData([], [])
+
 
 # Export the class for dynamic loading
 ANALYSIS_TAB_CLASS = ExcitabilityTab

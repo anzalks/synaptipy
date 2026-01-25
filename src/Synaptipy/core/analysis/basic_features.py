@@ -11,6 +11,7 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
+
 def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[float, float]) -> RmpResult:
     """
     Calculates the Resting Membrane Potential (RMP) from a defined baseline window.
@@ -30,36 +31,36 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
         log.warning("calculate_rmp: Time and data array shapes mismatch.")
         return RmpResult(value=None, unit="mV", is_valid=False, error_message="Time and data mismatch")
     if not isinstance(baseline_window, tuple) or len(baseline_window) != 2:
-         log.warning("calculate_rmp: baseline_window must be a tuple of (start, end).")
-         return RmpResult(value=None, unit="mV", is_valid=False, error_message="Invalid baseline window format")
+        log.warning("calculate_rmp: baseline_window must be a tuple of (start, end).")
+        return RmpResult(value=None, unit="mV", is_valid=False, error_message="Invalid baseline window format")
 
     start_t, end_t = baseline_window
     if not (isinstance(start_t, (int, float)) and isinstance(end_t, (int, float))):
-         log.warning("calculate_rmp: baseline_window times must be numeric.")
-         return RmpResult(value=None, unit="mV", is_valid=False, error_message="Non-numeric window times")
+        log.warning("calculate_rmp: baseline_window times must be numeric.")
+        return RmpResult(value=None, unit="mV", is_valid=False, error_message="Non-numeric window times")
     if start_t >= end_t:
-         log.warning(f"calculate_rmp: Baseline start time ({start_t}) >= end time ({end_t}).")
-         return RmpResult(value=None, unit="mV", is_valid=False, error_message="Start time >= End time")
+        log.warning(f"calculate_rmp: Baseline start time ({start_t}) >= end time ({end_t}).")
+        return RmpResult(value=None, unit="mV", is_valid=False, error_message="Start time >= End time")
 
     try:
         # Find indices corresponding to the time window
-        start_idx = np.searchsorted(time, start_t, side='left')
-        end_idx = np.searchsorted(time, end_t, side='right') # Use 'right' to include endpoint if exact match
+        start_idx = np.searchsorted(time, start_t, side="left")
+        end_idx = np.searchsorted(time, end_t, side="right")  # Use 'right' to include endpoint if exact match
 
         if start_idx >= end_idx:
-             log.warning(f"calculate_rmp: No data points found in baseline window {baseline_window}s.")
-             return RmpResult(value=None, unit="mV", is_valid=False, error_message="No data in window")
+            log.warning(f"calculate_rmp: No data points found in baseline window {baseline_window}s.")
+            return RmpResult(value=None, unit="mV", is_valid=False, error_message="No data in window")
 
         baseline_data = data[start_idx:end_idx]
 
         if baseline_data.size == 0:
-             log.warning(f"calculate_rmp: Baseline data slice is empty for window {baseline_window}s.")
-             return RmpResult(value=None, unit="mV", is_valid=False, error_message="Empty data slice")
+            log.warning(f"calculate_rmp: Baseline data slice is empty for window {baseline_window}s.")
+            return RmpResult(value=None, unit="mV", is_valid=False, error_message="Empty data slice")
 
         rmp = np.mean(baseline_data)
         std_dev = np.std(baseline_data)
         duration = end_t - start_t
-        
+
         # Calculate drift (linear regression slope)
         try:
             # Use time relative to start of window for stability
@@ -74,34 +75,32 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
             unit="mV",
             std_dev=float(std_dev),
             drift=float(slope) if slope is not None else None,
-            duration=duration
+            duration=duration,
         )
 
     except IndexError as e:
-         log.error(f"calculate_rmp: Indexing error: {e}")
-         return RmpResult(value=None, unit="mV", is_valid=False, error_message=str(e))
+        log.error(f"calculate_rmp: Indexing error: {e}")
+        return RmpResult(value=None, unit="mV", is_valid=False, error_message=str(e))
     except Exception as e:
         log.error(f"Error during RMP calculation: {e}", exc_info=True)
         return RmpResult(value=None, unit="mV", is_valid=False, error_message=str(e))
 
+
 def calculate_baseline_stats(
-    time: np.ndarray,
-    voltage: np.ndarray,
-    start_time: float,
-    end_time: float
+    time: np.ndarray, voltage: np.ndarray, start_time: float, end_time: float
 ) -> Optional[Tuple[float, float]]:
     """
     Calculates baseline statistics (mean and standard deviation) from a time window.
-    
+
     This is a convenience function that provides a simple tuple return format
     for compatibility with existing code.
-    
+
     Args:
         time: 1D NumPy array of corresponding time points (seconds).
         voltage: 1D NumPy array of voltage data.
         start_time: Start time of the baseline window (seconds).
         end_time: End time of the baseline window (seconds).
-    
+
     Returns:
         Tuple of (mean, std_dev) if successful, None otherwise.
     """
@@ -110,11 +109,9 @@ def calculate_baseline_stats(
         return (result.value, result.std_dev if result.std_dev is not None else 0.0)
     return None
 
+
 def find_stable_baseline(
-    data: np.ndarray, 
-    sample_rate: float,
-    window_duration_s: float = 0.5,
-    step_duration_s: float = 0.1
+    data: np.ndarray, sample_rate: float, window_duration_s: float = 0.5, step_duration_s: float = 0.1
 ) -> Tuple[Optional[float], Optional[float], Optional[Tuple[float, float]]]:
     """
     Finds the most stable baseline segment based on minimum variance.
@@ -142,7 +139,7 @@ def find_stable_baseline(
         log.warning(f"Baseline window ({window_samples}) or step ({step_samples}) too small. Adjust parameters.")
         window_samples = max(2, window_samples)
         step_samples = max(1, step_samples)
-       
+
     if window_samples >= n_points:
         # log.warning("Baseline window duration >= data length. Using full trace.")
         segment_data = data
@@ -155,7 +152,7 @@ def find_stable_baseline(
     best_mean = None
     best_sd = None
 
-    # Limit search for very long traces to avoid freezing? 
+    # Limit search for very long traces to avoid freezing?
     # For now, full search is fine for typical traces.
     for i in range(0, n_points - window_samples + 1, step_samples):
         segment = data[i : i + window_samples]
@@ -165,13 +162,13 @@ def find_stable_baseline(
             best_start_idx = i
             best_mean = np.mean(segment)
             best_sd = np.sqrt(variance)
-           
+
     if best_start_idx is None:
-         return None, None, None
-        
+        return None, None, None
+
     start_time = best_start_idx / sample_rate
     end_time = (best_start_idx + window_samples) / sample_rate
-    
+
     return best_mean, best_sd, (start_time, end_time)
 
 
@@ -187,7 +184,7 @@ def find_stable_baseline(
             "default": 0.0,
             "min": 0.0,
             "max": 1e9,
-            "decimals": 4
+            "decimals": 4,
         },
         {
             "name": "baseline_end",
@@ -196,14 +193,9 @@ def find_stable_baseline(
             "default": 0.1,
             "min": 0.0,
             "max": 1e9,
-            "decimals": 4
+            "decimals": 4,
         },
-        {
-            "name": "auto_detect",
-            "label": "Auto-Detect Stable Segment",
-            "type": "bool",
-            "default": False
-        },
+        {"name": "auto_detect", "label": "Auto-Detect Stable Segment", "type": "bool", "default": False},
         {
             "name": "window_duration",
             "label": "Auto Window (s):",
@@ -211,30 +203,25 @@ def find_stable_baseline(
             "default": 0.5,
             "min": 0.0,
             "max": 1e9,
-            "decimals": 4
-        }
-    ]
+            "decimals": 4,
+        },
+    ],
 )
-def run_rmp_analysis_wrapper(
-    data: np.ndarray,
-    time: np.ndarray,
-    sampling_rate: float,
-    **kwargs
-) -> Dict[str, Any]:
+def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
     Wrapper function for RMP analysis that conforms to the registry interface.
     """
     try:
         # Extract parameters from kwargs
-        baseline_start = kwargs.get('baseline_start', 0.0)
-        baseline_end = kwargs.get('baseline_end', 0.1)
-        auto_detect = kwargs.get('auto_detect', False)
-        
+        baseline_start = kwargs.get("baseline_start", 0.0)
+        baseline_end = kwargs.get("baseline_end", 0.1)
+        auto_detect = kwargs.get("auto_detect", False)
+
         if auto_detect:
-            window_duration = kwargs.get('window_duration', 0.5)
+            window_duration = kwargs.get("window_duration", 0.5)
             # Use shared helper
             mean, sd, window = find_stable_baseline(data, sampling_rate, window_duration_s=window_duration)
-            
+
             if window:
                 baseline_start, baseline_end = window
                 log.debug(f"Auto-detected stable baseline: {baseline_start:.3f} - {baseline_end:.3f} s")
@@ -242,38 +229,30 @@ def run_rmp_analysis_wrapper(
                 log.warning("Auto-detection failed or data too short. Using full trace.")
                 baseline_start = time[0]
                 baseline_end = time[-1]
-        
+
         # Validate window is within data range
         if len(time) > 0:
             if baseline_end > time[-1]:
                 baseline_end = time[-1]
             if baseline_start < time[0]:
                 baseline_start = time[0]
-        
+
         # Call the actual RMP calculation function
         result = calculate_rmp(data, time, (baseline_start, baseline_end))
-        
+
         if result.is_valid and result.value is not None:
             return {
-                'rmp_mv': result.value,
-                'rmp_std': result.std_dev if result.std_dev is not None else 0.0,
-                'rmp_drift': result.drift if result.drift is not None else 0.0,
-                'rmp_duration': result.duration if result.duration is not None else 0.0,
+                "rmp_mv": result.value,
+                "rmp_std": result.std_dev if result.std_dev is not None else 0.0,
+                "rmp_drift": result.drift if result.drift is not None else 0.0,
+                "rmp_duration": result.duration if result.duration is not None else 0.0,
             }
         else:
-            return {
-                'rmp_mv': None,
-                'rmp_std': None,
-                'rmp_error': result.error_message or "Unknown error"
-            }
-            
+            return {"rmp_mv": None, "rmp_std": None, "rmp_error": result.error_message or "Unknown error"}
+
     except Exception as e:
         log.error(f"Error in run_rmp_analysis_wrapper: {e}", exc_info=True)
-        return {
-            'rmp_mv': None,
-            'rmp_std': None,
-            'rmp_error': str(e)
-        }
+        return {"rmp_mv": None, "rmp_std": None, "rmp_error": str(e)}
 
 
 # --- Add other basic features here later ---

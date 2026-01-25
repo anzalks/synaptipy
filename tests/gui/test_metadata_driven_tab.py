@@ -5,9 +5,11 @@ from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDriv
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from unittest.mock import MagicMock
 
+
 # Register a dummy analysis for testing - MOVED TO FIXTURE
 def dummy_analysis_func(data, time, fs, **kwargs):
-    return {'result': 'success', 'kwargs': kwargs}
+    return {"result": "success", "kwargs": kwargs}
+
 
 @pytest.fixture
 def registered_analysis():
@@ -17,63 +19,66 @@ def registered_analysis():
         "test_analysis",
         label="Test Analysis",
         ui_params=[
-            {'name': 'param1', 'type': 'float', 'default': 1.0, 'label': 'Param 1'},
-            {'name': 'param2', 'type': 'int', 'default': 5, 'label': 'Param 2'},
-            {'name': 'param3', 'type': 'choice', 'choices': ['A', 'B'], 'default': 'A', 'label': 'Param 3'},
-            {'name': 'param4', 'type': 'bool', 'default': True, 'label': 'Param 4'}
-        ]
+            {"name": "param1", "type": "float", "default": 1.0, "label": "Param 1"},
+            {"name": "param2", "type": "int", "default": 5, "label": "Param 2"},
+            {"name": "param3", "type": "choice", "choices": ["A", "B"], "default": "A", "label": "Param 3"},
+            {"name": "param4", "type": "bool", "default": True, "label": "Param 4"},
+        ],
     )
     decorator(dummy_analysis_func)
-    
+
     yield
-    
+
     # Cleanup helps if other tests rely on clean state, though not strictly required if everything registers what it needs
     # AnalysisRegistry._registry.pop("test_analysis", None)
     # AnalysisRegistry._metadata.pop("test_analysis", None)
+
 
 @pytest.fixture
 def app(qapp):
     return qapp
 
+
 def test_metadata_tab_creation(app, registered_analysis):
     """Test that the tab creates widgets based on metadata."""
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
-    
+
     # Check if widgets were created
     widgets = tab.param_generator.widgets
-    assert 'param1' in widgets
-    assert 'param2' in widgets
-    assert 'param3' in widgets
-    assert 'param4' in widgets
-    
+    assert "param1" in widgets
+    assert "param2" in widgets
+    assert "param3" in widgets
+    assert "param4" in widgets
+
     # Check widget types
-    assert isinstance(widgets['param1'], QtWidgets.QDoubleSpinBox)
-    assert isinstance(widgets['param2'], QtWidgets.QSpinBox)
-    assert isinstance(widgets['param3'], QtWidgets.QComboBox)
-    assert isinstance(widgets['param4'], QtWidgets.QCheckBox)
-    
+    assert isinstance(widgets["param1"], QtWidgets.QDoubleSpinBox)
+    assert isinstance(widgets["param2"], QtWidgets.QSpinBox)
+    assert isinstance(widgets["param3"], QtWidgets.QComboBox)
+    assert isinstance(widgets["param4"], QtWidgets.QCheckBox)
+
     # Check default values
-    assert widgets['param1'].value() == 1.0
-    assert widgets['param2'].value() == 5
-    assert widgets['param3'].currentText() == 'A'
-    assert widgets['param4'].isChecked() == True
+    assert widgets["param1"].value() == 1.0
+    assert widgets["param2"].value() == 5
+    assert widgets["param3"].currentText() == "A"
+    assert widgets["param4"].isChecked() == True
+
 
 def test_parameter_gathering(app, registered_analysis):
     """Test that parameters are correctly gathered from widgets."""
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
-    
+
     # Modify values
     widgets = tab.param_generator.widgets
-    widgets['param1'].setValue(2.5)
-    widgets['param2'].setValue(10)
-    widgets['param3'].setCurrentText('B')
-    widgets['param4'].setChecked(False)
-    
+    widgets["param1"].setValue(2.5)
+    widgets["param2"].setValue(10)
+    widgets["param3"].setCurrentText("B")
+    widgets["param4"].setChecked(False)
+
     params = tab._gather_analysis_parameters()
-    
-    assert params['param1'] == 2.5
-    assert params['param2'] == 10
-    assert params['param3'] == 'B'
-    assert params['param4'] == False
+
+    assert params["param1"] == 2.5
+    assert params["param2"] == 10
+    assert params["param3"] == "B"
+    assert params["param4"] == False
