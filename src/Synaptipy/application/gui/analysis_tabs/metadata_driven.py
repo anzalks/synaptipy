@@ -269,4 +269,5 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         self.results_text.setText("\n".join(text_output))
 
-ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab
+# Export key class (But do NOT export ANALYSIS_TAB_CLASS as this class requires arguments)
+# ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab

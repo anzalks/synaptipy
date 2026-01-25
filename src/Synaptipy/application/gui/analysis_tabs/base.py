@@ -1112,37 +1112,187 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         Adds channel and data source selection combo boxes to the provided layout.
         Called by subclasses in their _setup_ui method.
         """
+        # --- Group 1: Data Source ---
+        data_group = QtWidgets.QGroupBox("Data Source")
+        dg_layout = QtWidgets.QVBoxLayout(data_group)
+
         # Signal Channel Selection
         self.signal_channel_combobox = QtWidgets.QComboBox()
         self.signal_channel_combobox.setToolTip("Select the signal channel to plot and analyze.")
         self.signal_channel_combobox.setEnabled(False)
+        
+        hbox1 = QtWidgets.QHBoxLayout()
+        hbox1.addWidget(QtWidgets.QLabel("Signal Channel:"))
+        hbox1.addWidget(self.signal_channel_combobox, stretch=1)
+        dg_layout.addLayout(hbox1)
 
         # Data Source Selection (Trial vs Average)
         self.data_source_combobox = QtWidgets.QComboBox()
         self.data_source_combobox.setToolTip("Select specific trial or average trace.")
         self.data_source_combobox.setEnabled(False)
+        
+        hbox2 = QtWidgets.QHBoxLayout()
+        hbox2.addWidget(QtWidgets.QLabel("Data Source:"))
+        hbox2.addWidget(self.data_source_combobox, stretch=1)
+        dg_layout.addLayout(hbox2)
 
-        # Add to layout
+        # Add Data Group to parent (handles FormLayout check if needed, but usually VBox)
         if isinstance(layout, QtWidgets.QFormLayout):
-            layout.addRow("Signal Channel:", self.signal_channel_combobox)
-            layout.addRow("Data Source:", self.data_source_combobox)
+            layout.addRow(data_group)
         else:
-            # Fallback for other layouts
-            hbox1 = QtWidgets.QHBoxLayout()
-            hbox1.addWidget(QtWidgets.QLabel("Signal Channel:"))
-            hbox1.addWidget(self.signal_channel_combobox, stretch=1)
-            layout.addLayout(hbox1)
+            layout.addWidget(data_group)
 
-            hbox2 = QtWidgets.QHBoxLayout()
-            hbox2.addWidget(QtWidgets.QLabel("Data Source:"))
-            hbox2.addWidget(self.data_source_combobox, stretch=1)
-            layout.addLayout(hbox2)
+        # --- Group 2: Plot Selected Trials ---
+        # User requested consistency with Explorer Tab filtering
+        pst_group = QtWidgets.QGroupBox("Plot Selected Trials")
+        pst_layout = QtWidgets.QVBoxLayout(pst_group)
+        pst_layout.setSpacing(10)
+
+        # Input Row
+        in_layout = QtWidgets.QHBoxLayout()
+        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
+        self.nth_trial_input = QtWidgets.QLineEdit()
+        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
+        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
+        in_layout.addWidget(self.nth_trial_input)
+        
+        in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
+        self.start_trial_input = QtWidgets.QLineEdit()
+        self.start_trial_input.setPlaceholderText("0")
+        self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
+        self.start_trial_input.setText("0")
+        in_layout.addWidget(self.start_trial_input)
+        
+        pst_layout.addLayout(in_layout)
+
+        # Buttons
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.select_trials_button = QtWidgets.QPushButton("Plot Selected")
+        self.select_trials_button.clicked.connect(self._on_plot_filtered_trials)
+        self.select_trials_button.setToolTip("Filter trials to show only every Nth trial.")
+        btn_layout.addWidget(self.select_trials_button)
+
+        self.reset_selection_btn = QtWidgets.QPushButton("Reset")
+        self.reset_selection_btn.clicked.connect(self._reset_trial_filtering)
+        btn_layout.addWidget(self.reset_selection_btn)
+        
+        pst_layout.addLayout(btn_layout)
+
+        if isinstance(layout, QtWidgets.QFormLayout):
+            layout.addRow(pst_group)
+        else:
+            layout.addWidget(pst_group)
 
         # Connect signals to trigger plotting when selection changes
         self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_data)
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_data)
 
         log.debug(f"{self.__class__.__name__}: Data selection UI setup complete")
+
+    def _reset_trial_filtering(self):
+        """Reset trial filter inputs and plot filtered trials default (all?). No, maybe just clears overlay."""
+        self.nth_trial_input.clear()
+        self.start_trial_input.setText("0")
+        
+        # Clear filter state
+        self._filtered_indices = None
+        
+        self._plot_selected_data() # Reverts to single trial view
+
+    def _on_plot_filtered_trials(self):
+        """
+        Parse inputs and plot filtered trials.
+        Replica of ExplorerTab logic.
+        """
+        text_gap = self.nth_trial_input.text().strip()
+        text_start = self.start_trial_input.text().strip()
+
+        if not self._selected_item_recording:
+            return
+
+        # Get number of trials from first channel
+        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+        num_trials = getattr(first_channel, "num_trials", 0) if first_channel else 0
+        
+        if num_trials == 0:
+            return
+
+        gap = 0
+        start_idx = 0
+
+        try:
+            if text_gap:
+                gap = int(text_gap)
+            start_idx = int(text_start) if text_start else 0
+        except ValueError:
+            pass
+            
+        selected_indices = []
+        # Create list of indices
+        # If gap = 0, step = 1
+        # If gap = 1, step = 2
+        step = gap + 1
+        
+        # Guard against zero step
+        if step < 1:
+            step = 1
+
+        for i in range(start_idx, num_trials, step):
+            selected_indices.append(i)
+            
+        if selected_indices:
+            # Store state and redraw using main loop
+            self._filtered_indices = set(selected_indices)
+            self._plot_selected_data()
+        else:
+            log.warning("No trials matched selection criteria.")
+
+    # Removed _open_trial_selection_dialog as we use filtering now
+
+    def _plot_multi_trials(self, trial_indices):
+        """Plot multiple trials overlaid."""
+        if not self.plot_widget or not self._selected_item_recording:
+            return
+
+        chan_id = self.signal_channel_combobox.currentData()
+        if chan_id is None:
+            return
+
+        channel = self._selected_item_recording.channels.get(chan_id)
+        if not channel:
+            return
+
+        self.plot_widget.clear()
+        self.plot_widget.setLabel("bottom", "Time", units="s")
+        self.plot_widget.setLabel("left", channel.name or f"Ch {chan_id}", units=channel.units)
+        self.plot_widget.setTitle(f"{channel.name} - Selected Trials ({len(trial_indices)})")
+
+        # Color cycle
+        colors = ['r', 'g', 'b', 'c', 'm', 'y']
+        
+        for i, trial_idx in enumerate(sorted(list(trial_indices))):
+            data = channel.get_data(trial_idx)
+            time = channel.get_relative_time_vector(trial_idx)
+            
+            if data is not None and time is not None:
+                color = colors[i % len(colors)]
+                self.plot_widget.plot(time, data, pen=pg.mkPen(color, width=1), name=f"Trial {trial_idx + 1}")
+
+        # Update current plot data to match what analysis might expect? 
+        # CAUTION: Analysis functions usually expect ONE trial or Average.
+        # If we plot multiple, does analysis run on all? 
+        # Typically analysis runs on what is selected in the combobox.
+        # Plotting multiple is usually just for visualization.
+        # So we might NOT update _current_plot_data, or update it to None to prevent analysis on mixed data?
+        # Or just leave specific selection as "Data Source" active.
+        
+        # Let's verify: user wants "plot selected trials" option.
+        # They probably just want to see them. 
+        # If they run analysis, it should probably run on the "Data Source" selection?
+        # Or should we disable analysis?
+        # For now, let's keep it simple: Visualization only.
+        pass
+
 
     def _populate_channel_and_source_comboboxes(self):
         """
@@ -1220,6 +1370,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.data_source_combobox.addItem("No Data Available")
             self.data_source_combobox.setEnabled(False)
 
+        # Enable/Disable Select Trials Button
+        if hasattr(self, "select_trials_button") and self.select_trials_button:
+            self.select_trials_button.setEnabled(num_trials > 0)
+
         self.signal_channel_combobox.blockSignals(False)
         self.data_source_combobox.blockSignals(False)
 
@@ -1260,10 +1414,52 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         channel = self._selected_item_recording.channels[chan_id]
 
         try:
+            # --- New Logic: Handle Filtered Trials Overlay & Dynamic Averaging ---
+            # If filtered trials are active (set by _on_plot_filtered_trials), we use them.
+            
+            # 1. Overlay Background (Context)
+            if hasattr(self, "_filtered_indices") and self._filtered_indices:
+                # Plot context traces in subtle gray
+                gray_pen = pg.mkPen((200, 200, 200), width=1)
+                for idx in self._filtered_indices:
+                    # Skip if this is the "main" trial being highlighted later (to avoid drawing twice)
+                    if isinstance(data_source, int) and idx == data_source:
+                        continue
+                        
+                    ctx_data = channel.get_data(idx)
+                    ctx_time = channel.get_relative_time_vector(idx)
+                    if ctx_data is not None:
+                         self.plot_widget.plot(ctx_time, ctx_data, pen=gray_pen)
+            
+            # 2. Handle Dynamic Averaging
+            # If "Average" is selected AND we have a filter, compute average across filtered indices.
+            # Otherwise use pre-calculated average.
             if data_source == "average":
-                data_vec = channel.get_averaged_data()
-                time_vec = channel.get_relative_averaged_time_vector()
-                data_label = "Average"
+                if hasattr(self, "_filtered_indices") and self._filtered_indices:
+                     # Dynamic Average
+                     indices = list(self._filtered_indices)
+                     # Fetch all data to compute mean
+                     first_trace = channel.get_data(indices[0])
+                     if first_trace is not None:
+                         sum_data = np.zeros_like(first_trace, dtype=float)
+                         count = 0
+                         for idx in indices:
+                             d = channel.get_data(idx)
+                             if d is not None and d.shape == sum_data.shape:
+                                 sum_data += d
+                                 count += 1
+                         
+                         if count > 0:
+                             data_vec = sum_data / count
+                             data_label = f"Average (Selected {count})"
+                             # Time vec is safe to take from first
+                             time_vec = channel.get_relative_time_vector(indices[0])
+                else:
+                    # Standard Average
+                    data_vec = channel.get_averaged_data()
+                    time_vec = channel.get_relative_averaged_time_vector()
+                    data_label = "Average (All)"
+            
             elif isinstance(data_source, int):
                 data_vec = channel.get_data(data_source)
                 time_vec = channel.get_relative_time_vector(data_source)
@@ -1275,6 +1471,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
             if data_vec is None or time_vec is None:
                 log.warning(f"{self.__class__.__name__}: No data vectors returned for {data_label}")
+                # Don't clear if we plotted background? No, clear because main analysis data is missing.
                 self.plot_widget.clear()
                 return
 
@@ -1287,15 +1484,24 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 "sampling_rate": channel.sampling_rate,
                 "channel_name": channel.name or f"Ch {chan_id}",
             }
-
-            self.plot_widget.clear()
-
+            
+            # Don't clear here! We might have plotted background.
+            # But wait, we cleared at lines 1382/1408? 
+            # We need to restructure the clearing logic.
+            # The clear() should happen ONCE at the start of _plot_selected_data.
+            # Let's adjust the replacement to include the top-level logic or rely on existing clear().
+            # Existing clear() is at line 1382:
+            # self.plot_widget.clear() 
+            # So by the time we get here, plot is clear.
+            # My logic above "1. Overlay Background" (which is inserted before data_vec fetching) will draw on clean canvas.
+            # Good.
+            
+            # Setup Pen for Main Trace
             try:
                 from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
-
                 pen = get_average_pen() if data_source == "average" else get_single_trial_pen()
             except ImportError:
-                pen = pg.mkPen(color=(0, 0, 0), width=1)
+                pen = pg.mkPen(color=(0, 0, 0), width=2) # Make main trace slightly thicker/definitive
 
             self.plot_widget.plot(time_vec, data_vec, pen=pen, name=data_label)
 
