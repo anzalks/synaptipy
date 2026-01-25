@@ -3,7 +3,7 @@
 """
 Dialog for selecting multiple trials.
 """
-from typing import List, Optional, Set
+from typing import Optional, Set, Tuple
 from PySide6 import QtWidgets, QtCore
 
 
@@ -33,12 +33,12 @@ class TrialSelectionDialog(QtWidgets.QDialog):
         for i in range(self.num_trials):
             item = QtWidgets.QListWidgetItem(f"Trial {i + 1}")
             item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            
+
             if i in self.selected_indices:
                 item.setCheckState(QtCore.Qt.CheckState.Checked)
             else:
                 item.setCheckState(QtCore.Qt.CheckState.Unchecked)
-            
+
             # Store index in user data
             item.setData(QtCore.Qt.ItemDataRole.UserRole, i)
             self.list_widget.addItem(item)

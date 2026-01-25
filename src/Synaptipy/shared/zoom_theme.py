@@ -209,7 +209,7 @@ def apply_theme_with_monitoring(viewbox) -> None:
         if not viewbox:
             return
 
-        log.debug("🔄 Applying theme with monitoring...")
+        log.debug("Applying theme with monitoring...")
 
         # Apply initial theme
         apply_theme_to_viewbox(viewbox)
@@ -259,10 +259,10 @@ def apply_theme_with_monitoring(viewbox) -> None:
 
         QTimer.singleShot(10, monitor_and_reapply)
 
-        log.debug("✅ Theme with monitoring applied successfully!")
+        log.debug("Theme with monitoring applied successfully!")
 
     except Exception as e:
-        log.error(f"❌ Failed to apply theme with monitoring: {e}")
+        log.error(f"Failed to apply theme with monitoring: {e}")
         import traceback
 
         log.error(f"Traceback: {traceback.format_exc()}")
@@ -320,7 +320,7 @@ def customize_pyqtgraph_selection(viewbox) -> None:
         log.debug("Selection customization active (class patch)")
 
     except Exception as e:
-        log.error(f"❌ Failed to customize PyQtGraph selection: {e}")
+        log.error(f"Failed to customize PyQtGraph selection: {e}")
         import traceback
 
         log.error(f"Traceback: {traceback.format_exc()}")
@@ -343,7 +343,7 @@ def apply_theme_with_custom_selection(viewbox) -> None:
         log.debug("Theme with PyQtGraph customization applied successfully!")
 
     except Exception as e:
-        log.error(f"❌ Failed to apply theme with PyQtGraph customization: {e}")
+        log.error(f"Failed to apply theme with PyQtGraph customization: {e}")
         import traceback
 
         log.error(f"Traceback: {traceback.format_exc()}")
