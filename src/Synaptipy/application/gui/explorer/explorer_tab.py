@@ -1317,61 +1317,41 @@ class ExplorerTab(QtWidgets.QWidget):
             if filename:
                 try:
                     import pyqtgraph.exporters
-                    scene = self.plot_canvas.widget.scene()
+                    # Use the central layout item (.ci) instead of the whole scene
+                    # This ensures we only export the plot area and respects layout bounds better
+                    target_item = self.plot_canvas.widget.ci
                     
                     exporter = None
                     if fmt == "svg":
-                        exporter = pyqtgraph.exporters.SVGExporter(scene)
-                        # Ensure text is preserved as text if possible?
-                        # pyqtgraph SVGExporter has 'item' arg but not much config for text.
-                        # It usually exports text as <text> elements by default unless they are path items.
-                        # But sometimes it converts to paths. 
-                        # There isn't a direct option in standard pg SVGExporter to force text-as-text vs path,
-                        # but standard behavior is usually acceptable for Illustrator. 
-                        # IMPORTANT: Some versions might rasterize if not careful.
+                        exporter = pyqtgraph.exporters.SVGExporter(target_item)
                     elif fmt == "pdf":
-                        # PDF Exporter usually available
-                        # If not, might need to rely on matplotlib or other backend, but pg has one.
-                        # Note: pg.exporters.PDFExporter might not be exposed directly in all versions or relies on reportlab?
-                        # Let's check typical availability. If PDFExporter not found, fallback or warn.
                         if hasattr(pyqtgraph.exporters, "PDFExporter"):
-                             exporter = pyqtgraph.exporters.PDFExporter(scene)
+                             exporter = pyqtgraph.exporters.PDFExporter(target_item)
                         else:
-                             # Fallback to Image export if PDF not supported directly
-                             # Or maybe try printing to PDF?
-                             # For now, let's assume it exists or fallback to ImageExporter with high DPI? No, PDF user asked for editable.
-                             # If pg doesn't support PDF vector export effectively, SVG is the vector fallback.
-                             # But standard pg has PDFExporter? Maybe called MatplotlibExporter in some contexts?
-                             # Let's try standard.
-                             try:
-                                 exporter = pyqtgraph.exporters.PDFExporter(scene)
-                             except AttributeError:
-                                 # Fallback: Print Scene
-                                 printer = QtGui.QPdfWriter(filename)
-                                 printer.setCreator("Synaptipy")
-                                 printer.setResolution(dpi)
-                                 painter = QtGui.QPainter(printer)
-                                 scene.render(painter)
-                                 painter.end()
-                                 self.status_bar.showMessage(f"Plot saved to {filename} (via QPdfWriter)", 3000)
-                                 return
-
+                             # Fallback: Print Scene via QPdfWriter (Scene is okay here if we clip?)
+                             # Actually let's try to stick to Exporter if possible or render the widget.
+                             # Using QPdfWriter on the scene is a reasonable fallback if Exporter missing.
+                             printer = QtGui.QPdfWriter(filename)
+                             printer.setCreator("Synaptipy")
+                             printer.setResolution(dpi)
+                             painter = QtGui.QPainter(printer)
+                             self.plot_canvas.widget.scene().render(painter) # Render scene to printer
+                             painter.end()
+                             self.status_bar.showMessage(f"Plot saved to {filename} (via QPdfWriter)", 3000)
+                             return
                     else: # png, jpg
-                        exporter = pyqtgraph.exporters.ImageExporter(scene)
+                        exporter = pyqtgraph.exporters.ImageExporter(target_item)
                         # Helper sets params
-                        exporter.parameters()['width'] = int(scene.width() * (dpi/72)) 
-                        # Or safer way to set dpi? ImageExporter usually takes width/height.
-                        # We can scale it.
+                        # For ImageExporter on Item, width affects pixel size directly
+                        exporter.parameters()['width'] = int(target_item.width() * (dpi/96.0))
                     
                     if exporter:
                         if fmt in ["png", "jpg"]:
                              # Scale for DPI
-                             # scene width is in pixels usually? 
-                             # If we want specific DPI, we scale the output image.
-                             # default logical dpi is often ~96 or 72.
-                             # If user wants 300, we scale up by 300/72 approx.
+                             # Target item width is in logical pixels (screen coordinates)
+                             # Scaling up provides higher resolution
                              scale_factor = dpi / 96.0 
-                             exporter.parameters()['width'] = int(scene.width() * scale_factor)
+                             exporter.parameters()['width'] = int(target_item.width() * scale_factor)
                         
                         exporter.export(filename)
                     
@@ -1380,18 +1360,26 @@ class ExplorerTab(QtWidgets.QWidget):
                     log.error(f"Error saving plot: {e}")
                     self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
 
-    def _on_trial_selection_requested(self, n):
-        """Filter trials to every Nth trial."""
+    def _on_trial_selection_requested(self, n, start_index=0):
+        """Filter trials to every Nth trial, starting from start_index."""
         if not self.current_recording:
             return
         
         self.max_trials_current_recording = getattr(self.current_recording, "max_trials", 0)
         all_indices = range(self.max_trials_current_recording)
         
-        # Select every Nth
-        self.selected_trial_indices = set(all_indices[::n])
+        # Select every Nth (Gap Logic: Step = N + 1)
+        # 0 -> Step 1 (All)
+        # 1 -> Step 2 (Every 2nd)
+        step = n + 1
         
-        log.info(f"Filtering trials: Every {n}th -> {len(self.selected_trial_indices)} trials selected.")
+        # Validate Start Index
+        if start_index < 0: start_index = 0
+        
+        # Slicing: [start:stop:step]
+        self.selected_trial_indices = set(all_indices[start_index::step])
+        
+        log.info(f"Filtering trials: Start={start_index}, Gap={n} (Step={step}) -> {len(self.selected_trial_indices)} trials selected.")
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
         

@@ -28,7 +28,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     show_selected_avg_toggled = QtCore.Signal(bool)
 
     # Trial Selection signals
-    trial_selection_requested = QtCore.Signal(int)
+    trial_selection_requested = QtCore.Signal(int, int) # gap, start_index
     trial_selection_reset_requested = QtCore.Signal()
 
     # Channel signals
@@ -119,11 +119,19 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
 
         # Input Row
         in_layout = QtWidgets.QHBoxLayout()
-        in_layout.addWidget(QtWidgets.QLabel("Every Nth Trial:"))
+        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
         self.nth_trial_input = QtWidgets.QLineEdit()
-        self.nth_trial_input.setPlaceholderText("e.g. 2, 5")
-        self.nth_trial_input.setValidator(QtGui.QIntValidator(1, 9999))
+        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
+        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
         in_layout.addWidget(self.nth_trial_input)
+        
+        in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
+        self.start_trial_input = QtWidgets.QLineEdit()
+        self.start_trial_input.setPlaceholderText("0")
+        self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
+        self.start_trial_input.setText("0")
+        in_layout.addWidget(self.start_trial_input)
+        
         layout.addLayout(in_layout)
 
         # Buttons
@@ -213,12 +221,16 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         if not text:
             return
         
+        text_start = self.start_trial_input.text().strip()
+        
         try:
             n = int(text)
-            if n > 0:
-                self.trial_selection_requested.emit(n)
+            start_idx = int(text_start) if text_start else 0
+            
+            if n >= 0 and start_idx >= 0:
+                self.trial_selection_requested.emit(n, start_idx)
         except ValueError:
-            pass  # Validator should prevent this but just in case
+            pass
 
     def _update_visibility(self):
         # Toggle buttons based on mode if needed
