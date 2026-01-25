@@ -113,7 +113,14 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
         return data
 
     b, a = signal.butter(order, [low, high], btype="band")
-    y = signal.filtfilt(b, a, data)
+    
+    # Pad signal to reduce edge effects
+    padlen = 3 * max(len(b), len(a))
+    if len(data) <= padlen:
+        y = signal.filtfilt(b, a, data) # Fallback for short signals
+    else:
+        y = signal.filtfilt(b, a, data, padlen=padlen)
+        
     return y
 
 
@@ -124,7 +131,14 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
     b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
-    y = signal.filtfilt(b, a, data)
+    
+    # Pad signal
+    padlen = 3 * max(len(b), len(a))
+    if len(data) <= padlen:
+        y = signal.filtfilt(b, a, data)
+    else:
+        y = signal.filtfilt(b, a, data, padlen=padlen)
+        
     return y
 
 
@@ -146,7 +160,14 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
         return data
 
     b, a = signal.butter(order, normal_cutoff, btype="high", analog=False)
-    y = signal.filtfilt(b, a, data)
+    
+    # Pad signal
+    padlen = 3 * max(len(b), len(a))
+    if len(data) <= padlen:
+        y = signal.filtfilt(b, a, data)
+    else:
+        y = signal.filtfilt(b, a, data, padlen=padlen)
+        
     return y
 
 
@@ -168,7 +189,14 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
         return data
 
     b, a = signal.iirnotch(freq_norm, Q)
-    y = signal.filtfilt(b, a, data)
+    
+    # Pad signal
+    padlen = 3 * max(len(b), len(a))
+    if len(data) <= padlen:
+        y = signal.filtfilt(b, a, data)
+    else:
+        y = signal.filtfilt(b, a, data, padlen=padlen)
+        
     return y
 
 

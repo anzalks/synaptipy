@@ -264,14 +264,25 @@ class Channel:
             return np.linspace(0, duration, num_samples, endpoint=False)
         return None
 
-    def get_averaged_data(self) -> Optional[np.ndarray]:
-        # Returns the averaged data across all trials.
+    def get_averaged_data(self, trial_indices: Optional[List[int]] = None) -> Optional[np.ndarray]:
+        # Returns the averaged data across all (or specified) trials.
         if self.data_trials:
             try:
+                # Determine which trials to use
+                if trial_indices is not None and len(trial_indices) > 0:
+                    # Validate indices
+                    valid_indices = [i for i in trial_indices if 0 <= i < len(self.data_trials)]
+                    trials_to_avg = [self.data_trials[i] for i in valid_indices if self.data_trials[i] is not None]
+                else:
+                    trials_to_avg = [t for t in self.data_trials if t is not None]
+
+                if not trials_to_avg:
+                    return None
+
                 # Ensure all trials have the same length for simple averaging
-                first_len = len(self.data_trials[0])
-                if all(len(trial) == first_len for trial in self.data_trials):
-                    return np.mean(np.array(self.data_trials), axis=0)
+                first_len = len(trials_to_avg[0])
+                if all(len(trial) == first_len for trial in trials_to_avg):
+                    return np.mean(np.array(trials_to_avg), axis=0)
                 else:
                     # Handle differing lengths (e.g., pad or error)
                     log.warning(f"Channel {self.id}: Trials have different lengths, cannot average directly.")

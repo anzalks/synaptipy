@@ -88,8 +88,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Limits State
         self.base_x_range: Optional[Tuple[float, float]] = None
+        self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_y_ranges: Dict[str, Optional[Tuple[float, float]]] = {}
-        self.manual_limits_enabled: bool = False
+        # self.manual_limits_enabled: bool = False # Removed
 
         self._updating_viewranges: bool = False  # Lock to prevent feedback loops
 
@@ -243,8 +244,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self.config_panel.select_current_trial_clicked.connect(self._toggle_select_current_trial)
         self.config_panel.clear_avg_selection_clicked.connect(self._clear_avg_selection)
         self.config_panel.show_selected_avg_toggled.connect(self._toggle_plot_selected_average)
-        self.config_panel.manual_limits_toggled.connect(self._on_manual_limits_toggled)
-        self.config_panel.set_manual_limits_clicked.connect(self._apply_manual_limits_from_dict)
+        self.config_panel.select_current_trial_clicked.connect(self._toggle_select_current_trial)
+        self.config_panel.clear_avg_selection_clicked.connect(self._clear_avg_selection)
+        self.config_panel.show_selected_avg_toggled.connect(self._toggle_plot_selected_average)
+        self.config_panel.trial_selection_requested.connect(self._on_trial_selection_requested)
+        self.config_panel.trial_selection_reset_requested.connect(self._on_trial_selection_reset_requested)
         self.config_panel.channel_visibility_changed.connect(self._on_channel_visibility_changed)
 
         # Toolbar
@@ -318,7 +322,22 @@ class ExplorerTab(QtWidgets.QWidget):
         self._average_cache.clear()
         self._cache_dirty = False
         self.current_trial_index = 0
+        self._cache_dirty: bool = False
+        self.current_trial_index = 0
         self.selected_trial_indices.clear()
+        
+        # Default: Select ALL trials implicitly (empty set means all in some logic, but here we want explicit control?)
+        # Let's say empty set in selected_trial_indices means "User hasn't filtered". 
+        # But for "Plot Selected" feature, we want explicit subset. 
+        # Actually my plan said "self.selected_trial_indices: Set[int] = set()".
+        # If I use this set for BOTH manual selection (cycle mode) and Nth selection (overlay mode), 
+        # I need to be careful. User wants "Plot Selected Trials" to replace "Manual Limits".
+        # So this selection affects Overlay mode primarily?
+        # Yes: "this will plot only those trials which i select... plot, preprocess, and average only every nth trial"
+        
+        # So, if selected_trial_indices is Empty, we assume ALL trials are valid for Overlay mode.
+        # If it is populated, we use only those.
+        self.selected_trial_indices = set()
 
         # Rebuild Components
         self.plot_canvas.rebuild_plots(recording)
@@ -450,8 +469,15 @@ class ExplorerTab(QtWidgets.QWidget):
                             log.error(f"Error plotting trial {self.current_trial_index} for {cid}: {e}")
 
                 else:  # OVERLAY_AVG
-                    # 1. Overlay ALL trials (Background)
-                    for trial_idx in range(channel.num_trials):
+                    # 1. Overlay ALL trials (Background) or SELECTED trials
+                    
+                    # Determine trials to plot
+                    if self.selected_trial_indices:
+                        trials_to_plot = sorted(list(self.selected_trial_indices))
+                    else:
+                        trials_to_plot = list(range(channel.num_trials))
+
+                    for trial_idx in trials_to_plot:
                         try:
                             # Skip extensive background plotting if too many trials?
                             # For now, plot all but use subsample for speed if DS enabled
@@ -490,7 +516,9 @@ class ExplorerTab(QtWidgets.QWidget):
                             item.setZValue(10)
                             self.plot_canvas.channel_plot_data_items[cid].append(item)
                         else:
-                            avg_data = channel.get_averaged_data()
+                            avg_data = channel.get_averaged_data(
+                                trial_indices=list(self.selected_trial_indices) if self.selected_trial_indices else None
+                            )
                             avg_t = channel.get_relative_time_vector(0)  # Use trial 0 time as Ref
                             if avg_data is not None and avg_t is not None:
                                 item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average")
@@ -857,8 +885,14 @@ class ExplorerTab(QtWidgets.QWidget):
         
         # Iterate over all channels
         for cid, channel in self.current_recording.channels.items():
-             # Iterate over all trials
-             for trial_idx in range(channel.num_trials):
+             # Determine trials to process
+             if self.selected_trial_indices:
+                 trials_to_process = sorted(list(self.selected_trial_indices))
+             else:
+                 trials_to_process = list(range(channel.num_trials))
+
+             # Iterate over selected trials
+             for trial_idx in trials_to_process:
                  try:
                      # Cumulative Processing: Check cache first
                      # If we have processed data, use it as input for the next step.
@@ -986,6 +1020,10 @@ class ExplorerTab(QtWidgets.QWidget):
         # Trigger Replot
         self._update_plot()
         
+        # Auto-range to fit new data
+        for plot in self.plot_canvas.channel_plots.values():
+            plot.autoRange()
+        
     def _on_preprocessing_error(self, error):
         self.preprocessing_widget.set_processing_state(False)
         self.status_bar.showMessage(f"Processing Error: {error}")
@@ -996,6 +1034,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self._processed_cache.clear()
         self._cache_dirty = True # Mark dirty just in case
         self._update_plot()
+        
+        # Auto-range to fit raw data
+        for plot in self.plot_canvas.channel_plots.values():
+            plot.autoRange()
+            
         self.status_bar.showMessage("Preprocessing reset to raw data.", 3000)
 
     # --- X-Axis Logic ---
@@ -1253,39 +1296,114 @@ class ExplorerTab(QtWidgets.QWidget):
             self._apply_global_y_zoom(self.y_controls.global_y_slider.value())
 
     def _save_plot(self):
-        """Save the current plot to an image file."""
+        """Save the current plot to an image file with custom dialog."""
+        if not self.current_recording:
+             return
+
+        from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+        
+        dialog = PlotExportDialog(self)
+        if dialog.exec():
+            settings = dialog.get_settings()
+            fmt = settings["format"]
+            dpi = settings["dpi"]
+
+            # Default filename
+            default_name = f"plot_{self.current_recording.source_file.stem}.{fmt}"
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save Plot", str(Path.home() / default_name), f"Images (*.{fmt})"
+            )
+
+            if filename:
+                try:
+                    import pyqtgraph.exporters
+                    scene = self.plot_canvas.widget.scene()
+                    
+                    exporter = None
+                    if fmt == "svg":
+                        exporter = pyqtgraph.exporters.SVGExporter(scene)
+                        # Ensure text is preserved as text if possible?
+                        # pyqtgraph SVGExporter has 'item' arg but not much config for text.
+                        # It usually exports text as <text> elements by default unless they are path items.
+                        # But sometimes it converts to paths. 
+                        # There isn't a direct option in standard pg SVGExporter to force text-as-text vs path,
+                        # but standard behavior is usually acceptable for Illustrator. 
+                        # IMPORTANT: Some versions might rasterize if not careful.
+                    elif fmt == "pdf":
+                        # PDF Exporter usually available
+                        # If not, might need to rely on matplotlib or other backend, but pg has one.
+                        # Note: pg.exporters.PDFExporter might not be exposed directly in all versions or relies on reportlab?
+                        # Let's check typical availability. If PDFExporter not found, fallback or warn.
+                        if hasattr(pyqtgraph.exporters, "PDFExporter"):
+                             exporter = pyqtgraph.exporters.PDFExporter(scene)
+                        else:
+                             # Fallback to Image export if PDF not supported directly
+                             # Or maybe try printing to PDF?
+                             # For now, let's assume it exists or fallback to ImageExporter with high DPI? No, PDF user asked for editable.
+                             # If pg doesn't support PDF vector export effectively, SVG is the vector fallback.
+                             # But standard pg has PDFExporter? Maybe called MatplotlibExporter in some contexts?
+                             # Let's try standard.
+                             try:
+                                 exporter = pyqtgraph.exporters.PDFExporter(scene)
+                             except AttributeError:
+                                 # Fallback: Print Scene
+                                 printer = QtGui.QPdfWriter(filename)
+                                 printer.setCreator("Synaptipy")
+                                 printer.setResolution(dpi)
+                                 painter = QtGui.QPainter(printer)
+                                 scene.render(painter)
+                                 painter.end()
+                                 self.status_bar.showMessage(f"Plot saved to {filename} (via QPdfWriter)", 3000)
+                                 return
+
+                    else: # png, jpg
+                        exporter = pyqtgraph.exporters.ImageExporter(scene)
+                        # Helper sets params
+                        exporter.parameters()['width'] = int(scene.width() * (dpi/72)) 
+                        # Or safer way to set dpi? ImageExporter usually takes width/height.
+                        # We can scale it.
+                    
+                    if exporter:
+                        if fmt in ["png", "jpg"]:
+                             # Scale for DPI
+                             # scene width is in pixels usually? 
+                             # If we want specific DPI, we scale the output image.
+                             # default logical dpi is often ~96 or 72.
+                             # If user wants 300, we scale up by 300/72 approx.
+                             scale_factor = dpi / 96.0 
+                             exporter.parameters()['width'] = int(scene.width() * scale_factor)
+                        
+                        exporter.export(filename)
+                    
+                    self.status_bar.showMessage(f"Plot saved to {filename}", 3000)
+                except Exception as e:
+                    log.error(f"Error saving plot: {e}")
+                    self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
+
+    def _on_trial_selection_requested(self, n):
+        """Filter trials to every Nth trial."""
         if not self.current_recording:
             return
-
-        # Simple save dialog
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Save Plot", str(Path.home() / "plot.png"), "Images (*.png *.jpg *.svg)"
-        )
-
-        if filename:
-            try:
-                # Use pyqtgraph exporter on the layout widget
-                import pyqtgraph.exporters
-
-                exporter = None
-                if filename.endswith(".svg"):
-                    exporter = pyqtgraph.exporters.SVGExporter(self.plot_canvas.widget.scene())
-                else:
-                    exporter = pyqtgraph.exporters.ImageExporter(self.plot_canvas.widget.scene())
-                exporter.export(filename)
-                self.status_bar.showMessage(f"Plot saved to {filename}", 3000)
-            except Exception as e:
-                log.error(f"Error saving plot: {e}")
-                self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
-
-    def _on_manual_limits_toggled(self, enabled):
-        self.manual_limits_enabled = enabled
-        self.y_controls.y_lock_checkbox.setEnabled(not enabled)  # Maybe?
-        # Update plots if needed
+        
+        self.max_trials_current_recording = getattr(self.current_recording, "max_trials", 0)
+        all_indices = range(self.max_trials_current_recording)
+        
+        # Select every Nth
+        self.selected_trial_indices = set(all_indices[::n])
+        
+        log.info(f"Filtering trials: Every {n}th -> {len(self.selected_trial_indices)} trials selected.")
+        self.config_panel.update_selection_label(self.selected_trial_indices)
+        self._update_plot()
+        
+    def _on_trial_selection_reset_requested(self):
+        """Reset trial selection to show all (raw data)."""
+        self.selected_trial_indices.clear() # Empty means all
+        log.info("Reset trial filtering: All trials selected.")
+        self.config_panel.update_selection_label(self.selected_trial_indices)
+        self._update_plot()
 
     def _apply_manual_limits_from_dict(self, limits):
-        # Apply limits
-        pass
+        pass # Deprecated
 
     def _toggle_select_current_trial(self):
         if self.current_trial_index in self.selected_trial_indices:
@@ -1324,5 +1442,6 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_plot()
 
     def _auto_select_trials(self):
-        # Auto select 5 trials
-        self.selected_trial_indices = set(range(min(5, self.max_trials_current_recording)))
+         # Removed auto-selection logic to avoid interfering with default view (Show All)
+         # self.selected_trial_indices = set(range(min(5, self.max_trials_current_recording)))
+         pass
