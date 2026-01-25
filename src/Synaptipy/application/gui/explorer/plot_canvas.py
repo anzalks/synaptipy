@@ -5,10 +5,10 @@ Explorer Plot Canvas widget.
 Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 """
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional
 
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore
 
 from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 from Synaptipy.core.data_model import Recording
@@ -37,9 +37,44 @@ class ExplorerPlotCanvas(QtCore.QObject):
         self.plot_widgets: List[pg.PlotItem] = []  # Ordered list
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
-
+        
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
+
+        # Constants
+
+    def clear_plot_items(self, chan_id: str):
+        """Robustly clear all data items from a channel plot."""
+        plot = self.channel_plots.get(chan_id)
+        if not plot:
+            return
+
+        # 1. Clear items tracked in our lists
+        if chan_id in self.channel_plot_data_items:
+            for item in self.channel_plot_data_items[chan_id]:
+                try:
+                    plot.removeItem(item)
+                except Exception:
+                    pass
+            self.channel_plot_data_items[chan_id].clear()
+
+        # 2. Clear items from plot's internal list if they seem to be data items
+        # Be careful not to remove grid or axes, but usually clear() does too much (removes labels/axes sometimes depending on impl)
+        # Instead, we can iterate over plot.listDataItems() if available
+        if hasattr(plot, "listDataItems"):
+            for item in plot.listDataItems():
+                try:
+                    plot.removeItem(item)
+                except Exception:
+                    pass
+        elif hasattr(plot, "items"):
+            # Fallback: remove all PlotDataItem
+            for item in plot.items[:]:
+                if isinstance(item, pg.PlotDataItem):
+                    try:
+                        plot.removeItem(item)
+                    except Exception:
+                        pass
 
     def clear(self):
         """Clear all plots."""

@@ -5,24 +5,18 @@ Explorer Tab widget for the Synaptipy GUI.
 Refactored modular version.
 """
 import logging
-import os
-import time
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Set, Union
-from functools import partial
+from typing import List, Optional, Dict, Any, Tuple, Set
 
 import numpy as np
-import pyqtgraph as pg
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 # --- Synaptipy Imports ---
-from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION, Z_ORDER
 from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.application.gui.analysis_worker import AnalysisWorker
-from Synaptipy.application.gui.nwb_dialog import NwbMetadataDialog
 
 # --- Components ---
 from .sidebar import ExplorerSidebar
@@ -320,6 +314,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # Reset Logic
         self._data_cache.clear()
         self._average_cache.clear()
+        self._processed_cache.clear()
         self._cache_dirty = False
         self.current_trial_index = 0
         self._cache_dirty: bool = False
@@ -374,7 +369,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     self.base_y_ranges[cid] = (mn - diff * 0.1, mx + diff * 0.1)
                 else:
                     self.base_y_ranges[cid] = (-1, 1)
-            except:
+            except Exception:
                 self.base_y_ranges[cid] = (-1, 1)
 
     def get_current_recording(self) -> Optional[Recording]:
@@ -399,16 +394,17 @@ class ExplorerTab(QtWidgets.QWidget):
             self.plot_canvas.widget.setUpdatesEnabled(False)
         try:
             # Clear existing items
-            for cid, items in self.plot_canvas.channel_plot_data_items.items():
-                p = self.plot_canvas.channel_plots.get(cid)
-                if p:
-                    for item in items:
-                        try:
-                            p.removeItem(item)
-                        except:
-                            pass
+            # Clear existing items robustly
+            for cid in self.plot_canvas.channel_plots.keys():
+                self.plot_canvas.clear_plot_items(cid)
+            
+            # Reset tracking lists
             self.plot_canvas.channel_plot_data_items.clear()
             self.plot_canvas.selected_average_plot_items.clear()
+            
+            # Re-init dict keys
+            for cid in self.plot_canvas.channel_plots.keys():
+                 self.plot_canvas.channel_plot_data_items[cid] = []
 
             # --- PLOT SETTINGS ---
             ds_enabled = self.config_panel.downsample_cb.isChecked()
@@ -545,7 +541,7 @@ class ExplorerTab(QtWidgets.QWidget):
         for cid, item in self.plot_canvas.selected_average_plot_items.items():
             try:
                 self.plot_canvas.channel_plots[cid].removeItem(item)
-            except:
+            except Exception:
                 pass
         self.plot_canvas.selected_average_plot_items.clear()
 
@@ -1315,50 +1311,33 @@ class ExplorerTab(QtWidgets.QWidget):
             )
 
             if filename:
+                from Synaptipy.shared.plot_exporter import PlotExporter
+                
+                # Provide context for export
+                export_config = {
+                    "plot_mode": self.current_plot_mode,
+                    "current_trial_index": self.current_trial_index,
+                    "selected_trial_indices": self.selected_trial_indices,
+                    "show_average": self.config_panel.show_avg_btn.isChecked()
+                }
+                
+                exporter = PlotExporter(
+                    recording=self.current_recording,
+                    plot_canvas_widget=self.plot_canvas.widget,
+                    plot_canvas_wrapper=self.plot_canvas,
+                    config=export_config
+                )
+                
                 try:
-                    import pyqtgraph.exporters
-                    # Use the central layout item (.ci) instead of the whole scene
-                    # This ensures we only export the plot area and respects layout bounds better
-                    target_item = self.plot_canvas.widget.ci
-                    
-                    exporter = None
-                    if fmt == "svg":
-                        exporter = pyqtgraph.exporters.SVGExporter(target_item)
-                    elif fmt == "pdf":
-                        if hasattr(pyqtgraph.exporters, "PDFExporter"):
-                             exporter = pyqtgraph.exporters.PDFExporter(target_item)
-                        else:
-                             # Fallback: Print Scene via QPdfWriter (Scene is okay here if we clip?)
-                             # Actually let's try to stick to Exporter if possible or render the widget.
-                             # Using QPdfWriter on the scene is a reasonable fallback if Exporter missing.
-                             printer = QtGui.QPdfWriter(filename)
-                             printer.setCreator("Synaptipy")
-                             printer.setResolution(dpi)
-                             painter = QtGui.QPainter(printer)
-                             self.plot_canvas.widget.scene().render(painter) # Render scene to printer
-                             painter.end()
-                             self.status_bar.showMessage(f"Plot saved to {filename} (via QPdfWriter)", 3000)
-                             return
-                    else: # png, jpg
-                        exporter = pyqtgraph.exporters.ImageExporter(target_item)
-                        # Helper sets params
-                        # For ImageExporter on Item, width affects pixel size directly
-                        exporter.parameters()['width'] = int(target_item.width() * (dpi/96.0))
-                    
-                    if exporter:
-                        if fmt in ["png", "jpg"]:
-                             # Scale for DPI
-                             # Target item width is in logical pixels (screen coordinates)
-                             # Scaling up provides higher resolution
-                             scale_factor = dpi / 96.0 
-                             exporter.parameters()['width'] = int(target_item.width() * scale_factor)
-                        
-                        exporter.export(filename)
-                    
+                    exporter.export(filename, fmt, dpi)
                     self.status_bar.showMessage(f"Plot saved to {filename}", 3000)
                 except Exception as e:
-                    log.error(f"Error saving plot: {e}")
                     self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
+
+        # Helper methods removed in favor of shared.plot_exporter.PlotExporter
+        pass
+            
+
 
     def _on_trial_selection_requested(self, n, start_index=0):
         """Filter trials to every Nth trial, starting from start_index."""
@@ -1419,11 +1398,6 @@ class ExplorerTab(QtWidgets.QWidget):
         if plot:
             if visible:
                 plot.show()
-                # Restore row
-                # This is tricky with GraphicsLayoutWidget.
-                # Ideally config panel should just toggle row height or something.
-                # But GraphicsLayoutWidget doesn't support hiding easily without removing.
-                # Just keeping plot items logic simpler: always there, maybe just hide content?
                 pass
             else:
                 plot.hide()
