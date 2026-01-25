@@ -28,6 +28,10 @@ from Synaptipy.application.startup_manager import StartupManager
 from Synaptipy.application.gui.dummy_classes import SYNAPTIPY_AVAILABLE
 from Synaptipy.shared.logging_config import setup_logging
 
+# Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyqtgraph")
+
 # Log instance to be initialized after setting up logging
 log = logging.getLogger(__name__)
 

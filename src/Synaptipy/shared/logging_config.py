@@ -30,7 +30,7 @@ from datetime import datetime
 DEFAULT_LOG_DIR = Path.home() / ".synaptipy" / "logs"
 
 # Define logger levels for different modes
-DEFAULT_CONSOLE_LEVEL = logging.INFO  # Regular operation - show INFO+ in console
+DEFAULT_CONSOLE_LEVEL = logging.WARNING  # Regular operation - show WARNING+ in console (Silent by default)
 DEFAULT_FILE_LEVEL = logging.INFO  # Regular operation - log INFO+ to file (balanced)
 DEV_CONSOLE_LEVEL = logging.DEBUG  # Dev mode - show DEBUG+ in console
 DEV_FILE_LEVEL = logging.DEBUG  # Dev mode - log DEBUG+ to file
