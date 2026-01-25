@@ -22,8 +22,8 @@ class ExplorerYControls(QtWidgets.QWidget):
     channel_scroll_changed = QtCore.Signal(str, int)
     lock_toggled = QtCore.Signal(bool)
 
-    SLIDER_RANGE_MIN = 1
-    SLIDER_RANGE_MAX = 100
+    SLIDER_RANGE_MIN = 0
+    SLIDER_RANGE_MAX = 1000
     SLIDER_DEFAULT_VALUE = SLIDER_RANGE_MIN
     SCROLLBAR_MAX_RANGE = 10000
 
@@ -98,7 +98,7 @@ class ExplorerYControls(QtWidgets.QWidget):
         y_zoom_widget = QtWidgets.QWidget()
         y_zoom_layout = QtWidgets.QVBoxLayout(y_zoom_widget)
         y_zoom_layout.setContentsMargins(0,0,0,0)
-        y_zoom_group = QtWidgets.QGroupBox("Y Zoom")
+        y_zoom_group = QtWidgets.QGroupBox("Amplitude Zoom (Y-Axis)")
         y_zoom_group_layout = QtWidgets.QVBoxLayout(y_zoom_group)
         y_zoom_layout.addWidget(y_zoom_group)
 

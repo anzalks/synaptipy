@@ -118,21 +118,28 @@ class PlotCustomizationManager:
             trial_transparency = 100
             log.debug("Using fallback colors (constants not available)")
         
+        # Get default pen width from constants
+        try:
+            from .constants import DEFAULT_PLOT_PEN_WIDTH
+            default_width = DEFAULT_PLOT_PEN_WIDTH
+        except ImportError:
+            default_width = 1
+        
         self.defaults = {
             'average': {
                 'color': average_color,
-                'width': 2,
+                'width': default_width,  # Use constant (1 pixel)
                 'opacity': 100  # 100% = fully opaque (alpha 1.0)
             },
             'single_trial': {
                 'color': trial_color,
-                'width': 1,
+                'width': default_width,  # Use constant (1 pixel)
                 'opacity': trial_transparency
             },
             'grid': {
                 'enabled': True,  # Whether grid is visible
                 'color': '#808080',  # Gray
-                'width': 1,
+                'width': default_width,  # Use constant (1 pixel)
                 'opacity': 70  # 70% = 70% opaque (alpha 0.7)
             }
         }
@@ -176,7 +183,8 @@ class PlotCustomizationManager:
                     for property_name in self.defaults[plot_type].keys():
                         key = f"{plot_type}/{property_name}"
                         self._settings.remove(key)
-                self._settings.sync()
+                # Async sync to prevent blocking
+                QtCore.QTimer.singleShot(0, self._settings.sync)
                 log.debug("Old preferences cleared from QSettings")
                     
             log.debug("User plot preferences loaded successfully")
@@ -194,7 +202,8 @@ class PlotCustomizationManager:
                     self._settings.setValue(key, value)
                     log.debug(f"Saving preference: {key} = {value}")
             
-            self._settings.sync()
+            # Async sync
+            QtCore.QTimer.singleShot(0, self._settings.sync)
             log.debug("Plot preferences saved successfully")
             
             # Clear pen cache since preferences changed
@@ -362,7 +371,8 @@ class PlotCustomizationManager:
                     key = f"{plot_type}/{property_name}"
                     value = self.defaults[plot_type][property_name]
                     self._settings.setValue(key, value)
-            self._settings.sync()
+            # Async sync
+            QtCore.QTimer.singleShot(0, self._settings.sync)
             
             log.debug("Updated preferences in batch, saved to QSettings, and reset pen cache")
             
@@ -415,7 +425,8 @@ class PlotCustomizationManager:
                 for property_name in self.defaults[plot_type].keys():
                     key = f"{plot_type}/{property_name}"
                     self._settings.remove(key)
-            self._settings.sync()
+            # Async sync
+            QtCore.QTimer.singleShot(0, self._settings.sync)
             log.debug("Cleared saved preferences from QSettings")
         except Exception as e:
             log.warning(f"Failed to clear saved preferences: {e}")
