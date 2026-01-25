@@ -12,22 +12,25 @@ from PySide6 import QtWidgets, QtCore
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-import Synaptipy.core.analysis.burst_analysis # Ensure registration
+import Synaptipy.core.analysis.burst_analysis  # Ensure registration
 
 log = logging.getLogger(__name__)
+
 
 class BurstAnalysisTab(MetadataDrivenAnalysisTab):
     """
     Tab for Burst Analysis.
     Visualizes detected bursts using brackets/lines on the main plot.
     """
-    
+
     def __init__(self, neo_adapter: NeoAdapter, settings_ref=None, parent=None):
         # Plot items
-        self.burst_lines = [] # List of PlotCurveItems or similar for bursts
+        self.burst_lines = []  # List of PlotCurveItems or similar for bursts
         self.spike_markers = None
-        
-        super().__init__(analysis_name="burst_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
+
+        super().__init__(
+            analysis_name="burst_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent
+        )
 
     def get_display_name(self) -> str:
         return "Burst Analysis"
@@ -36,9 +39,15 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         super()._setup_ui()
         # Initialize spike markers
         if self.plot_widget:
-            self.spike_markers = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush('r'))
+            self.spike_markers = pg.ScatterPlotItem(size=8, pen=pg.mkPen(None), brush=pg.mkBrush("r"))
             self.plot_widget.addItem(self.spike_markers)
             self.spike_markers.setVisible(False)
+
+    def _on_channel_changed(self, index):
+        """Re-add items to plot if cleared."""
+        super()._on_channel_changed(index)
+        if self.plot_widget and self.spike_markers and self.spike_markers not in self.plot_widget.items():
+            self.plot_widget.addItem(self.spike_markers)
 
     def _clear_burst_visualizations(self):
         """Remove old burst lines."""
@@ -46,7 +55,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
             for item in self.burst_lines:
                 self.plot_widget.removeItem(item)
             self.burst_lines.clear()
-            
+
         if self.spike_markers:
             self.spike_markers.setData([])
             self.spike_markers.setVisible(False)
@@ -56,87 +65,73 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         Visualize Burst Analysis results.
         """
         self._clear_burst_visualizations()
-        
-        if isinstance(results, dict) and 'result' in results:
-             result_data = results['result']
+
+        # Handle different result structures (Dict wrapper or Result Object)
+        if isinstance(results, dict) and "result" in results:
+            result_item = results["result"]
         else:
-             result_data = results
-             
-        if not isinstance(result_data, dict):
+            result_item = results
+
+        # Extract bursts list safely from Dict or Object
+        bursts = []
+        if hasattr(result_item, "bursts"):
+            bursts = result_item.bursts
+        elif isinstance(result_item, dict):
+            bursts = result_item.get("bursts", [])
+
+        if not bursts:
             return
 
-        # We need access to the raw data to plot lines at the right height
-        # But result_data usually just has stats.
-        # Wait, `burst_analysis.py` returns stats, but it doesn't return the burst indices/times explicitly in the final dict!
-        # Let's check `burst_analysis.py`.
-        # It returns: 'burst_count', 'spikes_per_burst_avg', 'burst_duration_avg', 'burst_freq_hz'.
-        # It DOES NOT return the actual burst start/end times in the wrapper output.
-        # This is a limitation of the current wrapper.
-        
-        # I need to modify `burst_analysis.py` wrapper to return the burst details (start/end times)
-        # so I can plot them.
-        
-        # For now, I will implement the plotting logic assuming the data is there,
-        # and then I will go fix `burst_analysis.py`.
-        
-        bursts = result_data.get('bursts') # List of lists of spike times
-        
         if bursts:
             # We want to draw a line above the burst.
-            # We need the Y-value. Let's use the max voltage in the burst + offset?
-            # Or just a fixed height if we don't have voltage easily accessible here?
-            # We have `self.plot_widget.listDataItems()`, but getting the data back is tricky if we don't store it.
-            # BaseAnalysisTab doesn't explicitly store the raw data in a way guaranteed to be here.
-            # BUT, MetadataDrivenAnalysisTab._on_channel_changed stores `self._current_plot_data`.
-            # Let's check if we can access it.
-            
+            # Get Y-offset from current data max or fallback
             y_offset = 0
-            if hasattr(self, '_current_plot_data') and self._current_plot_data:
+            if hasattr(self, "_current_plot_data") and self._current_plot_data:
                 # Find max voltage to place markers above
-                y_offset = np.max(self._current_plot_data['data']) + 10
+                try:
+                    y_offset = float(np.max(self._current_plot_data["data"])) + 10
+                except:
+                    y_offset = 50
             else:
-                y_offset = 50 # Fallback
-                
+                y_offset = 50  # Fallback
+
             for burst_spikes in bursts:
                 if len(burst_spikes) >= 2:
                     start_t = burst_spikes[0]
                     end_t = burst_spikes[-1]
-                    
+
                     # Draw a line
-                    # Using PlotCurveItem
-                    item = pg.PlotCurveItem([start_t, end_t], [y_offset, y_offset], pen=pg.mkPen('r', width=3))
+                    item = pg.PlotCurveItem([start_t, end_t], [y_offset, y_offset], pen=pg.mkPen("r", width=3))
                     self.plot_widget.addItem(item)
                     self.burst_lines.append(item)
-                    
-        # Also plot individual spikes if available (we need to re-detect or get them from result)
-        # The wrapper doesn't return all spike times, only burst ones implicitly.
-        # But we can't easily plot all spikes unless we run detection again or the wrapper returns them.
-        # Let's skip individual spike markers for now unless requested, or just mark the burst spikes.
-        # Actually, let's mark the burst spikes.
+
+        # Mark spikes within bursts explicitly
+
         all_burst_spikes = []
         if bursts:
             for b in bursts:
                 all_burst_spikes.extend(b)
-        
-        if all_burst_spikes and hasattr(self, '_current_plot_data') and self._current_plot_data:
-             # We need to find the voltage for these times.
-             # This is inefficient without indices.
-             # Let's just plot them at y_offset for now? Or try to map to voltage.
-             # Mapping to voltage is better.
-             time_vec = self._current_plot_data['time']
-             volt_vec = self._current_plot_data['data']
-             
-             # Find indices (approximate)
-             spike_indices = np.searchsorted(time_vec, all_burst_spikes)
-             # Clip to bounds
-             spike_indices = np.clip(spike_indices, 0, len(volt_vec)-1)
-             
-             spike_volts = volt_vec[spike_indices]
-             
-             self.spike_markers.setData(all_burst_spikes, spike_volts)
-             self.spike_markers.setVisible(True)
+
+        if all_burst_spikes and hasattr(self, "_current_plot_data") and self._current_plot_data:
+            # We need to find the voltage for these times.
+            # This is inefficient without indices.
+            # Let's just plot them at y_offset for now? Or try to map to voltage.
+            # Mapping to voltage is better.
+            time_vec = self._current_plot_data["time"]
+            volt_vec = self._current_plot_data["data"]
+
+            # Find indices (approximate)
+            spike_indices = np.searchsorted(time_vec, all_burst_spikes)
+            # Clip to bounds
+            spike_indices = np.clip(spike_indices, 0, len(volt_vec) - 1)
+
+            spike_volts = volt_vec[spike_indices]
+
+            self.spike_markers.setData(all_burst_spikes, spike_volts)
+            self.spike_markers.setVisible(True)
         else:
-             self.spike_markers.setVisible(False)
+            self.spike_markers.setVisible(False)
+
 
 # Export the class for dynamic loading
 ANALYSIS_TAB_CLASS = BurstAnalysisTab

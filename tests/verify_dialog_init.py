@@ -1,4 +1,3 @@
-
 import sys
 from pathlib import Path
 from PySide6 import QtWidgets
@@ -9,14 +8,11 @@ app = QtWidgets.QApplication.instance()
 if not app:
     app = QtWidgets.QApplication(sys.argv)
 
+
 def test_dialog():
     files = [Path("file1.abf"), Path("file2.abf")]
-    pipeline_config = [{
-        'analysis': 'spike_detection',
-        'scope': 'all_trials',
-        'params': {'threshold': -20}
-    }]
-    
+    pipeline_config = [{"analysis": "spike_detection", "scope": "all_trials", "params": {"threshold": -20}}]
+
     try:
         dialog = BatchAnalysisDialog(files, pipeline_config=pipeline_config)
         print("Dialog instantiated successfully")
@@ -28,7 +24,9 @@ def test_dialog():
     except Exception as e:
         print(f"Dialog instantiation failed: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     test_dialog()

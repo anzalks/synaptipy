@@ -40,10 +40,20 @@ dev = [
 ]
 
 [project.scripts]
-synaptipy-gui = "Synaptipy.application.__main__:run_gui"
+synaptipy = "Synaptipy.application.__main__:run_gui"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 Synaptipy = ["*.yml", "*.yaml", "*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

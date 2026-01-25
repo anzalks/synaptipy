@@ -10,10 +10,12 @@ from PySide6 import QtWidgets, QtCore, QtGui
 
 log = logging.getLogger(__name__)
 
+
 class SessionSummaryDialog(QtWidgets.QDialog):
     """
     Dialog showing a table of accumulated results and a summary of statistics (Mean/SD).
     """
+
     def __init__(self, results: List[Dict[str, Any]], parent=None):
         super().__init__(parent)
         self.results = results
@@ -27,16 +29,16 @@ class SessionSummaryDialog(QtWidgets.QDialog):
         # 1. Table of individual results
         self.table = QtWidgets.QTableWidget()
         layout.addWidget(self.table)
-        
+
         # 2. Statistics Summary
         stats_group = QtWidgets.QGroupBox("Session Statistics")
         self.stats_layout = QtWidgets.QFormLayout(stats_group)
         layout.addWidget(stats_group)
-        
+
         # Populate
         self._populate_table()
         self._calculate_stats()
-        
+
         # Close button
         close_btn = QtWidgets.QPushButton("Close")
         close_btn.clicked.connect(self.accept)
@@ -53,14 +55,14 @@ class SessionSummaryDialog(QtWidgets.QDialog):
         for k, v in sample.items():
             if isinstance(v, (int, float, str)):
                 keys.append(k)
-        
+
         # Ensure source_label is first
-        if 'source_label' in keys:
-            keys.remove('source_label')
-            keys.insert(0, 'source_label')
+        if "source_label" in keys:
+            keys.remove("source_label")
+            keys.insert(0, "source_label")
 
         self.table.setColumnCount(len(keys))
-        self.table.setHorizontalHeaderLabels([k.replace('_', ' ').title() for k in keys])
+        self.table.setHorizontalHeaderLabels([k.replace("_", " ").title() for k in keys])
         self.table.setRowCount(len(self.results))
 
         for row, entry in enumerate(self.results):
@@ -88,6 +90,6 @@ class SessionSummaryDialog(QtWidgets.QDialog):
             if values:
                 mean_val = np.mean(values)
                 std_val = np.std(values)
-                
-                label = key.replace('_', ' ').title()
+
+                label = key.replace("_", " ").title()
                 self.stats_layout.addRow(f"{label}:", QtWidgets.QLabel(f"{mean_val:.4g} ± {std_val:.4g}"))
