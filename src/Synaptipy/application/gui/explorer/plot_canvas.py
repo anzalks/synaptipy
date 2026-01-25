@@ -15,27 +15,29 @@ from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
 
+
 class ExplorerPlotCanvas(QtCore.QObject):
     """
     Manages the plotting area (GraphicsLayoutWidget) and plot items.
     """
+
     # Signal emitted when a ViewBox range changes: (channel_id, new_range)
     x_range_changed = QtCore.Signal(str, object)
     y_range_changed = QtCore.Signal(str, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
         # Create the widget using factory
         self.widget = SynaptipyPlotFactory.create_graphics_layout()
-        self.widget.setBackground('white')
-        
+        self.widget.setBackground("white")
+
         # State
         self.channel_plots: Dict[str, pg.PlotItem] = {}
-        self.plot_widgets: List[pg.PlotItem] = [] # Ordered list
+        self.plot_widgets: List[pg.PlotItem] = []  # Ordered list
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
-        
+
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
 
@@ -53,32 +55,32 @@ class ExplorerPlotCanvas(QtCore.QObject):
         Returns the list of channel keys in order.
         """
         self.clear()
-        
+
         if not recording or not recording.channels:
             return []
 
         channel_keys = list(recording.channels.keys())
         first_plot_item = None
-        
+
         self.widget.ci.setSpacing(10)
 
         for i, chan_key in enumerate(channel_keys):
             channel = recording.channels[chan_key]
-            
+
             # Create plot item
             plot_item = self.widget.addPlot(row=i, col=0)
-            
+
             # X-Link
             if first_plot_item is None:
                 first_plot_item = plot_item
             else:
                 plot_item.setXLink(first_plot_item)
-            
+
             # Styling
             try:
                 vb = plot_item.getViewBox()
                 if vb:
-                    vb.setBackgroundColor('white')
+                    vb.setBackgroundColor("white")
                     # Tag viewbox with ID for signal handling
                     vb._synaptipy_chan_id = chan_key
             except Exception as e:
@@ -86,20 +88,20 @@ class ExplorerPlotCanvas(QtCore.QObject):
 
             # Grid
             plot_item.showGrid(x=True, y=True, alpha=0.3)
-            
+
             # Labels
-            plot_item.setLabel('left', text=channel.get_primary_data_label(), units=channel.units)
-            plot_item.getAxis('left').setWidth(self.Y_AXIS_FIXED_WIDTH)
-            
+            plot_item.setLabel("left", text=channel.get_primary_data_label(), units=channel.units)
+            plot_item.getAxis("left").setWidth(self.Y_AXIS_FIXED_WIDTH)
+
             # Bottom Axis
             if i == len(channel_keys) - 1:
-                plot_item.setLabel('bottom', 'Time', units='s')
+                plot_item.setLabel("bottom", "Time", units="s")
             else:
-                plot_item.getAxis('bottom').showLabel(False)
-            
+                plot_item.getAxis("bottom").showLabel(False)
+
             # Interaction
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
-            
+
             # Connect Signals
             self._connect_signals(plot_item, chan_key)
 

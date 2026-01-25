@@ -17,19 +17,21 @@ from .analysis_tabs.event_detection_tab import EventDetectionTab
 from .analysis_tabs.spike_tab import SpikeAnalysisTab
 from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.shared.styling import style_button
+
 # from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog # Imported locally to avoid circular imports?
 
 
 log = logging.getLogger(__name__)
 
+
 class AnalysisSourceListWidget(QtWidgets.QListWidget):
     """Custom ListWidget that accepts file drops for analysis."""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.DropOnly)
-        self.session_manager = SessionManager() # Access singleton
+        self.session_manager = SessionManager()  # Access singleton
 
     def dragEnterEvent(self, event: QtGui.QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -48,19 +50,22 @@ class AnalysisSourceListWidget(QtWidgets.QListWidget):
             urls = event.mimeData().urls()
             new_items = []
             current_items = self.session_manager.selected_analysis_items
-            
+
             for url in urls:
                 file_path = Path(url.toLocalFile())
                 if file_path.is_file():
                     # Create analysis item
-                    item = {'path': file_path, 'target_type': 'Recording', 'trial_index': None}
-                    
+                    item = {"path": file_path, "target_type": "Recording", "trial_index": None}
+
                     # Check for duplicates
-                    is_duplicate = any(existing.get('path') == file_path and existing.get('target_type') == 'Recording' for existing in current_items)
+                    is_duplicate = any(
+                        existing.get("path") == file_path and existing.get("target_type") == "Recording"
+                        for existing in current_items
+                    )
                     if not is_duplicate:
                         new_items.append(item)
                         log.debug(f"Dropped file added to analysis: {file_path.name}")
-            
+
             if new_items:
                 # Update SessionManager (append new items)
                 updated_list = current_items + new_items
@@ -70,6 +75,7 @@ class AnalysisSourceListWidget(QtWidgets.QListWidget):
                 event.ignore()
         else:
             event.ignore()
+
 
 class AnalyserTab(QtWidgets.QWidget):
     """Main Analyser Widget containing dynamically loaded sub-tabs."""
@@ -91,7 +97,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.splitter: Optional[QtWidgets.QSplitter] = None
 
         self._setup_ui()
-        self._restore_state() # Restore splitter state
+        self._restore_state()  # Restore splitter state
         self._load_analysis_tabs()
         # Connect the signal from SessionManager
         self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
@@ -107,23 +113,23 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Top Toolbar with Batch Analysis Button ---
         toolbar_layout = QtWidgets.QHBoxLayout()
         toolbar_layout.setContentsMargins(0, 0, 0, 5)
-        
+
         # Batch Analysis Button
         self.batch_analysis_btn = QtWidgets.QPushButton("Run Batch Analysis...")
         self.batch_analysis_btn.setToolTip("Run analysis on multiple files.")
         self.batch_analysis_btn.clicked.connect(self._on_batch_analysis_clicked)
-        style_button(self.batch_analysis_btn, style='primary')
+        style_button(self.batch_analysis_btn, style="primary")
         toolbar_layout.addWidget(self.batch_analysis_btn)
-        
+
         toolbar_layout.addStretch()
-        
+
         toolbar_layout.addStretch()
-        
+
         # Info label showing number of files
         self.files_info_label = QtWidgets.QLabel("No files loaded")
         self.files_info_label.setStyleSheet("color: gray;")
         toolbar_layout.addWidget(self.files_info_label)
-        
+
         main_layout.addLayout(toolbar_layout)
 
         # Create Global Controls widgets (they will be injected into the active tab)
@@ -131,7 +137,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.source_list_widget.setToolTip("Items added from the Explorer tab for analysis.")
         self.source_list_widget.setMinimumHeight(60)
         self.source_list_widget.setMaximumHeight(120)
-        
+
         self.central_analysis_item_combo = QtWidgets.QComboBox()
         self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
         self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
@@ -139,18 +145,17 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Sub-Tab Widget (Analysis Tabs) - Takes full width ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
         self.sub_tab_widget.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
         )
         self.sub_tab_widget.setTabPosition(QtWidgets.QTabWidget.TabPosition.North)
         self.sub_tab_widget.setMovable(True)
-        
+
         # Add sub_tab_widget directly to main layout
         main_layout.addWidget(self.sub_tab_widget)
-        
+
         # Connect tab change signal
         self.sub_tab_widget.currentChanged.connect(self._on_tab_changed)
-        
+
         self.setLayout(main_layout)
         log.debug("Main AnalyserTab UI setup complete (Global controls will be injected into tabs).")
 
@@ -165,49 +170,67 @@ class AnalyserTab(QtWidgets.QWidget):
         self._loaded_analysis_tabs = []
         analysis_pkg_path = ["Synaptipy", "application", "gui", "analysis_tabs"]
         analysis_module_prefix = ".".join(analysis_pkg_path) + "."
-        # --- Get NeoAdapter instance --- 
+        # --- Get NeoAdapter instance ---
         neo_adapter_instance = self._neo_adapter
         if neo_adapter_instance is None:
-             log.error("Cannot load analysis tabs: NeoAdapter not available from ExplorerTab.")
-             # Show error in tab area
-             placeholder = QtWidgets.QLabel("Error: Core NeoAdapter missing."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Error")
-             self.sub_tab_widget.blockSignals(False)  # Re-enable signals before returning
-             return 
-        # --- END Get NeoAdapter --- 
+            log.error("Cannot load analysis tabs: NeoAdapter not available from ExplorerTab.")
+            # Show error in tab area
+            placeholder = QtWidgets.QLabel("Error: Core NeoAdapter missing.")
+            placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            self.sub_tab_widget.addTab(placeholder, "Error")
+            self.sub_tab_widget.blockSignals(False)  # Re-enable signals before returning
+            return
+        # --- END Get NeoAdapter ---
         try:
             pkg = importlib.import_module(".".join(analysis_pkg_path))
-            if not hasattr(pkg, '__path__') or not pkg.__path__: log.error(f"No path for analysis pkg: {'.'.join(analysis_pkg_path)}"); return
-            pkg_dir = Path(pkg.__path__[0]); log.debug(f"Scanning analysis modules in: {pkg_dir}")
-            modules_found = list(pkgutil.iter_modules([str(pkg_dir)])) # Get list first
+            if not hasattr(pkg, "__path__") or not pkg.__path__:
+                log.error(f"No path for analysis pkg: {'.'.join(analysis_pkg_path)}")
+                return
+            pkg_dir = Path(pkg.__path__[0])
+            log.debug(f"Scanning analysis modules in: {pkg_dir}")
+            modules_found = list(pkgutil.iter_modules([str(pkg_dir)]))  # Get list first
             log.debug(f"Modules found by pkgutil: {[m.name for m in modules_found]}")
-            
+
             for finder, name, ispkg in modules_found:
-                 log.debug(f"Processing module: name='{name}', ispkg={ispkg}") # Log each module attempt
-                 if not ispkg and name != 'base':
-                     module_name = f"{analysis_module_prefix}{name}"; 
-                     log.debug(f"Attempting to import module: {module_name}") # Log before import
-                     try:
-                         module = importlib.import_module(module_name); 
-                         log.debug(f"Successfully imported module: {module_name}") # Log after import
-                         found_tab = False
-                         # --- UPDATED: Look for ANALYSIS_TAB_CLASS --- 
-                         tab_class = getattr(module, 'ANALYSIS_TAB_CLASS', None)
-                         if tab_class and isinstance(tab_class, type) and issubclass(tab_class, BaseAnalysisTab):
-                             log.debug(f"Found analysis tab class via ANALYSIS_TAB_CLASS: {tab_class.__name__}")
-                             try:
-                                 # --- UPDATED: Pass neo_adapter directly --- 
-                                 tab_instance = tab_class(neo_adapter=neo_adapter_instance, settings_ref=self._settings, parent=self)
-                                 tab_name = tab_instance.get_display_name()
-                                 self.sub_tab_widget.addTab(tab_instance, tab_name)
-                                 self._loaded_analysis_tabs.append(tab_instance); log.debug(f"Loaded analysis tab: '{tab_name}'"); found_tab = True
-                             except NotImplementedError as nie: log.error(f"{tab_class.__name__} missing method: {nie}")
-                             except Exception as e_inst: log.error(f"Failed instantiate/add tab {tab_class.__name__}: {e_inst}", exc_info=True)
-                         # --- END UPDATE ---
-                         if not found_tab: log.warning(f"No ANALYSIS_TAB_CLASS constant found or it's not a BaseAnalysisTab subclass in: {module_name}")
-                     except ImportError as e_imp: log.error(f"Failed import module '{module_name}': {e_imp}", exc_info=True)
-                     except Exception as e_load: log.error(f"Failed load/process module '{module_name}': {e_load}", exc_info=True)
-        except ModuleNotFoundError: log.error(f"Could not find analysis pkg path: {'.'.join(analysis_pkg_path)}")
-        except Exception as e_pkg: log.error(f"Failed discovery analysis tabs: {e_pkg}", exc_info=True)
+                log.debug(f"Processing module: name='{name}', ispkg={ispkg}")  # Log each module attempt
+                if not ispkg and name != "base":
+                    module_name = f"{analysis_module_prefix}{name}"
+                    log.debug(f"Attempting to import module: {module_name}")  # Log before import
+                    try:
+                        module = importlib.import_module(module_name)
+                        log.debug(f"Successfully imported module: {module_name}")  # Log after import
+                        found_tab = False
+                        # --- UPDATED: Look for ANALYSIS_TAB_CLASS ---
+                        tab_class = getattr(module, "ANALYSIS_TAB_CLASS", None)
+                        if tab_class and isinstance(tab_class, type) and issubclass(tab_class, BaseAnalysisTab):
+                            log.debug(f"Found analysis tab class via ANALYSIS_TAB_CLASS: {tab_class.__name__}")
+                            try:
+                                # --- UPDATED: Pass neo_adapter directly ---
+                                tab_instance = tab_class(
+                                    neo_adapter=neo_adapter_instance, settings_ref=self._settings, parent=self
+                                )
+                                tab_name = tab_instance.get_display_name()
+                                self.sub_tab_widget.addTab(tab_instance, tab_name)
+                                self._loaded_analysis_tabs.append(tab_instance)
+                                log.debug(f"Loaded analysis tab: '{tab_name}'")
+                                found_tab = True
+                            except NotImplementedError as nie:
+                                log.error(f"{tab_class.__name__} missing method: {nie}")
+                            except Exception as e_inst:
+                                log.error(f"Failed instantiate/add tab {tab_class.__name__}: {e_inst}", exc_info=True)
+                        # --- END UPDATE ---
+                        if not found_tab:
+                            log.warning(
+                                f"No ANALYSIS_TAB_CLASS constant found or it's not a BaseAnalysisTab subclass in: {module_name}"
+                            )
+                    except ImportError as e_imp:
+                        log.error(f"Failed import module '{module_name}': {e_imp}", exc_info=True)
+                    except Exception as e_load:
+                        log.error(f"Failed load/process module '{module_name}': {e_load}", exc_info=True)
+        except ModuleNotFoundError:
+            log.error(f"Could not find analysis pkg path: {'.'.join(analysis_pkg_path)}")
+        except Exception as e_pkg:
+            log.error(f"Failed discovery analysis tabs: {e_pkg}", exc_info=True)
         finally:
             # Re-enable signals after all tabs are loaded
             self.sub_tab_widget.blockSignals(False)
@@ -216,12 +239,12 @@ class AnalyserTab(QtWidgets.QWidget):
         from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 
         registered_analyses = AnalysisRegistry.list_registered()
-        
+
         # Collect all covered analysis names from loaded manual tabs
         loaded_registry_names = set()
         for tab in self._loaded_analysis_tabs:
             loaded_registry_names.add(tab.get_registry_name())
-            if hasattr(tab, 'get_covered_analysis_names'):
+            if hasattr(tab, "get_covered_analysis_names"):
                 loaded_registry_names.update(tab.get_covered_analysis_names())
 
         for analysis_name in registered_analyses:
@@ -232,7 +255,7 @@ class AnalyserTab(QtWidgets.QWidget):
                         analysis_name=analysis_name,
                         neo_adapter=self._neo_adapter,
                         settings_ref=self._settings,
-                        parent=self
+                        parent=self,
                     )
                     self.sub_tab_widget.addTab(tab_instance, tab_instance.get_display_name())
                     self._loaded_analysis_tabs.append(tab_instance)
@@ -242,18 +265,19 @@ class AnalyserTab(QtWidgets.QWidget):
         # ------------------------------------------------------------------------
 
         if not self._loaded_analysis_tabs:
-             log.warning("No analysis sub-tabs loaded."); placeholder = QtWidgets.QLabel("No analysis modules found."); placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter); self.sub_tab_widget.addTab(placeholder, "Info")
+            log.warning("No analysis sub-tabs loaded.")
+            placeholder = QtWidgets.QLabel("No analysis modules found.")
+            placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            self.sub_tab_widget.addTab(placeholder, "Info")
         else:
             # Inject global controls into the first tab initially
             first_tab = self._loaded_analysis_tabs[0]
-            if hasattr(first_tab, 'set_global_controls'):
+            if hasattr(first_tab, "set_global_controls"):
                 try:
                     first_tab.set_global_controls(self.source_list_widget, self.central_analysis_item_combo)
                     log.debug(f"Injected global controls into first tab: {first_tab.get_display_name()}")
                 except Exception as e:
                     log.error(f"Failed to inject global controls into first tab: {e}", exc_info=True)
-
-
 
     # --- Batch Analysis Handler ---
     @QtCore.Slot()
@@ -262,37 +286,39 @@ class AnalyserTab(QtWidgets.QWidget):
         if not self._analysis_items:
             QtWidgets.QMessageBox.warning(self, "No Files", "Please load files in the Explorer tab first.")
             return
-            
+
         # Filter for Recording items only
-        recording_items = [item for item in self._analysis_items if item['target_type'] == 'Recording']
+        recording_items = [item for item in self._analysis_items if item["target_type"] == "Recording"]
         if not recording_items:
-             QtWidgets.QMessageBox.warning(self, "No Recordings", "No valid recording files selected for batch analysis.")
-             return
+            QtWidgets.QMessageBox.warning(
+                self, "No Recordings", "No valid recording files selected for batch analysis."
+            )
+            return
 
         from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog
-        
+
         # Extract files to process (Recording objects or Paths)
         # Prefer in-memory Recording objects to fix Split-Brain issues
         files_to_process = []
         for item in recording_items:
-            if item.get('recording_ref'):
-                files_to_process.append(item['recording_ref'])
+            if item.get("recording_ref"):
+                files_to_process.append(item["recording_ref"])
             else:
-                files_to_process.append(item['path'])
-        
+                files_to_process.append(item["path"])
+
         # Ensure uniqueness (though ExplorerTab largely handles this)
         # We invoke set() but Recording objects are hashable by id, Paths by value.
         # Given ExplorerTab prevents duplicate Paths for same target type, this list should be unique per file.
         # But to be safe if multiple sources add items:
-        # actually, simply passing the list is fine as BatchDialog handles list. 
-        # But let's keep the set() behavior for safety if logic changes elsewhere, 
+        # actually, simply passing the list is fine as BatchDialog handles list.
+        # But let's keep the set() behavior for safety if logic changes elsewhere,
         # BUT set() might lose order. List is better for order.
         # Let's trust ExplorerTab uniqueness for now.
-        
+
         # Gather current configuration from active tab if possible
         pipeline_config = None
         default_channels = None
-        
+
         current_tab = self.sub_tab_widget.currentWidget()
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
             try:
@@ -300,48 +326,43 @@ class AnalyserTab(QtWidgets.QWidget):
                 params = current_tab._gather_analysis_parameters()
                 if params:
                     # 2. Get registry name
-                    registry_name = getattr(current_tab, 'get_registry_name', lambda: None)()
-                    
+                    registry_name = getattr(current_tab, "get_registry_name", lambda: None)()
+
                     if not registry_name:
-                         # Attempt to get from metadata if it's a metadata tab
-                         if hasattr(current_tab, 'analysis_name'):
-                             registry_name = current_tab.analysis_name
-                    
+                        # Attempt to get from metadata if it's a metadata tab
+                        if hasattr(current_tab, "analysis_name"):
+                            registry_name = current_tab.analysis_name
+
                     # Handle special case for EventDetectionTab which returns registry_key in params
-                    if 'registry_key' in params:
-                        registry_name = params.pop('registry_key')
-                    
+                    if "registry_key" in params:
+                        registry_name = params.pop("registry_key")
+
                     # Remove internal keys
-                    params.pop('method_display', None)
-                    
+                    params.pop("method_display", None)
+
                     if registry_name:
-                        pipeline_config = [{
-                            'analysis': registry_name,
-                            'scope': 'all_trials', # Default scope
-                            'params': params
-                        }]
+                        pipeline_config = [
+                            {"analysis": registry_name, "scope": "all_trials", "params": params}  # Default scope
+                        ]
                         log.debug(f"Pre-filling batch pipeline with settings from {current_tab.get_display_name()}")
-                
+
                 # 3. Get channel selection
-                if hasattr(current_tab, 'signal_channel_combobox') and current_tab.signal_channel_combobox:
+                if hasattr(current_tab, "signal_channel_combobox") and current_tab.signal_channel_combobox:
                     channel_id = current_tab.signal_channel_combobox.currentData()
                     if channel_id is not None:
                         default_channels = [str(channel_id)]
-                        
+
             except Exception as e:
                 log.warning(f"Could not gather batch parameters from current tab: {e}")
-        
+
         # Open dialog with pre-filled config
         # Note: The init signature of BatchAnalysisDialog is (files, pipeline_config, default_channels, parent)
-        # We need to make sure we match it. 
+        # We need to make sure we match it.
         # Checking previous files... BatchAnalysisDialog declaration was:
         # def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
-        
+
         dialog = BatchAnalysisDialog(
-            files=files_to_process, 
-            pipeline_config=pipeline_config,
-            default_channels=default_channels, 
-            parent=self
+            files=files_to_process, pipeline_config=pipeline_config, default_channels=default_channels, parent=self
         )
         dialog.exec()
 
@@ -353,15 +374,15 @@ class AnalyserTab(QtWidgets.QWidget):
         Updates the list widget, central combo box, and internal state.
         """
         log.debug(f"Received updated analysis set with {len(analysis_items)} items.")
-        self._analysis_items = analysis_items # Store the latest list
+        self._analysis_items = analysis_items  # Store the latest list
 
         # Update files info label
         unique_files: Set[Path] = set()
         for item in analysis_items:
-            file_path = item.get('path')
+            file_path = item.get("path")
             if file_path and isinstance(file_path, Path):
                 unique_files.add(file_path)
-        
+
         if unique_files:
             self.files_info_label.setText(f"{len(unique_files)} file(s) loaded")
             self.files_info_label.setStyleSheet("")  # Reset to default color
@@ -377,13 +398,17 @@ class AnalyserTab(QtWidgets.QWidget):
         else:
             self.source_list_widget.setEnabled(True)
             for item in analysis_items:
-                path_name = item['path'].name
-                target = item['target_type']
-                if target == 'Recording': display_text = f"File: {path_name}"
-                elif target == 'Current Trial': trial_info = f" (Trial {item['trial_index'] + 1})" if item.get('trial_index') is not None else ""; display_text = f"{path_name} [{target}{trial_info}]"
-                else: display_text = f"{path_name} [{target}]"
+                path_name = item["path"].name
+                target = item["target_type"]
+                if target == "Recording":
+                    display_text = f"File: {path_name}"
+                elif target == "Current Trial":
+                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
+                    display_text = f"{path_name} [{target}{trial_info}]"
+                else:
+                    display_text = f"{path_name} [{target}]"
                 list_item = QtWidgets.QListWidgetItem(display_text)
-                list_item.setToolTip(str(item['path'])) # Show full path on hover
+                list_item.setToolTip(str(item["path"]))  # Show full path on hover
                 self.source_list_widget.addItem(list_item)
 
         # Update the Central ComboBox
@@ -395,22 +420,22 @@ class AnalyserTab(QtWidgets.QWidget):
         else:
             self.central_analysis_item_combo.setEnabled(True)
             for i, item in enumerate(analysis_items):
-                path_name = item.get('path', Path("Unknown")).name
-                target = item.get('target_type', 'Unknown')
+                path_name = item.get("path", Path("Unknown")).name
+                target = item.get("target_type", "Unknown")
                 display_text = f"Item {i+1}: "
-                if target == 'Recording': 
+                if target == "Recording":
                     display_text += f"File: {path_name}"
-                elif target == 'Current Trial': 
-                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get('trial_index') is not None else ""
+                elif target == "Current Trial":
+                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
                     display_text += f"{path_name} [{target}{trial_info}]"
-                else: 
+                else:
                     display_text += f"{path_name} [{target}]"
                 self.central_analysis_item_combo.addItem(display_text)
         self.central_analysis_item_combo.blockSignals(False)
 
         # Trigger state update for all sub-tabs
         self.update_state()
-        
+
         # Trigger initial selection if items exist
         if analysis_items:
             self._on_central_item_selected(0)
@@ -430,7 +455,7 @@ class AnalyserTab(QtWidgets.QWidget):
                 log.debug(f"Forwarded selection to {current_tab.get_display_name()}")
             except Exception as e:
                 log.error(f"Error forwarding selection to tab: {e}", exc_info=True)
-    
+
     @QtCore.Slot(int)
     def _on_tab_changed(self, tab_index: int):
         """
@@ -440,9 +465,9 @@ class AnalyserTab(QtWidgets.QWidget):
         log.debug(f"Analysis tab changed to index: {tab_index}")
         if tab_index < 0:
             return
-        
+
         current_tab = self.sub_tab_widget.widget(tab_index)
-        
+
         # Inject global controls into the current tab
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
             try:
@@ -450,13 +475,15 @@ class AnalyserTab(QtWidgets.QWidget):
                 log.debug(f"Injected global controls into {current_tab.get_display_name()}")
             except Exception as e:
                 log.error(f"Error injecting global controls: {e}", exc_info=True)
-            
+
             # Only forward selection if combo box is enabled (has valid items) and has items
             # This prevents forwarding invalid indices during initialization before
             # update_analysis_sources() populates the combo box
-            if (self.central_analysis_item_combo.isEnabled() and 
-                self.central_analysis_item_combo.count() > 0 and
-                len(self._analysis_items) > 0):
+            if (
+                self.central_analysis_item_combo.isEnabled()
+                and self.central_analysis_item_combo.count() > 0
+                and len(self._analysis_items) > 0
+            ):
                 selected_index = self.central_analysis_item_combo.currentIndex()
                 if selected_index >= 0 and selected_index < len(self._analysis_items):
                     try:
@@ -465,29 +492,37 @@ class AnalyserTab(QtWidgets.QWidget):
                     except Exception as e:
                         log.error(f"Error updating tab on switch: {e}", exc_info=True)
                 else:
-                    log.debug(f"Skipping tab update: invalid combo index {selected_index} (items count: {len(self._analysis_items)})")
+                    log.debug(
+                        f"Skipping tab update: invalid combo index {selected_index} (items count: {len(self._analysis_items)})"
+                    )
             else:
-                log.debug(f"Skipping tab update: combo box not ready (enabled={self.central_analysis_item_combo.isEnabled()}, count={self.central_analysis_item_combo.count()}, items={len(self._analysis_items)})")
+                log.debug(
+                    f"Skipping tab update: combo box not ready (enabled={self.central_analysis_item_combo.isEnabled()}, count={self.central_analysis_item_combo.count()}, items={len(self._analysis_items)})"
+                )
 
     # --- Update State Method ---
-    def update_state(self, _=None): # Can ignore argument if called directly or by simple signals
+    def update_state(self, _=None):  # Can ignore argument if called directly or by simple signals
         """Updates the state of all loaded sub-tabs based on the current analysis list."""
         # Update all loaded sub-tabs, passing only the list of analysis items
-        log.debug(f"Updating state for {len(self._loaded_analysis_tabs)} sub-tabs with {len(self._analysis_items)} analysis items.")
+        log.debug(
+            f"Updating state for {len(self._loaded_analysis_tabs)} sub-tabs with {len(self._analysis_items)} analysis items."
+        )
         for tab in self._loaded_analysis_tabs:
-             try:
-                 # Pass only the analysis items list
-                 tab.update_state(self._analysis_items)
-             except Exception as e_update:
-                 log.error(f"Error updating state for tab '{tab.get_display_name()}': {e_update}", exc_info=True)
+            try:
+                # Pass only the analysis items list
+                tab.update_state(self._analysis_items)
+            except Exception as e_update:
+                log.error(f"Error updating state for tab '{tab.get_display_name()}': {e_update}", exc_info=True)
 
     # --- Cleanup ---
     def cleanup(self):
         log.debug("Cleaning up main AnalyserTab and sub-tabs.")
-        self._save_state() # Save splitter state
+        self._save_state()  # Save splitter state
         for tab in self._loaded_analysis_tabs:
-            try: tab.cleanup()
-            except Exception as e_cleanup: log.error(f"Error during cleanup for tab '{tab.get_display_name()}': {e_cleanup}")
+            try:
+                tab.cleanup()
+            except Exception as e_cleanup:
+                log.error(f"Error during cleanup for tab '{tab.get_display_name()}': {e_cleanup}")
         self._loaded_analysis_tabs = []
 
     # --- State Persistence ---
