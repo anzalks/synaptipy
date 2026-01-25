@@ -1,4 +1,5 @@
 """Placeholder for Command Line Interface (CLI) logic."""
+
 # Use libraries like 'argparse' or 'click'
 # import argparse
 # from pathlib import Path

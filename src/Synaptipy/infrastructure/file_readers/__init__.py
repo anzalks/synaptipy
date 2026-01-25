@@ -12,5 +12,5 @@ from .neo_adapter import NeoAdapter
 
 # Define the public API for this subpackage
 __all__ = [
-    'NeoAdapter',
+    "NeoAdapter",
 ]

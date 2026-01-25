@@ -26,10 +26,10 @@ from .event_detection import detect_minis_threshold
 
 # Define what `from Synaptipy.core.analysis import *` imports
 __all__ = [
-    'AnalysisRegistry',
-    'calculate_rmp',
-    'detect_spikes_threshold',
-    'calculate_rin',
-    'calculate_tau',
-    'detect_minis_threshold',
+    "AnalysisRegistry",
+    "calculate_rmp",
+    "detect_spikes_threshold",
+    "calculate_rin",
+    "calculate_tau",
+    "detect_minis_threshold",
 ]

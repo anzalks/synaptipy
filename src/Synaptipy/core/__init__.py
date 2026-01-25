@@ -11,9 +11,9 @@ from .data_model import Recording, Channel, Experiment
 
 # Explicitly define the public API of this subpackage
 __all__ = [
-    'Recording',
-    'Channel',
-    'Experiment',
+    "Recording",
+    "Channel",
+    "Experiment",
     # Add EventDetector, SignalProcessor here if/when they are implemented
     # and intended for direct use from outside the core layer.
 ]
