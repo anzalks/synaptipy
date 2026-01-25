@@ -399,34 +399,55 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def update_plot_pens(self):
         """Update plot pens when customization preferences change."""
+        # Prevent re-entrant calls
+        if getattr(self, '_is_updating_pens', False):
+            return
+            
         if not self.current_recording or not self.plot_canvas.channel_plots:
             return
             
+        self._is_updating_pens = True
         try:
             from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
             
+            # Get pens once (cached in customization manager)
             avg_pen = get_average_pen()
             trial_pen = get_single_trial_pen()
             
-            # Update existing plot item pens
-            for cid, items in self.plot_canvas.channel_plot_data_items.items():
-                for item in items:
-                    try:
-                        # Check if this is an average plot (usually last item, higher Z value)
-                        if hasattr(item, 'name') and item.name() == "Average":
-                            item.setPen(avg_pen)
-                        else:
-                            item.setPen(trial_pen)
-                    except Exception:
-                        pass
-                        
-            # Force repaint
+            # Disable updates during batch operation
             if self.plot_canvas.widget:
-                self.plot_canvas.widget.update()
-                
-            log.debug("Updated plot pens from customization preferences")
+                self.plot_canvas.widget.setUpdatesEnabled(False)
+            
+            try:
+                # Update existing plot item pens
+                for cid, items in self.plot_canvas.channel_plot_data_items.items():
+                    if not items: continue
+                    
+                    # Optimization: Skip hidden plots
+                    # The expensive setPen operation is avoided for all items in hidden plots
+                    plot_widget = self.plot_canvas.channel_plots.get(cid)
+                    if not plot_widget or not plot_widget.isVisible():
+                        continue
+                        
+                    for item in items:
+                        try:
+                            # Check if this is an average plot
+                            if hasattr(item, 'name') and item.name() == "Average":
+                                item.setPen(avg_pen)
+                            else:
+                                item.setPen(trial_pen)
+                        except Exception:
+                            pass
+            finally:
+                # Re-enable updates and force single repaint
+                if self.plot_canvas.widget:
+                    self.plot_canvas.widget.setUpdatesEnabled(True)
+                    self.plot_canvas.widget.update()
+                    
         except Exception as e:
             log.warning(f"Failed to update plot pens: {e}")
+        finally:
+            self._is_updating_pens = False
 
     # --- Interaction Logic (Zoom/Scroll) ---
     # Need to reimplement _calculate_new_range, _apply_x_zoom, etc.
@@ -561,41 +582,45 @@ class ExplorerTab(QtWidgets.QWidget):
     # ... Implement Zoom/Scroll applying ...
     # --- Interaction Logic (Zoom/Scroll) ---
 
-    def _calculate_visible_range(self, total_min, total_max, zoom_val, scroll_val, zoom_min=1, zoom_max=100, scroll_max=10000):
+    def _calculate_visible_range(self, total_min, total_max, zoom_val, scroll_val, zoom_min=0, zoom_max=1000, scroll_max=10000):
         """
         Calculates the new min/max range based on zoom slider and scrollbar values.
-        Zoom: 1 (Wide) -> 100 (Narrow)
+        Zoom: 0 (Wide) -> 1000 (Narrow). Exponential scale (Apple-like feel).
         Scroll: 0 -> 10000 (Relative position of center)
         """
         total_span = total_max - total_min
         if total_span <= 0: return total_min, total_max
 
-        # 1. Calculate Visible Span based on Zoom
-        # Map 1..100 to 1.0..0.01 (inv log scale or linear?)
-        # Linear approach: 
-        # zoom 1 => 100% visible
-        # zoom 100 => 1% visible
+        # 1. Calculate Visible Span using Exponential Scaling
+        # We want to map slider [0, 1000] to ratio [1.0, 1e-6]
+        # ratio = (min_ratio) ** normalized_slider
         
-        # Using a power scale for better feel
-        # factor = 1 means 100% visible
-        # factor = 0.01 means 1% visible
-        # Let's map slider 1..100 -> ratio 1.0 .. 0.01
+        # Normalize slider to 0..1
+        if zoom_max == zoom_min:
+            norm_slider = 0
+        else:
+            norm_slider = (zoom_val - zoom_min) / (zoom_max - zoom_min)
+            
+        # Target minimum ratio (1e-6 = 1ppm, allows zooming to ~10 samples in 10s @ 100kHz)
+        min_ratio = 1e-6
         
-        # Linear mapping: ratio = 1.0 - (zoom_val - 1) / (zoom_max - 1) * 0.99
-        # This gives 1->1.0, 100->0.01
-        ratio = 1.0 - ((zoom_val - zoom_min) / (zoom_max - zoom_min)) * 0.99
+        # Exponential mapping: ratio = min_ratio ^ norm_slider
+        # However, to be "Apple-like", high numbers of slider should be SMALL ratio.
+        # At slider=0, norm=0, ratio=1 (Full view)
+        # At slider=1000, norm=1, ratio=1e-6 (Micro view)
+        ratio = min_ratio ** norm_slider
         
         visible_span = total_span * ratio
         
         # 2. Calculate Center based on Scroll
-        # scroll 0 => center at total_min + visible_span/2 (or just total_min for left-aligned?)
-        # Let's say scroll controls the CENTER of the view within the allowable range.
+        # Scroll 0 => center at start + half_view
+        # Scroll max => center at end - half_view
         
         # Allowable center range:
         min_center = total_min + visible_span / 2
         max_center = total_max - visible_span / 2
         
-        if min_center > max_center: # Zoomed out fully or more
+        if min_center > max_center: # Zoomed out fully or more (should happen at ratio=1)
              center = (total_min + total_max) / 2
         else:
              scroll_ratio = scroll_val / scroll_max
@@ -604,7 +629,7 @@ class ExplorerTab(QtWidgets.QWidget):
         new_min = center - visible_span / 2
         new_max = center + visible_span / 2
         
-        # Clamp (optional, but good for stability)
+        # Clamp to bounds to prevent floating point drift outside valid range
         if new_min < total_min: 
             diff = total_min - new_min
             new_min += diff; new_max += diff
@@ -614,9 +639,10 @@ class ExplorerTab(QtWidgets.QWidget):
             
         return new_min, new_max
 
-    def _calculate_controls_from_range(self, current_min, current_max, total_min, total_max, zoom_min=1, zoom_max=100, scroll_max=10000):
+    def _calculate_controls_from_range(self, current_min, current_max, total_min, total_max, zoom_min=0, zoom_max=1000, scroll_max=10000):
         """
         Reverse calculation: Range -> Zoom/Scroll values.
+        Syncs sliders when user uses Mouse Zoom/Pan (Rectangle).
         """
         total_span = total_max - total_min
         current_span = current_max - current_min
@@ -625,15 +651,20 @@ class ExplorerTab(QtWidgets.QWidget):
         
         # 1. Zoom
         ratio = current_span / total_span
-        ratio = max(0.01, min(1.0, ratio))
+        # Clamp ratio
+        min_ratio = 1e-6
+        ratio = max(min_ratio, min(1.0, ratio))
         
-        # ratio = 1.0 - (zoom - 1)/99 * 0.99
-        # (zoom - 1)/99 = (1.0 - ratio) / 0.99
-        if ratio >= 1.0:
-            zoom_val = zoom_min
-        else:
-            zoom_val = 1 + ((1.0 - ratio) / 0.99) * (zoom_max - zoom_min)
-        
+        # Inverse of ratio = min_ratio ** norm_slider
+        # log(ratio) = norm_slider * log(min_ratio)
+        # norm_slider = log(ratio) / log(min_ratio)
+        import math
+        try:
+            norm_slider = math.log(ratio) / math.log(min_ratio)
+        except ValueError:
+            norm_slider = 0
+            
+        zoom_val = zoom_min + norm_slider * (zoom_max - zoom_min)
         zoom_val = int(round(zoom_val))
         zoom_val = max(zoom_min, min(zoom_max, zoom_val))
         

@@ -26,8 +26,8 @@ class ExplorerToolbar(QtWidgets.QWidget):
     prev_trial_clicked = QtCore.Signal()
     next_trial_clicked = QtCore.Signal()
     
-    SLIDER_RANGE_MIN = 1
-    SLIDER_RANGE_MAX = 100
+    SLIDER_RANGE_MIN = 0
+    SLIDER_RANGE_MAX = 1000
     SLIDER_DEFAULT_VALUE = SLIDER_RANGE_MIN
 
     def __init__(self, parent=None):
@@ -79,7 +79,7 @@ class ExplorerToolbar(QtWidgets.QWidget):
         plot_layout.addWidget(view_group)
         
         # X Zoom Group
-        x_zoom_group = QtWidgets.QGroupBox("X Zoom")
+        x_zoom_group = QtWidgets.QGroupBox("Time Zoom (X-Axis)")
         x_zoom_layout = QtWidgets.QHBoxLayout(x_zoom_group)
         self.x_zoom_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.x_zoom_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)
