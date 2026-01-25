@@ -113,6 +113,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Save Button
         self._setup_save_button(control_layout)
 
+
         # Accumulation UI
         self._setup_accumulation_ui(control_layout)
 
@@ -287,3 +288,5 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # Update Accumulation UI state
         self._update_accumulation_ui_state()
+
+ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab
