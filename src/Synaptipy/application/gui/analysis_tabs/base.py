@@ -26,6 +26,8 @@ from Synaptipy.shared.styling import (
 from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
 from Synaptipy.application.gui.analysis_worker import AnalysisWorker  # Import Worker
 from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
+from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.core import signal_processor
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +75,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.reset_view_button: Optional[QtWidgets.QPushButton] = None
         # --- END ADDED ---
 
+        # --- ADDED: Preprocessing State ---
+        self.preprocessing_widget: Optional[PreprocessingWidget] = None
+        self._preprocessed_data: Optional[Dict[str, Any]] = None # Cached preprocessed data
+        self._is_preprocessing: bool = False
+        # --- END ADDED ---
+
         # --- PHASE 1: Data Selection and Plotting ---
         self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
         self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
@@ -105,112 +113,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
-    # --- ADDED: Method to set global controls ---
-    def set_global_controls(self, source_list_widget: QtWidgets.QListWidget, item_combo: QtWidgets.QComboBox):
-        """
-        Receives global control widgets from AnalyserTab and places them at the top
-        of the tab's left panel. Subclasses must have 'global_controls_layout' attribute.
-        """
-        if not hasattr(self, "global_controls_layout") or self.global_controls_layout is None:
-            log.warning(f"{self.__class__.__name__}: 'global_controls_layout' not found. Global controls not added.")
-            return
-
-        layout = self.global_controls_layout
-
-        # Check if widgets are already in this layout
-        # We need to check if the widgets' parent is already part of our layout
-        source_parent = source_list_widget.parent()
-        combo_parent = item_combo.parent()
-
-        # If widgets are already in our layout (via their container groups), we are good.
-        # But since we reuse the widgets, their parent might be a container group from ANOTHER tab
-        # if we didn't reparent the widgets themselves.
-        # Actually, we should probably reparent the widgets to NEW container groups in THIS tab,
-        # or move the container groups?
-        # Moving container groups is risky if they are destroyed.
-        # Better: The widgets (List/Combo) are passed. We should put them into the layout.
-        # If they are already in a group box, we might need to take them out?
-        # Or we can just add them to the layout directly?
-        # The previous implementation wrapped them in GroupBoxes.
-        # If we wrap them in new GroupBoxes every time, the old GroupBoxes (in other tabs) will be empty.
-        # That's fine.
-
-        # Ensure widgets are visible
-        source_list_widget.setVisible(True)
-        item_combo.setVisible(True)
-
-        # Create container groups for the widgets
-        # We create NEW groups for THIS tab.
-        source_group = QtWidgets.QGroupBox("Analysis Input Set")
-        source_layout_inner = QtWidgets.QVBoxLayout(source_group)
-        source_layout_inner.setContentsMargins(5, 5, 5, 5)
-        source_layout_inner.addWidget(source_list_widget)  # This reparents the list widget
-
-        combo_group = QtWidgets.QGroupBox("Analyze Item")
-        combo_layout_inner = QtWidgets.QVBoxLayout(combo_group)
-        combo_layout_inner.setContentsMargins(5, 5, 5, 5)
-        combo_layout_inner.addWidget(item_combo)  # This reparents the combo
-
-        # Insert at the beginning of the layout (index 0)
-        # We need to be careful not to keep adding groups if we call this multiple times for the SAME tab.
-        # But we only call it when switching tabs.
-        # However, if we switch back to a tab, we will add NEW groups.
-        # We should check if we already have these groups?
-        # Or better: The tab should have PERMANENT placeholders (GroupBoxes) and we just put the widgets in them.
-        # But `BaseAnalysisTab` doesn't know about the layout structure of subclasses easily.
-
-        # Alternative: Just insert them. If we switch back, we might have duplicate groups?
-        # No, because the widgets can only be in one place.
-        # The OLD groups in this tab (from previous visit) will now be empty.
-        # We should probably clean up empty groups?
-        # Or simpler: Just add them to the layout directly without groups?
-        # The user likes the groups (titles).
-
-        # Let's try to find if we already have groups with these titles?
-        # Or just clear the first 2 items if they are our groups?
-        # This is brittle.
-
-        # Better approach:
-        # `BaseAnalysisTab` creates the groups ONCE in `__init__` (or `_setup_ui`).
-        # And `set_global_controls` just adds the widgets to those existing groups.
-        # But `BaseAnalysisTab` doesn't control the layout creation (subclasses do).
-
-        # Let's stick to the previous implementation but check if we already added them.
-        # If we switch back to Tab A, `layout` still has the old groups (now empty).
-        # We can reuse them!
-
-        found_source_group = None
-        found_combo_group = None
-
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            widget = item.widget()
-            if isinstance(widget, QtWidgets.QGroupBox):
-                if widget.title() == "Analysis Input Set":
-                    found_source_group = widget
-                elif widget.title() == "Analyze Item":
-                    found_combo_group = widget
-
-        if found_source_group and found_combo_group:
-            # Reuse existing groups
-            found_source_group.layout().addWidget(source_list_widget)
-            found_combo_group.layout().addWidget(item_combo)
-            log.debug(f"{self.__class__.__name__}: Reused existing global control groups.")
-        else:
-            # Create new groups
-            source_group = QtWidgets.QGroupBox("Analysis Input Set")
-            source_layout_inner = QtWidgets.QVBoxLayout(source_group)
-            source_layout_inner.setContentsMargins(5, 5, 5, 5)
-            source_layout_inner.addWidget(source_list_widget)
-
-            combo_group = QtWidgets.QGroupBox("Analyze Item")
-            combo_layout_inner = QtWidgets.QVBoxLayout(combo_group)
-            combo_layout_inner.setContentsMargins(5, 5, 5, 5)
-            combo_layout_inner.addWidget(item_combo)
-
-            layout.insertWidget(0, source_group)
-            layout.insertWidget(1, combo_group)
-            log.debug(f"{self.__class__.__name__}: Created new global control groups.")
+    # --- ADDED: Method to set global controls (Removed duplicate) ---
+    # The actual implementation is further down in the file.
 
     def _setup_toolbar(self, parent_layout: QtWidgets.QLayout):
         """
@@ -306,9 +210,209 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Reparent combo to our container
         self._global_combo_group.layout().addWidget(item_combo)
         item_combo.setVisible(True)
+        
+        # 3. Handle Preprocessing Widget (Inject below Analyze Item)
+        if not hasattr(self, "preprocessing_widget") or self.preprocessing_widget is None:
+            self.preprocessing_widget = PreprocessingWidget()
+            self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
+            layout.insertWidget(2, self.preprocessing_widget)
+            log.debug(f"{self.__class__.__name__}: Created and injected PreprocessingWidget.")
+        else:
+            # Ensure it's visible if it was hidden or reused
+            self.preprocessing_widget.setVisible(True)
+            # Ensure it's in the layout at the right spot? 
+            # If we created it, it stays in the layout unless removed.
+            # But if we switch tabs, we want to make sure it's valid.
 
         log.debug(f"{self.__class__.__name__}: Global controls injected/reparented.")
 
+    def _handle_preprocessing_request(self, settings: Dict[str, Any]):
+        """
+        Handle signal from PreprocessingWidget.
+        Runs the requested operation in a background thread.
+        """
+        if self._selected_item_recording is None:
+            QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded to preprocess.")
+            return
+
+        # Disable UI
+        self._is_preprocessing = True
+        if self.preprocessing_widget:
+            self.preprocessing_widget.set_processing_state(True)
+        
+        # Determine data to process (Raw Data from the recording)
+        # We process the entire channel data generally, or just the current trial?
+        # Typically we preprocess the RAW signal for the display/analysis.
+        # But we need to know WHICH channel is selected.
+        
+        # Simplification: We process the CURRENTLY SELECTED data if possible,
+        # or we might need to process the whole recording?
+        # Let's say we process the data that is currently being PLOTTED.
+        # But wait, if we change channels, we want that new channel to be processed too?
+        # Ideally, preprocessing parameters are applied dynamically on load.
+        # But here the user explicitly clicked "Apply".
+        
+        # Strategy: We will apply the operation to the CURRENTLY DISPLAYED trace data.
+        # And cache it in `_preprocessed_data`.
+        # If we change channels, `_preprocessed_data` is cleared (in _on_analysis_item_selected/channel changed),
+        # so the user has to re-apply. This is consistent with "Basic Analysis" flow.
+        
+        # Get raw data from currently loaded recording (and selected channel)
+        try:
+            # We need to know the channel index/id
+            channel_id = None
+            if self.signal_channel_combobox:
+                channel_id = self.signal_channel_combobox.currentData()
+                
+            # If no specific channel selection logic in UI (some tabs hide it), 
+            # we might rely on what's in `self._selected_item_recording`.
+            # But `_selected_item_recording` is the whole Neo block.
+            
+            # Use `_get_data_for_analysis` if available, or reproduce logic?
+            # Better: The active tab knows how to fetch data.
+            # But the backend function needs numpy array.
+            
+            # NOTE: Most tabs implement `_fetch_data_for_channel` or similar logic inside `_on_analysis_item_selected`
+            # but it often puts it directly into `self._current_plot_data`.
+            
+            # If `self._current_plot_data` is available, we can use its 'data' (raw) as source?
+            # But `self._current_plot_data['data']` might already be processed?
+            # We should probably use the ORIGINAL raw data source.
+            
+            # Let's fetch FRESH raw data to ensure we are not applying filter on top of filter indefinitely
+            # unless that is desired. "Apply" usually implies "Apply to current state".
+            # But typically "Apply Filter" is non-destructive to the FILE, but creates a new VIEW.
+            # If we click apply twice, do we filter twice?
+            # User said: "one button shold be for 'substract baseline'... another button is for 'apply filter'"
+            # If I click Baseline then Filter, I expect both.
+            # If I click Filter then Filter, I might expect reset + new filter, OR cumulative.
+            # Given the UI "Filter Type" dropdown, usually implies "Set this filter".
+            
+            # DECISION: We will fetch FRESH raw data from the recording and apply the requested operations.
+            # Wait, if we did Baseline, then Filter, we need to chain them.
+            # But we don't store a "Pipeline". We just have buttons.
+            # If "Apply Filter" is clicked, do we lose Baseline?
+            # Ideally, we should just apply the requested operation to the CURRENT buffer `_preprocessed_data` 
+            # or `_current_plot_data['data']` if `_preprocessed_data` is None.
+            # YES: Apply to CURRENT buffer. This allows chaining.
+            
+            current_data = None
+            if self._preprocessed_data:
+                current_data = self._preprocessed_data.get('data')
+            elif self._current_plot_data:
+                current_data = self._current_plot_data.get('data')
+                
+            if current_data is None:
+                raise ValueError("No data available to process.")
+                
+            sampling_rate = 0.0
+            if self._current_plot_data:
+                sampling_rate = self._current_plot_data.get('sampling_rate', 0.0)
+                
+            # Define worker function
+            def run_processing(data_in, fs, params):
+                import numpy as np
+                # Check for NaNs/Inf just in case
+                if not np.all(np.isfinite(data_in)):
+                     log.warning("Data contains NaNs or Infs before processing.")
+                     
+                result_data = data_in.copy()
+                op_type = params.get('type')
+                
+                if op_type == 'baseline':
+                    decimals = params.get('decimals', 1)
+                    result_data = signal_processor.subtract_baseline_mode(result_data, decimals=decimals)
+                    
+                elif op_type == 'filter':
+                    method = params.get('method')
+                    if method == 'lowpass':
+                        cutoff = params.get('cutoff')
+                        order = int(params.get('order', 5))
+                        result_data = signal_processor.lowpass_filter(result_data, cutoff, fs, order)
+                    elif method == 'highpass':
+                        cutoff = params.get('cutoff')
+                        order = int(params.get('order', 5))
+                        result_data = signal_processor.highpass_filter(result_data, cutoff, fs, order)
+                    elif method == 'bandpass':
+                        low = params.get('low_cut')
+                        high = params.get('high_cut')
+                        order = int(params.get('order', 5))
+                        result_data = signal_processor.bandpass_filter(result_data, low, high, fs, order)
+                    elif method == 'notch':
+                        freq = params.get('freq')
+                        q = params.get('q_factor')
+                        result_data = signal_processor.notch_filter(result_data, freq, q, fs)
+                        
+                return result_data
+
+            # Create and launch worker
+            worker = AnalysisWorker(run_processing, current_data, sampling_rate, settings)
+            worker.signals.result.connect(self._on_preprocessing_complete)
+            worker.signals.error.connect(self._on_preprocessing_error)
+            self.thread_pool.start(worker)
+
+        except Exception as e:
+            log.error(f"Failed to start preprocessing: {e}", exc_info=True)
+            QtWidgets.QMessageBox.critical(self, "Error", f"Could not start processing: {e}")
+            self._is_preprocessing = False
+            if self.preprocessing_widget:
+                self.preprocessing_widget.set_processing_state(False)
+
+    def _on_preprocessing_complete(self, result_data):
+        """Preprocessing finished successfully."""
+        self._is_preprocessing = False
+        if self.preprocessing_widget:
+            self.preprocessing_widget.set_processing_state(False)
+            
+        log.debug("Preprocessing complete.")
+        
+        # Update cache
+        if self._preprocessed_data is None:
+             # Initialize from current plot data structure if first time
+             self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
+             
+        self._preprocessed_data['data'] = result_data
+        
+        # Trigger Re-plot with new data
+        # We need to manually update the plot because `_plot_selected_data` usually fetches raw data.
+        # But we modified `_plot_selected_data` (in our plan, not yet done in code?)
+        # Wait, I need to modify `_plot_selected_data` to checking `self._preprocessed_data`.
+        # For now, let's manually invoke the plotting logic with the new data.
+        
+        # Update `_current_plot_data` to point to the new data
+        if self._current_plot_data:
+            self._current_plot_data['data'] = result_data
+            
+        # Re-plot traces
+        if self.plot_widget:
+            self.plot_widget.clear()
+            # Re-draw the trace
+            # We can't easily call `_plot_selected_data` because it re-reads from file (usually).
+            # So we manually plot here or refactor.
+            # Refactoring `_plot_selected_data` might be risky if subclasses override it aggressively.
+            
+            # Safest: Use the standard plotting way if available, or just plot directly here.
+            time = self._current_plot_data.get('time')
+            if time is not None:
+                self.plot_widget.plot(time, result_data, pen='k') # Use default pen?
+                self._update_plot_pens_only() # Apply correct styling
+                
+                # IMPORTANT: Trigger any analysis that depends on the data (like Spike Detection)
+                # Subclasses hook into `_on_data_plotted`
+                self._on_data_plotted()
+            else:
+                 log.warning("Time array missing, cannot re-plot.")
+
+    def _on_preprocessing_error(self, error):
+        """Preprocessing failed."""
+        self._is_preprocessing = False
+        if self.preprocessing_widget:
+            self.preprocessing_widget.set_processing_state(False)
+        
+        log.error(f"Preprocessing error: {error}")
+        QtWidgets.QMessageBox.critical(self, "Processing Error", f"An error occurred:\n{error}")
+
+    # --- END ADDED ---
     # --- END ADDED ---
 
     def create_double_input(
@@ -659,6 +763,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Clear currently loaded data when the list changes
         self._selected_item_recording = None
         self._selected_item_index = -1
+        # Clear preprocessing cache
+        self._preprocessed_data = None
 
         # Clear plot when items change
         if self.plot_widget:
@@ -672,6 +778,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """Handles the selection change in the analysis item combo box."""
         self._selected_item_index = index
         self._selected_item_recording = None  # Clear previous loaded recording
+        self._preprocessed_data = None # Clear preprocessing cache on new item
 
         if index < 0 or index >= len(self._analysis_items):
             log.debug(f"{self.__class__.__name__}: No valid analysis item selected (index {index}).")

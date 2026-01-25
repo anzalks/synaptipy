@@ -126,3 +126,82 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
     y = signal.filtfilt(b, a, data)
     return y
+
+
+def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
+    """
+    Apply a Butterworth highpass filter.
+    """
+    if fs <= 0:
+        raise ValueError("Sampling rate must be positive")
+
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    
+    # Bounds check
+    if normal_cutoff <= 0 or normal_cutoff >= 1:
+        log.warning(
+            f"Filter frequency {cutoff} Hz is out of bounds for fs={fs} Hz. Returning original data."
+        )
+        return data
+
+    b, a = signal.butter(order, normal_cutoff, btype="high", analog=False)
+    y = signal.filtfilt(b, a, data)
+    return y
+
+
+def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarray:
+    """
+    Apply a notch filter to remove a specific frequency.
+    """
+    if fs <= 0:
+        raise ValueError("Sampling rate must be positive")
+
+    nyq = 0.5 * fs
+    freq_norm = freq / nyq
+    
+    # Bounds check
+    if freq_norm <= 0 or freq_norm >= 1:
+        log.warning(
+            f"Notch frequency {freq} Hz is out of bounds for fs={fs} Hz. Returning original data."
+        )
+        return data
+
+    b, a = signal.iirnotch(freq_norm, Q)
+    y = signal.filtfilt(b, a, data)
+    return y
+
+
+def subtract_baseline_mode(data: np.ndarray, decimals: int = 1) -> np.ndarray:
+    """
+    Subtract baseline using the mode of the distribution of values.
+    Values are rounded to the specified number of decimals to bin them,
+    and the mode (most frequent value) is used as the baseline offset.
+    
+    Args:
+        data: Input signal array
+        decimals: Number of decimal places to round to for mode calculation
+        
+    Returns:
+        Data with baseline subtracted (aligned to 0)
+    """
+    if data is None or len(data) == 0:
+        return data
+        
+    # Round data to bin values
+    rounded_data = np.round(data, decimals)
+    
+    # Calculate mode
+    # scipy.stats.mode returns (mode_array, count_array)
+    mode_result = stats.mode(rounded_data, keepdims=False)
+    
+    # Extract scalar mode value
+    if np.isscalar(mode_result.mode):
+        baseline_offset = mode_result.mode
+    else:
+        # Handle case where it might return an array (older scipy or specific settings)
+        baseline_offset = mode_result.mode if np.ndim(mode_result.mode) == 0 else mode_result.mode[0]
+        
+    log.debug(f"Baseline subtraction: Calculated mode offset = {baseline_offset}")
+    
+    return data - baseline_offset
