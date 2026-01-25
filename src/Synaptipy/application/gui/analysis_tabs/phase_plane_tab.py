@@ -12,9 +12,10 @@ from PySide6 import QtWidgets, QtCore
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-import Synaptipy.core.analysis.phase_plane # Ensure registration
+import Synaptipy.core.analysis.phase_plane  # Ensure registration
 
 log = logging.getLogger(__name__)
+
 
 class PhasePlaneTab(MetadataDrivenAnalysisTab):
     """
@@ -22,16 +23,18 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
     Visualizes dV/dt vs Voltage and detects threshold using phase plane kink.
     Inherits from MetadataDrivenAnalysisTab.
     """
-    
+
     def __init__(self, neo_adapter: NeoAdapter, settings_ref=None, parent=None):
-        super().__init__(analysis_name="phase_plane_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent)
-        
+        super().__init__(
+            analysis_name="phase_plane_analysis", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent
+        )
+
         # Popup plot items
         self.popup_plot = None
         self.phase_curve = None
         self.threshold_marker = None
         self.max_dvdt_marker = None
-        
+
         # Main plot items
         self.threshold_line = None
 
@@ -42,7 +45,9 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
         super()._setup_ui()
         # Initialize main plot items
         if self.plot_widget:
-            self.threshold_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('r', style=QtCore.Qt.PenStyle.DashLine))
+            self.threshold_line = pg.InfiniteLine(
+                angle=0, movable=False, pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine)
+            )
             self.plot_widget.addItem(self.threshold_line)
             self.threshold_line.setVisible(False)
 
@@ -51,16 +56,16 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
         Visualize Phase Plane results.
         Called by BaseAnalysisTab._on_analysis_result.
         """
-        if isinstance(results, dict) and 'result' in results:
-             result_data = results['result']
+        if isinstance(results, dict) and "result" in results:
+            result_data = results["result"]
         else:
-             result_data = results
-             
+            result_data = results
+
         if not isinstance(result_data, dict):
             return
 
         # --- 1. Update Main Plot (Threshold Line) ---
-        threshold_v = result_data.get('threshold_v')
+        threshold_v = result_data.get("threshold_v")
         if threshold_v is not None and self.threshold_line:
             self.threshold_line.setValue(threshold_v)
             self.threshold_line.setVisible(True)
@@ -77,35 +82,39 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
                 except:
                     pass
                 self.popup_plot = None
-                
+
             self.popup_plot = self.create_popup_plot("Phase Plane Plot", "Voltage (mV)", "dV/dt (V/s)")
             if self.popup_plot:
-                self.phase_curve = self.popup_plot.plot(pen='b', name="Phase Loop")
-                self.threshold_marker = self.popup_plot.plot(pen=None, symbol='o', symbolBrush='r', symbolSize=10, name="Threshold")
-                self.max_dvdt_marker = self.popup_plot.plot(pen=None, symbol='x', symbolBrush='g', symbolSize=10, name="Max dV/dt")
+                self.phase_curve = self.popup_plot.plot(pen="b", name="Phase Loop")
+                self.threshold_marker = self.popup_plot.plot(
+                    pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"
+                )
+                self.max_dvdt_marker = self.popup_plot.plot(
+                    pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt"
+                )
             else:
                 log.error("Failed to create popup plot for Phase Plane Analysis")
                 return
 
-        voltage = result_data.get('voltage')
-        dvdt = result_data.get('dvdt')
-        
+        voltage = result_data.get("voltage")
+        dvdt = result_data.get("dvdt")
+
         if voltage is not None and dvdt is not None:
-            if self.phase_curve: # Safety check
+            if self.phase_curve:  # Safety check
                 if len(voltage) == len(dvdt):
                     self.phase_curve.setData(voltage, dvdt)
                 else:
                     min_len = min(len(voltage), len(dvdt))
                     self.phase_curve.setData(voltage[:min_len], dvdt[:min_len])
-        
+
         # Plot markers in popup
-        threshold_dvdt = result_data.get('threshold_dvdt')
+        threshold_dvdt = result_data.get("threshold_dvdt")
         if threshold_v is not None and threshold_dvdt is not None and self.threshold_marker:
             self.threshold_marker.setData([threshold_v], [threshold_dvdt])
         elif self.threshold_marker:
             self.threshold_marker.setData([], [])
-            
-        max_dvdt = result_data.get('max_dvdt')
+
+        max_dvdt = result_data.get("max_dvdt")
         if max_dvdt is not None and voltage is not None and dvdt is not None and self.max_dvdt_marker:
             idx = np.argmax(dvdt)
             if idx < len(voltage):
@@ -119,16 +128,17 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
             self.results_text.setText("Analysis failed.")
             return
 
-        threshold_v = result.get('threshold_v')
-        max_dvdt = result.get('max_dvdt')
-        
+        threshold_v = result.get("threshold_v")
+        max_dvdt = result.get("max_dvdt")
+
         text = "--- Phase Plane Analysis ---\n"
         if threshold_v is not None:
             text += f"Threshold: {threshold_v:.2f} mV\n"
         if max_dvdt is not None:
             text += f"Max dV/dt: {max_dvdt:.2f} V/s\n"
-            
+
         self.results_text.setText(text)
+
 
 # Export the class for dynamic loading
 ANALYSIS_TAB_CLASS = PhasePlaneTab
