@@ -36,16 +36,64 @@ class PreprocessingWidget(QtWidgets.QWidget):
         group_layout = QtWidgets.QVBoxLayout(self.group_box)
         group_layout.setSpacing(10)
         
-        # --- Row 1: Baseline Subtraction ---
-        baseline_layout = QtWidgets.QHBoxLayout()
-        self.baseline_btn = QtWidgets.QPushButton("Subtract Baseline")
-        style_button(self.baseline_btn, style="secondary")
-        self.baseline_btn.setToolTip("Align traces to zero using mode-based baseline subtraction.")
-        self.baseline_btn.clicked.connect(self._on_baseline_clicked)
-        baseline_layout.addWidget(self.baseline_btn)
-        group_layout.addLayout(baseline_layout)
+        # --- Baseline Group ---
+        baseline_group = QtWidgets.QGroupBox("Baseline Correction")
+        baseline_layout = QtWidgets.QVBoxLayout(baseline_group)
+        baseline_layout.setContentsMargins(5, 5, 5, 5)
         
-        # --- Row 2: Filter Controls ---
+        # Method Selection
+        bl_type_layout = QtWidgets.QHBoxLayout()
+        bl_type_layout.addWidget(QtWidgets.QLabel("Method:"))
+        self.baseline_type_combo = QtWidgets.QComboBox()
+        self.baseline_type_combo.addItems(["None", "Mode", "Mean", "Median", "Linear Detrend", "Time Window"])
+        self.baseline_type_combo.currentIndexChanged.connect(self._on_baseline_type_changed)
+        bl_type_layout.addWidget(self.baseline_type_combo, 1)
+        baseline_layout.addLayout(bl_type_layout)
+        
+        # Baseline Param Stack
+        self.bl_param_stack = QtWidgets.QStackedWidget()
+        
+        # Page 0: None
+        self.bl_param_stack.addWidget(QtWidgets.QWidget())
+        
+        # Page 1: Mode (Decimals)
+        self.page_bl_mode = self._create_param_page([
+            ("Decimals:", "1", "decimals")
+        ])
+        # Force integer validator for decimals
+        if "decimals" in self.page_bl_mode.inputs:
+             self.page_bl_mode.inputs["decimals"].setValidator(QtGui.QIntValidator())
+        self.bl_param_stack.addWidget(self.page_bl_mode)
+        
+        # Page 2: Mean (No params)
+        self.bl_param_stack.addWidget(QtWidgets.QWidget())
+        
+        # Page 3: Median (No params)
+        self.bl_param_stack.addWidget(QtWidgets.QWidget())
+
+        # Page 4: Linear (No params)
+        self.bl_param_stack.addWidget(QtWidgets.QWidget())
+        
+        # Page 5: Region (Start, End)
+        self.page_bl_region = self._create_param_page([
+            ("Start (s):", "0.0", "start_t"),
+            ("End (s):", "0.05", "end_t")
+        ])
+        self.bl_param_stack.addWidget(self.page_bl_region)
+        
+        baseline_layout.addWidget(self.bl_param_stack)
+        
+        # Apply Baseline Button
+        self.apply_baseline_btn = QtWidgets.QPushButton("Apply Baseline")
+        style_button(self.apply_baseline_btn, style="secondary")
+        self.apply_baseline_btn.clicked.connect(self._on_baseline_apply_clicked)
+        self.apply_baseline_btn.setEnabled(False)
+        baseline_layout.addWidget(self.apply_baseline_btn)
+
+        # Add baseline group first
+        group_layout.addWidget(baseline_group)
+        
+        # --- Filter Controls ---
         filter_group = QtWidgets.QWidget()
         filter_layout = QtWidgets.QVBoxLayout(filter_group)
         filter_layout.setContentsMargins(0, 0, 0, 0)
@@ -79,7 +127,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         ])
         self.param_stack.addWidget(self.page_highpass)
         
-        # Page 3: Bandpass (Low Cut, High Cut, Order)
+        # Page 3: Bandpass
         self.page_bandpass = self._create_param_page([
             ("Low Cut (Hz):", "1", "low_cut"),
             ("High Cut (Hz):", "300", "high_cut"),
@@ -87,7 +135,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         ])
         self.param_stack.addWidget(self.page_bandpass)
         
-        # Page 4: Notch (Freq, Q)
+        # Page 4: Notch
         self.page_notch = self._create_param_page([
             ("Freq (Hz):", "50", "freq"),
             ("Q-Factor:", "30", "q_factor")
@@ -96,29 +144,28 @@ class PreprocessingWidget(QtWidgets.QWidget):
         
         filter_layout.addWidget(self.param_stack)
         
-        # --- Row 3: Apply Filter Button ---
+        # Apply/Reset Buttons
+        btns_layout = QtWidgets.QHBoxLayout()
+        
         self.apply_filter_btn = QtWidgets.QPushButton("Apply Filter")
         style_button(self.apply_filter_btn, style="secondary")
         self.apply_filter_btn.clicked.connect(self._on_apply_filter_clicked)
-        self.apply_filter_btn.setEnabled(False) # Disabled initially as "None" is selected
+        self.apply_filter_btn.setEnabled(False)
+        btns_layout.addWidget(self.apply_filter_btn)
         
-        # Reset Button
         self.reset_btn = QtWidgets.QPushButton("Reset Preprocessing")
-        style_button(self.reset_btn, style="danger") # Use danger style for reset
+        style_button(self.reset_btn, style="danger")
         self.reset_btn.setToolTip("Clear all filters/baseline corrections and revert to raw data.")
         self.reset_btn.clicked.connect(self._on_reset_clicked)
-        
-        # Layout for buttons
-        btns_layout = QtWidgets.QHBoxLayout()
-        btns_layout.addWidget(self.apply_filter_btn)
         btns_layout.addWidget(self.reset_btn)
         
         filter_layout.addLayout(btns_layout)
         
         group_layout.addWidget(filter_group)
         
+        # ADDED BACK: Add group box to main layout
         main_layout.addWidget(self.group_box)
-        
+
     def _create_param_page(self, inputs: list) -> QtWidgets.QWidget:
         """
         Helper to create a parameter page.
@@ -149,10 +196,6 @@ class PreprocessingWidget(QtWidgets.QWidget):
         # Enable apply button only if not "None" (index 0)
         self.apply_filter_btn.setEnabled(index != 0)
 
-    def _on_baseline_clicked(self):
-        log.debug("Baseline subtraction requested")
-        self.preprocessing_requested.emit({"type": "baseline", "decimals": 1})
-
     def _on_apply_filter_clicked(self):
         filter_type = self.filter_type_combo.currentText().lower()
         if filter_type == "none":
@@ -180,9 +223,42 @@ class PreprocessingWidget(QtWidgets.QWidget):
         log.debug("Reset preprocessing requested")
         self.preprocessing_reset_requested.emit()
         
+    def _on_baseline_type_changed(self, index):
+        self.bl_param_stack.setCurrentIndex(index)
+        self.apply_baseline_btn.setEnabled(index != 0)
+
+    def _on_baseline_apply_clicked(self):
+        method_map = {
+            1: "mode", 2: "mean", 3: "median", 4: "linear", 5: "region"
+        }
+        idx = self.baseline_type_combo.currentIndex()
+        if idx == 0:
+            return
+            
+        settings = {"type": "baseline", "method": method_map.get(idx, "mean")}
+        
+        # Get params from current stack page
+        current_page = self.bl_param_stack.currentWidget()
+        if hasattr(current_page, "inputs"):
+             for name, line_edit in current_page.inputs.items():
+                try:
+                    val = float(line_edit.text())
+                    # Special check for decimals (int)
+                    if name == "decimals":
+                        val = int(val)
+                    settings[name] = val
+                except ValueError:
+                    log.warning(f"Invalid input: {line_edit.text()}")
+                    return
+        
+        log.debug(f"Baseline requested: {settings}")
+        self.preprocessing_requested.emit(settings)
+        
     def set_processing_state(self, is_processing: bool):
         """Enable/Disable controls during processing."""
-        self.baseline_btn.setEnabled(not is_processing)
+        self.baseline_type_combo.setEnabled(not is_processing)
+        self.apply_baseline_btn.setEnabled(not is_processing and self.baseline_type_combo.currentIndex() != 0)
+        
         self.apply_filter_btn.setEnabled(not is_processing and self.filter_type_combo.currentIndex() != 0)
         self.reset_btn.setEnabled(not is_processing)
         self.filter_type_combo.setEnabled(not is_processing)
