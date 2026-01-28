@@ -164,7 +164,7 @@ class SynaptipyPlotFactory:
                             plot_item.showGrid(x=False, y=False)
                     else:
                         plot_item.showGrid(x=False, y=False)
-                except:
+                except Exception:
                     # Fallback to enabled grid
                     plot_item.showGrid(x=True, y=True, alpha=0.3)
 

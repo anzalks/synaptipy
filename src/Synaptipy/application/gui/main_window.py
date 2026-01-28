@@ -13,7 +13,6 @@ import uuid
 from datetime import datetime, timezone
 
 from PySide6 import QtCore, QtGui, QtWidgets
-import pyqtgraph as pg  # Add import for pyqtgraph
 
 # --- Synaptipy Imports / Dummies ---
 # --- Synaptipy Imports ---
@@ -98,14 +97,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.resize(1000, 700)
 
         # --- Instantiate Adapters/Exporters ---
-        # These come from dummy_classes (which imports real ones if available)
         try:
             self.neo_adapter = NeoAdapter()
             self.nwb_exporter = NWBExporter()
             log.debug("NeoAdapter and NWBExporter instantiated successfully.")
         except Exception as e:
             log.critical(f"Failed to instantiate NeoAdapter or NWBExporter: {e}", exc_info=True)
-            print(f"CRITICAL ERROR: Failed to instantiate adapters: {e}")
             try:
                 QtWidgets.QMessageBox.critical(
                     None,
@@ -113,7 +110,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     f"Failed to initialize core components:\n{e}\nPlease check installation and dependencies.",
                 )
             except Exception as mb_error:
-                print(f"Failed to show message box: {mb_error}")
+                log.error(f"Failed to show message box: {mb_error}")
             QtCore.QTimer.singleShot(100, lambda: sys.exit(1))
             return
 

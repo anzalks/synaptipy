@@ -6,14 +6,15 @@ Use this structure for ALL new analysis tabs.
 """
 from typing import Optional, Dict, Any
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore
+
 
 # Rule: Must inherit from MetadataDrivenAnalysisTab (preferred) or BaseAnalysisTab
 from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 # Rule: Import the result type you expect
-from Synaptipy.core.results import AnalysisResult
+# from Synaptipy.core.results import AnalysisResult
 
 # Rule: Ensure the analysis module is imported to register it
 import Synaptipy.core.analysis.template_analysis

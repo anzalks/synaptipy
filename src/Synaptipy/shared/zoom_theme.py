@@ -10,7 +10,7 @@ See the LICENSE file in the root of the repository for full license details.
 """
 
 import logging
-from typing import Optional
+# from typing import Optional
 import shiboken6
 
 log = logging.getLogger(__name__)
