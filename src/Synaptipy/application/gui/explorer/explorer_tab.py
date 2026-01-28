@@ -77,6 +77,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._data_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}
         self._average_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
         self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {} # NEW: Cache for processed data
+        self._active_preprocessing_settings: Optional[Dict[str, Any]] = None # Active settings for on-the-fly processing
         self._cache_dirty: bool = False
         self._is_loading: bool = False
 
@@ -406,6 +407,12 @@ class ExplorerTab(QtWidgets.QWidget):
             for cid in self.plot_canvas.channel_plots.keys():
                  self.plot_canvas.channel_plot_data_items[cid] = []
 
+            # 0. Preserve View State if possible
+            view_state = {}
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                if plot.isVisible():
+                    view_state[cid] = plot.viewRange()
+
             # --- PLOT SETTINGS ---
             ds_enabled = self.config_panel.downsample_cb.isChecked()
             # Force aggressive threshold if enabled (e.g. 3000 points) to prevent freezes
@@ -445,17 +452,30 @@ class ExplorerTab(QtWidgets.QWidget):
                             data = channel.get_data(self.current_trial_index)
                             t = channel.get_relative_time_vector(self.current_trial_index)
                             
-                            # CHECK FOR PROCESSED DATA
-                            # Key format: 'processed_cid_trial'
-                            proc_key = f"{cid}_{self.current_trial_index}"
-                            if proc_key in self._processed_cache:
-                                data, t = self._processed_cache[proc_key]
-                                item = plot_item.plot(
-                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1} (Processed)"
-                                )
-                                # FIXED: Append to tracking list to prevent ghosting
-                                self.plot_canvas.channel_plot_data_items[cid].append(item)
-                            elif data is not None and t is not None:
+                            # APPLY PREPROCESSING
+                            if self._active_preprocessing_settings and data is not None:
+                                try:
+                                    params = self._active_preprocessing_settings
+                                    op_type = params.get('type')
+                                    fs = channel.sampling_rate
+                                    
+                                    if op_type == 'baseline':
+                                        decimals = params.get('decimals', 1)
+                                        data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
+                                    elif op_type == 'filter':
+                                        method = params.get('method')
+                                        if method == 'lowpass':
+                                            data = signal_processor.lowpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                        elif method == 'highpass':
+                                            data = signal_processor.highpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                        elif method == 'bandpass':
+                                            data = signal_processor.bandpass_filter(data, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
+                                        elif method == 'notch':
+                                            data = signal_processor.notch_filter(data, params.get('freq'), params.get('q_factor'), fs)
+                                except Exception as e:
+                                    log.error(f"Error processing trial {self.current_trial_index}: {e}")
+
+                            if data is not None and t is not None:
                                 item = plot_item.plot(
                                     t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1}"
                                 )
@@ -482,10 +502,28 @@ class ExplorerTab(QtWidgets.QWidget):
                             data = channel.get_data(trial_idx)
                             t = channel.get_relative_time_vector(trial_idx)
                             
-                            # CHECK FOR PROCESSED DATA (Overlay Mode)
-                            proc_key = f"{cid}_{trial_idx}"
-                            if proc_key in self._processed_cache:
-                                data, t = self._processed_cache[proc_key]
+                            # APPLY PREPROCESSING (Overlay Mode)
+                            if self._active_preprocessing_settings and data is not None:
+                                try:
+                                    params = self._active_preprocessing_settings
+                                    op_type = params.get('type')
+                                    fs = channel.sampling_rate
+                                    
+                                    if op_type == 'baseline':
+                                        decimals = params.get('decimals', 1)
+                                        data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
+                                    elif op_type == 'filter':
+                                        method = params.get('method')
+                                        if method == 'lowpass':
+                                            data = signal_processor.lowpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                        elif method == 'highpass':
+                                            data = signal_processor.highpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                        elif method == 'bandpass':
+                                            data = signal_processor.bandpass_filter(data, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
+                                        elif method == 'notch':
+                                            data = signal_processor.notch_filter(data, params.get('freq'), params.get('q_factor'), fs)
+                                except Exception:
+                                    pass
                             
                             if data is not None and t is not None:
                                 item = plot_item.plot(t, data, pen=current_trial_pen)
@@ -504,26 +542,50 @@ class ExplorerTab(QtWidgets.QWidget):
                     # 2. Plot Average on Top
                     # 2. Plot Average on Top
                     try:
-                        # CHECK FOR PROCESSED AVERAGE
-                        proc_key = f"{cid}_average"
-                        if proc_key in self._processed_cache:
-                            avg_data, avg_t = self._processed_cache[proc_key]
-                            item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average (Processed)")
+                        avg_data = channel.get_averaged_data(
+                            trial_indices=list(self.selected_trial_indices) if self.selected_trial_indices else None
+                        )
+                        avg_t = channel.get_relative_time_vector(0)  # Use trial 0 time as Ref
+                        
+                        # APPLY PREPROCESSING (Average)
+                        if self._active_preprocessing_settings and avg_data is not None:
+                             try:
+                                params = self._active_preprocessing_settings
+                                op_type = params.get('type')
+                                fs = channel.sampling_rate
+                                
+                                if op_type == 'baseline':
+                                    decimals = params.get('decimals', 1)
+                                    avg_data = signal_processor.subtract_baseline_mode(avg_data, decimals=decimals)
+                                elif op_type == 'filter':
+                                    method = params.get('method')
+                                    if method == 'lowpass':
+                                        avg_data = signal_processor.lowpass_filter(avg_data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                    elif method == 'highpass':
+                                        avg_data = signal_processor.highpass_filter(avg_data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                    elif method == 'bandpass':
+                                        avg_data = signal_processor.bandpass_filter(avg_data, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
+                                    elif method == 'notch':
+                                        avg_data = signal_processor.notch_filter(avg_data, params.get('freq'), params.get('q_factor'), fs)
+                             except Exception as e:
+                                log.error(f"Error processing average for {cid}: {e}")
+
+                        if avg_data is not None and avg_t is not None:
+                            item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average")
+                            _apply_item_opts(item, ds_enabled)
                             item.setZValue(10)
                             self.plot_canvas.channel_plot_data_items[cid].append(item)
-                        else:
-                            avg_data = channel.get_averaged_data(
-                                trial_indices=list(self.selected_trial_indices) if self.selected_trial_indices else None
-                            )
-                            avg_t = channel.get_relative_time_vector(0)  # Use trial 0 time as Ref
-                            if avg_data is not None and avg_t is not None:
-                                item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average")
-                                _apply_item_opts(item, ds_enabled)
-                                item.setZValue(10)
-                                self.plot_canvas.channel_plot_data_items[cid].append(item)
                     except Exception as e:
                         log.error(f"Error plotting avg for {cid}: {e}")
 
+            # Restore View State
+            if view_state:
+                for cid, state in view_state.items():
+                    plot = self.plot_canvas.get_plot(cid)
+                    if plot and plot.isVisible():
+                        # We restore the view range to preserve zoom
+                        plot.setXRange(state[0][0], state[0][1], padding=0)
+                        plot.setYRange(state[1][0], state[1][1], padding=0)
         finally:
             if self.plot_canvas.widget:
                 self.plot_canvas.widget.setUpdatesEnabled(True)
@@ -867,163 +929,28 @@ class ExplorerTab(QtWidgets.QWidget):
     def _handle_preprocessing_request(self, settings: Dict[str, Any]):
         """
         Handle signal from PreprocessingWidget.
-        Runs the requested operation in a background thread.
-        Applies only to the *currently visible* trial(s).
+        Uses simplified logic: Store settings and trigger re-draw.
+        Processing happens on-the-fly in _update_plot (or helper).
         """
         if not self.current_recording:
              QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded.")
              return
 
-        # Prepare data for processing
-        # Apply to ALL trials of ALL channels to allow seamless navigation and overlay.
+        # Store settings
+        self._active_preprocessing_settings = settings
         
-        tasks = []
-        
-        # Iterate over all channels
-        for cid, channel in self.current_recording.channels.items():
-             # Determine trials to process
-             if self.selected_trial_indices:
-                 trials_to_process = sorted(list(self.selected_trial_indices))
-             else:
-                 trials_to_process = list(range(channel.num_trials))
-
-             # Iterate over selected trials
-             for trial_idx in trials_to_process:
-                 try:
-                     # Cumulative Processing: Check cache first
-                     # If we have processed data, use it as input for the next step.
-                     # "Reset" is the only way to go back to Raw.
-                     proc_key = f"{cid}_{trial_idx}"
-                     if proc_key in self._processed_cache:
-                        data, _ = self._processed_cache[proc_key]
-                        # Time vector doesn't change usually but good to keep aligned
-                        t = channel.get_relative_time_vector(trial_idx)
-                     else:
-                        data = channel.get_data(trial_idx)
-                        t = channel.get_relative_time_vector(trial_idx)
-                     
-                     if data is not None:
-                         tasks.append({
-                             'cid': cid,
-                             'trial_idx': trial_idx,
-                             'data': data,
-                             'time': t,
-                             'fs': channel.sampling_rate
-                         })
-                 except Exception as e:
-                     log.warning(f"Error prepping channel {cid} trial {trial_idx}: {e}")
-
-                     log.warning(f"Error prepping channel {cid} trial {trial_idx}: {e}")
-
-             # NOTE: We do NOT process the average trace separately anymore.
-             # We will compute the new average from the processed trials in the worker.
-
-        if not tasks:
-            return
-
+        # Trigger update (which will use the settings)
         self.preprocessing_widget.set_processing_state(True)
-        self.status_bar.showMessage(f"Processing {len(tasks)} traces...")
+        try:
+            self._update_plot()
+        finally:
+            self.preprocessing_widget.set_processing_state(False)
+            self.status_bar.showMessage(f"Applied preprocessing settings.", 3000)
 
-        # Worker Function
-        def run_processing(task_list, params):
-            results = []
-            for task in task_list:
-                d = task['data']
-                fs = task['fs']
-                
-                # Apply processing
-                op_type = params.get('type')
-                processed = d.copy()
-                
-                if op_type == 'baseline':
-                    decimals = params.get('decimals', 1)
-                    processed = signal_processor.subtract_baseline_mode(processed, decimals=decimals)
-                elif op_type == 'filter':
-                    method = params.get('method')
-                    if method == 'lowpass':
-                         processed = signal_processor.lowpass_filter(processed, params.get('cutoff'), fs, int(params.get('order', 5)))
-                    elif method == 'highpass':
-                         processed = signal_processor.highpass_filter(processed, params.get('cutoff'), fs, int(params.get('order', 5)))
-                    elif method == 'bandpass':
-                         processed = signal_processor.bandpass_filter(processed, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
-                    elif method == 'notch':
-                         processed = signal_processor.notch_filter(processed, params.get('freq'), params.get('q_factor'), fs)
-                
-                results.append({
-                    'cid': task['cid'],
-                    'trial_idx': task['trial_idx'],
-                    'data': processed,
-                    'time': task['time']
-                })
-            
-            # --- COMPUTE NEW AVERAGE ---
-            # Group results by channel
-            import numpy as np
-            grouped = {}
-            for res in results:
-                cid = res['cid']
-                if cid not in grouped:
-                    grouped[cid] = []
-                grouped[cid].append(res['data'])
-            
-            # Compute mean for each channel
-            for cid, arrays in grouped.items():
-                if not arrays:
-                    continue
-                try:
-                    # Assuming all arrays have same shape (they should if they are trials)
-                    # Stack and mean
-                    stack = np.vstack(arrays)
-                    mean_trace = np.mean(stack, axis=0)
-                    
-                    # Add to results as 'average'
-                    # We need a time vector; borrow from the first task for this channel
-                    # Find a task for this channel to get time
-                    t_vec = None
-                    for res in results:
-                        if res['cid'] == cid:
-                            t_vec = res['time']
-                            break
-                    
-                    if t_vec is not None:
-                        results.append({
-                            'cid': cid,
-                            'trial_idx': 'average',
-                            'data': mean_trace,
-                            'time': t_vec
-                        })
-                except Exception as e:
-                    # Log but don't fail the whole batch
-                    print(f"Error computing average for {cid}: {e}")
+    def _on_preprocessing_complete_legacy(self, result_data):
+        pass # Removed legacy worker method
 
-            return results
 
-        # Launch Worker
-        worker = AnalysisWorker(run_processing, tasks, settings)
-        worker.signals.result.connect(self._on_preprocessing_success)
-        worker.signals.error.connect(self._on_preprocessing_error)
-        self.thread_pool.start(worker)
-
-    def _on_preprocessing_success(self, results):
-        self.preprocessing_widget.set_processing_state(False)
-        self.status_bar.showMessage("Processing Complete", 3000)
-        
-        # Update Cache
-        for res in results:
-            key = f"{res['cid']}_{res['trial_idx']}"
-            self._processed_cache[key] = (res['data'], res['time'])
-            
-        # Trigger Replot
-        self._update_plot()
-        
-        # Auto-range to fit new data
-        for plot in self.plot_canvas.channel_plots.values():
-            plot.autoRange()
-        
-    def _on_preprocessing_error(self, error):
-        self.preprocessing_widget.set_processing_state(False)
-        self.status_bar.showMessage(f"Processing Error: {error}")
-        QtWidgets.QMessageBox.critical(self, "Error", f"Processing failed: {error}")
 
     def _handle_preprocessing_reset(self):
         """Reset all preprocessing and revert to raw data."""
@@ -1228,6 +1155,23 @@ class ExplorerTab(QtWidgets.QWidget):
 
             tmin, tmax = base_range
             cmin, cmax = new_range
+            
+            # --- Dynamic Range Expansion ---
+            # If the user pans outside the initial "Base Range" (calculated from Trial 0),
+            # we must expand the base range to encompass the new view.
+            # Otherwise, scroll ratio calculations clamp to 0 or 1, locking the view.
+            expanded = False
+            if cmin < tmin:
+                tmin = cmin
+                expanded = True
+            if cmax > tmax:
+                tmax = cmax
+                expanded = True
+                
+            if expanded:
+                self.base_y_ranges[chan_id] = (tmin, tmax)
+                # Note: We don't trigger a full re-calc of everything, just update the reference.
+            # -------------------------------
             
             # Avoid division by zero
             total_span = tmax - tmin
