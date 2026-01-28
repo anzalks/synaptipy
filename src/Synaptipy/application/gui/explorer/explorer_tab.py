@@ -510,8 +510,20 @@ class ExplorerTab(QtWidgets.QWidget):
                                     fs = channel.sampling_rate
                                     
                                     if op_type == 'baseline':
-                                        decimals = params.get('decimals', 1)
-                                        data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
+                                        method = params.get('method', 'mode')
+                                        if method == 'mode':
+                                            decimals = params.get('decimals', 1)
+                                            data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
+                                        elif method == 'mean':
+                                            data = signal_processor.subtract_baseline_mean(data)
+                                        elif method == 'median':
+                                            data = signal_processor.subtract_baseline_median(data)
+                                        elif method == 'linear':
+                                            data = signal_processor.subtract_baseline_linear(data)
+                                        elif method == 'region':
+                                            start_t = params.get('start_t', 0.0)
+                                            end_t = params.get('end_t', 0.0)
+                                            data = signal_processor.subtract_baseline_region(data, t, start_t, end_t)
                                     elif op_type == 'filter':
                                         method = params.get('method')
                                         if method == 'lowpass':
@@ -555,8 +567,21 @@ class ExplorerTab(QtWidgets.QWidget):
                                 fs = channel.sampling_rate
                                 
                                 if op_type == 'baseline':
-                                    decimals = params.get('decimals', 1)
-                                    avg_data = signal_processor.subtract_baseline_mode(avg_data, decimals=decimals)
+                                    method = params.get('method', 'mode')
+                                    if method == 'mode':
+                                        decimals = params.get('decimals', 1)
+                                        avg_data = signal_processor.subtract_baseline_mode(avg_data, decimals=decimals)
+                                    elif method == 'mean':
+                                        avg_data = signal_processor.subtract_baseline_mean(avg_data)
+                                    elif method == 'median':
+                                        avg_data = signal_processor.subtract_baseline_median(avg_data)
+                                    elif method == 'linear':
+                                        avg_data = signal_processor.subtract_baseline_linear(avg_data)
+                                    elif method == 'region':
+                                        start_t = params.get('start_t', 0.0)
+                                        end_t = params.get('end_t', 0.0)
+                                        # Use avg_t for time vector
+                                        avg_data = signal_processor.subtract_baseline_region(avg_data, avg_t, start_t, end_t)
                                 elif op_type == 'filter':
                                     method = params.get('method')
                                     if method == 'lowpass':

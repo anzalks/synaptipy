@@ -337,7 +337,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         QtWidgets.QMessageBox.critical(self, "Processing Error", f"An error occurred:\n{error}")
 
     @staticmethod
-    def _process_signal_data(data_in: np.ndarray, fs: float, params: Dict[str, Any]) -> np.ndarray:
+    def _process_signal_data(data_in: np.ndarray, fs: float, params: Dict[str, Any], time_vector: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Static helper method to process signal data.
         Can be used by worker threads or main thread.
@@ -351,8 +351,23 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         op_type = params.get('type')
         
         if op_type == 'baseline':
-            decimals = params.get('decimals', 1)
-            result_data = signal_processor.subtract_baseline_mode(result_data, decimals=decimals)
+            method = params.get('method', 'mode')
+            if method == 'mode':
+                decimals = params.get('decimals', 1)
+                result_data = signal_processor.subtract_baseline_mode(result_data, decimals=decimals)
+            elif method == 'mean':
+                result_data = signal_processor.subtract_baseline_mean(result_data)
+            elif method == 'median':
+                result_data = signal_processor.subtract_baseline_median(result_data)
+            elif method == 'linear':
+                result_data = signal_processor.subtract_baseline_linear(result_data)
+            elif method == 'region':
+                if time_vector is not None:
+                     start_t = params.get('start_t', 0.0)
+                     end_t = params.get('end_t', 0.0)
+                     result_data = signal_processor.subtract_baseline_region(result_data, time_vector, start_t, end_t)
+                else:
+                    log.warning("Region baseline requested but no time vector provided. Skipping.")
             
         elif op_type == 'filter':
             method = params.get('method')
@@ -1420,7 +1435,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                              ctx_data = self._process_signal_data(
                                  ctx_data, 
                                  channel.sampling_rate, 
-                                 self._active_preprocessing_settings
+                                 self._active_preprocessing_settings,
+                                 time_vector=ctx_time
                              )
                         
                         self.plot_widget.plot(ctx_time, ctx_data, pen=gray_pen)
@@ -1484,7 +1500,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     data_vec = self._process_signal_data(
                         data_vec, 
                         channel.sampling_rate, 
-                        self._active_preprocessing_settings
+                        self._active_preprocessing_settings,
+                        time_vector=time_vec
                     )
                     # Note: We do NOT update the cache `_preprocessed_data` here because 
                     # `_preprocessed_data` is strictly for "what was last computed by the widget".
@@ -1506,7 +1523,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                      data_vec = self._process_signal_data(
                          data_vec, 
                          channel.sampling_rate, 
-                         self._active_preprocessing_settings
+                         self._active_preprocessing_settings,
+                         time_vector=time_vec
                      )
                  except Exception as proc_err:
                      log.error(f"Failed to apply active preprocessing to main trace: {proc_err}")

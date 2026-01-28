@@ -200,15 +200,14 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
     return y
 
 
-def subtract_baseline_mode(data: np.ndarray, decimals: int = 1) -> np.ndarray:
+def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> np.ndarray:
     """
     Subtract baseline using the mode of the distribution of values.
-    Values are rounded to the specified number of decimals to bin them,
-    and the mode (most frequent value) is used as the baseline offset.
     
     Args:
         data: Input signal array
-        decimals: Number of decimal places to round to for mode calculation
+        decimals: Number of decimal places to round to for mode calculation.
+                 If None, it tries to infer a reasonable precision or defaults to 1.
         
     Returns:
         Data with baseline subtracted (aligned to 0)
@@ -216,20 +215,78 @@ def subtract_baseline_mode(data: np.ndarray, decimals: int = 1) -> np.ndarray:
     if data is None or len(data) == 0:
         return data
         
+    # Infer decimals if not provided? For now default to 1 as per original behavior if None
+    # Better yet, let's keep it explicit.
+    if decimals is None:
+        decimals = 1
+        
     # Round data to bin values
     rounded_data = np.round(data, decimals)
     
     # Calculate mode
-    # scipy.stats.mode returns (mode_array, count_array)
-    mode_result = stats.mode(rounded_data, keepdims=False)
-    
-    # Extract scalar mode value
-    if np.isscalar(mode_result.mode):
-        baseline_offset = mode_result.mode
-    else:
-        # Handle case where it might return an array (older scipy or specific settings)
-        baseline_offset = mode_result.mode if np.ndim(mode_result.mode) == 0 else mode_result.mode[0]
+    try:
+        # scipy.stats.mode returns (mode_array, count_array)
+        # Using keepdims=False for scalar result in newer scipy
+        # But older scipy might not have keepdims, or return array.
+        mode_result = stats.mode(rounded_data, axis=None, keepdims=False)
         
-    log.debug(f"Baseline subtraction: Calculated mode offset = {baseline_offset}")
+        if np.isscalar(mode_result.mode):
+            baseline_offset = mode_result.mode
+        elif np.ndim(mode_result.mode) == 0:
+             baseline_offset = mode_result.mode.item()
+        else:
+             baseline_offset = mode_result.mode[0]
+             
+    except Exception as e:
+        log.warning(f"Mode calculation failed: {e}. Fallback to median.")
+        baseline_offset = np.median(data)
+
+    log.debug(f"Baseline subtraction (Mode): Calculated offset = {baseline_offset}")
+    return data - baseline_offset
+
+
+def subtract_baseline_mean(data: np.ndarray) -> np.ndarray:
+    """Subtract the mean of the entire signal."""
+    if data is None or len(data) == 0:
+        return data
+    return data - np.mean(data)
+
+
+def subtract_baseline_median(data: np.ndarray) -> np.ndarray:
+    """Subtract the median of the entire signal."""
+    if data is None or len(data) == 0:
+        return data
+    return data - np.median(data)
+
+
+def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
+    """
+    Subtract a linear trend (detrend) from the signal.
+    Useful for removing drift.
+    """
+    if data is None or len(data) == 0:
+        return data
+    return signal.detrend(data, type='linear')
+
+
+def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, end_t: float) -> np.ndarray:
+    """
+    Subtract the mean value calculated from a specific time window.
     
+    Args:
+        data: Signal array
+        t: Time vector (must be same length as data)
+        start_t: Start time of baseline window
+        end_t: End time of baseline window
+    """
+    if data is None or len(data) == 0 or t is None or len(t) == 0:
+        return data
+        
+    mask = (t >= start_t) & (t <= end_t)
+    if not np.any(mask):
+        log.warning(f"Baseline region {start_t}-{end_t} contains no data points. Returning original.")
+        return data
+        
+    baseline_offset = np.mean(data[mask])
+    log.debug(f"Baseline subtraction (Region {start_t}-{end_t}): Calculated offset = {baseline_offset:.4f}")
     return data - baseline_offset
