@@ -25,7 +25,6 @@ from PySide6 import QtWidgets, QtCore
 
 # --- Import Core Components ---
 from Synaptipy.application.startup_manager import StartupManager
-from Synaptipy.application.gui.dummy_classes import SYNAPTIPY_AVAILABLE
 from Synaptipy.shared.logging_config import setup_logging
 
 # Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
@@ -78,12 +77,9 @@ def run_gui():
     # Setup logging with the appropriate mode
     setup_logging(dev_mode=dev_mode, log_dir=args.log_dir, log_filename=args.log_file)
 
-    log.info(f"Application starting... Synaptipy Library Available: {SYNAPTIPY_AVAILABLE}")
+    log.info(f"Application starting...")
     if dev_mode:
         log.info("Running in DEVELOPMENT mode with verbose logging")
-
-    if not SYNAPTIPY_AVAILABLE:
-        log.warning("*" * 30 + "\n Running with DUMMY Synaptipy classes! \n" + "*" * 30)
 
     # Create Qt Application with High DPI support
     app = QtWidgets.QApplication.instance()

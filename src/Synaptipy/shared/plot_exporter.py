@@ -221,8 +221,8 @@ class PlotExporter:
                  chan = self.recording.channels[label]
                  ax.set_ylabel(f"{chan.get_primary_data_label()} ({chan.units})")
             else:
-                 # Try to get label from plot item?
-                 ax.set_ylabel(label)
+                # Try to get label from plot item?
+                ax.set_ylabel(label)
 
             # Remove top/right spines
             ax.spines['right'].set_visible(False)
