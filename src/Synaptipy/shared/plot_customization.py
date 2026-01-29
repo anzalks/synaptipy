@@ -171,6 +171,10 @@ class PlotCustomizationManager:
 
                     if property_name in ["transparency", "opacity"]:
                         value = self._settings.value(key, default_value, type=int)
+                    elif property_name == "width":
+                         value = self._settings.value(key, default_value, type=float)
+                    elif property_name == "enabled":
+                         value = self._settings.value(key, default_value, type=bool)
                     else:
                         value = self._settings.value(key, default_value)
 
@@ -244,7 +248,10 @@ class PlotCustomizationManager:
 
         # Create new pen with proper opacity handling
         color_str = self.defaults["average"]["color"]
-        width = self.defaults["average"]["width"]
+        try:
+            width = float(self.defaults["average"]["width"])
+        except (ValueError, TypeError):
+            width = 1.0
         opacity = self.defaults["average"]["opacity"]
 
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
@@ -281,7 +288,10 @@ class PlotCustomizationManager:
 
         # Create new pen with proper opacity handling
         color_str = self.defaults["single_trial"]["color"]
-        width = self.defaults["single_trial"]["width"]
+        try:
+            width = float(self.defaults["single_trial"]["width"])
+        except (ValueError, TypeError):
+            width = 1.0
         opacity = self.defaults["single_trial"]["opacity"]
 
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
@@ -327,7 +337,10 @@ class PlotCustomizationManager:
             return cached_pen
 
         # Create new pen with proper opacity handling
-        width = self.defaults["grid"]["width"]
+        try:
+            width = float(self.defaults["grid"]["width"])
+        except (ValueError, TypeError):
+            width = 1.0
         opacity = self.defaults["grid"]["opacity"]
 
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
