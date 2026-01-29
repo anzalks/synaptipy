@@ -61,6 +61,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.session_manager = SessionManager()
         self.session_manager.current_recording_changed.connect(self._on_recording_changed_from_session)
         self.session_manager.selected_analysis_items_changed.connect(self._on_analysis_items_changed_from_session)
+        self.session_manager.file_context_changed.connect(self._on_file_context_changed)
 
         # Data State
         self.current_recording: Optional[Recording] = None
@@ -699,6 +700,13 @@ class ExplorerTab(QtWidgets.QWidget):
     def _on_analysis_items_changed_from_session(self, items):
         self._analysis_items = items
         self.analysis_set_label.setText(f"Analysis Set: {len(items)} items")
+        self._update_all_ui_state()
+
+    def _on_file_context_changed(self, file_list: List[Path], current_index: int):
+        """Handle file context updates from SessionManager (e.g. from Open File dialog)."""
+        log.debug(f"ExplorerTab received file context update: {len(file_list)} files, index {current_index}")
+        self.file_list = file_list
+        self.current_file_index = current_index
         self._update_all_ui_state()
 
     def _on_file_load_error(self, error_info, filepath=None):

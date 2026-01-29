@@ -59,6 +59,10 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
             self.file_tree.setColumnHidden(i, True)
 
         self.file_tree.doubleClicked.connect(self._on_tree_double_clicked)
+        
+        # Async Sync Handling
+        self.file_model.directoryLoaded.connect(self._on_directory_loaded)
+        self._pending_sync_path: Optional[Path] = None
 
         layout.addWidget(self.file_tree)
 
@@ -97,21 +101,42 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
 
     def sync_to_file(self, file_path: Path):
         """Ensure the file explorer shows and selects the given file."""
-        if not file_path or not self.file_model or not self.file_tree:
+        if not file_path or not self.file_model:
             return
+            
+        self._pending_sync_path = file_path
+        
+        # 1. Ask model to watch this path (triggers loading)
+        self.file_model.setRootPath(str(file_path.parent))
+        
+        # 2. Try to sync immediately if already loaded
+        self._attempt_sync(file_path)
 
-        # Update the root index to the parent directory of the file
-        # This ensures the file is visible in the tree view (scopes the view to the folder)
+    def _attempt_sync(self, file_path: Path):
+        """Try to set root index and select file if model is ready."""
         parent_dir = file_path.parent
-        root_index = self.file_model.index(str(parent_dir))
-
-        # Only update root if it's valid and different (though valid check is crucial)
-        if root_index.isValid():
-            self.file_tree.setRootIndex(root_index)
-            # Update settings to reflect this new location so Open File dialog syncs "vice versa"
+        parent_index = self.file_model.index(str(parent_dir))
+        
+        if parent_index.isValid():
+            # Set View Root (Visual)
+            self.file_tree.setRootIndex(parent_index)
             QtCore.QSettings(APP_NAME, SETTINGS_SECTION).setValue("lastDirectory", str(parent_dir))
+            
+            # Select File
+            file_index = self.file_model.index(str(file_path))
+            if file_index.isValid():
+                self.file_tree.scrollTo(file_index, QtWidgets.QAbstractItemView.ScrollHint.EnsureVisible)
+                self.file_tree.setCurrentIndex(file_index)
+                self.file_tree.selectionModel().select(file_index, QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect)
+                # Success, clear pending
+                if self._pending_sync_path == file_path:
+                    self._pending_sync_path = None
+            else:
+                log.debug(f"File index not valid yet: {file_path}")
+        else:
+            log.debug(f"Parent index not valid yet: {parent_dir}")
 
-        index = self.file_model.index(str(file_path))
-        if index.isValid():
-            self.file_tree.scrollTo(index)
-            self.file_tree.setCurrentIndex(index)
+    def _on_directory_loaded(self, path: str):
+        """Handle directory load completion."""
+        if self._pending_sync_path and str(self._pending_sync_path.parent) == path:
+            self._attempt_sync(self._pending_sync_path)
