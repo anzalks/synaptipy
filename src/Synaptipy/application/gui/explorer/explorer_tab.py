@@ -97,6 +97,12 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Initial State
         self._update_all_ui_state()
+        
+        # State Preservation for Cycling
+        self._current_trial_selection_params: Optional[Tuple[int, int]] = None  # (n, start_index)
+        self._pending_view_state: Optional[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = None
+        self._pending_trial_params: Optional[Tuple[int, int]] = None
+
 
     def _init_components(self):
         self.config_panel = ExplorerConfigPanel()
@@ -232,7 +238,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self.open_file_btn.clicked.connect(self.open_file_requested.emit)
 
         # Sidebar
-        self.sidebar.file_selected.connect(self.load_recording_data)
+        # Sidebar
+        # We preserve state when selecting from sidebar too, to allow seamless browsing of siblings
+        self.sidebar.file_selected.connect(lambda f, l, i: self.load_recording_data(f, l, i, preserve_state=True))
 
         # Config Panel
         self.config_panel.plot_mode_changed.connect(self._on_plot_mode_changed)
@@ -276,7 +284,13 @@ class ExplorerTab(QtWidgets.QWidget):
 
     # --- Loading Logic ---
 
-    def load_recording_data(self, filepath: Path, file_list: List[Path] = None, selected_index: int = -1):
+    def load_recording_data(
+        self,
+        filepath: Path,
+        file_list: List[Path] = None,
+        selected_index: int = -1,
+        preserve_state: bool = False,
+    ):
         if self._is_loading:
             return
         self._is_loading = True
@@ -288,6 +302,23 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self.file_list = file_list
         self.current_file_index = selected_index
+
+        # --- Capture State if Requested ---
+        if preserve_state:
+            # 1. Capture View State (Zoom/Pan)
+            self._pending_view_state = {}
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                if plot.isVisible():
+                    # capture ((xmin, xmax), (ymin, ymax))
+                    self._pending_view_state[cid] = (plot.viewRange()[0], plot.viewRange()[1])
+            
+            # 2. Capture Trial Selection Params
+            self._pending_trial_params = self._current_trial_selection_params
+            log.debug(f"State captured for restoration: View for {len(self._pending_view_state)} plots, Trial Params: {self._pending_trial_params}")
+        else:
+            # Clear pending state if not preserving
+            self._pending_view_state = None
+            self._pending_trial_params = None
 
         # Update SessionManager
         self.session_manager.set_file_context(file_list, selected_index)
@@ -317,11 +348,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self._data_cache.clear()
         self._average_cache.clear()
         self._processed_cache.clear()
-        self._cache_dirty = False
-        self.current_trial_index = 0
         self._cache_dirty: bool = False
         self.current_trial_index = 0
         self.selected_trial_indices.clear()
+        self._current_trial_selection_params = None # Reset params
         
         # Default: Select ALL trials implicitly (empty set means all in some logic, but here we want explicit control?)
         # Let's say empty set in selected_trial_indices means "User hasn't filtered". 
@@ -347,7 +377,44 @@ class ExplorerTab(QtWidgets.QWidget):
         # Initial Plot
         self._update_plot()
         self._reset_view()
-        self._auto_select_trials()
+        
+        # --- Restore State if Pending ---
+        restored_view = False
+        if self._pending_view_state:
+            log.debug("Restoring view state...")
+            try:
+                for cid, ranges in self._pending_view_state.items():
+                    # Only restore if channel exists in new recording
+                    if cid in self.plot_canvas.channel_plots:
+                        plot = self.plot_canvas.channel_plots[cid]
+                        if plot and plot.isVisible():
+                            # ranges = ((xmin, xmax), (ymin, ymax))
+                            plot.setXRange(ranges[0][0], ranges[0][1], padding=0)
+                            plot.setYRange(ranges[1][0], ranges[1][1], padding=0)
+                restored_view = True
+                # Clear after use
+                self._pending_view_state = None
+            except Exception as e:
+                log.warning(f"Failed to restore view state: {e}")
+        
+        if not restored_view:
+            pass # _reset_view already called above
+
+        # Restore Trial Selection
+        if self._pending_trial_params:
+            log.debug(f"Restoring trial selection params: {self._pending_trial_params}")
+            try:
+                n_gap, start_idx = self._pending_trial_params
+                # Re-apply selection logic (this will update selected_trial_indices and trigger plot update)
+                self._on_trial_selection_requested(n_gap, start_index=start_idx)
+                # Note: _on_trial_selection_requested calls _update_plot, so we might redraw twice, but safe.
+            except Exception as e:
+                log.warning(f"Failed to restore trial selection: {e}")
+                self._auto_select_trials() # Fallback
+            finally:
+                self._pending_trial_params = None
+        else:
+             self._auto_select_trials()
 
         # Update State
         self._update_all_ui_state()
@@ -812,13 +879,19 @@ class ExplorerTab(QtWidgets.QWidget):
     def _prev_file_folder(self):
         if self.current_file_index > 0:
             self.load_recording_data(
-                self.file_list[self.current_file_index - 1], self.file_list, self.current_file_index - 1
+                self.file_list[self.current_file_index - 1],
+                self.file_list,
+                self.current_file_index - 1,
+                preserve_state=True,  # Preserve Zoom/Selection
             )
 
     def _next_file_folder(self):
         if self.current_file_index < len(self.file_list) - 1:
             self.load_recording_data(
-                self.file_list[self.current_file_index + 1], self.file_list, self.current_file_index + 1
+                self.file_list[self.current_file_index + 1],
+                self.file_list,
+                self.current_file_index + 1,
+                preserve_state=True,  # Preserve Zoom/Selection
             )
 
     def _prev_trial(self):
@@ -1336,12 +1409,17 @@ class ExplorerTab(QtWidgets.QWidget):
         self.selected_trial_indices = set(all_indices[start_index::step])
         
         log.info(f"Filtering trials: Start={start_index}, Gap={n} (Step={step}) -> {len(self.selected_trial_indices)} trials selected.")
+        
+        # Store params for preservation
+        self._current_trial_selection_params = (n, start_index)
+        
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
         
     def _on_trial_selection_reset_requested(self):
         """Reset trial selection to show all (raw data)."""
         self.selected_trial_indices.clear() # Empty means all
+        self._current_trial_selection_params = None # Clear params
         log.info("Reset trial filtering: All trials selected.")
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
