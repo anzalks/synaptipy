@@ -6,14 +6,11 @@ Refactored to use MetadataDrivenAnalysisTab architecture fully.
 """
 import logging
 from typing import Optional, Dict, Any
-import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-import Synaptipy.core.analysis.basic_features  # Ensure registration
 
 log = logging.getLogger(__name__)
 
@@ -226,7 +223,7 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
             mean = result_data.get("rmp_mv")
             sd = result_data.get("rmp_std")
             drift = result_data.get("rmp_drift")
-            text = f"<h3>Baseline Analysis</h3>"
+            text = "<h3>Baseline Analysis</h3>"
             text += f"<b>Mean:</b> {mean:.2f} mV<br>"
             text += f"<b>SD:</b> {sd:.3f} mV<br>"
             if drift is not None:

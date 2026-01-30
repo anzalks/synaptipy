@@ -7,10 +7,10 @@ Handles exporting recording data and analysis results to CSV format.
 import logging
 import csv
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Tuple
 import numpy as np
 
-from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
 

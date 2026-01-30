@@ -115,7 +115,7 @@ def test_explorer_synchronization(explorer_tab, qtbot):
     explorer_tab.y_controls.global_y_slider.setValue(1)
     # Apply zoom
     explorer_tab._apply_global_y_zoom(50)
-    y_range = vb.viewRange()[1]
+    _y_range = vb.viewRange()[1]  # noqa: F841
     # Check if range is smaller than base range (Mock data is 0, base range likely small but zoom should shrink it)
 
     # 3. Test Signal Sync (Reverse)
@@ -145,8 +145,6 @@ def test_sidebar_sync(explorer_tab, qtbot, tmp_path):
     mock_idx = MagicMock()
     mock_idx.isValid.return_value = True
     explorer_tab.sidebar.file_model.index.return_value = mock_idx
-
-    from pathlib import Path
 
     explorer_tab.sidebar.sync_to_file(dummy_file)
 

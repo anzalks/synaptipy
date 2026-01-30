@@ -6,7 +6,7 @@ Includes filtering and trace quality checks.
 import logging
 import numpy as np
 from scipy import signal, stats
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         # We'll just flag it if it's significant relative to signal std
         if abs(total_drift) > 5.0 * np.std(data):
             results["warnings"].append(f"Significant baseline drift detected ({total_drift:.2f} units)")
-            # results['is_good'] = False # Don't fail automatically, just warn
+            # results['is_good'] = False  # Don't fail automatically, just warn
 
         # 2. RMS Noise / SNR
         # Estimate noise from the detrended signal
@@ -113,14 +113,14 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
         return data
 
     b, a = signal.butter(order, [low, high], btype="band")
-    
+
     # Pad signal to reduce edge effects
     padlen = 3 * max(len(b), len(a))
     if len(data) <= padlen:
-        y = signal.filtfilt(b, a, data) # Fallback for short signals
+        y = signal.filtfilt(b, a, data)  # Fallback for short signals
     else:
         y = signal.filtfilt(b, a, data, padlen=padlen)
-        
+
     return y
 
 
@@ -131,14 +131,14 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
     b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
-    
+
     # Pad signal
     padlen = 3 * max(len(b), len(a))
     if len(data) <= padlen:
         y = signal.filtfilt(b, a, data)
     else:
         y = signal.filtfilt(b, a, data, padlen=padlen)
-        
+
     return y
 
 
@@ -151,7 +151,7 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
 
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
-    
+
     # Bounds check
     if normal_cutoff <= 0 or normal_cutoff >= 1:
         log.warning(
@@ -160,14 +160,14 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
         return data
 
     b, a = signal.butter(order, normal_cutoff, btype="high", analog=False)
-    
+
     # Pad signal
     padlen = 3 * max(len(b), len(a))
     if len(data) <= padlen:
         y = signal.filtfilt(b, a, data)
     else:
         y = signal.filtfilt(b, a, data, padlen=padlen)
-        
+
     return y
 
 
@@ -180,7 +180,7 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
 
     nyq = 0.5 * fs
     freq_norm = freq / nyq
-    
+
     # Bounds check
     if freq_norm <= 0 or freq_norm >= 1:
         log.warning(
@@ -189,54 +189,54 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
         return data
 
     b, a = signal.iirnotch(freq_norm, Q)
-    
+
     # Pad signal
     padlen = 3 * max(len(b), len(a))
     if len(data) <= padlen:
         y = signal.filtfilt(b, a, data)
     else:
         y = signal.filtfilt(b, a, data, padlen=padlen)
-        
+
     return y
 
 
 def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> np.ndarray:
     """
     Subtract baseline using the mode of the distribution of values.
-    
+
     Args:
         data: Input signal array
         decimals: Number of decimal places to round to for mode calculation.
                  If None, it tries to infer a reasonable precision or defaults to 1.
-        
+
     Returns:
         Data with baseline subtracted (aligned to 0)
     """
     if data is None or len(data) == 0:
         return data
-        
+
     # Infer decimals if not provided? For now default to 1 as per original behavior if None
     # Better yet, let's keep it explicit.
     if decimals is None:
         decimals = 1
-        
+
     # Round data to bin values
     rounded_data = np.round(data, decimals)
-    
+
     # Calculate mode
     try:
         # scipy.stats.mode returns (mode_array, count_array)
         # Using keepdims=False for scalar result in newer scipy
         # But older scipy might not have keepdims, or return array.
         mode_result = stats.mode(rounded_data, axis=None, keepdims=False)
-        
+
         if np.isscalar(mode_result.mode):
             baseline_offset = mode_result.mode
         elif np.ndim(mode_result.mode) == 0:
-             baseline_offset = mode_result.mode.item()
+            baseline_offset = mode_result.mode.item()
         else:
-             baseline_offset = mode_result.mode[0]
-             
+            baseline_offset = mode_result.mode[0]
+
     except Exception as e:
         log.warning(f"Mode calculation failed: {e}. Fallback to median.")
         baseline_offset = np.median(data)
@@ -272,7 +272,7 @@ def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
 def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, end_t: float) -> np.ndarray:
     """
     Subtract the mean value calculated from a specific time window.
-    
+
     Args:
         data: Signal array
         t: Time vector (must be same length as data)
@@ -281,12 +281,12 @@ def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, en
     """
     if data is None or len(data) == 0 or t is None or len(t) == 0:
         return data
-        
+
     mask = (t >= start_t) & (t <= end_t)
     if not np.any(mask):
         log.warning(f"Baseline region {start_t}-{end_t} contains no data points. Returning original.")
         return data
-        
+
     baseline_offset = np.mean(data[mask])
     log.debug(f"Baseline subtraction (Region {start_t}-{end_t}): Calculated offset = {baseline_offset:.4f}")
     return data - baseline_offset

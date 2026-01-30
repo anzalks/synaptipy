@@ -1,12 +1,9 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
-import pyqtgraph as pg
-from PySide6 import QtWidgets
 
 from Synaptipy.application.gui.analysis_tabs.event_detection_tab import EventDetectionTab
 from Synaptipy.core.results import EventDetectionResult
-from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 
 # Mock the registry to return metadata for our testing

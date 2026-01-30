@@ -7,10 +7,7 @@ Email: anzal.ks@gmail.com
 """
 
 import pytest
-import tempfile
-import os
 from unittest.mock import patch, MagicMock
-from PySide6 import QtCore
 
 from Synaptipy.shared.plot_customization import (
     PlotCustomizationManager,

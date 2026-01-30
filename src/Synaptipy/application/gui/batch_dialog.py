@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 import pandas as pd
 import numpy as np
 

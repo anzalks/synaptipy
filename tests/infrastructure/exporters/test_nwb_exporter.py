@@ -9,10 +9,10 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
-from Synaptipy.infrastructure.exporters import NWBExporter
-from Synaptipy.core.data_model import Recording, Channel  # Use actual or placeholder
-from Synaptipy.shared.error_handling import ExportError
-from unittest.mock import patch
+from Synaptipy.infrastructure.exporters import NWBExporter  # noqa: E402
+from Synaptipy.core.data_model import Recording, Channel  # noqa: E402
+from Synaptipy.shared.error_handling import ExportError  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 
 
 # Fixture for a sample recording object (can reuse from test_data_model or create new)
@@ -117,7 +117,7 @@ def test_nwb_exporter_permission_error(
     # Assume export calls pynwb.NWBHDF5IO.write or similar
 
     try:
-        import pynwb
+        import pynwb  # noqa: F401
     except ImportError:
         pytest.skip("pynwb not installed")
 
@@ -135,7 +135,7 @@ def test_nwb_exporter_empty_recording(nwb_exporter_instance, valid_session_metad
     output_file = tmp_path / "empty_export.nwb"
 
     try:
-        import pynwb
+        import pynwb  # noqa: F401
     except ImportError:
         pytest.skip("pynwb not installed")
 
@@ -143,7 +143,7 @@ def test_nwb_exporter_empty_recording(nwb_exporter_instance, valid_session_metad
     # Pynwb generally allows empty files.
     try:
         nwb_exporter_instance.export(empty_rec, output_file, valid_session_metadata)
-    except Exception as e:
+    except Exception as e:  # noqa: F841
         # If it fails, it should be a reasonable error
         pass
 

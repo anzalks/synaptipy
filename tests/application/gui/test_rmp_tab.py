@@ -4,8 +4,8 @@ Unit tests for the Baseline/RMP Analysis Tab - Testing Refactored Version
 
 import pytest
 import numpy as np
-from unittest.mock import MagicMock, patch
-from PySide6 import QtWidgets, QtCore
+from unittest.mock import MagicMock
+from PySide6 import QtWidgets
 from pathlib import Path
 
 from Synaptipy.application.gui.analysis_tabs.rmp_tab import BaselineAnalysisTab
@@ -25,7 +25,7 @@ def mock_neo_adapter():
     recording.duration = 1.0  # 1 second
 
     # Create voltage channel with baseline signal
-    time_vec = np.linspace(0, 1, 10000)  # 1 second at 10kHz
+    _time_vec = np.linspace(0, 1, 10000)  # 1 second at 10kHz  # noqa: F841
     voltage_data = np.random.normal(-70.0, 2.0, 10000)  # -70 mV baseline with noise
 
     # Create a mock voltage channel

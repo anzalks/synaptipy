@@ -1,6 +1,4 @@
 import pytest
-from PySide6 import QtCore
-from PySide6.QtCore import Qt
 from pathlib import Path
 import numpy as np
 from unittest.mock import patch, MagicMock  # Use unittest.mock or pytest-mock

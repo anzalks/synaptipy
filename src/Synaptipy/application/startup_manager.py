@@ -11,7 +11,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 import time
-from typing import Optional, Callable, List, Tuple
+from typing import Optional
 from PySide6 import QtCore, QtWidgets
 
 from .gui.welcome_screen import WelcomeScreen

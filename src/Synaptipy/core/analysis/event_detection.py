@@ -4,13 +4,12 @@
 Analysis functions for detecting synaptic events (miniature, evoked).
 """
 import logging
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Tuple, Dict, Any
 import numpy as np
 from scipy import signal
 from scipy.stats import median_abs_deviation
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.analysis.basic_features import find_stable_baseline
 from Synaptipy.core.results import EventDetectionResult
 
 log = logging.getLogger(__name__)
@@ -225,7 +224,7 @@ def detect_events_deconvolution_custom(
         filtered_data = data.copy()
 
     # KERNEL GEN
-    tau_rise_samples = tau_rise_ms / 1000.0 / dt
+    _tau_rise_samples = tau_rise_ms / 1000.0 / dt  # noqa: F841
     tau_decay_samples = tau_decay_ms / 1000.0 / dt
     kernel_len = int(10 * tau_decay_samples)
     kernel_len = max(10, min(kernel_len, n_points // 2))
@@ -354,7 +353,8 @@ def run_event_detection_deconvolution_wrapper(
 
 
 # --- 4. Baseline Peak Kinetics (Simplified for this refactor, omit full impl if unused or complex) ---
-# Assuming user wants me to fix the core files. Since this file was huge, I should probably keep the 4th method if it's used.
+# Assuming user wants me to fix the core files. Since this file was huge, I should probably keep the 4th method if it's
+# used.
 # But I will simplify returning EventDetectionResult for it too.
 
 
@@ -426,7 +426,7 @@ def detect_events_baseline_peak_kinetics(
         try:
             sos = signal.butter(4, filter_freq_hz, "low", fs=sample_rate, output="sos")
             filtered = signal.sosfiltfilt(sos, signal_to_process)
-        except:
+        except Exception:
             filtered = signal_to_process
     else:
         filtered = signal_to_process
@@ -436,7 +436,7 @@ def detect_events_baseline_peak_kinetics(
     peaks, _ = signal.find_peaks(filtered, height=threshold_val, distance=min_dist)
 
     # Stats details
-    event_details = []
+    _event_details = []  # noqa: F841
     # (Skipping detailed kinetics calculation for brevity of this file update, unless essential)
     # The user asked for contracts refactor. I will include empty list for details for now or basic loop.
 

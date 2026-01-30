@@ -1,5 +1,4 @@
 import pytest
-from typing import Dict, Any
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 
@@ -46,7 +45,6 @@ def test_get_metadata_missing():
 def test_spike_detection_metadata():
     """Test that spike_detection has the correct metadata (integration test)."""
     # Re-import to ensure registration runs
-    import Synaptipy.core.analysis.spike_analysis
 
     metadata = AnalysisRegistry.get_metadata("spike_detection")
     assert metadata is not None

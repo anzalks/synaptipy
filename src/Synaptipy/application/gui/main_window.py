@@ -8,7 +8,7 @@ import logging
 import sys
 import os
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Set
+from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timezone
 
@@ -23,6 +23,7 @@ from Synaptipy.shared.error_handling import SynaptipyError, ExportError
 
 # Import the new DataLoader for background file loading
 from ..data_loader import DataLoader
+from Synaptipy.application.controllers.file_io_controller import FileIOController
 
 # --- Tab Imports ---
 # Use RELATIVE imports for tabs and dialogs within the gui package
@@ -39,7 +40,6 @@ except ImportError:
     tzlocal = None
 
 # Import styling module for basic styling
-from Synaptipy.shared.styling import apply_stylesheet
 from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 
 # Use a specific logger for this module
@@ -60,13 +60,13 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug("Initializing MainWindow...")
         self.session_manager = SessionManager()
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
-        
+
         # Set Window Icon
         icon_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
         if icon_path.exists():
             app_icon = QtGui.QIcon(str(icon_path))
             self.setWindowIcon(app_icon)
-            QtWidgets.QApplication.setWindowIcon(app_icon) # Set for taskbar/dock as well
+            QtWidgets.QApplication.setWindowIcon(app_icon)  # Set for taskbar/dock as well
 
         # --- Calculate initial size based on screen (70%) ---
         screen = QtWidgets.QApplication.primaryScreen()
@@ -119,6 +119,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Settings ---
         self.settings = QtCore.QSettings(APP_NAME, SETTINGS_SECTION)
+
+        # --- Controllers ---
+        self.file_io_controller = FileIOController(self, self.settings, self.neo_adapter)
 
         # --- Initialize State Variables (Specific to MainWindow) ---
         self.saved_analysis_results: List[Dict[str, Any]] = []
@@ -450,7 +453,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
                 log.debug(
-                    f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager."
+                    f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' "
+                    f"to ExplorerTab via SessionManager."
                 )
 
                 # Update SessionManager
@@ -469,7 +473,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 current_index = 0
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
                 log.debug(
-                    f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' to ExplorerTab via SessionManager."
+                    f"Passing pre-loaded Recording object for '{recording_data.source_file.name}' "
+                    f"to ExplorerTab via SessionManager."
                 )
 
                 # Update SessionManager
@@ -522,122 +527,24 @@ class MainWindow(QtWidgets.QMainWindow):
         #     except Exception as e_analyse_update:
         #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
 
-    # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same as previous answer ---
+    # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same
+    # as previous answer ---
     # V V V (Keep methods from previous answer here) V V V
     def _open_file_dialog(self):
         """Shows the file open dialog (single file), scans for siblings, and initiates loading."""
-        log.debug("Open file dialog requested.")
-        try:
-            file_filter = self.neo_adapter.get_supported_file_filter()
-        except Exception as e:
-            log.error(f"Failed to get file filter from NeoAdapter: {e}", exc_info=True)
-            QtWidgets.QMessageBox.critical(self, "Adapter Error", f"Could not get file types from adapter:\n{e}")
-            file_filter = "All Files (*)"  # Fallback
-
-        last_dir = self.settings.value("lastDirectory", "", type=str)
-
-        # Create instance-based dialog to add custom widget
-        dialog = QtWidgets.QFileDialog(self, "Open Recording File", filter=file_filter)
-        dialog.setDirectory(last_dir)  # Set the directory using this correct method
-        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.ExistingFile)  # Ensure only one file can be selected
-
-        # Create and add the checkbox
-        lazy_load_checkbox = QtWidgets.QCheckBox("Lazy Load (recommended for large files)")
-        lazy_load_checkbox.setChecked(False)  # Default to OFF
-
-        # Add the checkbox to the dialog's layout
-        # This is a standard way to add a widget to a QFileDialog
-        layout = dialog.layout()
-        if isinstance(layout, QtWidgets.QGridLayout):
-            # Find the row after the file type selector to insert the checkbox
-            row = layout.rowCount()
-            layout.addWidget(lazy_load_checkbox, row, 0, 1, layout.columnCount())
-
-        # Execute the dialog and check for acceptance
-        if not dialog.exec():
-            log.debug("File open dialog cancelled.")
-            self.status_bar.showMessage("File open cancelled.", 3000)
+        if not hasattr(self, "file_io_controller") or not self.file_io_controller:
+            log.error("FileIOController not initialized.")
             return
 
-        # Get the state of the checkbox and the selected file path
-        lazy_load_enabled = lazy_load_checkbox.isChecked()
-        filepath_str = dialog.selectedFiles()[0] if dialog.selectedFiles() else None
+        context = self.file_io_controller.prompt_and_get_file_context()
 
-        # Check if file was selected
-        if not filepath_str:
-            log.debug("No file selected.")
-            self.status_bar.showMessage("No file selected.", 3000)
-            return
+        if context:
+            selected_filepath, file_list, current_index, lazy_load_enabled = context
 
-        # --- REVERTED: Process single selected file path ---
-        selected_filepath = Path(filepath_str)
-        folder_path = selected_filepath.parent
-        self.settings.setValue("lastDirectory", str(folder_path))
-
-        selected_extension = selected_filepath.suffix.lower()
-        log.debug(
-            f"File selected: {selected_filepath.name}. Scanning folder '{folder_path}' for files with extension '{selected_extension}'."
-        )
-        # --- END REVERT ---
-
-        # --- Robust Sibling Scan using iterdir() (No glob wildcards) ---
-        try:
-            # List all files in directory and filter manually by suffix
-            # This avoids issues with special characters ([], etc.) in filenames that break glob
-            sibling_files = []
-            if folder_path.exists() and folder_path.is_dir():
-                for p in folder_path.iterdir():
-                    if p.is_file() and p.suffix.lower() == selected_extension:
-                        sibling_files.append(p)
-            sibling_files.sort()
-
-        except Exception as e:
-            log.error(f"Error scanning folder {folder_path} for sibling files: {e}", exc_info=True)
-            QtWidgets.QMessageBox.warning(
-                self, "Folder Scan Error", f"Could not scan folder for similar files:\n{e}\nLoading selected file only."
-            )
-            # Fallback: Load only the selected file if scan fails
-            file_list = [selected_filepath]
-            current_index = 0
+            # Initiate loading
             self._load_in_explorer(selected_filepath, file_list, current_index, lazy_load_enabled)
-            return
-
-        if not sibling_files:
-            log.warning(
-                f"No files with extension '{selected_extension}' found (including selected). Defaulting to selected."
-            )
-            file_list = [selected_filepath]
-            current_index = 0
         else:
-            file_list = sibling_files
-            try:
-                # Find the index of the originally selected file within the sibling list
-                current_index = file_list.index(selected_filepath)
-                log.debug(
-                    f"Found {len(file_list)} file(s) with extension '{selected_extension}'. Selected file is at index {current_index}."
-                )
-            except ValueError:
-                log.warning(f"Selected file '{selected_filepath.name}' not found in scanned list. Appending it.")
-                file_list.append(selected_filepath)  # Should be there, but safety first
-                file_list.sort()
-                current_index = file_list.index(selected_filepath)
-
-        # --- Load the file at the determined index ---
-        if file_list:
-            if 0 <= current_index < len(file_list):
-                self._load_in_explorer(file_list[current_index], file_list, current_index, lazy_load_enabled)
-            else:
-                log.error(
-                    f"Determined index {current_index} is out of bounds for file list (size {len(file_list)}). Cannot load."
-                )
-                QtWidgets.QMessageBox.critical(
-                    self, "Loading Error", "Internal error: Could not determine correct file index."
-                )
-                self._update_menu_state()
-        else:
-            log.error("File list is unexpectedly empty after selection and processing.")
-            QtWidgets.QMessageBox.critical(self, "Loading Error", "Failed to identify the file to load.")
-            self._update_menu_state()
+            self.status_bar.showMessage("File open action cancelled or failed.", 3000)
 
     # CHANGE: Signature updated to reflect the arguments passed from the modified _open_file_dialog
     def _load_in_explorer(
@@ -646,7 +553,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """Initiates background loading of the initial file and stores context for completion."""
         # CHANGE: Log using the clearer argument name
         log.debug(
-            f"Requesting background load of initial file: {initial_filepath_to_load.name} (from list of {len(file_list)} siblings)"
+            f"Requesting background load of initial file: {initial_filepath_to_load.name} "
+            f"(from list of {len(file_list)} siblings)"
         )
         if not (hasattr(self, "explorer_tab") and self.explorer_tab):
             log.error("Cannot load file: Explorer tab not found or not initialized yet.")
@@ -692,8 +600,9 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 log.warning("Cannot update exporter tab state: Exporter tab not found.")
             # if hasattr(self, 'analyser_tab') and self.analyser_tab:
-            #     try: self.analyser_tab.update_state(self.explorer_tab._analysis_items) # Pass analysis items explicitly
-            #     except Exception as e_analyse_update: log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
+            # try: self.analyser_tab.update_state(self.explorer_tab._analysis_items) # Pass analysis items explicitly
+            # except Exception as e_analyse_update: log.error(f"Error updating analyser tab state: {e_analyse_update}",
+            # exc_info=True)
             # else: log.warning("Cannot update analyser tab state: Analyser tab not found.")
 
     def _export_to_nwb(self):
@@ -896,7 +805,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.saved_analysis_results.append(result_data)
         log.debug(
-            f"Saved analysis result ({result_data.get('analysis_type', '?')} from {result_data.get('source_file_name', '?')}). Total saved: {len(self.saved_analysis_results)}"
+            f"Saved analysis result ({result_data.get('analysis_type', '?')} from "
+            f"{result_data.get('source_file_name', '?')}). Total saved: {len(self.saved_analysis_results)}"
         )
         # Optional: Update status bar or emit signal
         self.status_bar.showMessage(

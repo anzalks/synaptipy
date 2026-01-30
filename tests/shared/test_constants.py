@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """Tests for Synaptipy shared constants module."""
 
-import unittest
 from unittest import TestCase
 
 
@@ -36,9 +35,5 @@ class TestConstants(TestCase):
         from Synaptipy.shared import constants
 
         self.assertIn("Z_ORDER", constants.__all__)
-
-
-import pytest
-from Synaptipy.shared import constants
 
 # Add tests for other constants or utility functions in shared/constants.py if any

@@ -211,7 +211,8 @@ class BatchAnalysisEngine:
                             results_list.extend(task_results)
                         except Exception as e:
                             log.error(
-                                f"Error processing task {task.get('analysis', 'unknown')} on {file_path.name}/{channel_name}: {e}",
+                                f"Error processing task {task.get('analysis', 'unknown')} on "
+                                f"{file_path.name}/{channel_name}: {e}",
                                 exc_info=True,
                             )
                             # Add error row
@@ -474,7 +475,8 @@ class BatchAnalysisEngine:
             # Memory Safety Check
             if len(data_list) > 500:  # Heuristic warning
                 log.warning(
-                    f"Batch processing channel set with {len(data_list)} trials. This uses significant memory. Proceeding..."
+                    f"Batch processing channel set with {len(data_list)} trials. "
+                    f"This uses significant memory. Proceeding..."
                 )
 
             if not data_list:

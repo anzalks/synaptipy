@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import MagicMock, patch
-from PySide6 import QtCore, QtWidgets
+from unittest.mock import MagicMock
+from PySide6 import QtWidgets
 from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 

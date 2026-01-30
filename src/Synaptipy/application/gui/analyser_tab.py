@@ -8,17 +8,12 @@ from typing import Optional, List, Dict, Any, Set
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from .analysis_tabs.base import BaseAnalysisTab
-from .analysis_tabs.rmp_tab import BaselineAnalysisTab
-from .analysis_tabs.rin_tab import RinAnalysisTab
-from .analysis_tabs.event_detection_tab import EventDetectionTab
-from .analysis_tabs.spike_tab import SpikeAnalysisTab
 from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.shared.styling import style_button
 
-# from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog # Imported locally to avoid circular imports?
+# from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog  # Imported locally to avoid circular imports?
 
 
 log = logging.getLogger(__name__)
@@ -90,7 +85,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self._loaded_analysis_tabs: List[BaseAnalysisTab] = []
 
         # --- UI References ---
-        # self.source_file_label: Optional[QtWidgets.QLabel] = None # Replaced by list
+        # self.source_file_label: Optional[QtWidgets.QLabel] = None  # Replaced by list
         self.source_list_widget: Optional[QtWidgets.QListWidget] = None
         self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
         self.central_analysis_item_combo: Optional[QtWidgets.QComboBox] = None
@@ -220,7 +215,8 @@ class AnalyserTab(QtWidgets.QWidget):
                         # --- END UPDATE ---
                         if not found_tab:
                             log.warning(
-                                f"No ANALYSIS_TAB_CLASS constant found or it's not a BaseAnalysisTab subclass in: {module_name}"
+                                f"No ANALYSIS_TAB_CLASS constant found or it's not a BaseAnalysisTab "
+                                f"subclass in: {module_name}"
                             )
                     except ImportError as e_imp:
                         log.error(f"Failed import module '{module_name}': {e_imp}", exc_info=True)
@@ -358,7 +354,8 @@ class AnalyserTab(QtWidgets.QWidget):
         # Note: The init signature of BatchAnalysisDialog is (files, pipeline_config, default_channels, parent)
         # We need to make sure we match it.
         # Checking previous files... BatchAnalysisDialog declaration was:
-        # def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None, default_channels: Optional[List[str]] = None, parent=None):
+        # def __init__(self, files: List[Path], pipeline_config: Optional[List[Dict[str, Any]]] = None,
+        # default_channels: Optional[List[str]] = None, parent=None):
 
         dialog = BatchAnalysisDialog(
             files=files_to_process, pipeline_config=pipeline_config, default_channels=default_channels, parent=self
@@ -492,11 +489,16 @@ class AnalyserTab(QtWidgets.QWidget):
                         log.error(f"Error updating tab on switch: {e}", exc_info=True)
                 else:
                     log.debug(
-                        f"Skipping tab update: invalid combo index {selected_index} (items count: {len(self._analysis_items)})"
+                        f"Skipping tab update: invalid combo index {selected_index} "
+                        f"(items count: {len(self._analysis_items)})"
                     )
             else:
+                is_enabled = self.central_analysis_item_combo.isEnabled()
+                count = self.central_analysis_item_combo.count()
+                items_len = len(self._analysis_items)
                 log.debug(
-                    f"Skipping tab update: combo box not ready (enabled={self.central_analysis_item_combo.isEnabled()}, count={self.central_analysis_item_combo.count()}, items={len(self._analysis_items)})"
+                    f"Skipping tab update: combo box not ready (enabled={is_enabled}, "
+                    f"count={count}, items={items_len})"
                 )
 
     # --- Update State Method ---
@@ -504,7 +506,8 @@ class AnalyserTab(QtWidgets.QWidget):
         """Updates the state of all loaded sub-tabs based on the current analysis list."""
         # Update all loaded sub-tabs, passing only the list of analysis items
         log.debug(
-            f"Updating state for {len(self._loaded_analysis_tabs)} sub-tabs with {len(self._analysis_items)} analysis items."
+            f"Updating state for {len(self._loaded_analysis_tabs)} sub-tabs with "
+            f"{len(self._analysis_items)} analysis items."
         )
         for tab in self._loaded_analysis_tabs:
             try:

@@ -5,14 +5,13 @@ Analysis tab for Phase Plane (dV/dt vs V) visualization and analysis.
 Refactored to use MetadataDrivenAnalysisTab architecture.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtCore
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-import Synaptipy.core.analysis.phase_plane  # Ensure registration
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
             if self.popup_plot is not None:
                 try:
                     self.popup_plot.close()
-                except:
+                except Exception:
                     pass
                 self.popup_plot = None
 

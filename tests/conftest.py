@@ -1,5 +1,3 @@
-import os
-import pytest
 
 
 def pytest_ignore_collect(collection_path, config):

@@ -82,7 +82,7 @@ All analysis features must be split into two distinct parts:
 * **Complexity**: Keep function cyclomatic complexity under 10. Refactor if logic gets too nested.
 * **Unused Imports**: Remove them. (Exception: `__init__.py` files).
 * **Command**: Before finalizing code, the Agent should verify with: `flake8 src tests`
-* **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures.
+* **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures (0 errors allowed).
 
 **2. Cross-Platform Compatibility (The "Windows" Rule)**
 * **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).
@@ -117,3 +117,24 @@ All analysis features must be split into two distinct parts:
     *   Headers: `#` for titles, `##` for sections, `###` for subsections.
     *   Code Blocks: Always specify the language (e.g., `python`, `bash`).
     *   Lists: Use `-` for bullet points.
+
+## VI. REFACTORING CONSTRAINTS
+
+**1. "God Object" Prevention**
+*   **Class Limit**: No class should exceed **500 lines**. If it grows beyond, refactor into smaller, focused classes.
+*   **Method Limit**: No single method should exceed **50 lines** of logic. Extract helper methods for complex logic.
+
+**2. Explicit Error Handling**
+*   **Forbidden**: Generic `except Exception` or bare `except:` blocks in production code.
+*   **Requirement**: Catch specific exceptions (e.g., `KeyError`, `ValueError`, `IOError`). Use a global handler for truly unexpected errors.
+*   *Reason*: Generic catches mask bugs and make debugging difficult.
+
+**3. Domain Purity (Strict)**
+* **FORBIDDEN**: Core domain objects (`Channel`, `Recording`, `Experiment`) must NOT hold direct references to infrastructure objects (e.g., `neo_block`, `neo.io` readers, file handles).
+* **Requirement**: Use the `SourceHandle` protocol (`src/Synaptipy/core/source_interfaces.py`) for abstract data access.
+* *Reason*: Decouples the core domain from specific I/O libraries (Neo), enabling easier testing and future library swaps.
+
+**4. Test Canonicalization**
+*   **Forbidden**: Standalone `verify_*.py` scripts for testing. All tests must be discoverable by `pytest`.
+*   **Requirement**: All test files must reside in `tests/` and follow `test_*.py` naming.
+*   *Reason*: Ensures CI runs all tests and provides uniform coverage reporting.

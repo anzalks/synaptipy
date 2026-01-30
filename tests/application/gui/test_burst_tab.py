@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
-import pyqtgraph as pg
 
 from Synaptipy.application.gui.analysis_tabs.burst_tab import BurstAnalysisTab
 from Synaptipy.core.results import BurstResult

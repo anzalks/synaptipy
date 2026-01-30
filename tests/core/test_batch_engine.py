@@ -10,8 +10,7 @@ Author: Anzal KS <anzal.ks@gmail.com>
 import pytest
 import numpy as np
 from pathlib import Path
-from typing import Dict, Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
@@ -93,7 +92,7 @@ class TestBatchAnalysisSystem:
 
     def setup_method(self):
         # Clear registry before each test to ensure clean state
-        # AnalysisRegistry.clear() # We need to implement clear if it doesn't exist, or just mock
+        # AnalysisRegistry.clear()  # We need to implement clear if it doesn't exist, or just mock
         # Looking at registry.py, it has a clear() method.
         AnalysisRegistry.clear()
 
@@ -130,7 +129,7 @@ class TestBatchAnalysisSystem:
         rec = Recording(source_file=Path("dummy.abf"))
 
         # Add some dummy data
-        t = np.linspace(0, 1, 1000)
+        _t = np.linspace(0, 1, 1000)  # noqa: F841
         d = np.ones(1000) * 5.0  # Mean is 5.0
 
         # Initialize channel with data_trials
@@ -306,7 +305,7 @@ class TestBatchAnalysisSystem:
         def progress_cb(current, total, msg):
             progress_calls.append((current, total, msg))
 
-        df = engine.run_batch([Path("f1.abf"), Path("f2.abf")], pipeline, progress_callback=progress_cb)
+        _df = engine.run_batch([Path("f1.abf"), Path("f2.abf")], pipeline, progress_callback=progress_cb)  # noqa: F841
 
         # Should have progress calls for each file plus completion
         assert len(progress_calls) >= 2

@@ -77,8 +77,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Caching
         self._data_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}
         self._average_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
-        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {} # NEW: Cache for processed data
-        self._active_preprocessing_settings: Optional[Dict[str, Any]] = None # Active settings for on-the-fly processing
+        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}  # NEW: Cache for processed data
+        # Active settings for on-the-fly processing
+        self._active_preprocessing_settings: Optional[Dict[str, Any]] = None
         self._cache_dirty: bool = False
         self._is_loading: bool = False
 
@@ -86,7 +87,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_y_ranges: Dict[str, Optional[Tuple[float, float]]] = {}
-        # self.manual_limits_enabled: bool = False # Removed
+        # self.manual_limits_enabled: bool = False  # Removed
 
         self._updating_viewranges: bool = False  # Lock to prevent feedback loops
 
@@ -97,12 +98,11 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Initial State
         self._update_all_ui_state()
-        
+
         # State Preservation for Cycling
         self._current_trial_selection_params: Optional[Tuple[int, int]] = None  # (n, start_index)
         self._pending_view_state: Optional[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = None
         self._pending_trial_params: Optional[Tuple[int, int]] = None
-
 
     def _init_components(self):
         self.config_panel = ExplorerConfigPanel()
@@ -136,7 +136,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Open File Button
         self.open_file_btn = QtWidgets.QPushButton("Open File...")
-        
+
         # Preprocessing Widget
         self.preprocessing_widget = PreprocessingWidget()
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
@@ -152,10 +152,10 @@ class ExplorerTab(QtWidgets.QWidget):
         center_widget = QtWidgets.QWidget()
         center_layout = QtWidgets.QGridLayout(center_widget)
         # (Row, Col, RowSpan, ColSpan)
-        
+
         # 1. Plot Area (0, 0)
         center_layout.addWidget(self.plot_canvas.widget, 0, 0)
-        
+
         # 2. Y Scrollbar (Right of Plot) (0, 1)
         center_layout.addWidget(self.y_controls.y_scroll_widget, 0, 1)
 
@@ -167,54 +167,53 @@ class ExplorerTab(QtWidgets.QWidget):
         nav_row_widget = QtWidgets.QWidget()
         nav_row_layout = QtWidgets.QHBoxLayout(nav_row_widget)
         nav_row_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Reparent widgets
         nav_row_layout.addWidget(self.toolbar.prev_file_btn)
         nav_row_layout.addStretch()
         nav_row_layout.addWidget(self.toolbar.trial_group)
         nav_row_layout.addStretch()
         nav_row_layout.addWidget(self.toolbar.next_file_btn)
-        
+
         # Also include the file index label somewhere? The user's request:
         # "the seco row acomodates the next previous as it isand put trial cycle int he centre of that region"
-        # The original toolbar had the file label in the middle. 
+        # The original toolbar had the file label in the middle.
         # I'll put the file index label with the file buttons to keep context?
         # Or maybe putting trial cycle in center implicitly displaces the index label.
         # I'll add the index label next to the buttons for clarity.
         # [Prev] [Index] ... [Trial] ... [Next] - actually User said "put trial cycle in the centre".
         # So I will do: [Prev] [Index] [Stretch] [Trial] [Stretch] [Next]
-        
+
         # Wait, I can't easily insert into the middle of the "nav_row" if I just steal buttons.
         # Let's clean up the toolbar layout first? No, reparenting removes from old layout automatically.
         # I will grab the file_index_lbl too.
-        
-        nav_row_layout.insertWidget(1, self.toolbar.file_index_lbl) # Place index next to Prev?
+
+        nav_row_layout.insertWidget(1, self.toolbar.file_index_lbl)  # Place index next to Prev?
         # Or maybe better: [Prev] [Stretch] [Trial] [Stretch] [Index] [Next]?
         # Let's stick to the user request: "trial cycle in the centre... between the two buttons".
         # I'll put index label next to Next or Prev. Let's put it next to Next.
-        
+
         # Re-doing nav row layout:
         # [Prev File] [Stretch] [Trial Group] [Stretch] [Index Label] [Next File]
-        
-        
+
         # 5. Zoom/View Row (Row 3: X Zoom | Y Zoom | View)
         zoom_row_widget = QtWidgets.QWidget()
         zoom_row_layout = QtWidgets.QHBoxLayout(zoom_row_widget)
         zoom_row_layout.setContentsMargins(0, 0, 0, 0)
-        
-        zoom_row_layout.addWidget(self.toolbar.x_zoom_group, 1) # Time Zoom
-        zoom_row_layout.addWidget(self.y_controls.y_zoom_widget, 1) # Amplitude Zoom
-        zoom_row_layout.addWidget(self.toolbar.view_group) # View Controls
-        
+
+        zoom_row_layout.addWidget(self.toolbar.x_zoom_group, 1)  # Time Zoom
+        zoom_row_layout.addWidget(self.y_controls.y_zoom_widget, 1)  # Amplitude Zoom
+        zoom_row_layout.addWidget(self.toolbar.view_group)  # View Controls
+
         center_layout.addWidget(nav_row_widget, 2, 0)
         center_layout.addWidget(zoom_row_widget, 3, 0)
 
         # Adjust column stretch
-        center_layout.setColumnStretch(0, 1) # Plot takes max width
-        center_layout.setColumnStretch(1, 0) # Scrollbar fixes width
-        
+        center_layout.setColumnStretch(0, 1)  # Plot takes max width
+        center_layout.setColumnStretch(1, 0)  # Scrollbar fixes width
+
         # Adjust row stretch
-        center_layout.setRowStretch(0, 1) # Plot takes max height
+        center_layout.setRowStretch(0, 1)  # Plot takes max height
         center_layout.setRowStretch(1, 0)
         center_layout.setRowStretch(2, 0)
         center_layout.setRowStretch(3, 0)
@@ -228,8 +227,8 @@ class ExplorerTab(QtWidgets.QWidget):
         right_layout.addWidget(self.open_file_btn)
         right_layout.addWidget(self.sidebar)
         right_layout.addWidget(self.analysis_group)
-        right_layout.addWidget(self.preprocessing_widget) # Added below analysis selection
-        # right_layout.addWidget(self.y_controls) # Removed, integrated into center grid
+        right_layout.addWidget(self.preprocessing_widget)  # Added below analysis selection
+        # right_layout.addWidget(self.y_controls)  # Removed, integrated into center grid
 
         layout.addWidget(right_widget, 0)
 
@@ -240,7 +239,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Sidebar
         # Sidebar
         # We preserve state when selecting from sidebar too, to allow seamless browsing of siblings
-        self.sidebar.file_selected.connect(lambda f, l, i: self.load_recording_data(f, l, i, preserve_state=True))
+        self.sidebar.file_selected.connect(
+            lambda f, files, i: self.load_recording_data(f, files, i, preserve_state=True)
+        )
 
         # Config Panel
         self.config_panel.plot_mode_changed.connect(self._on_plot_mode_changed)
@@ -311,10 +312,13 @@ class ExplorerTab(QtWidgets.QWidget):
                 if plot.isVisible():
                     # capture ((xmin, xmax), (ymin, ymax))
                     self._pending_view_state[cid] = (plot.viewRange()[0], plot.viewRange()[1])
-            
+
             # 2. Capture Trial Selection Params
             self._pending_trial_params = self._current_trial_selection_params
-            log.debug(f"State captured for restoration: View for {len(self._pending_view_state)} plots, Trial Params: {self._pending_trial_params}")
+            log.debug(
+                f"State captured for restoration: View for {len(self._pending_view_state)} plots, "
+                f"Trial Params: {self._pending_trial_params}"
+            )
         else:
             # Clear pending state if not preserving
             self._pending_view_state = None
@@ -351,17 +355,17 @@ class ExplorerTab(QtWidgets.QWidget):
         self._cache_dirty: bool = False
         self.current_trial_index = 0
         self.selected_trial_indices.clear()
-        self._current_trial_selection_params = None # Reset params
-        
+        self._current_trial_selection_params = None  # Reset params
+
         # Default: Select ALL trials implicitly (empty set means all in some logic, but here we want explicit control?)
-        # Let's say empty set in selected_trial_indices means "User hasn't filtered". 
-        # But for "Plot Selected" feature, we want explicit subset. 
+        # Let's say empty set in selected_trial_indices means "User hasn't filtered".
+        # But for "Plot Selected" feature, we want explicit subset.
         # Actually my plan said "self.selected_trial_indices: Set[int] = set()".
-        # If I use this set for BOTH manual selection (cycle mode) and Nth selection (overlay mode), 
+        # If I use this set for BOTH manual selection (cycle mode) and Nth selection (overlay mode),
         # I need to be careful. User wants "Plot Selected Trials" to replace "Manual Limits".
         # So this selection affects Overlay mode primarily?
         # Yes: "this will plot only those trials which i select... plot, preprocess, and average only every nth trial"
-        
+
         # So, if selected_trial_indices is Empty, we assume ALL trials are valid for Overlay mode.
         # If it is populated, we use only those.
         self.selected_trial_indices = set()
@@ -377,7 +381,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # Initial Plot
         self._update_plot()
         self._reset_view()
-        
+
         # --- Restore State if Pending ---
         restored_view = False
         if self._pending_view_state:
@@ -396,9 +400,9 @@ class ExplorerTab(QtWidgets.QWidget):
                 self._pending_view_state = None
             except Exception as e:
                 log.warning(f"Failed to restore view state: {e}")
-        
+
         if not restored_view:
-            pass # _reset_view already called above
+            pass  # _reset_view already called above
 
         # Restore Trial Selection
         if self._pending_trial_params:
@@ -410,11 +414,11 @@ class ExplorerTab(QtWidgets.QWidget):
                 # Note: _on_trial_selection_requested calls _update_plot, so we might redraw twice, but safe.
             except Exception as e:
                 log.warning(f"Failed to restore trial selection: {e}")
-                self._auto_select_trials() # Fallback
+                self._auto_select_trials()  # Fallback
             finally:
                 self._pending_trial_params = None
         else:
-             self._auto_select_trials()
+            self._auto_select_trials()
 
         # Update State
         self._update_all_ui_state()
@@ -466,14 +470,14 @@ class ExplorerTab(QtWidgets.QWidget):
             # Clear existing items robustly
             for cid in self.plot_canvas.channel_plots.keys():
                 self.plot_canvas.clear_plot_items(cid)
-            
+
             # Reset tracking lists
             self.plot_canvas.channel_plot_data_items.clear()
             self.plot_canvas.selected_average_plot_items.clear()
-            
+
             # Re-init dict keys
             for cid in self.plot_canvas.channel_plots.keys():
-                 self.plot_canvas.channel_plot_data_items[cid] = []
+                self.plot_canvas.channel_plot_data_items[cid] = []
 
             # 0. Preserve View State if possible
             view_state = {}
@@ -519,27 +523,36 @@ class ExplorerTab(QtWidgets.QWidget):
                         try:
                             data = channel.get_data(self.current_trial_index)
                             t = channel.get_relative_time_vector(self.current_trial_index)
-                            
+
                             # APPLY PREPROCESSING
                             if self._active_preprocessing_settings and data is not None:
                                 try:
                                     params = self._active_preprocessing_settings
                                     op_type = params.get('type')
                                     fs = channel.sampling_rate
-                                    
+
                                     if op_type == 'baseline':
                                         decimals = params.get('decimals', 1)
                                         data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
                                     elif op_type == 'filter':
                                         method = params.get('method')
                                         if method == 'lowpass':
-                                            data = signal_processor.lowpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                            data = signal_processor.lowpass_filter(
+                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
+                                            )
                                         elif method == 'highpass':
-                                            data = signal_processor.highpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                            data = signal_processor.highpass_filter(
+                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
+                                            )
                                         elif method == 'bandpass':
-                                            data = signal_processor.bandpass_filter(data, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
+                                            data = signal_processor.bandpass_filter(
+                                                data, params.get('low_cut'), params.get('high_cut'),
+                                                fs, int(params.get('order', 5))
+                                            )
                                         elif method == 'notch':
-                                            data = signal_processor.notch_filter(data, params.get('freq'), params.get('q_factor'), fs)
+                                            data = signal_processor.notch_filter(
+                                                data, params.get('freq'), params.get('q_factor'), fs
+                                            )
                                 except Exception as e:
                                     log.error(f"Error processing trial {self.current_trial_index}: {e}")
 
@@ -554,7 +567,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                 else:  # OVERLAY_AVG
                     # 1. Overlay ALL trials (Background) or SELECTED trials
-                    
+
                     # Determine trials to plot
                     if self.selected_trial_indices:
                         trials_to_plot = sorted(list(self.selected_trial_indices))
@@ -569,14 +582,14 @@ class ExplorerTab(QtWidgets.QWidget):
 
                             data = channel.get_data(trial_idx)
                             t = channel.get_relative_time_vector(trial_idx)
-                            
+
                             # APPLY PREPROCESSING (Overlay Mode)
                             if self._active_preprocessing_settings and data is not None:
                                 try:
                                     params = self._active_preprocessing_settings
                                     op_type = params.get('type')
                                     fs = channel.sampling_rate
-                                    
+
                                     if op_type == 'baseline':
                                         method = params.get('method', 'mode')
                                         if method == 'mode':
@@ -595,16 +608,25 @@ class ExplorerTab(QtWidgets.QWidget):
                                     elif op_type == 'filter':
                                         method = params.get('method')
                                         if method == 'lowpass':
-                                            data = signal_processor.lowpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                            data = signal_processor.lowpass_filter(
+                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
+                                            )
                                         elif method == 'highpass':
-                                            data = signal_processor.highpass_filter(data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                            data = signal_processor.highpass_filter(
+                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
+                                            )
                                         elif method == 'bandpass':
-                                            data = signal_processor.bandpass_filter(data, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
+                                            data = signal_processor.bandpass_filter(
+                                                data, params.get('low_cut'), params.get('high_cut'),
+                                                fs, int(params.get('order', 5))
+                                            )
                                         elif method == 'notch':
-                                            data = signal_processor.notch_filter(data, params.get('freq'), params.get('q_factor'), fs)
+                                            data = signal_processor.notch_filter(
+                                                data, params.get('freq'), params.get('q_factor'), fs
+                                            )
                                 except Exception:
                                     pass
-                            
+
                             if data is not None and t is not None:
                                 item = plot_item.plot(t, data, pen=current_trial_pen)
 
@@ -626,19 +648,21 @@ class ExplorerTab(QtWidgets.QWidget):
                             trial_indices=list(self.selected_trial_indices) if self.selected_trial_indices else None
                         )
                         avg_t = channel.get_relative_time_vector(0)  # Use trial 0 time as Ref
-                        
+
                         # APPLY PREPROCESSING (Average)
                         if self._active_preprocessing_settings and avg_data is not None:
-                             try:
+                            try:
                                 params = self._active_preprocessing_settings
                                 op_type = params.get('type')
                                 fs = channel.sampling_rate
-                                
+
                                 if op_type == 'baseline':
                                     method = params.get('method', 'mode')
                                     if method == 'mode':
                                         decimals = params.get('decimals', 1)
-                                        avg_data = signal_processor.subtract_baseline_mode(avg_data, decimals=decimals)
+                                        avg_data = signal_processor.subtract_baseline_mode(
+                                            avg_data, decimals=decimals
+                                        )
                                     elif method == 'mean':
                                         avg_data = signal_processor.subtract_baseline_mean(avg_data)
                                     elif method == 'median':
@@ -649,18 +673,29 @@ class ExplorerTab(QtWidgets.QWidget):
                                         start_t = params.get('start_t', 0.0)
                                         end_t = params.get('end_t', 0.0)
                                         # Use avg_t for time vector
-                                        avg_data = signal_processor.subtract_baseline_region(avg_data, avg_t, start_t, end_t)
+                                        avg_data = signal_processor.subtract_baseline_region(
+                                            avg_data, avg_t, start_t, end_t
+                                        )
                                 elif op_type == 'filter':
                                     method = params.get('method')
                                     if method == 'lowpass':
-                                        avg_data = signal_processor.lowpass_filter(avg_data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                        avg_data = signal_processor.lowpass_filter(
+                                            avg_data, params.get('cutoff'), fs, int(params.get('order', 5))
+                                        )
                                     elif method == 'highpass':
-                                        avg_data = signal_processor.highpass_filter(avg_data, params.get('cutoff'), fs, int(params.get('order', 5)))
+                                        avg_data = signal_processor.highpass_filter(
+                                            avg_data, params.get('cutoff'), fs, int(params.get('order', 5))
+                                        )
                                     elif method == 'bandpass':
-                                        avg_data = signal_processor.bandpass_filter(avg_data, params.get('low_cut'), params.get('high_cut'), fs, int(params.get('order', 5)))
+                                        avg_data = signal_processor.bandpass_filter(
+                                            avg_data, params.get('low_cut'), params.get('high_cut'),
+                                            fs, int(params.get('order', 5))
+                                        )
                                     elif method == 'notch':
-                                        avg_data = signal_processor.notch_filter(avg_data, params.get('freq'), params.get('q_factor'), fs)
-                             except Exception as e:
+                                        avg_data = signal_processor.notch_filter(
+                                            avg_data, params.get('freq'), params.get('q_factor'), fs
+                                        )
+                            except Exception as e:
                                 log.error(f"Error processing average for {cid}: {e}")
 
                         if avg_data is not None and avg_t is not None:
@@ -798,7 +833,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # Analysis Buttons
         self.add_analysis_btn.setEnabled(self.current_recording is not None)
         self.clear_analysis_btn.setEnabled(bool(self._analysis_items))
-        
+
         # Preprocessing state
         # Can enable/disable based on recording presence
         self.preprocessing_widget.setEnabled(self.current_recording is not None)
@@ -1039,35 +1074,33 @@ class ExplorerTab(QtWidgets.QWidget):
         Processing happens on-the-fly in _update_plot (or helper).
         """
         if not self.current_recording:
-             QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded.")
-             return
+            QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded.")
+            return
 
         # Store settings
         self._active_preprocessing_settings = settings
-        
+
         # Trigger update (which will use the settings)
         self.preprocessing_widget.set_processing_state(True)
         try:
             self._update_plot()
         finally:
             self.preprocessing_widget.set_processing_state(False)
-            self.status_bar.showMessage(f"Applied preprocessing settings.", 3000)
+            self.status_bar.showMessage("Applied preprocessing settings.", 3000)
 
     def _on_preprocessing_complete_legacy(self, result_data):
-        pass # Removed legacy worker method
-
-
+        pass  # Removed legacy worker method
 
     def _handle_preprocessing_reset(self):
         """Reset all preprocessing and revert to raw data."""
         self._processed_cache.clear()
-        self._cache_dirty = True # Mark dirty just in case
+        self._cache_dirty = True  # Mark dirty just in case
         self._update_plot()
-        
+
         # Auto-range to fit raw data
         for plot in self.plot_canvas.channel_plots.values():
             plot.autoRange()
-            
+
         self.status_bar.showMessage("Preprocessing reset to raw data.", 3000)
 
     # --- X-Axis Logic ---
@@ -1113,12 +1146,12 @@ class ExplorerTab(QtWidgets.QWidget):
             # Derived from ViewBox
             cmin, cmax = new_range
             tmin, tmax = self.base_x_range
-            
+
             # Avoid division by zero
             total_span = tmax - tmin
-            if total_span <= 0: 
+            if total_span <= 0:
                 total_span = 1
-            
+
             # 1. Update Sliders/Scrollbars values
             z, s = self._calculate_controls_from_range(cmin, cmax, tmin, tmax)
 
@@ -1129,14 +1162,15 @@ class ExplorerTab(QtWidgets.QWidget):
 
             self.x_scrollbar.blockSignals(True)
             self.x_scrollbar.setValue(s)
-            
+
             # 2. Update Page Step (Handle Size)
             current_span = cmax - cmin
             ratio = max(0.0, min(1.0, current_span / total_span))
             page_step = int(ratio * 10000)
-            if page_step < 1: page_step = 1
+            if page_step < 1:
+                page_step = 1
             self.x_scrollbar.setPageStep(page_step)
-            
+
             self.x_scrollbar.blockSignals(False)
 
         except Exception as e:
@@ -1167,7 +1201,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                 # ALSO Update individual controls to match global
                 self.y_controls.set_individual_scrollbar(cid, scroll_val)
-                
+
         finally:
             self._updating_viewranges = False
 
@@ -1261,7 +1295,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
             tmin, tmax = base_range
             cmin, cmax = new_range
-            
+
             # --- Dynamic Range Expansion ---
             # If the user pans outside the initial "Base Range" (calculated from Trial 0),
             # we must expand the base range to encompass the new view.
@@ -1273,15 +1307,16 @@ class ExplorerTab(QtWidgets.QWidget):
             if cmax > tmax:
                 tmax = cmax
                 expanded = True
-                
+
             if expanded:
                 self.base_y_ranges[chan_id] = (tmin, tmax)
                 # Note: We don't trigger a full re-calc of everything, just update the reference.
             # -------------------------------
-            
+
             # Avoid division by zero
             total_span = tmax - tmin
-            if total_span <= 0: total_span = 1
+            if total_span <= 0:
+                total_span = 1
 
             z, s = self._calculate_controls_from_range(cmin, cmax, tmin, tmax)
 
@@ -1289,13 +1324,14 @@ class ExplorerTab(QtWidgets.QWidget):
             # We need to access YControls methods to set these without triggering signals if possible
             # But here we want to update the UI
             self.y_controls.set_individual_scrollbar(chan_id, s)
-            
+
             # Update Page Step (Handle Size) for individual scrollbar?
             current_span = cmax - cmin
             ratio = max(0.0, min(1.0, current_span / total_span))
             page_step = int(ratio * 10000)
-            if page_step < 1: page_step = 1
-            
+            if page_step < 1:
+                page_step = 1
+
             sb = self.y_controls.individual_y_scrollbars.get(chan_id)
             if sb:
                 sb.setPageStep(page_step)
@@ -1304,7 +1340,7 @@ class ExplorerTab(QtWidgets.QWidget):
             if self.y_controls.y_lock_checkbox.isChecked():
                 self.y_controls.set_global_scrollbar(s)
                 self.y_controls.global_y_scrollbar.setPageStep(page_step)
-                
+
                 self.y_controls.global_y_slider.blockSignals(True)
                 self.y_controls.global_y_slider.setValue(z)
                 self.y_controls.global_y_slider.blockSignals(False)
@@ -1324,7 +1360,7 @@ class ExplorerTab(QtWidgets.QWidget):
                         other_plot.setYRange(nm, nM, padding=0)
                         # Also update their individual scrollbars
                         self.y_controls.set_individual_scrollbar(other_cid, s)
-                        
+
                         # And page steps
                         other_sb = self.y_controls.individual_y_scrollbars.get(other_cid)
                         if other_sb:
@@ -1344,10 +1380,10 @@ class ExplorerTab(QtWidgets.QWidget):
     def _save_plot(self):
         """Save the current plot to an image file with custom dialog."""
         if not self.current_recording:
-             return
+            return
 
         from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
-        
+
         dialog = PlotExportDialog(self)
         if dialog.exec():
             settings = dialog.get_settings()
@@ -1362,7 +1398,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
             if filename:
                 from Synaptipy.shared.plot_exporter import PlotExporter
-                
+
                 # Provide context for export
                 export_config = {
                     "plot_mode": self.current_plot_mode,
@@ -1370,14 +1406,14 @@ class ExplorerTab(QtWidgets.QWidget):
                     "selected_trial_indices": self.selected_trial_indices,
                     "show_average": self.config_panel.show_avg_btn.isChecked()
                 }
-                
+
                 exporter = PlotExporter(
                     recording=self.current_recording,
                     plot_canvas_widget=self.plot_canvas.widget,
                     plot_canvas_wrapper=self.plot_canvas,
                     config=export_config
                 )
-                
+
                 try:
                     exporter.export(filename, fmt, dpi)
                     self.status_bar.showMessage(f"Plot saved to {filename}", 3000)
@@ -1386,46 +1422,48 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Helper methods removed in favor of shared.plot_exporter.PlotExporter
         pass
-            
-
 
     def _on_trial_selection_requested(self, n, start_index=0):
         """Filter trials to every Nth trial, starting from start_index."""
         if not self.current_recording:
             return
-        
+
         self.max_trials_current_recording = getattr(self.current_recording, "max_trials", 0)
         all_indices = range(self.max_trials_current_recording)
-        
+
         # Select every Nth (Gap Logic: Step = N + 1)
         # 0 -> Step 1 (All)
         # 1 -> Step 2 (Every 2nd)
         step = n + 1
-        
+
         # Validate Start Index
-        if start_index < 0: start_index = 0
-        
+        if start_index < 0:
+            start_index = 0
+
         # Slicing: [start:stop:step]
         self.selected_trial_indices = set(all_indices[start_index::step])
-        
-        log.info(f"Filtering trials: Start={start_index}, Gap={n} (Step={step}) -> {len(self.selected_trial_indices)} trials selected.")
-        
+
+        log.info(
+            f"Filtering trials: Start={start_index}, Gap={n} (Step={step}) -> "
+            f"{len(self.selected_trial_indices)} trials selected."
+        )
+
         # Store params for preservation
         self._current_trial_selection_params = (n, start_index)
-        
+
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
-        
+
     def _on_trial_selection_reset_requested(self):
         """Reset trial selection to show all (raw data)."""
-        self.selected_trial_indices.clear() # Empty means all
-        self._current_trial_selection_params = None # Clear params
+        self.selected_trial_indices.clear()  # Empty means all
+        self._current_trial_selection_params = None  # Clear params
         log.info("Reset trial filtering: All trials selected.")
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
 
     def _apply_manual_limits_from_dict(self, limits):
-        pass # Deprecated
+        pass  # Deprecated
 
     def _toggle_select_current_trial(self):
         if self.current_trial_index in self.selected_trial_indices:
@@ -1459,6 +1497,6 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_plot()
 
     def _auto_select_trials(self):
-         # Removed auto-selection logic to avoid interfering with default view (Show All)
-         # self.selected_trial_indices = set(range(min(5, self.max_trials_current_recording)))
-         pass
+        # Removed auto-selection logic to avoid interfering with default view (Show All)
+        # self.selected_trial_indices = set(range(min(5, self.max_trials_current_recording)))
+        pass

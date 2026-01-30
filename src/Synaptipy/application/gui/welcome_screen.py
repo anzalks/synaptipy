@@ -10,10 +10,8 @@ See the LICENSE file in the root of the repository for full license details.
 """
 
 import logging
-from typing import Optional, Callable
 from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
-import pyqtgraph as pg
 
 log = logging.getLogger(__name__)
 
@@ -59,14 +57,16 @@ class WelcomeScreen(QtWidgets.QWidget):
         if logo_path.exists():
             pixmap = QtGui.QPixmap(str(logo_path))
             # Scale logo to reasonable size (e.g., 100x100)
-            pixmap = pixmap.scaled(100, 100, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation)
+            pixmap = pixmap.scaled(
+                100, 100, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation
+            )
             logo_label.setPixmap(pixmap)
         else:
             logo_label.setText("[LOGO]")
             font = logo_label.font()
             font.setPointSize(48)
             logo_label.setFont(font)
-        
+
         logo_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         title_layout.addWidget(logo_label)
 

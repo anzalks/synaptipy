@@ -13,7 +13,7 @@ PLOT_COLORS = [
     (100, 100, 100),  # Gray
     # Add more colors if needed
 ]
-TRIAL_COLOR = (55, 126, 184)  # Blueish (similar to #377eb8)
+TRIAL_COLOR = (55, 126, 184)  # Blueish (similar to  #377eb8)
 AVERAGE_COLOR = (0, 0, 0)  # Black (#000000)
 TRIAL_ALPHA = 100  # Alpha for overlaid trials (0-255)
 
@@ -30,7 +30,7 @@ Z_ORDER = {
 DOWNSAMPLING_THRESHOLD = 100000  # Apply auto-downsampling if samples > this
 
 # Pre-compute the file filter for reuse
-# NEO_FILE_FILTER = get_neo_file_filter() # Removed as it is handled by NeoAdapter
+# NEO_FILE_FILTER = get_neo_file_filter()  # Removed as it is handled by NeoAdapter
 
 # Make all constants available at the module level
 __all__ = [

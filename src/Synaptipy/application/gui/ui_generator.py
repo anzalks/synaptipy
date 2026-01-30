@@ -5,7 +5,7 @@ Helper module to generate UI widgets from metadata parameters.
 """
 import logging
 from typing import Dict, Any, List, Optional
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets
 
 log = logging.getLogger(__name__)
 

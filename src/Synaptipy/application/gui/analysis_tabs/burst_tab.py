@@ -5,14 +5,12 @@ Analysis tab for Burst Analysis.
 Visualizes detected bursts on the raw trace.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtWidgets, QtCore
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-import Synaptipy.core.analysis.burst_analysis  # Ensure registration
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +88,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
                 # Find max voltage to place markers above
                 try:
                     y_offset = float(np.max(self._current_plot_data["data"])) + 10
-                except:
+                except Exception:
                     y_offset = 50
             else:
                 y_offset = 50  # Fallback

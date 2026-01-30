@@ -11,8 +11,6 @@ from PySide6 import QtCore, QtWidgets
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.shared.plot_customization import get_plot_customization_manager
-import Synaptipy.core.analysis.intrinsic_properties  # Ensure registration
 
 log = logging.getLogger(__name__)
 

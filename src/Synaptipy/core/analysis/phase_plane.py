@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from typing import Tuple, Optional, Dict, Any
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ def detect_threshold_kink(
     dvdt = calculate_dvdt(voltage, sampling_rate, sigma_ms=0.1)
     threshold_indices = []
 
-    dt = 1.0 / sampling_rate
+    _dt = 1.0 / sampling_rate  # noqa: F841
     search_samples = int((search_window_ms / 1000.0) * sampling_rate)
 
     for peak_idx in peak_indices:
@@ -130,9 +131,6 @@ def detect_threshold_kink(
         threshold_indices.append(thresh_idx)
 
     return np.array(threshold_indices)
-
-
-from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 
 @AnalysisRegistry.register(

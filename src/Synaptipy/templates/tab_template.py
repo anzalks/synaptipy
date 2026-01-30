@@ -17,7 +17,6 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 # from Synaptipy.core.results import AnalysisResult
 
 # Rule: Ensure the analysis module is imported to register it
-import Synaptipy.core.analysis.template_analysis
 
 
 class TemplateAnalysisTab(MetadataDrivenAnalysisTab):

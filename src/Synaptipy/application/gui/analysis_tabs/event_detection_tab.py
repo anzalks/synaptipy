@@ -5,15 +5,13 @@ Analysis sub-tab for detecting synaptic events (Miniature and Evoked).
 Refactored to inherit from MetadataDrivenAnalysisTab.
 """
 import logging
-from typing import Optional, Dict, Any, List
-import numpy as np
+from typing import Optional, Any, List
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-import Synaptipy.core.analysis.event_detection  # Ensure registration
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +30,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.method_map = {
             "Threshold Based": "event_detection_threshold",
             "Deconvolution (Custom)": "event_detection_deconvolution",
-            # "Baseline + Peak + Kinetics": "event_detection_baseline_peak" # Uncomment if available
+            # "Baseline + Peak + Kinetics": "event_detection_baseline_peak"  # Uncomment if available
         }
 
         # Initialize with default method
@@ -178,14 +176,14 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         """Override to provide custom HTML result summary."""
         # Base logic (BaseAnalysisTab._on_analysis_result) handles storage, plot hook, save button.
         # We just need to update the text display.
-        
-        # We also call super()._display_analysis_results(results) if we want the generic text 
+
+        # We also call super()._display_analysis_results(results) if we want the generic text
         # but here we seem to want to REPLACE it with HTML.
         # So we won't call super() unless we want both (which would be messy in one text box).
         # MetadataDrivenAnalysisTab._display_analysis_results sets generic text.
         # If we mistakenly implemented _on_analysis_result before, we overrode everything.
         # Now we override _display_analysis_results.
-        
+
         # Let's just do our custom HTML and skip generic text.
 
         if isinstance(results, dict) and "result" in results:
@@ -209,7 +207,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         mean_amp = get_val("mean_amplitude")
         amp_sd = get_val("amplitude_sd")
 
-        text = f"<h3>Event Detection Results</h3>"
+        text = "<h3>Event Detection Results</h3>"
         text += f"<b>Method:</b> {self.method_combobox.currentText()}<br>"
         text += f"<b>Count:</b> {count}<br>"
 

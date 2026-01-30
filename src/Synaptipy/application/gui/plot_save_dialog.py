@@ -9,11 +9,10 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
-from PySide6 import QtWidgets, QtCore, QtGui
-import pyqtgraph as pg
+from PySide6 import QtWidgets
 import logging
 import os
-from typing import Optional, Tuple
+from typing import Tuple
 
 from Synaptipy.shared.constants import APP_NAME
 
@@ -55,7 +54,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
                 log.debug(f"Loaded last save location: {last_location}")
                 return last_location
             else:
-                log.debug(f"No last save location found, using default")
+                log.debug("No last save location found, using default")
                 return os.path.expanduser("~/Desktop")
 
         except Exception as e:
@@ -127,7 +126,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
 
         self.preview_label = QtWidgets.QLabel()
         self.preview_label.setStyleSheet(
-            "color: blue; font-family: monospace; padding: 5px; border: 1px solid #ccc; background-color: #f9f9f9;"
+            "color: blue; font-family: monospace; padding: 5px; border: 1px solid  #ccc; background-color:  #f9f9f9;"
         )
         self.preview_label.setWordWrap(True)
         self._update_preview()
@@ -243,14 +242,14 @@ def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") ->
             # Save as PDF using high-quality image conversion
             # This approach captures the plot as a high-quality image first, then converts to PDF
             try:
-                from PySide6.QtGui import QPixmap, QPainter
+                from PySide6.QtGui import QPainter
                 from PySide6.QtCore import QSizeF
                 from PySide6.QtPrintSupport import QPrinter
 
                 # Capture the plot as a high-quality pixmap
                 # Use a larger size for better quality
                 original_size = plot_widget.size()
-                capture_size = QSizeF(original_size.width() * 2, original_size.height() * 2)
+                _capture_size = QSizeF(original_size.width() * 2, original_size.height() * 2)  # noqa: F841
 
                 # Create a high-resolution pixmap
                 pixmap = plot_widget.grab()

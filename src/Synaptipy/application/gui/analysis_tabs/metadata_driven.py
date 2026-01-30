@@ -8,9 +8,8 @@ adapt to any registered analysis function by reading its metadata (ui_params)
 from the AnalysisRegistry.
 """
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import numpy as np
-import pyqtgraph as pg
 from PySide6 import QtWidgets, QtCore
 
 from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
@@ -113,7 +112,6 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Save Button
         self._setup_save_button(control_layout)
 
-
         # Accumulation UI
         self._setup_accumulation_ui(control_layout)
 
@@ -150,11 +148,13 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # For metadata-driven tabs, the result is usually a dictionary or object
         # If it's an object, we might need to convert it to a dict
         log.debug(
-            f"{self.__class__.__name__}._get_specific_result_data: _last_analysis_result is None? {self._last_analysis_result is None}"
+            f"{self.__class__.__name__}._get_specific_result_data: _last_analysis_result is None? "
+            f"{self._last_analysis_result is None}"
         )
         if not self._last_analysis_result:
             log.warning(
-                f"{self.__class__.__name__}._get_specific_result_data: returning None because _last_analysis_result is falsy"
+                f"{self.__class__.__name__}._get_specific_result_data: returning None because "
+                f"_last_analysis_result is falsy"
             )
             return None
 

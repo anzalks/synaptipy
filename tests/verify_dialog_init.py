@@ -16,7 +16,7 @@ def test_dialog():
     try:
         dialog = BatchAnalysisDialog(files, pipeline_config=pipeline_config)
         print("Dialog instantiated successfully")
-        # dialog.show() # Can't show in headless
+        # dialog.show()  # Can't show in headless
         # Check if internal state is correct
         assert len(dialog.files) == 2
         assert len(dialog.pipeline_steps) == 1

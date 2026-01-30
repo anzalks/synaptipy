@@ -6,7 +6,7 @@ Worker class for running analysis tasks in a background thread.
 import logging
 import traceback
 import sys
-from typing import Callable, Dict, Any, Optional
+from typing import Callable
 
 from PySide6 import QtCore
 
@@ -57,7 +57,7 @@ class AnalysisWorker(QtCore.QRunnable):
         """
         try:
             result = self.fn(*self.args, **self.kwargs)
-        except:
+        except Exception:
             traceback.print_exc()
             exctype, value = sys.exc_info()[:2]
             self.signals.error.emit((exctype, value, traceback.format_exc()))

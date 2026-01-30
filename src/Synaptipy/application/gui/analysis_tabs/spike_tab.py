@@ -6,15 +6,12 @@ Refactored to use MetadataDrivenAnalysisTab architecture.
 """
 import logging
 from typing import Optional, Dict, Any
-import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore
 
 # Import base class
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.core.results import SpikeTrainResult
-import Synaptipy.core.analysis.spike_analysis  # Ensure registration
 
 log = logging.getLogger(__name__)
 
@@ -149,7 +146,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         # spike_times is already extracted above
         num_spikes = len(spike_times) if spike_times is not None else 0
 
-        results_str = f"--- Spike Detection Results ---\n"
+        results_str = "--- Spike Detection Results ---\n"
         if threshold is not None:
             results_str += f"Threshold: {threshold:.3f} {units}\n"
         if refractory_ms is not None:
