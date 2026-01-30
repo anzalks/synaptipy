@@ -4,7 +4,7 @@
 Analysis functions related to action potential detection and characterization.
 """
 import logging
-from typing import Tuple, List, Dict, Any
+from typing import List, Dict, Any
 import numpy as np
 from scipy import signal
 from Synaptipy.core.results import SpikeTrainResult
@@ -117,7 +117,8 @@ def detect_spikes_threshold(
     except IndexError as e:
         # This might happen if indexing goes wrong, e.g., with peak_indices_arr
         log.error(
-            f"IndexError during spike detection: {e}. Indices={peak_indices_arr if 'peak_indices_arr' in locals() else 'N/A'}",
+            f"IndexError during spike detection: {e}. "
+            f"Indices={peak_indices_arr if 'peak_indices_arr' in locals() else 'N/A'}",
             exc_info=True,
         )
         return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e))
@@ -167,7 +168,7 @@ def calculate_spike_features(
             else:
                 thresh_idx = search_start  # Fallback
                 ap_threshold = data[thresh_idx]
-        except:
+        except Exception:
             thresh_idx = peak_idx - 2  # fallback
             ap_threshold = data[thresh_idx]
 

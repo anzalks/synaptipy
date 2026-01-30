@@ -5,7 +5,7 @@ import numpy as np
 # Assuming neo_adapter_instance fixture is in conftest.py
 # Assuming sample_abf_path fixture is in conftest.py providing a valid Path object
 from Synaptipy.core.data_model import Recording, Channel
-from Synaptipy.shared.error_handling import UnsupportedFormatError, SynaptipyFileNotFoundError, FileReadError
+from Synaptipy.shared.error_handling import UnsupportedFormatError, SynaptipyFileNotFoundError
 
 
 # --- Test _get_neo_io_class ---
@@ -63,7 +63,7 @@ def test_read_recording_abf_success(neo_adapter_instance, sample_abf_path):
     assert len(ch.get_data(0)) == ch.num_samples
 
     # Check specific metadata if known for the sample file
-    # assert recording.protocol_name == "ExpectedProtocol" # If applicable
+    # assert recording.protocol_name == "ExpectedProtocol"  # If applicable
     # assert recording.metadata.get('neo_reader_class') == 'AxonIO'
 
 
@@ -197,7 +197,7 @@ def test_read_recording_truncated(neo_adapter_instance, sample_abf_path, tmp_pat
         # and raises a catchable exception.
         try:
             neo_adapter_instance.read_recording(truncated_file)
-        except Exception as e:
+        except Exception as e:  # noqa: F841
             # Caught exception is good.
             pass
         except SystemExit:

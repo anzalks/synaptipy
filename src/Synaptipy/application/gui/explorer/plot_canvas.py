@@ -37,7 +37,7 @@ class ExplorerPlotCanvas(QtCore.QObject):
         self.plot_widgets: List[pg.PlotItem] = []  # Ordered list
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
-        
+
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
 
@@ -59,7 +59,8 @@ class ExplorerPlotCanvas(QtCore.QObject):
             self.channel_plot_data_items[chan_id].clear()
 
         # 2. Clear items from plot's internal list if they seem to be data items
-        # Be careful not to remove grid or axes, but usually clear() does too much (removes labels/axes sometimes depending on impl)
+        # Be careful not to remove grid or axes, but usually clear() does too much (removes labels/axes sometimes
+        # depending on impl)
         # Instead, we can iterate over plot.listDataItems() if available
         if hasattr(plot, "listDataItems"):
             for item in plot.listDataItems():

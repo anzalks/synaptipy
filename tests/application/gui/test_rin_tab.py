@@ -4,9 +4,8 @@ Unit tests for the Input Resistance Analysis Tab
 
 import pytest
 import numpy as np
-from unittest.mock import MagicMock, patch
-from PySide6 import QtWidgets, QtCore
-from pathlib import Path
+from unittest.mock import MagicMock
+from PySide6 import QtWidgets
 
 from Synaptipy.application.gui.analysis_tabs.rin_tab import RinAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
@@ -79,7 +78,7 @@ def test_mode_selection(rin_tab, qtbot):
     assert hasattr(rin_tab, "plot_widget")
     # Verify tab has the necessary structure
     assert hasattr(rin_tab, "plot_widget")
-    # assert hasattr(rin_tab, 'run_button') # Removed in refactor
+    # assert hasattr(rin_tab, 'run_button')  # Removed in refactor
 
     # Test mode switching works
     initial_mode = rin_tab.mode_combobox.currentText()
@@ -111,7 +110,7 @@ def test_manual_calculation(rin_tab, qtbot, mock_neo_adapter):
         rin_tab.mode_combobox.setCurrentText(manual_mode)
 
     # Check that essential UI elements exist
-    # assert hasattr(rin_tab, 'run_button') # Removed in refactor (reactive)
+    # assert hasattr(rin_tab, 'run_button')  # Removed in refactor (reactive)
     assert hasattr(rin_tab, "save_button")
     assert isinstance(rin_tab.save_button, QtWidgets.QPushButton)
 

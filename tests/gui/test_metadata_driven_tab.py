@@ -29,7 +29,8 @@ def registered_analysis():
 
     yield
 
-    # Cleanup helps if other tests rely on clean state, though not strictly required if everything registers what it needs
+    # Cleanup helps if other tests rely on clean state, though not strictly required if everything registers what it
+    # needs
     # AnalysisRegistry._registry.pop("test_analysis", None)
     # AnalysisRegistry._metadata.pop("test_analysis", None)
 
@@ -61,7 +62,7 @@ def test_metadata_tab_creation(app, registered_analysis):
     assert widgets["param1"].value() == 1.0
     assert widgets["param2"].value() == 5
     assert widgets["param3"].currentText() == "A"
-    assert widgets["param4"].isChecked() == True
+    assert widgets["param4"].isChecked() is True
 
 
 def test_parameter_gathering(app, registered_analysis):
@@ -81,4 +82,4 @@ def test_parameter_gathering(app, registered_analysis):
     assert params["param1"] == 2.5
     assert params["param2"] == 10
     assert params["param3"] == "B"
-    assert params["param4"] == False
+    assert params["param4"] is False

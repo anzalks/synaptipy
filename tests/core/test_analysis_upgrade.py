@@ -1,11 +1,10 @@
 # tests/core/test_analysis_upgrade.py
-import pytest
 import numpy as np
 from unittest.mock import MagicMock
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.excitability import calculate_fi_curve, run_excitability_analysis_wrapper
+from Synaptipy.core.analysis.excitability import calculate_fi_curve
 from Synaptipy.core.analysis.spike_analysis import run_spike_detection_wrapper
-from Synaptipy.core.analysis.burst_analysis import calculate_bursts_logic, run_burst_analysis_wrapper
+from Synaptipy.core.analysis.burst_analysis import calculate_bursts_logic
 from Synaptipy.core.analysis.intrinsic_properties import run_rin_analysis_wrapper
 
 
@@ -92,7 +91,7 @@ def test_calculate_fi_curve():
 def test_spike_shape_stats():
     """Test that spike detection wrapper returns aggregated stats."""
     t = np.linspace(0, 1, 10000)  # 10kHz
-    dt = t[1] - t[0]
+    _dt = t[1] - t[0]  # noqa: F841
     data = np.zeros_like(t)
 
     # Create a spike

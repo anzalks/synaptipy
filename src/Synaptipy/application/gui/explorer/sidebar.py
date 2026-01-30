@@ -6,9 +6,9 @@ Handles file system navigation (tree view) and file list management.
 """
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -59,7 +59,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
             self.file_tree.setColumnHidden(i, True)
 
         self.file_tree.doubleClicked.connect(self._on_tree_double_clicked)
-        
+
         # Async Sync Handling
         self.file_model.directoryLoaded.connect(self._on_directory_loaded)
         self._pending_sync_path: Optional[Path] = None
@@ -103,12 +103,12 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         """Ensure the file explorer shows and selects the given file."""
         if not file_path or not self.file_model:
             return
-            
+
         self._pending_sync_path = file_path
-        
+
         # 1. Ask model to watch this path (triggers loading)
         self.file_model.setRootPath(str(file_path.parent))
-        
+
         # 2. Try to sync immediately if already loaded
         self._attempt_sync(file_path)
 
@@ -116,18 +116,20 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         """Try to set root index and select file if model is ready."""
         parent_dir = file_path.parent
         parent_index = self.file_model.index(str(parent_dir))
-        
+
         if parent_index.isValid():
             # Set View Root (Visual)
             self.file_tree.setRootIndex(parent_index)
             QtCore.QSettings(APP_NAME, SETTINGS_SECTION).setValue("lastDirectory", str(parent_dir))
-            
+
             # Select File
             file_index = self.file_model.index(str(file_path))
             if file_index.isValid():
                 self.file_tree.scrollTo(file_index, QtWidgets.QAbstractItemView.ScrollHint.EnsureVisible)
                 self.file_tree.setCurrentIndex(file_index)
-                self.file_tree.selectionModel().select(file_index, QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect)
+                self.file_tree.selectionModel().select(
+                    file_index, QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect
+                )
                 # Success, clear pending
                 if self._pending_sync_path == file_path:
                     self._pending_sync_path = None

@@ -1,5 +1,4 @@
 # tests/core/test_spike_kinetics.py
-import pytest
 import numpy as np
 from Synaptipy.core.analysis.spike_analysis import calculate_spike_features
 
@@ -24,7 +23,7 @@ def test_spike_kinetics_ideal():
     # Duration 1ms.
     # Rise time 10-90% should be 0.8 ms
 
-    start_idx = 100  # 10 ms
+    _start_idx = 100  # 10 ms  # noqa: F841
     peak_idx = 110  # 11 ms
 
     # Pre-threshold rise (Make it flat to avoid premature threshold detection)
@@ -36,7 +35,7 @@ def test_spike_kinetics_ideal():
     # AP Decay (Linear for simplicity)
     # Fall from +30 to -70 in 2ms (20 samples)
     # Decay 90-10% should be 0.8 * 2 = 1.6 ms
-    end_idx = 130
+    _end_idx = 130  # noqa: F841
     v[110:131] = np.linspace(30, -70, 21)
 
     spike_indices = np.array([peak_idx])

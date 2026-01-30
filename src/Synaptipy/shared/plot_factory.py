@@ -10,7 +10,7 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-from typing import Optional, Any, Dict
+from typing import Optional, Any
 from PySide6 import QtCore, QtWidgets
 import pyqtgraph as pg
 

@@ -87,7 +87,7 @@ def get_system_accent_color() -> str:
                 return link_color.name()
 
         # Final fallback to a neutral blue-grey
-        log.debug("Using fallback neutral color: #6B7280")
+        log.debug("Using fallback neutral color:  #6B7280")
         return "#6B7280"
 
     except Exception as e:

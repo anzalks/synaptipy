@@ -9,7 +9,6 @@ file I/O operations.
 """
 import logging
 from pathlib import Path
-from typing import Optional
 
 from PySide6 import QtCore
 

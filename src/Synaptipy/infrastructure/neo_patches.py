@@ -1,7 +1,6 @@
 import logging
 import datetime
 import numpy as np
-import struct
 from neo.rawio.winwcprawio import WinWcpRawIO, HeaderReader, AnalysisDescription
 
 log = logging.getLogger(__name__)
@@ -12,7 +11,7 @@ def apply_winwcp_patch():
     Monkeypatches neo.rawio.winwcprawio.WinWcpRawIO._parse_header to fix UnboundLocalError
     when reading truncated or corrupted files where the segment loop doesn't run.
     """
-    original_parse_header = WinWcpRawIO._parse_header
+    _original_parse_header = WinWcpRawIO._parse_header  # noqa: F841
 
     def patched_parse_header(self):
         # Retrieve necessary private/internal structures if possible, or replicate logic
@@ -46,7 +45,7 @@ def apply_winwcp_patch():
                 ]:
                     try:
                         val = int(val)
-                    except:
+                    except Exception:
                         val = 0  # Fallback
                 elif key in [
                     "AD",
@@ -55,7 +54,7 @@ def apply_winwcp_patch():
                     val = val.replace(",", ".")
                     try:
                         val = float(val)
-                    except:
+                    except Exception:
                         val = 0.0
                 header[key] = val
 
@@ -96,7 +95,7 @@ def apply_winwcp_patch():
             if header.get("VER", 0) > 8 and "RTIME" in header:
                 try:
                     rec_datetime = datetime.datetime.strptime(header["RTIME"], "%d/%m/%Y %H:%M:%S")
-                except:
+                except Exception:
                     rec_datetime = None
             else:
                 rec_datetime = None
@@ -156,7 +155,8 @@ def apply_winwcp_patch():
                     log.error(f"Fallback analysis header read failed: {e}")
                     # Construct dummy analysisHeader to prevent crash
                     # AnalysisDescription usually defines structs. We need a dict-like object with 'VMax'
-                    # AnalysisDescription = [('RecordType','4s'), ..., ('SamplingInterval','f'), ..., ('VMax','32f'), ...]
+                    # AnalysisDescription = [('RecordType','4s'), ..., ('SamplingInterval','f'), ..., ('VMax','32f'),
+                    # ...]
                     # We assume 32f for VMax based on standard WCP
                     analysisHeader = {
                         "SamplingInterval": 1.0,  # Dummy
@@ -184,7 +184,7 @@ def apply_winwcp_patch():
                     VMax = analysisHeader["VMax"][c]
                 else:
                     VMax = 1.0
-            except:
+            except Exception:
                 VMax = 1.0
 
             name = header.get(f"YN{c}", f"Chan{c}")
@@ -193,7 +193,7 @@ def apply_winwcp_patch():
 
             try:
                 gain = VMax / ADCMAX / YG
-            except:
+            except Exception:
                 gain = 1.0
 
             offset = 0.0

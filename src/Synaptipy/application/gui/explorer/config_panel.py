@@ -5,11 +5,10 @@ Explorer Config Panel.
 Contains the Left Panel widgets: Display Options, Manual Limits, Channel List, File Info.
 """
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Optional
 
 from PySide6 import QtCore, QtWidgets, QtGui
 from Synaptipy.core.data_model import Recording
-from Synaptipy.shared.constants import APP_NAME
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     show_selected_avg_toggled = QtCore.Signal(bool)
 
     # Trial Selection signals
-    trial_selection_requested = QtCore.Signal(int, int) # gap, start_index
+    trial_selection_requested = QtCore.Signal(int, int)  # gap, start_index
     trial_selection_reset_requested = QtCore.Signal()
 
     # Channel signals
@@ -41,7 +40,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
-        
+
         self._setup_ui()
 
     def _setup_ui(self):
@@ -124,14 +123,14 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
         self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
         in_layout.addWidget(self.nth_trial_input)
-        
+
         in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
         self.start_trial_input = QtWidgets.QLineEdit()
         self.start_trial_input.setPlaceholderText("0")
         self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
         self.start_trial_input.setText("0")
         in_layout.addWidget(self.start_trial_input)
-        
+
         layout.addLayout(in_layout)
 
         # Buttons
@@ -220,13 +219,13 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         text = self.nth_trial_input.text().strip()
         if not text:
             return
-        
+
         text_start = self.start_trial_input.text().strip()
-        
+
         try:
             n = int(text)
             start_idx = int(text_start) if text_start else 0
-            
+
             if n >= 0 and start_idx >= 0:
                 self.trial_selection_requested.emit(n, start_idx)
         except ValueError:

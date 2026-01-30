@@ -120,7 +120,9 @@ class ExplorerYControls(QtWidgets.QWidget):
 
         gz_layout = QtWidgets.QHBoxLayout()
         gz_layout.setSpacing(5)
-        gz_layout.addWidget(QtWidgets.QLabel("Global", alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter))
+        gz_layout.addWidget(QtWidgets.QLabel(
+            "Global", alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+        ))
         gz_layout.addWidget(self.global_y_slider, 1)
         y_zoom_group_layout.addLayout(gz_layout)
 
@@ -150,7 +152,9 @@ class ExplorerYControls(QtWidgets.QWidget):
             slider_layout = QtWidgets.QHBoxLayout(slider_container)
             slider_layout.setContentsMargins(0, 0, 0, 0)
             slider_layout.setSpacing(5)
-            slider_layout.addWidget(QtWidgets.QLabel(display_name, alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter))
+            slider_layout.addWidget(QtWidgets.QLabel(
+                display_name, alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+            ))
 
             y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)

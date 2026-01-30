@@ -29,18 +29,22 @@ from typing import Dict, List, Optional, Type, Tuple
 import neo  # Added missing import
 import neo.io as nIO  # Keep original import style
 import numpy as np
-import numpy as np
 
 # Import from our package structure
+from Synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
 from Synaptipy.core.data_model import Recording, Channel
-from Synaptipy.shared.error_handling import FileReadError, UnsupportedFormatError, SynaptipyFileNotFoundError
+from Synaptipy.shared.error_handling import (
+    FileReadError,
+    UnsupportedFormatError,
+    SynaptipyFileNotFoundError,
+)
 
 # Apply Patches
 try:
     from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
-except Exception as e:
+except (ImportError, AttributeError) as e:
     logging.getLogger(__name__).warning(f"Failed to apply Neo patches: {e}")
 
 log = logging.getLogger(__name__)
@@ -119,37 +123,57 @@ class NeoAdapter:
         extension = filepath.suffix.lower().lstrip(".")
         log.debug(f"Attempting to find IO for extension: '{extension}'")
 
-        available_io_names = [io_name for io_name, exts in IODict.items() if extension in exts]
+        available_io_names = [
+            io_name for io_name, exts in IODict.items() if extension in exts
+        ]
 
         if not available_io_names:
-            raise UnsupportedFormatError(f"Unsupported file extension '.{extension}'. No suitable IO found in IODict.")
+            raise UnsupportedFormatError(
+                f"Unsupported file extension '.{extension}'. No suitable IO found in IODict."
+            )
 
         selected_io_name = available_io_names[0]
         if len(available_io_names) > 1:
-            if extension == "abf" and "AxonIO" in available_io_names and "StimfitIO" in available_io_names:
+            if (
+                extension == "abf"
+                and "AxonIO" in available_io_names
+                and "StimfitIO" in available_io_names
+            ):
                 selected_io_name = "AxonIO"
                 log.warning(
                     f"Multiple IOs support '.{extension}' ({available_io_names}). Prioritizing '{selected_io_name}'."
                 )
             else:
                 log.warning(
-                    f"Multiple Neo IOs support '.{extension}': {available_io_names}. Using first match: '{selected_io_name}'."
+                    f"Multiple Neo IOs support '.{extension}': {available_io_names}. "
+                    f"Using first match: '{selected_io_name}'."
                 )
         else:
-            log.debug(f"Selected Neo IO: '{selected_io_name}' for file extension '.{extension}'.")
+            log.debug(
+                f"Selected Neo IO: '{selected_io_name}' for file extension '.{extension}'."
+            )
 
         try:
             io_class = getattr(nIO, selected_io_name)
             # Optional check (can be removed if causing issues):
-            # if not (isinstance(io_class, type) and hasattr(nIO, 'baseio') and issubclass(io_class, nIO.baseio.BaseIO)):
+            # if not (isinstance(io_class, type) and hasattr(nIO, 'baseio') and issubclass(io_class,
+            # nIO.baseio.BaseIO)):
             #      log.warning(f"'{selected_io_name}' found via getattr but might not be a valid Neo IO class.")
             return io_class
         except AttributeError:
-            log.error(f"Internal IODict Error: IO class name '{selected_io_name}' not found in neo.io module.")
-            raise ValueError(f"Invalid IO class name '{selected_io_name}' defined in IODict.")
+            log.error(
+                f"Internal IODict Error: IO class name '{selected_io_name}' not found in neo.io module."
+            )
+            raise ValueError(
+                f"Invalid IO class name '{selected_io_name}' defined in IODict."
+            )
         except Exception as e:
-            log.error(f"Unexpected error retrieving Neo IO class '{selected_io_name}': {e}")
-            raise FileReadError(f"Error accessing Neo IO class '{selected_io_name}': {e}")
+            log.error(
+                f"Unexpected error retrieving Neo IO class '{selected_io_name}': {e}"
+            )
+            raise FileReadError(
+                f"Error accessing Neo IO class '{selected_io_name}': {e}"
+            )
 
     def get_supported_file_filter(self) -> str:
         """Generates a file filter string for QFileDialog based on the IODict."""
@@ -163,7 +187,9 @@ class NeoAdapter:
                 continue
 
             wildcard_exts = [
-                f"*.{ext.lower()}" for ext in extensions if ext and isinstance(ext, str) and "." not in ext
+                f"*.{ext.lower()}"
+                for ext in extensions
+                if ext and isinstance(ext, str) and "." not in ext
             ]
             if not wildcard_exts:
                 continue
@@ -174,7 +200,9 @@ class NeoAdapter:
             all_exts_wildcard.update(wildcard_exts)
 
         if all_exts_wildcard:
-            all_supported_entry = f"All Supported Files ({' '.join(sorted(list(all_exts_wildcard)))})"
+            all_supported_entry = (
+                f"All Supported Files ({' '.join(sorted(list(all_exts_wildcard)))})"
+            )
             filters.insert(0, all_supported_entry)
 
         filters.append("All Files (*)")
@@ -193,7 +221,9 @@ class NeoAdapter:
                     all_exts.add(ext.lower())
         return sorted(list(all_exts))
 
-    def _extract_axon_metadata(self, reader: nIO.AxonIO) -> Tuple[Optional[str], Optional[float]]:
+    def _extract_axon_metadata(
+        self, reader: nIO.AxonIO
+    ) -> Tuple[Optional[str], Optional[float]]:
         """Extracts protocol name and estimated injected current range specifically for AxonIO."""
         protocol_name: Optional[str] = None
         injected_current: Optional[float] = None
@@ -204,7 +234,11 @@ class NeoAdapter:
 
         # --- Protocol Name ---
         try:
-            if hasattr(reader, "_axon_info") and reader._axon_info and "sProtocolPath" in reader._axon_info:
+            if (
+                hasattr(reader, "_axon_info")
+                and reader._axon_info
+                and "sProtocolPath" in reader._axon_info
+            ):
                 protocol_path_raw = reader._axon_info["sProtocolPath"]
                 protocol_path = (
                     protocol_path_raw.decode("utf-8", "ignore")
@@ -213,13 +247,15 @@ class NeoAdapter:
                 )
                 if protocol_path and protocol_path.strip():
                     filename = protocol_path.split("\\")[-1].split("/")[-1]
-                    protocol_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+                    protocol_name = (
+                        filename.rsplit(".", 1)[0] if "." in filename else filename
+                    )
                     log.debug(f"Extracted protocol name: {protocol_name}")
                 else:
                     log.debug("Axon header 'sProtocolPath' is present but empty.")
             else:
                 log.debug("Axon header '_axon_info' or 'sProtocolPath' not found.")
-        except Exception as e:
+        except (KeyError, TypeError, UnicodeDecodeError) as e:
             log.warning(f"Protocol name extraction failed: {e}")
             protocol_name = "Extraction Error"
 
@@ -230,10 +266,15 @@ class NeoAdapter:
                 if isinstance(protocol_raw_list, list) and protocol_raw_list:
                     all_command_signals = []
                     for seg_protocol in protocol_raw_list:
-                        if isinstance(seg_protocol, (list, tuple)) and len(seg_protocol) > 0:
+                        if (
+                            isinstance(seg_protocol, (list, tuple))
+                            and len(seg_protocol) > 0
+                        ):
                             command_signal_data = seg_protocol[0]
                             if isinstance(command_signal_data, (np.ndarray, list)):
-                                command_signal_array = np.asarray(command_signal_data).ravel()
+                                command_signal_array = np.asarray(
+                                    command_signal_data
+                                ).ravel()
                                 if command_signal_array.size > 0:
                                     all_command_signals.append(command_signal_array)
                     # --- Corrected Indentation for Current Calculation --- START ---
@@ -242,9 +283,13 @@ class NeoAdapter:
                         if all_command_points.size > 0:
                             current_range = np.ptp(all_command_points)
                             injected_current = np.around(current_range, decimals=3)
-                            log.debug(f"Estimated injected current range (PTP): {injected_current}")
+                            log.debug(
+                                f"Estimated injected current range (PTP): {injected_current}"
+                            )
                         else:
-                            log.debug("Concatenated command signals were empty.")  # Aligned with inner if
+                            log.debug(
+                                "Concatenated command signals were empty."
+                            )  # Aligned with inner if
                     else:
                         log.debug(
                             "No suitable command signals found in protocol structure."
@@ -255,21 +300,28 @@ class NeoAdapter:
                         "'read_raw_protocol()' returned empty list or non-list structure."
                     )  # Aligned with outer if
             else:
-                log.debug("AxonIO reader instance does not have 'read_raw_protocol()' method.")  # Aligned with hasattr
-        except Exception as e:
-            log.warning(f"Failed during injected current estimation: {e}", exc_info=True)
+                log.debug(
+                    "AxonIO reader instance does not have 'read_raw_protocol()' method."
+                )  # Aligned with hasattr
+        except (KeyError, TypeError, ValueError, IndexError) as e:
+            log.warning(f"Failed during injected current estimation: {e}")
             injected_current = None
 
         return protocol_name, injected_current
 
     def read_recording(
-        self, filepath: Path, lazy: bool = False, channel_whitelist: Optional[List[str]] = None
+        self,
+        filepath: Path,
+        lazy: bool = False,
+        channel_whitelist: Optional[List[str]] = None,
     ) -> Recording:
         """
         Reads any neo-supported electrophysiology file and translates it into a
         robust Recording object. This is the definitive, file-format-agnostic implementation.
         """
-        log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
+        log.debug(
+            f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})"
+        )
         filepath = Path(filepath)
         io_class = self._get_neo_io_class(filepath)
         try:
@@ -277,7 +329,10 @@ class NeoAdapter:
             block = reader.read_block(lazy=lazy, signal_group_mode="split-all")
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
-            log.error(f"Failed to read block from {filepath} (Lazy: {lazy}): {e}", exc_info=True)
+            log.error(
+                f"Failed to read block from {filepath} (Lazy: {lazy}): {e}",
+                exc_info=True,
+            )
             # If not lazy, maybe try lazy as fallback?
             if not lazy:
                 log.debug("Attempting lazy load fallback due to failure...")
@@ -296,162 +351,38 @@ class NeoAdapter:
         recording = Recording(source_file=filepath)
         if hasattr(block, "rec_datetime") and block.rec_datetime:
             recording.session_start_time_dt = block.rec_datetime
-            log.debug(f"Extracted session start time: {recording.session_start_time_dt}")
+            log.debug(
+                f"Extracted session start time: {recording.session_start_time_dt}"
+            )
 
         # --- Definitive Universal Header-First Data Loading Strategy ---
-        channel_metadata_map: Dict[str, Dict] = {}
+
+        # Initialize Source Handle
+        source_handle = NeoSourceHandle(filepath, block=block, reader=reader)
+        recording.source_handle = source_handle
 
         # Stage 1: Discover ALL potential channels from the header first.
-        header_channels = reader.header.get("signal_channels") if hasattr(reader, "header") else None
-        if header_channels is not None and len(header_channels) > 0:
-            log.debug(f"Header found. Discovering channels from {type(header_channels)}.")
-            for i, ch_info in enumerate(header_channels):
-                ch_id = (
-                    str(ch_info.get("id", i))
-                    if isinstance(ch_info, dict)
-                    else str(ch_info["id"]) if "id" in ch_info.dtype.names else str(i)
-                )
-                if isinstance(ch_info, dict):
-                    ch_name = str(ch_info.get("name", f"Channel {ch_id}"))
-                else:
-                    if "name" in ch_info.dtype.names and ch_info["name"]:
-                        ch_name_raw = ch_info["name"]
-                        if isinstance(ch_name_raw, bytes):
-                            ch_name = ch_name_raw.decode().strip()
-                        elif isinstance(ch_name_raw, (str, np.str_)):
-                            ch_name = str(ch_name_raw).strip()
-                        else:
-                            ch_name = f"Channel {ch_id}"
-                    else:
-                        ch_name = f"Channel {ch_id}"
-                map_key = f"id_{ch_id}"
-                if map_key not in channel_metadata_map:
-                    channel_metadata_map[map_key] = {"id": ch_id, "name": ch_name, "data_trials": []}
-            log.debug(f"Discovered {len(channel_metadata_map)} channels from header.")
+        channel_metadata_map = self._discover_channels_from_header(reader)
+
+        # Helper map for SourceHandle: id -> {signal_index, offset}
+        # We populate this during the first segment scan or iteratively
+        handle_map: Dict[str, Dict[str, int]] = {}
 
         # Stage 2: Aggregate data into the discovered channels.
         for seg_idx, segment in enumerate(block.segments):
-            log.debug(f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals")
-
-            # Critical fix: Iterate through ALL analogsignals by index to ensure each channel gets its data
-            for anasig_idx, anasig in enumerate(segment.analogsignals):
-                if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
-                    log.debug(f"Skipping non-AnalogSignal object at index {anasig_idx}")
-                    continue
-
-                # Extract channel ID using multiple fallback methods for robustness
-                # Try annotation first, then attributes, finally use the signal index
-                anasig_id = None
-                if hasattr(anasig, "annotations") and "channel_id" in anasig.annotations:
-                    anasig_id = str(anasig.annotations["channel_id"])
-                elif hasattr(anasig, "channel_index") and anasig.channel_index is not None:
-                    anasig_id = str(anasig.channel_index)
-                elif hasattr(anasig, "array_annotations") and "channel_id" in anasig.array_annotations:
-                    anasig_id = str(anasig.array_annotations["channel_id"][0])
-                else:
-                    # Use the signal's position in the list as the channel ID
-                    anasig_id = str(anasig_idx)
-                    log.debug(f"Using signal index {anasig_idx} as channel ID (no channel metadata found)")
-
-                map_key = f"id_{anasig_id}"
-                log.debug(f"Processing analogsignal {anasig_idx} -> channel ID '{anasig_id}' (map_key: {map_key})")
-
-                # Check channel whitelist to avoid unnecessary loading (Memory Optimization)
-                # We check against ID and Name (if known)
-                should_load = True
-                if channel_whitelist:
-                    should_load = False
-                    # Check ID match
-                    if anasig_id in channel_whitelist:
-                        should_load = True
-                    else:
-                        # Check Name match if available in metadata map
-                        if map_key in channel_metadata_map:
-                            meta_name = channel_metadata_map[map_key]["name"]
-                            if meta_name in channel_whitelist:
-                                should_load = True
-
-                if not should_load:
-                    log.debug(f"Skipping channel '{anasig_id}' (not in whitelist)")
-                    continue
-
-                if map_key not in channel_metadata_map:
-                    log.warning(f"Data for channel ID '{anasig_id}' not in header; creating fallback channel.")
-                    channel_metadata_map[map_key] = {
-                        "id": anasig_id,
-                        "name": f"Channel {anasig_id}",
-                        "data_trials": [],
-                        "lazy_trials": [],  # Store lazy references here
-                    }
-                elif "lazy_trials" not in channel_metadata_map[map_key]:
-                    channel_metadata_map[map_key]["lazy_trials"] = []
-
-                # --- DATA EXTRACTION (Eager vs Lazy) ---
-                if lazy:
-                    # Store reference to the proxy/object for later loading
-                    channel_metadata_map[map_key]["lazy_trials"].append({"analog_signal_ref": anasig})
-                    log.debug(f"Lazily stored reference for channel '{anasig_id}' from segment {seg_idx}")
-                else:
-                    # Extract and append the signal data immediately
-                    signal_data = np.array(anasig.magnitude).ravel()
-                    channel_metadata_map[map_key]["data_trials"].append(signal_data)
-                    log.debug(f"Appended {len(signal_data)} samples to channel '{anasig_id}' from segment {seg_idx}")
-
-                # Store metadata on first encounter (works for both lazy proxy and eager objects)
-                if "sampling_rate" not in channel_metadata_map[map_key]:
-                    try:
-                        # Proxy objects usually expose these metadata attributes
-                        channel_metadata_map[map_key].update(
-                            {
-                                "units": str(anasig.units.dimensionality),
-                                "sampling_rate": float(anasig.sampling_rate),
-                                "t_start": float(anasig.t_start),
-                            }
-                        )
-                        log.debug(
-                            f"Stored metadata for channel '{anasig_id}': {channel_metadata_map[map_key]['sampling_rate']} Hz"
-                        )
-                    except Exception as e:
-                        log.warning(f"Failed to extract metadata from channel '{anasig_id}' (Lazy: {lazy}): {e}")
-
-        # Stage 3: Create Channel objects ONLY for channels that actually have data (or lazy refs).
-        created_channels: List[Channel] = []
-        for meta in channel_metadata_map.values():
-            has_data = len(meta["data_trials"]) > 0
-            has_lazy = len(meta.get("lazy_trials", [])) > 0
-
-            if not has_data and not has_lazy and meta.get("sampling_rate") is None:
-                log.debug(f"Channel '{meta['name']}' discovered but contained no data/refs; skipping.")
-                continue
-
-            # If lazy, data_trials will be empty. Channel class handles this if we provide lazy_info.
-            channel = Channel(
-                id=meta["id"],
-                name=meta["name"],
-                units=meta.get("units", "unknown"),
-                sampling_rate=meta.get("sampling_rate", 0.0),
-                data_trials=meta["data_trials"] if not lazy else [],
+            log.debug(
+                f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals"
             )
-            channel.t_start = meta.get("t_start", 0.0)
+            # Pass handle_map to extract logic
+            self._process_segment_signals(
+                segment, seg_idx, channel_metadata_map, lazy, channel_whitelist, handle_map
+            )
 
-            # Populate lazy_info if applicable
-            if lazy and has_lazy:
-                lazy_trials = meta["lazy_trials"]
-                if lazy_trials:
-                    # Conform to Channel's expected structure:
-                    # 'analog_signal_ref' for trial 0
-                    # 'trials' list for subsequent trials (index 0 in list = trial 1 in channel)
+        # Configure SourceHandle with the learned map
+        source_handle.set_channel_map(handle_map)
 
-                    channel.lazy_info = {
-                        "analog_signal_ref": lazy_trials[0]["analog_signal_ref"],
-                        "trials": lazy_trials[1:] if len(lazy_trials) > 1 else [],
-                    }
-                    channel.metadata["num_trials"] = len(lazy_trials)  # Help generic properties
-                    # Keep a ref to the recording/block if needed?
-                    # Channel lazy loader uses `self.lazy_info` directly, doesn't strictly need block ref
-                    # if the proxy holds the file handle.
-
-            created_channels.append(channel)
+        # Stage 3: Create Channel objects
+        created_channels = self._build_channels(channel_metadata_map, lazy, recording)
 
         if created_channels:
             # Link channels to parent recording for lazy loading access
@@ -467,20 +398,200 @@ class NeoAdapter:
                 first_trial_data = first_ch.get_data(0)
                 if first_trial_data is not None:
                     recording.duration = len(first_trial_data) / first_ch.sampling_rate
-            elif lazy and first_ch.lazy_info:
-                # Estimate duration from lazy info? Proxy might have shape/duration
+            elif lazy and first_ch.loader:
+                # Try to get duration from loader info or source handle?
                 try:
-                    ref = first_ch.lazy_info["analog_signal_ref"]
-                    if hasattr(ref, "duration"):
-                        recording.duration = float(ref.duration)
-                    elif hasattr(ref, "shape"):
-                        recording.duration = ref.shape[0] / first_ch.sampling_rate
-                except:
+                    # Approximation using Neo Block structure
+                    if len(block.segments) > 0 and len(block.segments[0].analogsignals) > 0:
+                        sig = block.segments[0].analogsignals[0]
+                        recording.duration = (
+                            float(sig.duration) if hasattr(sig, 'duration') else 0.0
+                        )
+                except Exception:
                     pass
 
         # Store block reference on recording (Crucial for keeping lazy file handles alive/accessible)
-        recording.neo_block = block
+        # recording.neo_block = block # REMOVED: Replaced by source_handle
         recording.channels = {ch.id: ch for ch in created_channels}
 
-        log.debug(f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}")
+        log.debug(
+            f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}"
+        )
         return recording
+
+    # --- Refactored Helper Methods ---
+
+    def _discover_channels_from_header(self, reader) -> Dict[str, Dict]:
+        """Stage 1: Discover ALL potential channels from the header first."""
+        channel_metadata_map: Dict[str, Dict] = {}
+        header_channels = (
+            reader.header.get("signal_channels") if hasattr(reader, "header") else None
+        )
+
+        if header_channels is not None and len(header_channels) > 0:
+            log.debug(
+                f"Header found. Discovering channels from {type(header_channels)}."
+            )
+            for i, ch_info in enumerate(header_channels):
+                ch_id = (
+                    str(ch_info.get("id", i))
+                    if isinstance(ch_info, dict)
+                    else str(ch_info["id"]) if "id" in ch_info.dtype.names else str(i)
+                )
+                if isinstance(ch_info, dict):
+                    ch_name = str(ch_info.get("name", f"Channel {ch_id}"))
+                else:
+                    if "name" in ch_info.dtype.names and ch_info["name"]:
+                        ch_name_raw = ch_info["name"]
+                        ch_name = (
+                            ch_name_raw.decode().strip()
+                            if isinstance(ch_name_raw, bytes)
+                            else str(ch_name_raw).strip()
+                        )
+                    else:
+                        ch_name = f"Channel {ch_id}"
+
+                map_key = f"id_{ch_id}"
+                if map_key not in channel_metadata_map:
+                    channel_metadata_map[map_key] = {
+                        "id": ch_id,
+                        "name": ch_name,
+                        "data_trials": [],
+                    }
+
+            log.debug(f"Discovered {len(channel_metadata_map)} channels from header.")
+        return channel_metadata_map
+
+    def _process_segment_signals(
+        self,
+        segment: neo.Segment,
+        seg_idx: int,
+        channel_metadata_map: Dict[str, Dict],
+        lazy: bool,
+        channel_whitelist: Optional[List[str]],
+        handle_map: Optional[Dict[str, Dict[str, int]]] = None
+    ):
+        """Stage 2: Process signals in a segment and update the metadata map."""
+        for anasig_idx, anasig in enumerate(segment.analogsignals):
+            if not isinstance(
+                anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)
+            ):
+                continue
+
+            # Extract channel ID with fallbacks
+            anasig_id = None
+            if hasattr(anasig, "annotations") and "channel_id" in anasig.annotations:
+                anasig_id = str(anasig.annotations["channel_id"])
+            elif hasattr(anasig, "channel_index") and anasig.channel_index is not None:
+                anasig_id = str(anasig.channel_index)
+            elif (
+                hasattr(anasig, "array_annotations")
+                and "channel_id" in anasig.array_annotations
+            ):
+                anasig_id = str(anasig.array_annotations["channel_id"][0])
+            else:
+                anasig_id = str(anasig_idx)
+
+            map_key = f"id_{anasig_id}"
+
+            # Whitelist check
+            should_load = True
+            if channel_whitelist:
+                should_load = False
+                if anasig_id in channel_whitelist:
+                    should_load = True
+                elif map_key in channel_metadata_map:
+                    if channel_metadata_map[map_key]["name"] in channel_whitelist:
+                        should_load = True
+
+            if not should_load:
+                continue
+
+            # Ensure entry exists
+            if map_key not in channel_metadata_map:
+                channel_metadata_map[map_key] = {
+                    "id": anasig_id,
+                    "name": f"Channel {anasig_id}",
+                    "data_trials": [],
+                }
+
+            # --- Populate Handle Map ---
+            if handle_map is not None and anasig_id not in handle_map:
+                # Assuming 1 AnalogSignal = 1 Channel for now.
+                # Note: Currently Synaptipy treats each AnalogSignal as a channel usually,
+                # unless we are splitting columns.
+                # Assuming 1 AnalogSignal = 1 Channel for now as per previous logic.
+                handle_map[anasig_id] = {
+                    "signal_index": anasig_idx,
+                    "channel_offset": 0  # Default to 0
+                }
+
+            # Extract Data/Ref
+            if lazy:
+                # We don't need to append refs anymore for loading, but we need to ensure the list exists
+                # for the Channel object to know how many trials there are?
+                # Channel object infers num_trials from data_trials length or metadata.
+                # If lazy, data_trials is empty.
+                # We should update metadata with the number of segments ideally.
+                if "num_trials" not in channel_metadata_map[map_key]:
+                    channel_metadata_map[map_key]["num_trials"] = 0
+                channel_metadata_map[map_key]["num_trials"] += 1
+            else:
+                signal_data = np.array(anasig.magnitude).ravel()
+                channel_metadata_map[map_key]["data_trials"].append(signal_data)
+
+            # Metadata Extraction (First encounter)
+            if "sampling_rate" not in channel_metadata_map[map_key]:
+                try:
+                    channel_metadata_map[map_key].update(
+                        {
+                            "units": str(anasig.units.dimensionality),
+                            "sampling_rate": float(anasig.sampling_rate),
+                            "t_start": float(anasig.t_start),
+                        }
+                    )
+                except Exception:
+                    pass
+
+    def _build_channels(
+        self, channel_metadata_map: Dict[str, Dict], lazy: bool, recording: Recording
+    ) -> List[Channel]:
+        """Stage 3: Create Channel objects from the populated metadata map."""
+        created_channels: List[Channel] = []
+
+        # Helper to create a closure for the loader
+        def create_loader(ch_id: str, handle: NeoSourceHandle):
+            return lambda idx: handle.load_channel_data(ch_id, idx)
+
+        for meta in channel_metadata_map.values():
+            has_data = len(meta["data_trials"]) > 0
+            is_lazy_mode = lazy
+
+            if not has_data and not is_lazy_mode and meta.get("sampling_rate") is None:
+                continue
+
+            # Instantiate Loader if needed
+            loader = None
+            if lazy and recording.source_handle:
+                # Use the decoupled SourceHandle
+                handle = recording.source_handle
+                if isinstance(handle, NeoSourceHandle):
+                    loader = create_loader(meta["id"], handle)
+
+            channel = Channel(
+                id=meta["id"],
+                name=meta["name"],
+                units=meta.get("units", "unknown"),
+                sampling_rate=meta.get("sampling_rate", 0.0),
+                data_trials=meta["data_trials"] if not lazy else [],
+                loader=loader,
+            )
+            channel.t_start = meta.get("t_start", 0.0)
+
+            # Pass num_trials metadata if lazy
+            if lazy and "num_trials" in meta:
+                channel.metadata["num_trials"] = meta["num_trials"]
+
+            created_channels.append(channel)
+
+        return created_channels

@@ -10,9 +10,8 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-import sys
-from typing import Dict, Any, Optional, Tuple
-from PySide6 import QtCore, QtWidgets
+from typing import Dict, Any, Optional
+from PySide6 import QtCore
 import pyqtgraph as pg
 
 from Synaptipy.shared.constants import APP_NAME
@@ -122,7 +121,9 @@ class PlotCustomizationManager:
                 trial_transparency = 100  # Default to fully opaque
 
             log.debug(
-                f"Loaded constants: TRIAL_COLOR={TRIAL_COLOR} -> {trial_color}, AVERAGE_COLOR={AVERAGE_COLOR} -> {average_color}, TRIAL_ALPHA={TRIAL_ALPHA} -> {trial_transparency}%"
+                f"Loaded constants: TRIAL_COLOR={TRIAL_COLOR} -> {trial_color}, "
+                f"AVERAGE_COLOR={AVERAGE_COLOR} -> {average_color}, "
+                f"TRIAL_ALPHA={TRIAL_ALPHA} -> {trial_transparency}%"
             )
         except ImportError:
             # Fallback to hardcoded values if constants not available
@@ -172,9 +173,9 @@ class PlotCustomizationManager:
                     if property_name in ["transparency", "opacity"]:
                         value = self._settings.value(key, default_value, type=int)
                     elif property_name == "width":
-                         value = self._settings.value(key, default_value, type=float)
+                        value = self._settings.value(key, default_value, type=float)
                     elif property_name == "enabled":
-                         value = self._settings.value(key, default_value, type=bool)
+                        value = self._settings.value(key, default_value, type=bool)
                     else:
                         value = self._settings.value(key, default_value)
 
@@ -274,7 +275,8 @@ class PlotCustomizationManager:
 
         pen = pg.mkPen(color=color, width=width)
         log.debug(
-            f"Created average pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})"
+            f"Created average pen: color={color}, width={width}, alpha={color.alpha()} "
+            f"(opacity: {opacity}%, alpha: {alpha:.3f})"
         )
         self._cache_pen("average", pen)
         return pen
@@ -320,7 +322,8 @@ class PlotCustomizationManager:
 
         pen = pg.mkPen(color=color, width=width)
         log.debug(
-            f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f}, force_opaque: {_force_opaque_trials})"
+            f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} "
+            f"(opacity: {opacity}%, alpha: {alpha:.3f}, force_opaque: {_force_opaque_trials})"
         )
         self._cache_pen("single_trial", pen)
         return pen
@@ -354,7 +357,8 @@ class PlotCustomizationManager:
 
         pen = pg.mkPen(color=color, width=width)
         log.debug(
-            f"Created grid pen: color={color}, width={width}, alpha={color.alpha()} (opacity: {opacity}%, alpha: {alpha:.3f})"
+            f"Created grid pen: color={color}, width={width}, alpha={color.alpha()} "
+            f"(opacity: {opacity}%, alpha: {alpha:.3f})"
         )
         self._cache_pen("grid", pen)
         return pen
@@ -473,7 +477,7 @@ class PlotCustomizationManager:
         self._pen_cache.clear()
         self._cache_dirty = True
         log.debug("Plot preferences reset to defaults")
-        
+
         # Emit signal to notify about preference changes (queued to keep UI responsive)
         try:
             QtCore.QTimer.singleShot(0, _plot_signals.preferences_updated.emit)

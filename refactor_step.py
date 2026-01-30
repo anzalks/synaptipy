@@ -1,5 +1,4 @@
 
-import os
 
 target_file = "/Users/anzalks/PycharmProjects/Synaptipy/src/Synaptipy/application/gui/analysis_tabs/base.py"
 
@@ -32,10 +31,10 @@ for i, line in enumerate(lines):
         found_start = True
         skip = True
         new_lines.extend(replacement)
-    
+
     if end_marker in line and skip:
         skip = False
-    
+
     if not skip:
         new_lines.append(line)
 

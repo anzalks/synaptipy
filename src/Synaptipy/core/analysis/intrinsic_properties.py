@@ -138,7 +138,8 @@ def calculate_conductance(
         rin_megaohms = 1.0 / conductance_us if conductance_us != 0 else float("inf")
 
         log.debug(
-            f"Calculated Conductance: dI={delta_i:.3f}, dV={voltage_step:.3f}, G={conductance_us:.3f} uS, Rin={rin_megaohms:.3f} MOhm"
+            f"Calculated Conductance: dI={delta_i:.3f}, dV={voltage_step:.3f}, G={conductance_us:.3f} uS, "
+            f"Rin={rin_megaohms:.3f} MOhm"
         )
 
         return RinResult(

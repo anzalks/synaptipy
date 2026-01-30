@@ -5,10 +5,8 @@ Unit tests for the styling module.
 Tests the styling constants, theme values, and functions for consistency.
 """
 import unittest
-from unittest.mock import MagicMock, patch
-import sys
+from unittest.mock import MagicMock
 import os
-import pytest
 
 # Check if running in CI/headless environment
 IS_HEADLESS = os.environ.get("CI") or not os.environ.get("DISPLAY")
@@ -35,20 +33,14 @@ except ImportError:
     PYQTGRAPH_AVAILABLE = False
 
 # Import styling module - this should always succeed
-from Synaptipy.shared.styling import (
+from Synaptipy.shared.styling import (  # noqa: E402
     PLOT_COLORS,
     get_trial_pen,
     get_average_pen,
-    get_baseline_pen,
-    get_response_pen,
     get_grid_pen,
     configure_plot_widget,
-    apply_stylesheet,
     style_button,
     style_label,
-    style_result_display,
-    style_info_label,
-    style_error_message,
     get_system_theme_mode,
 )
 

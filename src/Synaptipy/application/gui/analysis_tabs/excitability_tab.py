@@ -5,14 +5,12 @@ Analysis tab for Excitability (F-I Curve) Analysis.
 Visualizes F-I Curve in a popup window.
 """
 import logging
-from typing import Dict, Any, Optional
-import numpy as np
+from typing import Any
 import pyqtgraph as pg
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtCore
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-import Synaptipy.core.analysis.excitability  # Ensure registration
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +40,7 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
         if self.popup_plot:
             try:
                 self.popup_plot.window().close()
-            except:
+            except Exception:
                 pass
 
     def _plot_analysis_visualizations(self, results: Any):
@@ -86,7 +84,7 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
             if slope is not None and rheobase is not None and slope > 0:
                 # Plot line from rheobase to max current
                 max_curr = max(currents)
-                x_line = [rheobase, max_curr]
+                _x_line = [rheobase, max_curr]  # noqa: F841
                 # y = m(x - x0) + y0? No, simple regression y = mx + c.
                 # But we don't have intercept from wrapper.
                 # We can estimate it or just plot a line starting from rheobase (approx 0 Hz or first spike freq).

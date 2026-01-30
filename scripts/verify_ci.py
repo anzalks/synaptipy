@@ -11,6 +11,7 @@ import os
 import re
 from typing import List, Tuple
 
+
 def run_command(command: List[str], description: str) -> Tuple[bool, str]:
     """Run a shell command and return (success, output)."""
     print(f"Running: {description}...")
@@ -33,6 +34,7 @@ def run_command(command: List[str], description: str) -> Tuple[bool, str]:
         print(f"[FAIL] {description} Failed: Command not found")
         return False, "Command not found"
 
+
 def check_dependencies():
     """Check if required tools are installed, install if missing."""
     tools = ["flake8", "pytest"]
@@ -52,11 +54,15 @@ def check_dependencies():
                     check=True
                 )
             except subprocess.CalledProcessError:
-                 print(f"[WARN] Standard install failed (PEP 668?). Retrying with --break-system-packages...")
-                 subprocess.run(
-                    [sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock", "--break-system-packages"],
+                print("[WARN] Standard install failed (PEP 668?). Retrying with --break-system-packages...")
+                subprocess.run(
+                    [
+                        sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock",
+                        "--break-system-packages"
+                    ],
                     check=True
                 )
+
 
 def check_flake8() -> bool:
     """Run flake8 linting with strict settings."""
@@ -65,47 +71,56 @@ def check_flake8() -> bool:
         [sys.executable, "-m", "flake8", ".", "--count", "--select=E9,F63,F7,F82", "--show-source", "--statistics"],
         "Critical Syntax Check"
     )
-    
-    # Matches GitHub Actions (Strict Mode requested by User): 
+
+    # Matches GitHub Actions (Strict Mode requested by User):
     # flake8 . --count --max-complexity=10 --max-line-length=127 --statistics
     # Removed --exit-zero to enforce strictness
     success_style, _ = run_command(
-        [sys.executable, "-m", "flake8", ".", "--count", "--max-complexity=10", "--max-line-length=127", "--statistics"],
+        [
+            sys.executable, "-m", "flake8", ".", "--count", "--max-complexity=10", "--max-line-length=127",
+            "--statistics"
+        ],
         "Style & Complexity Check"
     )
-    
+
     return success_critical and success_style
+
 
 def check_tests() -> bool:
     """Run pytest with offscreen platform."""
     import os
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
-    
+
     print("Running: Pytest (Headless)...")
     try:
         # Check if pytest exists first to avoid crash
         subprocess.run([sys.executable, "-m", "pytest", "--version"], capture_output=True, check=True)
-        
+
         result = subprocess.run(
             [sys.executable, "-m", "pytest"],
             env=env,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=120  # Overall timeout of 2 minutes for all tests
         )
         if result.returncode == 0:
             print("[PASS] Pytest Passed")
             return True
         else:
             print("[FAIL] Pytest Failed")
-            # print(result.stdout) # Can be too long, maybe summarize?
+            # print(result.stdout)  # Can be too long, maybe summarize?
             # For now print last 20 lines
             lines = (result.stdout + result.stderr).splitlines()
             print("\n".join(lines[-30:]))
             return False
+    except subprocess.TimeoutExpired:
+        print("[FAIL] Pytest timed out after 120 seconds. A test may be blocking/hanging.")
+        return False
     except Exception as e:
         print(f"[FAIL] Pytest Execution Failed: {e}")
         return False
+
 
 def check_no_emojis() -> bool:
     """Scan codebase for emojis."""
@@ -113,10 +128,10 @@ def check_no_emojis() -> bool:
     # Regex for emojis (simplified range, covers most common ones)
     # Using a broad unicode range for emojis and symbols commonly used as emojis
     emoji_pattern = re.compile(r'[\U00010000-\U0010ffff]', flags=re.UNICODE)
-    
+
     found_emojis = False
     affected_files = []
-    
+
     for root, dirs, files in os.walk("."):
         if ".git" in dirs:
             dirs.remove(".git")
@@ -124,7 +139,7 @@ def check_no_emojis() -> bool:
             dirs.remove("__pycache__")
         if ".idea" in dirs:
             dirs.remove(".idea")
-            
+
         for file in files:
             if file.endswith(('.py', '.md', '.txt', '.yml', '.yaml')):
                 path = os.path.join(root, file)
@@ -135,9 +150,11 @@ def check_no_emojis() -> bool:
                 if ".agent/rules.md" in path:
                     continue
                 # Skip virtual environment directories and docs
-                if any(x in path for x in ["site-packages", "dist-packages", "venv", ".env", ".verify_venv_temp", "lib/python", "docs/"]):
+                if any(x in path for x in [
+                    "site-packages", "dist-packages", "venv", ".env", ".verify_venv_temp", "lib/python", "docs/"
+                ]):
                     continue
-                    
+
                 try:
                     with open(path, 'r', encoding='utf-8') as f:
                         content = f.read()
@@ -145,10 +162,10 @@ def check_no_emojis() -> bool:
                             found_emojis = True
                             affected_files.append(path)
                 except UnicodeDecodeError:
-                    pass # Skip binary files
+                    pass  # Skip binary files
 
     if found_emojis:
-        print(f"[FAIL] Emoji Check Failed: Emojis found in the following files:")
+        print("[FAIL] Emoji Check Failed: Emojis found in the following files:")
         for f in affected_files:
             print(f"  - {f}")
         return False
@@ -156,9 +173,10 @@ def check_no_emojis() -> bool:
         print("[PASS] Emoji Check Passed")
         return True
 
+
 def main():
     print(f"[INFO] Starting Local CI Verification on {platform.system()}...")
-    
+
     # Ensure dependencies are present
     try:
         check_dependencies()
@@ -172,13 +190,13 @@ def main():
         check_no_emojis()
     ]
 
-    
     if all(checks):
         print("\n[SUCCESS] All CI Checks Passed! You are ready to push.")
         sys.exit(0)
     else:
         print("\n[FAIL] Some checks failed. Please fix them before pushing.")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

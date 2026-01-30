@@ -4,8 +4,8 @@
 # import argparse
 # from pathlib import Path
 # from ...infrastructure.file_readers import NeoAdapter
-# from ...core.signal_processor import apply_filter_to_recording # Example import
-# from ...infrastructure.exporters import NWBExporter, CSVExporter # Example import
+# from ...core.signal_processor import apply_filter_to_recording  # Example import
+# from ...infrastructure.exporters import NWBExporter, CSVExporter  # Example import
 #
 # def run_cli():
 #     parser = argparse.ArgumentParser(description="Synaptipy CLI")
@@ -32,16 +32,16 @@
 #         #         # Need to collect metadata for NWB CLI? Harder than GUI.
 #         #         print("NWB export via CLI needs metadata handling.")
 #         #         # exporter = NWBExporter()
-#         #         # metadata = {...} # Get metadata somehow
+#         #         # metadata = {...}  # Get metadata somehow
 #         #         # exporter.export(recording, args.output, metadata)
 #         #     elif args.export_format == 'csv':
 #         #          print("CSV export via CLI needs trial selection.")
 #         #         # exporter = CSVExporter()
-#         #         # exporter.export(recording, args.output, trial_index=0) # Example trial 0
+#         #         # exporter.export(recording, args.output, trial_index=0)  # Example trial 0
 #         #     print(f"Exported to: {args.output}")
 #
 #     except Exception as e:
 #         print(f"Error: {e}")
 #
 # if __name__ == "__main__":
-#     run_cli() # Example direct run
+#     run_cli()  # Example direct run

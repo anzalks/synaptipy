@@ -5,7 +5,6 @@ These fixtures help with testing GUI components by providing
 mock objects and setup for headless UI testing.
 """
 
-import sys
 import pytest
 from unittest.mock import MagicMock
 

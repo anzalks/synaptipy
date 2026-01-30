@@ -60,10 +60,10 @@ class PlotExporter:
         # Use the central layout item (.ci) if avail, else the widget itself
         # Wrapper might not be present, so rely on widget
         target_item = getattr(self.widget, 'ci', self.widget)
-        
+
         # If it's a PlotWidget, target the PlotItem
         if hasattr(self.widget, "getPlotItem"):
-             target_item = self.widget.getPlotItem()
+            target_item = self.widget.getPlotItem()
 
         exporter = pg.exporters.ImageExporter(target_item)
 
@@ -84,7 +84,7 @@ class PlotExporter:
 
         # 1. Setup Figure
         plots_to_export = []
-        
+
         if self.wrapper:
             # Explorer Mode: Multiple channels via wrapper
             for cid in self.recording.channels.keys():
@@ -142,7 +142,7 @@ class PlotExporter:
         # 2. Iterate and extract data DIRECTLY from pyqtgraph PlotDataItems
         for i, (label, plot_item) in enumerate(plots_to_export):
             ax = axes[i]
-            
+
             # Get current view range to match screen
             vb = plot_item.getViewBox()
             x_range = vb.viewRange()[0]
@@ -156,13 +156,13 @@ class PlotExporter:
                 for item in plot_item.items:
                     if isinstance(item, pg.PlotDataItem):
                         plotted_items.append(item)
-            
+
             # Also check for InfiniteLine and LinearRegionItem for Analysis plots?
             # Matplotlib support for these is tricky but valuable.
-            # unique to PlotExporter: we mainly focus on traces. 
+            # unique to PlotExporter: we mainly focus on traces.
             # Subclassing usage in Analysis tabs might involve markers.
             # Ideally we extract data points.
-            
+
             # Plot each data item
             for item in plotted_items:
                 try:
@@ -182,28 +182,28 @@ class PlotExporter:
                     # Determine if this is an average or trial line
                     item_name = item.name() if item.name() else ""
                     is_average = "Average" in item_name or "average" in item_name
-                    
+
                     # Check pen color to decide style if name relies on defaults
                     # Simply use the item's pen if possible?
                     # For consistency with Explorer, we use the global pens.
                     # But for Analysis tabs, the pen might be custom (e.g. orange for fits).
                     # We should probably respect the item's pen if we can extract it.
-                    
+
                     item_pen = item.opts.get('pen')
                     if item_pen:
                         # Convert QPen to MPL
                         import PySide6.QtGui
                         if isinstance(item_pen, PySide6.QtGui.QPen):
-                             c, a = pen_to_mpl(item_pen)
-                             mp_color, mp_alpha = c, a
+                            c, a = pen_to_mpl(item_pen)
+                            mp_color, mp_alpha = c, a
                         else:
-                             # Default fallback
-                             mp_color, mp_alpha = trial_color, trial_alpha
+                            # Default fallback
+                            mp_color, mp_alpha = trial_color, trial_alpha
                     else:
-                         mp_color, mp_alpha = trial_color, trial_alpha
+                        mp_color, mp_alpha = trial_color, trial_alpha
 
                     if is_average:
-                        ax.plot(x_data, y_data, color=mp_color if self.wrapper else avg_color, 
+                        ax.plot(x_data, y_data, color=mp_color if self.wrapper else avg_color,
                                 alpha=mp_alpha if self.wrapper else avg_alpha, linewidth=1.5, zorder=10)
                     else:
                         ax.plot(x_data, y_data, color=mp_color, alpha=mp_alpha, linewidth=0.8)
@@ -215,11 +215,11 @@ class PlotExporter:
             # Styling Axes
             ax.set_xlim(x_range)
             ax.set_ylim(y_range)
-            
+
             # Label
             if self.wrapper and hasattr(self.recording, 'channels') and label in self.recording.channels:
-                 chan = self.recording.channels[label]
-                 ax.set_ylabel(f"{chan.get_primary_data_label()} ({chan.units})")
+                chan = self.recording.channels[label]
+                ax.set_ylabel(f"{chan.get_primary_data_label()} ({chan.units})")
             else:
                 # Try to get label from plot item?
                 ax.set_ylabel(label)

@@ -52,7 +52,7 @@ def main():
         os.environ["SYNAPTIPY_DEV_MODE"] = "1"
 
     # Configure logging
-    log_level = logging.DEBUG if args.verbose or args.dev else logging.INFO
+    _log_level = logging.DEBUG if args.verbose or args.dev else logging.INFO  # noqa: F841
     setup_logging(dev_mode=args.dev, log_dir=args.log_dir)
     logger = logging.getLogger(__name__)
 

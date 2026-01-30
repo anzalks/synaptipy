@@ -241,7 +241,8 @@ class NWBExporter:
                     # If units imply current -> VoltageClampSeries (measures I)
                     # For now, generic PatchClampSeries is safer if mode unknown,
                     # BUT PyNWB encourages specific if possible.
-                    # NWB: VoltageClampSeries (records Current, units=Amps). CurrentClampSeries (records Voltage, units=Volts).
+                    # NWB: VoltageClampSeries (records Current, units=Amps). CurrentClampSeries (records Voltage,
+                    # units=Volts).
 
                     units = getattr(channel, "units", "unknown").lower()
 
@@ -254,12 +255,14 @@ class NWBExporter:
                     final_units = getattr(channel, "units", "unknown")
 
                     # Decide Class based on units if possible
-                    SeriesClass = PatchClampSeries
+                    _SeriesClass = PatchClampSeries  # noqa: F841
                     if "v" in units:  # likely Voltage -> CurrentClampSeries (records V)
                         pass  # PyNWB structure is complex: CurrentClampSeries stores MEASURED VOLTAGE in 'data'
-                        # For simplicity/safety, sticking to parent PatchClampSeries is often better unless we are SURE of clamp mode.
+                        # For simplicity/safety, sticking to parent PatchClampSeries is often better unless we are SURE
+                        # of clamp mode.
                         # However, NWB guidelines prefer specific classes.
-                        # Let's stick to PatchClampSeries to avoid validation errors if we misuse the specific ones without full clamp params (Series resistance etc)
+                        # Let's stick to PatchClampSeries to avoid validation errors if we misuse the specific ones
+                        # without full clamp params (Series resistance etc)
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
 

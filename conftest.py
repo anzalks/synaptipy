@@ -1,7 +1,5 @@
-import os
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock
 
 
 def pytest_ignore_collect(collection_path, config):
@@ -23,11 +21,11 @@ def pytest_ignore_collect(collection_path, config):
 def main_window(qtbot):
     """Create a MainWindow instance for testing."""
     from Synaptipy.application.gui.main_window import MainWindow
-    
+
     # Create main window
     window = MainWindow()
     qtbot.addWidget(window)
-    
+
     return window
 
 
@@ -47,9 +45,9 @@ def sample_abf_path():
     project_root = Path(__file__).parent
     examples_dir = project_root / "examples" / "data"
     sample_files = list(examples_dir.glob("*.abf"))
-    
+
     if sample_files:
         return sample_files[0]
-    
+
     # Fallback: create a pytest skip if no sample file exists
     pytest.skip("No sample ABF file found in examples/data directory")

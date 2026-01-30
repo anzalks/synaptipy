@@ -112,7 +112,7 @@ def generate_current_response(
 
     # Calculate time constant (tau = RC)
     tau = resistance * cap
-    decay_factor = np.exp(-dt / tau)
+    _decay_factor = np.exp(-dt / tau)  # noqa: F841
 
     # Apply simple RC model with time constant
     for i in range(1, len(voltage_data)):

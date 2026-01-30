@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any  # Added Any for metadata dict
 import numpy as np
 import uuid
-from datetime import datetime, timezone  # Required for Recording timestamp
+from datetime import datetime  # Required for Recording timestamp
+from Synaptipy.core.source_interfaces import SourceHandle
 
 # Configure logger for this module
 log = logging.getLogger(__name__)
@@ -24,7 +25,15 @@ class Channel:
     trials or segments.
     """
 
-    def __init__(self, id: str, name: str, units: str, sampling_rate: float, data_trials: List[np.ndarray]):
+    def __init__(
+        self,
+        id: str,
+        name: str,
+        units: str,
+        sampling_rate: float,
+        data_trials: List[np.ndarray],
+        loader: Optional[Any] = None  # Callable[[int], Optional[np.ndarray]]
+    ):
         """
         Initializes a Channel object.
 
@@ -35,6 +44,7 @@ class Channel:
             sampling_rate: The sampling frequency in Hz.
             data_trials: A list where each element is a 1D NumPy array
                          representing the data for one trial/segment.
+            loader: Optional callable/object with load_trial(index) method for lazy loading.
         """
         # --- Core Attributes (Assigned ONCE) ---
         self.id: str = id
@@ -84,7 +94,7 @@ class Channel:
         self.electrode_seal: Optional[str] = None  # Seal resistance (e.g., "5 GOhm") - Requires parsing for NWB
 
         # --- Lazy Loading Support ---
-        self.lazy_info: Dict[str, Any] = {}  # Stores lazy loading information from NeoAdapter
+        self.loader = loader
         self.metadata: Dict[str, Any] = {}  # General metadata dictionary
 
     @property
@@ -129,7 +139,8 @@ class Channel:
 
         if len(lengths) > 1:
             log.warning(
-                f"Channel '{self.name}' has trials with varying lengths: {lengths}. `num_samples` returning length of first trial ({first_trial_len})."
+                f"Channel '{self.name}' has trials with varying lengths: {lengths}. "
+                f"`num_samples` returning length of first trial ({first_trial_len})."
             )
         # Return length of first valid trial if lengths are consistent or vary
         return first_trial_len if lengths else 0
@@ -167,83 +178,34 @@ class Channel:
             if data is not None:
                 return data
 
-        # For lazy loading, try to load data from neo Block
-        if hasattr(self, "lazy_info") and self.lazy_info:
+        # For lazy loading, try to load data using the loader
+        if self.loader:
             try:
-                data = self._load_trial_data_lazy(trial_index)
+                # If loader is a callable or has load_trial method
+                if hasattr(self.loader, "load_trial"):
+                    data = self.loader.load_trial(trial_index)
+                elif callable(self.loader):
+                    data = self.loader(trial_index)
+                else:
+                    log.error(f"Channel {self.id}: Invalid loader object.")
+                    return None
+
+                if data is not None:
+                    # Store valid data to avoid re-loading
+                    # Ensure data_trials list is long enough
+                    while len(self.data_trials) <= trial_index:
+                        self.data_trials.append(None)
+                    self.data_trials[trial_index] = data
+
                 return data
+
             except Exception as e:
                 log.error(f"Failed to load trial {trial_index} data lazily for channel {self.id}: {e}")
                 return None
 
         return None
 
-    def _load_trial_data_lazy(self, trial_index: int) -> Optional[np.ndarray]:
-        """
-        Load data for a specific trial from the neo Block using lazy loading.
-        This method accesses the stored neo Block and reader to load data on-demand.
-        """
-        if not hasattr(self, "lazy_info") or not self.lazy_info:
-            log.warning(f"No lazy loading info available for channel {self.id}")
-            return None
-
-        try:
-            # Get the recording object (should be accessible through the channel's parent)
-            # For now, we'll need to access it through the lazy_info
-            recording = getattr(self, "_recording_ref", None)
-            if not recording or not hasattr(recording, "neo_block"):
-                log.error(f"No recording reference or neo_block available for lazy loading")
-                return None
-
-            neo_block = recording.neo_block
-
-            # Determine which trial to load based on lazy_info
-            if trial_index == 0:
-                # First trial - use the main signal reference
-                analog_signal_ref = self.lazy_info.get("analog_signal_ref")
-                if analog_signal_ref is None:
-                    log.error(f"No analog signal reference for trial 0 in channel {self.id}")
-                    return None
-            else:
-                # Additional trials - use the trials list
-                trials_info = self.lazy_info.get("trials", [])
-                if trial_index - 1 >= len(trials_info):
-                    log.error(f"Trial index {trial_index} out of range for channel {self.id}")
-                    return None
-                analog_signal_ref = trials_info[trial_index - 1].get("analog_signal_ref")
-                if analog_signal_ref is None:
-                    log.error(f"No analog signal reference for trial {trial_index} in channel {self.id}")
-                    return None
-
-            # Load the actual data from the lazy AnalogSignal
-
-            real_signal = analog_signal_ref
-            # Neo proxies (Lazy Loading) usually have a 'load' method to fetch the actual data
-            if hasattr(analog_signal_ref, "load"):
-                real_signal = analog_signal_ref.load()
-
-            # Ensure we have the magnitude (remove units if Quantity)
-            if hasattr(real_signal, "magnitude"):
-                raw_data = real_signal.magnitude
-            else:
-                raw_data = real_signal
-
-            # robustly convert to flat numpy array
-            data = np.array(raw_data).ravel()
-
-            # Store the loaded data in data_trials for future access
-            # Ensure data_trials list is long enough
-            while len(self.data_trials) <= trial_index:
-                self.data_trials.append(None)
-
-            self.data_trials[trial_index] = data
-            log.debug(f"Successfully loaded trial {trial_index} data for channel {self.id}: {data.shape[0]} samples")
-
-            return data
-
-        except Exception as e:
-            log.error(f"Error loading trial {trial_index} data lazily for channel {self.id}: {e}", exc_info=True)
-            return None
+    # _load_trial_data_lazy removed (moved to ChannelLoader strategy)
 
     def get_time_vector(self, trial_index: int) -> Optional[np.ndarray]:
         # Returns the absolute time vector for a specific trial.
@@ -412,8 +374,8 @@ class Recording:
         self.metadata: Dict[str, Any] = {}  # Use Any for metadata flexibility
 
         # --- Lazy Loading Support ---
-        self.neo_block = None  # Will be set by NeoAdapter for lazy loading
-        self.neo_reader = None  # Will be set by NeoAdapter for lazy loading
+        # --- Lazy Loading Support ---
+        self.source_handle: Optional[SourceHandle] = None  # Decoupled handle for lazy loading
 
     @property
     def num_channels(self) -> int:

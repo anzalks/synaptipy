@@ -1,7 +1,6 @@
 # tests/core/test_phase_plane.py
-import pytest
 import numpy as np
-from Synaptipy.core.analysis.phase_plane import calculate_dvdt, get_phase_plane_trajectory, detect_threshold_kink
+from Synaptipy.core.analysis.phase_plane import calculate_dvdt, detect_threshold_kink
 
 
 def test_calculate_dvdt_simple():
@@ -43,8 +42,8 @@ def test_detect_threshold_kink():
     v = np.full_like(t, -70.0)
 
     # Simple AP shape
-    start_idx = 200
-    peak_idx = 250
+    _start_idx = 200  # noqa: F841
+    _peak_idx = 250  # noqa: F841
 
     # Linear rise for simplicity of dV/dt control
     # Rise from -70 to -50 (subthreshold) slowly
