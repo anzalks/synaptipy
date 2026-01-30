@@ -448,6 +448,35 @@ class ExplorerTab(QtWidgets.QWidget):
     def get_current_recording(self) -> Optional[Recording]:
         return self.current_recording
 
+    def _recalculate_base_y_ranges_from_view(self):
+        """
+        Recalculate base Y ranges from the current view ranges.
+
+        This fixes scroll range issues after preprocessing (e.g., baseline subtraction)
+        by updating the base ranges to match the currently displayed data range.
+        """
+        if not self.current_recording:
+            return
+
+        for cid, plot in self.plot_canvas.channel_plots.items():
+            if not plot or not plot.isVisible():
+                continue
+
+            try:
+                # Get the current view range from the plot's ViewBox
+                vb = plot.getViewBox()
+                if vb:
+                    y_range = vb.viewRange()[1]  # [1] is Y range
+                    if y_range and len(y_range) == 2:
+                        ymin, ymax = y_range
+                        diff = ymax - ymin
+                        if diff > 0:
+                            # Expand slightly to allow full scroll range
+                            self.base_y_ranges[cid] = (ymin - diff * 0.1, ymax + diff * 0.1)
+                            log.debug(f"Updated base Y range for {cid}: {self.base_y_ranges[cid]}")
+            except Exception as e:
+                log.debug(f"Could not recalculate Y range for {cid}: {e}")
+
     def _trigger_plot_update(self):
         """Updates all plot items based on current selection/data state."""
         if not self.current_recording:
@@ -1000,6 +1029,13 @@ class ExplorerTab(QtWidgets.QWidget):
             center = (total_min + total_max) / 2
         else:
             scroll_ratio = scroll_val / scroll_max
+            # Apply scroll direction inversion based on user preference
+            try:
+                from Synaptipy.shared.scroll_settings import is_scroll_inverted
+                if is_scroll_inverted():
+                    scroll_ratio = 1.0 - scroll_ratio
+            except ImportError:
+                pass
             center = min_center + (max_center - min_center) * scroll_ratio
 
         new_min = center - visible_span / 2
@@ -1084,6 +1120,8 @@ class ExplorerTab(QtWidgets.QWidget):
         self.preprocessing_widget.set_processing_state(True)
         try:
             self._update_plot()
+            # Recalculate base Y ranges from current view to fix scroll range
+            self._recalculate_base_y_ranges_from_view()
         finally:
             self.preprocessing_widget.set_processing_state(False)
             self.status_bar.showMessage("Applied preprocessing settings.", 3000)
