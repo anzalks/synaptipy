@@ -168,6 +168,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quit_action.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
         self.quit_action.triggered.connect(self.close)
 
+        # --- Edit Menu ---
+        edit_menu = menu_bar.addMenu("&Edit")
+
+        # Preferences Action
+        self.preferences_action = edit_menu.addAction("&Preferences...")
+        self.preferences_action.setShortcut(QtGui.QKeySequence.StandardKey.Preferences)
+        self.preferences_action.setToolTip("Open application preferences")
+        self.preferences_action.triggered.connect(self._show_preferences)
+
         # --- View Menu ---
         view_menu = menu_bar.addMenu("&View")
 
@@ -385,6 +394,18 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.error(f"Failed to show plot customization dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open plot customization:\n{e}")
+
+    def _show_preferences(self):
+        """Show the preferences dialog."""
+        try:
+            from .preferences_dialog import PreferencesDialog
+
+            dialog = PreferencesDialog(self)
+            dialog.exec()
+            log.debug("Preferences dialog closed")
+        except Exception as e:
+            log.error(f"Failed to show preferences dialog: {e}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open preferences:\n{e}")
 
     def _show_popup_windows(self):
         """Show/restore all popup windows from analysis tabs."""

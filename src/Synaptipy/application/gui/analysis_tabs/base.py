@@ -1403,11 +1403,56 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Setup Pen
             try:
                 from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
-                pen = get_average_pen() if plot_package.data_source == "average" else get_single_trial_pen()
+                avg_pen = get_average_pen()
+                trial_pen = get_single_trial_pen()
             except ImportError:
-                pen = pg.mkPen(color=(0, 0, 0), width=2)
+                avg_pen = pg.mkPen(color=(0, 0, 0), width=2)
+                trial_pen = pg.mkPen(color=(55, 126, 184, 100), width=1)
 
-            self.plot_widget.plot(plot_package.main_time, plot_package.main_data, pen=pen, name=plot_package.label)
+            # When average is selected, plot all trials underneath with transparency
+            if plot_package.data_source == "average":
+                # Get the channel to access individual trials
+                channel = self._selected_item_recording.channels.get(chan_id)
+                if channel:
+                    num_trials = getattr(channel, "num_trials", 0)
+                    # Apply filtering if set
+                    trial_indices = range(num_trials)
+                    if hasattr(self, "_filtered_indices") and self._filtered_indices:
+                        trial_indices = sorted(self._filtered_indices)
+
+                    # Plot each individual trial with transparency
+                    for trial_idx in trial_indices:
+                        try:
+                            trial_data = channel.get_data(trial_idx)
+                            trial_time = channel.get_relative_time_vector(trial_idx)
+
+                            if trial_data is not None and trial_time is not None:
+                                # Apply any preprocessing if active
+                                if self._active_preprocessing_settings:
+                                    processed = self._process_signal_data(
+                                        trial_data,
+                                        plot_package.sampling_rate,
+                                        self._active_preprocessing_settings,
+                                        trial_time
+                                    )
+                                    if processed is not None:
+                                        trial_data = processed
+
+                                self.plot_widget.plot(trial_time, trial_data, pen=trial_pen)
+                        except Exception as e:
+                            log.debug(f"Could not plot trial {trial_idx}: {e}")
+
+                # Plot the average on top
+                self.plot_widget.plot(
+                    plot_package.main_time, plot_package.main_data,
+                    pen=avg_pen, name=plot_package.label
+                )
+            else:
+                # Single trial selected - just plot it
+                self.plot_widget.plot(
+                    plot_package.main_time, plot_package.main_data,
+                    pen=trial_pen, name=plot_package.label
+                )
 
             # 5. Config Plot
             self.plot_widget.setLabel("bottom", "Time", units="s")
@@ -1430,9 +1475,22 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 "channel_name": plot_package.channel_name,
             }
 
-            # 7. Restore View
+            # 7. Auto-range or Restore View
+            # Only restore previous view if it was meaningful (not default 0-1 range)
+            should_restore = False
             if view_state:
+                x_view, y_view = view_state
+                # Check if this was a meaningful view (not default 0-1 range)
+                is_default_x = abs(x_view[0]) < 0.01 and abs(x_view[1] - 1.0) < 0.01
+                is_default_y = abs(y_view[0]) < 0.01 and abs(y_view[1] - 1.0) < 0.01
+                if not (is_default_x and is_default_y):
+                    should_restore = True
+
+            if should_restore:
                 self.plot_widget.setRange(xRange=view_state[0], yRange=view_state[1], padding=0)
+            else:
+                # First time or default - auto-range to fit data
+                self.auto_range_plot()
 
             self._on_data_plotted()
 
