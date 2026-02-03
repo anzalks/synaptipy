@@ -5,7 +5,8 @@ Includes filtering and trace quality checks.
 
 import logging
 import numpy as np
-from scipy import signal, stats
+import scipy.signal as signal
+import scipy.stats as stats
 from typing import Dict, Any, Optional
 
 log = logging.getLogger(__name__)

@@ -6,34 +6,27 @@ Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 """
 import logging
 from typing import Dict, List, Optional
-
+import logging
 import pyqtgraph as pg
 from PySide6 import QtCore
 
-from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
+from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
 
 
-class ExplorerPlotCanvas(QtCore.QObject):
+class ExplorerPlotCanvas(SynaptipyPlotCanvas):
     """
     Manages the plotting area (GraphicsLayoutWidget) and plot items.
+    Inherits from SynaptipyPlotCanvas for unified infrastructure.
     """
-
-    # Signal emitted when a ViewBox range changes: (channel_id, new_range)
-    x_range_changed = QtCore.Signal(str, object)
-    y_range_changed = QtCore.Signal(str, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Create the widget using factory
-        self.widget = SynaptipyPlotFactory.create_graphics_layout()
-        self.widget.setBackground("white")
-
-        # State
-        self.channel_plots: Dict[str, pg.PlotItem] = {}
+        # State unique to Explorer
+        # channel_plots will alias to self.plot_items for backward compatibility
         self.plot_widgets: List[pg.PlotItem] = []  # Ordered list
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
@@ -41,11 +34,14 @@ class ExplorerPlotCanvas(QtCore.QObject):
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
 
-        # Constants
+    @property
+    def channel_plots(self) -> Dict[str, pg.PlotItem]:
+        """Alias for plot_items to maintain compatibility with ExplorerTab."""
+        return self.plot_items
 
     def clear_plot_items(self, chan_id: str):
         """Robustly clear all data items from a channel plot."""
-        plot = self.channel_plots.get(chan_id)
+        plot = self.get_plot(chan_id)
         if not plot:
             return
 
@@ -58,32 +54,15 @@ class ExplorerPlotCanvas(QtCore.QObject):
                     pass
             self.channel_plot_data_items[chan_id].clear()
 
-        # 2. Clear items from plot's internal list if they seem to be data items
-        # Be careful not to remove grid or axes, but usually clear() does too much (removes labels/axes sometimes
-        # depending on impl)
-        # Instead, we can iterate over plot.listDataItems() if available
-        if hasattr(plot, "listDataItems"):
-            for item in plot.listDataItems():
-                try:
-                    plot.removeItem(item)
-                except Exception:
-                    pass
-        elif hasattr(plot, "items"):
-            # Fallback: remove all PlotDataItem
-            for item in plot.items[:]:
-                if isinstance(item, pg.PlotDataItem):
-                    try:
-                        plot.removeItem(item)
-                    except Exception:
-                        pass
+        # 2. Use base class clear mechanism for robustness
+        self.clear_items(chan_id)
 
     def clear(self):
         """Clear all plots."""
-        self.channel_plots.clear()
+        super().clear_plots()
         self.plot_widgets.clear()
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
-        self.widget.clear()
 
     def rebuild_plots(self, recording: Recording) -> List[str]:
         """
@@ -103,8 +82,10 @@ class ExplorerPlotCanvas(QtCore.QObject):
         for i, chan_key in enumerate(channel_keys):
             channel = recording.channels[chan_key]
 
-            # Create plot item
-            plot_item = self.widget.addPlot(row=i, col=0)
+            # Create plot item using base class method
+            # Row i, Col 0
+            plot_item = self.add_plot(chan_key, row=i, col=0)
+            self.plot_widgets.append(plot_item)
 
             # X-Link
             if first_plot_item is None:
@@ -112,18 +93,17 @@ class ExplorerPlotCanvas(QtCore.QObject):
             else:
                 plot_item.setXLink(first_plot_item)
 
-            # Styling
+            # Custom Styling for Explorer
             try:
                 vb = plot_item.getViewBox()
                 if vb:
-                    vb.setBackgroundColor("white")
-                    # Tag viewbox with ID for signal handling
+                    # Tag viewbox with ID for signal handling (legacy need?)
+                    # Base class already connects signals using chan_key, 
+                    # but ExplorerTab might check this attribute manually?
+                    # Let's keep it to be safe.
                     vb._synaptipy_chan_id = chan_key
             except Exception as e:
                 log.warning(f"Error styling ViewBox: {e}")
-
-            # Grid
-            plot_item.showGrid(x=True, y=True, alpha=0.3)
 
             # Labels
             plot_item.setLabel("left", text=channel.get_primary_data_label(), units=channel.units)
@@ -135,23 +115,5 @@ class ExplorerPlotCanvas(QtCore.QObject):
             else:
                 plot_item.getAxis("bottom").showLabel(False)
 
-            # Interaction
-            plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
-
-            # Connect Signals
-            self._connect_signals(plot_item, chan_key)
-
-            # Store
-            self.channel_plots[chan_key] = plot_item
-            self.plot_widgets.append(plot_item)
-
         return channel_keys
 
-    def _connect_signals(self, plot_item, chan_key):
-        vb = plot_item.getViewBox()
-        if vb:
-            vb.sigXRangeChanged.connect(lambda _, range: self.x_range_changed.emit(chan_key, range))
-            vb.sigYRangeChanged.connect(lambda _, range: self.y_range_changed.emit(chan_key, range))
-
-    def get_plot(self, chan_key: str) -> Optional[pg.PlotItem]:
-        return self.channel_plots.get(chan_key)

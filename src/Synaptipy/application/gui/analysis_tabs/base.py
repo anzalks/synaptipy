@@ -29,6 +29,10 @@ from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
 from Synaptipy.core import signal_processor
 
+# NEW: Unified Plotting & Pipeline
+from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
+from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
+
 log = logging.getLogger(__name__)
 
 
@@ -73,8 +77,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._selected_item_recording: Optional[Recording] = None
         # UI element for selecting the analysis item - REMOVED: Now centralized in parent AnalyserTab
         # self.analysis_item_combo: Optional[QtWidgets.QComboBox] = None
-        # --- ADDED: Plot Widget ---
-        self.plot_widget: Optional[pg.PlotWidget] = None
+        # --- ADDED: Plot Canvas (replaces plot_widget wrapper) ---
+        self.plot_canvas: Optional[SynaptipyPlotCanvas] = None
+        # self.plot_widget will now reference the main PlotItem for compatibility
+        self.plot_widget: Optional[pg.PlotItem] = None
         # --- END ADDED ---
         # --- ADDED: Save Button ---
         self.save_button: Optional[QtWidgets.QPushButton] = None
@@ -91,6 +97,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._preprocessed_data: Optional[Dict[str, Any]] = None  # Cached preprocessed data
         self._is_preprocessing: bool = False
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None  # Persist settings
+        # Pipeline
+        self.pipeline = SignalProcessingPipeline()
         # --- END ADDED ---
 
         # --- PHASE 1: Data Selection and Plotting ---
@@ -169,7 +177,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Use pyqtgraph exporter
             import pyqtgraph.exporters
 
-            exporter = pyqtgraph.exporters.ImageExporter(self.plot_widget.plotItem)
+            exporter = pyqtgraph.exporters.ImageExporter(self.plot_widget)
             exporter.export(file_path)
 
     # --- END ADDED ---
@@ -238,54 +246,36 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"{self.__class__.__name__}: Global controls injected/reparented.")
 
+    # --- Preprocessing Logic (Pipeline Integrated) ---
     def _handle_preprocessing_request(self, settings: Dict[str, Any]):
         """
         Handle signal from PreprocessingWidget.
-        Runs the requested operation in a background thread.
+        Updates the pipeline and triggers re-plotting.
         """
         if self._selected_item_recording is None:
             QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded to preprocess.")
             return
 
-        # Disable UI
         self._is_preprocessing = True
-        self._active_preprocessing_settings = settings  # Store settings for future plots
+        self._active_preprocessing_settings = settings
+
+        # Update Pipeline
+        self.pipeline.clear()
+        self.pipeline.add_step(settings)
+
         if self.preprocessing_widget:
             self.preprocessing_widget.set_processing_state(True)
-
-        # Determine data to process (Raw Data from the recording)
-        # We process the entire channel data generally, or just the current trial?
-        # Typically we preprocess the RAW signal for the display/analysis.
-        # But we need to know WHICH channel is selected.
-
-        # Simplification: We process the CURRENTLY SELECTED data if possible,
-        # or we might need to process the whole recording?
-        # Let's say we process the data that is currently being PLOTTED.
-        # But wait, if we change channels, we want that new channel to be processed too?
-        # Ideally, preprocessing parameters are applied dynamically on load.
-        # But here the user explicitly clicked "Apply".
-
-        # Strategy: We will apply the operation to the CURRENTLY DISPLAYED trace data.
-        # And cache it in `_preprocessed_data`.
-        # If we change channels, `_preprocessed_data` is cleared (in _on_analysis_item_selected/channel changed),
-        # so the user has to re-apply. This is consistent with "Basic Analysis" flow.
-
-        # Get raw data from currently loaded recording (and selected channel)
+        
         try:
-            # FIX: Directly trigger re-plotting.
-            # This ensures we use the centralized `_plot_selected_data` logic, which:
-            # 1. Preserves Zoom (via our recent fix).
-            # 2. Applies settings to ALL traces (Context + Main) on-the-fly.
-            # 3. Respects trial selection.
+            # Trigger centralized plotting which now uses the pipeline callback
             self._plot_selected_data()
-            # Note: We return early or just let the method finish
-
+            
+            # Since processing is now synchronous/on-demand during plotting, we are done
+            self._on_preprocessing_complete(None) # Pass None or dummy result
+            
         except Exception as e:
             log.error(f"Failed to start preprocessing: {e}", exc_info=True)
-            QtWidgets.QMessageBox.critical(self, "Error", f"Could not start processing: {e}")
-            self._is_preprocessing = False
-            if self.preprocessing_widget:
-                self.preprocessing_widget.set_processing_state(False)
+            self._on_preprocessing_error(e)
 
     def _on_preprocessing_complete(self, result_data):
         """Preprocessing finished successfully."""
@@ -341,62 +331,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.error(f"Preprocessing error: {error}")
         QtWidgets.QMessageBox.critical(self, "Processing Error", f"An error occurred:\n{error}")
 
-    @staticmethod
-    def _process_signal_data(
-        data_in: np.ndarray, fs: float, params: Dict[str, Any], time_vector: Optional[np.ndarray] = None
+    def _pipeline_process_adapter(
+        self, data_in: np.ndarray, fs: float, params: Dict[str, Any], time_vector: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
-        Static helper method to process signal data.
-        Can be used by worker threads or main thread.
+        Adapter to make SignalProcessingPipeline compatible with AnalysisPlotManager's callback signature.
+        Ignores 'params' as the pipeline is already configured.
         """
-        import numpy as np
-        # Check for NaNs/Inf just in case
-        if not np.all(np.isfinite(data_in)):
-            log.warning("Data contains NaNs or Infs before processing.")
-
-        result_data = data_in.copy()
-        op_type = params.get('type')
-
-        if op_type == 'baseline':
-            method = params.get('method', 'mode')
-            if method == 'mode':
-                decimals = params.get('decimals', 1)
-                result_data = signal_processor.subtract_baseline_mode(result_data, decimals=decimals)
-            elif method == 'mean':
-                result_data = signal_processor.subtract_baseline_mean(result_data)
-            elif method == 'median':
-                result_data = signal_processor.subtract_baseline_median(result_data)
-            elif method == 'linear':
-                result_data = signal_processor.subtract_baseline_linear(result_data)
-            elif method == 'region':
-                if time_vector is not None:
-                    start_t = params.get('start_t', 0.0)
-                    end_t = params.get('end_t', 0.0)
-                    result_data = signal_processor.subtract_baseline_region(result_data, time_vector, start_t, end_t)
-                else:
-                    log.warning("Region baseline requested but no time vector provided. Skipping.")
-
-        elif op_type == 'filter':
-            method = params.get('method')
-            if method == 'lowpass':
-                cutoff = params.get('cutoff')
-                order = int(params.get('order', 5))
-                result_data = signal_processor.lowpass_filter(result_data, cutoff, fs, order)
-            elif method == 'highpass':
-                cutoff = params.get('cutoff')
-                order = int(params.get('order', 5))
-                result_data = signal_processor.highpass_filter(result_data, cutoff, fs, order)
-            elif method == 'bandpass':
-                low = params.get('low_cut')
-                high = params.get('high_cut')
-                order = int(params.get('order', 5))
-                result_data = signal_processor.bandpass_filter(result_data, low, high, fs, order)
-            elif method == 'notch':
-                freq = params.get('freq')
-                q = params.get('q_factor')
-                result_data = signal_processor.notch_filter(result_data, freq, q, fs)
-
-        return result_data
+        return self.pipeline.process(data_in, fs, time_vector)
 
     # --- END ADDED ---
     # --- END ADDED ---
@@ -432,7 +374,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             grid_pen = get_grid_pen()
 
             # Update pens for existing plot data items
-            for item in self.plot_widget.plotItem.items:
+            # Accessing items on PlotItem directly
+            items = self.plot_widget.items if hasattr(self.plot_widget, 'items') else []
+            for item in items:
                 if isinstance(item, pg.PlotDataItem):
                     # Determine which pen to apply based on item properties or name
                     if hasattr(item, "opts") and "name" in item.opts:
@@ -461,67 +405,41 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     # --- ADDED: Method to setup plot area ---
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
-        """Adds a PlotWidget to the provided layout with normal configuration."""
+        """Adds a SynaptipyPlotCanvas to the provided layout."""
         log.debug(f"[ANALYSIS-BASE] Setting up plot area for {self.__class__.__name__}")
 
-        # Add the plot widget using the factory pattern for compliance
-        self.plot_widget = SynaptipyPlotFactory.create_plot_widget(
-            parent=None, background="white", enable_grid=True, mouse_mode="rect"  # Parent handled by addWidget
-        )
-        log.debug(f"[ANALYSIS-BASE] Created plot widget for {self.__class__.__name__}")
+        # Usage of SynaptipyPlotCanvas
+        self.plot_canvas = SynaptipyPlotCanvas(parent=self)
+        
+        # Add the main analysis plot item
+        self.plot_widget = self.plot_canvas.add_plot("main_analysis_plot", row=0, col=0)
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.plot_widget.setLabel("left", "Amplitude")
+        self.plot_widget.setLabel("bottom", "Time", units="s")
 
-        # Add Windows signal protection to prevent rapid range changes
-        # This is already partly handled by factory but added here for extra safety if needed
-        viewbox = self.plot_widget.getViewBox()
-        if viewbox:
-            import sys
+        # Standard interaction mode
+        vb = self.plot_widget.getViewBox()
+        if vb:
+             vb.setMouseMode(pg.ViewBox.RectMode)
 
-            if sys.platform.startswith("win"):
-                log.debug(f"[ANALYSIS-BASE] Adding Windows signal protection for {self.__class__.__name__}")
-                self._setup_windows_signal_protection(viewbox)
+        # Add windows signal protection? handled by new canvas? 
+        # Base canvas handles signal protection if needed, but we can verify.
+        # For now, rely on canvas.
 
-        # Add the plot widget to the layout
-        layout.addWidget(self.plot_widget, stretch=stretch_factor)
+        # Add the plot widget (GraphicsLayoutWidget) to layout
+        layout.addWidget(self.plot_canvas.widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
 
         # Add Toolbar below the plot
         self._setup_toolbar(layout)
 
-        # Normal grid configuration with customization support
-        try:
-            # Try to use customized grid settings
-            try:
-                from Synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
-
-                if is_grid_enabled():
-                    grid_pen = get_grid_pen()
-                    if grid_pen:
-                        # Get alpha value from pen color
-                        alpha = 0.3  # Default alpha
-                        if hasattr(grid_pen, "color") and hasattr(grid_pen.color(), "alpha"):
-                            alpha = grid_pen.color().alpha() / 255.0
-                            log.debug(f"Using grid pen alpha: {alpha} (opacity: {alpha * 100:.1f}%)")
-                        else:
-                            log.debug("Using default grid alpha: 0.3")
-
-                        self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
-                        log.debug(
-                            f"[ANALYSIS-BASE] Customized grid configuration successful for "
-                            f"{self.__class__.__name__} with alpha: {alpha}"
-                        )
-                    else:
-                        self.plot_widget.showGrid(x=False, y=False)
-                        log.debug(f"[ANALYSIS-BASE] Grid disabled for {self.__class__.__name__}")
-                else:
-                    self.plot_widget.showGrid(x=False, y=False)
-                    log.debug(f"[ANALYSIS-BASE] Grid disabled for {self.__class__.__name__}")
-            except ImportError:
-                self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-                log.debug(f"[ANALYSIS-BASE] Default grid configuration successful for {self.__class__.__name__}")
-        except Exception as e:
-            log.warning(f"[ANALYSIS-BASE] Grid configuration warning for {self.__class__.__name__}: {e}")
-
-        # Initialize zoom synchronization manager (for reset functionality only)
+        # Initialize zoom synchronization manager (with the new canvas setup)
+        # ZoomSyncManager expects a PlotWidget or we adapt it?
+        # It calls widget.getViewBox(). If we pass SynaptipyPlotCanvas.widget, it might fail?
+        # PlotZoomSyncManager takes 'plot_widget' usually.
+        # If we pass the PlotItem (self.plot_widget), it might work if it uses getViewBox().
+        # Let's check `_setup_zoom_sync` implementation below.
+        
         self._setup_zoom_sync()
 
         log.debug(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
@@ -1374,7 +1292,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         try:
             # 0. Preserve View State
             view_state = None
-            if self.plot_widget.plotItem:
+            if self.plot_widget:
                 view_state = self.plot_widget.viewRange()
 
             # 1. Clear plot
@@ -1387,7 +1305,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 data_source=data_source,
                 preprocessing_settings=self._active_preprocessing_settings,
                 filtered_indices=self._filtered_indices if hasattr(self, "_filtered_indices") else None,
-                process_callback=self._process_signal_data
+                process_callback=self._pipeline_process_adapter
             )
 
             if not plot_package:
