@@ -26,6 +26,7 @@ from .y_controls import ExplorerYControls
 from .toolbar import ExplorerToolbar
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
 from Synaptipy.core import signal_processor
+from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 
 # Configure Logger
 log = logging.getLogger(__name__)
@@ -78,6 +79,8 @@ class ExplorerTab(QtWidgets.QWidget):
         self._data_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}
         self._average_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
         self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}  # NEW: Cache for processed data
+        # Pipeline for processing
+        self.pipeline = SignalProcessingPipeline()
         # Active settings for on-the-fly processing
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None
         self._cache_dirty: bool = False
@@ -553,35 +556,12 @@ class ExplorerTab(QtWidgets.QWidget):
                             data = channel.get_data(self.current_trial_index)
                             t = channel.get_relative_time_vector(self.current_trial_index)
 
-                            # APPLY PREPROCESSING
-                            if self._active_preprocessing_settings and data is not None:
+                            # APPLY PREPROCESSING (via Pipeline)
+                            if data is not None:
                                 try:
-                                    params = self._active_preprocessing_settings
-                                    op_type = params.get('type')
                                     fs = channel.sampling_rate
-
-                                    if op_type == 'baseline':
-                                        decimals = params.get('decimals', 1)
-                                        data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
-                                    elif op_type == 'filter':
-                                        method = params.get('method')
-                                        if method == 'lowpass':
-                                            data = signal_processor.lowpass_filter(
-                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
-                                            )
-                                        elif method == 'highpass':
-                                            data = signal_processor.highpass_filter(
-                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
-                                            )
-                                        elif method == 'bandpass':
-                                            data = signal_processor.bandpass_filter(
-                                                data, params.get('low_cut'), params.get('high_cut'),
-                                                fs, int(params.get('order', 5))
-                                            )
-                                        elif method == 'notch':
-                                            data = signal_processor.notch_filter(
-                                                data, params.get('freq'), params.get('q_factor'), fs
-                                            )
+                                    # Pipeline handles empty steps gracefully
+                                    data = self.pipeline.process(data, fs, time_vector=t)
                                 except Exception as e:
                                     log.error(f"Error processing trial {self.current_trial_index}: {e}")
 
@@ -1102,21 +1082,28 @@ class ExplorerTab(QtWidgets.QWidget):
 
         return zoom_val, scroll_val
 
+
+
     # --- Preprocessing Logic ---
     def _handle_preprocessing_request(self, settings: Dict[str, Any]):
         """
         Handle signal from PreprocessingWidget.
-        Uses simplified logic: Store settings and trigger re-draw.
-        Processing happens on-the-fly in _update_plot (or helper).
+        Updates the SignalProcessingPipeline and triggers re-draw.
         """
         if not self.current_recording:
             QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded.")
             return
 
-        # Store settings
+        # Store settings for UI state tracking
         self._active_preprocessing_settings = settings
 
-        # Trigger update (which will use the settings)
+        # Update Pipeline
+        # For now, we mimic the legacy behavior: 1 active operation type.
+        # In the future, this can be expanded to append steps.
+        self.pipeline.clear()
+        self.pipeline.add_step(settings)
+
+        # Trigger update
         self.preprocessing_widget.set_processing_state(True)
         try:
             self._update_plot()
@@ -1124,7 +1111,7 @@ class ExplorerTab(QtWidgets.QWidget):
             self._recalculate_base_y_ranges_from_view()
         finally:
             self.preprocessing_widget.set_processing_state(False)
-            self.status_bar.showMessage("Applied preprocessing settings.", 3000)
+            self.status_bar.showMessage("Applied preprocessing settings via Pipeline.", 3000)
 
     def _on_preprocessing_complete_legacy(self, result_data):
         pass  # Removed legacy worker method
