@@ -5,9 +5,16 @@ Includes filtering and trace quality checks.
 
 import logging
 import numpy as np
-import scipy.signal as signal
-import scipy.stats as stats
 from typing import Dict, Any, Optional
+
+try:
+    import scipy.signal as signal
+    import scipy.stats as stats
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    signal = None
+    stats = None
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +41,10 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
     results = {"is_good": True, "warnings": [], "metrics": {}}
 
     try:
+        if not HAS_SCIPY:
+            results["warnings"].append("Scipy not installed. Detailed quality metrics unavailable.")
+            return results
+
         # 1. Baseline Drift (Linear Trend)
         # Fit a line to the data to estimate drift
         x = np.arange(len(data))
@@ -99,6 +110,10 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
     """
     Apply a Butterworth bandpass filter to the data.
     """
+    if not HAS_SCIPY:
+        log.warning("Scipy not available. Cannot apply bandpass filter.")
+        return data
+
     if fs <= 0:
         raise ValueError("Sampling rate must be positive")
 
@@ -129,6 +144,10 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     """
     Apply a Butterworth lowpass filter.
     """
+    if not HAS_SCIPY:
+        log.warning("Scipy not available. Cannot apply lowpass filter.")
+        return data
+
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
     b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
@@ -147,6 +166,10 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
     """
     Apply a Butterworth highpass filter.
     """
+    if not HAS_SCIPY:
+        log.warning("Scipy not available. Cannot apply highpass filter.")
+        return data
+
     if fs <= 0:
         raise ValueError("Sampling rate must be positive")
 
@@ -176,6 +199,10 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
     """
     Apply a notch filter to remove a specific frequency.
     """
+    if not HAS_SCIPY:
+        log.warning("Scipy not available. Cannot apply notch filter.")
+        return data
+
     if fs <= 0:
         raise ValueError("Sampling rate must be positive")
 
@@ -215,6 +242,10 @@ def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> 
     """
     if data is None or len(data) == 0:
         return data
+
+    if not HAS_SCIPY:
+        log.warning("Scipy not available. Cannot use mode for baseline subtraction. Using median.")
+        return subtract_baseline_median(data)
 
     # Infer decimals if not provided? For now default to 1 as per original behavior if None
     # Better yet, let's keep it explicit.
@@ -267,6 +298,11 @@ def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
     """
     if data is None or len(data) == 0:
         return data
+        
+    if not HAS_SCIPY:
+        log.warning("Scipy not available. Cannot detrend.")
+        return data
+        
     return signal.detrend(data, type='linear')
 
 
