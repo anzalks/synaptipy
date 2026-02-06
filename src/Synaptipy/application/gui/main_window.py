@@ -734,10 +734,38 @@ class MainWindow(QtWidgets.QMainWindow):
         """Restore window geometry, state, and user preferences."""
         log.debug("Restoring window state and preferences...")
 
+        # Get current screen available geometry
+        screen = QtWidgets.QApplication.primaryScreen()
+        available_geometry = screen.availableGeometry() if screen else None
+
         # Restore window geometry if available
         if self.settings.contains("geometry"):
             self.restoreGeometry(self.settings.value("geometry"))
             log.debug("Restored window geometry.")
+
+            # Validate restored geometry fits on current screen
+            if available_geometry:
+                current_geometry = self.geometry()
+                # Check if window is mostly off-screen
+                visible_width = min(current_geometry.right(), available_geometry.right()) - \
+                               max(current_geometry.left(), available_geometry.left())
+                visible_height = min(current_geometry.bottom(), available_geometry.bottom()) - \
+                                max(current_geometry.top(), available_geometry.top())
+
+                # If less than 50% visible, reset to fit screen
+                if visible_width < current_geometry.width() * 0.5 or \
+                   visible_height < current_geometry.height() * 0.5:
+                    log.warning("Restored geometry doesn't fit current screen. Adjusting...")
+                    # Resize to fit available screen (70% of screen)
+                    new_width = min(current_geometry.width(), int(available_geometry.width() * 0.8))
+                    new_height = min(current_geometry.height(), int(available_geometry.height() * 0.8))
+                    self.resize(new_width, new_height)
+                    # Move to visible area
+                    self.move(
+                        available_geometry.left() + (available_geometry.width() - new_width) // 2,
+                        available_geometry.top() + (available_geometry.height() - new_height) // 2,
+                    )
+                    log.debug(f"Adjusted window size to {new_width}x{new_height}")
 
         # Restore window state if available
         if self.settings.contains("windowState"):

@@ -101,7 +101,7 @@ class SignalProcessingPipeline:
                     method = step.get('method')
                     # Filters usually need 'order' which defaults to 5 in signal_processor if not passed
                     order = int(step.get('order', 5))
-                    
+
                     if method == 'lowpass':
                         result = signal_processor.lowpass_filter(
                             result, step.get('cutoff'), fs, order=order
@@ -120,9 +120,9 @@ class SignalProcessingPipeline:
                             result, step.get('freq'), step.get('q_factor'), fs
                         )
 
-            except Exception as e:
+            except (ValueError, TypeError, KeyError) as e:
                 log.error(f"Error processing step {step}: {e}")
-                # Continue or raise? For UI robustness, maybe log and continue, 
+                # Continue or raise? For UI robustness, maybe log and continue,
                 # but for data correctness, maybe we should know.
                 # Let's log error but keep the data as is from previous step (safe failure).
 

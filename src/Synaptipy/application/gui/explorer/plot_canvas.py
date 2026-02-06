@@ -5,10 +5,8 @@ Explorer Plot Canvas widget.
 Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 """
 import logging
-from typing import Dict, List, Optional
-import logging
+from typing import Dict, List
 import pyqtgraph as pg
-from PySide6 import QtCore
 
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.core.data_model import Recording
@@ -98,7 +96,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 vb = plot_item.getViewBox()
                 if vb:
                     # Tag viewbox with ID for signal handling (legacy need?)
-                    # Base class already connects signals using chan_key, 
+                    # Base class already connects signals using chan_key,
                     # but ExplorerTab might check this attribute manually?
                     # Let's keep it to be safe.
                     vb._synaptipy_chan_id = chan_key
@@ -116,4 +114,3 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 plot_item.getAxis("bottom").showLabel(False)
 
         return channel_keys
-

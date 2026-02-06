@@ -680,3 +680,69 @@ def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
 
     pen = pg.mkPen(color=color, width=width)
     return pen
+
+
+def apply_plot_theme(plot_widget, background_color: str = "white", axis_color: str = "black"):
+    """
+    Apply consistent theme/styling to a PlotItem or PlotWidget.
+    
+    This ensures all plot widgets have the same visual appearance
+    (axis colors, labels, background, etc.) throughout the application.
+    
+    Args:
+        plot_widget: A pyqtgraph PlotItem or PlotWidget
+        background_color: Color for the background (default: white)
+        axis_color: Color for axis lines and labels (default: black)
+    """
+    from PySide6.QtGui import QColor, QFont
+    
+    if plot_widget is None:
+        return
+    
+    try:
+        # Set background color on ViewBox
+        vb = plot_widget.getViewBox() if hasattr(plot_widget, 'getViewBox') else None
+        if vb:
+            vb.setBackgroundColor(background_color)
+        
+        # Get axes
+        axes = ['bottom', 'left', 'top', 'right']
+        for axis_name in axes:
+            try:
+                axis = plot_widget.getAxis(axis_name)
+                if axis:
+                    # Set axis line color (pen)
+                    axis.setPen(pg.mkPen(color=axis_color, width=1))
+                    
+                    # Set tick text color
+                    axis.setTextPen(pg.mkPen(color=axis_color))
+                    
+                    # Set label style (text color)
+                    axis.setStyle(tickFont=QFont("Arial", 9))
+                    axis.label.setDefaultTextColor(QColor(axis_color))
+            except Exception:
+                pass  # Some axes may not exist
+        
+        # Set title color if exists
+        title_item = plot_widget.titleLabel
+        if hasattr(title_item, 'setDefaultTextColor'):
+            title_item.setDefaultTextColor(QColor(axis_color))
+        
+        log.debug(f"Applied plot theme to {type(plot_widget).__name__}")
+        
+    except Exception as e:
+        log.warning(f"Could not fully apply plot theme: {e}")
+
+
+def apply_theme_to_all_plots(plot_widgets: list, background_color: str = "white", axis_color: str = "black"):
+    """
+    Apply consistent theme to a list of plot widgets.
+    
+    Args:
+        plot_widgets: List of PlotItem or PlotWidget objects
+        background_color: Color for the background (default: white)
+        axis_color: Color for axis lines and labels (default: black)
+    """
+    for widget in plot_widgets:
+        apply_plot_theme(widget, background_color, axis_color)
+

@@ -62,7 +62,7 @@ class Channel:
                 self.data_trials: List[np.ndarray] = (
                     [np.asarray(data_trials, dtype=float)] if data_trials is not None else []
                 )
-            except Exception as e:
+            except (TypeError, ValueError) as e:
                 log.error(f"Could not convert data_trials for channel '{name}' to list of arrays: {e}")
                 self.data_trials = []  # Assign empty list on failure
         else:
@@ -199,7 +199,7 @@ class Channel:
 
                 return data
 
-            except Exception as e:
+            except (TypeError, ValueError, IndexError) as e:
                 log.error(f"Failed to load trial {trial_index} data lazily for channel {self.id}: {e}")
                 return None
 
@@ -249,7 +249,7 @@ class Channel:
                     # Handle differing lengths (e.g., pad or error)
                     log.warning(f"Channel {self.id}: Trials have different lengths, cannot average directly.")
                     return None
-            except Exception as e:
+            except (TypeError, ValueError, IndexError) as e:
                 log.error(f"Channel {self.id}: Error averaging trials: {e}")
                 return None
         return None
@@ -288,7 +288,7 @@ class Channel:
                 else:
                     log.warning(f"Channel {self.id}: Current trials have different lengths, cannot average.")
                     return None
-            except Exception as e:
+            except (TypeError, ValueError, IndexError) as e:
                 log.error(f"Channel {self.id}: Error averaging current trials: {e}")
                 return None
         return None

@@ -5,9 +5,9 @@ Unified Plot Canvas Base Class.
 Wraps PyQtGraph's GraphicsLayoutWidget with standard Synaptipy configuration.
 """
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore
 
 from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 
@@ -26,7 +26,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
         # Create the widget using factory for Windows safety
         self.widget = SynaptipyPlotFactory.create_graphics_layout(parent)
         self.widget.setBackground("white")
@@ -49,7 +49,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     def add_plot(self, plot_id: str, row: int = None, col: int = None, **kwargs) -> pg.PlotItem:
         """
         Add a plot item to the layout.
-        
+
         Args:
             plot_id: Unique identifier for the plot
             row: Row index in layout
@@ -65,27 +65,27 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
-        
+
         # Apply standard configuration
         self._configure_plot_item(plot_item, plot_id)
-        
+
         # Store
         self.plot_items[plot_id] = plot_item
         if self._main_plot_id is None:
             self._main_plot_id = plot_id
-            
+
         return plot_item
 
     def _configure_plot_item(self, plot_item: pg.PlotItem, plot_id: str):
         """Apply standard configuration to a plot item."""
         # Grid
         plot_item.showGrid(x=True, y=True, alpha=0.3)
-        
+
         # White background for ViewBox
         if plot_item.getViewBox():
             plot_item.getViewBox().setBackgroundColor("white")
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
-            
+
             # Connect range signals
             plot_item.getViewBox().sigXRangeChanged.connect(
                 lambda _, range: self.x_range_changed.emit(plot_id, range)
@@ -93,6 +93,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             plot_item.getViewBox().sigYRangeChanged.connect(
                 lambda _, range: self.y_range_changed.emit(plot_id, range)
             )
+        
+        # Apply consistent theme to axis colors, labels, etc.
+        try:
+            from Synaptipy.shared.plot_customization import apply_plot_theme
+            apply_plot_theme(plot_item, background_color="white", axis_color="black")
+        except ImportError:
+            log.debug("plot_customization module not available for theming")
 
     def get_plot(self, plot_id: str) -> Optional[pg.PlotItem]:
         return self.plot_items.get(plot_id)
@@ -108,22 +115,22 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         plot = self.get_plot(plot_id)
         if not plot:
             return
-            
+
         # Robust clearing
         for item in plot.listDataItems():
             try:
                 plot.removeItem(item)
             except Exception:
                 pass
-        
+
         # Also remove any InfiniteLines or other items if needed?
-        # Typically we just want to remove data. 
-        # CAUTION: plot.clear() removes everything including labels sometimes? 
+        # Typically we just want to remove data.
+        # CAUTION: plot.clear() removes everything including labels sometimes?
         # PG's plot.clear() usually removes all items.
-        # Let's try to be specific if we want to keep grid/labels, 
+        # Let's try to be specific if we want to keep grid/labels,
         # or just rely on re-adding them if we used plot.clear().
         # Actually plot.clear() is usually fine for PlotItem.
-        plot.clear() 
+        plot.clear()
 
     def set_main_plot(self, plot_id: str):
         if plot_id in self.plot_items:

@@ -142,9 +142,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         get_plot_customization_signals().preferences_updated.connect(self._on_plot_preferences_updated)
 
     def _on_plot_preferences_updated(self):
-        """Handle global plot preference changes."""
-        # Refresh the plot to apply new styles
-        self._plot_selected_data()
+        """Handle global plot preference changes efficiently."""
+        # Only update pens if we have cached data, otherwise do a full re-plot
+        if self._current_plot_data and self.plot_widget:
+            self._update_plot_pens_only()
+        else:
+            self._plot_selected_data()
 
     # --- ADDED: Method to set global controls (Removed duplicate) ---
     # The actual implementation is further down in the file.
@@ -181,7 +184,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _save_plot(self):
         """Save the current plot using the shared PlotExportDialog."""
-        if not self.plot_widget or not self._selected_item_recording:
+        if not self.plot_widget:
+            QtWidgets.QMessageBox.warning(self, "Export Error", "No plot widget available.")
+            return
+        if not self._selected_item_recording:
+            QtWidgets.QMessageBox.warning(self, "Export Error", "No recording loaded. Please load data first.")
             return
 
         dialog = PlotExportDialog(self)
@@ -305,24 +312,28 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         if self.preprocessing_widget:
             self.preprocessing_widget.set_processing_state(True)
-        
+
         try:
-            # Trigger centralized plotting which now uses the pipeline callback
-            self._plot_selected_data()
-            
+            # Use cached data if available for faster processing
+            if self._current_plot_data and "raw_data" in self._current_plot_data:
+                self._apply_preprocessing_to_cached_data()
+            else:
+                # Fallback to full re-plot
+                self._plot_selected_data()
+
             # Processing is synchronous, so just finish up
             self._is_preprocessing = False
             if self.preprocessing_widget:
                 self.preprocessing_widget.set_processing_state(False)
-            
+
         except Exception as e:
             log.error(f"Failed to start preprocessing: {e}", exc_info=True)
             self._on_preprocessing_error(e)
 
     def _on_preprocessing_complete(self, result_data):
         """
-        Legacy callback. 
-        If result_data is provided, it updates plot. 
+        Legacy callback.
+        If result_data is provided, it updates plot.
         If None (from synchronous flow), it does nothing (handled in caller).
         """
         self._is_preprocessing = False
@@ -337,7 +348,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self._preprocessed_data is None:
             self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
         self._preprocessed_data['data'] = result_data
-        
+
         if self._current_plot_data:
             self._current_plot_data['data'] = result_data
 
@@ -357,6 +368,78 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.error(f"Preprocessing error: {error}")
         QtWidgets.QMessageBox.critical(self, "Processing Error", f"An error occurred:\n{error}")
+
+    def _apply_preprocessing_to_cached_data(self):
+        """Apply current pipeline to cached raw data and re-plot efficiently."""
+        if not self._current_plot_data or "raw_data" not in self._current_plot_data:
+            # Fallback to full re-plot if no cached data
+            log.debug("No cached data, falling back to full re-plot")
+            self._plot_selected_data()
+            return
+
+        raw_data = self._current_plot_data["raw_data"]
+        raw_time = self._current_plot_data["raw_time"]
+        fs = self._current_plot_data.get("sampling_rate", 1.0)
+        chan_id = self._current_plot_data.get("channel_id")
+
+        processed_data = raw_data.copy()
+        if self._active_preprocessing_settings and self.pipeline:
+            result = self.pipeline.process(raw_data, fs, raw_time)
+            if result is not None:
+                processed_data = result
+
+        # Update cache with processed data
+        self._current_plot_data["data"] = processed_data
+
+        # Clear and re-plot
+        self.plot_widget.clear()
+        data_source = self._current_plot_data.get("data_source", "")
+        trial_pen = get_single_trial_pen()
+        avg_pen = get_average_pen()
+
+        # For average, plot individual trials first (background)
+        if data_source == "average" and self._selected_item_recording and chan_id:
+            channel = self._selected_item_recording.channels.get(chan_id)
+            if channel:
+                # Get indices to plot
+                indices_to_plot = []
+                if hasattr(self, "_filtered_indices") and self._filtered_indices:
+                    indices_to_plot = sorted(list(self._filtered_indices))
+                else:
+                    num_trials = getattr(channel, "num_trials", 0)
+                    indices_to_plot = list(range(num_trials))
+
+                # Plot each trial with preprocessing
+                for trial_idx in indices_to_plot:
+                    try:
+                        trial_data = channel.get_data(trial_idx)
+                        trial_time = channel.get_relative_time_vector(trial_idx)
+
+                        if trial_data is not None and trial_time is not None:
+                            if self._active_preprocessing_settings and self.pipeline:
+                                processed_trial = self.pipeline.process(trial_data, fs, trial_time)
+                                if processed_trial is not None:
+                                    trial_data = processed_trial
+                            self.plot_widget.plot(trial_time, trial_data, pen=trial_pen)
+                    except (ValueError, IndexError) as e:
+                        log.debug(f"Could not plot trial {trial_idx}: {e}")
+
+            # Plot average on top
+            self.plot_widget.plot(raw_time, processed_data, pen=avg_pen)
+        else:
+            # Single trial - just plot it
+            self.plot_widget.plot(raw_time, processed_data, pen=trial_pen)
+
+        # Restore labels
+        self.plot_widget.setLabel("bottom", "Time", units="s")
+        self.plot_widget.setLabel("left", self._current_plot_data.get("channel_name", ""),
+                                  units=self._current_plot_data.get("units", ""))
+
+        # Auto-range to fit new data
+        self.auto_range_plot()
+
+        self._on_data_plotted()
+        log.debug("Preprocessing applied to cached data")
 
     def _pipeline_process_adapter(
         self, data_in: np.ndarray, fs: float, params: Dict[str, Any], time_vector: Optional[np.ndarray] = None
@@ -437,7 +520,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Usage of SynaptipyPlotCanvas
         self.plot_canvas = SynaptipyPlotCanvas(parent=self)
-        
+
         # Add the main analysis plot item
         self.plot_widget = self.plot_canvas.add_plot("main_analysis_plot", row=0, col=0)
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
@@ -466,7 +549,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # PlotZoomSyncManager takes 'plot_widget' usually.
         # If we pass the PlotItem (self.plot_widget), it might work if it uses getViewBox().
         # Let's check `_setup_zoom_sync` implementation below.
-        
+
         self._setup_zoom_sync()
 
         log.debug(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
@@ -783,11 +866,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _on_item_load_success(self, recording: Optional[Recording]):
         """Callback when async loading completes successfully."""
         self._selected_item_recording = recording
-        
+
         # Re-enable widget immediately so UI updates (which check isEnabled) can succeed
         self.setEnabled(True)
         QtWidgets.QApplication.restoreOverrideCursor()
-        
+
         if recording:
             log.debug(f"{self.__class__.__name__}: Async load success. Channels: {len(recording.channels)}")
         else:
@@ -808,14 +891,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         exctype, value, tb_str = err_tuple
         log.error(f"{self.__class__.__name__}: Async load failed: {value}")
         log.debug(f"Traceback: {tb_str}")
-        
+
         # Re-enable widget
         self.setEnabled(True)
         QtWidgets.QApplication.restoreOverrideCursor()
-        
+
         QtWidgets.QMessageBox.critical(self, "Load Error", f"Failed to load data:\n{value}")
         self._selected_item_recording = None
-        
+
         # Still update UI to reflect potential empty state or error state
         # Still update UI to reflect potential empty state or error state
         try:
@@ -1254,18 +1337,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Get trial info from first channel
         first_channel = next(iter(self._selected_item_recording.channels.values()), None)
-        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
         num_trials = 0
 
         if first_channel:
             num_trials = getattr(first_channel, "num_trials", 0)
-            # Check for average data
-            if hasattr(first_channel, "get_averaged_data") and first_channel.get_averaged_data() is not None:
-                pass
-            elif hasattr(first_channel, "has_average_data") and first_channel.has_average_data():
-                pass
-            elif getattr(first_channel, "_averaged_data", None) is not None:
-                pass
 
         # Populate based on item type
         if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
@@ -1332,10 +1407,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # 0. Preserve View State (Sticky Zoom Logic)
             view_state = None
             should_preserve_view = False
-            
+
             if self.plot_widget:
                 view_state = self.plot_widget.viewRange()
-                
+
                 # Logic: Preserve view if preprocessing active OR if user is zoomed in
                 if self._active_preprocessing_settings:
                     should_preserve_view = True
@@ -1347,10 +1422,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                             # Use finite min/max in case of NaNs, or just first/last if sorted
                             # Time is usually sorted
                             data_span = float(data_time[-1] - data_time[0])
-                            
+
                             current_x_view = view_state[0]
                             view_span = float(current_x_view[1] - current_x_view[0])
-                            
+
                             # If view covers less than 95% of data, consider it zoomed
                             # Also check if we are significantly panned away (center shift)
                             # But span check is usually sufficient for "zoomed in"
@@ -1380,34 +1455,36 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Use customized single trial pen for context
             trial_pen = get_single_trial_pen()
             avg_pen = get_average_pen()
-            
+
             for ctx_trace in plot_package.context_traces:
                 self.plot_widget.plot(ctx_trace.time, ctx_trace.data, pen=trial_pen)
 
             # 4. Plot Main Trace
             # When average is selected, plot all trials underneath with transparency
             if plot_package.data_source == "average":
-                # Only plot individual trials if we have a filtered set or if we want to show all?
-                # The customized 'avg_pen' usually handles the average trace itself.
-                # If we want to show the population variance (all trials), we can plot them.
-                # Only plot individual trials if we have a filtered set or if we want to show all?
-                # The customized 'avg_pen' usually handles the average trace itself.
-                # If we want to show the population variance (all trials), we can plot them.
-                # Logic: If 'filtered_indices' is set, we plot those.
-                # If not, maybe we shouldn't plot ALL for performance?
-                # Explorer Tab plots them. Let's do it if indices are known.
-                
+                log.debug(f"[TRIAL-OVERLAY] data_source is 'average', plotting background trials")
                 # Get indices used for this average
                 indices_to_plot = []
                 if hasattr(self, "_filtered_indices") and self._filtered_indices:
                     indices_to_plot = sorted(list(self._filtered_indices))
+                    log.debug(f"[TRIAL-OVERLAY] Using filtered indices: {len(indices_to_plot)} trials")
                 else:
                     # If no specific filter is set, plot ALL trials
                     # (This is the standard behavior: show population behind average)
                     channel = self._selected_item_recording.channels.get(chan_id)
                     if channel:
+                        # Try multiple ways to get trial count
                         num_trials = getattr(channel, "num_trials", 0)
+                        if num_trials == 0:
+                            # Fallback: check data_trials length
+                            num_trials = len(getattr(channel, "data_trials", []))
+                        if num_trials == 0:
+                            # Fallback: check trial_count
+                            num_trials = getattr(channel, "trial_count", 0)
                         indices_to_plot = list(range(num_trials))
+                        log.debug(f"[TRIAL-OVERLAY] No filter, using all {num_trials} trials")
+                    else:
+                        log.warning(f"[TRIAL-OVERLAY] Channel {chan_id} not found in recording")
 
                 # If valid indices found, plot them
                 if indices_to_plot:
@@ -1445,6 +1522,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     pen=trial_pen, name=plot_package.label
                 )
 
+            self.plot_widget.setLabel("bottom", "Time", units="s")
             self.plot_widget.setLabel("left", plot_package.channel_name, units=plot_package.units)
             self.plot_widget.setTitle(f"{plot_package.channel_name} - {plot_package.label}")
 
@@ -1453,10 +1531,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 y_range = (float(np.min(plot_package.main_data)), float(np.max(plot_package.main_data)))
                 self.set_data_ranges(x_range, y_range)
 
-            # 6. Store State
+            # 6. Store State (including raw data for efficient preprocessing)
             self._current_plot_data = {
                 "data": plot_package.main_data,
                 "time": plot_package.main_time,
+                "raw_data": plot_package.main_data.copy(),  # Cache raw for preprocessing
+                "raw_time": plot_package.main_time.copy(),  # Cache raw time
                 "channel_id": plot_package.channel_id,
                 "data_source": plot_package.data_source,
                 "units": plot_package.units,
