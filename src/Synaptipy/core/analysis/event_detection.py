@@ -71,7 +71,7 @@ def detect_minis_threshold(
             direction=direction,
         )
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error during threshold event detection: {e}", exc_info=True)
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
 
@@ -217,7 +217,7 @@ def detect_events_deconvolution_custom(
         try:
             sos = signal.butter(4, filter_freq_hz, btype="low", analog=False, output="sos", fs=sample_rate)
             filtered_data = signal.sosfiltfilt(sos, data)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, IndexError) as e:
             log.error(f"Filter error: {e}")
             filtered_data = data.copy()
     else:
@@ -426,7 +426,7 @@ def detect_events_baseline_peak_kinetics(
         try:
             sos = signal.butter(4, filter_freq_hz, "low", fs=sample_rate, output="sos")
             filtered = signal.sosfiltfilt(sos, signal_to_process)
-        except Exception:
+        except (ValueError, TypeError, IndexError):
             filtered = signal_to_process
     else:
         filtered = signal_to_process

@@ -209,7 +209,7 @@ class BatchAnalysisEngine:
                             )
                             # Extend results list with all results from this task
                             results_list.extend(task_results)
-                        except Exception as e:
+                        except (ValueError, TypeError, KeyError, IndexError) as e:
                             log.error(
                                 f"Error processing task {task.get('analysis', 'unknown')} on "
                                 f"{file_path.name}/{channel_name}: {e}",
@@ -228,7 +228,7 @@ class BatchAnalysisEngine:
                                 }
                             )
 
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 log.error(f"Error processing batch file {file_path}: {e}", exc_info=True)
                 # Add error row
                 results_list.append(
@@ -323,7 +323,7 @@ class BatchAnalysisEngine:
                     }
                 )
                 results.append(result_dict)
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 log.error(f"Error running {analysis_name} on average trace: {e}", exc_info=True)
                 results.append(
                     {
@@ -379,7 +379,7 @@ class BatchAnalysisEngine:
                         }
                     )
                     results.append(result_dict)
-                except Exception as e:
+                except (ValueError, TypeError, KeyError, IndexError) as e:
                     log.error(f"Error running {analysis_name} on trial {trial_idx}: {e}", exc_info=True)
                     results.append(
                         {
@@ -429,7 +429,7 @@ class BatchAnalysisEngine:
                     }
                 )
                 results.append(result_dict)
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 log.error(f"Error running {analysis_name} on first trial: {e}", exc_info=True)
                 results.append(
                     {
@@ -510,7 +510,7 @@ class BatchAnalysisEngine:
                     }
                 )
                 results.append(result_dict)
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 log.error(f"Error running {analysis_name} on channel set: {e}", exc_info=True)
                 results.append(
                     {
@@ -582,7 +582,7 @@ class BatchAnalysisEngine:
                     }
                 )
                 results.append(result_dict)
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 log.error(f"Error running {analysis_name} on specific trial {trial_target}: {e}", exc_info=True)
                 results.append(
                     {

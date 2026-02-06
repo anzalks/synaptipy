@@ -56,7 +56,12 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter)
 
-        # --- Left Control Panel ---
+        # --- Left Control Panel (wrapped in scroll area for small screens) ---
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setMinimumWidth(250)
+
         control_panel = QtWidgets.QWidget()
         control_layout = QtWidgets.QVBoxLayout(control_panel)
         control_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
@@ -117,8 +122,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         control_layout.addStretch()
 
-        # Add control panel to splitter
-        splitter.addWidget(control_panel)
+        # Set the control panel as the scroll area widget
+        scroll_area.setWidget(control_panel)
+
+        # Add scroll area to splitter (instead of control_panel directly)
+        splitter.addWidget(scroll_area)
 
         # --- Right Plot Area ---
         plot_container = QtWidgets.QWidget()

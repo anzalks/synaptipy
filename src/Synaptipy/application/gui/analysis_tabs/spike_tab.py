@@ -37,7 +37,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         """Setup UI and initialize plot items."""
         # Call parent to setup layout and plot area
         super()._setup_ui()
-        
+
         # Initialize plot items now that plot_widget is created
         if self.plot_widget:
             self.spike_markers_item = pg.ScatterPlotItem(
@@ -48,13 +48,13 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
             self.plot_widget.addItem(self.spike_markers_item)
             # Z-value high to be on top
             self.spike_markers_item.setZValue(10)
-            
+
             # Threshold line
             self.threshold_line = pg.InfiniteLine(
                 angle=0, movable=False, pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine)
             )
             self.plot_widget.addItem(self.threshold_line)
-            
+
             self.spike_markers_item.setVisible(False)
             self.threshold_line.setVisible(False)
 

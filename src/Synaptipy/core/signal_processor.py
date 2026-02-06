@@ -98,7 +98,7 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         if power_ratio_60 > 10.0:
             results["warnings"].append("Significant 60Hz line noise detected")
 
-    except Exception as e:
+    except (ValueError, TypeError, RuntimeError) as e:
         log.error(f"Error during trace quality check: {e}")
         results["is_good"] = False
         results["error"] = str(e)
@@ -269,7 +269,7 @@ def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> 
         else:
             baseline_offset = mode_result.mode[0]
 
-    except Exception as e:
+    except (ValueError, TypeError, IndexError) as e:
         log.warning(f"Mode calculation failed: {e}. Fallback to median.")
         baseline_offset = np.median(data)
 
@@ -298,11 +298,11 @@ def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
     """
     if data is None or len(data) == 0:
         return data
-        
+
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot detrend.")
         return data
-        
+
     return signal.detrend(data, type='linear')
 
 

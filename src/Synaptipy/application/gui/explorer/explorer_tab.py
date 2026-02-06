@@ -1082,8 +1082,6 @@ class ExplorerTab(QtWidgets.QWidget):
 
         return zoom_val, scroll_val
 
-
-
     # --- Preprocessing Logic ---
     def _handle_preprocessing_request(self, settings: Dict[str, Any]):
         """

@@ -78,7 +78,7 @@ def calculate_rin(
     except IndexError:
         log.exception("IndexError during Rin calculation. Check trace/time vector alignment and window validity.")
         return RinResult(value=None, unit="MOhm", is_valid=False, error_message="IndexError during calculation")
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Rin calculation: {e}")
         return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
 
@@ -152,7 +152,7 @@ def calculate_conductance(
             steady_state_voltage=None,  # Not applicable
         )
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Conductance calculation: {e}")
         return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
 
@@ -202,7 +202,7 @@ def calculate_tau(
     except RuntimeError:
         log.warning("Optimal parameters not found for Tau calculation.")
         return None
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Tau calculation: {e}")
         return None
 
@@ -255,7 +255,7 @@ def calculate_sag_ratio(
         sag_ratio = delta_v_peak / delta_v_ss
         log.debug(f"Calculated Sag Ratio: {sag_ratio:.3f}")
         return sag_ratio
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Sag calculation: {e}")
         return None
 
@@ -429,7 +429,7 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         else:
             return {"rin_mohm": None, "conductance_us": None, "rin_error": result.error_message or "Unknown error"}
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_rin_analysis_wrapper: {e}", exc_info=True)
         return {"rin_mohm": None, "conductance_us": None, "rin_error": str(e)}
 
@@ -486,6 +486,6 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         else:
             return {"tau_ms": None, "tau_error": "Tau calculation failed"}
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_tau_analysis_wrapper: {e}", exc_info=True)
         return {"tau_ms": None, "tau_error": str(e)}

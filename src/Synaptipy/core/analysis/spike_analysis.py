@@ -122,7 +122,7 @@ def detect_spikes_threshold(
             exc_info=True,
         )
         return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e))
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error during spike detection: {e}", exc_info=True)
         return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e))
 
@@ -168,7 +168,7 @@ def calculate_spike_features(
             else:
                 thresh_idx = search_start  # Fallback
                 ap_threshold = data[thresh_idx]
-        except Exception:
+        except (ValueError, TypeError, IndexError):
             thresh_idx = peak_idx - 2  # fallback
             ap_threshold = data[thresh_idx]
 
@@ -295,7 +295,7 @@ def calculate_spike_features(
                         # Let's define it as amplitude above the "expected" repolarization curve?
                         # For simplicity: Max voltage in the ADP window minus the voltage at AP end
                         adp_amplitude = adp_val - data[ap_end_idx]
-        except Exception:
+        except (ValueError, TypeError, IndexError):
             pass
 
         # 5. Maximum rise and fall slopes (max/min dV/dt)
@@ -355,7 +355,7 @@ def analyze_multi_sweep_spikes(
             # Add trial index to metadata
             result.metadata["sweep_index"] = i
             results.append(result)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, IndexError) as e:
             log.error(f"Error analyzing sweep {i}: {e}")
             # Return an error result for this sweep
             error_result = SpikeTrainResult(
@@ -500,6 +500,6 @@ def run_spike_detection_wrapper(
         else:
             return {"spike_count": 0, "mean_freq_hz": 0.0, "spike_error": result.error_message or "Unknown error"}
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_spike_detection_wrapper: {e}", exc_info=True)
         return {"spike_count": 0, "mean_freq_hz": 0.0, "spike_error": str(e)}

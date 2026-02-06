@@ -66,7 +66,7 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
             # Use time relative to start of window for stability
             window_time = time[start_idx:end_idx] - time[start_idx]
             slope, _ = np.polyfit(window_time, baseline_data, 1)
-        except Exception:
+        except (ValueError, TypeError, np.linalg.LinAlgError):
             slope = None
 
         log.debug(f"Calculated RMP = {rmp:.3f} over {baseline_data.size} points.")
@@ -81,7 +81,7 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
     except IndexError as e:
         log.error(f"calculate_rmp: Indexing error: {e}")
         return RmpResult(value=None, unit="mV", is_valid=False, error_message=str(e))
-    except Exception as e:
+    except (ValueError, TypeError, RuntimeError) as e:
         log.error(f"Error during RMP calculation: {e}", exc_info=True)
         return RmpResult(value=None, unit="mV", is_valid=False, error_message=str(e))
 
@@ -250,7 +250,7 @@ def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         else:
             return {"rmp_mv": None, "rmp_std": None, "rmp_error": result.error_message or "Unknown error"}
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_rmp_analysis_wrapper: {e}", exc_info=True)
         return {"rmp_mv": None, "rmp_std": None, "rmp_error": str(e)}
 

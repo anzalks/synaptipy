@@ -106,7 +106,7 @@ def calculate_fi_curve(
                 slope, intercept, r_value, p_value, std_err = linregress(x, y)
                 fi_slope = slope
                 r_squared = r_value**2
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 log.warning(f"Linear regression failed: {e}")
 
     return {
@@ -215,6 +215,6 @@ def run_excitability_analysis_wrapper(
             "current_steps": results["current_steps"],
         }
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_excitability_analysis_wrapper: {e}", exc_info=True)
         return {"excitability_error": str(e)}
