@@ -41,6 +41,7 @@ def base_tab(mock_neo_adapter, qtbot):
         def _setup_ui(self): 
             layout = QtWidgets.QVBoxLayout(self)
             self._setup_plot_area(layout)
+            self._setup_data_selection_ui(layout)
         def _update_ui_for_selected_item(self): pass
         def _gather_analysis_parameters(self): return {}
         def _execute_core_analysis(self, params, data): return {}
@@ -91,30 +92,44 @@ def test_preprocessing_flow(base_tab):
     rec = create_mock_recording()
     base_tab._selected_item_recording = rec
     
-    # Mock the plot_selected_data to intercept
-    # But we want to test that _handle_preprocessing_request calls it
-    # and that the processing actually happens in the manager via the callback.
+    # Setup comboboxes to allow plotting
+    base_tab.signal_channel_combobox.addItem("Ch1", "ch1")
+    base_tab.signal_channel_combobox.setEnabled(True)
+    base_tab.data_source_combobox.addItem("Trial 1", 0)
+    base_tab.data_source_combobox.setEnabled(True)
     
-    # Let's inspect the active settings
+    # Lets inspect the active settings
     settings = {'type': 'filter', 'method': 'lowpass', 'cutoff': 100}
     
     # We can mock _plot_selected_data to see if it gets called
     with patch.object(base_tab, '_plot_selected_data', wraps=base_tab._plot_selected_data) as mock_plot:
         with patch('Synaptipy.application.controllers.analysis_plot_manager.AnalysisPlotManager.prepare_plot_data') as mock_prep:
-             # We mock prepare_plot_data to avoid complex return types for now, 
-             # just checking if it is CALLED with our settings and callback
-            mock_prep.return_value = None 
-            
+             # Return a dummy package so it doesn't return None
+            mock_prep.return_value = MagicMock(main_data=np.array([0,1]), main_time=np.array([0,1]), context_traces=[])
+
             base_tab._handle_preprocessing_request(settings)
             
             assert base_tab._active_preprocessing_settings == settings
             assert mock_plot.called
             
             # Verify AnalysisPlotManager called with correct args
+            assert mock_prep.called
             args, kwargs = mock_prep.call_args
             assert kwargs.get('preprocessing_settings') == settings
             # Verify callback is passed
             assert 'process_callback' in kwargs
+            
+            # Verify pipeline was updated
+            assert len(base_tab.pipeline._steps) > 0
+            assert base_tab.pipeline._steps[0] == settings
+            
+def test_pipeline_cleared_on_update(base_tab):
+    """Verify pipeline is cleared when state is updated."""
+    base_tab.pipeline.add_step({'type': 'dummy'})
+    assert len(base_tab.pipeline._steps) == 1
+    
+    base_tab.update_state([])
+    assert len(base_tab.pipeline._steps) == 0
 
 def test_spike_tab_plot_items(spike_tab):
     """Verify SpikeTab adds its items to the plot widget."""
@@ -125,7 +140,8 @@ def test_spike_tab_plot_items(spike_tab):
     assert spike_tab.threshold_line is not None
     
     # Verify they are in the plot
-    # plot_widget.items() returns list of items
-    items = spike_tab.plot_widget.items() if hasattr(spike_tab.plot_widget, 'items') else spike_tab.plot_widget.plotItem.items
+    # plot_widget in base refactor is a PlotItem
+    items = spike_tab.plot_widget.items
+    
     assert spike_tab.spike_markers_item in items
     assert spike_tab.threshold_line in items

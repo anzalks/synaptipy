@@ -270,57 +270,44 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Trigger centralized plotting which now uses the pipeline callback
             self._plot_selected_data()
             
-            # Since processing is now synchronous/on-demand during plotting, we are done
-            self._on_preprocessing_complete(None) # Pass None or dummy result
+            # Processing is synchronous, so just finish up
+            self._is_preprocessing = False
+            if self.preprocessing_widget:
+                self.preprocessing_widget.set_processing_state(False)
             
         except Exception as e:
             log.error(f"Failed to start preprocessing: {e}", exc_info=True)
             self._on_preprocessing_error(e)
 
     def _on_preprocessing_complete(self, result_data):
-        """Preprocessing finished successfully."""
+        """
+        Legacy callback. 
+        If result_data is provided, it updates plot. 
+        If None (from synchronous flow), it does nothing (handled in caller).
+        """
         self._is_preprocessing = False
         if self.preprocessing_widget:
             self.preprocessing_widget.set_processing_state(False)
 
-        log.debug("Preprocessing complete.")
+        if result_data is None:
+            return
 
-        # Update cache
+        log.debug("Preprocessing complete (async).")
+        # Legacy Handling for async if needed:
         if self._preprocessed_data is None:
-            # Initialize from current plot data structure if first time
-            self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
-
+             self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
         self._preprocessed_data['data'] = result_data
-
-        # Trigger Re-plot with new data
-        # We need to manually update the plot because `_plot_selected_data` usually fetches raw data.
-        # But we modified `_plot_selected_data` (in our plan, not yet done in code?)
-        # Wait, I need to modify `_plot_selected_data` to checking `self._preprocessed_data`.
-        # For now, let's manually invoke the plotting logic with the new data.
-
-        # Update `_current_plot_data` to point to the new data
+        
         if self._current_plot_data:
             self._current_plot_data['data'] = result_data
-
-        # Re-plot traces
+            
         if self.plot_widget:
             self.plot_widget.clear()
-            # Re-draw the trace
-            # We can't easily call `_plot_selected_data` because it re-reads from file (usually).
-            # So we manually plot here or refactor.
-            # Refactoring `_plot_selected_data` might be risky if subclasses override it aggressively.
-
-            # Safest: Use the standard plotting way if available, or just plot directly here.
             time = self._current_plot_data.get('time')
             if time is not None:
-                self.plot_widget.plot(time, result_data, pen='k')  # Use default pen?
-                self._update_plot_pens_only()  # Apply correct styling
-
-                # IMPORTANT: Trigger any analysis that depends on the data (like Spike Detection)
-                # Subclasses hook into `_on_data_plotted`
+                self.plot_widget.plot(time, result_data, pen='k')
+                self._update_plot_pens_only()
                 self._on_data_plotted()
-            else:
-                log.warning("Time array missing, cannot re-plot.")
 
     def _on_preprocessing_error(self, error):
         """Preprocessing failed."""
@@ -694,6 +681,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._selected_item_index = -1
         # Clear preprocessing cache
         self._preprocessed_data = None
+        self._active_preprocessing_settings = None
+        self.pipeline.clear()
 
         # Clear plot when items change
         if self.plot_widget:
@@ -709,6 +698,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._selected_item_recording = None  # Clear previous loaded recording
         self._preprocessed_data = None  # Clear preprocessing cache on new item
         self._active_preprocessing_settings = None  # Clear settings on new item
+        self.pipeline.clear()
 
         if index < 0 or index >= len(self._analysis_items):
             log.debug(f"{self.__class__.__name__}: No valid analysis item selected (index {index}).")
@@ -1290,10 +1280,35 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # channel = self._selected_item_recording.channels[chan_id] # Unused now as Manager handles it
 
         try:
-            # 0. Preserve View State
+            # 0. Preserve View State (Sticky Zoom Logic)
             view_state = None
+            should_preserve_view = False
+            
             if self.plot_widget:
                 view_state = self.plot_widget.viewRange()
+                
+                # Logic: Preserve view if preprocessing active OR if user is zoomed in
+                if self._active_preprocessing_settings:
+                    should_preserve_view = True
+                elif self._current_plot_data and "time" in self._current_plot_data:
+                    # Check if zoomed in (> 5% reduction from full range)
+                    try:
+                        data_time = self._current_plot_data["time"]
+                        if len(data_time) > 1:
+                            # Use finite min/max in case of NaNs, or just first/last if sorted
+                            # Time is usually sorted
+                            data_span = float(data_time[-1] - data_time[0])
+                            
+                            current_x_view = view_state[0]
+                            view_span = float(current_x_view[1] - current_x_view[0])
+                            
+                            # If view covers less than 95% of data, consider it zoomed
+                            # Also check if we are significantly panned away (center shift)
+                            # But span check is usually sufficient for "zoomed in"
+                            if data_span > 0 and (view_span / data_span) < 0.95:
+                                should_preserve_view = True
+                    except Exception as e:
+                        log.debug(f"Error checking zoom state: {e}")
 
             # 1. Clear plot
             self.plot_widget.clear()
@@ -1347,10 +1362,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                             if trial_data is not None and trial_time is not None:
                                 # Apply any preprocessing if active
                                 if self._active_preprocessing_settings:
-                                    processed = self._process_signal_data(
+                                    processed = self.pipeline.process(
                                         trial_data,
                                         plot_package.sampling_rate,
-                                        self._active_preprocessing_settings,
                                         trial_time
                                     )
                                     if processed is not None:
@@ -1394,20 +1408,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             }
 
             # 7. Auto-range or Restore View
-            # Only restore previous view if it was meaningful (not default 0-1 range)
-            should_restore = False
-            if view_state:
-                x_view, y_view = view_state
-                # Check if this was a meaningful view (not default 0-1 range)
-                is_default_x = abs(x_view[0]) < 0.01 and abs(x_view[1] - 1.0) < 0.01
-                is_default_y = abs(y_view[0]) < 0.01 and abs(y_view[1] - 1.0) < 0.01
-                if not (is_default_x and is_default_y):
-                    should_restore = True
-
-            if should_restore:
+            # Apply Sticky Zoom Logic
+            if should_preserve_view and view_state:
+                # User was zoomed or processing active -> Keep the view
                 self.plot_widget.setRange(xRange=view_state[0], yRange=view_state[1], padding=0)
             else:
-                # First time or default - auto-range to fit data
+                # User was in full view (or first plot) -> Auto-range to new data
                 self.auto_range_plot()
 
             self._on_data_plotted()
