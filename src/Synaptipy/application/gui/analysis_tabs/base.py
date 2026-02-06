@@ -20,18 +20,23 @@ import numpy as np
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.application.controllers.analysis_plot_manager import AnalysisPlotManager
-from Synaptipy.shared.error_handling import SynaptipyError, FileReadError
 from Synaptipy.shared.styling import (
     style_button,
 )
 from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
-from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
-from Synaptipy.core import signal_processor
 
 # NEW: Unified Plotting & Pipeline
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.shared.plot_customization import (
+    get_average_pen,
+    get_single_trial_pen,
+    get_plot_customization_signals
+)
+from Synaptipy.shared.plot_exporter import PlotExporter
+from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
 
 log = logging.getLogger(__name__)
 
@@ -133,6 +138,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
+        # Connect Customization Signals
+        get_plot_customization_signals().preferences_updated.connect(self._on_plot_preferences_updated)
+
+    def _on_plot_preferences_updated(self):
+        """Handle global plot preference changes."""
+        # Refresh the plot to apply new styles
+        self._plot_selected_data()
+
     # --- ADDED: Method to set global controls (Removed duplicate) ---
     # The actual implementation is further down in the file.
 
@@ -167,18 +180,45 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.autoRange()
 
     def _save_plot(self):
-        """Save the current plot as an image."""
-        if not self.plot_widget:
+        """Save the current plot using the shared PlotExportDialog."""
+        if not self.plot_widget or not self._selected_item_recording:
             return
 
-        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Plot", "", "Images (*.png *.jpg *.svg)")
+        dialog = PlotExportDialog(self)
+        if dialog.exec():
+            settings = dialog.get_settings()
+            fmt = settings["format"]
+            dpi = settings["dpi"]
 
-        if file_path:
-            # Use pyqtgraph exporter
-            import pyqtgraph.exporters
+            # Default filename
+            default_name = f"plot_{self._selected_item_recording.source_file.stem}_analysis.{fmt}"
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save Plot", str(Path.home() / default_name), f"Images (*.{fmt})"
+            )
 
-            exporter = pyqtgraph.exporters.ImageExporter(self.plot_widget)
-            exporter.export(file_path)
+            if filename:
+                # Provide context for export (Analysis tabs specific)
+                export_config = {
+                    "plot_mode": "Analysis",  # Custom mode string
+                    "selected_trial_indices": self._filtered_indices or "All",
+                    "channel": self.signal_channel_combobox.currentText() if self.signal_channel_combobox else "",
+                    "data_source": self.data_source_combobox.currentText() if self.data_source_combobox else ""
+                }
+
+                exporter = PlotExporter(
+                    recording=self._selected_item_recording,
+                    plot_canvas_widget=self.plot_widget,
+                    plot_canvas_wrapper=None,  # Analysis tabs don't use PlotCanvas wrapper same way
+                    config=export_config
+                )
+
+                try:
+                    exporter.export(filename, fmt, dpi)
+                    if hasattr(self, "status_label") and self.status_label:
+                        self.status_label.setText(f"Status: Plot saved to {filename}")
+                except Exception as e:
+                    log.error(f"Error saving plot: {e}")
+                    QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to save plot:\n{e}")
 
     # --- END ADDED ---
 
@@ -295,12 +335,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug("Preprocessing complete (async).")
         # Legacy Handling for async if needed:
         if self._preprocessed_data is None:
-             self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
+            self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
         self._preprocessed_data['data'] = result_data
         
         if self._current_plot_data:
             self._current_plot_data['data'] = result_data
-            
+
         if self.plot_widget:
             self.plot_widget.clear()
             time = self._current_plot_data.get('time')
@@ -407,9 +447,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Standard interaction mode
         vb = self.plot_widget.getViewBox()
         if vb:
-             vb.setMouseMode(pg.ViewBox.RectMode)
+            vb.setMouseMode(pg.ViewBox.RectMode)
 
-        # Add windows signal protection? handled by new canvas? 
+        # Add windows signal protection? handled by new canvas?
         # Base canvas handles signal protection if needed, but we can verify.
         # For now, rely on canvas.
 
@@ -710,81 +750,86 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         selected_item = self._analysis_items[index]
-        item_type = selected_item.get("target_type")
         item_path = selected_item.get("path")
+        item_type = selected_item.get("target_type")
 
         log.debug(f"{self.__class__.__name__}: Selected analysis item {index}: Type={item_type}, Path={item_path}")
 
-        # If the selected item is a whole recording, we need to load it
-        if item_type == "Recording" and item_path:
-            try:
-                log.debug(f"{self.__class__.__name__}: Loading recording for analysis item: {item_path.name}")
-                # Force process events to flush logs and update UI before blocking read
-                QtWidgets.QApplication.processEvents()
+        # Show Loading State if we have a status label or similar
+        # For now, we can maybe set the cursor?
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        self.setEnabled(False)  # Disable interaction while loading
 
-                # Use the NeoAdapter passed during init
-                self._selected_item_recording = self.neo_adapter.read_recording(item_path)
+        # Clear plot immediately
+        if self.plot_widget:
+            self.plot_widget.clear()
 
-                if self._selected_item_recording:
-                    log.debug(
-                        f"{self.__class__.__name__}: Successfully loaded {item_path.name} "
-                        f"with {len(self._selected_item_recording.channels)} channels."
-                    )
-                else:
-                    log.error(f"{self.__class__.__name__}: read_recording returned None for {item_path.name}")
+        # Define the loading task
+        def load_task(path):
+            if not path:
+                return None
+            return self.neo_adapter.read_recording(path)
 
-            except (FileNotFoundError, FileReadError, SynaptipyError) as e:
-                log.error(f"{self.__class__.__name__}: Failed to load recording {item_path.name}: {e}")
-                QtWidgets.QMessageBox.warning(
-                    self, "Load Error", f"Could not load data for selected item:\n{item_path.name}\n\nError: {e}"
-                )
-                self._selected_item_recording = None
-            except Exception as e:
-                log.exception(f"{self.__class__.__name__}: Unexpected error loading recording {item_path.name}")
-                QtWidgets.QMessageBox.critical(
-                    self, "Load Error", f"Unexpected error loading:\n{item_path.name}\n\n{e}"
-                )
-                self._selected_item_recording = None
-        elif item_type in ["Current Trial", "Average Trace", "All Trials"]:
-            if item_path:
-                try:
-                    log.debug(f"{self.__class__.__name__}: Loading source recording for item: {item_path.name}")
-                    QtWidgets.QApplication.processEvents()
-                    self._selected_item_recording = self.neo_adapter.read_recording(item_path)
-                    if not self._selected_item_recording:
-                        log.error(
-                            f"{self.__class__.__name__}: read_recording returned None for source {item_path.name}"
-                        )
-                except Exception as e:
-                    log.error(
-                        f"{self.__class__.__name__}: Failed to load source recording {item_path.name} "
-                        f"for item type {item_type}: {e}"
-                    )
-                    self._selected_item_recording = None
-            else:
-                log.warning(f"{self.__class__.__name__}: Item type {item_type} selected but path is missing.")
-                self._selected_item_recording = None
+        # Launch Worker
+        worker = AnalysisWorker(load_task, item_path)
+        worker.signals.result.connect(self._on_item_load_success)
+        worker.signals.error.connect(self._on_item_load_error)
+        # We can also connect finished to restore cursor
+        worker.signals.finished.connect(self._on_item_load_finished)
+
+        log.debug(f"{self.__class__.__name__}: Starting async load for {item_path}")
+        self.thread_pool.start(worker)
+
+    def _on_item_load_success(self, recording: Optional[Recording]):
+        """Callback when async loading completes successfully."""
+        self._selected_item_recording = recording
+        
+        # Re-enable widget immediately so UI updates (which check isEnabled) can succeed
+        self.setEnabled(True)
+        QtWidgets.QApplication.restoreOverrideCursor()
+        
+        if recording:
+            log.debug(f"{self.__class__.__name__}: Async load success. Channels: {len(recording.channels)}")
         else:
-            log.warning(f"{self.__class__.__name__}: Unknown or unhandled analysis item type: {item_type}")
-            self._selected_item_recording = None
+            log.warning(f"{self.__class__.__name__}: Async load returned None/Empty.")
 
-        # --- Call Subclass UI Update ---
-        # This should be called regardless of whether loading succeeded,
-        # so the subclass can update its UI (e.g., disable widgets if loading failed)
+        # Trigger UI update
         try:
-            # Clear plot before updating UI for new selection
-            if self.plot_widget:
-                self.plot_widget.clear()
-
             # PHASE 1: Populate channel and data source comboboxes if they exist
             if self.signal_channel_combobox and self.data_source_combobox:
                 self._populate_channel_and_source_comboboxes()
 
             self._update_ui_for_selected_item()
-        except NotImplementedError:  # Catch if subclass forgot to implement
-            log.error(f"Subclass {self.__class__.__name__} must implement _update_ui_for_selected_item()")
         except Exception as e:
-            log.error(f"Error calling _update_ui_for_selected_item in {self.__class__.__name__}: {e}", exc_info=True)
+            log.error(f"Error updating UI after load: {e}", exc_info=True)
+
+    def _on_item_load_error(self, err_tuple):
+        """Callback when async loading fails."""
+        exctype, value, tb_str = err_tuple
+        log.error(f"{self.__class__.__name__}: Async load failed: {value}")
+        log.debug(f"Traceback: {tb_str}")
+        
+        # Re-enable widget
+        self.setEnabled(True)
+        QtWidgets.QApplication.restoreOverrideCursor()
+        
+        QtWidgets.QMessageBox.critical(self, "Load Error", f"Failed to load data:\n{value}")
+        self._selected_item_recording = None
+        
+        # Still update UI to reflect potential empty state or error state
+        # Still update UI to reflect potential empty state or error state
+        try:
+            self._update_ui_for_selected_item()
+        except Exception:
+            pass
+
+    def _on_item_load_finished(self):
+        """Cleanup after loading (success or error)."""
+        # Redundant safety measure
+        if not self.isEnabled():
+            self.setEnabled(True)
+            QtWidgets.QApplication.restoreOverrideCursor()
+        log.debug(f"{self.__class__.__name__}: Async load finished.")
 
     # --- ADDED: Base slot for save button click ---
     @QtCore.Slot()
@@ -1008,10 +1053,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Input Row
         in_layout = QtWidgets.QHBoxLayout()
-        in_layout.addWidget(QtWidgets.QLabel("Every Nth Trial (Period):"))
+        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
         self.nth_trial_input = QtWidgets.QLineEdit()
-        self.nth_trial_input.setPlaceholderText("e.g. 1=All, 10=Every 10th")
-        self.nth_trial_input.setValidator(QtGui.QIntValidator(1, 9999))
+        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
+        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
         self.nth_trial_input.returnPressed.connect(self._on_plot_filtered_trials)
         in_layout.addWidget(self.nth_trial_input)
 
@@ -1081,26 +1126,30 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         try:
             if text_gap:
-                period = int(text_gap)
+                gap = int(text_gap)
             else:
-                period = 1  # Default to All
+                gap = 0  # Default to All (Gap 0)
             start_idx = int(text_start) if text_start else 0
         except ValueError:
             log.warning("Invalid input for trial selection.")
             return
 
         selected_indices = []
-        # Period = Step
-        step = period
+        # Gap Logic: Step = Gap + 1
+        # Gap 0 -> Step 1 (All)
+        # Gap 1 -> Step 2 (Every 2nd)
+        step = gap + 1
 
-        # Guard against zero step
+        # Guard against zero step (shouldn't happen with gap >= 0)
         if step < 1:
             step = 1
 
         for i in range(start_idx, num_trials, step):
             selected_indices.append(i)
 
-        log.info(f"Trial Selection: Period={step}, Start={start_idx} -> Found {len(selected_indices)} trials.")
+        log.info(
+            f"Trial Selection: Gap={gap} (Step={step}), Start={start_idx} -> Found {len(selected_indices)} trials."
+        )
 
         if selected_indices:
             # Store state and redraw using main loop
@@ -1205,27 +1254,27 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Get trial info from first channel
         first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
         num_trials = 0
-        has_average = False
 
         if first_channel:
             num_trials = getattr(first_channel, "num_trials", 0)
             # Check for average data
             if hasattr(first_channel, "get_averaged_data") and first_channel.get_averaged_data() is not None:
-                has_average = True
+                pass
             elif hasattr(first_channel, "has_average_data") and first_channel.has_average_data():
-                has_average = True
+                pass
             elif getattr(first_channel, "_averaged_data", None) is not None:
-                has_average = True
+                pass
 
         # Populate based on item type
         if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
             self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index)
-        elif item_type == "Average Trace" and has_average:
+        elif item_type == "Average Trace":
             self.data_source_combobox.addItem("Average Trace", userData="average")
         else:  # "Recording" or "All Trials"
-            if has_average:
-                self.data_source_combobox.addItem("Average Trace", userData="average")
+            # Always add "Average Trace" (Overlay) option so users can see all trials even if no average exists
+            self.data_source_combobox.addItem("Average Trace", userData="average")
             for i in range(num_trials):
                 self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
 
@@ -1328,51 +1377,61 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 return
 
             # 3. Plot Context Traces
-            gray_pen = pg.mkPen((200, 200, 200), width=1)
+            # Use customized single trial pen for context
+            trial_pen = get_single_trial_pen()
+            avg_pen = get_average_pen()
+            
             for ctx_trace in plot_package.context_traces:
-                self.plot_widget.plot(ctx_trace.time, ctx_trace.data, pen=gray_pen)
+                self.plot_widget.plot(ctx_trace.time, ctx_trace.data, pen=trial_pen)
 
             # 4. Plot Main Trace
-            # Setup Pen
-            try:
-                from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
-                avg_pen = get_average_pen()
-                trial_pen = get_single_trial_pen()
-            except ImportError:
-                avg_pen = pg.mkPen(color=(0, 0, 0), width=2)
-                trial_pen = pg.mkPen(color=(55, 126, 184, 100), width=1)
-
             # When average is selected, plot all trials underneath with transparency
             if plot_package.data_source == "average":
-                # Get the channel to access individual trials
-                channel = self._selected_item_recording.channels.get(chan_id)
-                if channel:
-                    num_trials = getattr(channel, "num_trials", 0)
-                    # Apply filtering if set
-                    trial_indices = range(num_trials)
-                    if hasattr(self, "_filtered_indices") and self._filtered_indices:
-                        trial_indices = sorted(self._filtered_indices)
+                # Only plot individual trials if we have a filtered set or if we want to show all?
+                # The customized 'avg_pen' usually handles the average trace itself.
+                # If we want to show the population variance (all trials), we can plot them.
+                # Only plot individual trials if we have a filtered set or if we want to show all?
+                # The customized 'avg_pen' usually handles the average trace itself.
+                # If we want to show the population variance (all trials), we can plot them.
+                # Logic: If 'filtered_indices' is set, we plot those.
+                # If not, maybe we shouldn't plot ALL for performance?
+                # Explorer Tab plots them. Let's do it if indices are known.
+                
+                # Get indices used for this average
+                indices_to_plot = []
+                if hasattr(self, "_filtered_indices") and self._filtered_indices:
+                    indices_to_plot = sorted(list(self._filtered_indices))
+                else:
+                    # If no specific filter is set, plot ALL trials
+                    # (This is the standard behavior: show population behind average)
+                    channel = self._selected_item_recording.channels.get(chan_id)
+                    if channel:
+                        num_trials = getattr(channel, "num_trials", 0)
+                        indices_to_plot = list(range(num_trials))
 
-                    # Plot each individual trial with transparency
-                    for trial_idx in trial_indices:
-                        try:
-                            trial_data = channel.get_data(trial_idx)
-                            trial_time = channel.get_relative_time_vector(trial_idx)
+                # If valid indices found, plot them
+                if indices_to_plot:
+                    channel = self._selected_item_recording.channels.get(chan_id)
+                    if channel:
+                        for trial_idx in indices_to_plot:
+                            try:
+                                trial_data = channel.get_data(trial_idx)
+                                trial_time = channel.get_relative_time_vector(trial_idx)
 
-                            if trial_data is not None and trial_time is not None:
-                                # Apply any preprocessing if active
-                                if self._active_preprocessing_settings:
-                                    processed = self.pipeline.process(
-                                        trial_data,
-                                        plot_package.sampling_rate,
-                                        trial_time
-                                    )
-                                    if processed is not None:
-                                        trial_data = processed
+                                if trial_data is not None and trial_time is not None:
+                                    # Apply any preprocessing if active
+                                    if self._active_preprocessing_settings:
+                                        processed = self.pipeline.process(
+                                            trial_data,
+                                            plot_package.sampling_rate,
+                                            trial_time
+                                        )
+                                        if processed is not None:
+                                            trial_data = processed
 
-                                self.plot_widget.plot(trial_time, trial_data, pen=trial_pen)
-                        except Exception as e:
-                            log.debug(f"Could not plot trial {trial_idx}: {e}")
+                                    self.plot_widget.plot(trial_time, trial_data, pen=trial_pen)
+                            except Exception as e:
+                                log.debug(f"Could not plot trial {trial_idx}: {e}")
 
                 # Plot the average on top
                 self.plot_widget.plot(
@@ -1386,8 +1445,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     pen=trial_pen, name=plot_package.label
                 )
 
-            # 5. Config Plot
-            self.plot_widget.setLabel("bottom", "Time", units="s")
             self.plot_widget.setLabel("left", plot_package.channel_name, units=plot_package.units)
             self.plot_widget.setTitle(f"{plot_package.channel_name} - {plot_package.label}")
 
