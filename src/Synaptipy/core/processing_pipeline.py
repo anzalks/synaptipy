@@ -72,16 +72,18 @@ class SignalProcessingPipeline:
         if data is None or len(data) == 0:
             return data
 
+        log.debug(f"Pipeline processing with {len(self._steps)} steps: {[s.get('type') for s in self._steps]}")
         result = data.copy()
 
         for step in self._steps:
             try:
                 op_type = step.get('type')
+                log.debug(f"Processing step: {step}")
 
                 if op_type == 'baseline':
                     method = step.get('method', 'mode')
                     if method == 'mode':
-                        decimals = step.get('decimals', 1)
+                        decimals = int(step.get('decimals', 1))
                         result = signal_processor.subtract_baseline_mode(result, decimals=decimals)
                     elif method == 'mean':
                         result = signal_processor.subtract_baseline_mean(result)
@@ -91,8 +93,8 @@ class SignalProcessingPipeline:
                         result = signal_processor.subtract_baseline_linear(result)
                     elif method == 'region':
                         if time_vector is not None:
-                            start_t = step.get('start_t', 0.0)
-                            end_t = step.get('end_t', 0.0)
+                            start_t = float(step.get('start_t', 0.0))
+                            end_t = float(step.get('end_t', 0.0))
                             result = signal_processor.subtract_baseline_region(result, time_vector, start_t, end_t)
                         else:
                             log.warning("Region baseline requested but no time vector provided. Skipping.")
@@ -101,27 +103,41 @@ class SignalProcessingPipeline:
                     method = step.get('method')
                     # Filters usually need 'order' which defaults to 5 in signal_processor if not passed
                     order = int(step.get('order', 5))
+                    log.debug(f"Applying {method} filter with order={order}, fs={fs}")
 
                     if method == 'lowpass':
                         result = signal_processor.lowpass_filter(
-                            result, step.get('cutoff'), fs, order=order
+                            result, float(step.get('cutoff')), fs, order=order
                         )
                     elif method == 'highpass':
                         result = signal_processor.highpass_filter(
-                            result, step.get('cutoff'), fs, order=order
+                            result, float(step.get('cutoff')), fs, order=order
                         )
                     elif method == 'bandpass':
+                        low_cut = float(step.get('low_cut'))
+                        high_cut = float(step.get('high_cut'))
+                        log.debug(f"Bandpass: low_cut={low_cut}, high_cut={high_cut}")
                         result = signal_processor.bandpass_filter(
-                            result, step.get('low_cut'), step.get('high_cut'), fs, order=order
+                            result, low_cut, high_cut, fs, order=order
                         )
                     elif method == 'notch':
                         # Notch filter signature: (data, freq, Q, fs)
                         result = signal_processor.notch_filter(
-                            result, step.get('freq'), step.get('q_factor'), fs
+                            result, float(step.get('freq')), float(step.get('q_factor')), fs
                         )
 
-            except (ValueError, TypeError, KeyError) as e:
-                log.error(f"Error processing step {step}: {e}")
+                # Check for bad data after each step
+                import numpy as np
+                if result is not None:
+                    has_nan = np.any(np.isnan(result))
+                    has_inf = np.any(np.isinf(result))
+                    if has_nan or has_inf:
+                        log.error(f"Step {op_type}/{step.get('method')} produced NaN={has_nan}, Inf={has_inf}")
+                    else:
+                        log.debug(f"Step {op_type} complete. Data range: [{np.min(result):.2f}, {np.max(result):.2f}]")
+
+            except Exception as e:
+                log.error(f"Error processing step {step}: {e}", exc_info=True)
                 # Continue or raise? For UI robustness, maybe log and continue,
                 # but for data correctness, maybe we should know.
                 # Let's log error but keep the data as is from previous step (safe failure).

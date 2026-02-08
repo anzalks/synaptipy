@@ -84,6 +84,10 @@ class AnalyserTab(QtWidgets.QWidget):
         self._analysis_items: List[Dict[str, Any]] = []
         self._loaded_analysis_tabs: List[BaseAnalysisTab] = []
 
+        # --- Global Preprocessing State ---
+        self._global_preprocessing_settings: Optional[Dict[str, Any]] = None
+        self._global_preprocessing_confirmed: bool = False  # Tracks if user confirmed for this session
+
         # --- UI References ---
         # self.source_file_label: Optional[QtWidgets.QLabel] = None  # Replaced by list
         self.source_list_widget: Optional[QtWidgets.QListWidget] = None
@@ -97,6 +101,134 @@ class AnalyserTab(QtWidgets.QWidget):
         self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
         # Initialize with current session state
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
+
+        # Track last active tab for zoom syncing
+        self._last_active_tab = None
+
+    # --- Global Preprocessing Methods ---
+    def get_global_preprocessing(self) -> Optional[Dict[str, Any]]:
+        """Returns the currently active global preprocessing settings."""
+        return self._global_preprocessing_settings
+
+    def set_global_preprocessing(self, settings: Optional[Dict[str, Any]]):
+        """
+        Sets global preprocessing and propagates to all sub-tabs.
+        Called by sub-tabs when user applies preprocessing.
+        Supports multiple filters - same filter type replaces, different types accumulate.
+        """
+        if settings is None:
+            # Clear all
+            self._global_preprocessing_settings = None
+        elif 'baseline' in settings or 'filters' in settings:
+            # Already in slot format
+            self._global_preprocessing_settings = settings
+        else:
+            # Single step - accumulate by type
+            step_type = settings.get('type')
+            if self._global_preprocessing_settings is None:
+                self._global_preprocessing_settings = {}
+            
+            if step_type == 'baseline':
+                self._global_preprocessing_settings['baseline'] = settings
+            elif step_type == 'filter':
+                filter_method = settings.get('method', 'unknown')
+                if 'filters' not in self._global_preprocessing_settings:
+                    self._global_preprocessing_settings['filters'] = {}
+                # Same filter method replaces old one
+                self._global_preprocessing_settings['filters'][filter_method] = settings
+        
+        log.debug(f"Global preprocessing set: {self._global_preprocessing_settings is not None}")
+        
+        # Propagate full accumulated settings to all loaded sub-tabs
+        for tab in self._loaded_analysis_tabs:
+            if hasattr(tab, "apply_global_preprocessing"):
+                try:
+                    tab.apply_global_preprocessing(self._global_preprocessing_settings)
+                except Exception as e:
+                    log.error(f"Failed to apply global preprocessing to {tab.get_display_name()}: {e}")
+
+    def _show_global_preprocessing_popup(self, settings: Dict[str, Any]) -> bool:
+        """
+        Shows popup asking user if they want to apply preprocessing globally.
+        Returns True if user wants global application, False otherwise.
+        """
+        from PySide6.QtWidgets import QMessageBox
+        
+        # Build description of current preprocessing
+        # Settings use 'type' and 'method' keys
+        settings_type = settings.get("type", "unknown")
+        method = settings.get("method", "unknown")
+        
+        if settings_type == "baseline":
+            settings_desc = f"Baseline: {method}"
+        elif settings_type == "filter":
+            cutoff = settings.get("cutoff", "")
+            settings_desc = f"Filter: {method} ({cutoff} Hz)"
+        else:
+            settings_desc = f"{settings_type}: {method}"
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Apply Preprocessing Globally?")
+        msg_box.setText(f"Preprocessing is active:\n{settings_desc}")
+        msg_box.setInformativeText(
+            "Do you want to apply this preprocessing to all files during analysis?\n\n"
+            "This will be applied across all analysis sub-tabs."
+        )
+        
+        apply_btn = msg_box.addButton("Apply Globally", QMessageBox.ButtonRole.AcceptRole)
+        this_only_btn = msg_box.addButton("This Tab Only", QMessageBox.ButtonRole.RejectRole)
+        reset_btn = msg_box.addButton("Reset Preprocessing", QMessageBox.ButtonRole.DestructiveRole)
+        
+        msg_box.setDefaultButton(apply_btn)
+        msg_box.exec()
+        
+        clicked = msg_box.clickedButton()
+        if clicked == apply_btn:
+            return True
+        elif clicked == reset_btn:
+            # Reset preprocessing
+            self._global_preprocessing_settings = None
+            self._global_preprocessing_confirmed = False
+            for tab in self._loaded_analysis_tabs:
+                if hasattr(tab, "apply_global_preprocessing"):
+                    tab.apply_global_preprocessing(None)
+            return False
+        else:
+            # This Tab Only - don't set global
+            return False
+
+    def showEvent(self, event):
+        """Override to check for pending preprocessing confirmation."""
+        super().showEvent(event)
+        
+        # Check SessionManager for preprocessing settings from Explorer
+        session_preprocessing = self.session_manager.preprocessing_settings
+        if session_preprocessing and not self._global_preprocessing_confirmed:
+            # Store locally and trigger popup
+            self._global_preprocessing_settings = session_preprocessing
+            # Defer popup to after event processing
+            QtCore.QTimer.singleShot(100, self._check_preprocessing_on_enter)
+
+    def _check_preprocessing_on_enter(self):
+        """Called when entering Analyser tab to check preprocessing state."""
+        session_preprocessing = self.session_manager.preprocessing_settings
+        if session_preprocessing and not self._global_preprocessing_confirmed:
+            self._global_preprocessing_settings = session_preprocessing
+            apply_globally = self._show_global_preprocessing_popup(session_preprocessing)
+            if apply_globally:
+                self._global_preprocessing_confirmed = True
+                # Propagate to all tabs
+                self.set_global_preprocessing(session_preprocessing)
+            else:
+                # Don't show popup again for this session (until reset)
+                self._global_preprocessing_confirmed = True
+
+        # Process deferred initial selection if any
+        if getattr(self, "_pending_initial_selection", False):
+            log.debug("Processing deferred initial selection after preprocessing check.")
+            self._pending_initial_selection = False
+            if self.central_analysis_item_combo.count() > 0:
+                self._on_central_item_selected(0)
 
     def _setup_ui(self):
         """Setup UI with sub-tabs only. Global controls are injected into each tab's left panel."""
@@ -432,9 +564,19 @@ class AnalyserTab(QtWidgets.QWidget):
         # Trigger state update for all sub-tabs
         self.update_state()
 
-        # Trigger initial selection if items exist
-        if analysis_items:
-            self._on_central_item_selected(0)
+        # Check if we should defer selection due to pending global preprocessing check
+        # This prevents loading raw data before the user has a chance to apply global preprocessing
+        session_preprocessing = self.session_manager.preprocessing_settings
+        if session_preprocessing and not self._global_preprocessing_confirmed and analysis_items:
+            log.debug("Deferring initial selection until global preprocessing check matches.")
+            self._pending_initial_selection = True
+            # Trigger check immediately in case we are already visible and missed the event
+            QtCore.QTimer.singleShot(50, self._check_preprocessing_on_enter)
+        else:
+            self._pending_initial_selection = False
+            # Trigger initial selection if items exist
+            if analysis_items:
+                self._on_central_item_selected(0)
 
     # --- Central Item Selection Handler ---
     @QtCore.Slot(int)
@@ -463,6 +605,23 @@ class AnalyserTab(QtWidgets.QWidget):
             return
 
         current_tab = self.sub_tab_widget.widget(tab_index)
+
+        # --- Sync Zoom from Previous Tab ---
+        if hasattr(self, "_last_active_tab") and self._last_active_tab and current_tab:
+            try:
+                if (hasattr(self._last_active_tab, "plot_widget") and self._last_active_tab.plot_widget and
+                    hasattr(current_tab, "plot_widget") and current_tab.plot_widget):
+                    
+                    # Sync X-Range (Time axis) only
+                    # We assume X-axis is compatible (e.g. Time vs Time)
+                    x_range = self._last_active_tab.plot_widget.viewRange()[0]
+                    current_tab.plot_widget.setXRange(x_range[0], x_range[1], padding=0)
+                    log.debug(f"Synced X-range from previous tab: {x_range}")
+            except Exception as e:
+                log.warning(f"Failed to sync zoom: {e}")
+        
+        self._last_active_tab = current_tab
+        # -----------------------------------
 
         # Inject global controls into the current tab
         if current_tab and isinstance(current_tab, BaseAnalysisTab):

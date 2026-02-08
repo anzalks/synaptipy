@@ -298,17 +298,41 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """
         Handle signal from PreprocessingWidget.
         Updates the pipeline and triggers re-plotting.
+        Also notifies parent AnalyserTab to enable global preprocessing.
+        Supports multiple filters - same filter type replaces, different types accumulate.
         """
         if self._selected_item_recording is None:
             QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded to preprocess.")
             return
 
         self._is_preprocessing = True
-        self._active_preprocessing_settings = settings
+        
+        # Store settings in slot format - merge with existing
+        step_type = settings.get('type')
+        if self._active_preprocessing_settings is None:
+            self._active_preprocessing_settings = {}
+        
+        if step_type == 'baseline':
+            self._active_preprocessing_settings['baseline'] = settings
+        elif step_type == 'filter':
+            filter_method = settings.get('method', 'unknown')
+            if 'filters' not in self._active_preprocessing_settings:
+                self._active_preprocessing_settings['filters'] = {}
+            # Same filter method replaces old one
+            self._active_preprocessing_settings['filters'][filter_method] = settings
 
-        # Update Pipeline
-        self.pipeline.clear()
-        self.pipeline.add_step(settings)
+        # Rebuild pipeline from all settings
+        self._rebuild_pipeline_from_settings()
+
+        # --- Notify Parent AnalyserTab about preprocessing ---
+        # This enables global preprocessing across all sub-tabs
+        parent_analyser = self.parent()
+        while parent_analyser is not None:
+            if hasattr(parent_analyser, "set_global_preprocessing"):
+                parent_analyser.set_global_preprocessing(settings if settings else None)
+                log.debug("Notified parent AnalyserTab about preprocessing change.")
+                break
+            parent_analyser = parent_analyser.parent()
 
         if self.preprocessing_widget:
             self.preprocessing_widget.set_processing_state(True)
@@ -329,6 +353,62 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         except Exception as e:
             log.error(f"Failed to start preprocessing: {e}", exc_info=True)
             self._on_preprocessing_error(e)
+
+    def apply_global_preprocessing(self, settings):
+        """
+        Called by parent AnalyserTab to apply global preprocessing.
+        Updates local state and re-plots if data is loaded.
+        
+        Args:
+            settings: Can be None (clear), a single step dict, or slot-based dict
+        """
+        log.debug(f"{self.__class__.__name__}: Applying global preprocessing: {settings is not None}")
+        
+        if settings is None:
+            # Reset all preprocessing
+            self._active_preprocessing_settings = None
+            self.pipeline.clear()
+        elif 'baseline' in settings or 'filters' in settings:
+            # Slot-based format - apply all steps
+            self._active_preprocessing_settings = settings
+            self._rebuild_pipeline_from_settings()
+        else:
+            # Single step format - accumulate by type
+            step_type = settings.get('type')
+            if self._active_preprocessing_settings is None:
+                self._active_preprocessing_settings = {}
+            
+            if step_type == 'baseline':
+                self._active_preprocessing_settings['baseline'] = settings
+            elif step_type == 'filter':
+                filter_method = settings.get('method', 'unknown')
+                if 'filters' not in self._active_preprocessing_settings:
+                    self._active_preprocessing_settings['filters'] = {}
+                self._active_preprocessing_settings['filters'][filter_method] = settings
+            
+            self._rebuild_pipeline_from_settings()
+        
+        # Re-plot if we have data loaded
+        if self._selected_item_recording is not None and self._current_plot_data:
+            try:
+                if "raw_data" in self._current_plot_data:
+                    self._apply_preprocessing_to_cached_data()
+                else:
+                    self._plot_selected_data()
+            except Exception as e:
+                log.error(f"Failed to re-plot after global preprocessing: {e}")
+
+    def _rebuild_pipeline_from_settings(self):
+        """Rebuild pipeline from current slot-based settings."""
+        self.pipeline.clear()
+        if self._active_preprocessing_settings:
+            # Baseline first
+            if 'baseline' in self._active_preprocessing_settings:
+                self.pipeline.add_step(self._active_preprocessing_settings['baseline'])
+            # Then all filters in sorted order for consistency
+            if 'filters' in self._active_preprocessing_settings:
+                for method in sorted(self._active_preprocessing_settings['filters'].keys()):
+                    self.pipeline.add_step(self._active_preprocessing_settings['filters'][method])
 
     def _on_preprocessing_complete(self, result_data):
         """
@@ -876,6 +956,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         else:
             log.warning(f"{self.__class__.__name__}: Async load returned None/Empty.")
 
+        # --- Check for global preprocessing from parent AnalyserTab ---
+        self._apply_global_preprocessing_from_parent()
+
         # Trigger UI update
         try:
             # PHASE 1: Populate channel and data source comboboxes if they exist
@@ -885,6 +968,40 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._update_ui_for_selected_item()
         except Exception as e:
             log.error(f"Error updating UI after load: {e}", exc_info=True)
+
+    def _apply_global_preprocessing_from_parent(self):
+        """Check parent AnalyserTab for global preprocessing and apply if active.
+        
+        Falls back to checking SessionManager directly if parent doesn't have
+        global preprocessing set yet (e.g., before popup confirmation).
+        """
+        global_settings = None
+        
+        # First try parent AnalyserTab's global preprocessing
+        parent = self.parent()
+        while parent is not None:
+            if hasattr(parent, "get_global_preprocessing"):
+                global_settings = parent.get_global_preprocessing()
+                break
+            parent = parent.parent()
+        
+        # Fallback: check SessionManager directly (for preprocessing set in Explorer
+        # but not yet confirmed via popup in AnalyserTab)
+        if not global_settings:
+            try:
+                from Synaptipy.application.session_manager import SessionManager
+                session_settings = SessionManager.instance().preprocessing_settings
+                if session_settings:
+                    global_settings = session_settings
+                    log.debug(f"{self.__class__.__name__}: Using preprocessing from SessionManager")
+            except Exception as e:
+                log.debug(f"Could not check SessionManager for preprocessing: {e}")
+        
+        if global_settings:
+            log.debug(f"{self.__class__.__name__}: Applying global preprocessing from parent")
+            self._active_preprocessing_settings = global_settings
+            self.pipeline.clear()
+            self.pipeline.add_step(global_settings)
 
     def _on_item_load_error(self, err_tuple):
         """Callback when async loading fails."""
@@ -1412,7 +1529,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 view_state = self.plot_widget.viewRange()
 
                 # Logic: Preserve view if preprocessing active OR if user is zoomed in
-                if self._active_preprocessing_settings:
+                # Logic: Preserve view if preprocessing active AND we have existing data
+                # (Prevents locking to default 0-1 view on first load with global preprocessing)
+                if self._active_preprocessing_settings and self._current_plot_data:
                     should_preserve_view = True
                 elif self._current_plot_data and "time" in self._current_plot_data:
                     # Check if zoomed in (> 5% reduction from full range)
