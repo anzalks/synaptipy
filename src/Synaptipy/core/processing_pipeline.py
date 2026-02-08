@@ -72,13 +72,11 @@ class SignalProcessingPipeline:
         if data is None or len(data) == 0:
             return data
 
-        log.debug(f"Pipeline processing with {len(self._steps)} steps: {[s.get('type') for s in self._steps]}")
         result = data.copy()
 
         for step in self._steps:
             try:
                 op_type = step.get('type')
-                log.debug(f"Processing step: {step}")
 
                 if op_type == 'baseline':
                     method = step.get('method', 'mode')
@@ -101,9 +99,7 @@ class SignalProcessingPipeline:
 
                 elif op_type == 'filter':
                     method = step.get('method')
-                    # Filters usually need 'order' which defaults to 5 in signal_processor if not passed
                     order = int(step.get('order', 5))
-                    log.debug(f"Applying {method} filter with order={order}, fs={fs}")
 
                     if method == 'lowpass':
                         result = signal_processor.lowpass_filter(
@@ -114,14 +110,10 @@ class SignalProcessingPipeline:
                             result, float(step.get('cutoff')), fs, order=order
                         )
                     elif method == 'bandpass':
-                        low_cut = float(step.get('low_cut'))
-                        high_cut = float(step.get('high_cut'))
-                        log.debug(f"Bandpass: low_cut={low_cut}, high_cut={high_cut}")
                         result = signal_processor.bandpass_filter(
-                            result, low_cut, high_cut, fs, order=order
+                            result, float(step.get('low_cut')), float(step.get('high_cut')), fs, order=order
                         )
                     elif method == 'notch':
-                        # Notch filter signature: (data, freq, Q, fs)
                         result = signal_processor.notch_filter(
                             result, float(step.get('freq')), float(step.get('q_factor')), fs
                         )
@@ -129,17 +121,10 @@ class SignalProcessingPipeline:
                 # Check for bad data after each step
                 import numpy as np
                 if result is not None:
-                    has_nan = np.any(np.isnan(result))
-                    has_inf = np.any(np.isinf(result))
-                    if has_nan or has_inf:
-                        log.error(f"Step {op_type}/{step.get('method')} produced NaN={has_nan}, Inf={has_inf}")
-                    else:
-                        log.debug(f"Step {op_type} complete. Data range: [{np.min(result):.2f}, {np.max(result):.2f}]")
+                    if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+                        log.error(f"Step {op_type}/{step.get('method')} produced invalid data (NaN/Inf)")
 
             except Exception as e:
-                log.error(f"Error processing step {step}: {e}", exc_info=True)
-                # Continue or raise? For UI robustness, maybe log and continue,
-                # but for data correctness, maybe we should know.
-                # Let's log error but keep the data as is from previous step (safe failure).
+                log.error(f"Error processing step {step}: {e}")
 
         return result
