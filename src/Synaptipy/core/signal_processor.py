@@ -109,6 +109,7 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
 def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, order: int = 5) -> np.ndarray:
     """
     Apply a Butterworth bandpass filter to the data.
+    Uses Second Order Sections (SOS) for numerical stability.
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply bandpass filter.")
@@ -128,14 +129,9 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
         )
         return data
 
-    b, a = signal.butter(order, [low, high], btype="band")
-
-    # Pad signal to reduce edge effects
-    padlen = 3 * max(len(b), len(a))
-    if len(data) <= padlen:
-        y = signal.filtfilt(b, a, data)  # Fallback for short signals
-    else:
-        y = signal.filtfilt(b, a, data, padlen=padlen)
+    # Use SOS format for numerical stability (critical for low freq / high fs ratios)
+    sos = signal.butter(order, [low, high], btype="band", output='sos')
+    y = signal.sosfiltfilt(sos, data)
 
     return y
 
@@ -143,6 +139,7 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
 def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
     """
     Apply a Butterworth lowpass filter.
+    Uses Second Order Sections (SOS) for numerical stability.
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply lowpass filter.")
@@ -150,14 +147,10 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
 
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
-    b, a = signal.butter(order, normal_cutoff, btype="low", analog=False)
 
-    # Pad signal
-    padlen = 3 * max(len(b), len(a))
-    if len(data) <= padlen:
-        y = signal.filtfilt(b, a, data)
-    else:
-        y = signal.filtfilt(b, a, data, padlen=padlen)
+    # Use SOS format for numerical stability
+    sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
+    y = signal.sosfiltfilt(sos, data)
 
     return y
 
@@ -165,6 +158,7 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
 def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
     """
     Apply a Butterworth highpass filter.
+    Uses Second Order Sections (SOS) for numerical stability.
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply highpass filter.")
@@ -183,14 +177,9 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
         )
         return data
 
-    b, a = signal.butter(order, normal_cutoff, btype="high", analog=False)
-
-    # Pad signal
-    padlen = 3 * max(len(b), len(a))
-    if len(data) <= padlen:
-        y = signal.filtfilt(b, a, data)
-    else:
-        y = signal.filtfilt(b, a, data, padlen=padlen)
+    # Use SOS format for numerical stability (critical for low freq / high fs ratios)
+    sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
+    y = signal.sosfiltfilt(sos, data)
 
     return y
 

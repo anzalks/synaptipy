@@ -344,6 +344,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Session Manager update handled by signal? existing code suggests so.
         # But we update session manager with recording:
         self.session_manager.current_recording = recording
+        
+        # Auto-add to analysis set so AnalyserTab sees it immediately
+        self._add_current_to_analysis_set()
 
     def _display_recording(self, recording: Recording):
         if not recording:
@@ -592,49 +595,14 @@ class ExplorerTab(QtWidgets.QWidget):
                             data = channel.get_data(trial_idx)
                             t = channel.get_relative_time_vector(trial_idx)
 
-                            # APPLY PREPROCESSING (Overlay Mode)
-                            if self._active_preprocessing_settings and data is not None:
+                            # APPLY PREPROCESSING (via Pipeline - same as CYCLE_SINGLE)
+                            if data is not None:
                                 try:
-                                    params = self._active_preprocessing_settings
-                                    op_type = params.get('type')
                                     fs = channel.sampling_rate
-
-                                    if op_type == 'baseline':
-                                        method = params.get('method', 'mode')
-                                        if method == 'mode':
-                                            decimals = params.get('decimals', 1)
-                                            data = signal_processor.subtract_baseline_mode(data, decimals=decimals)
-                                        elif method == 'mean':
-                                            data = signal_processor.subtract_baseline_mean(data)
-                                        elif method == 'median':
-                                            data = signal_processor.subtract_baseline_median(data)
-                                        elif method == 'linear':
-                                            data = signal_processor.subtract_baseline_linear(data)
-                                        elif method == 'region':
-                                            start_t = params.get('start_t', 0.0)
-                                            end_t = params.get('end_t', 0.0)
-                                            data = signal_processor.subtract_baseline_region(data, t, start_t, end_t)
-                                    elif op_type == 'filter':
-                                        method = params.get('method')
-                                        if method == 'lowpass':
-                                            data = signal_processor.lowpass_filter(
-                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
-                                            )
-                                        elif method == 'highpass':
-                                            data = signal_processor.highpass_filter(
-                                                data, params.get('cutoff'), fs, int(params.get('order', 5))
-                                            )
-                                        elif method == 'bandpass':
-                                            data = signal_processor.bandpass_filter(
-                                                data, params.get('low_cut'), params.get('high_cut'),
-                                                fs, int(params.get('order', 5))
-                                            )
-                                        elif method == 'notch':
-                                            data = signal_processor.notch_filter(
-                                                data, params.get('freq'), params.get('q_factor'), fs
-                                            )
-                                except Exception:
-                                    pass
+                                    # Pipeline handles empty steps gracefully
+                                    data = self.pipeline.process(data, fs, time_vector=t)
+                                except Exception as e:
+                                    log.error(f"Error processing trial {trial_idx}: {e}")
 
                             if data is not None and t is not None:
                                 item = plot_item.plot(t, data, pen=current_trial_pen)
@@ -658,52 +626,12 @@ class ExplorerTab(QtWidgets.QWidget):
                         )
                         avg_t = channel.get_relative_time_vector(0)  # Use trial 0 time as Ref
 
-                        # APPLY PREPROCESSING (Average)
-                        if self._active_preprocessing_settings and avg_data is not None:
+                        # APPLY PREPROCESSING (via Pipeline - same as trials)
+                        if avg_data is not None:
                             try:
-                                params = self._active_preprocessing_settings
-                                op_type = params.get('type')
                                 fs = channel.sampling_rate
-
-                                if op_type == 'baseline':
-                                    method = params.get('method', 'mode')
-                                    if method == 'mode':
-                                        decimals = params.get('decimals', 1)
-                                        avg_data = signal_processor.subtract_baseline_mode(
-                                            avg_data, decimals=decimals
-                                        )
-                                    elif method == 'mean':
-                                        avg_data = signal_processor.subtract_baseline_mean(avg_data)
-                                    elif method == 'median':
-                                        avg_data = signal_processor.subtract_baseline_median(avg_data)
-                                    elif method == 'linear':
-                                        avg_data = signal_processor.subtract_baseline_linear(avg_data)
-                                    elif method == 'region':
-                                        start_t = params.get('start_t', 0.0)
-                                        end_t = params.get('end_t', 0.0)
-                                        # Use avg_t for time vector
-                                        avg_data = signal_processor.subtract_baseline_region(
-                                            avg_data, avg_t, start_t, end_t
-                                        )
-                                elif op_type == 'filter':
-                                    method = params.get('method')
-                                    if method == 'lowpass':
-                                        avg_data = signal_processor.lowpass_filter(
-                                            avg_data, params.get('cutoff'), fs, int(params.get('order', 5))
-                                        )
-                                    elif method == 'highpass':
-                                        avg_data = signal_processor.highpass_filter(
-                                            avg_data, params.get('cutoff'), fs, int(params.get('order', 5))
-                                        )
-                                    elif method == 'bandpass':
-                                        avg_data = signal_processor.bandpass_filter(
-                                            avg_data, params.get('low_cut'), params.get('high_cut'),
-                                            fs, int(params.get('order', 5))
-                                        )
-                                    elif method == 'notch':
-                                        avg_data = signal_processor.notch_filter(
-                                            avg_data, params.get('freq'), params.get('q_factor'), fs
-                                        )
+                                # Pipeline handles empty steps gracefully
+                                avg_data = self.pipeline.process(avg_data, fs, time_vector=avg_t)
                             except Exception as e:
                                 log.error(f"Error processing average for {cid}: {e}")
 
@@ -1087,19 +1015,34 @@ class ExplorerTab(QtWidgets.QWidget):
         """
         Handle signal from PreprocessingWidget.
         Updates the SignalProcessingPipeline and triggers re-draw.
+        Supports multiple filters - same filter type replaces, different types accumulate.
         """
         if not self.current_recording:
             QtWidgets.QMessageBox.warning(self, "No Data", "No recording loaded.")
             return
 
-        # Store settings for UI state tracking
-        self._active_preprocessing_settings = settings
+        # Store settings for UI state tracking - merge with existing
+        step_type = settings.get('type')
+        if self._active_preprocessing_settings is None:
+            self._active_preprocessing_settings = {}
+        
+        # Store in slot format (baseline slot + filters dict keyed by method)
+        if step_type == 'baseline':
+            self._active_preprocessing_settings['baseline'] = settings
+            # Pipeline: remove old baseline, add new
+            self.pipeline.remove_step_by_type('baseline')
+            self.pipeline.add_step(settings)
+        elif step_type == 'filter':
+            filter_method = settings.get('method', 'unknown')
+            if 'filters' not in self._active_preprocessing_settings:
+                self._active_preprocessing_settings['filters'] = {}
+            # Same filter method replaces old one
+            self._active_preprocessing_settings['filters'][filter_method] = settings
+            # Pipeline: rebuild from all filters to ensure correct order
+            self._rebuild_pipeline_from_settings()
 
-        # Update Pipeline
-        # For now, we mimic the legacy behavior: 1 active operation type.
-        # In the future, this can be expanded to append steps.
-        self.pipeline.clear()
-        self.pipeline.add_step(settings)
+        # Notify SessionManager for global preprocessing state
+        self.session_manager.preprocessing_settings = settings
 
         # Trigger update
         self.preprocessing_widget.set_processing_state(True)
@@ -1111,13 +1054,31 @@ class ExplorerTab(QtWidgets.QWidget):
             self.preprocessing_widget.set_processing_state(False)
             self.status_bar.showMessage("Applied preprocessing settings via Pipeline.", 3000)
 
+    def _rebuild_pipeline_from_settings(self):
+        """Rebuild pipeline from current slot-based settings."""
+        self.pipeline.clear()
+        if self._active_preprocessing_settings:
+            # Baseline first
+            if 'baseline' in self._active_preprocessing_settings:
+                self.pipeline.add_step(self._active_preprocessing_settings['baseline'])
+            # Then all filters in sorted order
+            if 'filters' in self._active_preprocessing_settings:
+                for method in sorted(self._active_preprocessing_settings['filters'].keys()):
+                    self.pipeline.add_step(self._active_preprocessing_settings['filters'][method])
+
     def _on_preprocessing_complete_legacy(self, result_data):
         pass  # Removed legacy worker method
 
     def _handle_preprocessing_reset(self):
         """Reset all preprocessing and revert to raw data."""
         self._processed_cache.clear()
-        self._cache_dirty = True  # Mark dirty just in case
+        self._cache_dirty = True
+        self._active_preprocessing_settings = None  # Clear slot-based settings
+        self.pipeline.clear()  # Clear pipeline
+        
+        # Notify SessionManager
+        self.session_manager.preprocessing_settings = None
+        
         self._update_plot()
 
         # Auto-range to fit raw data

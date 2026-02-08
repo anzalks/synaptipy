@@ -23,6 +23,7 @@ class SessionManager(QObject):
     current_recording_changed = Signal(object)  # Emits Recording object or None
     selected_analysis_items_changed = Signal(list)  # Emits List[Dict[str, Any]]
     global_settings_changed = Signal(dict)  # Emits Dict[str, Any]
+    preprocessing_settings_changed = Signal(object)  # Emits preprocessing settings dict or None
     file_context_changed = Signal(list, int)  # Emits file_list, current_index
 
     def __new__(cls, *args, **kwargs):
@@ -38,6 +39,7 @@ class SessionManager(QObject):
         self._current_recording: Optional[Recording] = None
         self._selected_analysis_items: List[Dict[str, Any]] = []
         self._global_settings: Dict[str, Any] = {}
+        self._preprocessing_settings: Optional[Dict[str, Any]] = None
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
         self._initialized = True
@@ -96,3 +98,90 @@ class SessionManager(QObject):
     @property
     def current_file_index(self) -> int:
         return self._current_file_index
+
+    @property
+    def preprocessing_settings(self) -> Optional[Dict[str, Any]]:
+        """Returns the current global preprocessing settings as a dict with slots."""
+        return self._preprocessing_settings
+
+    @preprocessing_settings.setter
+    def preprocessing_settings(self, settings: Optional[Dict[str, Any]]):
+        """
+        Sets global preprocessing settings and emits signal.
+        
+        Settings can be:
+        - None: Clear all preprocessing
+        - A dict with 'type' key: Update specific slot (baseline or filter by method)
+        - A dict with 'baseline' and/or 'filters' keys: Set slots directly
+        """
+        if settings is None:
+            # Clear all
+            self._preprocessing_settings = None
+            log.debug("Preprocessing settings cleared")
+            self.preprocessing_settings_changed.emit(None)
+            return
+        
+        # Check if this is a slot-based settings dict or a single step
+        if 'baseline' in settings or 'filters' in settings:
+            # Already in slot format
+            self._preprocessing_settings = settings
+        else:
+            # Single step format - merge into slots
+            step_type = settings.get('type')
+            if self._preprocessing_settings is None:
+                self._preprocessing_settings = {}
+            
+            if step_type == 'baseline':
+                self._preprocessing_settings['baseline'] = settings
+            elif step_type == 'filter':
+                # Multiple filters supported - keyed by method (lowpass, highpass, etc.)
+                filter_method = settings.get('method', 'unknown')
+                if 'filters' not in self._preprocessing_settings:
+                    self._preprocessing_settings['filters'] = {}
+                # Same filter type replaces old one
+                self._preprocessing_settings['filters'][filter_method] = settings
+            else:
+                log.warning(f"Unknown preprocessing step type: {step_type}")
+                return
+        
+        # Log current state
+        has_baseline = self._preprocessing_settings.get('baseline') is not None
+        filter_count = len(self._preprocessing_settings.get('filters', {}))
+        log.debug(f"Preprocessing settings updated: baseline={has_baseline}, filters={filter_count}")
+        self.preprocessing_settings_changed.emit(self._preprocessing_settings)
+
+    def clear_preprocessing_slot(self, slot_type: str, filter_method: str = None):
+        """Clear a specific preprocessing slot ('baseline' or a specific filter method)."""
+        if not self._preprocessing_settings:
+            return
+            
+        if slot_type == 'baseline' and 'baseline' in self._preprocessing_settings:
+            del self._preprocessing_settings['baseline']
+        elif slot_type == 'filter' and filter_method and 'filters' in self._preprocessing_settings:
+            if filter_method in self._preprocessing_settings['filters']:
+                del self._preprocessing_settings['filters'][filter_method]
+                if not self._preprocessing_settings['filters']:
+                    del self._preprocessing_settings['filters']
+        
+        if not self._preprocessing_settings:
+            self._preprocessing_settings = None
+        log.debug(f"Cleared preprocessing slot: {slot_type} {filter_method or ''}")
+        self.preprocessing_settings_changed.emit(self._preprocessing_settings)
+
+    def get_preprocessing_steps(self) -> List[Dict[str, Any]]:
+        """
+        Returns preprocessing steps in the correct order:
+        1. Baseline first
+        2. Then all filters in consistent order (alphabetical by method)
+        This ensures consistent processing regardless of application order.
+        """
+        steps = []
+        if self._preprocessing_settings:
+            # Always apply baseline before filters
+            if 'baseline' in self._preprocessing_settings:
+                steps.append(self._preprocessing_settings['baseline'])
+            # Add all filters in sorted order for consistency
+            if 'filters' in self._preprocessing_settings:
+                for method in sorted(self._preprocessing_settings['filters'].keys()):
+                    steps.append(self._preprocessing_settings['filters'][method])
+        return steps
