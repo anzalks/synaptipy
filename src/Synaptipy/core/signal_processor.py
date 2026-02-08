@@ -106,115 +106,231 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
     return results
 
 
+def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple:
+    """
+    Common validation for all filter functions.
+    
+    Returns:
+        (is_valid, data_or_error_msg)
+        If valid: (True, data)
+        If invalid: (False, original_data) - caller should return this unchanged
+    """
+    # Empty data check
+    if data is None or len(data) == 0:
+        log.warning("Empty data provided to filter. Returning unchanged.")
+        return False, data if data is not None else np.array([])
+    
+    # Sampling rate check
+    if fs <= 0:
+        log.error(f"Sampling rate must be positive, got {fs}")
+        return False, data
+    
+    # Order validation
+    if order < 1 or order > 10:
+        log.warning(f"Filter order {order} outside recommended range [1, 10]. Clamping.")
+        order = max(1, min(10, order))
+    
+    # NaN/Inf check
+    if np.any(np.isnan(data)) or np.any(np.isinf(data)):
+        log.warning("Data contains NaN or Inf values. Returning unchanged.")
+        return False, data
+    
+    # Minimum length check for filtfilt (needs at least 3*order samples)
+    min_length = 3 * order + 1
+    if len(data) < min_length:
+        log.warning(f"Data too short ({len(data)} samples) for filter order {order}. Need at least {min_length}.")
+        return False, data
+    
+    return True, data
+
+
 def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, order: int = 5) -> np.ndarray:
     """
     Apply a Butterworth bandpass filter to the data.
     Uses Second Order Sections (SOS) for numerical stability.
+    
+    Args:
+        data: Input signal array
+        lowcut: Low cutoff frequency in Hz
+        highcut: High cutoff frequency in Hz
+        fs: Sampling frequency in Hz
+        order: Filter order (1-10, default 5)
+    
+    Returns:
+        Filtered data, or original data if filtering fails
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply bandpass filter.")
         return data
 
-    if fs <= 0:
-        raise ValueError("Sampling rate must be positive")
+    # Validate input
+    is_valid, result = _validate_filter_input(data, fs, order)
+    if not is_valid:
+        return result
+    
+    # Clamp order
+    order = max(1, min(10, order))
 
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
 
     # Bounds check
-    if low <= 0 or high >= 1:
-        log.warning(
-            f"Filter frequencies {lowcut}-{highcut} Hz are out of bounds for fs={fs} Hz. Returning original data."
-        )
+    if low <= 0 or low >= 1:
+        log.warning(f"Low cutoff {lowcut} Hz out of bounds for fs={fs} Hz. Returning original.")
+        return data
+    if high <= 0 or high >= 1:
+        log.warning(f"High cutoff {highcut} Hz out of bounds for fs={fs} Hz. Returning original.")
+        return data
+    if low >= high:
+        log.warning(f"Low cutoff {lowcut} Hz >= high cutoff {highcut} Hz. Returning original.")
         return data
 
-    # Use SOS format for numerical stability (critical for low freq / high fs ratios)
-    sos = signal.butter(order, [low, high], btype="band", output='sos')
-    y = signal.sosfiltfilt(sos, data)
-
-    return y
+    try:
+        # Use SOS format for numerical stability
+        sos = signal.butter(order, [low, high], btype="band", output='sos')
+        y = signal.sosfiltfilt(sos, data)
+        return y
+    except Exception as e:
+        log.error(f"Bandpass filter failed: {e}")
+        return data
 
 
 def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
     """
     Apply a Butterworth lowpass filter.
     Uses Second Order Sections (SOS) for numerical stability.
+    
+    Args:
+        data: Input signal array
+        cutoff: Cutoff frequency in Hz
+        fs: Sampling frequency in Hz
+        order: Filter order (1-10, default 5)
+    
+    Returns:
+        Filtered data, or original data if filtering fails
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply lowpass filter.")
         return data
 
+    # Validate input
+    is_valid, result = _validate_filter_input(data, fs, order)
+    if not is_valid:
+        return result
+    
+    # Clamp order
+    order = max(1, min(10, order))
+
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
 
-    # Use SOS format for numerical stability
-    sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
-    y = signal.sosfiltfilt(sos, data)
+    # Bounds check (was missing!)
+    if normal_cutoff <= 0 or normal_cutoff >= 1:
+        log.warning(f"Cutoff {cutoff} Hz out of bounds for fs={fs} Hz. Returning original.")
+        return data
 
-    return y
+    try:
+        # Use SOS format for numerical stability
+        sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
+        y = signal.sosfiltfilt(sos, data)
+        return y
+    except Exception as e:
+        log.error(f"Lowpass filter failed: {e}")
+        return data
 
 
 def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
     """
     Apply a Butterworth highpass filter.
     Uses Second Order Sections (SOS) for numerical stability.
+    
+    Args:
+        data: Input signal array
+        cutoff: Cutoff frequency in Hz
+        fs: Sampling frequency in Hz
+        order: Filter order (1-10, default 5)
+    
+    Returns:
+        Filtered data, or original data if filtering fails
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply highpass filter.")
         return data
 
-    if fs <= 0:
-        raise ValueError("Sampling rate must be positive")
+    # Validate input
+    is_valid, result = _validate_filter_input(data, fs, order)
+    if not is_valid:
+        return result
+    
+    # Clamp order
+    order = max(1, min(10, order))
 
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
 
     # Bounds check
     if normal_cutoff <= 0 or normal_cutoff >= 1:
-        log.warning(
-            f"Filter frequency {cutoff} Hz is out of bounds for fs={fs} Hz. Returning original data."
-        )
+        log.warning(f"Cutoff {cutoff} Hz out of bounds for fs={fs} Hz. Returning original.")
         return data
 
-    # Use SOS format for numerical stability (critical for low freq / high fs ratios)
-    sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
-    y = signal.sosfiltfilt(sos, data)
-
-    return y
+    try:
+        # Use SOS format for numerical stability
+        sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
+        y = signal.sosfiltfilt(sos, data)
+        return y
+    except Exception as e:
+        log.error(f"Highpass filter failed: {e}")
+        return data
 
 
 def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarray:
     """
     Apply a notch filter to remove a specific frequency.
+    Uses SOS format via zpk2sos for numerical stability.
+    
+    Args:
+        data: Input signal array
+        freq: Notch frequency in Hz
+        Q: Quality factor (higher = narrower notch)
+        fs: Sampling frequency in Hz
+    
+    Returns:
+        Filtered data, or original data if filtering fails
     """
     if not HAS_SCIPY:
         log.warning("Scipy not available. Cannot apply notch filter.")
         return data
 
-    if fs <= 0:
-        raise ValueError("Sampling rate must be positive")
+    # Validate input (order=2 for notch is standard)
+    is_valid, result = _validate_filter_input(data, fs, order=2)
+    if not is_valid:
+        return result
 
     nyq = 0.5 * fs
     freq_norm = freq / nyq
 
     # Bounds check
     if freq_norm <= 0 or freq_norm >= 1:
-        log.warning(
-            f"Notch frequency {freq} Hz is out of bounds for fs={fs} Hz. Returning original data."
-        )
+        log.warning(f"Notch frequency {freq} Hz out of bounds for fs={fs} Hz. Returning original.")
         return data
+    
+    # Q factor validation
+    if Q <= 0:
+        log.warning(f"Q factor must be positive, got {Q}. Using Q=30.")
+        Q = 30.0
 
-    b, a = signal.iirnotch(freq_norm, Q)
-
-    # Pad signal
-    padlen = 3 * max(len(b), len(a))
-    if len(data) <= padlen:
-        y = signal.filtfilt(b, a, data)
-    else:
-        y = signal.filtfilt(b, a, data, padlen=padlen)
-
-    return y
+    try:
+        # Get zpk representation and convert to SOS for stability
+        b, a = signal.iirnotch(freq_norm, Q)
+        # Convert to zpk then to sos for stability
+        z, p, k = signal.tf2zpk(b, a)
+        sos = signal.zpk2sos(z, p, k)
+        y = signal.sosfiltfilt(sos, data)
+        return y
+    except Exception as e:
+        log.error(f"Notch filter failed: {e}")
+        return data
 
 
 def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> np.ndarray:
