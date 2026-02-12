@@ -659,7 +659,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             brush=pg.mkBrush(0, 255, 0, 50), movable=True
         )
         self.analysis_region.setVisible(False)
-        # self.plot_widget.addItem(self.analysis_region) # Don't add yet to avoid auto-range issues
+        self.analysis_region.setZValue(-10)  # Behind data traces
+        self.plot_widget.addItem(self.analysis_region)
         self.analysis_region.sigRegionChanged.connect(self._on_region_changed)
         
         # Add the plot widget (GraphicsLayoutWidget) to layout
@@ -1046,8 +1047,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if global_settings:
             log.debug(f"{self.__class__.__name__}: Applying global preprocessing from parent")
             self._active_preprocessing_settings = global_settings
-            self.pipeline.clear()
-            self.pipeline.add_step(global_settings)
+            self._rebuild_pipeline_from_settings()
 
     def _on_item_load_error(self, err_tuple):
         """Callback when async loading fails."""
@@ -1741,6 +1741,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             else:
                 # User was in full view (or first plot) -> Auto-range to new data
                 self.auto_range_plot()
+
+            # 8. Update analysis_region defaults (25-75% of time range)
+            if getattr(self, "analysis_region", None) and len(plot_package.main_time) > 1:
+                t_min = float(plot_package.main_time[0])
+                t_max = float(plot_package.main_time[-1])
+                t_span = t_max - t_min
+                self.analysis_region.setRegion([t_min + 0.25 * t_span, t_min + 0.75 * t_span])
 
             self._on_data_plotted()
 

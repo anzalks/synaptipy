@@ -1,4 +1,18 @@
+import sys
+import os
 
+# Remove .verify_venv from sys.path to prevent its Python 3.13 scipy
+# from shadowing the conda environment's scipy (Python 3.11)
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_verify_venv = os.path.join(_project_root, '.verify_venv')
+sys.path[:] = [p for p in sys.path if not p.startswith(_verify_venv)]
+
+# Also invalidate any cached scipy imports from the wrong path
+for mod_name in list(sys.modules.keys()):
+    if mod_name == 'scipy' or mod_name.startswith('scipy.'):
+        mod = sys.modules[mod_name]
+        if mod is not None and hasattr(mod, '__file__') and mod.__file__ and '.verify_venv' in mod.__file__:
+            del sys.modules[mod_name]
 
 def pytest_ignore_collect(collection_path, config):
     """

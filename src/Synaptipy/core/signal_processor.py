@@ -7,14 +7,19 @@ import logging
 import numpy as np
 from typing import Dict, Any, Optional
 
-try:
-    import scipy.signal as signal
-    import scipy.stats as stats
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
-    signal = None
-    stats = None
+
+def _get_scipy():
+    """Lazily import scipy modules. Returns (signal_module, stats_module, has_scipy).
+
+    Does NOT cache to prevent mock leakage between tests.
+    """
+    try:
+        import scipy.signal as sig
+        import scipy.stats as st
+        return sig, st, True
+    except ImportError:
+        return None, None, False
+
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +46,8 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
     results = {"is_good": True, "warnings": [], "metrics": {}}
 
     try:
-        if not HAS_SCIPY:
+        signal, stats, has_scipy = _get_scipy()
+        if not has_scipy:
             results["warnings"].append("Scipy not installed. Detailed quality metrics unavailable.")
             return results
 
@@ -159,7 +165,8 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
     Returns:
         Filtered data, or original data if filtering fails
     """
-    if not HAS_SCIPY:
+    signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
         log.warning("Scipy not available. Cannot apply bandpass filter.")
         return data
 
@@ -210,7 +217,8 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     Returns:
         Filtered data, or original data if filtering fails
     """
-    if not HAS_SCIPY:
+    signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
         log.warning("Scipy not available. Cannot apply lowpass filter.")
         return data
 
@@ -254,7 +262,8 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
     Returns:
         Filtered data, or original data if filtering fails
     """
-    if not HAS_SCIPY:
+    signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
         log.warning("Scipy not available. Cannot apply highpass filter.")
         return data
 
@@ -298,7 +307,8 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
     Returns:
         Filtered data, or original data if filtering fails
     """
-    if not HAS_SCIPY:
+    signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
         log.warning("Scipy not available. Cannot apply notch filter.")
         return data
 
@@ -348,7 +358,8 @@ def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> 
     if data is None or len(data) == 0:
         return data
 
-    if not HAS_SCIPY:
+    _, stats, has_scipy = _get_scipy()
+    if not has_scipy:
         log.warning("Scipy not available. Cannot use mode for baseline subtraction. Using median.")
         return subtract_baseline_median(data)
 
@@ -404,7 +415,8 @@ def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
     if data is None or len(data) == 0:
         return data
 
-    if not HAS_SCIPY:
+    signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
         log.warning("Scipy not available. Cannot detrend.")
         return data
 

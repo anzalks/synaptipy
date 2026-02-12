@@ -2,12 +2,19 @@ import pytest
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 
-# Clear registry before each test to ensure isolation
+# Save and restore registry around each test to ensure isolation
+# without losing module-level @register decorations for other tests
 @pytest.fixture(autouse=True)
 def clear_registry():
-    AnalysisRegistry.clear()
+    saved_registry = dict(AnalysisRegistry._registry)
+    saved_metadata = dict(AnalysisRegistry._metadata)
+    AnalysisRegistry._registry.clear()
+    AnalysisRegistry._metadata.clear()
     yield
-    AnalysisRegistry.clear()
+    AnalysisRegistry._registry.clear()
+    AnalysisRegistry._metadata.clear()
+    AnalysisRegistry._registry.update(saved_registry)
+    AnalysisRegistry._metadata.update(saved_metadata)
 
 
 def test_register_with_metadata():
@@ -44,7 +51,10 @@ def test_get_metadata_missing():
 
 def test_spike_detection_metadata():
     """Test that spike_detection has the correct metadata (integration test)."""
-    # Re-import to ensure registration runs
+    # Re-import to ensure registration runs after clear()
+    import importlib
+    import Synaptipy.core.analysis.spike_analysis as sa
+    importlib.reload(sa)
 
     metadata = AnalysisRegistry.get_metadata("spike_detection")
     assert metadata is not None

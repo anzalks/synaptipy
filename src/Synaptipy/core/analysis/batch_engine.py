@@ -12,7 +12,7 @@ Author: Anzal KS <anzal.ks@gmail.com>
 import logging
 import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable, Union
+from typing import List, Dict, Any, Optional, Callable, Union, Tuple
 
 import traceback  # Added for stack trace logging
 from datetime import datetime
@@ -484,6 +484,7 @@ class BatchAnalysisEngine:
                             "channel": channel_name,
                             "analysis": analysis_name,
                             "scope": scope,
+                            "trial_count": len(data) if isinstance(data, list) else 1,
                          })
                          results.append(res)
                      else:

@@ -7,7 +7,7 @@ Refactored to use MetadataDrivenAnalysisTab architecture.
 import logging
 from typing import Optional, Dict, Any
 import pyqtgraph as pg
-from PySide6 import QtCore
+from PySide6 import QtCore, QtWidgets
 
 # Import base class
 from .metadata_driven import MetadataDrivenAnalysisTab
@@ -74,22 +74,21 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         """
         log.debug(f"{self.get_display_name()}: _on_data_plotted hook called")
 
-        # Clear previous spike analysis visualization
+        # Clear previous spike analysis visualization (markers only)
         if self.spike_markers_item:
             self.spike_markers_item.setData([])
             self.spike_markers_item.setVisible(False)
-        if self.threshold_line:
-            self.threshold_line.setVisible(False)
 
         # Validate that base class plotted data successfully
         if not self._current_plot_data or "time" not in self._current_plot_data:
             return
 
-        # Update threshold line position if parameters are available
+        # Update threshold line position and ensure it is visible
         params = self._gather_analysis_parameters()
         threshold = params.get("threshold")
         if threshold is not None and self.threshold_line:
             self.threshold_line.setValue(threshold)
+        if self.threshold_line:
             self.threshold_line.setVisible(True)
 
         # CRITICAL: Call parent to trigger analysis and enable save button

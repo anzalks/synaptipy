@@ -104,9 +104,39 @@ class AnalysisRegistry:
         return list(cls._registry.keys())
 
     @classmethod
+    def list_by_type(cls, type_str: str) -> list:
+        """
+        Get registered function names filtered by type.
+
+        Args:
+            type_str: The type to filter by (e.g., "analysis", "preprocessing")
+
+        Returns:
+            List of function names matching the given type
+        """
+        return [
+            name for name, meta in cls._metadata.items()
+            if meta.get("type") == type_str
+        ]
+
+    @classmethod
+    def list_preprocessing(cls) -> list:
+        """Get all registered preprocessing function names."""
+        return cls.list_by_type("preprocessing")
+
+    @classmethod
+    def list_analysis(cls) -> list:
+        """Get all registered analysis function names (excludes preprocessing)."""
+        return [
+            name for name, meta in cls._metadata.items()
+            if meta.get("type", "analysis") == "analysis"
+        ]
+
+    @classmethod
     def clear(cls):
         """
         Clear all registered functions (mainly for testing).
         """
         cls._registry.clear()
+        cls._metadata.clear()
         log.debug("Analysis registry cleared")

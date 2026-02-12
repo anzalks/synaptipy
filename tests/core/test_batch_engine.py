@@ -21,12 +21,18 @@ class TestAnalysisRegistry:
     """Tests for the AnalysisRegistry class."""
 
     def setup_method(self):
-        """Clear registry before each test."""
-        AnalysisRegistry.clear()
+        """Save and clear registry before each test."""
+        self._saved_registry = dict(AnalysisRegistry._registry)
+        self._saved_metadata = dict(AnalysisRegistry._metadata)
+        AnalysisRegistry._registry.clear()
+        AnalysisRegistry._metadata.clear()
 
     def teardown_method(self):
-        """Clear registry after each test."""
-        AnalysisRegistry.clear()
+        """Restore registry after each test."""
+        AnalysisRegistry._registry.clear()
+        AnalysisRegistry._metadata.clear()
+        AnalysisRegistry._registry.update(self._saved_registry)
+        AnalysisRegistry._metadata.update(self._saved_metadata)
 
     def test_register_function(self):
         """Test that a function can be registered."""
@@ -91,13 +97,17 @@ class TestAnalysisRegistry:
 class TestBatchAnalysisSystem:
 
     def setup_method(self):
-        # Clear registry before each test to ensure clean state
-        # AnalysisRegistry.clear()  # We need to implement clear if it doesn't exist, or just mock
-        # Looking at registry.py, it has a clear() method.
-        AnalysisRegistry.clear()
+        # Save and clear registry before each test to ensure clean state
+        self._saved_registry = dict(AnalysisRegistry._registry)
+        self._saved_metadata = dict(AnalysisRegistry._metadata)
+        AnalysisRegistry._registry.clear()
+        AnalysisRegistry._metadata.clear()
 
     def teardown_method(self):
-        AnalysisRegistry.clear()
+        AnalysisRegistry._registry.clear()
+        AnalysisRegistry._metadata.clear()
+        AnalysisRegistry._registry.update(self._saved_registry)
+        AnalysisRegistry._metadata.update(self._saved_metadata)
 
     def test_registry_registration(self):
         """Test that functions can be registered and retrieved."""
