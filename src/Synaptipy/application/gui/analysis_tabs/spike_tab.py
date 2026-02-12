@@ -51,12 +51,14 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
 
             # Threshold line
             self.threshold_line = pg.InfiniteLine(
-                angle=0, movable=False, pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine)
+                angle=0, movable=True, pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine)
             )
             self.plot_widget.addItem(self.threshold_line)
 
             self.spike_markers_item.setVisible(False)
-            self.threshold_line.setVisible(False)
+            # Ensure visible and connect signal
+            self.threshold_line.setVisible(True)
+            self.threshold_line.sigPositionChangeFinished.connect(self._on_threshold_dragged)
 
     def get_display_name(self) -> str:
         return "Spike Detection (Threshold)"
@@ -207,6 +209,27 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
                 return self._last_analysis_result
             return {"result": self._last_analysis_result}
         return None
+
+    def _on_threshold_dragged(self):
+        """Handle threshold line drag event."""
+        if not self.threshold_line:
+            return
+
+        new_val = self.threshold_line.value()
+        log.debug(f"Threshold dragged to: {new_val}")
+
+        # Update parameter widget
+        if hasattr(self, "param_generator") and "threshold" in self.param_generator.widgets:
+            widget = self.param_generator.widgets["threshold"]
+            # Block signals to prevent loop (param change -> plot update -> line update)
+            signals_blocked = widget.blockSignals(True)
+            if isinstance(widget, QtWidgets.QDoubleSpinBox):
+                widget.setValue(new_val)
+            widget.blockSignals(signals_blocked)
+            
+            # Manually trigger parameter change callback
+            if hasattr(self, "_on_param_changed"):
+                self._on_param_changed()
 
 
 # Export the class for dynamic loading

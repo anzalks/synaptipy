@@ -82,9 +82,9 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
             angle=0, movable=True, pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine)
         )
         self.plot_widget.addItem(self.threshold_line)
-        self.threshold_line.setVisible(False)
-        self.threshold_line.setVisible(False)
+        self.threshold_line.setVisible(True)
         self.threshold_line.setZValue(90)
+        self.threshold_line.sigPositionChangeFinished.connect(self._on_threshold_dragged)
 
     def _on_channel_changed(self, index):
         """Re-add items to plot if cleared."""
@@ -223,6 +223,27 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
 
         if hasattr(self, "results_text"):  # MetadataDriven uses results_text (TextEdit)
             self.results_text.setHtml(text)
+
+    def _on_threshold_dragged(self):
+        """Handle threshold line drag event."""
+        if not self.threshold_line:
+            return
+
+        new_val = self.threshold_line.value()
+        log.debug(f"Event threshold dragged to: {new_val}")
+
+        # Update parameter widget
+        if hasattr(self, "param_generator") and "threshold" in self.param_generator.widgets:
+            widget = self.param_generator.widgets["threshold"]
+            # Block signals to prevent loop
+            signals_blocked = widget.blockSignals(True)
+            if isinstance(widget, QtWidgets.QDoubleSpinBox):
+                widget.setValue(new_val)
+            widget.blockSignals(signals_blocked)
+
+            # Trigger update
+            if hasattr(self, "_on_param_changed"):
+                self._on_param_changed()
 
 
 # Export the class for dynamic loading

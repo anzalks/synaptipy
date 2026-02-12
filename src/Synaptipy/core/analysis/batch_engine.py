@@ -198,15 +198,36 @@ class BatchAnalysisEngine:
                     if self._cancelled:
                         break
 
+                    # Data Buffer for the pipeline (stores (data, time) tuples or lists)
+                    # Keyed by 'scope' to allow caching, but specialized for persistence
+                    # We need a robust way to pass data between steps.
+                    # As per plan, later steps consume data from previous steps if available.
+                    # Currently, we'll support a 'channel_data' context.
+                    pipeline_context = {
+                        "scope": None,   # Current scope of data in context
+                        "data": None,    # The data (array or list)
+                        "time": None,    # The time (array or list)
+                    }
+
                     # Process each task in the pipeline
                     for task in pipeline_config:
                         if self._cancelled:
                             break
 
                         try:
-                            task_results = self._process_task(
-                                task=task, channel=channel, channel_name=channel_name, file_path=file_path
+                            # Pass the context to allow tasks to use/modify it
+                            task_results, updated_context = self._process_task(
+                                task=task,
+                                channel=channel,
+                                channel_name=channel_name,
+                                file_path=file_path,
+                                context=pipeline_context
                             )
+                            
+                            # Update context if the task modified it (e.g. preprocessing)
+                            if updated_context:
+                                pipeline_context = updated_context
+
                             # Extend results list with all results from this task
                             results_list.extend(task_results)
                         except (ValueError, TypeError, KeyError, IndexError) as e:
@@ -253,22 +274,34 @@ class BatchAnalysisEngine:
 
         return df
 
-    def _process_task(self, task: Dict[str, Any], channel, channel_name: str, file_path: Path) -> List[Dict[str, Any]]:
+    def _process_task(
+        self,
+        task: Dict[str, Any],
+        channel,
+        channel_name: str,
+        file_path: Path,
+        context: Dict[str, Any]
+    ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """
-        Process a single analysis task on a channel.
+        Process a single analysis task on a channel, supporting preprocessing.
 
         Args:
-            task: Task configuration dict with 'analysis', 'scope', and 'params'
-            channel: Channel object to analyze
-            channel_name: Name/ID of the channel
-            file_path: Path to the source file
+            task: Task configuration dict
+            channel: Channel object
+            channel_name: Name/ID
+            file_path: Path
+            context: Current data context from previous steps
 
         Returns:
-            List of result dictionaries (one per trial if scope is 'all_trials')
+            Tuple: (List of results, Updated context or None)
         """
         analysis_name = task.get("analysis")
         scope = task.get("scope", "first_trial")
         params = task.get("params", {})
+        
+        # Check metadata for type
+        meta = AnalysisRegistry.get_metadata(analysis_name)
+        is_preprocessing = meta.get("type") == "preprocessing"
 
         # Get the registered analysis function
         analysis_func = AnalysisRegistry.get_function(analysis_name)
@@ -283,331 +316,194 @@ class BatchAnalysisEngine:
                     "scope": scope,
                     "error": f"Analysis function '{analysis_name}' not registered",
                 }
-            ]
+            ], None
 
         results = []
         sampling_rate = channel.sampling_rate
-
-        # Determine data scope and extract data
-        if scope == "average":
-            # Analyze the averaged trace
-            data = channel.get_averaged_data()
-            time = channel.get_relative_averaged_time_vector()
-
-            if data is None or time is None:
-                log.warning(f"No averaged data available for {channel_name} in {file_path.name}")
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": "No averaged data available",
-                    }
-                ]
-
-            # Run analysis
-            try:
-                result_dict = analysis_func(data, time, sampling_rate, **params)
-                # Add metadata
-                result_dict.update(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "trial_index": None,  # Average has no trial index
-                        "sampling_rate": sampling_rate,
-                    }
-                )
-                results.append(result_dict)
-            except (ValueError, TypeError, KeyError, IndexError) as e:
-                log.error(f"Error running {analysis_name} on average trace: {e}", exc_info=True)
-                results.append(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": str(e),
-                        "debug_trace": traceback.format_exc(),
-                    }
-                )
-
-        elif scope == "all_trials":
-            # Analyze each trial separately
-            num_trials = channel.num_trials
-            if num_trials == 0:
-                log.warning(f"No trials available for {channel_name} in {file_path.name}")
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": "No trials available",
-                    }
-                ]
-
-            for trial_idx in range(num_trials):
-                data = channel.get_data(trial_idx)
-                time = channel.get_relative_time_vector(trial_idx)
-
-                if data is None or time is None:
-                    log.warning(f"No data available for trial {trial_idx} of {channel_name} in {file_path.name}")
-                    continue
-
-                # Run analysis
+        
+        # --- Data Retrieval Strategy ---
+        # 1. If context matches requested scope, use it.
+        # 2. If context exists but scope differs, try to adapt (e.g. average existing trials).
+        # 3. If no context, load from channel.
+        
+        data = None
+        time = None
+        
+        # Check if we can use context
+        if context["data"] is not None:
+            # If scope matches, use directly
+            if context["scope"] == scope:
+                data = context["data"]
+                time = context["time"]
+            
+            # Adaptation: If we have 'all_trials' data but need 'average'
+            elif context["scope"] == "all_trials" and scope == "average":
+                # Compute average from cached trials
+                # context['data'] is list of arrays
                 try:
-                    result_dict = analysis_func(data, time, sampling_rate, **params)
-                    # Add metadata
-                    result_dict.update(
-                        {
-                            "file_name": file_path.name,
-                            "file_path": str(file_path),
-                            "channel": channel_name,
-                            "analysis": analysis_name,
-                            "scope": scope,
-                            "trial_index": trial_idx,
-                            "sampling_rate": sampling_rate,
-                        }
-                    )
-                    results.append(result_dict)
-                except (ValueError, TypeError, KeyError, IndexError) as e:
-                    log.error(f"Error running {analysis_name} on trial {trial_idx}: {e}", exc_info=True)
-                    results.append(
-                        {
-                            "file_name": file_path.name,
-                            "file_path": str(file_path),
-                            "channel": channel_name,
-                            "analysis": analysis_name,
-                            "scope": scope,
-                            "trial_index": trial_idx,
-                            "trial_index": trial_idx,
-                            "error": str(e),
-                            "debug_trace": traceback.format_exc(),
-                        }
-                    )
+                    import numpy as np
+                    # Assume equal length for averaging - simplified for now
+                    # In production, check lengths or align
+                    if len(context["data"]) > 0:
+                        data = np.mean(context["data"], axis=0) # Only works if all same shape
+                        time = context["time"][0] # Use first time vector
+                    else:
+                        log.warning("Context data empty, cannot average.")
+                except Exception as e:
+                    log.warning(f"Could not compute average from context: {e}. Reloading from source.")
+                    
+        # If data is still None, load from channel
+        if data is None:
+            if scope == "average":
+                data = channel.get_averaged_data()
+                time = channel.get_relative_averaged_time_vector()
+            elif scope == "all_trials":
+                data = []
+                time = []
+                for i in range(channel.num_trials):
+                    d = channel.get_data(i)
+                    t = channel.get_relative_time_vector(i)
+                    if d is not None:
+                        data.append(d)
+                        time.append(t)
+                # If loading raw, we might want to update context if this was a heavy load?
+                # For now, only update context if preprocessing occurs.
+                
+            elif scope == "first_trial":
+                data = channel.get_data(0)
+                time = channel.get_relative_time_vector(0)
+                
+            elif scope == "specific_trial":
+                idx = int(params.get("trial_index", 0))
+                data = channel.get_data(idx)
+                time = channel.get_relative_time_vector(idx)
+                
+            elif scope == "channel_set":
+                # channel_set usually implies list of all trials
+                data = []
+                time = []
+                for i in range(channel.num_trials):
+                    d = channel.get_data(i)
+                    t = channel.get_relative_time_vector(i)
+                    if d is not None:
+                        data.append(d)
+                        time.append(t)
 
-        elif scope == "first_trial":
-            # Analyze only the first trial
-            data = channel.get_data(0)
-            time = channel.get_relative_time_vector(0)
-
-            if data is None or time is None:
-                log.warning(f"No data available for first trial of {channel_name} in {file_path.name}")
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": "No data available for first trial",
-                    }
-                ]
-
-            # Run analysis
-            try:
-                result_dict = analysis_func(data, time, sampling_rate, **params)
-                # Add metadata
-                result_dict.update(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "trial_index": 0,
-                        "sampling_rate": sampling_rate,
-                    }
-                )
-                results.append(result_dict)
-            except (ValueError, TypeError, KeyError, IndexError) as e:
-                log.error(f"Error running {analysis_name} on first trial: {e}", exc_info=True)
-                results.append(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": str(e),
-                        "debug_trace": traceback.format_exc(),
-                    }
-                )
-        elif scope == "channel_set":
-            # Analyze all trials together as a set
-            num_trials = channel.num_trials
-            if num_trials == 0:
-                log.warning(f"No trials available for {channel_name} in {file_path.name}")
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": "No trials available",
-                    }
-                ]
-
-            # Aggregate data from all trials
-            data_list = []
-            time_list = []
-            valid_trials = []
-
-            for trial_idx in range(num_trials):
-                data = channel.get_data(trial_idx)
-                time = channel.get_relative_time_vector(trial_idx)
-
-                if data is not None and time is not None:
-                    data_list.append(data)
-                    time_list.append(time)
-                    valid_trials.append(trial_idx)
-
-            # Memory Safety Check
-            if len(data_list) > 500:  # Heuristic warning
-                log.warning(
-                    f"Batch processing channel set with {len(data_list)} trials. "
-                    f"This uses significant memory. Proceeding..."
-                )
-
-            if not data_list:
-                log.warning(f"No valid data found for any trial of {channel_name} in {file_path.name}")
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": "No valid data found",
-                    }
-                ]
-
-            # Run analysis on the aggregated set
-            try:
-                # The analysis function is expected to handle lists of arrays
-                result_dict = analysis_func(data_list, time_list, sampling_rate, **params)
-
-                # Add metadata
-                result_dict.update(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "trial_count": len(valid_trials),
-                        "sampling_rate": sampling_rate,
-                    }
-                )
-                results.append(result_dict)
-            except (ValueError, TypeError, KeyError, IndexError) as e:
-                log.error(f"Error running {analysis_name} on channel set: {e}", exc_info=True)
-                results.append(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": str(e),
-                        "debug_trace": traceback.format_exc(),
-                    }
-                )
-
-        elif scope == "specific_trial":
-            # Analyze a specific trial index
-            params = task.get("params", {})
-            trial_target = int(params.get("trial_index", 0))  # Default to 0 if not specified
-
-            num_trials = channel.num_trials
-            if trial_target >= num_trials or trial_target < 0:
-                log.warning(
-                    f"Trial {trial_target} not available for {channel_name} in {file_path.name} (Max: {num_trials-1})"
-                )
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": f"Trial {trial_target} out of range (Total: {num_trials})",
-                    }
-                ]
-
-            data = channel.get_data(trial_target)
-            time = channel.get_relative_time_vector(trial_target)
-
-            if data is None or time is None:
-                log.warning(f"No data available for trial {trial_target} of {channel_name} in {file_path.name}")
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": f"No data available for trial {trial_target}",
-                    }
-                ]
-
-            # Run analysis
-            try:
-                # Remove trial_index from params before passing to analysis func so we don't pass unexpected kwargs
-                # copy params first
-                analysis_params = params.copy()
-                analysis_params.pop("trial_index", None)
-
-                result_dict = analysis_func(data, time, sampling_rate, **analysis_params)
-                # Add metadata
-                result_dict.update(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "trial_index": trial_target,
-                        "sampling_rate": sampling_rate,
-                    }
-                )
-                results.append(result_dict)
-            except (ValueError, TypeError, KeyError, IndexError) as e:
-                log.error(f"Error running {analysis_name} on specific trial {trial_target}: {e}", exc_info=True)
-                results.append(
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "trial_index": trial_target,
-                        "error": str(e),
-                        "debug_trace": traceback.format_exc(),
-                    }
-                )
-
-        else:
-            log.warning(f"Unknown scope '{scope}' for analysis '{analysis_name}'. Skipping.")
-            results.append(
-                {
+        # Validation
+        if data is None or (isinstance(data, list) and len(data) == 0):
+             return [{
                     "file_name": file_path.name,
                     "file_path": str(file_path),
                     "channel": channel_name,
                     "analysis": analysis_name,
+                    "error": "No data available",
+                }], None
+                
+        # --- Execution ---
+        
+        if is_preprocessing:
+            # Preprocessing: Modify data and return new context
+            try:
+                # Preprocessing functions typically take (data, time, fs, **kwargs)
+                # and return modified data. 
+                # If scope is 'all_trials', we might need to iterate if the func expects single trace.
+                
+                # Heuristic: Check if data is list (multiple trials)
+                if isinstance(data, list):
+                    # Apply to each item
+                    new_data = []
+                    new_time = [] 
+                    for d, t in zip(data, time):
+                        # Filter might modify data or time? Usually just data.
+                        # Some filters might return (data, time) tuple?
+                        # Let's assume standard signature returns just data for now, 
+                        # or we check return type.
+                        res = analysis_func(d, t, sampling_rate, **params)
+                        new_data.append(res)
+                        new_time.append(t) # Assume time unchanged
+                    
+                    modified_data = new_data
+                    modified_time = new_time
+                else:
+                    # Single trace
+                    modified_data = analysis_func(data, time, sampling_rate, **params)
+                    modified_time = time
+                
+                # Return empty results, but updated context
+                new_context = {
                     "scope": scope,
-                    "error": f"Unknown scope: {scope}",
+                    "data": modified_data,
+                    "time": modified_time
                 }
-            )
+                return [], new_context
+                
+            except Exception as e:
+                log.error(f"Preprocessing failed: {e}", exc_info=True)
+                return [{
+                    "file_name": file_path.name,
+                    "analysis": analysis_name,
+                    "error": f"Preprocessing failed: {e}"
+                }], None
+        
+        else:
+            # Standard Analysis
+            try:
+                # Helper to run analysis and format result
+                def run_single(d, t, trial_idx=None):
+                    # Remove trial_index from params if present
+                    p = params.copy()
+                    p.pop("trial_index", None)
+                    
+                    res = analysis_func(d, t, sampling_rate, **p)
+                    # Add metadata
+                    res.update({
+                        "file_name": file_path.name,
+                        "file_path": str(file_path),
+                        "channel": channel_name,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "sampling_rate": sampling_rate
+                    })
+                    if trial_idx is not None:
+                        res["trial_index"] = trial_idx
+                    return res
 
-        return results
+                if scope == "all_trials" or scope == "channel_set":
+                     # For channel_set, some functions expect the list (e.g. F-I curve)
+                     # others expect iteration. 
+                     # Check if function handles list? 
+                     # NOTE: Original code treated 'channel_set' as passing the list to func.
+                     # 'all_trials' iterated.
+                     
+                     if scope == "channel_set":
+                         # Pass full list
+                         res = analysis_func(data, time, sampling_rate, **params)
+                         res.update({
+                            "file_name": file_path.name,
+                             "file_path": str(file_path),
+                            "channel": channel_name,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                         })
+                         results.append(res)
+                     else:
+                        # Iterate 'all_trials'
+                        for idx, (d, t) in enumerate(zip(data, time)):
+                            results.append(run_single(d, t, idx))
+                            
+                elif scope == "specific_trial":
+                     idx = int(params.get("trial_index", 0))
+                     results.append(run_single(data, time, idx))
+                else:
+                    # Single trace (average, first_trial)
+                    results.append(run_single(data, time))
+                    
+                return results, None # No context update
+
+            except Exception as e:
+                log.error(f"Analysis failed: {e}", exc_info=True)
+                return [{
+                    "file_name": file_path.name,
+                    "analysis": analysis_name,
+                    "error": f"Analysis failed: {e}"
+                }], None

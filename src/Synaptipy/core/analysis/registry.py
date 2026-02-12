@@ -24,12 +24,13 @@ class AnalysisRegistry:
     _metadata: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
-    def register(cls, name: str, **kwargs) -> Callable:
+    def register(cls, name: str, type: str = "analysis", **kwargs) -> Callable:
         """
-        Decorator to register an analysis function.
+        Decorator to register an analysis or preprocessing function.
 
         Args:
-            name: Unique identifier for the analysis function (e.g., "spike_detection")
+            name: Unique identifier for the function (e.g., "spike_detection")
+            type: The type of function ("analysis" or "preprocessing")
             **kwargs: Additional metadata to store with the function (e.g., ui_params)
 
         Returns:
@@ -46,11 +47,22 @@ class AnalysisRegistry:
             if name in cls._registry:
                 log.warning(f"Analysis function '{name}' is already registered. Overwriting.")
             cls._registry[name] = func
-            cls._metadata[name] = kwargs
-            log.debug(f"Registered analysis function: {name} with metadata: {list(kwargs.keys())}")
+            # Ensure type is stored in metadata
+            meta = kwargs.copy()
+            meta["type"] = type
+            cls._metadata[name] = meta
+            log.debug(f"Registered {type} function: {name} with metadata: {list(meta.keys())}")
             return func
 
         return decorator
+
+    @classmethod
+    def register_processor(cls, name: str, **kwargs) -> Callable:
+        """
+        Decorator to register a preprocessing function.
+        Alias for register(name, type="preprocessing", **kwargs).
+        """
+        return cls.register(name, type="preprocessing", **kwargs)
 
     @classmethod
     def get_function(cls, name: str) -> Optional[Callable]:
