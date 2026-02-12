@@ -63,6 +63,8 @@ def test_plot_limits_auto_range_on_switch(tab, mock_recording):
     tab._selected_item_recording = mock_recording
     tab.signal_channel_combobox.currentData = MagicMock(return_value="0")
     tab.data_source_combobox.currentData = MagicMock(return_value=0)
+    tab.signal_channel_combobox.setEnabled(True)
+    tab.data_source_combobox.setEnabled(True)
     
     # 1. Plot Initial Data
     # Mock AnalysisPlotManager to return our data
@@ -76,6 +78,9 @@ def test_plot_limits_auto_range_on_switch(tab, mock_recording):
         mock_prep.return_value.channel_name = "TestCh"
         mock_prep.return_value.label = "Trial 1"
         mock_prep.return_value.context_traces = []
+        
+        mock_prep.return_value.context_traces = []
+        mock_prep.return_value.is_multi_trial = False
         
         # Trigger plot
         tab._plot_selected_data()
@@ -92,6 +97,15 @@ def test_plot_limits_auto_range_on_switch(tab, mock_recording):
         # Important: We haven't zoomed, so it should auto-range to new data (0-0.5)
         tab._plot_selected_data()
         
+        # Force update
+        tab.plot_widget.getViewBox().enableAutoRange()
+        QtWidgets.QApplication.processEvents()
+        QtWidgets.QApplication.processEvents()
+        
+        # Check Item Count
+        items = tab.plot_widget.listDataItems()
+        assert len(items) == 1, f"Expected 1 item, got {len(items)}: {items}"
+        
         # Check ViewRange
         view_range = tab.plot_widget.viewRange()
         x_range = view_range[0]
@@ -107,6 +121,8 @@ def test_plot_limits_sticky_zoom(tab, mock_recording):
     tab._selected_item_recording = mock_recording
     tab.signal_channel_combobox.currentData = MagicMock(return_value="0")
     tab.data_source_combobox.currentData = MagicMock(return_value=0)
+    tab.signal_channel_combobox.setEnabled(True)
+    tab.data_source_combobox.setEnabled(True)
     
     # 1. Plot Initial Data (0-1s)
     with patch("Synaptipy.application.controllers.analysis_plot_manager.AnalysisPlotManager.prepare_plot_data") as mock_prep:
@@ -118,13 +134,20 @@ def test_plot_limits_sticky_zoom(tab, mock_recording):
         mock_prep.return_value.channel_name = "TestCh"
         mock_prep.return_value.label = "Trial 1"
         mock_prep.return_value.units = "mV"
+        mock_prep.return_value.units = "mV"
         mock_prep.return_value.context_traces = []
+        mock_prep.return_value.is_multi_trial = False
 
         tab._plot_selected_data()
         
         # 2. ZOOM IN significantly (e.g., 0.2 to 0.4s)
         zoom_x = (0.2, 0.4)
         tab.plot_widget.setXRange(zoom_x[0], zoom_x[1], padding=0)
+        QtWidgets.QApplication.processEvents()
+        
+        # Verify zoom applied
+        curr = tab.plot_widget.viewRange()[0]
+        assert abs(curr[0] - 0.2) < 0.05, f"setXRange failed. Got {curr}"
         
         # Ensure we are considered "zoomed" logic works eventually
         # ...
@@ -150,6 +173,8 @@ def test_plot_limits_preprocessing_preserves(tab, mock_recording):
     tab._selected_item_recording = mock_recording
     tab.signal_channel_combobox.currentData = MagicMock(return_value="0")
     tab.data_source_combobox.currentData = MagicMock(return_value=0)
+    tab.signal_channel_combobox.setEnabled(True)
+    tab.data_source_combobox.setEnabled(True)
     
     # Enable Preprocessing
     tab._active_preprocessing_settings = {"filter": "highpass"}
@@ -164,7 +189,9 @@ def test_plot_limits_preprocessing_preserves(tab, mock_recording):
         mock_prep.return_value.units = "mV"
         mock_prep.return_value.channel_name = "TestCh"
         mock_prep.return_value.label = "Trial 1"
+        mock_prep.return_value.label = "Trial 1"
         mock_prep.return_value.context_traces = []
+        mock_prep.return_value.is_multi_trial = False
 
         tab._plot_selected_data()
         
@@ -175,6 +202,8 @@ def test_plot_limits_preprocessing_preserves(tab, mock_recording):
         
         # 3. Switch Data (Update Plot)
         tab._plot_selected_data()
+        
+        QtWidgets.QApplication.processEvents()
         
         # Check ViewRange
         view_range = tab.plot_widget.viewRange()

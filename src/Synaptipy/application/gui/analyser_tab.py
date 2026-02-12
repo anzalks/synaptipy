@@ -75,6 +75,9 @@ class AnalysisSourceListWidget(QtWidgets.QListWidget):
 class AnalyserTab(QtWidgets.QWidget):
     """Main Analyser Widget containing dynamically loaded sub-tabs."""
 
+    # Signal to request loading a file (e.g. from Batch Dialog result)
+    load_file_requested = QtCore.Signal(str)
+
     def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
         super().__init__(parent)
         log.debug("Initializing Main AnalyserTab (dynamic loading)")
@@ -471,6 +474,50 @@ class AnalyserTab(QtWidgets.QWidget):
                         pipeline_config = [
                             {"analysis": registry_name, "scope": "all_trials", "params": params}  # Default scope
                         ]
+                        
+                        # --- PREPEND Global Preprocessing ---
+                        global_prep = self.get_global_preprocessing()
+                        start_steps = []
+                        if global_prep:
+                            # Convert settings to steps
+                            if 'baseline' in global_prep:
+                                # Baseline is a step
+                                # Need to map 'method' to a registered function name
+                                
+                                # Assuming the 'method' key holds the registry name or something usable.
+                                start_steps.append({
+                                    "analysis": global_prep['baseline'].get("method_id", "baseline_subtraction"),
+                                    "scope": "all_trials", # Preprocessing works on raw data usually?
+                                    "params": global_prep['baseline']
+                                })
+                            
+                            if 'filters' in global_prep:
+                                for method, settings in global_prep['filters'].items():
+                                    # settings['method'] might be 'Lowpass'.
+                                    # We need registered name 'lowpass_filter'.
+                                    # This mapping is crucial.
+                                    # For now, let's inject a "filter" task and hope Registry has it,
+                                    # or we assume 'method_id' exists.
+                                    
+                                    # If PreprocessingWidget doesn't provide method_id, we might rely on 'method'.
+                                    # Ideally, we should update PreprocessingWidget to include registry key.
+                                    # But let's try to infer or use 'method_id' if present, else lowercase+underscore.
+                                    
+                                    analysis_name = settings.get("method_id", settings.get("method", "").lower().replace(" ", "_"))
+                                    if "filter" not in analysis_name:
+                                        analysis_name += "_filter" # basic heuristic
+                                        
+                                    start_steps.append({
+                                        "analysis": analysis_name,
+                                        "scope": "all_trials",
+                                        "params": settings
+                                    })
+                        
+                        if start_steps:
+                            log.debug(f"Prepending {len(start_steps)} preprocessing steps to batch pipeline.")
+                            pipeline_config = start_steps + pipeline_config
+                        # ------------------------------------
+
                         log.debug(f"Pre-filling batch pipeline with settings from {current_tab.get_display_name()}")
 
                 # 3. Get channel selection
@@ -492,7 +539,20 @@ class AnalyserTab(QtWidgets.QWidget):
         dialog = BatchAnalysisDialog(
             files=files_to_process, pipeline_config=pipeline_config, default_channels=default_channels, parent=self
         )
+        dialog.load_file_request.connect(self._handle_batch_load_request)
         dialog.exec()
+
+    def _handle_batch_load_request(self, file_path, params, channel, trial):
+        """
+        Handle request to load a file from batch results.
+        Emits signal for MainWindow to handle.
+        """
+        log.debug(f"Batch Analysis requested load: {file_path}")
+        self.load_file_requested.emit(file_path)
+        
+        # TODO: Handle channel/trial auto-selection after load
+        # This requires the load to complete first, which is async/decoupled.
+        # For now, just loading the file is a huge win.
 
     # --- Slot for Explorer Signal ---
     @QtCore.Slot(list)

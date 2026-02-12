@@ -104,8 +104,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None  # Persist settings
         # Pipeline
         self.pipeline = SignalProcessingPipeline()
+        
+        # --- ADDED: Global Analysis Window ---
+        self.analysis_region: Optional[pg.LinearRegionItem] = None
+        self.restrict_analysis_checkbox: Optional[QtWidgets.QCheckBox] = None
         # --- END ADDED ---
-
+        
         # --- PHASE 1: Data Selection and Plotting ---
         self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
         self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
@@ -173,9 +177,43 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.save_plot_button.clicked.connect(self._save_plot)
         toolbar_layout.addWidget(self.save_plot_button)
 
+        # Restrict Analysis Checkbox
+        self.restrict_analysis_checkbox = QtWidgets.QCheckBox("Restrict Analysis Window")
+        self.restrict_analysis_checkbox.setToolTip("Only analyze data within the green region")
+        self.restrict_analysis_checkbox.stateChanged.connect(self._toggle_analysis_region)
+        toolbar_layout.addWidget(self.restrict_analysis_checkbox)
+
         toolbar_layout.addStretch()
 
         parent_layout.addLayout(toolbar_layout)
+
+    def _toggle_analysis_region(self, state):
+        """Toggle visibility of the analysis region."""
+        visible = (state == QtCore.Qt.CheckState.Checked.value)
+        if self.analysis_region:
+            self.analysis_region.setVisible(visible)
+            
+            # If making visible and we have data, try to set a reasonable default range if current is [0,1]
+            if visible and self._current_plot_data:
+                time_vec = self._current_plot_data.get("time")
+                if time_vec is not None and len(time_vec) > 1:
+                    current_region = self.analysis_region.getRegion()
+                    # If strictly default 0-1, maybe autoset to 10-90%?
+                    # For now, let's just leave it to user, or persist it.
+                    pass
+        
+        # Trigger re-analysis to apply/unapply restriction
+        self._trigger_analysis()
+
+    def _on_region_changed(self):
+        """Handle region drag."""
+        # Just trigger analysis (debounced by the timer if we connected to it, but direct trigger here)
+        # We might want to debounce this?
+        # Creating a dedicated timer for region dragging might be better if it's heavy.
+        # For now, direct trigger.
+        # Actually, let's use the debounce timer.
+        if self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     def _reset_plot_view(self) -> None:
         """Reset the plot view to default range."""
@@ -616,6 +654,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Base canvas handles signal protection if needed, but we can verify.
         # For now, rely on canvas.
 
+        self.analysis_region = pg.LinearRegionItem(
+            values=[0, 0], orientation=pg.LinearRegionItem.Vertical, 
+            brush=pg.mkBrush(0, 255, 0, 50), movable=True
+        )
+        self.analysis_region.setVisible(False)
+        # self.plot_widget.addItem(self.analysis_region) # Don't add yet to avoid auto-range issues
+        self.analysis_region.sigRegionChanged.connect(self._on_region_changed)
+        
         # Add the plot widget (GraphicsLayoutWidget) to layout
         layout.addWidget(self.plot_canvas.widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
@@ -1160,6 +1206,29 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         QtWidgets.QMessageBox.critical(self, "Analysis Error", f"An error occurred during analysis:\n{value}")
 
+    def _toggle_analysis_region(self, state):
+        """Toggle visibility of the analysis region."""
+        visible = (state == QtCore.Qt.CheckState.Checked.value)
+        if self.analysis_region and self.plot_widget:
+            if visible:
+                # Add if not already added (check items list or just try add)
+                if self.analysis_region not in self.plot_widget.items:
+                    self.plot_widget.addItem(self.analysis_region)
+                self.analysis_region.setVisible(True)
+            else:
+                self.analysis_region.setVisible(False)
+                # Remove to prevent auto-ranging issues
+                if self.analysis_region in self.plot_widget.items:
+                    self.plot_widget.removeItem(self.analysis_region)
+
+        # Trigger re-analysis
+        self._trigger_analysis()
+
+    def _on_region_changed(self):
+        """Handle region drag."""
+        if self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
+
     # --- PHASE 2: Abstract Methods for Template Method Pattern ---
     # BUG 2 FIX: These are the ONLY declarations of these methods - no duplicates
 
@@ -1494,7 +1563,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         plots it, and calls the _on_data_plotted hook for subclass-specific additions.
         """
         log.debug(f"{self.__class__.__name__}: Plotting selected data")
-        self._current_plot_data = None
+        
 
         if not self.plot_widget:
             log.error(f"{self.__class__.__name__}: Plot widget is None!")
@@ -1530,6 +1599,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
                 # Logic: Preserve view if preprocessing active OR if user is zoomed in
                 # Logic: Preserve view if preprocessing active AND we have existing data
+                # (Prevents locking to default 0-1 view on first load with global preprocessing)
                 # (Prevents locking to default 0-1 view on first load with global preprocessing)
                 if self._active_preprocessing_settings and self._current_plot_data:
                     should_preserve_view = True
@@ -1727,9 +1797,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Step 1: Gather parameters from subclass UI
             params = self._gather_analysis_parameters()
             if not params:
-                log.warning(f"{self.__class__.__name__}: No parameters gathered")
                 self._set_save_button_enabled(False)
                 return
+
+            # --- INJECT GLOBAL ANALYSIS WINDOW ---
+            if getattr(self, "restrict_analysis_checkbox", None) and \
+               self.restrict_analysis_checkbox.isChecked() and \
+               getattr(self, "analysis_region", None):
+                min_t, max_t = self.analysis_region.getRegion()
+                params["t_start"] = min_t
+                params["t_end"] = max_t
+                log.debug(f"Applied restricted analysis window: {min_t:.4f} to {max_t:.4f} s")
+            # -------------------------------------
 
             # Step 2: Execute core analysis
             results = self._execute_core_analysis(params, self._current_plot_data)

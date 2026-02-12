@@ -422,6 +422,10 @@ class AddStepDialog(QtWidgets.QDialog):
 
 
 class BatchAnalysisDialog(QtWidgets.QDialog):
+    # Signal emitted when user double clicks a result row to inspect it
+    # Arguments: file_path (str), params (dict), channel (str/None), trial (int/None)
+    load_file_request = QtCore.Signal(str, dict, object, object)
+
     """
     Main dialog for configuring and running batch analysis.
 
@@ -890,6 +894,31 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         # Resize columns to content
         self.results_table.resizeColumnsToContents()
+        self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
+
+    def _on_result_row_clicked(self, row, col):
+        """Handle double click on result row to load file."""
+        if self.result_df is None or self.result_df.empty:
+            return
+
+        try:
+            if row < len(self.result_df):
+                record = self.result_df.iloc[row]
+                
+                # Try multiple keys for file path
+                file_path = record.get("file_path") or record.get("file") or record.get("source_file")
+                if not file_path:
+                    # Fallback: try to construct from name if possible (unreliable)
+                    return
+
+                channel = record.get("channel")
+                trial = record.get("trial_index")
+                
+                log.debug(f"Requesting load for: {file_path}, Ch={channel}, Trial={trial}")
+                self.load_file_request.emit(str(file_path), {}, channel, trial)
+                
+        except Exception as e:
+            log.error(f"Error handling row click: {e}")
 
     def _on_export(self):
         """Export results to CSV."""

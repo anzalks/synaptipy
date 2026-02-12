@@ -254,6 +254,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Connect Signals FROM Tabs TO MainWindow ---
         self.explorer_tab.open_file_requested.connect(self._open_file_dialog)
+        
+        # Connect AnalyserTab load request
+        if hasattr(self.analyser_tab, "load_file_requested"):
+            self.analyser_tab.load_file_requested.connect(self._on_analyser_load_file_request)
 
         # --- Set Central Widget ---
         self.setCentralWidget(self.tab_widget)
@@ -620,11 +624,25 @@ class MainWindow(QtWidgets.QMainWindow):
                     log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
             else:
                 log.warning("Cannot update exporter tab state: Exporter tab not found.")
-            # if hasattr(self, 'analyser_tab') and self.analyser_tab:
-            # try: self.analyser_tab.update_state(self.explorer_tab._analysis_items) # Pass analysis items explicitly
-            # except Exception as e_analyse_update: log.error(f"Error updating analyser tab state: {e_analyse_update}",
-            # exc_info=True)
             # else: log.warning("Cannot update analyser tab state: Analyser tab not found.")
+
+    def _on_analyser_load_file_request(self, file_path_str: str):
+        """Handle request from AnalyserTab to load a specific file."""
+        try:
+            file_path = Path(file_path_str)
+            if not file_path.exists():
+                QtWidgets.QMessageBox.warning(self, "File Not Found", f"The file could not be found:\n{file_path}")
+                return
+            
+            log.debug(f"MainWindow received request to load: {file_path}")
+            
+            # Use _load_in_explorer to handle the loading
+            # Treat as single file context if not already in list, or just load it.
+            # _load_in_explorer expects: initial_filepath, file_list, index, lazy_load
+            self._load_in_explorer(file_path, [file_path], 0, False)
+            
+        except Exception as e:
+            log.error(f"Error handling analyser load request: {e}")
 
     def _export_to_nwb(self):
         """Handles exporting the current recording (from Explorer tab) to NWB."""
