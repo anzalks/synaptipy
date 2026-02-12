@@ -25,7 +25,6 @@ from .plot_canvas import ExplorerPlotCanvas
 from .y_controls import ExplorerYControls
 from .toolbar import ExplorerToolbar
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
-from Synaptipy.core import signal_processor
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 
 # Configure Logger
@@ -87,7 +86,6 @@ class ExplorerTab(QtWidgets.QWidget):
         self._is_loading: bool = False
 
         # Limits State
-        self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_y_ranges: Dict[str, Optional[Tuple[float, float]]] = {}
         # self.manual_limits_enabled: bool = False  # Removed
@@ -240,7 +238,6 @@ class ExplorerTab(QtWidgets.QWidget):
         self.open_file_btn.clicked.connect(self.open_file_requested.emit)
 
         # Sidebar
-        # Sidebar
         # We preserve state when selecting from sidebar too, to allow seamless browsing of siblings
         self.sidebar.file_selected.connect(
             lambda f, files, i: self.load_recording_data(f, files, i, preserve_state=True)
@@ -252,9 +249,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.config_panel.select_current_trial_clicked.connect(self._toggle_select_current_trial)
         self.config_panel.clear_avg_selection_clicked.connect(self._clear_avg_selection)
         self.config_panel.show_selected_avg_toggled.connect(self._toggle_plot_selected_average)
-        self.config_panel.select_current_trial_clicked.connect(self._toggle_select_current_trial)
-        self.config_panel.clear_avg_selection_clicked.connect(self._clear_avg_selection)
-        self.config_panel.show_selected_avg_toggled.connect(self._toggle_plot_selected_average)
+
         self.config_panel.trial_selection_requested.connect(self._on_trial_selection_requested)
         self.config_panel.trial_selection_reset_requested.connect(self._on_trial_selection_reset_requested)
         self.config_panel.channel_visibility_changed.connect(self._on_channel_visibility_changed)
@@ -618,7 +613,6 @@ class ExplorerTab(QtWidgets.QWidget):
                         except Exception:
                             pass
 
-                    # 2. Plot Average on Top
                     # 2. Plot Average on Top
                     try:
                         avg_data = channel.get_averaged_data(
