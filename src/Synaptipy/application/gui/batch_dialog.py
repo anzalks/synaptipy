@@ -180,9 +180,14 @@ class AddStepDialog(QtWidgets.QDialog):
         type_layout = QtWidgets.QFormLayout(type_group)
 
         self.analysis_combo = QtWidgets.QComboBox()
-        available_analyses = AnalysisRegistry.list_registered()
-        if available_analyses:
-            self.analysis_combo.addItems(sorted(available_analyses))
+        analysis_names = sorted(AnalysisRegistry.list_analysis())
+        preprocessing_names = sorted(AnalysisRegistry.list_preprocessing())
+        if analysis_names or preprocessing_names:
+            if analysis_names:
+                self.analysis_combo.addItems(analysis_names)
+            if preprocessing_names:
+                self.analysis_combo.insertSeparator(self.analysis_combo.count())
+                self.analysis_combo.addItems(preprocessing_names)
         else:
             self.analysis_combo.addItem("No analyses registered")
             self.analysis_combo.setEnabled(False)
@@ -262,7 +267,7 @@ class AddStepDialog(QtWidgets.QDialog):
         layout.addLayout(button_layout)
 
         # Initialize with first analysis
-        if available_analyses:
+        if analysis_names or preprocessing_names:
             self._on_analysis_changed(self.analysis_combo.currentText())
 
     def _on_analysis_changed(self, analysis_name: str):
@@ -271,6 +276,13 @@ class AddStepDialog(QtWidgets.QDialog):
         for widget in self.param_widgets.values():
             self.params_layout.removeRow(widget)
         self.param_widgets.clear()
+
+        # Hide scope when preprocessing is selected
+        meta = AnalysisRegistry.get_metadata(analysis_name)
+        is_preprocessing = meta.get("type") == "preprocessing" if meta else False
+        scope_parent = self.scope_group.buttons()[0].parentWidget() if self.scope_group.buttons() else None
+        if scope_parent:
+            scope_parent.parentWidget().setVisible(not is_preprocessing)
 
         # Get analysis info
         info = BatchAnalysisEngine.get_analysis_info(analysis_name)
@@ -894,7 +906,9 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         # Resize columns to content
         self.results_table.resizeColumnsToContents()
-        self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
+        if not getattr(self, '_result_click_connected', False):
+            self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
+            self._result_click_connected = True
 
     def _on_result_row_clicked(self, row, col):
         """Handle double click on result row to load file."""
@@ -908,14 +922,28 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 # Try multiple keys for file path
                 file_path = record.get("file_path") or record.get("file") or record.get("source_file")
                 if not file_path:
-                    # Fallback: try to construct from name if possible (unreliable)
                     return
 
                 channel = record.get("channel")
                 trial = record.get("trial_index")
                 
-                log.debug(f"Requesting load for: {file_path}, Ch={channel}, Trial={trial}")
-                self.load_file_request.emit(str(file_path), {}, channel, trial)
+                # Extract analysis name and parameters from the result row
+                params = {}
+                analysis_name = record.get("analysis")
+                if analysis_name:
+                    params["analysis_name"] = analysis_name
+                # Include any numeric result columns as context
+                skip_keys = {"file_path", "file", "source_file", "channel",
+                             "trial_index", "analysis", "status", "error"}
+                for key, val in record.items():
+                    if key not in skip_keys and val is not None:
+                        try:
+                            params[key] = float(val)
+                        except (ValueError, TypeError):
+                            pass
+
+                log.debug(f"Requesting load for: {file_path}, Ch={channel}, Trial={trial}, Params={params}")
+                self.load_file_request.emit(str(file_path), params, channel, trial)
                 
         except Exception as e:
             log.error(f"Error handling row click: {e}")

@@ -50,6 +50,8 @@ Synaptipy = ["*.yml", "*.yaml", "*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
+norecursedirs = [".verify_venv", ".git", "__pycache__", "*.egg-info"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

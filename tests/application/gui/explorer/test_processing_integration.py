@@ -70,7 +70,7 @@ def test_preprocessing_integration(explorer_tab, qtbot):
         # In current explorer, it stores _active_preprocessing_settings and calls _update_plot.
         # _update_plot calls signal_processor.
         
-        assert explorer_tab._active_preprocessing_settings == settings
+        assert explorer_tab._active_preprocessing_settings == {'baseline': settings}
         
         # Verify mock called (triggered by _update_plot)
         assert mock_process.called
@@ -87,6 +87,6 @@ def test_pipeline_transition_check(explorer_tab):
     
     settings = {'type': 'filter', 'method': 'lowpass', 'cutoff': 100}
     explorer_tab._handle_preprocessing_request(settings)
-    assert explorer_tab._active_preprocessing_settings == settings
+    assert explorer_tab._active_preprocessing_settings == {'filters': {'lowpass': settings}}
     # In future, we will check:
     # assert len(explorer_tab.pipeline.get_steps()) > 0

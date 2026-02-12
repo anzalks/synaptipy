@@ -5,7 +5,6 @@ Analysis functions for Phase Plane (dV/dt vs V) analysis.
 """
 import logging
 import numpy as np
-from scipy.ndimage import gaussian_filter1d
 from typing import Tuple, Optional, Dict, Any
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
@@ -29,6 +28,7 @@ def calculate_dvdt(voltage: np.ndarray, sampling_rate: float, sigma_ms: float = 
 
     # Optional smoothing
     if sigma_ms > 0:
+        from scipy.ndimage import gaussian_filter1d
         sigma_samples = (sigma_ms / 1000.0) * sampling_rate
         if sigma_samples > 0.5:
             voltage_smooth = gaussian_filter1d(voltage, sigma_samples)

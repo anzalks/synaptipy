@@ -3,14 +3,6 @@ import pytest
 import sys
 from unittest.mock import MagicMock, patch
 
-# Mock scipy BEFORE importing application modules that depend on it
-mock_signal = MagicMock()
-mock_stats = MagicMock()
-sys.modules["scipy.signal"] = mock_signal
-sys.modules["scipy.stats"] = mock_stats
-sys.modules["scipy.optimize"] = MagicMock()
-sys.modules["scipy"] = MagicMock()
-
 import numpy as np
 from PySide6 import QtWidgets, QtCore
 import pyqtgraph as pg
@@ -109,13 +101,15 @@ def test_preprocessing_flow(base_tab):
 
             base_tab._handle_preprocessing_request(settings)
             
-            assert base_tab._active_preprocessing_settings == settings
+            # Settings are stored in nested format: filters keyed by method
+            expected = {'filters': {'lowpass': settings}}
+            assert base_tab._active_preprocessing_settings == expected
             assert mock_plot.called
             
             # Verify AnalysisPlotManager called with correct args
             assert mock_prep.called
             args, kwargs = mock_prep.call_args
-            assert kwargs.get('preprocessing_settings') == settings
+            assert kwargs.get('preprocessing_settings') == expected
             # Verify callback is passed
             assert 'process_callback' in kwargs
             
