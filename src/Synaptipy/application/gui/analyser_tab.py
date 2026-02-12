@@ -102,6 +102,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self._load_analysis_tabs()
         # Connect the signal from SessionManager
         self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
+        self.session_manager.preprocessing_settings_changed.connect(self._on_session_preprocessing_changed)
         # Initialize with current session state
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
 
@@ -232,6 +233,29 @@ class AnalyserTab(QtWidgets.QWidget):
             self._pending_initial_selection = False
             if self.central_analysis_item_combo.count() > 0:
                 self._on_central_item_selected(0)
+
+    @QtCore.Slot(object)
+    def _on_session_preprocessing_changed(self, settings: Optional[Dict[str, Any]]):
+        """
+        Handle updates to global preprocessing from SessionManager (e.g. from ExplorerTab).
+        If global preprocessing is already confirmed/active, we update and propagate immediately.
+        """
+        # Always keep local reference in sync if we are in a 'confirmed' state or if it matches
+        # logic where we want to track it.
+        # If we haven't confirmed yet, _check_preprocessing_on_enter will handle it.
+        # But if we HAVE confirmed, we must update active settings.
+        
+        if self._global_preprocessing_confirmed:
+            log.debug(f"Session preprocessing changed. Updating active global settings.")
+            self._global_preprocessing_settings = settings
+            # Propagate to all tabs
+            self.set_global_preprocessing(settings)
+        else:
+            # If not confirmed, just update local ref so next check might see it?
+            # Actually _check_preprocessing_on_enter reads from SessionManager directly.
+            # So we don't strictly need to do anything here unless we want to force a popup?
+            # Let's just log.
+            log.debug("Session preprocessing changed (not yet confirmed globally).")
 
     def _setup_ui(self):
         """Setup UI with sub-tabs only. Global controls are injected into each tab's left panel."""

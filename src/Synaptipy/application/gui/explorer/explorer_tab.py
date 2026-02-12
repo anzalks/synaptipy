@@ -1189,7 +1189,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self._updating_viewranges = True
         try:
             zoom_val = self.y_controls.global_y_slider.value()
-            log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
+            # Silence excessive logging or only log if changed significantly
+        # log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
+
 
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
