@@ -187,34 +187,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         parent_layout.addLayout(toolbar_layout)
 
-    def _toggle_analysis_region(self, state):
-        """Toggle visibility of the analysis region."""
-        visible = (state == QtCore.Qt.CheckState.Checked.value)
-        if self.analysis_region:
-            self.analysis_region.setVisible(visible)
-            
-            # If making visible and we have data, try to set a reasonable default range if current is [0,1]
-            if visible and self._current_plot_data:
-                time_vec = self._current_plot_data.get("time")
-                if time_vec is not None and len(time_vec) > 1:
-                    current_region = self.analysis_region.getRegion()
-                    # If strictly default 0-1, maybe autoset to 10-90%?
-                    # For now, let's just leave it to user, or persist it.
-                    pass
-        
-        # Trigger re-analysis to apply/unapply restriction
-        self._trigger_analysis()
-
-    def _on_region_changed(self):
-        """Handle region drag."""
-        # Just trigger analysis (debounced by the timer if we connected to it, but direct trigger here)
-        # We might want to debounce this?
-        # Creating a dedicated timer for region dragging might be better if it's heavy.
-        # For now, direct trigger.
-        # Actually, let's use the debounce timer.
-        if self._analysis_debounce_timer:
-            self._analysis_debounce_timer.start(self._debounce_delay_ms)
-
     def _reset_plot_view(self) -> None:
         """Reset the plot view to default range."""
         if self.plot_widget:
