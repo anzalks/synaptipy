@@ -90,10 +90,10 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         """Re-add custom plot items if they were removed by plot_widget.clear()."""
         if not self.plot_widget:
             return
-        if self.event_markers_item and self.event_markers_item not in self.plot_widget.items():
+        if self.event_markers_item and self.event_markers_item not in self.plot_widget.items:
             self.plot_widget.addItem(self.event_markers_item)
             self.event_markers_item.setZValue(100)
-        if self.threshold_line and self.threshold_line not in self.plot_widget.items():
+        if self.threshold_line and self.threshold_line not in self.plot_widget.items:
             self.plot_widget.addItem(self.threshold_line)
             self.threshold_line.setZValue(90)
 

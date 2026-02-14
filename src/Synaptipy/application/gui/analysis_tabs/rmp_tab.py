@@ -149,11 +149,11 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
             return
 
         # Check if items are attached to the plot
-        if self.interactive_region and self.interactive_region not in self.plot_widget.items():
+        if self.interactive_region and self.interactive_region not in self.plot_widget.items:
             self.plot_widget.addItem(self.interactive_region)
 
         for line in [self.baseline_mean_line, self.baseline_plus_sd_line, self.baseline_minus_sd_line]:
-            if line and line not in self.plot_widget.items():
+            if line and line not in self.plot_widget.items:
                 self.plot_widget.addItem(line)
 
     def _on_channel_changed(self, channel_index: int):

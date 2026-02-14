@@ -304,6 +304,32 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # --- Capture State if Requested ---
         if preserve_state:
+            # CHECK: Only preserve if user has actually modified the view or processing
+            # 1. Check Preprocessing
+            preprocessing_active = bool(self.pipeline.get_steps())
+
+            # 2. Check Zoom
+            is_zoomed = False
+            try:
+                # Check X-Zoom ratio against base range
+                if self.base_x_range:
+                    base_span = self.base_x_range[1] - self.base_x_range[0]
+                    for cid, plot in self.plot_canvas.channel_plots.items():
+                        if plot.isVisible():
+                            view_range = plot.viewRange()[0]
+                            current_span = view_range[1] - view_range[0]
+                            # If we are seeing less than 95% of data, we are zoomed
+                            if base_span > 0 and (current_span / base_span) < 0.95:
+                                is_zoomed = True
+                                break
+            except Exception as e:
+                log.debug(f"Error checking zoom state: {e}")
+
+            if not (preprocessing_active or is_zoomed):
+                preserve_state = False
+                log.debug("State preservation skipped: View is default and no preprocessing active.")
+
+        if preserve_state:
             # 1. Capture View State (Zoom/Pan)
             self._pending_view_state = {}
             for cid, plot in self.plot_canvas.channel_plots.items():
@@ -341,7 +367,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.session_manager.current_recording = recording
         
         # Auto-add to analysis set so AnalyserTab sees it immediately
-        self._add_current_to_analysis_set()
+        # self._add_current_to_analysis_set()  # Disabled per user request (manual only)
 
     def _display_recording(self, recording: Recording):
         if not recording:
