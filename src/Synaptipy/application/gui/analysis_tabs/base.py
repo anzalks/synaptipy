@@ -1184,13 +1184,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.analysis_region and self.plot_widget:
             if visible:
                 # Add if not already added (check items list or just try add)
-                if self.analysis_region not in self.plot_widget.items:
+                if self.analysis_region not in self.plot_widget.items():
                     self.plot_widget.addItem(self.analysis_region)
                 self.analysis_region.setVisible(True)
             else:
                 self.analysis_region.setVisible(False)
                 # Remove to prevent auto-ranging issues
-                if self.analysis_region in self.plot_widget.items:
+                if self.analysis_region in self.plot_widget.items():
                     self.plot_widget.removeItem(self.analysis_region)
 
         # Trigger re-analysis
@@ -1733,6 +1733,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         Hook method called after data has been successfully plotted by the base class.
         Subclasses should override this to add their specific plot items (e.g., regions, markers).
         """
+        # Base implementation handles analysis_region re-addition
+        if self.analysis_region and self.restrict_analysis_checkbox.isChecked():
+            if self.plot_widget and self.analysis_region not in self.plot_widget.items():
+                self.plot_widget.addItem(self.analysis_region)
+            self.analysis_region.setVisible(True)
         pass  # Default implementation does nothing
 
     # --- PHASE 2: Template Method Pattern ---

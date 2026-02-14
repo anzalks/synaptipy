@@ -50,11 +50,25 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
             self.plot_widget.addItem(self.threshold_line)
             self.threshold_line.setVisible(False)
 
+    def _ensure_custom_items_on_plot(self):
+        """Re-add custom plot items if they were removed by plot_widget.clear()."""
+        if not self.plot_widget:
+            return
+        if self.threshold_line and self.threshold_line not in self.plot_widget.items():
+            self.plot_widget.addItem(self.threshold_line)
+
+    def _on_data_plotted(self):
+        """Re-add custom items after plot_widget.clear() in _plot_selected_data."""
+        self._ensure_custom_items_on_plot()
+        super()._on_data_plotted()
+
     def _plot_analysis_visualizations(self, results: Any):
         """
         Visualize Phase Plane results.
         Called by BaseAnalysisTab._on_analysis_result.
         """
+        self._ensure_custom_items_on_plot()
+
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:

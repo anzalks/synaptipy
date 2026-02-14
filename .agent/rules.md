@@ -101,6 +101,10 @@ All analysis features must be split into two distinct parts:
 * **Lockfile Integrity**: If you import a new third-party library, you **MUST** explicitly tell the user to add it to `requirements.txt`.
 * *Reason*: The CI pipeline installs dependencies strictly from `requirements.txt`. If you skip this, the build fails.
 
+**5. IO & Data Abstraction**
+* **Native Discovery**: In `NeoAdapter`, strictly prioritize `neo.io.get_io(filename)` over manual extension mapping lists (`IODict`), which become stale.
+* **Memory Hygiene**: When aggregating signals from multiple segments, PRE-ALLOCATE NumPy arrays based on header info. Do not append to lists in a loop for massive datasets.
+
 ## V. DOCUMENTATION & PROFESSIONALISM
 
 **1. Professional Tone & Style**
@@ -138,3 +142,24 @@ All analysis features must be split into two distinct parts:
 *   **Forbidden**: Standalone `verify_*.py` scripts for testing. All tests must be discoverable by `pytest`.
 *   **Requirement**: All test files must reside in `tests/` and follow `test_*.py` naming.
 *   *Reason*: Ensures CI runs all tests and provides uniform coverage reporting.
+
+## VII. SCIENTIFIC RIGOR & MATHEMATICAL CORRECTNESS
+
+**1. The Vectorization Mandate (Performance)**
+* **Prohibition**: Python `for` loops are strictly **FORBIDDEN** for iterating over signal arrays, time series, or detected event lists (e.g., spikes) inside Core logic.
+* **Requirement**: You MUST use NumPy vectorization, broadcasting, or `scipy.ndimage` operations.
+    * *Bad*: `for i in range(len(data)): ...`
+    * *Good*: `np.where(data > threshold)` or `data[indices] - data[indices-1]`
+
+**2. The Provenance Protocol (Reproducibility)**
+* **Traceability**: Every "Result Object" (e.g., `SpikeTrainResult`, `RinResult`) MUST contain a `parameters` field (Dict) storing the exact configuration used to generate it (e.g., threshold values, window sizes).
+* **Constraint**: A scientist must be able to reconstruct the analysis solely from the saved Result object.
+
+**3. Algorithmic Flexibility (No Hardcoding)**
+* **Forbidden**: Hardcoded scientific bounds or constants (e.g., `tau_bounds=[0, 1]`, `threshold=-20`) inside logic functions.
+* **Requirement**: All bounds and constants must be exposed as function arguments with defaults provided only in the `ui_params` of the Registry Wrapper, not the core logic.
+* **Model Selection**: Fitting functions (e.g., Tau) MUST support multiple models (e.g., Mono-exponential vs. Bi-exponential) via a `mode` argument.
+
+**4. Unit Safety & Validation**
+* **Magnitude Checks**: Functions accepting `sampling_rate` MUST implement sanity checks (e.g., if `fs < 100`, warn "Is this Hz or kHz?").
+* **Zero-State Safety**: All statistical aggregators (mean, std) MUST explicitly handle empty arrays to prevent `NaN` propagation or RuntimeWarnings.

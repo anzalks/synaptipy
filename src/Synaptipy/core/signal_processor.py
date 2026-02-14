@@ -24,6 +24,27 @@ def _get_scipy():
 log = logging.getLogger(__name__)
 
 
+def validate_sampling_rate(fs: float) -> bool:
+    """
+    Validate sampling rate and warn if suspiciously low.
+
+    Args:
+        fs: Sampling rate in Hz.
+
+    Returns:
+        True if valid (positive), False otherwise.
+    """
+    if fs <= 0:
+        log.error("Sampling rate must be positive, got %s", fs)
+        return False
+    if fs < 100:
+        log.warning(
+            "Sampling rate is suspiciously low (%.2f Hz, <100). "
+            "Are you using kHz instead of Hz?", fs
+        )
+    return True
+
+
 def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any]:
     """
     Assess the quality of a recording trace.
@@ -103,6 +124,29 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
             results["warnings"].append("Significant 50Hz line noise detected")
         if power_ratio_60 > 10.0:
             results["warnings"].append("Significant 60Hz line noise detected")
+
+        # 4. Low-Frequency Variance ("wobbly" baseline detection)
+        # Apply <1Hz lowpass filter and measure variance of slow drift.
+        nyq = 0.5 * sampling_rate
+        lf_cutoff = 1.0 / nyq
+        if 0 < lf_cutoff < 1 and len(detrended) > 30:
+            try:
+                sos_lf = signal.butter(2, lf_cutoff, btype='low', output='sos')
+                lf_signal = signal.sosfiltfilt(sos_lf, detrended, padtype='odd')
+                lf_variance = float(np.var(lf_signal))
+                results["metrics"]["lf_variance"] = lf_variance
+
+                # Compare to overall noise variance
+                hf_variance = float(np.var(detrended - lf_signal))
+                if hf_variance > 0 and lf_variance > 2.0 * hf_variance:
+                    results["warnings"].append(
+                        f"Low-frequency instability detected "
+                        f"(LF var={lf_variance:.4f} > 2x HF var={hf_variance:.4f})"
+                    )
+            except Exception as lf_err:
+                log.debug("LF variance check skipped: %s", lf_err)
+        else:
+            results["metrics"]["lf_variance"] = None
 
     except (ValueError, TypeError, RuntimeError) as e:
         log.error(f"Error during trace quality check: {e}")
@@ -196,7 +240,7 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
     try:
         # Use SOS format for numerical stability
         sos = signal.butter(order, [low, high], btype="band", output='sos')
-        y = signal.sosfiltfilt(sos, data)
+        y = signal.sosfiltfilt(sos, data, padtype='odd')
         return y
     except Exception as e:
         log.error(f"Bandpass filter failed: {e}")
@@ -241,7 +285,7 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     try:
         # Use SOS format for numerical stability
         sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
-        y = signal.sosfiltfilt(sos, data)
+        y = signal.sosfiltfilt(sos, data, padtype='odd')
         return y
     except Exception as e:
         log.error(f"Lowpass filter failed: {e}")
@@ -286,7 +330,7 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
     try:
         # Use SOS format for numerical stability
         sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
-        y = signal.sosfiltfilt(sos, data)
+        y = signal.sosfiltfilt(sos, data, padtype='odd')
         return y
     except Exception as e:
         log.error(f"Highpass filter failed: {e}")
@@ -336,7 +380,7 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
         # Convert to zpk then to sos for stability
         z, p, k = signal.tf2zpk(b, a)
         sos = signal.zpk2sos(z, p, k)
-        y = signal.sosfiltfilt(sos, data)
+        y = signal.sosfiltfilt(sos, data, padtype='odd')
         return y
     except Exception as e:
         log.error(f"Notch filter failed: {e}")

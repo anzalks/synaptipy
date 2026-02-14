@@ -145,8 +145,32 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
 
         return params
 
+    def _ensure_custom_items_on_plot(self):
+        """Re-add custom plot items if they were removed by plot_widget.clear()."""
+        if not self.plot_widget:
+            return
+
+        # Regions
+        if self.baseline_region and self.baseline_region not in self.plot_widget.items():
+            self.plot_widget.addItem(self.baseline_region)
+        if self.response_region and self.response_region not in self.plot_widget.items():
+            self.plot_widget.addItem(self.response_region)
+
+        # Lines
+        if self.baseline_line and self.baseline_line not in self.plot_widget.items():
+            self.plot_widget.addItem(self.baseline_line)
+        if self.response_line and self.response_line not in self.plot_widget.items():
+            self.plot_widget.addItem(self.response_line)
+
+    def _on_data_plotted(self):
+        """Re-add custom items after plot_widget.clear() in _plot_selected_data."""
+        self._ensure_custom_items_on_plot()
+        super()._on_data_plotted()
+
     def _plot_analysis_visualizations(self, results: Any):
         """Override to update result lines."""
+        self._ensure_custom_items_on_plot()
+
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:

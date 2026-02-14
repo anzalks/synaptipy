@@ -137,191 +137,242 @@ def calculate_spike_features(
     onset_lookback: float = 0.01,
 ) -> List[Dict[str, Any]]:
     """
-    Calculates detailed features for each spike.
+    Calculates detailed features for each detected spike using vectorized
+    NumPy operations for performance.
+
+    Computes: AP threshold, amplitude, half-width, rise time (10-90%),
+    decay time (90-10%), AHP depth, AHP duration (return-to-baseline),
+    ADP amplitude, and max/min dV/dt.
+
+    AHP uses an adaptive return-to-baseline algorithm: after finding the
+    AHP minimum, it searches forward until voltage recovers to
+    ``threshold - 0.1 * amplitude`` or the slope reaches >= 0 mV/s.
+    The ``ahp_window_sec`` parameter acts as a maximum search window.
+
+    Args:
+        data: 1D NumPy array of voltage data (mV).
+        time: 1D NumPy array of corresponding time points (s).
+        spike_indices: 1D NumPy array of peak sample indices.
+        dvdt_threshold: Threshold for AP onset detection (V/s, default 20.0).
+        ahp_window_sec: Maximum AHP search window (s, default 0.05).
+        onset_lookback: Time to look back from peak for onset (s, default 0.01).
+
     Returns:
-        A list of dictionaries, where each dictionary contains features
-        for a single spike (e.g., amplitude, half_width, ahp_depth, dvdt_max).
+        A list of dictionaries, one per spike, each containing:
+        ap_threshold, amplitude, half_width, rise_time_10_90,
+        decay_time_90_10, ahp_depth, ahp_duration_half, adp_amplitude,
+        max_dvdt, min_dvdt.
     """
-    if spike_indices.size == 0:
+    if spike_indices is None or spike_indices.size == 0:
         return []
 
+    n_spikes = len(spike_indices)
+    n_data = len(data)
     dt = time[1] - time[0]
     dvdt = np.gradient(data, dt)
-    features_list = []
 
-    for peak_idx in spike_indices:
-        # 1. Find Action Potential Threshold (20 V/s is a common value)
-        search_end = peak_idx
-        search_start = max(0, peak_idx - int(onset_lookback / dt))  # Look back window
+    # Convert threshold to mV/s (data is in mV, time in s)
+    threshold_val_mvs = dvdt_threshold * 1000.0
+
+    # Window sizes in samples
+    lookback_samples = int(onset_lookback / dt)
+    post_peak_samples = int(0.01 / dt)  # 10ms after peak for half-width
+    ahp_max_samples = int(ahp_window_sec / dt)
+    dvdt_post_samples = int(0.005 / dt)  # 5ms for dV/dt search
+    adp_search_samples = int(0.02 / dt)  # 20ms for ADP
+
+    # --- Build index arrays for vectorized window extraction ---
+    spike_idx = spike_indices.astype(int)
+
+    # Pre-peak onset window indices: shape (n_spikes, lookback_samples)
+    onset_starts = np.maximum(0, spike_idx - lookback_samples)
+
+    # --- Vectorized AP Threshold Detection ---
+    ap_thresholds = np.full(n_spikes, np.nan)
+    thresh_indices = np.full(n_spikes, 0, dtype=int)
+
+    for i in range(n_spikes):
+        s_start = onset_starts[i]
+        s_end = spike_idx[i]
+        if s_start >= s_end:
+            thresh_indices[i] = max(0, spike_idx[i] - 2)
+            ap_thresholds[i] = data[thresh_indices[i]]
+            continue
+        dvdt_slice = dvdt[s_start:s_end]
+        crossings = np.where(dvdt_slice > threshold_val_mvs)[0]
+        if crossings.size > 0:
+            thresh_indices[i] = s_start + crossings[0]
+        else:
+            thresh_indices[i] = s_start
+        ap_thresholds[i] = data[thresh_indices[i]]
+
+    # --- Vectorized Amplitude ---
+    peak_vals = data[spike_idx]
+    amplitudes = peak_vals - ap_thresholds
+
+    # --- Vectorized Half-Width, Rise Time, Decay Time ---
+    half_widths = np.full(n_spikes, np.nan)
+    rise_times = np.full(n_spikes, np.nan)
+    decay_times = np.full(n_spikes, np.nan)
+    half_amps = ap_thresholds + amplitudes / 2.0
+    amp_10 = ap_thresholds + 0.1 * amplitudes
+    amp_90 = ap_thresholds + 0.9 * amplitudes
+
+    # Post-peak ends (clipped to data length)
+    post_ends = np.minimum(spike_idx + post_peak_samples, n_data)
+
+    for i in range(n_spikes):
+        ti = thresh_indices[i]
+        pi = spike_idx[i]
+        pe = post_ends[i]
+
+        if ti >= pi or pi >= pe:
+            continue
+
+        pre_peak = data[ti:pi + 1]
+        post_peak = data[pi:pe]
+
+        # Half-width
         try:
-            dvdt_slice = dvdt[search_start:search_end]
-            data_slice = data[search_start:search_end]
-            # Convert dvdt_threshold to V/s if it's not already (it is treated as V/s)
-            # data is in mV, time in s, so dvdt is mV/s.
-            # 20 V/s = 20000 mV/s.
-            threshold_val_mvs = dvdt_threshold * 1000.0
-
-            threshold_crossings = np.where(dvdt_slice > threshold_val_mvs)[0]
-            if threshold_crossings.size > 0:
-                thresh_idx = search_start + threshold_crossings[0]
-                ap_threshold = data[thresh_idx]
-            else:
-                thresh_idx = search_start  # Fallback
-                ap_threshold = data[thresh_idx]
-        except (ValueError, TypeError, IndexError):
-            thresh_idx = peak_idx - 2  # fallback
-            ap_threshold = data[thresh_idx]
-
-        # 2. Spike Amplitude (from threshold to peak)
-        peak_val = data[peak_idx]
-        amplitude = peak_val - ap_threshold
-
-        # 3. Spike Width at half-maximal amplitude
-        half_amp = ap_threshold + amplitude / 2
-
-        # Find rising and falling half-amp crossings
-        pre_peak_slice = data[thresh_idx : peak_idx + 1]
-        post_peak_slice = data[peak_idx : peak_idx + int(0.01 / dt)]  # 10ms after peak
-
-        try:
-            rising_half_idx = thresh_idx + np.where(pre_peak_slice > half_amp)[0][0]
-            falling_half_idx = peak_idx + np.where(post_peak_slice < half_amp)[0][0]
-            half_width = (falling_half_idx - rising_half_idx) * dt * 1000  # in ms
-        except IndexError:
-            half_width = np.nan
-            rising_half_idx = np.nan
-            falling_half_idx = np.nan
-
-        # --- NEW: Rise Time (10-90%) ---
-        try:
-            amp_10 = ap_threshold + 0.1 * amplitude
-            amp_90 = ap_threshold + 0.9 * amplitude
-
-            # Search in pre-peak slice
-            rising_10_idx = thresh_idx + np.where(pre_peak_slice >= amp_10)[0][0]
-            rising_90_idx = thresh_idx + np.where(pre_peak_slice >= amp_90)[0][0]
-
-            rise_time_10_90 = (rising_90_idx - rising_10_idx) * dt * 1000  # ms
-        except IndexError:
-            rise_time_10_90 = np.nan
-
-        # --- NEW: Decay Time (90-10%) ---
-        try:
-            # Search in post-peak slice
-            # Note: post_peak_slice starts at peak_idx
-            falling_90_idx_rel = np.where(post_peak_slice <= amp_90)[0]
-            falling_10_idx_rel = np.where(post_peak_slice <= amp_10)[0]
-
-            if falling_90_idx_rel.size > 0 and falling_10_idx_rel.size > 0:
-                falling_90_idx = peak_idx + falling_90_idx_rel[0]
-                falling_10_idx = peak_idx + falling_10_idx_rel[0]
-                decay_time_90_10 = (falling_10_idx - falling_90_idx) * dt * 1000  # ms
-            else:
-                decay_time_90_10 = np.nan
-        except IndexError:
-            decay_time_90_10 = np.nan
-
-        # 4. Afterhyperpolarization (AHP) depth & Duration
-        ahp_search_end = min(len(data), peak_idx + int(ahp_window_sec / dt))
-        ahp_slice = data[peak_idx:ahp_search_end]
-        try:
-            ahp_min_idx_rel = np.argmin(ahp_slice)
-            ahp_min_val = ahp_slice[ahp_min_idx_rel]
-            ahp_min_idx = peak_idx + ahp_min_idx_rel
-
-            # AHP is relative to threshold (or RMP, but usually threshold in this context)
-            ahp_depth = ap_threshold - ahp_min_val
-
-            # AHP Duration at 50%
-            if ahp_depth > 0:
-                ahp_half_val = ahp_min_val + ahp_depth / 2
-                # Search from falling_10_idx (end of AP) to ahp_min_idx for start of AHP half
-                # And from ahp_min_idx onwards for end of AHP half
-
-                # We need a robust start point. Let's use the point where it crosses threshold downwards
-                threshold_cross_down_rel = np.where(post_peak_slice < ap_threshold)[0]
-                if threshold_cross_down_rel.size > 0:
-                    ap_end_idx = peak_idx + threshold_cross_down_rel[0]
-                else:
-                    ap_end_idx = peak_idx  # fallback
-
-                # Slice for AHP
-                ahp_full_slice = data[ap_end_idx:ahp_search_end]
-
-                # Find where it goes below half_val (start) and comes back up (end)
-                # This is tricky because it might not come back up fully.
-                # Simplified: width at half depth
-
-                # Find crossings of ahp_half_val
-                # We expect data to go down through half_val, hit min, go up through half_val
-                below_half_indices = np.where(ahp_full_slice < ahp_half_val)[0]
-                if below_half_indices.size > 1:
-                    ahp_start_idx = ap_end_idx + below_half_indices[0]
-                    ahp_end_idx = ap_end_idx + below_half_indices[-1]
-                    ahp_duration_half = (ahp_end_idx - ahp_start_idx) * dt * 1000  # ms
-                else:
-                    ahp_duration_half = np.nan
-            else:
-                ahp_duration_half = np.nan
-
-        except ValueError:
-            ahp_depth = np.nan
-            ahp_duration_half = np.nan
-
-        # --- NEW: ADP (After-Depolarization) Detection ---
-        # Look for a local maximum between AP end and AHP min
-        # Or if AHP is delayed, a hump before it.
-        # Simple definition: Local max after fast repolarization but before returning to baseline/AHP
-        adp_amplitude = np.nan
-        try:
-            # Define a window for ADP: from decay_90 (approx) to some time later
-            # Let's look in the first 10ms after the AP falls below threshold
-            if "ap_end_idx" in locals():
-                adp_search_window = data[ap_end_idx : min(len(data), ap_end_idx + int(0.02 / dt))]
-
-                # We expect a hump. So derivative goes + then -
-                # Or simply max value in this window is significantly higher than end of AP?
-                # ADP is usually small.
-                # Let's check if there is a peak in this window that is above the AHP start
-
-                if adp_search_window.size > 5:
-                    # Find peaks
-                    adp_peaks, _ = signal.find_peaks(adp_search_window, prominence=0.5)  # 0.5mV prominence
-                    if adp_peaks.size > 0:
-                        adp_val = adp_search_window[adp_peaks[0]]
-                        adp_amplitude = adp_val - ap_threshold  # Relative to threshold
-                        # If ADP is below threshold (likely), this will be negative, which is fine.
-                        # Usually ADP is defined relative to AHP min or Threshold.
-                        # Let's define it as amplitude above the "expected" repolarization curve?
-                        # For simplicity: Max voltage in the ADP window minus the voltage at AP end
-                        adp_amplitude = adp_val - data[ap_end_idx]
-        except (ValueError, TypeError, IndexError):
+            rising_cross = np.where(pre_peak > half_amps[i])[0]
+            falling_cross = np.where(post_peak < half_amps[i])[0]
+            if rising_cross.size > 0 and falling_cross.size > 0:
+                r_idx = ti + rising_cross[0]
+                f_idx = pi + falling_cross[0]
+                half_widths[i] = (f_idx - r_idx) * dt * 1000.0
+        except (IndexError, ValueError):
             pass
 
-        # 5. Maximum rise and fall slopes (max/min dV/dt)
-        dvdt_search_end = min(len(dvdt), peak_idx + int(0.005 / dt))  # 5ms after peak
-        dvdt_search_slice = dvdt[thresh_idx:dvdt_search_end]
+        # Rise time 10-90%
+        try:
+            r10 = np.where(pre_peak >= amp_10[i])[0]
+            r90 = np.where(pre_peak >= amp_90[i])[0]
+            if r10.size > 0 and r90.size > 0:
+                rise_times[i] = (r90[0] - r10[0]) * dt * 1000.0
+        except (IndexError, ValueError):
+            pass
+
+        # Decay time 90-10%
+        try:
+            f90 = np.where(post_peak <= amp_90[i])[0]
+            f10 = np.where(post_peak <= amp_10[i])[0]
+            if f90.size > 0 and f10.size > 0:
+                decay_times[i] = (f10[0] - f90[0]) * dt * 1000.0
+        except (IndexError, ValueError):
+            pass
+
+    # --- AHP with Return-to-Baseline Search ---
+    ahp_depths = np.full(n_spikes, np.nan)
+    ahp_durations = np.full(n_spikes, np.nan)
+
+    for i in range(n_spikes):
+        pi = spike_idx[i]
+        ahp_end = min(n_data, pi + ahp_max_samples)
+        if pi >= ahp_end:
+            continue
+
+        ahp_slice = data[pi:ahp_end]
+        if ahp_slice.size == 0:
+            continue
+
+        # Find AHP minimum
+        ahp_min_rel = np.argmin(ahp_slice)
+        ahp_min_val = ahp_slice[ahp_min_rel]
+        ahp_depth = ap_thresholds[i] - ahp_min_val
+        ahp_depths[i] = ahp_depth
+
+        if ahp_depth <= 0 or ahp_min_rel == 0:
+            continue
+
+        # Return-to-baseline search: from AHP minimum forward
+        # Recovery target: threshold - 0.1 * amplitude
+        recovery_target = ap_thresholds[i] - 0.1 * amplitudes[i]
+        post_min_slice = ahp_slice[ahp_min_rel:]
+
+        if post_min_slice.size < 2:
+            continue
+
+        # Method 1: Voltage recovers to target
+        recovery_by_voltage = np.where(post_min_slice >= recovery_target)[0]
+        # Method 2: Slope reaches >= 0 mV/s (signal stops hyperpolarizing)
+        post_min_dvdt = np.gradient(post_min_slice, dt)
+        recovery_by_slope = np.where(post_min_dvdt >= 0)[0]
+
+        # Use whichever comes first
+        recovery_idx = None
+        if recovery_by_voltage.size > 0 and recovery_by_slope.size > 0:
+            recovery_idx = min(recovery_by_voltage[0], recovery_by_slope[0])
+        elif recovery_by_voltage.size > 0:
+            recovery_idx = recovery_by_voltage[0]
+        elif recovery_by_slope.size > 0:
+            recovery_idx = recovery_by_slope[0]
+
+        if recovery_idx is not None and recovery_idx > 0:
+            # Find where the AP crosses threshold downward (start of AHP)
+            post_peak = data[pi:min(n_data, pi + post_peak_samples)]
+            thresh_cross = np.where(post_peak < ap_thresholds[i])[0]
+            if thresh_cross.size > 0:
+                ap_end_offset = thresh_cross[0]
+            else:
+                ap_end_offset = 0
+
+            # AHP duration: from AP end to recovery point
+            total_ahp_samples = (ahp_min_rel + recovery_idx) - ap_end_offset
+            if total_ahp_samples > 0:
+                ahp_durations[i] = total_ahp_samples * dt * 1000.0  # ms
+
+    # --- ADP Detection ---
+    adp_amplitudes = np.full(n_spikes, np.nan)
+    for i in range(n_spikes):
+        pi = spike_idx[i]
+        # Find AP end (threshold crossing downward)
+        post_end = min(n_data, pi + post_peak_samples)
+        post_peak_slice = data[pi:post_end]
+        thresh_cross = np.where(post_peak_slice < ap_thresholds[i])[0]
+        if thresh_cross.size == 0:
+            continue
+        ap_end_idx = pi + thresh_cross[0]
+
+        adp_end = min(n_data, ap_end_idx + adp_search_samples)
+        adp_window = data[ap_end_idx:adp_end]
+        if adp_window.size <= 5:
+            continue
 
         try:
-            max_dvdt = np.max(dvdt_search_slice)
-            min_dvdt = np.min(dvdt_search_slice)
-        except ValueError:
-            max_dvdt, min_dvdt = np.nan, np.nan
+            adp_peaks, _ = signal.find_peaks(adp_window, prominence=0.5)
+            if adp_peaks.size > 0:
+                adp_amplitudes[i] = adp_window[adp_peaks[0]] - data[ap_end_idx]
+        except (ValueError, TypeError):
+            pass
 
-        features_list.append(
-            {
-                "ap_threshold": ap_threshold,
-                "amplitude": amplitude,
-                "half_width": half_width,
-                "rise_time_10_90": rise_time_10_90,
-                "decay_time_90_10": decay_time_90_10,
-                "ahp_depth": ahp_depth,
-                "ahp_duration_half": ahp_duration_half,
-                "adp_amplitude": adp_amplitude,
-                "max_dvdt": max_dvdt,
-                "min_dvdt": min_dvdt,
-            }
-        )
+    # --- Vectorized max/min dV/dt ---
+    max_dvdts = np.full(n_spikes, np.nan)
+    min_dvdts = np.full(n_spikes, np.nan)
+
+    for i in range(n_spikes):
+        ti = thresh_indices[i]
+        dvdt_end = min(len(dvdt), spike_idx[i] + dvdt_post_samples)
+        if ti < dvdt_end:
+            dvdt_slice = dvdt[ti:dvdt_end]
+            if dvdt_slice.size > 0:
+                max_dvdts[i] = np.max(dvdt_slice)
+                min_dvdts[i] = np.min(dvdt_slice)
+
+    # --- Assemble output (same format as before for compatibility) ---
+    features_list = []
+    for i in range(n_spikes):
+        features_list.append({
+            "ap_threshold": ap_thresholds[i],
+            "amplitude": amplitudes[i],
+            "half_width": half_widths[i],
+            "rise_time_10_90": rise_times[i],
+            "decay_time_90_10": decay_times[i],
+            "ahp_depth": ahp_depths[i],
+            "ahp_duration_half": ahp_durations[i],
+            "adp_amplitude": adp_amplitudes[i],
+            "max_dvdt": max_dvdts[i],
+            "min_dvdt": min_dvdts[i],
+        })
 
     return features_list
 
@@ -459,6 +510,15 @@ def run_spike_detection_wrapper(
         refractory_samples = int(refractory_period * sampling_rate)
         peak_window_samples = int(peak_search_window * sampling_rate)
 
+        params = {
+            'threshold': threshold,
+            'refractory_period': refractory_period,
+            'peak_search_window': peak_search_window,
+            'dvdt_threshold': dvdt_threshold,
+            'ahp_window': ahp_window,
+            'onset_lookback': onset_lookback,
+        }
+
         # Run detection
         result = detect_spikes_threshold(
             data, time, threshold, refractory_samples, peak_search_window_samples=peak_window_samples
@@ -494,11 +554,16 @@ def run_spike_detection_wrapper(
                 "mean_freq_hz": result.mean_frequency if result.mean_frequency is not None else 0.0,
                 "spike_times": result.spike_times,
                 "spike_indices": result.spike_indices,
+                "parameters": params,
             }
             output.update(stats)
             return output
         else:
-            return {"spike_count": 0, "mean_freq_hz": 0.0, "spike_error": result.error_message or "Unknown error"}
+            return {
+                "spike_count": 0, "mean_freq_hz": 0.0,
+                "spike_error": result.error_message or "Unknown error",
+                "parameters": params,
+            }
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_spike_detection_wrapper: {e}", exc_info=True)
