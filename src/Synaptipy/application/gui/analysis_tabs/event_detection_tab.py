@@ -86,14 +86,26 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.threshold_line.setZValue(90)
         self.threshold_line.sigPositionChangeFinished.connect(self._on_threshold_dragged)
 
+    def _ensure_custom_items_on_plot(self):
+        """Re-add custom plot items if they were removed by plot_widget.clear()."""
+        if not self.plot_widget:
+            return
+        if self.event_markers_item and self.event_markers_item not in self.plot_widget.items():
+            self.plot_widget.addItem(self.event_markers_item)
+            self.event_markers_item.setZValue(100)
+        if self.threshold_line and self.threshold_line not in self.plot_widget.items():
+            self.plot_widget.addItem(self.threshold_line)
+            self.threshold_line.setZValue(90)
+
     def _on_channel_changed(self, index):
         """Re-add items to plot if cleared."""
         super()._on_channel_changed(index)
-        if self.plot_widget:
-            if self.event_markers_item and self.event_markers_item not in self.plot_widget.items():
-                self.plot_widget.addItem(self.event_markers_item)
-            if self.threshold_line and self.threshold_line not in self.plot_widget.items():
-                self.plot_widget.addItem(self.threshold_line)
+        self._ensure_custom_items_on_plot()
+
+    def _on_data_plotted(self):
+        """Re-add custom items after plot_widget.clear() in _plot_selected_data."""
+        self._ensure_custom_items_on_plot()
+        super()._on_data_plotted()
 
     def _on_method_changed(self):
         """Handle method switching."""
@@ -128,6 +140,9 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
 
     def _plot_analysis_visualizations(self, results: Any):
         """Visualize analysis results (markers)."""
+        # Ensure items are on the plot (they may have been removed by clear())
+        self._ensure_custom_items_on_plot()
+
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:

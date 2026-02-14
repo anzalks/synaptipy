@@ -143,6 +143,19 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
 
         return params
 
+    def _ensure_custom_items_on_plot(self):
+        """Re-add custom plot items if they were removed by plot_widget.clear()."""
+        if not self.plot_widget:
+            return
+
+        # Check if items are attached to the plot
+        if self.interactive_region and self.interactive_region not in self.plot_widget.items():
+            self.plot_widget.addItem(self.interactive_region)
+
+        for line in [self.baseline_mean_line, self.baseline_plus_sd_line, self.baseline_minus_sd_line]:
+            if line and line not in self.plot_widget.items():
+                self.plot_widget.addItem(line)
+
     def _on_channel_changed(self, channel_index: int):
         """Handle channel switch to update interactive region."""
         super()._on_channel_changed(channel_index)
@@ -157,6 +170,7 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
 
                 # Check if current region is "default-like" or invalid
                 curr_min, curr_max = self.interactive_region.getRegion()
+                # Use a small epsilon for float comparison or just check bounds logic
                 if (curr_min == 0 and curr_max == 0.1) or (curr_max > t_end) or (curr_min < t_start):
                     # Reset to 10% or 200ms, whichever is smaller/sane
                     default_width = min(duration * 0.2, 0.5)  # Max 500ms default
@@ -165,20 +179,21 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
                 # Update bounds
                 self.interactive_region.setBounds([t_start, t_end])
 
-                # Check if items are attached to the plot (BaseAnalysisTab might clear plot)
-                if self.plot_widget:
-                    if self.interactive_region not in self.plot_widget.items():
-                        self.plot_widget.addItem(self.interactive_region)
+        # Ensure items are on plot
+        self._ensure_custom_items_on_plot()
 
-                    for line in [self.baseline_mean_line, self.baseline_plus_sd_line, self.baseline_minus_sd_line]:
-                        if line and line not in self.plot_widget.items():
-                            self.plot_widget.addItem(line)
+        # Ensure visibility if in interactive mode
+        self._on_mode_changed()
 
-                # Ensure visibility if in interactive mode
-                self._on_mode_changed()
+    def _on_data_plotted(self):
+        """Re-add custom items after plot_widget.clear() in _plot_selected_data."""
+        self._ensure_custom_items_on_plot()
+        super()._on_data_plotted()
 
     def _plot_analysis_visualizations(self, results: Any):
         """Visualize RMP results."""
+        self._ensure_custom_items_on_plot()
+
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:

@@ -41,17 +41,29 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
             self.plot_widget.addItem(self.spike_markers)
             self.spike_markers.setVisible(False)
 
+    def _ensure_custom_items_on_plot(self):
+        """Re-add custom plot items if they were removed by plot_widget.clear()."""
+        if not self.plot_widget:
+            return
+        if self.spike_markers and self.spike_markers not in self.plot_widget.items():
+            self.plot_widget.addItem(self.spike_markers)
+
     def _on_channel_changed(self, index):
         """Re-add items to plot if cleared."""
         super()._on_channel_changed(index)
-        if self.plot_widget and self.spike_markers and self.spike_markers not in self.plot_widget.items():
-            self.plot_widget.addItem(self.spike_markers)
+        self._ensure_custom_items_on_plot()
+
+    def _on_data_plotted(self):
+        """Re-add custom items after plot_widget.clear() in _plot_selected_data."""
+        self._ensure_custom_items_on_plot()
+        super()._on_data_plotted()
 
     def _clear_burst_visualizations(self):
         """Remove old burst lines."""
         if self.plot_widget:
             for item in self.burst_lines:
-                self.plot_widget.removeItem(item)
+                if item in self.plot_widget.items():
+                    self.plot_widget.removeItem(item)
             self.burst_lines.clear()
 
         if self.spike_markers:
@@ -62,6 +74,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         """
         Visualize Burst Analysis results.
         """
+        self._ensure_custom_items_on_plot()
         self._clear_burst_visualizations()
 
         # Handle different result structures (Dict wrapper or Result Object)

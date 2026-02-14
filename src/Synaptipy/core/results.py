@@ -30,6 +30,7 @@ class SpikeTrainResult(AnalysisResult):
     spike_indices: Optional[np.ndarray] = None  # Array of sample indices
     mean_frequency: Optional[float] = None  # Mean frequency in Hz
     instantaneous_frequencies: Optional[np.ndarray] = None  # Array of inst. freqs in Hz
+    parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
 
     def __repr__(self):
         if self.is_valid:
@@ -53,6 +54,7 @@ class RinResult(AnalysisResult):
     current_injection: Optional[float] = None  # Delta I in pA
     baseline_voltage: Optional[float] = None  # Baseline V in mV
     steady_state_voltage: Optional[float] = None  # Steady state V in mV
+    parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
 
     def __repr__(self):
         if self.is_valid:
@@ -89,6 +91,7 @@ class BurstResult(AnalysisResult):
     spikes_per_burst_avg: float = 0.0
     burst_duration_avg: float = 0.0
     burst_freq_hz: float = 0.0
+    parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
     bursts: List[List[float]] = field(default_factory=list)  # List of lists of spike times
 
     def __repr__(self):

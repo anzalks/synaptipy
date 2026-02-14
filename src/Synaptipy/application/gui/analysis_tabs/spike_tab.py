@@ -67,12 +67,25 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
     # _gather_analysis_parameters is inherited
     # _execute_core_analysis is inherited (uses registry function)
 
+    def _ensure_custom_items_on_plot(self):
+        """Re-add custom plot items if they were removed by plot_widget.clear()."""
+        if not self.plot_widget:
+            return
+        if self.spike_markers_item and self.spike_markers_item not in self.plot_widget.items():
+            self.plot_widget.addItem(self.spike_markers_item)
+            self.spike_markers_item.setZValue(10)
+        if self.threshold_line and self.threshold_line not in self.plot_widget.items():
+            self.plot_widget.addItem(self.threshold_line)
+
     def _on_data_plotted(self):
         """
         Hook called by BaseAnalysisTab after plotting main data trace.
         Adds Spike-specific plot items: spike markers and threshold line.
         """
         log.debug(f"{self.get_display_name()}: _on_data_plotted hook called")
+
+        # Re-add items that may have been removed by plot_widget.clear()
+        self._ensure_custom_items_on_plot()
 
         # Clear previous spike analysis visualization (markers only)
         if self.spike_markers_item:
@@ -99,6 +112,9 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         Visualize spike detection results.
         Called by BaseAnalysisTab._on_analysis_result.
         """
+        # Ensure items are on the plot (they may have been removed by clear())
+        self._ensure_custom_items_on_plot()
+
         # Handle both object and dict
         if isinstance(results, dict):
             # If wrapped in dict with 'result' key (from generic wrapper)

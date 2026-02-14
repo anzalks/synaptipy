@@ -5,7 +5,7 @@ Analysis functions for intrinsic membrane properties.
 """
 import logging
 import numpy as np
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Union
 from scipy.optimize import curve_fit
 from Synaptipy.core.results import RinResult
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -158,21 +158,58 @@ def calculate_conductance(
 
 
 def _exp_growth(t, V_ss, V_0, tau):
-    """Exponential growth function for fitting."""
+    """Mono-exponential growth/decay function for fitting."""
     return V_ss + (V_0 - V_ss) * np.exp(-t / tau)
 
 
-# Placeholder for Tau calculation
+def _bi_exp_growth(t, V_ss, A_fast, tau_fast, A_slow, tau_slow):
+    """
+    Bi-exponential growth/decay function.
+
+    V(t) = V_ss + A_fast * exp(-t / tau_fast) + A_slow * exp(-t / tau_slow)
+
+    Args:
+        t: Time array (s), starting at 0.
+        V_ss: Steady-state voltage.
+        A_fast: Amplitude of fast component.
+        tau_fast: Time constant of fast component (s).
+        A_slow: Amplitude of slow component.
+        tau_slow: Time constant of slow component (s).
+    """
+    return V_ss + A_fast * np.exp(-t / tau_fast) + A_slow * np.exp(-t / tau_slow)
+
+
 def calculate_tau(
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
     stim_start_time: float,
-    fit_duration: float,  # Time window after stimulus start to fit
-) -> Optional[float]:
+    fit_duration: float,
+    model: str = 'mono',
+    tau_bounds: Optional[Tuple[float, float]] = None,
+) -> Optional[Union[float, Dict[str, float]]]:
     """
-    Placeholder for Membrane Time Constant (Tau) calculation.
-    Typically involves fitting an exponential to the rising phase of the voltage response.
+    Calculate Membrane Time Constant (Tau) by fitting an exponential
+    to the voltage response after stimulus onset.
+
+    Args:
+        voltage_trace: 1D NumPy array of the voltage recording (mV).
+        time_vector: 1D NumPy array of corresponding time points (s).
+        stim_start_time: Time of stimulus onset (s).
+        fit_duration: Duration of fit window after stimulus start (s).
+        model: Fitting model, 'mono' for single-exponential or 'bi'
+               for bi-exponential.
+        tau_bounds: Tuple (min_tau, max_tau) in seconds. Constrains
+                    allowed tau values. Defaults to (1e-4, 1.0) if None.
+
+    Returns:
+        For model='mono': Tau in ms (float), or None if fitting fails.
+        For model='bi': Dict with keys {tau_fast_ms, tau_slow_ms,
+                        amplitude_fast, amplitude_slow, V_ss}, or None.
     """
+    if tau_bounds is None:
+        tau_bounds = (1e-4, 1.0)
+    tau_min, tau_max = tau_bounds
+
     try:
         fit_start_time = stim_start_time
         fit_end_time = stim_start_time + fit_duration
@@ -188,22 +225,74 @@ def calculate_tau(
         V_0 = V_fit[0]
         V_ss_guess = np.mean(V_fit[-5:])  # Guess steady state from last few points
 
-        # bounds (V_ss, V_0, tau)
-        lower_bounds = [-np.inf, -np.inf, 0.0001]  # tau > 0
-        upper_bounds = [np.inf, np.inf, 1.0]  # tau < 1s
+        if model == 'mono':
+            # --- Single-exponential fit ---
+            lower_bounds = [-np.inf, -np.inf, tau_min]
+            upper_bounds = [np.inf, np.inf, tau_max]
+            p0 = [V_ss_guess, V_0, 0.01]
 
-        p0 = [V_ss_guess, V_0, 0.01]  # Initial guess for tau = 10ms
+            popt, _ = curve_fit(
+                _exp_growth, t_fit, V_fit, p0=p0,
+                bounds=(lower_bounds, upper_bounds), maxfev=5000
+            )
 
-        popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds))
+            tau_ms = popt[2] * 1000  # convert tau to ms
+            log.debug("Calculated Tau (mono): %.3f ms", tau_ms)
+            return tau_ms
 
-        tau_ms = popt[2] * 1000  # convert tau to ms
-        log.debug(f"Calculated Tau: {tau_ms:.3f} ms")
-        return tau_ms
+        elif model == 'bi':
+            # --- Bi-exponential fit ---
+            if len(t_fit) < 6:
+                log.warning("Not enough data for bi-exponential fit (need >= 6).")
+                return None
+
+            delta_v = V_ss_guess - V_0
+            # Initial guesses: split amplitude 60/40 fast/slow
+            A_fast_guess = 0.6 * (V_0 - V_ss_guess)
+            A_slow_guess = 0.4 * (V_0 - V_ss_guess)
+            tau_fast_guess = min(0.005, tau_max * 0.1)
+            tau_slow_guess = min(0.05, tau_max * 0.5)
+
+            p0 = [V_ss_guess, A_fast_guess, tau_fast_guess,
+                  A_slow_guess, tau_slow_guess]
+
+            lower_bounds = [-np.inf, -np.inf, tau_min, -np.inf, tau_min]
+            upper_bounds = [np.inf, np.inf, tau_max, np.inf, tau_max]
+
+            popt, pcov = curve_fit(
+                _bi_exp_growth, t_fit, V_fit, p0=p0,
+                bounds=(lower_bounds, upper_bounds), maxfev=10000
+            )
+
+            V_ss_fit, A_fast, tau_fast, A_slow, tau_slow = popt
+
+            # Ensure tau_fast < tau_slow (swap if needed)
+            if tau_fast > tau_slow:
+                tau_fast, tau_slow = tau_slow, tau_fast
+                A_fast, A_slow = A_slow, A_fast
+
+            result = {
+                'tau_fast_ms': tau_fast * 1000,
+                'tau_slow_ms': tau_slow * 1000,
+                'amplitude_fast': A_fast,
+                'amplitude_slow': A_slow,
+                'V_ss': V_ss_fit,
+            }
+            log.debug(
+                "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms",
+                result['tau_fast_ms'], result['tau_slow_ms']
+            )
+            return result
+
+        else:
+            log.error("Unknown model '%s'. Use 'mono' or 'bi'.", model)
+            return None
+
     except RuntimeError:
-        log.warning("Optimal parameters not found for Tau calculation.")
+        log.warning("Optimal parameters not found for Tau calculation (model=%s).", model)
         return None
     except (ValueError, TypeError, KeyError, IndexError) as e:
-        log.exception(f"Unexpected error during Tau calculation: {e}")
+        log.exception("Unexpected error during Tau calculation: %s", e)
         return None
 
 
@@ -456,6 +545,31 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "tau_model",
+            "label": "Model:",
+            "type": "combo",
+            "default": "mono",
+            "options": ["mono", "bi"],
+        },
+        {
+            "name": "tau_bound_min",
+            "label": "Tau Min (s):",
+            "type": "float",
+            "default": 0.0001,
+            "min": 0.0,
+            "max": 1.0,
+            "decimals": 5,
+        },
+        {
+            "name": "tau_bound_max",
+            "label": "Tau Max (s):",
+            "type": "float",
+            "default": 1.0,
+            "min": 0.001,
+            "max": 100.0,
+            "decimals": 4,
+        },
     ],
 )
 def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
@@ -463,12 +577,15 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     Wrapper function for Membrane Time Constant (Tau) analysis.
 
     Args:
-        data: 1D NumPy array of voltage data
-        time: 1D NumPy array of corresponding time points (seconds)
-        sampling_rate: Sampling rate in Hz
+        data: 1D NumPy array of voltage data (mV).
+        time: 1D NumPy array of corresponding time points (s).
+        sampling_rate: Sampling rate in Hz.
         **kwargs: Additional parameters:
-            - stim_start_time: Time when stimulus starts (default: 0.1)
-            - fit_duration: Duration of fit window in seconds (default: 0.05)
+            - stim_start_time: Time when stimulus starts (s, default: 0.1)
+            - fit_duration: Duration of fit window (s, default: 0.05)
+            - tau_model: 'mono' or 'bi' (default: 'mono')
+            - tau_bound_min: Minimum tau bound (s, default: 0.0001)
+            - tau_bound_max: Maximum tau bound (s, default: 1.0)
 
     Returns:
         Dictionary containing results suitable for DataFrame rows.
@@ -476,16 +593,43 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     try:
         stim_start_time = kwargs.get("stim_start_time", 0.1)
         fit_duration = kwargs.get("fit_duration", 0.05)
+        model = kwargs.get("tau_model", "mono")
+        tau_bound_min = kwargs.get("tau_bound_min", 0.0001)
+        tau_bound_max = kwargs.get("tau_bound_max", 1.0)
+        tau_bounds = (tau_bound_min, tau_bound_max)
 
-        tau_ms = calculate_tau(data, time, stim_start_time, fit_duration)
+        result = calculate_tau(
+            data, time, stim_start_time, fit_duration,
+            model=model, tau_bounds=tau_bounds
+        )
 
-        if tau_ms is not None:
-            return {
-                "tau_ms": tau_ms,
-            }
+        params = {
+            'stim_start_time': stim_start_time,
+            'fit_duration': fit_duration,
+            'model': model,
+            'tau_bounds': tau_bounds,
+        }
+
+        if result is not None:
+            if model == 'bi' and isinstance(result, dict):
+                return {
+                    "tau_fast_ms": result['tau_fast_ms'],
+                    "tau_slow_ms": result['tau_slow_ms'],
+                    "amplitude_fast": result['amplitude_fast'],
+                    "amplitude_slow": result['amplitude_slow'],
+                    "tau_model": model,
+                    "parameters": params,
+                }
+            else:
+                return {
+                    "tau_ms": result,
+                    "tau_model": model,
+                    "parameters": params,
+                }
         else:
-            return {"tau_ms": None, "tau_error": "Tau calculation failed"}
+            return {"tau_ms": None, "tau_error": "Tau calculation failed", "parameters": params}
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_tau_analysis_wrapper: {e}", exc_info=True)
         return {"tau_ms": None, "tau_error": str(e)}
+
