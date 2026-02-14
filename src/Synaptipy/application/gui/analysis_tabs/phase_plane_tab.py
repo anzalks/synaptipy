@@ -54,7 +54,7 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
         """Re-add custom plot items if they were removed by plot_widget.clear()."""
         if not self.plot_widget:
             return
-        if self.threshold_line and self.threshold_line not in self.plot_widget.items():
+        if self.threshold_line and self.threshold_line not in self.plot_widget.items:
             self.plot_widget.addItem(self.threshold_line)
 
     def _on_data_plotted(self):

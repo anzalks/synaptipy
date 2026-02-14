@@ -904,6 +904,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Clear preprocessing cache
         self._preprocessed_data = None
         self._active_preprocessing_settings = None
+        self._current_plot_data = None  # Clear plot context
         self.pipeline.clear()
 
         # Clear plot when items change
@@ -920,6 +921,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._selected_item_recording = None  # Clear previous loaded recording
         self._preprocessed_data = None  # Clear preprocessing cache on new item
         self._active_preprocessing_settings = None  # Clear settings on new item
+        self._current_plot_data = None  # Reset plot data context immediately
         self.pipeline.clear()
 
         if index < 0 or index >= len(self._analysis_items):
@@ -965,6 +967,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _on_item_load_success(self, recording: Optional[Recording]):
         """Callback when async loading completes successfully."""
         self._selected_item_recording = recording
+        self._current_plot_data = None  # Force reset of view state for new recording
 
         # Re-enable widget immediately so UI updates (which check isEnabled) can succeed
         self.setEnabled(True)

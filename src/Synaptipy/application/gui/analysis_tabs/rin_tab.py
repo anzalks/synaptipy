@@ -151,15 +151,15 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
             return
 
         # Regions
-        if self.baseline_region and self.baseline_region not in self.plot_widget.items():
+        if self.baseline_region and self.baseline_region not in self.plot_widget.items:
             self.plot_widget.addItem(self.baseline_region)
-        if self.response_region and self.response_region not in self.plot_widget.items():
+        if self.response_region and self.response_region not in self.plot_widget.items:
             self.plot_widget.addItem(self.response_region)
 
         # Lines
-        if self.baseline_line and self.baseline_line not in self.plot_widget.items():
+        if self.baseline_line and self.baseline_line not in self.plot_widget.items:
             self.plot_widget.addItem(self.baseline_line)
-        if self.response_line and self.response_line not in self.plot_widget.items():
+        if self.response_line and self.response_line not in self.plot_widget.items:
             self.plot_widget.addItem(self.response_line)
 
     def _on_data_plotted(self):

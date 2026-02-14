@@ -45,7 +45,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         """Re-add custom plot items if they were removed by plot_widget.clear()."""
         if not self.plot_widget:
             return
-        if self.spike_markers and self.spike_markers not in self.plot_widget.items():
+        if self.spike_markers and self.spike_markers not in self.plot_widget.items:
             self.plot_widget.addItem(self.spike_markers)
 
     def _on_channel_changed(self, index):
@@ -62,7 +62,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         """Remove old burst lines."""
         if self.plot_widget:
             for item in self.burst_lines:
-                if item in self.plot_widget.items():
+                if item in self.plot_widget.items:
                     self.plot_widget.removeItem(item)
             self.burst_lines.clear()
 
