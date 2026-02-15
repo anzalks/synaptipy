@@ -1,7 +1,6 @@
-# src/Synaptipy/application/controllers/analysis_formatter.py
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple, List, Union
 import logging
-from Synaptipy.core.results import SpikeTrainResult
+from Synaptipy.core.results import SpikeTrainResult, AnalysisResult, RinResult, RmpResult, BurstResult, EventDetectionResult
 
 log = logging.getLogger(__name__)
 
@@ -13,12 +12,46 @@ class AnalysisResultFormatter:
     """
 
     @staticmethod
-    def format_result(result: Dict[str, Any]) -> Tuple[str, List[str]]:
+    def format_result(result: Union[Dict[str, Any], AnalysisResult]) -> Tuple[str, List[str]]:
         """
-        Formats a single analysis result dictionary.
+        Formats a single analysis result (dict or object).
         Returns: (value_str, details_list)
         """
-        analysis_type = result.get("analysis_type", "Unknown")
+        # Convert object to dict-like access or handle logic
+        if isinstance(result, AnalysisResult):
+            # Map object types to legacy string IDs or new logic
+            if isinstance(result, SpikeTrainResult):
+                analysis_type = "Spike Detection (Threshold)"
+                # Create a pseudo-dict for the internal methods if we want to reuse them
+                # OR better: update internal methods to handle objects.
+                # For now, converting to dict roughly to reuse existing logic is safest/fastest given constraints
+                # But we must be careful with attributes matching keys.
+                res_dict = {
+                    "spike_count": len(result.spike_times) if result.spike_times is not None else 0,
+                    "average_firing_rate_hz": result.mean_frequency,
+                    "threshold": result.parameters.get("threshold"),
+                    "threshold_units": "mV", # Assumed
+                    "refractory_period_ms": result.parameters.get("refractory_period", 0) * 1000 if result.parameters.get("refractory_period") else None
+                }
+                # Pass through
+                return AnalysisResultFormatter._format_spike_detection(res_dict), AnalysisResultFormatter._details_spike_detection(res_dict)
+
+            elif isinstance(result, RinResult):
+                 # Reuse logic
+                 res_dict = {
+                     "Input Resistance (kOhm)": result.value if result.unit == "kOhm" else None,
+                     "Rin (MΩ)": result.value if result.unit == "MOhm" else None,
+                     "delta_mV": result.voltage_deflection,
+                     "delta_pA": result.current_injection
+                 }
+                 return AnalysisResultFormatter._format_input_resistance(res_dict), AnalysisResultFormatter._details_input_resistance(res_dict)
+            
+            # ... Add other mappings as needed or default to:
+            analysis_type = "Unknown object"
+        
+        else:
+             analysis_type = result.get("analysis_type", "Unknown")
+
         value_str = "N/A"
         details = []
 

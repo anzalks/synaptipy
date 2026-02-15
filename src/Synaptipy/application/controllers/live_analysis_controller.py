@@ -1,3 +1,10 @@
+# src/Synaptipy/application/controllers/live_analysis_controller.py
+# -*- coding: utf-8 -*-
+"""
+Live Analysis Controller.
+Coordinates real-time analysis (spikes, events) during navigation.
+Enforces 'Single Source of Truth' by fetching data from DataCache.
+"""
 import logging
 from typing import Dict, Any, Optional
 
@@ -6,6 +13,7 @@ from PySide6 import QtCore
 
 from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.shared.data_cache import DataCache
 
 log = logging.getLogger(__name__)
 
@@ -19,36 +27,38 @@ class AnalysisRunnable(QtCore.QRunnable):
         result = QtCore.Signal(object)  # Emits SpikeTrainResult
         error = QtCore.Signal(str)
 
-    def __init__(self, data: np.ndarray, time: np.ndarray, params: Dict[str, Any]):
+    def __init__(self, data: np.ndarray, fs: float, params: Dict[str, Any], metadata: Dict[str, Any] = None):
         super().__init__()
         self.signals = self.Signals()
         self.data = data
-        self.time = time
+        self.fs = fs
         self.params = params
+        self.metadata = metadata or {}
 
     def run(self):
         try:
-            # Extract parameters used by detect_spikes_threshold
+            # Extract parameters
             threshold = self.params.get("threshold", -20.0)
             refractory_sec = self.params.get("refractory_period", 0.002)
 
-            # Convert refractory period to samples - we need sampling rate or dt for this. 
-            # If time is provided, we can estimate dt.
-            if len(self.time) > 1:
-                dt = self.time[1] - self.time[0]
-                fs = 1.0 / dt if dt > 0 else 10000.0  # Fallback
-            else:
-                fs = 10000.0 # Fallback
-
+            # Convert refractory period to samples
+            fs = self.fs if self.fs > 0 else 10000.0
             refractory_samples = int(refractory_sec * fs)
 
+            # Generate time vector if needed by detection (usually it generates indices)
+            # detect_spikes_threshold expects time array or we can adapt it.
+            # Looking at signature: (data, time_vector, ...)
+            # We can generate relative time vector from fs
+            time_vector = np.arange(len(self.data)) / fs
+
             # Run Vectorized Detection
+            # Note: We pass the params dict as 'parameters' to be stored in result
             result = detect_spikes_threshold(
                 self.data, 
-                self.time, 
+                time_vector, 
                 threshold, 
                 refractory_samples,
-                parameters=self.params
+                parameters={**self.params, **self.metadata}
             )
             
             self.signals.result.emit(result)
@@ -66,8 +76,7 @@ class LiveAnalysisController(QtCore.QObject):
 
     sig_analysis_finished = QtCore.Signal(object)  # SpikeTrainResult
     sig_analysis_error = QtCore.Signal(str)
-    sig_analysis_started = QtCore.Signal() # Optional: to show busy state
-
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         
@@ -77,54 +86,68 @@ class LiveAnalysisController(QtCore.QObject):
         self.debounce_timer.setInterval(50)  # 50ms wait
         self.debounce_timer.timeout.connect(self._execute_analysis)
         
-        # Pending Request Data
-        self._pending_data: Optional[np.ndarray] = None
-        self._pending_time: Optional[np.ndarray] = None
+        # Store params only - Data comes from DataCache
         self._pending_params: Optional[Dict[str, Any]] = None
         
-        # State
-        self._is_running = False
+        # Thread Pool
+        self.thread_pool = QtCore.QThreadPool.globalInstance()
 
-    def request_analysis(self, data: np.ndarray, time: np.ndarray, params: Dict[str, Any]):
+    def request_analysis(self, params: Dict[str, Any]):
         """
         Public slot to request a new analysis run.
         Resets the debounce timer.
-        """
-        if data is None or time is None:
-            return
-
-        # Store latest request
-        self._pending_data = data
-        self._pending_time = time
-        self._pending_params = params
         
-        # Restart debounce timer - this effectively debounces by delaying execution
+        Args:
+            params: Analysis parameters (threshold, etc.)
+        """
+        self._pending_params = params
+        # Restart debounce timer
         self.debounce_timer.start()
 
     def _execute_analysis(self):
         """
-        Called by timer timeout. Submits the job to thread pool.
+        Called by timer timeout. Fetches ACTIVE TRACE from DataCache.
         """
-        if self._pending_data is None:
+        cache = DataCache.get_instance()
+        active_trace = cache.get_active_trace()
+        
+        if not active_trace:
+            log.debug("LiveAnalysis: No active trace in DataCache. Skipping.")
+            return
+
+        data, fs, metadata = active_trace
+        
+        if data is None or len(data) == 0:
+            return
+
+        if self._pending_params is None:
+            # Should not happen if triggered by request, but possible if timer expired
+            # without params (unlikely)
             return
 
         # Prepare Runnable
-        # We need to define the runnable class inside or import it. It's defined above.
         runnable = AnalysisRunnable(
-            self._pending_data, 
-            self._pending_time, 
-            self._pending_params.copy()
+            data, 
+            fs, 
+            self._pending_params.copy(),
+            metadata
         )
         
-        # Connect signals - using a lambda or direct connect depending on signature
-        # Runnable signals are not standard QObjects in PySide potentially?
-        # QRunnable is not a QObject, but we use a nested QObject for signals.
         runnable.signals.result.connect(self._on_result)
         runnable.signals.error.connect(self.sig_analysis_error.emit)
         
-        self.sig_analysis_started.emit()
-        QtCore.QThreadPool.globalInstance().start(runnable)
+        self.thread_pool.start(runnable)
 
-    def _on_result(self, result):
-        """Forward result to UI."""
+    def _on_result(self, result: SpikeTrainResult):
+        """
+        Handle analysis completion.
+        1. Update Data Model (if applicable).
+        2. Emit signal for UI.
+        """
         self.sig_analysis_finished.emit(result)
+
+    def cleanup(self):
+        """Stop any pending analysis and timers."""
+        if self.debounce_timer.isActive():
+            self.debounce_timer.stop()
+        # Optional: Cancel running runnables if we had handles, but QThreadPool manages them.

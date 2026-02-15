@@ -127,3 +127,65 @@ class FileIOController:
             current_index = file_list.index(selected_filepath)
 
         return selected_filepath, file_list, current_index, lazy_load_enabled
+
+    def load_files(self, file_paths: List[Path]) -> Optional[Tuple[Path, List[Path], int, bool]]:
+        """
+        Processes a list of file paths (e.g. from Drag & Drop).
+        Validates them using NeoAdapter and determines context.
+        
+        Args:
+            file_paths: List of paths to load.
+            
+        Returns:
+            Tuple (primary_file, file_list, index, lazy_load) or None.
+        """
+        if not file_paths:
+            return None
+            
+        # 1. Filter supported files
+        supported_extensions = self.neo_adapter.get_supported_extensions()
+        valid_files = [
+            p for p in file_paths 
+            if p.is_file() and p.suffix.lstrip(".").lower() in supported_extensions
+        ]
+        
+        if not valid_files:
+            log.warning("No supported files found in dropped list.")
+            return None
+            
+        # 2. Determine Primary File (First one)
+        primary_file = valid_files[0]
+        
+        # 3. Context
+        # If multiple files dropped, they form the context list
+        # If single file, we might want to scan parent? 
+        # Requirement: "The Ingestion". Pass paths strictly.
+        # Let's assume dropped files *are* the context if multiple.
+        # If single file dropped, usually users expect to see siblings?
+        # Let's stick to "dropped files are the list" or "scan folder if single"?
+        # For drag and drop, usually the user drags what they want.
+        # If they drag a folder, we might scan it (but input is list of paths).
+        
+        # Let's scan parent if only 1 file is dropped, to match "Open File" behavior?
+        # Or simpler: just use valid_files.
+        
+        if len(valid_files) == 1:
+            # Maybe scan siblings?
+            # Let's just return the file as the list for now to stay simple and strict.
+            # Actually, reusing scan logic is better UX.
+            # But constraint says "do NOT parse locally... pass strictly". 
+            # It enables validation.
+            pass
+
+        file_list = sorted(valid_files)
+        current_index = file_list.index(primary_file)
+        
+        # Update Settings
+        if primary_file.parent.exists():
+             self.settings.setValue("lastDirectory", str(primary_file.parent))
+             
+        # Default Lazy Load to False or True?
+        # Maybe False for D&D unless huge?
+        lazy_load = False
+        
+        return primary_file, file_list, current_index, lazy_load

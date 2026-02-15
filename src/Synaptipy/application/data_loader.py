@@ -49,7 +49,7 @@ class DataLoader(QtCore.QObject):
         self.neo_adapter = NeoAdapter()
 
         # Initialize the data cache
-        self.cache = DataCache(max_size=10)
+        self.cache = DataCache.get_instance()
         log.debug("DataLoader initialization complete.")
 
     @QtCore.Slot(Path, bool)

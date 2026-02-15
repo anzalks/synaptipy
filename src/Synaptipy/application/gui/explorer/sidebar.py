@@ -22,11 +22,14 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
 
     file_selected = QtCore.Signal(Path, list, int)  # path, file_list, index
 
-    def __init__(self, neo_adapter: NeoAdapter, parent=None):
+    def __init__(self, neo_adapter: NeoAdapter, file_io_controller=None, parent=None):
         super().__init__("File Explorer", parent)
         self.neo_adapter = neo_adapter
+        self.file_io = file_io_controller
         self.file_model: Optional[QtWidgets.QFileSystemModel] = None
         self.file_tree: Optional[QtWidgets.QTreeView] = None
+        
+        self.setAcceptDrops(True) # Screen-level drop support
         self._setup_ui()
 
     def _setup_ui(self):
@@ -155,10 +158,53 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
             if isinstance(delegate, QualityDelegate):
                 delegate.update_status(file_path, metrics)
                 
-                # Trigget viewport update for the specific index if visible
+                # Retrieve index for the file path
                 idx = self.file_model.index(str(file_path))
+
+                # Trigget viewport update for the specific index if visible
                 if idx.isValid():
                     self.file_tree.update(idx)
+
+    # --- Drag & Drop Support ---
+    def dragEnterEvent(self, event: QtGui.QDragEnterEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QtGui.QDropEvent):
+        if not self.file_io:
+            log.warning("Drop ignored: No FileIOController connected.")
+            return
+
+        urls = event.mimeData().urls()
+        if not urls:
+             return
+             
+        file_paths = []
+        for url in urls:
+            if url.isLocalFile():
+                file_paths.append(Path(url.toLocalFile()))
+        
+        if not file_paths:
+            return
+            
+        # Pass rigid paths to FileIOController
+        context = self.file_io.load_files(file_paths)
+        
+        if context:
+            # Unpack context: (primary, list, index, lazy)
+            primary_file, file_list, index, lazy = context
+            log.debug(f"Drop accepted. Loading {primary_file}")
+            
+            # Emit signal to trigger loading in ExplorerTab
+            self.file_selected.emit(primary_file, file_list, index)
+            
+            # Also sync sidebar to show this file
+            self.sync_to_file(primary_file)
+            
+        event.acceptProposedAction()
+
 
 
 class QualityDelegate(QtWidgets.QStyledItemDelegate):
