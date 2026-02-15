@@ -110,6 +110,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.restrict_analysis_checkbox: Optional[QtWidgets.QCheckBox] = None
         # --- END ADDED ---
 
+        # --- ADDED: Trial Filtering State ---
+        self._filtered_indices: Optional[List[int]] = None
+        # --- END ADDED ---
+
         # --- ADDED: Preprocessing Widget Init ---
         # Initialize early so it's available for layout placement by subclasses
         self.preprocessing_widget = PreprocessingWidget()
@@ -1185,13 +1189,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.analysis_region and self.plot_widget:
             if visible:
                 # Add if not already added (check items list or just try add)
-                if self.analysis_region not in self.plot_widget.items():
+                if self.analysis_region not in self.plot_widget.items:
                     self.plot_widget.addItem(self.analysis_region)
                 self.analysis_region.setVisible(True)
             else:
                 self.analysis_region.setVisible(False)
                 # Remove to prevent auto-ranging issues
-                if self.analysis_region in self.plot_widget.items():
+                if self.analysis_region in self.plot_widget.items:
                     self.plot_widget.removeItem(self.analysis_region)
 
         # Trigger re-analysis

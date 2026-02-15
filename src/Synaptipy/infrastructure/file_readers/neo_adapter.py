@@ -321,6 +321,7 @@ class NeoAdapter:
         filepath: Path,
         lazy: bool = False,
         channel_whitelist: Optional[List[str]] = None,
+        force_kHz_to_Hz: bool = False,
     ) -> Recording:
         """
         Reads any neo-supported electrophysiology file and translates it into a
@@ -383,7 +384,7 @@ class NeoAdapter:
             )
             # Pass handle_map to extract logic
             self._process_segment_signals(
-                segment, seg_idx, channel_metadata_map, lazy, channel_whitelist, handle_map
+                segment, seg_idx, channel_metadata_map, lazy, channel_whitelist, handle_map, force_kHz_to_Hz
             )
 
         # Configure SourceHandle with the learned map
@@ -479,7 +480,8 @@ class NeoAdapter:
         channel_metadata_map: Dict[str, Dict],
         lazy: bool,
         channel_whitelist: Optional[List[str]],
-        handle_map: Optional[Dict[str, Dict[str, int]]] = None
+        handle_map: Optional[Dict[str, Dict[str, int]]] = None,
+        force_kHz_to_Hz: bool = False,
     ):
         """Stage 2: Process signals in a segment and update the metadata map."""
         for anasig_idx, anasig in enumerate(segment.analogsignals):
@@ -565,22 +567,46 @@ class NeoAdapter:
             # Metadata Extraction (First encounter)
             if "sampling_rate" not in channel_metadata_map[map_key]:
                 try:
+                    raw_fs = float(anasig.sampling_rate)
+                    
+                    if force_kHz_to_Hz:
+                        # Apply Correction
+                        fs = raw_fs * 1000.0
+                        units_dim = "Hz"  # Explicitly corrected
+                        log.info(f"Applying Unit Correction: {raw_fs} -> {fs} Hz for Channel {anasig_id}")
+                    else:
+                        fs = raw_fs
+                        units_dim = str(anasig.units.dimensionality)
+
                     channel_metadata_map[map_key].update(
                         {
-                            "units": str(anasig.units.dimensionality),
-                            "sampling_rate": float(anasig.sampling_rate),
+                            "units": units_dim,
+                            "sampling_rate": fs,
                             "t_start": float(anasig.t_start),
                         }
                     )
+                    
                     # Phase 4: Validate sampling rate
-                    fs = float(anasig.sampling_rate)
-                    if not validate_sampling_rate(fs):
-                        # Strict Scientific Safety Rule:
-                        # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
-                        if fs < 100:
-                             raise UnitError(f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
-                                             f"Check if units are in kHz.")
+                    # If forced, we assume the new 'fs' is correct and we skip the 'UnitError' check
+                    # (though we might still want to warn if it's STILL low, but the explicit intent was to fix it)
+                    
+                    # Phase 4: Identify Suspicious Sampling Rates
+                    # If forced, we assume the new 'fs' is correct.
+                    # Otherwise, if < 100Hz, we suspect unit mismatch (kHz vs Hz).
+                    
+                    is_valid = validate_sampling_rate(fs)
+                    
+                    if not force_kHz_to_Hz and fs < 100.0:
+                         # Strict Scientific Safety Rule:
+                         # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
+                         raise UnitError(f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
+                                         f"Check if units are in kHz.")
+                except UnitError:
+                    raise
                 except Exception:
+                    # Re-raise UnitError to be caught by UI
+                    if isinstance(sys.exc_info()[1], UnitError):
+                        raise
                     pass
 
     def _build_channels(

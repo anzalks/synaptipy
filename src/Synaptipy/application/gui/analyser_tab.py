@@ -274,6 +274,13 @@ class AnalyserTab(QtWidgets.QWidget):
         style_button(self.batch_analysis_btn, style="primary")
         toolbar_layout.addWidget(self.batch_analysis_btn)
 
+        # Copy Methods Button
+        self.copy_methods_btn = QtWidgets.QPushButton("Copy Methods Text")
+        self.copy_methods_btn.setToolTip("Copy a description of the current analysis methods to clipboard.")
+        self.copy_methods_btn.clicked.connect(self._copy_methods_to_clipboard)
+        style_button(self.copy_methods_btn, style="secondary")
+        toolbar_layout.addWidget(self.copy_methods_btn)
+
         toolbar_layout.addStretch()
 
         toolbar_layout.addStretch()
@@ -577,6 +584,33 @@ class AnalyserTab(QtWidgets.QWidget):
         # TODO: Handle channel/trial auto-selection after load
         # This requires the load to complete first, which is async/decoupled.
         # For now, just loading the file is a huge win.
+
+    @QtCore.Slot()
+    def _copy_methods_to_clipboard(self):
+        """Generates methods text for the current analysis result and copies to clipboard."""
+        from Synaptipy.application.controllers.analysis_formatter import generate_methods_text
+        
+        current_tab = self.sub_tab_widget.currentWidget()
+        if not current_tab:
+            return
+
+        # Try to find a result object on the tab
+        result = None
+        if hasattr(current_tab, "last_result"):
+            result = current_tab.last_result
+        elif hasattr(current_tab, "current_result"):
+            result = current_tab.current_result
+        
+        if result:
+            methods_text = generate_methods_text(result)
+            clipboard = QtWidgets.QApplication.clipboard()
+            clipboard.setText(methods_text)
+            
+            # Feedback
+            self.window().statusBar().showMessage("Methods description copied to clipboard.", 3000)
+            log.info("Copied methods text to clipboard.")
+        else:
+            QtWidgets.QMessageBox.information(self, "No Result", "Run an analysis first to generate methods text.")
 
     # --- Slot for Explorer Signal ---
     @QtCore.Slot(list)

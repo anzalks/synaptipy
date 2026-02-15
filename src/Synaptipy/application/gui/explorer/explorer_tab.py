@@ -419,7 +419,11 @@ class ExplorerTab(QtWidgets.QWidget):
                 plot_item.addItem(scatter)
                 self.active_scatter_items[item_key] = scatter
 
-    # --- Loading Logic ---
+    # --- File Loading ---
+    @staticmethod
+    def _read_file_task(neo_adapter, filepath, lazy, whitelist, force_units=False):
+        """Worker function to read file."""
+        return neo_adapter.read_recording(filepath, lazy=lazy, channel_whitelist=whitelist, force_kHz_to_Hz=force_units)
 
     def load_recording_data(
         self,
@@ -427,8 +431,22 @@ class ExplorerTab(QtWidgets.QWidget):
         file_list: List[Path] = None,
         selected_index: int = -1,
         preserve_state: bool = False,
+        lazy: bool = False,
+        force_units: bool = False,
     ):
+        """
+        Loads the recording data in a background thread.
+        
+        Args:
+            filepath: Path to the file.
+            file_list: Optional list of sibling files for navigation.
+            selected_index: Index of the current file in the file_list.
+            preserve_state: If True, attempts to preserve view state (zoom/pan) across files.
+            lazy: If True, uses lazy loading.
+            force_units: If True, forces kHz -> Hz conversion for low sampling rates.
+        """
         if self._is_loading:
+            log.warning("Already loading a file.")
             return
         self._is_loading = True
 
@@ -972,9 +990,35 @@ class ExplorerTab(QtWidgets.QWidget):
         self.current_file_index = current_index
         self._update_all_ui_state()
 
-    def _on_file_load_error(self, error_info, filepath=None):
-        self.status_bar.showMessage(f"Error loading file: {error_info}", 5000)
+    def _on_file_load_error(self, error: Exception, filepath: Path):
+        """Handle errors during file loading."""
         self._is_loading = False
+        self.loading_overlay.hide()
+        self.status_bar.showMessage(f"Error loading {filepath.name}", 5000)
+        
+        error_msg = str(error)
+        log.error(f"File load error: {error_msg}", exc_info=True)
+
+        # Special Handling for Unit Error (Safety Check)
+        if "Critical Safety: Sampling Rate" in error_msg and "dangerously low" in error_msg:
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Ambiguous Units Detected",
+                f"The sampling rate is < 100Hz.\n\n"
+                f"This often means the file was recorded in kHz but read as Hz.\n"
+                f"Do you want to auto-convert it to Hz (multiply by 1000)?",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.Cancel,
+                QtWidgets.QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+                log.info(f"User requested Unit Correction for {filepath.name}")
+                # Re-trigger load with force_units=True
+                # We use QTimer to allow current stack to unwind/cleanup
+                QtCore.QTimer.singleShot(100, lambda: self.load_recording_data(filepath, force_units=True))
+                return
+
+        QtWidgets.QMessageBox.critical(self, "Load Error", f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}")
 
     def _finalize_loading_state(self):
         self._is_loading = False
