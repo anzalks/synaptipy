@@ -126,6 +126,10 @@ class EventDetectionResult(AnalysisResult):
     tau_decay_ms: Optional[float] = None
     threshold_sd: Optional[float] = None
 
+    # Artifact Rejection
+    n_artifacts_rejected: int = 0
+    artifact_mask: Optional[np.ndarray] = None
+
     def __repr__(self):
         if self.is_valid:
             freq_str = f"{self.frequency_hz:.2f}" if self.frequency_hz is not None else "N/A"

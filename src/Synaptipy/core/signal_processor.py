@@ -487,3 +487,73 @@ def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, en
     baseline_offset = np.mean(data[mask])
     log.debug(f"Baseline subtraction (Region {start_t}-{end_t}): Calculated offset = {baseline_offset:.4f}")
     return data - baseline_offset
+
+
+def find_artifact_windows(
+    data: np.ndarray, fs: float, slope_threshold: float, padding_ms: float = 2.0
+) -> np.ndarray:
+    """
+    Identify time windows containing high-slope artifacts.
+
+    Algorithm:
+    1. Calculate absolute gradient of the data.
+    2. Threshold gradient to find high-slope points.
+    3. Dilate the boolean mask by `padding_ms` to capture the artifact tail/ringing.
+
+    Args:
+        data: Signal array.
+        fs: Sampling rate in Hz.
+        slope_threshold: Threshold for the absolute gradient (e.g. pA/sample or mV/sample).
+        padding_ms: Time to expand the mask around detected peaks (in milliseconds).
+
+    Returns:
+        Boolean mask of the same shape as `data`, where True indicates an artifact.
+    """
+    if data is None or len(data) == 0:
+        return np.array([], dtype=bool)
+
+    # Lazily import scipy
+    _, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        log.warning("Scipy not available. Cannot perform artifact dilation.")
+        # Fallback: just return thresholded gradient without dilation
+        grad = np.abs(np.gradient(data))
+        return grad > slope_threshold
+
+    import scipy.ndimage as ndimage
+
+    # 1. Gradient
+    grad = np.abs(np.gradient(data))
+
+    # 2. Threshold
+    mask = grad > slope_threshold
+
+    # 3. Dilation
+    if padding_ms > 0:
+        # Interpret padding_ms as Post-Padding (artifact tail).
+        # We allow a small fixed Pre-Padding to cover the rising edge.
+        post_padding_samples = int((padding_ms / 1000.0) * fs)
+        
+        # Small fixed pre-padding (0.25 ms or 2 samples minimum)
+        pre_padding_ms = 0.25
+        pre_padding_samples = int((pre_padding_ms / 1000.0) * fs)
+        pre_padding_samples = max(2, pre_padding_samples) 
+        
+        # Create asymmetric structure
+        # Size = 2 * max_reach + 1 to keep center aligned
+        max_reach = max(pre_padding_samples, post_padding_samples)
+        structure_len = 2 * max_reach + 1
+        structure = np.zeros(structure_len, dtype=bool)
+        
+        center = max_reach
+        
+        # Left side of kernel (negative offsets) -> Looks at future (right) -> Dilates LEFT (Pre-padding)
+        # Right side of kernel (positive offsets) -> Looks at past (left) -> Dilates RIGHT (Post-padding)
+        start_idx = center - pre_padding_samples
+        end_idx = center + post_padding_samples + 1
+        structure[start_idx:end_idx] = True
+        
+        mask = ndimage.binary_dilation(mask, structure=structure)
+
+    return mask
+

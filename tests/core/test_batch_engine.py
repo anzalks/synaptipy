@@ -416,9 +416,14 @@ class TestRegisteredAnalyses:
         assert func is not None
 
     def test_mini_detection_registered(self):
-        """Test that mini_detection is registered."""
-        func = AnalysisRegistry.get_function("mini_detection")
+        """Test that event detection is registered."""
+        # Renamed from "mini_detection" to "event_detection_threshold"
+        func = AnalysisRegistry.get_function("event_detection_threshold")
         assert func is not None
+        # Verify metadata too
+        meta = AnalysisRegistry.get_metadata("event_detection_threshold")
+        assert meta is not None
+        assert "threshold" in [p["name"] for p in meta.get("ui_params", [])]
 
     def test_spike_detection_wrapper_returns_dict(self):
         """Test that spike_detection wrapper returns proper dict."""
