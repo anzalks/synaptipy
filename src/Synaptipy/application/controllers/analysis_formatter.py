@@ -1,6 +1,7 @@
 # src/Synaptipy/application/controllers/analysis_formatter.py
 from typing import Dict, Any, Tuple, List
 import logging
+from Synaptipy.core.results import SpikeTrainResult
 
 log = logging.getLogger(__name__)
 
@@ -377,3 +378,47 @@ class AnalysisResultFormatter:
             except Exception:
                 return f"{tau} ms"
         return "N/A"
+
+
+def generate_methods_text(result: Any) -> str:
+    """
+    Generate a natural language description of the analysis performed.
+
+    Args:
+        result: The result object (e.g. SpikeTrainResult) containing parameters.
+
+    Returns:
+        String description suitable for a paper's Methods section.
+    """
+    if not hasattr(result, "parameters") or not result.parameters:
+        return "Analysis was performed using default parameters."
+
+    params = result.parameters
+
+    if isinstance(result, SpikeTrainResult):
+        threshold = params.get("threshold", "unknown")
+        refractory = params.get("refractory_period", "unknown")
+
+        # Convert to ms if float (assuming seconds)
+        if isinstance(refractory, (float, int)):
+            refractory_str = f"{refractory * 1000.0:.2f} ms"
+        else:
+            refractory_str = str(refractory)
+
+        text = (
+            f"Action potentials were detected using a voltage threshold crossing algorithm. "
+            f"The detection threshold was set to {threshold} mV with a refractory period "
+            f"enforced to prevent double-counting within {refractory_str} of a spike. "
+        )
+
+        if "dvdt_threshold" in params:
+             text += (
+                 f"Spike features were calculated based on the derivative of the membrane potential, "
+                 f"using a dV/dt onset threshold of {params['dvdt_threshold']} V/s. "
+             )
+
+        return text
+
+    # Fallback for generic results
+    param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
+    return f"Analysis performed with parameters: {param_str}."

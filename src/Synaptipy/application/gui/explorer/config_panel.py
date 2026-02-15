@@ -33,6 +33,10 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     # Channel signals
     channel_visibility_changed = QtCore.Signal(str, bool)
 
+    # Live Analysis Signals
+    threshold_changed = QtCore.Signal(float)
+    refractory_changed = QtCore.Signal(float)
+
     class PlotMode:
         OVERLAY_AVG = 0
         CYCLE_SINGLE = 1
@@ -57,7 +61,10 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         # 3. Channels
         self._setup_channel_list(layout)
 
-        # 4. File Info
+        # 4. Analysis Controls (New)
+        self._setup_analysis_controls(layout)
+
+        # 5. File Info
         self._setup_file_info(layout)
 
         layout.addStretch()
@@ -160,6 +167,29 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         layout.addWidget(scroll)
 
         parent_layout.addWidget(self.channel_group)
+
+    def _setup_analysis_controls(self, parent_layout):
+        group = QtWidgets.QGroupBox("Live Analysis")
+        layout = QtWidgets.QFormLayout(group)
+        
+        # Threshold
+        self.threshold_spin = QtWidgets.QDoubleSpinBox()
+        self.threshold_spin.setRange(-1000.0, 1000.0)
+        self.threshold_spin.setValue(-20.0)
+        self.threshold_spin.setSuffix(" mV")
+        self.threshold_spin.valueChanged.connect(self.threshold_changed.emit)
+        layout.addRow("Threshold:", self.threshold_spin)
+        
+        # Refractory
+        self.refractory_spin = QtWidgets.QDoubleSpinBox()
+        self.refractory_spin.setRange(0.0, 100.0)
+        self.refractory_spin.setValue(2.0)
+        self.refractory_spin.setSuffix(" ms")
+        self.refractory_spin.setSingleStep(0.1)
+        self.refractory_spin.valueChanged.connect(self.refractory_changed.emit)
+        layout.addRow("Refractory:", self.refractory_spin)
+        
+        parent_layout.addWidget(group)
 
     def _setup_file_info(self, parent_layout):
         group = QtWidgets.QGroupBox("File Information")

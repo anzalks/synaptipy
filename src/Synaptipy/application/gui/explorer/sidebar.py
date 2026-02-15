@@ -6,9 +6,8 @@ Handles file system navigation (tree view) and file list management.
 """
 import logging
 from pathlib import Path
-from typing import Optional
-
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
+from typing import Dict, Optional # Added Dict
 from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -57,6 +56,10 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         # Hide columns other than Name (Size, Type, Date) to save space
         for i in range(1, 4):
             self.file_tree.setColumnHidden(i, True)
+
+        # Set Custom Delegate
+        self.delegate = QualityDelegate(self.file_tree)
+        self.file_tree.setItemDelegate(self.delegate)
 
         self.file_tree.doubleClicked.connect(self._on_tree_double_clicked)
 
@@ -142,3 +145,111 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         """Handle directory load completion."""
         if self._pending_sync_path and str(self._pending_sync_path.parent) == path:
             self._attempt_sync(self._pending_sync_path)
+
+    def update_file_quality(self, file_path: Path, metrics: dict):
+        """
+        Update the quality status for a specific file and trigger repaint.
+        """
+        if self.file_tree.itemDelegate():
+            delegate = self.file_tree.itemDelegate()
+            if isinstance(delegate, QualityDelegate):
+                delegate.update_status(file_path, metrics)
+                
+                # Trigget viewport update for the specific index if visible
+                idx = self.file_model.index(str(file_path))
+                if idx.isValid():
+                    self.file_tree.update(idx)
+
+
+class QualityDelegate(QtWidgets.QStyledItemDelegate):
+    """
+    Delegate to draw a small colored circle indicating signal quality next to the filename.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.quality_cache: Dict[Path, Dict] = {}
+        # Colors
+        self.color_good = QtGui.QColor("#2ecc71")   # Green
+        self.color_warn = QtGui.QColor("#f1c40f")   # Yellow
+        self.color_bad = QtGui.QColor("#e74c3c")    # Red
+        self.color_unknown = QtGui.QColor("transparent") # Default
+
+    def update_status(self, path: Path, metrics: dict):
+        self.quality_cache[path] = metrics
+
+    def paint(self, painter: QtGui.QPainter, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex):
+        # 1. Draw Default Text/Icon behavior
+        super().paint(painter, option, index)
+
+        # 2. Check if we have quality info for this file
+        model = index.model()
+        if isinstance(model, QtWidgets.QFileSystemModel):
+            file_path = Path(model.filePath(index))
+            
+            if file_path in self.quality_cache:
+                info = self.quality_cache[file_path]
+                
+                # Determine Color
+                if not info.get("is_good", False):
+                    color = self.color_bad
+                elif info.get("warnings"):
+                    color = self.color_warn
+                else:
+                    color = self.color_good
+                
+                # Draw Circle
+                painter.save()
+                painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+                painter.setPen(QtCore.Qt.PenStyle.NoPen)
+                painter.setBrush(color)
+                
+                # Position: Right side of the item rect, or left of text? 
+                # FileSystemModel usually has Icon then Text.
+                # Let's draw it on the far right of the column (Name column 0)
+                # Or just to the left of the text if possible?
+                # Calculating text rect is hard without more info.
+                # Let's put it at fixed offset from left, assuming standard icon size.
+                # Or better: Draw it on top of the icon? No.
+                # Let's draw it in the right padding of the text?
+                
+                # Simple approach: Draw a small circle at (rect.right() - 15, center_y)
+                radius = 4
+                cx = option.rect.right() - 15
+                cy = option.rect.center().y()
+                
+                if cx > option.rect.left(): # Only if visible
+                    painter.drawEllipse(QtCore.QPointF(cx, cy), radius, radius)
+                
+                painter.restore()
+
+    def helpEvent(self, event, view, option, index):
+        """Show Tooltip with specific warnings."""
+        if event.type() == QtCore.QEvent.Type.ToolTip:
+            model = index.model()
+            if isinstance(model, QtWidgets.QFileSystemModel):
+                file_path = Path(model.filePath(index))
+                if file_path in self.quality_cache:
+                    info = self.quality_cache[file_path]
+                    
+                    tooltip = "<b>Signal Quality analysis:</b><br>"
+                    if not info.get("is_good"):
+                        tooltip += f"<font color='red'>ERROR: {info.get('error', 'Unknown')}</font><br>"
+                    
+                    if info.get("warnings"):
+                        tooltip += "<b>Warnings:</b><ul>"
+                        for w in info['warnings']:
+                            tooltip += f"<li>{w}</li>"
+                        tooltip += "</ul>"
+                    
+                    # Add drift info if available
+                    if 'metrics' in info:
+                        m = info['metrics']
+                        if 'total_drift' in m:
+                            tooltip += f"<br>Drift: {m['total_drift']:.2f}"
+                        if 'rms_noise' in m:
+                            tooltip += f"<br>RMS Noise: {m['rms_noise']:.2f}"
+
+                    QtWidgets.QToolTip.showText(event.globalPos(), tooltip, view)
+                    return True
+                    
+        return super().helpEvent(event, view, option, index)

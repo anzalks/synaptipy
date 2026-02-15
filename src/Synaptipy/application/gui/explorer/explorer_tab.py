@@ -25,7 +25,14 @@ from .plot_canvas import ExplorerPlotCanvas
 from .y_controls import ExplorerYControls
 from .toolbar import ExplorerToolbar
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
+
+# --- Live Analysis ---
+from Synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
+from Synaptipy.core.signal_processor import check_trace_quality
+from Synaptipy.core.results import SpikeTrainResult
+import pyqtgraph as pg
 
 # Configure Logger
 log = logging.getLogger(__name__)
@@ -142,6 +149,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self.preprocessing_widget = PreprocessingWidget()
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
         self.preprocessing_widget.preprocessing_reset_requested.connect(self._handle_preprocessing_reset)
+
+        # Live Analysis Controller
+        self.live_controller = LiveAnalysisController()
+        self.live_controller.sig_analysis_finished.connect(self._on_live_analysis_finished)
+        self.live_controller.sig_analysis_error.connect(lambda e: log.error(f"Live Analysis Error: {e}"))
 
     def _setup_layout(self):
         layout = QtWidgets.QHBoxLayout(self)
@@ -281,6 +293,117 @@ class ExplorerTab(QtWidgets.QWidget):
         self.add_analysis_btn.clicked.connect(self._add_current_to_analysis_set)
         self.clear_analysis_btn.clicked.connect(self._clear_analysis_set)
 
+        # Live Analysis Controls
+        self.config_panel.threshold_changed.connect(self._request_live_analysis)
+        self.config_panel.refractory_changed.connect(self._request_live_analysis)
+
+    def _request_live_analysis(self):
+        """Gather params and request analysis for the CURRENT visible channel/trial."""
+        if not self.current_recording:
+            return
+            
+        # For simplicity in Explorer, we analyze the First Visible Channel's current trial
+        # Finding the "active" channel is tricky if multiple are visible.
+        # We will prioritize the first visible one for the demo/live tuning.
+        
+        target_cid = None
+        for cid, plot in self.plot_canvas.channel_plots.items():
+            if plot.isVisible():
+                target_cid = cid
+                break
+        
+        if target_cid is None:
+            return
+
+        channel = self.current_recording.channels.get(target_cid)
+        if not channel:
+            return
+
+        # Get Data for current trial (or average if in overlay mode? Plan said "Live-Tuning").
+        # Usually checking current trial is best for "tuning".
+        try:
+            # We use the raw data? Or processed?
+            # Detection usually happens on Processed (filtered) data if pipeline active.
+            # But here we might want to just show it on the raw trace if pipeline is empty.
+            # Let's use the SAME data logic as plotting.
+            
+            # Re-fetch data for the current trial index
+            idx = self.current_trial_index
+            data = channel.get_data(idx)
+            t = channel.get_relative_time_vector(idx)
+            
+            if data is None:
+                return
+                
+            # Apply pipeline if active
+            fs = channel.sampling_rate
+            processed_data = self.pipeline.process(data, fs, time_vector=t)
+            
+            # Params
+            params = {
+                "threshold": self.config_panel.threshold_spin.value(),
+                "refractory_period": self.config_panel.refractory_spin.value() / 1000.0, # ms -> s
+                "channel_id": target_cid,
+                "trial_index": idx
+            }
+            
+            self.live_controller.request_analysis(processed_data, t, params)
+            
+        except Exception as e:
+            log.error(f"Failed to prepare live analysis request: {e}")
+
+    def _on_live_analysis_finished(self, result: SpikeTrainResult):
+        """Handle new analysis result: Draw Red Dots."""
+        # 1. Check if result matches current view context? 
+        # (Controller cancels old ones, but we should verify channel/trial if possible, 
+        # but parameters dict has it).
+        
+        cid = result.parameters.get("channel_id")
+        trial_idx = result.parameters.get("trial_index")
+        
+        # Verify context match to avoid flashing wrong dots
+        if trial_idx != self.current_trial_index:
+             return
+        
+        item_key = f"spikes_{cid}"
+        
+        # 2. Update Plot
+        # We need to access the plot item.
+        if cid in self.plot_canvas.channel_plots:
+            plot_item = self.plot_canvas.channel_plots[cid]
+            
+            # Remove old scatter if stored
+            # We need a place to store the scatter item reference.
+            # We can store it in a dict on ExplorerTab: self.active_scatter_items = {}
+            if not hasattr(self, "active_scatter_items"):
+                self.active_scatter_items = {}
+            
+            if item_key in self.active_scatter_items:
+                plot_item.removeItem(self.active_scatter_items[item_key])
+            
+            if result.spike_times is not None and len(result.spike_times) > 0:
+                # Get Y-values for the dots. trace[spike_indices]
+                # But we only have times/indices. We need the data again?
+                # Or we can just plot at Threshold level? 
+                # Plotting at Threshold level is good for visualization.
+                threshold = result.parameters.get("threshold", 0)
+                
+                # Or better: plot on the trace? 
+                # To plot on trace, we need data.
+                # Let's plot at Threshold for now as it shows the crossing clearly.
+                y_vals = np.full(len(result.spike_times), threshold)
+                
+                scatter = pg.ScatterPlotItem(
+                    x=result.spike_times, 
+                    y=y_vals, 
+                    pen=pg.mkPen(None), 
+                    brush=pg.mkBrush('r'), 
+                    size=10, 
+                    pxMode=True
+                )
+                plot_item.addItem(scatter)
+                self.active_scatter_items[item_key] = scatter
+
     # --- Loading Logic ---
 
     def load_recording_data(
@@ -352,7 +475,8 @@ class ExplorerTab(QtWidgets.QWidget):
         self.session_manager.set_file_context(file_list, selected_index)
 
         # Start Worker
-        worker = AnalysisWorker(self.neo_adapter.read_recording, filepath)
+        # We wrap the loading function to also include quality check
+        worker = AnalysisWorker(self._load_and_check_quality, self.neo_adapter, filepath)
         worker.signals.result.connect(self._on_file_load_success)
         worker.signals.error.connect(self._on_file_load_error)
         worker.signals.finished.connect(self._finalize_loading_state)
@@ -360,14 +484,48 @@ class ExplorerTab(QtWidgets.QWidget):
         self.status_bar.showMessage(f"Loading '{filepath.name}'...")
         self.thread_pool.start(worker)
 
-    def _on_file_load_success(self, recording, filepath=None):
+    @staticmethod
+    def _load_and_check_quality(adapter, filepath):
+        """Background task: Load file AND run quality check."""
+        # 1. Load
+        rec = adapter.read_recording(filepath)
+        
+        # 2. Quality Check (on first channel or all?)
+        # For 'Traffic Light', checking the first channel is usually enough for a quick indicator
+        # unless it is empty.
+        metrics = {"is_good": True, "warnings": []}
+        
+        if rec and rec.channels:
+            # Pick first channel
+            first_ch = list(rec.channels.values())[0]
+            # Get data (force load if lazy?)
+            # check_trace_quality expects numpy array
+            try:
+                data = first_ch.get_data(0)
+                if data is not None:
+                    metrics = check_trace_quality(data, first_ch.sampling_rate)
+            except Exception as e:
+                metrics = {"is_good": False, "error": str(e), "warnings": ["Quality check failed"]}
+        
+        return rec, metrics
+
+    def _on_file_load_success(self, result_tuple):
+        # Unpack result
+        if isinstance(result_tuple, tuple):
+             recording, metrics = result_tuple
+        else:
+             recording = result_tuple
+             metrics = {}
+
         self._display_recording(recording)
-        # Session Manager update handled by signal? existing code suggests so.
-        # But we update session manager with recording:
         self.session_manager.current_recording = recording
         
-        # Auto-add to analysis set so AnalyserTab sees it immediately
-        # self._add_current_to_analysis_set()  # Disabled per user request (manual only)
+        # Update Sidebar Indicator
+        if recording and recording.source_file:
+            self.sidebar.update_file_quality(recording.source_file, metrics)
+            
+            # Also Auto-Trigger Live Analysis on load?
+            # self._request_live_analysis() # Maybe too aggressive/slow
 
     def _display_recording(self, recording: Recording):
         if not recording:

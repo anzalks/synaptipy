@@ -239,14 +239,51 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if not self._selected_item_recording:
             if self.plot_widget:
                 self.plot_widget.clear()
+        
+        # Update visibility based on new item context
+        self._update_parameter_visibility()
 
-    def _on_channel_changed(self, index):
+    def _on_channel_changed(self, index=None):
         """Handle channel selection change."""
-        # Now handled by BaseAnalysisTab._plot_selected_data via signal connection
-        # But we might need to trigger analysis?
+        # Trigger visibility update (channel units might have changed)
+        self._update_parameter_visibility()
+        
         # BaseAnalysisTab._plot_selected_data calls _on_data_plotted hook.
         # We can trigger analysis there.
         pass
+
+    def _update_parameter_visibility(self):
+        """Calculate context and update parameter visibility."""
+        if not hasattr(self, "param_generator"):
+            return
+
+        context = {}
+        
+        # 1. Determine Clamp Mode
+        # Logic: If channel units contain 'A' (Amps), it's Voltage Clamp (measuring Current)
+        # If channel units contain 'V' (Volts), it's Current Clamp (measuring Voltage)
+        # Default to Current Clamp if unknown
+        
+        is_voltage_clamp = False
+        
+        if self.signal_channel_combobox:
+            # Get channel name string
+            channel_name = self.signal_channel_combobox.currentData()
+            
+            # Fetch channel object
+            channel = None
+            if channel_name and self._selected_item_recording and channel_name in self._selected_item_recording.channels:
+                channel = self._selected_item_recording.channels[channel_name]
+            
+            if channel:
+                units = channel.units or "V"
+                if "A" in units or "amp" in units.lower():
+                    is_voltage_clamp = True
+        
+        context["clamp_mode"] = "voltage_clamp" if is_voltage_clamp else "current_clamp"
+        
+        # Update generator
+        self.param_generator.update_visibility(context)
 
     def _on_data_plotted(self):
         """Hook called after data is plotted."""

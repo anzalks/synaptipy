@@ -37,6 +37,7 @@ from Synaptipy.shared.error_handling import (
     FileReadError,
     UnsupportedFormatError,
     SynaptipyFileNotFoundError,
+    UnitError,
 )
 from Synaptipy.core.signal_processor import validate_sampling_rate
 
@@ -572,7 +573,13 @@ class NeoAdapter:
                         }
                     )
                     # Phase 4: Validate sampling rate
-                    validate_sampling_rate(float(anasig.sampling_rate))
+                    fs = float(anasig.sampling_rate)
+                    if not validate_sampling_rate(fs):
+                        # Strict Scientific Safety Rule:
+                        # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
+                        if fs < 100:
+                             raise UnitError(f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
+                                             f"Check if units are in kHz.")
                 except Exception:
                     pass
 

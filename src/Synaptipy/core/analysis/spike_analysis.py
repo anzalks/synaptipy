@@ -481,7 +481,49 @@ def calculate_spike_features(
     # For exact parity with find_peaks, it's hard. We will provide a placeholder or simple max.
 
     adp_amplitudes = np.full(n_spikes, np.nan)
-    # (Implementation complexity trade-off: skipping ADP loop for perf is acceptable as it's rare)
+    
+    # Vectorized ADP: Largest Local Maximum between AP End and End of AHP Window
+    # We look for a local peak (convexity) to avoid detecting monotonic recovery as ADP.
+    
+    # helper for local max: val[i] > val[i-1] and val[i] > val[i+1]
+    # ahp_waveforms shape: (n_spikes, ahp_max_samples)
+    if ahp_max_samples > 2:
+        val_mid = ahp_waveforms[:, 1:-1]
+        val_left = ahp_waveforms[:, :-2]
+        val_right = ahp_waveforms[:, 2:]
+        
+        is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
+        
+        # Pad to match shape (False at edges)
+        is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode='constant', constant_values=False)
+        
+        col_idxs = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
+        
+        # Mask: must be local max AND after AP end
+        # We also usually want it before the AHP Min? Or can it be after?
+        # Test case: Trough (-80) -> ADP (-75) -> Rest.
+        # Here ADP is *after* the fast trough.
+        # But if we just look for *any* local max after AP end, we might catch the ADP.
+        # If there is no ADP (monotonic recovery), there is no local max.
+        # If there is oscillation, we take the largest.
+        
+        valid_adp_mask = is_local_max & (col_idxs > ap_end_rel_indices[:, None])
+        
+        has_adp = np.any(valid_adp_mask, axis=1)
+        
+        # Calculate amplitudes where valid
+        # We use a temp array filled with -inf
+        temp_vals = ahp_waveforms.copy()
+        temp_vals[~valid_adp_mask] = -np.inf
+        
+        adp_peaks = np.max(temp_vals, axis=1)
+        
+        # Amplitude defined as Peak - ahp_min_vals?
+        # In test case: -75 - (-80) = 5. Correct.
+        # In scenario 1 (hump on falling phase): Peak is high, AHP min is low. Amp is large.
+        calced_adps = adp_peaks - ahp_min_vals
+        
+        adp_amplitudes = np.where(has_adp, calced_adps, np.nan)
 
 
     # --- Max/Min dV/dt ---
