@@ -301,6 +301,9 @@ class AnalyserTab(QtWidgets.QWidget):
         self.central_analysis_item_combo = QtWidgets.QComboBox()
         self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
         self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
+        
+        # Connect Sidebar Selection Signal (Cross-Tab Navigation)
+        self.source_list_widget.currentItemChanged.connect(self._on_sidebar_selection_changed)
 
         # --- Sub-Tab Widget (Analysis Tabs) - Takes full width ---
         self.sub_tab_widget = QtWidgets.QTabWidget()
@@ -797,6 +800,43 @@ class AnalyserTab(QtWidgets.QWidget):
                 tab.update_state(self._analysis_items)
             except Exception as e_update:
                 log.error(f"Error updating state for tab '{tab.get_display_name()}': {e_update}", exc_info=True)
+
+    # --- Cross-Tab Navigation Handler ---
+    @QtCore.Slot(QtWidgets.QListWidgetItem, QtWidgets.QListWidgetItem)
+    def _on_sidebar_selection_changed(self, current: QtWidgets.QListWidgetItem, previous: QtWidgets.QListWidgetItem):
+        """
+        Handle selection changes in the sidebar (Analysis Source List).
+        If a specific trial is selected, notify the current analysis tab to highlight it.
+        """
+        if not current:
+            return
+
+        # Determine index in the list
+        row = self.source_list_widget.row(current)
+        if row < 0 or row >= len(self._analysis_items):
+            return
+
+        selected_item = self._analysis_items[row]
+        target_type = selected_item.get("target_type")
+        
+        # Check if it's a specific trial selection (from Explorer expansion)
+        # Note: The item dictionary structure from ExplorerTab typically is:
+        # {"path": Path(...), "target_type": "Current Trial", "trial_index": 5}
+        
+        trial_index = -1
+        if target_type == "Current Trial":
+            trial_index = selected_item.get("trial_index", -1)
+        
+        # Forward to current tab
+        current_tab = self.sub_tab_widget.currentWidget()
+        if current_tab and isinstance(current_tab, BaseAnalysisTab):
+            if hasattr(current_tab, "highlight_trial"):
+                try:
+                    current_tab.highlight_trial(trial_index)
+                    log.debug(f"Highlighted trial {trial_index} in {current_tab.get_display_name()}")
+                except Exception as e:
+                    log.error(f"Error highlighting trial in tab: {e}")
+
 
     # --- Cleanup ---
     def cleanup(self):

@@ -641,6 +641,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         layout.addWidget(self.plot_canvas.widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
 
+        # Add Plot Navigation Controls (Prev/Next Trial)
+        self._setup_plot_navigation_controls(layout)
+
         # Add Toolbar below the plot
         self._setup_toolbar(layout)
 
@@ -1338,6 +1341,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_data)
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_data)
 
+        # _setup_trial_nav_ui removed in favor of plot area controls
+
         log.debug(f"{self.__class__.__name__}: Data selection UI setup complete")
 
     def _reset_trial_filtering(self):
@@ -1408,6 +1413,69 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             QtWidgets.QMessageBox.information(self, "Trial Selection", "No trials matched your criteria.")
             # Refresh plot (revert to default/all?)
             self._plot_selected_data()
+
+            # Refresh plot (revert to default/all?)
+            self._plot_selected_data()
+
+    # --- Plot Navigation Controls (Below Plot) ---
+    def _setup_plot_navigation_controls(self, layout: QtWidgets.QVBoxLayout):
+        """Add Prev/Next buttons below the plot to navigate trials."""
+        nav_layout = QtWidgets.QHBoxLayout()
+        # nav_layout.addStretch() # Center align or left align? Let's center.
+        
+        self.prev_trial_btn = QtWidgets.QPushButton("Previous Trial")
+        self.prev_trial_btn.setToolTip("Select the previous trial in the Data Source list.")
+        self.prev_trial_btn.clicked.connect(self._on_prev_trial)
+        self.prev_trial_btn.setEnabled(False)
+        style_button(self.prev_trial_btn)
+
+        self.next_trial_btn = QtWidgets.QPushButton("Next Trial")
+        self.next_trial_btn.setToolTip("Select the next trial in the Data Source list.")
+        self.next_trial_btn.clicked.connect(self._on_next_trial)
+        self.next_trial_btn.setEnabled(False)
+        style_button(self.next_trial_btn)
+
+        nav_layout.addWidget(self.prev_trial_btn)
+        nav_layout.addWidget(self.next_trial_btn)
+        # nav_layout.addStretch()
+
+        layout.addLayout(nav_layout)
+
+    def _update_nav_buttons_state(self):
+        """Enable/disable buttons based on current selection."""
+        if not self.data_source_combobox.isEnabled() or self.data_source_combobox.count() <= 1:
+             self.prev_trial_btn.setEnabled(False)
+             self.next_trial_btn.setEnabled(False)
+             return
+        
+        idx = self.data_source_combobox.currentIndex()
+        count = self.data_source_combobox.count()
+        
+        # Enable if we can move (cyclic navigation is often preferred, but let's stick to bounds for clarity first)
+        # Actually lets make them always enabled if >1 item so user can cycle.
+        self.prev_trial_btn.setEnabled(count > 1)
+        self.next_trial_btn.setEnabled(count > 1)
+
+    def _on_prev_trial(self):
+        """Select previous item in data source combobox."""
+        self._navigate_combobox(-1)
+
+    def _on_next_trial(self):
+        """Select next item in data source combobox."""
+        self._navigate_combobox(1)
+
+    def _navigate_combobox(self, delta: int):
+        """Move combobox selection by delta."""
+        count = self.data_source_combobox.count()
+        if count <= 1:
+            return
+        
+        current = self.data_source_combobox.currentIndex()
+        new_idx = (current + delta) % count # Cycle
+        self.data_source_combobox.setCurrentIndex(new_idx)
+
+
+    # --- END UI TWEAKS ---
 
     # Removed _open_trial_selection_dialog as we use filtering now
 
@@ -1505,16 +1573,32 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if first_channel:
             num_trials = getattr(first_channel, "num_trials", 0)
 
-        # Populate based on item type
+        # Force population of ALL options (Average + All Trials) to allow navigation
+        # regardless of what was clicked in Explorer.
+        
+        # 1. Add Average Trace (always available as overlay or calculation)
+        self.data_source_combobox.addItem("Average Trace", userData="average")
+        
+        # 2. Add All Trials
+        for i in range(num_trials):
+            self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
+
+        # 3. Set Initial Selection based on item_type
         if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
-            self.data_source_combobox.addItem(f"Trial {item_trial_index + 1}", userData=item_trial_index)
+            # Find and select the specific trial
+            index = self.data_source_combobox.findData(item_trial_index)
+            if index >= 0:
+                self.data_source_combobox.setCurrentIndex(index)
         elif item_type == "Average Trace":
-            self.data_source_combobox.addItem("Average Trace", userData="average")
-        else:  # "Recording" or "All Trials"
-            # Always add "Average Trace" (Overlay) option so users can see all trials even if no average exists
-            self.data_source_combobox.addItem("Average Trace", userData="average")
-            for i in range(num_trials):
-                self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
+            # Select Average
+            index = self.data_source_combobox.findData("average")
+            if index >= 0:
+                self.data_source_combobox.setCurrentIndex(index)
+        else:
+            # Default to Average
+             index = self.data_source_combobox.findData("average")
+             if index >= 0:
+                self.data_source_combobox.setCurrentIndex(index)
 
         if self.data_source_combobox.count() > 0:
             self.data_source_combobox.setEnabled(True)
@@ -1530,8 +1614,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.signal_channel_combobox.blockSignals(False)
         self.data_source_combobox.blockSignals(False)
 
+        # Update button state
+        self._update_nav_buttons_state()
+
         log.debug(f"{self.__class__.__name__}: Comboboxes populated - triggering plot")
         self._plot_selected_data()
+
 
     @QtCore.Slot()
     def _plot_selected_data(self):  # noqa: C901
@@ -1671,7 +1759,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                                         if processed is not None:
                                             trial_data = processed
 
-                                    self.plot_widget.plot(trial_time, trial_data, pen=trial_pen)
+                                    # CAPTURE CURVE TO TAG IT
+                                    curve = self.plot_widget.plot(trial_time, trial_data, pen=trial_pen)
+                                    curve.trial_index = trial_idx
+                                    curve.curve_type = "trial_trace"  # Tag for identification
                             except Exception as e:
                                 log.debug(f"Could not plot trial {trial_idx}: {e}")
 
@@ -2092,4 +2183,89 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.add_to_session_button:
             self.add_to_session_button.setEnabled(self._last_analysis_result is not None)
 
-    # --- END ADDED ---
+    # --- NEW: Cross-Tab Highlighting Interface ---
+    def highlight_trial(self, segment_index: int):
+        """
+        Called when the user selects a specific trial in the sidebar.
+        Override this to update plots (e.g., highlight the trace).
+
+        Args:
+            segment_index: Index of the trial (segment) selected in the sidebar.
+                           If -1, clear highlighting.
+        """
+    # --- NEW: Cross-Tab Highlighting Interface ---
+    def highlight_trial(self, segment_index: int):
+        """
+        Called when the user selects a specific trial in the sidebar.
+        Updates plots to highlight the trace corresponding to the selected trial.
+        Works for any plot where individual trials are tagged with 'trial_index'.
+
+        Args:
+            segment_index: Index of the trial (segment) selected in the sidebar.
+                           If -1, clear highlighting.
+        """
+        # 1. Update Plot Highlighting
+        if self.plot_widget:
+            # Fetch pen colors from customization
+            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
+
+            # Default pen for unselected (faded)
+            unselected_pen = pg.mkPen((150, 150, 150, 50), width=1)
+            # Selected pen
+            selected_pen = pg.mkPen('b', width=2)
+            
+            reset = (segment_index == -1)
+            base_trial_pen = get_single_trial_pen()
+            
+            # Access underlying PlotItem items if using Canvas
+            plot_item = self.plot_widget
+            if hasattr(self.plot_widget, "getPlotItem"):
+                 plot_item = self.plot_widget.getPlotItem()
+
+            items = plot_item.items
+            found_highlight = False
+
+            for item in items:
+                if isinstance(item, pg.PlotDataItem):
+                    # Check for our tag or dynamic attribute
+                    t_idx = getattr(item, "trial_index", None)
+                    
+                    if t_idx is not None:
+                        # It is a trial trace
+                        if reset:
+                            item.setPen(base_trial_pen)
+                            item.setZValue(0)
+                            item.setShadowPen(None)
+                        else:
+                            if t_idx == segment_index:
+                                item.setPen(selected_pen)
+                                item.setZValue(10)  # Bring to front
+                                item.setShadowPen(pg.mkPen((0,0,0,100), width=3)) # Add shadow for pop
+                                found_highlight = True
+                            else:
+                                item.setPen(unselected_pen)
+                                item.setZValue(0)
+                                item.setShadowPen(None)
+        
+        # 2. Sync Combobox (if selection came from outside, e.g. Sidebar)
+        # We need to block signals so we don't re-trigger plotting if we just want to show selection
+        if self.data_source_combobox:
+            # Find index for this trial
+            # Trials are usually userData=int
+            # We iterate to find it
+            count = self.data_source_combobox.count()
+            target_idx = -1
+            for i in range(count):
+                ud = self.data_source_combobox.itemData(i)
+                if ud == segment_index:
+                    target_idx = i
+                    break
+            
+            if target_idx >= 0:
+                 was_blocked = self.data_source_combobox.blockSignals(True)
+                 self.data_source_combobox.setCurrentIndex(target_idx)
+                 self.data_source_combobox.blockSignals(was_blocked)
+
+        # 3. Update Buttons State
+        self._update_nav_buttons_state()
+
