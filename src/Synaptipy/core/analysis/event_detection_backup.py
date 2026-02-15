@@ -153,8 +153,8 @@ detect_minis_threshold = detect_events_threshold
 
 
 @AnalysisRegistry.register(
-    "event_detection_threshold",
-    label="Threshold Based (Adaptive)",
+    "mini_detection",
+    label="Miniature Event Detection (Adaptive)",
     ui_params=[
         {
             "name": "threshold",
@@ -183,7 +183,7 @@ detect_minis_threshold = detect_events_threshold
         },
     ],
 )
-def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
+def run_mini_detection_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     threshold = kwargs.get("threshold", 5.0)
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
