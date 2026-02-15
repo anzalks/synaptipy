@@ -1,5 +1,6 @@
 import sys
 import os
+import pytest
 
 # Remove .verify_venv from sys.path to prevent its Python 3.13 scipy
 # from shadowing the conda environment's scipy (Python 3.11)
@@ -21,7 +22,17 @@ def pytest_ignore_collect(collection_path, config):
     """
     if collection_path.name == ".DS_Store":
         return True
-    # Also ignore .git and generic system folders
     if collection_path.name in [".git", ".idea", "__pycache__"]:
         return True
     return None
+
+@pytest.fixture(autouse=True)
+def reset_datacache():
+    """Ensure DataCache singleton is reset between tests."""
+    try:
+        from Synaptipy.shared.data_cache import DataCache
+        DataCache.reset_instance()
+        yield
+        DataCache.reset_instance()
+    except ImportError:
+        yield

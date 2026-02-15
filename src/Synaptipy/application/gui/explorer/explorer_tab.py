@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple, Set
 
 import numpy as np
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 # --- Synaptipy Imports ---
 from Synaptipy.core.data_model import Recording
@@ -17,6 +17,7 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.shared.data_cache import DataCache
 
 # --- Components ---
 from .sidebar import ExplorerSidebar
@@ -30,6 +31,9 @@ from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 
 # --- Live Analysis ---
 from Synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
+from Synaptipy.application.controllers.file_io_controller import FileIOController
+from Synaptipy.application.controllers.shortcut_manager import ShortcutManager
+from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 from Synaptipy.core.signal_processor import check_trace_quality
 from Synaptipy.core.results import SpikeTrainResult
 import pyqtgraph as pg
@@ -112,11 +116,25 @@ class ExplorerTab(QtWidgets.QWidget):
         self._pending_view_state: Optional[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = None
         self._pending_trial_params: Optional[Tuple[int, int]] = None
 
+    def closeEvent(self, event):
+        """Cleanup resources."""
+        if hasattr(self, "live_controller"):
+            self.live_controller.cleanup()
+        super().closeEvent(event)
+
     def _init_components(self):
         self.config_panel = ExplorerConfigPanel()
         self.plot_canvas = ExplorerPlotCanvas()
         self.toolbar = ExplorerToolbar()
-        self.sidebar = ExplorerSidebar(self.neo_adapter)
+        
+        # Instantiate FileIOController
+        self.file_io = FileIOController(
+            self, 
+            QtCore.QSettings(APP_NAME, SETTINGS_SECTION), 
+            self.neo_adapter
+        )
+        
+        self.sidebar = ExplorerSidebar(self.neo_adapter, self.file_io)
         self.y_controls = ExplorerYControls()
 
         # X Scrollbar (managed here as it bridges canvas and toolbar)
@@ -150,10 +168,28 @@ class ExplorerTab(QtWidgets.QWidget):
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
         self.preprocessing_widget.preprocessing_reset_requested.connect(self._handle_preprocessing_reset)
 
-        # Live Analysis Controller
         self.live_controller = LiveAnalysisController()
         self.live_controller.sig_analysis_finished.connect(self._on_live_analysis_finished)
         self.live_controller.sig_analysis_error.connect(lambda e: log.error(f"Live Analysis Error: {e}"))
+
+        # Shortcut Manager
+        self.shortcut_manager = ShortcutManager(self)
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        """Forward key events to ShortcutManager."""
+        if self.shortcut_manager.handle_key_press(event):
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+            
+    # --- Navigation Interface for ShortcutManager ---
+    def next_file(self):
+        """Public interface for ShortcutManager."""
+        self._next_file_folder()
+
+    def prev_file(self):
+        """Public interface for ShortcutManager."""
+        self._prev_file_folder()
 
     def _setup_layout(self):
         layout = QtWidgets.QHBoxLayout(self)
@@ -299,55 +335,34 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _request_live_analysis(self):
         """Gather params and request analysis for the CURRENT visible channel/trial."""
-        if not self.current_recording:
-            return
-            
-        # For simplicity in Explorer, we analyze the First Visible Channel's current trial
-        # Finding the "active" channel is tricky if multiple are visible.
-        # We will prioritize the first visible one for the demo/live tuning.
-        
-        target_cid = None
-        for cid, plot in self.plot_canvas.channel_plots.items():
-            if plot.isVisible():
-                target_cid = cid
-                break
-        
-        if target_cid is None:
-            return
-
-        channel = self.current_recording.channels.get(target_cid)
-        if not channel:
-            return
-
-        # Get Data for current trial (or average if in overlay mode? Plan said "Live-Tuning").
-        # Usually checking current trial is best for "tuning".
         try:
-            # We use the raw data? Or processed?
-            # Detection usually happens on Processed (filtered) data if pipeline active.
-            # But here we might want to just show it on the raw trace if pipeline is empty.
-            # Let's use the SAME data logic as plotting.
-            
-            # Re-fetch data for the current trial index
-            idx = self.current_trial_index
-            data = channel.get_data(idx)
-            t = channel.get_relative_time_vector(idx)
-            
-            if data is None:
+            if not self.current_recording:
                 return
                 
-            # Apply pipeline if active
-            fs = channel.sampling_rate
-            processed_data = self.pipeline.process(data, fs, time_vector=t)
+            # For simplicity in Explorer, we analyze the First Visible Channel's current trial
+            target_cid = None
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                if plot.isVisible():
+                    target_cid = cid
+                    break
             
+            if target_cid is None:
+                return
+
+            channel = self.current_recording.channels.get(target_cid)
+            if not channel:
+                return
+
             # Params
             params = {
                 "threshold": self.config_panel.threshold_spin.value(),
-                "refractory_period": self.config_panel.refractory_spin.value() / 1000.0, # ms -> s
+                # Convert ms -> s carefully to avoid ZeroDivision if 0 (though spinbox usually has min)
+                "refractory_period": self.config_panel.refractory_spin.value() / 1000.0, 
                 "channel_id": target_cid,
-                "trial_index": idx
+                "trial_index": self.current_trial_index
             }
             
-            self.live_controller.request_analysis(processed_data, t, params)
+            self.live_controller.request_analysis(params)
             
         except Exception as e:
             log.error(f"Failed to prepare live analysis request: {e}")
@@ -692,6 +707,37 @@ class ExplorerTab(QtWidgets.QWidget):
             # Re-init dict keys
             for cid in self.plot_canvas.channel_plots.keys():
                 self.plot_canvas.channel_plot_data_items[cid] = []
+
+            # --- Update Single Source of Truth for Live Analysis ---
+            # We push the PROCESSED data of the 'primary' (first visible) channel to DataCache.
+            primary_cid = None
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                if plot.isVisible():
+                    primary_cid = cid
+                    break
+            
+            if primary_cid and self.current_recording:
+                # Get data for current trial
+                ch = self.current_recording.channels.get(primary_cid)
+                if ch:
+                    try:
+                        raw_data = ch.get_data(self.current_trial_index)
+                        t_vec = ch.get_relative_time_vector(self.current_trial_index)
+                        fs = ch.sampling_rate
+                        
+                        # Apply Pipeline
+                        proc_data = self.pipeline.process(raw_data, fs, time_vector=t_vec)
+                        
+                        # Push to Cache
+                        DataCache.get_instance().set_active_trace(
+                            proc_data, 
+                            fs, 
+                            metadata={"channel_id": primary_cid, "trial_index": self.current_trial_index}
+                        )
+                    except Exception as e:
+                        log.warning(f"Failed to push active trace to DataCache: {e}")
+            else:
+                 DataCache.get_instance().clear_active_trace()
 
             # 0. Preserve View State if possible
             view_state = {}

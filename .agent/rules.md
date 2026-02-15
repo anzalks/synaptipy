@@ -166,3 +166,7 @@ All analysis features must be split into two distinct parts:
 **4. Unit Safety & Validation**
 * **Magnitude Checks**: Functions accepting `sampling_rate` MUST implement sanity checks (e.g., if `fs < 100`, warn "Is this Hz or kHz?").
 * **Zero-State Safety**: All statistical aggregators (mean, std) MUST explicitly handle empty arrays to prevent `NaN` propagation or RuntimeWarnings.
+
+**5. Infrastructure Robustness (IO)**
+* **Native Discovery**: In `neo_adapter.py`, strictly prioritize `neo.io.get_io(filename)` over manual extension mapping lists (`IODict`). Manual mapping is only a fallback.
+* **Memory Hygiene**: When aggregating signals from multiple segments, PRE-ALLOCATE NumPy arrays based on header info. Do not use `.append()` on lists inside data loops.
