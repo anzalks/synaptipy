@@ -39,7 +39,7 @@ def validate_sampling_rate(fs: float) -> bool:
         return False
     if fs < 100:
         log.warning(
-            "Sampling rate < 100Hz. Did you provide units in kHz? Synaptipy requires Hz."
+            "Sampling rate is suspiciously low (<100 Hz). Are you using kHz instead of Hz?"
         )
     return True
 
