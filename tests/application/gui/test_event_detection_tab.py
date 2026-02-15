@@ -72,17 +72,49 @@ def test_visualization_with_dict_result(event_tab):
 
 
 def test_display_results_with_object(event_tab):
-    """Test result text display with object."""
-    event_tab.results_text = MagicMock()
+    """Test result table display with object."""
+    # Mock results_table (QTableWidget)
+    event_tab.results_table = MagicMock()
+    # Also need method_combobox since display logic uses it
+    event_tab.method_combobox = MagicMock()
+    event_tab.method_combobox.currentText.return_value = "Threshold Based"
 
     result_obj = EventDetectionResult(
-        value=5, unit="events", event_indices=np.array([]), event_times=np.array([]), event_count=5, frequency_hz=2.5
+        value=5, 
+        unit="events", 
+        event_indices=np.array([]), 
+        event_times=np.array([]), 
+        event_count=5, 
+        frequency_hz=2.5,
+        threshold_value=-20.0
     )
 
-    event_tab._on_analysis_result(result_obj)
+    event_tab._display_analysis_results(result_obj)
 
-    # Check text set
-    event_tab.results_text.setHtml.assert_called()
-    html_arg = event_tab.results_text.setHtml.call_args[0][0]
-    assert "Count:</b> 5" in html_arg
-    assert "Frequency:</b> 2.50 Hz" in html_arg
+    # Check table population
+    # Should call setRowCount and setItem
+    event_tab.results_table.setRowCount.assert_called()
+    
+    # Check that setItem was called with appropriate values
+    # We can check if "Count" and "5" were set
+    # The implementation iterates and calls setItem(row, col, item)
+    # We can inspect call_args_list or just verify setItem called enough times
+    assert event_tab.results_table.setItem.called
+    
+    # Inspect arguments to verify content
+    # args: (row, col, QTableWidgetItem)
+    found_count = False
+    found_freq = False
+    
+    for call in event_tab.results_table.setItem.call_args_list:
+        args = call.args
+        item = args[2]
+        if hasattr(item, "text"):
+            text = item.text()
+            if text == "5":
+                found_count = True
+            if "2.50" in text: # 2.50 Hz
+                found_freq = True
+                
+    assert found_count, "Count value '5' not found in table items"
+    assert found_freq, "Frequency value '2.50 Hz' not found in table items"

@@ -6,6 +6,7 @@ Refactored to inherit from MetadataDrivenAnalysisTab.
 """
 import logging
 from typing import Optional, Any, List
+import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
@@ -67,6 +68,15 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         # Let's try to put it nicely
         layout.addRow("", self.analyze_button)
 
+        if hasattr(self, "threshold_line") and self.threshold_line and self.threshold_line not in self.plot_widget.items:
+            self.plot_widget.addItem(self.threshold_line)
+            self.threshold_line.setZValue(90)
+        
+        # Ensure artifact curve is present
+        if hasattr(self, "artifact_curve_item") and self.artifact_curve_item and self.artifact_curve_item not in self.plot_widget.items:
+             self.plot_widget.addItem(self.artifact_curve_item)
+             self.artifact_curve_item.setZValue(80)
+
     def _setup_custom_plot_items(self):
         """Add markers and lines to the plot."""
         if not self.plot_widget:
@@ -77,6 +87,13 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.plot_widget.addItem(self.event_markers_item)
         self.event_markers_item.setVisible(False)
         self.event_markers_item.setZValue(100)  # On top
+
+        # Artifact Mask Visualization (Green overlay)
+        # Use a pleasant sea green color for artifact regions to distinguish from red events
+        self.artifact_curve_item = pg.PlotCurveItem(pen=pg.mkPen(color=(60, 179, 113, 200), width=3))
+        self.plot_widget.addItem(self.artifact_curve_item)
+        self.artifact_curve_item.setVisible(False)
+        self.artifact_curve_item.setZValue(80)
 
         # Threshold line
         self.threshold_line = pg.InfiniteLine(
@@ -91,12 +108,18 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         """Re-add custom plot items if they were removed by plot_widget.clear()."""
         if not self.plot_widget:
             return
-        if self.event_markers_item and self.event_markers_item not in self.plot_widget.items:
+            
+        if hasattr(self, "event_markers_item") and self.event_markers_item and self.event_markers_item not in self.plot_widget.items:
             self.plot_widget.addItem(self.event_markers_item)
             self.event_markers_item.setZValue(100)
-        if self.threshold_line and self.threshold_line not in self.plot_widget.items:
+            
+        if hasattr(self, "threshold_line") and self.threshold_line and self.threshold_line not in self.plot_widget.items:
             self.plot_widget.addItem(self.threshold_line)
             self.threshold_line.setZValue(90)
+
+        if hasattr(self, "artifact_curve_item") and self.artifact_curve_item and self.artifact_curve_item not in self.plot_widget.items:
+            self.plot_widget.addItem(self.artifact_curve_item)
+            self.artifact_curve_item.setZValue(80)
 
     def _on_channel_changed(self, index):
         """Re-add items to plot if cleared."""
@@ -135,6 +158,9 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
             if hasattr(self, "event_markers_item"):
                 self.event_markers_item.setData([])
                 self.event_markers_item.setVisible(False)
+            if hasattr(self, "artifact_curve_item"):
+                self.artifact_curve_item.setData([], [])
+                self.artifact_curve_item.setVisible(False)
 
             # Trigger analysis (optional, maybe wait for user?)
             # self._trigger_analysis()
@@ -173,6 +199,27 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         else:
             if self.event_markers_item:
                 self.event_markers_item.setVisible(False)
+
+        # Artifact Mask
+        if hasattr(self, "artifact_curve_item"):
+            artifact_mask = getattr(result_data, "artifact_mask", None)
+            if artifact_mask is not None and hasattr(self, "_current_plot_data") and self._current_plot_data:
+                # We want to plot the trace only where mask is True.
+                # Create a copy of data and set non-artifact regions to NaN
+                full_data = self._current_plot_data["data"]
+                full_time = self._current_plot_data["time"]
+                
+                if len(full_data) == len(artifact_mask):
+                    artifact_data = full_data.copy()
+                    # Invert mask: set non-artifact to nan
+                    artifact_data[~artifact_mask] = np.nan
+                    
+                    self.artifact_curve_item.setData(full_time, artifact_data, connect="finite")
+                    self.artifact_curve_item.setVisible(True)
+                else:
+                     self.artifact_curve_item.setVisible(False)
+            else:
+                self.artifact_curve_item.setVisible(False)
 
         # Threshold line
         if is_obj:

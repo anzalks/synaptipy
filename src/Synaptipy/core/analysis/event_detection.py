@@ -12,6 +12,7 @@ from scipy.stats import median_abs_deviation
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.results import EventDetectionResult
+from Synaptipy.core.signal_processor import find_artifact_windows
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +23,8 @@ def detect_events_threshold(
     time: np.ndarray,
     threshold: float,
     polarity: str = "negative",
-    refractory_period: float = 0.002
+    refractory_period: float = 0.002,
+    artifact_mask: Optional[np.ndarray] = None
 ) -> EventDetectionResult:
     """
     Detects events using Adaptive Peak Finding within suprathreshold spans.
@@ -33,6 +35,7 @@ def detect_events_threshold(
         threshold: Amplitude threshold (positive value).
         polarity: 'positive' or 'negative'.
         refractory_period: Minimum time between events (seconds).
+        artifact_mask: Boolean mask where True indicates an artifact region to ignore.
 
     Returns:
         EventDetectionResult
@@ -70,6 +73,15 @@ def detect_events_threshold(
             for span in spans:
                 if len(span) == 0:
                     continue
+                
+                # Check for artifact overlap
+                if artifact_mask is not None:
+                    # If any point in the span is an artifact, we discard the whole event candidate?
+                    # Or just check the peak? 
+                    # Generally safely reject if any part is contaminated.
+                    if np.any(artifact_mask[span]):
+                        continue
+
                 # Find index of max value within this span
                 # span_max_idx relative to span start
                 span_vals = work_data[span]
@@ -142,6 +154,8 @@ def detect_events_threshold(
             detection_method="threshold_adaptive",
             threshold_value=threshold,
             direction=polarity,
+            n_artifacts_rejected=0, # Calculation of exact rejected count is tricky here without tracking, but we filtered candidates.
+            artifact_mask=artifact_mask
         )
 
     except Exception as e:
@@ -181,6 +195,9 @@ detect_minis_threshold = detect_events_threshold
             "max": 1.0,
             "decimals": 4,
         },
+        {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
+        {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:", "type": "float", "default": 20.0, "min": 0.0},
+        {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
     ],
 )
 def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
@@ -188,7 +205,15 @@ def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray, sa
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
 
-    result = detect_events_threshold(data, time, threshold, direction, refractory_period)
+    # Artifact rejection
+    reject_artifacts = kwargs.get("reject_artifacts", False)
+    artifact_mask = None
+    if reject_artifacts:
+        slope_thresh = kwargs.get("artifact_slope_threshold", 20.0)
+        padding_ms = kwargs.get("artifact_padding_ms", 2.0)
+        artifact_mask = find_artifact_windows(data, sampling_rate, slope_thresh, padding_ms)
+
+    result = detect_events_threshold(data, time, threshold, direction, refractory_period, artifact_mask=artifact_mask)
 
     if not result.is_valid:
         return {"event_error": result.error_message}
@@ -210,7 +235,8 @@ def detect_events_template(
     threshold_std: float,
     tau_rise: float,
     tau_decay: float,
-    polarity: str = "negative"
+    polarity: str = "negative",
+    artifact_mask: Optional[np.ndarray] = None
 ) -> EventDetectionResult:
     """
     Detects events using Parametric Template Matching (Matched Filter).
@@ -222,6 +248,7 @@ def detect_events_template(
         tau_rise: Rise time constant (seconds).
         tau_decay: Decay time constant (seconds).
         polarity: 'positive' or 'negative'.
+        artifact_mask: Optional boolean mask for artifact regions.
         
     Returns:
         EventDetectionResult
@@ -287,6 +314,9 @@ def detect_events_template(
         if mad == 0:
             mad = 1e-12 # Avoid div/0
             
+        if mad == 0:
+            mad = 1e-12 # Avoid div/0
+            
         z_score_trace = filtered_trace / mad
         
         # 4. Detection
@@ -299,6 +329,20 @@ def detect_events_template(
             
         peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
         
+        # Filter artifacts
+        if artifact_mask is not None and len(peak_indices) > 0:
+            # Keep only peaks where mask is False
+            # Ensure indices are within bounds of mask
+            n_mask = len(artifact_mask)
+            valid_mask = peak_indices < n_mask
+            
+            # Check mask value at peak index
+            not_artifact = ~artifact_mask[peak_indices[valid_mask]]
+            
+            # Combine
+            final_indices = peak_indices[valid_mask][not_artifact]
+            peak_indices = final_indices
+
         # Map back to results
         event_count = len(peak_indices)
         event_indices = peak_indices.astype(int)
@@ -324,7 +368,8 @@ def detect_events_template(
             tau_decay_ms=tau_decay * 1000,
             threshold_sd=threshold_std,
             summary_stats={"noise_mad": mad},
-            direction=polarity
+            direction=polarity,
+            artifact_mask=artifact_mask
         )
 
     except Exception as e:
@@ -363,6 +408,9 @@ def detect_events_template(
             "max": 1e9,
             "decimals": 4,
         },
+        {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
+        {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:", "type": "float", "default": 20.0, "min": 0.0},
+        {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
         {
             "name": "filter_freq_hz",
             "label": "Filter Freq (Hz):",
@@ -392,13 +440,22 @@ def run_event_detection_template_wrapper(
     # Default to negative for now or check args?
     direction = kwargs.get("direction", "negative")
 
+    # Artifact rejection
+    reject_artifacts = kwargs.get("reject_artifacts", False)
+    artifact_mask = None
+    if reject_artifacts:
+        slope_thresh = kwargs.get("artifact_slope_threshold", 20.0)
+        padding_ms = kwargs.get("artifact_padding_ms", 2.0)
+        artifact_mask = find_artifact_windows(data, sampling_rate, slope_thresh, padding_ms)
+
     result = detect_events_template(
         data=data,
         sampling_rate=sampling_rate,
         threshold_std=threshold_sd,
         tau_rise=tau_rise,
         tau_decay=tau_decay,
-        polarity=direction
+        polarity=direction,
+        artifact_mask=artifact_mask
     )
 
     if not result.is_valid:

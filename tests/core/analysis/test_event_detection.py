@@ -222,3 +222,91 @@ class TestEventDetectionTemplate:
         assert result.event_count >= 1
 
 
+from Synaptipy.core.signal_processor import find_artifact_windows
+
+class TestArtifactRejection:
+    def test_find_artifact_windows_basic(self):
+        """Test artifact detector logic."""
+        fs = 1000.0
+        t = np.arange(0, 1.0, 1.0/fs)
+        data = np.random.normal(0, 1, size=len(t))
+        
+        # Add a sharp artifact (stronger step function to robustly exceed threshold)
+        data[500:510] = 200.0 
+        
+        # Slope threshold 50.0
+        mask = find_artifact_windows(data, fs, slope_threshold=50.0, padding_ms=0)
+        
+        # Should detect the edges
+        # Gradient roughly 200/2 = 100 >> 50
+        assert np.any(mask[499:501]) # Rising edge
+        assert np.any(mask[509:511]) # Falling edge
+        
+        # Test dilation
+        mask_dilated = find_artifact_windows(data, fs, slope_threshold=50.0, padding_ms=2.0)
+        # 2ms at 1kHz = 2 samples padding
+        assert np.sum(mask_dilated) > np.sum(mask)
+        
+    def test_threshold_detection_with_mask(self):
+        """Test that detect_events_threshold ignores masked regions."""
+        fs = 1000.0
+        t = np.arange(0, 1.0, 1.0/fs)
+        data = np.zeros_like(t)
+        
+        # Real event at 100ms (Positive)
+        data[100:110] = 10.0
+        
+        # Artifact at 500ms
+        data[500:510] = 10.0
+        mask = np.zeros_like(data, dtype=bool)
+        mask[500:510] = True 
+        
+        # Without mask -> 2 events
+        # MUST specify polarity='positive' because data is positive
+        res_nomask = detect_events_threshold(data, t, threshold=5.0, polarity='positive')
+        assert res_nomask.event_count == 2
+        
+        # With mask -> 1 event (at 100ms)
+        res_mask = detect_events_threshold(data, t, threshold=5.0, polarity='positive', artifact_mask=mask)
+        assert res_mask.event_count == 1
+        assert np.abs(res_mask.event_indices[0] - 100) <= 1
+        
+    def test_template_detection_with_mask(self):
+        """Test that detect_events_template ignores masked regions."""
+        fs = 10000.0
+        dt = 1.0/fs
+        t = np.arange(0, 0.5, dt)
+        
+        # Create kernel for proper signal shape
+        tau_rise = 0.001
+        tau_decay = 0.005
+        # Kernel shape: (exp(-t/decay) - exp(-t/rise))
+        kt = np.arange(0, 0.05, dt)
+        kernel = np.exp(-kt/tau_decay) - np.exp(-kt/tau_rise)
+        kernel /= np.max(np.abs(kernel))
+        
+        data = np.zeros_like(t)
+        
+        # Bump 1 at idx 1000
+        data[1000:1000+len(kernel)] = 10.0 * kernel
+        # Bump 2 at idx 3000
+        data[3000:3000+len(kernel)] = 10.0 * kernel
+        
+        # Mask bump 2
+        # Mask the region where the event is
+        mask = np.zeros_like(data, dtype=bool)
+        mask[3000:3000+len(kernel)] = True
+        
+        res_mask = detect_events_template(
+            data, fs, 
+            threshold_std=5.0, 
+            tau_rise=tau_rise, 
+            tau_decay=tau_decay,
+            polarity='positive',
+            artifact_mask=mask
+        )
+        
+        # Should detect only 1 event
+        assert res_mask.event_count == 1
+        idx = res_mask.event_indices[0]
+        assert 1000 <= idx <= 1500
