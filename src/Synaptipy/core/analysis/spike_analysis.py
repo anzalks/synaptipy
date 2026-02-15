@@ -6,14 +6,13 @@ Analysis functions related to action potential detection and characterization.
 import logging
 from typing import List, Dict, Any
 import numpy as np
-from scipy import signal
 from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
 
-def detect_spikes_threshold(
+def detect_spikes_threshold(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,
     threshold: float,
@@ -37,23 +36,28 @@ def detect_spikes_threshold(
     """
     if not isinstance(data, np.ndarray) or data.ndim != 1 or data.size < 2:
         log.warning("detect_spikes_threshold: Invalid data array provided.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Invalid data array", parameters=parameters or {})
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
+                                error_message="Invalid data array", parameters=parameters or {})
     if not isinstance(time, np.ndarray) or time.shape != data.shape:
         log.warning("detect_spikes_threshold: Time and data array shapes mismatch.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Time and data mismatch", parameters=parameters or {})
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
+                                error_message="Time and data mismatch", parameters=parameters or {})
     if not isinstance(threshold, (int, float)):
         log.warning("detect_spikes_threshold: Threshold must be numeric.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Threshold must be numeric", parameters=parameters or {})
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
+                                error_message="Threshold must be numeric", parameters=parameters or {})
     if not isinstance(refractory_samples, int) or refractory_samples < 0:
         log.warning("detect_spikes_threshold: refractory_samples must be a non-negative integer.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message="Invalid refractory period", parameters=parameters or {})
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
+                                error_message="Invalid refractory period", parameters=parameters or {})
 
     try:
         # 1. Find indices where the data crosses the threshold upwards
         crossings = np.where((data[:-1] < threshold) & (data[1:] >= threshold))[0] + 1
         if crossings.size == 0:
             log.debug("No threshold crossings found.")
-            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array([]), spike_indices=np.array([]), parameters=parameters or {})
+            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array(
+                []), spike_indices=np.array([]), parameters=parameters or {})
 
         # 2. Apply refractory period based on crossings
         if refractory_samples <= 0:
@@ -68,7 +72,8 @@ def detect_spikes_threshold(
             valid_crossing_indices = np.array(valid_crossings_list)
 
         if valid_crossing_indices.size == 0:
-            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array([]), spike_indices=np.array([]), parameters=parameters or {})
+            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array(
+                []), spike_indices=np.array([]), parameters=parameters or {})
 
         # 3. Find peak index after each valid crossing
         peak_indices_list = []
@@ -123,10 +128,12 @@ def detect_spikes_threshold(
             f"Indices={peak_indices_arr if 'peak_indices_arr' in locals() else 'N/A'}",
             exc_info=True,
         )
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e), parameters=parameters or {})
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
+                                error_message=str(e), parameters=parameters or {})
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error during spike detection: {e}", exc_info=True)
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False, error_message=str(e), parameters=parameters or {})
+        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
+                                error_message=str(e), parameters=parameters or {})
 
 
 # --- Add other spike analysis functions here later ---
@@ -167,9 +174,9 @@ def calculate_spike_features(
     spike_indices = np.asarray(spike_indices, dtype=int)
     n_spikes = len(spike_indices)
     n_data = len(data)
-    
+
     if n_data < 2:
-         return []
+        return []
 
     dt = time[1] - time[0]
     if dt <= 0:
@@ -188,79 +195,79 @@ def calculate_spike_features(
     lookback_samples = int(onset_lookback / dt)
     post_peak_samples = int(0.01 / dt)  # 10ms after peak for half-width/decay
     ahp_max_samples = int(ahp_window_sec / dt)
-    dvdt_window_samples = int(0.002 / dt)  # +/- 2ms for dV/dt max/min search
+    # dvdt_window_samples removed (unused)
 
     # --- 2. Construct Vectorized Windows (Fancy Indexing) ---
     # We clip indices to [0, n_data-1] to avoid IndexError, then handle boundary effects later
-    
+
     # Onset Window: [peak - lookback, peak]
     # We'll search backwards safely.
-    
+
     # --- Vectorized AP Threshold (Onset) ---
     # Strategy:
     # We need to find the *first* point crossing threshold_val_mvs going backwards from peak.
     # Or simpler: Find last point crossing threshold in the lookback window.
-    
+
     ap_thresholds = np.full(n_spikes, np.nan)
     thresh_indices = np.full(n_spikes, -1, dtype=int)
-    
+
     # Create a 2D index array for the lookback windows
     # shape: (n_spikes, lookback_samples)
     # indices: peak - lookback + range(lookback)
     lookback_range = np.arange(-lookback_samples, 0)
     onset_window_indices = spike_indices[:, None] + lookback_range
-    
+
     # Clip to valid range
     np.clip(onset_window_indices, 0, n_data - 1, out=onset_window_indices)
-    
+
     # Extract dV/dt in these windows
     onset_dvdt_windows = dvdt[onset_window_indices]  # shape (n_spikes, lookback_samples)
 
     # Find where dV/dt > threshold
-    # We want the *first* crossing in the window (which is the earliest time). 
+    # We want the *first* crossing in the window (which is the earliest time).
     # Actually, we usually want the point closest to the peak where it *starts* rising fast?
     # Standard: The point where dV/dt crosses the threshold *upwards* (or just exceeds it).
     # Since we are looking back, let's look for the *last* index in the window where it was below?
     # Actually, let's stick to the previous logic: "First crossing in the lookback window"?
-    # Original code: `crossings = np.where(dvdt_slice > threshold_val_mvs)[0]; if crossings.size > 0: thresh_indices[i] = s_start + crossings[0]`
+    # Original code: crossings = np.where(dvdt_slice > threshold)[0]
+    # if crossings: thresh_indices[i] = s_start + crossings[0]
     # This implies searching from lookback_start forward to peak. The first time it exceeds is the onset.
-    
+
     crossings_mask = onset_dvdt_windows > threshold_val_mvs
-    
+
     # We need the first True in each row
     has_crossing = np.any(crossings_mask, axis=1)
-    
-    # argmax returns the first index of the max value (True=1). 
+
+    # argmax returns the first index of the max value (True=1).
     first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
-    
+
     # Calculate absolute indices
     # If no crossing, fallback to creating a default (e.g., peak - const)
     fallback_indices = np.maximum(0, spike_indices - int(0.001 / dt))  # 1ms before peak fallback
 
     found_thresh_indices = onset_window_indices[np.arange(n_spikes), first_crossing_rel_idx]
-    
+
     thresh_indices = np.where(has_crossing, found_thresh_indices, fallback_indices)
     ap_thresholds = data[thresh_indices]
-
 
     # --- Vectorized Amplitude ---
     peak_vals = data[spike_indices]
     amplitudes = peak_vals - ap_thresholds
 
     # --- Vectorized Rise/Decay/Width ---
-    
+
     # We need windows spanning from threshold to some time after peak
     # Because widths can be wide, let's take a generous window around peak
     # Start: threshold index, End: peak + post_peak_samples
-    
+
     # Since threshold indices vary, we can't make a perfect rectangular matrix easily without masking.
     # Alternative: Use a fix window relative to peak: [peak - small, peak + large]
     # But width start point is before peak (at threshold).
-    
+
     # Let's proceed with a fixed window relative to peak for width/decay/rise search.
-    # Window: [peak - lookback, peak + post_peak_samples] 
+    # Window: [peak - lookback, peak + post_peak_samples]
     # This covers the whole AP shape usually.
-    
+
     full_window_len = lookback_samples + post_peak_samples
     full_window_range = np.arange(-lookback_samples, post_peak_samples)
     full_window_indices = spike_indices[:, None] + full_window_range
@@ -272,68 +279,67 @@ def calculate_spike_features(
     amp_50 = ap_thresholds + 0.5 * amplitudes
     amp_10 = ap_thresholds + 0.1 * amplitudes
     amp_90 = ap_thresholds + 0.9 * amplitudes
-    
+
     half_widths = np.full(n_spikes, np.nan)
     rise_times = np.full(n_spikes, np.nan)
     decay_times = np.full(n_spikes, np.nan)
-    
+
     # We need to find crossings in `waveforms` relative to `threshold_indices`
     # This is tricky fully vectorized because "first crossing after X" depends on X which varies per row.
-    # However, Python loops over spikes for just the lightweight logic on extracted waveforms is fast enough 
+    # However, Python loops over spikes for just the lightweight logic on extracted waveforms is fast enough
     # compared to full raw loops, OR we can try to be clever.
     # Given the strict "Pure NumPy Vectorization" requirement, let's try to be clever.
-    
+
     # Relative index of peak in the waveform window is constant: `lookback_samples`
     rel_peak = lookback_samples
-    
+
     # 1. Rise Time (10% to 90% in pre-peak part)
     # Mask pre-peak part: indices < rel_peak
-    # We search backwards from peak for 90% and 10%? Or forwards from start? 
+    # We search backwards from peak for 90% and 10%? Or forwards from start?
     # Usually forwards from threshold.
     # Let's search in the part of waveform corresponding to [threshold_index, peak_index]
-    
-    # We will iterate row-by-row on the *extracted small waveforms*. 
+
+    # We will iterate row-by-row on the *extracted small waveforms*.
     # This avoids Python overhead of fancy indexing the big array, but is still a loop.
     # To be "Pure Vectorized", we can use boolean logic on the matrix.
-    
+
     # Logic for Half Width:
     # 1. Find last time it crosses 50% BEFORE peak
     # 2. Find first time it crosses 50% AFTER peak
-    
+
     # Create coordinate grids
     # shape (n_spikes, full_window_len)
-    
+
     # Mask for pre-peak and post-peak
     # We can use the column indices of `waveforms` (0 to full_window_len-1)
     col_indices = np.arange(full_window_len)
     is_pre_peak = col_indices < rel_peak
     is_post_peak = col_indices > rel_peak
-    
+
     # --- Half Width ---
     # Broadcast levels: (n_spikes, 1)
     lev_50 = amp_50[:, None]
-    
+
     # Find crossings: where (trace < lev) changes to (trace > lev) or vice-versa
     # For pre-peak rising flank: last point where (val <= 50%)
-    
-    pre_peak_mask = is_pre_peak & (waveforms <= lev_50)
+
     # We want the LAST index where this is true (closest to peak)
     # We can use trick: multiply existing indices by mask, take max
-    # Indices are 0..window_len. 
+    # Indices are 0..window_len.
     # If mask is False (0), it becomes 0.
     # We want to properly handle "no crossing" (all False).
-    
+
     # Create an index array where False -> -1
     idxs = np.tile(col_indices, (n_spikes, 1))
-    
+
     # Pre-peak crossing (Rising 50%)
     # We want the last index < peak where val <= 50% (interpolated usually, but nearest neighbor for now)
     # Actually, simpler: First index < peak where val >= 50%? No, that might catch noise.
     # Safest: Last index < peak where val <= 50% -> the crossing is between this and next.
-    
+
     # Let's map the extracted waveform indices back to absolute time for dt mult.
     # rel_idx * dt = time offset from window start.
-    
+
     # Rise 50%
     # valid points: pre-peak, <= 50%
     # We want the right-most of these.
@@ -341,7 +347,7 @@ def calculate_spike_features(
     # If a row has no True, it means it never went below 50% in window? (Baseline > 50%?)
     # Set those to nan.
     has_pre_50 = np.any(temp_mask, axis=1)
-    
+
     # indices where mask is true. We want max index for each row.
     # We set False entries to -1 so they are not max.
     masked_idxs_pre = np.where(temp_mask, idxs, -1)
@@ -352,52 +358,50 @@ def calculate_spike_features(
     # We want the left-most of these (first point dropping below).
     temp_mask_post = is_post_peak & (waveforms <= lev_50)
     has_post_50 = np.any(temp_mask_post, axis=1)
-    
+
     # Set False entries to infinity (big number) so they are not min
     masked_idxs_post = np.where(temp_mask_post, idxs, 999999)
     idx_fall_50_rel = np.min(masked_idxs_post, axis=1)  # First point below
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
-    
-    # Interpolation for better precision? 
+
+    # Interpolation for better precision?
     # t = t1 + (level - y1) / (y2 - y1) * dt
-    # Let's stick to simple index diff * dt per requirement "using nanoseconds...". 
+    # Let's stick to simple index diff * dt per requirement "using nanoseconds...".
     # Standard logic: (idx_fall - idx_rise) * dt
     # But idx_rise is point BEFORE, idx_fall is point AFTER.
-    # So Width is roughly (idx_fall - idx_rise) * dt ? 
+    # So Width is roughly (idx_fall - idx_rise) * dt ?
     # Refinement: Linear Interp.
     # Code below implements simple index diff for speed and robustness first.
-    
+
     # Correcting "point before" vs "point after":
     # Rise: y[i] <= 50, y[i+1] >= 50. Crossing is at i + frac
     # Fall: y[j-1] >= 50, y[j] <= 50. Crossing is at j - frac
     # Let's just use indices.
-    
-    half_widths[valid_width] = (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width]) * dt * 1000.0
 
+    half_widths[valid_width] = (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width]) * dt * 1000.0
 
     # --- Rise Time (10-90) ---
     lev_10 = amp_10[:, None]
     lev_90 = amp_90[:, None]
-    
+
     # 10%: Last point < peak where y <= 10%
     mask_10 = is_pre_peak & (waveforms <= lev_10)
     valid_10 = np.any(mask_10, axis=1)
     idx_10_rel = np.max(np.where(mask_10, idxs, -1), axis=1)
-    
-    # 90%: First point < peak where y >= 90% ? 
+
+    # 90%: First point < peak where y >= 90% ?
     # Or Last point < peak where y <= 90%?
     # Usually "time from 10% to 90%".
-    # 90% point is closer to peak. 
+    # 90% point is closer to peak.
     # Let's look for: First point > 10% index where y >= 90%?
     # Simpler: Last point < peak where y <= 90% (point before crossing 90)
     mask_90 = is_pre_peak & (waveforms <= lev_90)
     valid_90 = np.any(mask_90, axis=1)
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
-    
+
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
     rise_times[valid_rise] = (idx_90_rel[valid_rise] - idx_10_rel[valid_rise]) * dt * 1000.0
-
 
     # --- Decay Time (90-10) ---
     # Post peak
@@ -410,10 +414,9 @@ def calculate_spike_features(
     mask_dec_10 = is_post_peak & (waveforms <= lev_10)
     valid_dec_10 = np.any(mask_dec_10, axis=1)
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
-    
+
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
     decay_times[valid_decay] = (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay]) * dt * 1000.0
-
 
     # --- AHP Depth & Duration ---
     # Window: From peak to peak + ahp_max_samples
@@ -426,12 +429,12 @@ def calculate_spike_features(
     # Min value in window
     # We ignore the first few samples to avoid catching the decay phase as "min" if it keeps going down?
     # No, AHP is usually the global min in the window after peak.
-    
+
     ahp_min_vals = np.min(ahp_waveforms, axis=1)
     ahp_min_rel_indices = np.argmin(ahp_waveforms, axis=1)
 
     ahp_depths = ap_thresholds - ahp_min_vals
-    
+
     # Duration: From "AP End" (crossing threshold down) to recovery
     # This is complex to behave exactly like previous logical loop purely vectorized.
     # Approximation: Time from Peak to Recovery?
@@ -441,7 +444,7 @@ def calculate_spike_features(
     # "Time from Peak to when it recovers to (Threshold - 10% Amplitude)"
     # Or keep it blank if too complex, but user asked for "Pure NumPy Vectorization".
     # We can do it!
-    
+
     # Recovery Target
     rec_targets = ap_thresholds - 0.1 * amplitudes
     rec_target_bcast = rec_targets[:, None]
@@ -466,7 +469,7 @@ def calculate_spike_features(
     # Actually peak is max, so it will be > threshold.
     has_ap_end = np.any(is_below_thresh, axis=1)
     ap_end_rel_indices = np.where(has_ap_end, np.argmax(is_below_thresh, axis=1), 0)
-    
+
     # Duration
     ahp_durations = np.full(n_spikes, np.nan)
     valid_ahp_dur = has_recovery & has_ap_end & (rec_rel_indices > ap_end_rel_indices)
@@ -481,24 +484,24 @@ def calculate_spike_features(
     # For exact parity with find_peaks, it's hard. We will provide a placeholder or simple max.
 
     adp_amplitudes = np.full(n_spikes, np.nan)
-    
+
     # Vectorized ADP: Largest Local Maximum between AP End and End of AHP Window
     # We look for a local peak (convexity) to avoid detecting monotonic recovery as ADP.
-    
+
     # helper for local max: val[i] > val[i-1] and val[i] > val[i+1]
     # ahp_waveforms shape: (n_spikes, ahp_max_samples)
     if ahp_max_samples > 2:
         val_mid = ahp_waveforms[:, 1:-1]
         val_left = ahp_waveforms[:, :-2]
         val_right = ahp_waveforms[:, 2:]
-        
+
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
-        
+
         # Pad to match shape (False at edges)
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode='constant', constant_values=False)
-        
+
         col_idxs = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
-        
+
         # Mask: must be local max AND after AP end
         # We also usually want it before the AHP Min? Or can it be after?
         # Test case: Trough (-80) -> ADP (-75) -> Rest.
@@ -506,25 +509,24 @@ def calculate_spike_features(
         # But if we just look for *any* local max after AP end, we might catch the ADP.
         # If there is no ADP (monotonic recovery), there is no local max.
         # If there is oscillation, we take the largest.
-        
+
         valid_adp_mask = is_local_max & (col_idxs > ap_end_rel_indices[:, None])
-        
+
         has_adp = np.any(valid_adp_mask, axis=1)
-        
+
         # Calculate amplitudes where valid
         # We use a temp array filled with -inf
         temp_vals = ahp_waveforms.copy()
         temp_vals[~valid_adp_mask] = -np.inf
-        
+
         adp_peaks = np.max(temp_vals, axis=1)
-        
+
         # Amplitude defined as Peak - ahp_min_vals?
         # In test case: -75 - (-80) = 5. Correct.
         # In scenario 1 (hump on falling phase): Peak is high, AHP min is low. Amp is large.
         calced_adps = adp_peaks - ahp_min_vals
-        
-        adp_amplitudes = np.where(has_adp, calced_adps, np.nan)
 
+        adp_amplitudes = np.where(has_adp, calced_adps, np.nan)
 
     # --- Max/Min dV/dt ---
     # Window: [Threshold, Peak + 2ms]
@@ -545,7 +547,6 @@ def calculate_spike_features(
 
     max_dvdts = np.max(full_dvdt * is_pre_peak, axis=1)  # Max in pre-peak
     min_dvdts = np.min(full_dvdt * is_post_peak, axis=1)  # Min in post-peak coverage
-
 
     # --- Assemble Results ---
     features_list = []

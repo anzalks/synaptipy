@@ -128,7 +128,7 @@ class SynaptipyPlotFactory:
             return pg.mkPen(color="gray", width=1, alpha=0.3)
 
     @staticmethod
-    def _configure_grid_safe(plot_widget: pg.PlotWidget) -> None:
+    def _configure_grid_safe(plot_widget: pg.PlotWidget) -> None:  # noqa: C901
         """
         Safely configure grid with Windows compatibility.
         Uses multiple retry attempts and extensive error checking.

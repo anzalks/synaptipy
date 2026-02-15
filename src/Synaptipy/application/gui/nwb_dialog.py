@@ -183,7 +183,7 @@ class NwbMetadataDialog(QtWidgets.QDialog):
 
         return widget
 
-    def _prefill_data(self):
+    def _prefill_data(self):  # noqa: C901
         """Fills fields based on the Recording object if provided."""
         # Defaults
         self.identifier.setText(str(uuid.uuid4()))

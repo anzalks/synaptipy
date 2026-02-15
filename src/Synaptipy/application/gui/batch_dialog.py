@@ -910,7 +910,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
             self._result_click_connected = True
 
-    def _on_result_row_clicked(self, row, col):
+    def _on_result_row_clicked(self, row, col):  # noqa: C901
         """Handle double click on result row to load file."""
         if self.result_df is None or self.result_df.empty:
             return
@@ -918,7 +918,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         try:
             if row < len(self.result_df):
                 record = self.result_df.iloc[row]
-                
+
                 # Try multiple keys for file path
                 file_path = record.get("file_path") or record.get("file") or record.get("source_file")
                 if not file_path:
@@ -926,7 +926,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
                 channel = record.get("channel")
                 trial = record.get("trial_index")
-                
+
                 # Extract analysis name and parameters from the result row
                 params = {}
                 analysis_name = record.get("analysis")
@@ -944,7 +944,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
                 log.debug(f"Requesting load for: {file_path}, Ch={channel}, Trial={trial}, Params={params}")
                 self.load_file_request.emit(str(file_path), params, channel, trial)
-                
+
         except Exception as e:
             log.error(f"Error handling row click: {e}")
 
@@ -1001,7 +1001,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         else:
             event.accept()
 
-    def _save_results_to_main_window(self, df: pd.DataFrame):
+    def _save_results_to_main_window(self, df: pd.DataFrame):  # noqa: C901
         """
         Saves the batch analysis results to the MainWindow's global list
         so they appear in the Exporter Tab.

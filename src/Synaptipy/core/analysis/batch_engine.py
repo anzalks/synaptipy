@@ -99,7 +99,7 @@ class BatchAnalysisEngine:
             "module": func.__module__,
         }
 
-    def run_batch(
+    def run_batch(  # noqa: C901
         self,
         files: List[Union[Path, "Recording"]],
         pipeline_config: List[Dict[str, Any]],
@@ -223,7 +223,7 @@ class BatchAnalysisEngine:
                                 file_path=file_path,
                                 context=pipeline_context
                             )
-                            
+
                             # Update context if the task modified it (e.g. preprocessing)
                             if updated_context:
                                 pipeline_context = updated_context
@@ -274,7 +274,7 @@ class BatchAnalysisEngine:
 
         return df
 
-    def _process_task(
+    def _process_task(  # noqa: C901
         self,
         task: Dict[str, Any],
         channel,
@@ -298,7 +298,7 @@ class BatchAnalysisEngine:
         analysis_name = task.get("analysis")
         scope = task.get("scope", "first_trial")
         params = task.get("params", {})
-        
+
         # Check metadata for type
         meta = AnalysisRegistry.get_metadata(analysis_name)
         is_preprocessing = meta.get("type") == "preprocessing"
@@ -320,22 +320,22 @@ class BatchAnalysisEngine:
 
         results = []
         sampling_rate = channel.sampling_rate
-        
+
         # --- Data Retrieval Strategy ---
         # 1. If context matches requested scope, use it.
         # 2. If context exists but scope differs, try to adapt (e.g. average existing trials).
         # 3. If no context, load from channel.
-        
+
         data = None
         time = None
-        
+
         # Check if we can use context
         if context["data"] is not None:
             # If scope matches, use directly
             if context["scope"] == scope:
                 data = context["data"]
                 time = context["time"]
-            
+
             # Adaptation: If we have 'all_trials' data but need 'average'
             elif context["scope"] == "all_trials" and scope == "average":
                 # Compute average from cached trials
@@ -345,13 +345,13 @@ class BatchAnalysisEngine:
                     # Assume equal length for averaging - simplified for now
                     # In production, check lengths or align
                     if len(context["data"]) > 0:
-                        data = np.mean(context["data"], axis=0) # Only works if all same shape
-                        time = context["time"][0] # Use first time vector
+                        data = np.mean(context["data"], axis=0)  # Only works if all same shape
+                        time = context["time"][0]  # Use first time vector
                     else:
                         log.warning("Context data empty, cannot average.")
                 except Exception as e:
                     log.warning(f"Could not compute average from context: {e}. Reloading from source.")
-                    
+
         # If data is still None, load from channel
         if data is None:
             if scope == "average":
@@ -368,16 +368,16 @@ class BatchAnalysisEngine:
                         time.append(t)
                 # If loading raw, we might want to update context if this was a heavy load?
                 # For now, only update context if preprocessing occurs.
-                
+
             elif scope == "first_trial":
                 data = channel.get_data(0)
                 time = channel.get_relative_time_vector(0)
-                
+
             elif scope == "specific_trial":
                 idx = int(params.get("trial_index", 0))
                 data = channel.get_data(idx)
                 time = channel.get_relative_time_vector(idx)
-                
+
             elif scope == "channel_set":
                 # channel_set usually implies list of all trials
                 data = []
@@ -391,44 +391,44 @@ class BatchAnalysisEngine:
 
         # Validation
         if data is None or (isinstance(data, list) and len(data) == 0):
-             return [{
-                    "file_name": file_path.name,
-                    "file_path": str(file_path),
-                    "channel": channel_name,
-                    "analysis": analysis_name,
-                    "error": "No data available",
-                }], None
-                
+            return [{
+                "file_name": file_path.name,
+                "file_path": str(file_path),
+                "channel": channel_name,
+                "analysis": analysis_name,
+                "error": "No data available",
+            }], None
+
         # --- Execution ---
-        
+
         if is_preprocessing:
             # Preprocessing: Modify data and return new context
             try:
                 # Preprocessing functions typically take (data, time, fs, **kwargs)
-                # and return modified data. 
+                # and return modified data.
                 # If scope is 'all_trials', we might need to iterate if the func expects single trace.
-                
+
                 # Heuristic: Check if data is list (multiple trials)
                 if isinstance(data, list):
                     # Apply to each item
                     new_data = []
-                    new_time = [] 
+                    new_time = []
                     for d, t in zip(data, time):
                         # Filter might modify data or time? Usually just data.
                         # Some filters might return (data, time) tuple?
-                        # Let's assume standard signature returns just data for now, 
+                        # Let's assume standard signature returns just data for now,
                         # or we check return type.
                         res = analysis_func(d, t, sampling_rate, **params)
                         new_data.append(res)
-                        new_time.append(t) # Assume time unchanged
-                    
+                        new_time.append(t)  # Assume time unchanged
+
                     modified_data = new_data
                     modified_time = new_time
                 else:
                     # Single trace
                     modified_data = analysis_func(data, time, sampling_rate, **params)
                     modified_time = time
-                
+
                 # Return empty results, but updated context
                 new_context = {
                     "scope": scope,
@@ -436,7 +436,7 @@ class BatchAnalysisEngine:
                     "time": modified_time
                 }
                 return [], new_context
-                
+
             except Exception as e:
                 log.error(f"Preprocessing failed: {e}", exc_info=True)
                 return [{
@@ -444,7 +444,7 @@ class BatchAnalysisEngine:
                     "analysis": analysis_name,
                     "error": f"Preprocessing failed: {e}"
                 }], None
-        
+
         else:
             # Standard Analysis
             try:
@@ -453,7 +453,7 @@ class BatchAnalysisEngine:
                     # Remove trial_index from params if present
                     p = params.copy()
                     p.pop("trial_index", None)
-                    
+
                     res = analysis_func(d, t, sampling_rate, **p)
                     # Add metadata
                     res.update({
@@ -469,37 +469,37 @@ class BatchAnalysisEngine:
                     return res
 
                 if scope == "all_trials" or scope == "channel_set":
-                     # For channel_set, some functions expect the list (e.g. F-I curve)
-                     # others expect iteration. 
-                     # Check if function handles list? 
-                     # NOTE: Original code treated 'channel_set' as passing the list to func.
-                     # 'all_trials' iterated.
-                     
-                     if scope == "channel_set":
-                         # Pass full list
-                         res = analysis_func(data, time, sampling_rate, **params)
-                         res.update({
+                    # For channel_set, some functions expect the list (e.g. F-I curve)
+                    # others expect iteration.
+                    # Check if function handles list?
+                    # NOTE: Original code treated 'channel_set' as passing the list to func.
+                    # 'all_trials' iterated.
+
+                    if scope == "channel_set":
+                        # Pass full list
+                        res = analysis_func(data, time, sampling_rate, **params)
+                        res.update({
                             "file_name": file_path.name,
-                             "file_path": str(file_path),
+                            "file_path": str(file_path),
                             "channel": channel_name,
                             "analysis": analysis_name,
                             "scope": scope,
                             "trial_count": len(data) if isinstance(data, list) else 1,
-                         })
-                         results.append(res)
-                     else:
+                        })
+                        results.append(res)
+                    else:
                         # Iterate 'all_trials'
                         for idx, (d, t) in enumerate(zip(data, time)):
                             results.append(run_single(d, t, idx))
-                            
+
                 elif scope == "specific_trial":
-                     idx = int(params.get("trial_index", 0))
-                     results.append(run_single(data, time, idx))
+                    idx = int(params.get("trial_index", 0))
+                    results.append(run_single(data, time, idx))
                 else:
                     # Single trace (average, first_trial)
                     results.append(run_single(data, time))
-                    
-                return results, None # No context update
+
+                return results, None  # No context update
 
             except Exception as e:
                 log.error(f"Analysis failed: {e}", exc_info=True)

@@ -6,7 +6,7 @@ from neo.rawio.winwcprawio import WinWcpRawIO, HeaderReader, AnalysisDescription
 log = logging.getLogger(__name__)
 
 
-def apply_winwcp_patch():
+def apply_winwcp_patch():  # noqa: C901
     """
     Monkeypatches neo.rawio.winwcprawio.WinWcpRawIO._parse_header to fix UnboundLocalError
     when reading truncated or corrupted files where the segment loop doesn't run.

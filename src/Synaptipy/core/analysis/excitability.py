@@ -13,7 +13,7 @@ from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 log = logging.getLogger(__name__)
 
 
-def calculate_fi_curve(
+def calculate_fi_curve(  # noqa: C901
     sweeps: List[np.ndarray],
     time_vectors: List[np.ndarray],
     current_steps: Optional[List[float]] = None,
@@ -211,7 +211,11 @@ def run_excitability_analysis_wrapper(
         refractory_ms = kwargs.get("refractory_ms", 2.0)
 
         results = calculate_fi_curve(
-            sweeps=data_list, time_vectors=time_list, current_steps=current_steps, threshold=threshold, refractory_ms=refractory_ms
+            sweeps=data_list,
+            time_vectors=time_list,
+            current_steps=current_steps,
+            threshold=threshold,
+            refractory_ms=refractory_ms
         )
 
         if "error" in results:

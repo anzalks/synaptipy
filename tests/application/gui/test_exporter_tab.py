@@ -113,7 +113,7 @@ def test_export_to_csv(exporter_tab, qtbot, mock_main_window):
         # Mock the pandas DataFrame.to_csv to avoid actual file writes
         # and mock QMessageBox to avoid GUI blocking
         with patch("pandas.DataFrame.to_csv") as mock_to_csv, \
-             patch.object(QtWidgets.QMessageBox, 'information'):
+                patch.object(QtWidgets.QMessageBox, 'information'):
             # Export the selected results
             exporter_tab._do_export_analysis_results()
 

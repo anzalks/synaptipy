@@ -14,14 +14,14 @@ log = logging.getLogger(__name__)
 class ShortcutManager(QtCore.QObject):
     """
     Manages keyboard shortcuts and routes them to the appropriate controller.
-    
+
     Constraint: Stateless. Simply maps Key_Space -> NavigationController.next_file().
     """
-    
+
     def __init__(self, navigation_controller=None, parent=None):
         """
         Initialize the ShortcutManager.
-        
+
         Args:
             navigation_controller: Object with 'next_file()', 'prev_file()' methods.
             parent: Parent QObject.
@@ -38,7 +38,7 @@ class ShortcutManager(QtCore.QObject):
             return False
 
         key = event.key()
-        
+
         if key == QtCore.Qt.Key_Space:
             log.debug("Shortcut: Space -> Next File")
             # Check if controller has the method before calling
@@ -48,10 +48,10 @@ class ShortcutManager(QtCore.QObject):
             else:
                 log.warning("NavigationController missing 'next_file' method.")
 
-        elif key == QtCore.Qt.Key_Back: # Or Backspace? or Left?
+        elif key == QtCore.Qt.Key_Back:  # Or Backspace? or Left?
             # Optional: Add Previous File on Backspace?
             # User constraint only mentioned Space -> next_file explicitly.
             # But let's add Backspace -> Prev File for symmetry if method exists
             pass
-            
+
         return False

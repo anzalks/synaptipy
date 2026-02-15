@@ -208,7 +208,7 @@ class ExporterTab(QtWidgets.QWidget):
 
         return tab_widget
 
-    def _connect_signals(self):
+    def _connect_signals(self):  # noqa: C901
         """Connect signals for widgets within the Exporter Tab and its sub-tabs."""
         # NWB signals
         if self.nwb_browse_button:

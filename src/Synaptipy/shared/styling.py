@@ -159,7 +159,7 @@ def _detect_linux_desktop():
 # Plot color functions removed - preserving original plot appearance
 
 
-def _configure_grid_z_order_safe(plot_widget):
+def _configure_grid_z_order_safe(plot_widget):  # noqa: C901
     """Safely configure grid z-order with better error handling for Windows compatibility."""
     try:
         plot_item = plot_widget.getPlotItem()

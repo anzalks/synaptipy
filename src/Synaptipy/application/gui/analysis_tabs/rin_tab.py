@@ -45,7 +45,7 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
         self.mode_combobox.currentIndexChanged.connect(self._on_mode_changed)
 
         layout.addRow("Mode:", self.mode_combobox)
-        
+
         # Connect channel change to update UI
         if self.signal_channel_combobox:
             self.signal_channel_combobox.currentIndexChanged.connect(self._on_channel_changed)
@@ -139,7 +139,7 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
     def _gather_analysis_parameters(self) -> Dict[str, Any]:
         """Override to enforce mode-specific logic."""
         params = super()._gather_analysis_parameters()
-        
+
         # If interactive, force auto_detect to False (we are manually setting regions)
         if hasattr(self, "mode_combobox") and self.mode_combobox.currentText() == self._MODE_INTERACTIVE:
             params["auto_detect_pulse"] = False
@@ -148,27 +148,26 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
         # We re-check mode here or rely on the UI being correct.
         # But user might have changed units mid-flow? Unlikely.
         # Let's rely on what the wrapper does: if V-clamp, we must ensure current_amp is 0.
-        
+
         # Determine mode from units (same logic)
         is_voltage_clamp = False
-        
+
         channel_name = None
         if self.signal_channel_combobox:
             channel_name = self.signal_channel_combobox.currentData()
-            
+
         if channel_name and self._selected_item_recording and channel_name in self._selected_item_recording.channels:
-             channel = self._selected_item_recording.channels[channel_name]
-             units = channel.units or "V"
-             if "A" in units or "amp" in units.lower():
-                 is_voltage_clamp = True
-        
+            channel = self._selected_item_recording.channels[channel_name]
+            units = channel.units or "V"
+            if "A" in units or "amp" in units.lower():
+                is_voltage_clamp = True
+
         if is_voltage_clamp:
             params["current_amplitude"] = 0.0
         else:
             params["voltage_step"] = 0.0
-            
-        return params
 
+        return params
 
     def _ensure_custom_items_on_plot(self):
         """Re-add custom plot items if they were removed by plot_widget.clear()."""
@@ -217,7 +216,7 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
         else:
             self.response_line.setVisible(False)
 
-    def _display_analysis_results(self, results: Any):
+    def _display_analysis_results(self, results: Any):  # noqa: C901
         """Override to display context-aware results."""
         if not self.results_table:
             return
@@ -226,35 +225,35 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
             result_data = results["result"]
         else:
             result_data = results
-            
+
         if not result_data or "rin_error" in result_data:
-             self.results_table.setRowCount(1)
-             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
-             val = result_data.get("rin_error") if result_data else "No Results"
-             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem(str(val)))
-             return
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+            val = result_data.get("rin_error") if result_data else "No Results"
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem(str(val)))
+            return
 
         # Determine mode from units again to be consistent
         is_voltage_clamp = False
-        
+
         channel_name = None
         if self.signal_channel_combobox:
             channel_name = self.signal_channel_combobox.currentData()
-            
+
         if channel_name and self._selected_item_recording and channel_name in self._selected_item_recording.channels:
-             channel = self._selected_item_recording.channels[channel_name]
-             units = channel.units or "V"
-             if "A" in units or "amp" in units.lower():
-                 is_voltage_clamp = True
+            channel = self._selected_item_recording.channels[channel_name]
+            units = channel.units or "V"
+            if "A" in units or "amp" in units.lower():
+                is_voltage_clamp = True
 
         display_items = []
-        
+
         # Extract values
         rin = result_data.get("rin_mohm")
         cond = result_data.get("conductance_us")
-        v_deflection = result_data.get("voltage_deflection_mv") 
+        v_deflection = result_data.get("voltage_deflection_mv")
         i_injection = result_data.get("current_injection_pa")
-        
+
         if is_voltage_clamp:
             # Voltage Clamp: Show Conductance primarily
             if cond is not None:
@@ -264,17 +263,17 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
             if v_deflection is not None:
                 display_items.append(("Voltage Step", f"{v_deflection:.2f} mV"))
             if rin is not None:
-                display_items.append(("Resistance", f"{rin:.2f} MOhm")) 
+                display_items.append(("Resistance", f"{rin:.2f} MOhm"))
         else:
             # Current Clamp: Show Resistance primarily
             if rin is not None:
-                 display_items.append(("Rin", f"{rin:.2f} MOhm"))
+                display_items.append(("Rin", f"{rin:.2f} MOhm"))
             if v_deflection is not None:
-                 display_items.append(("Voltage Deflection", f"{v_deflection:.2f} mV"))
+                display_items.append(("Voltage Deflection", f"{v_deflection:.2f} mV"))
             if i_injection is not None:
-                 display_items.append(("Current Step", f"{i_injection:.2f} pA"))
+                display_items.append(("Current Step", f"{i_injection:.2f} pA"))
             if cond is not None:
-                 display_items.append(("Conductance", f"{cond:.4f} uS")) 
+                display_items.append(("Conductance", f"{cond:.4f} uS"))
 
         self.results_table.setRowCount(len(display_items))
         for row, (k, v) in enumerate(display_items):

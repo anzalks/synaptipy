@@ -48,7 +48,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def run_gui():
+def run_gui():  # noqa: C901
     """
     Set up and run the Synaptipy GUI application with welcome screen.
 

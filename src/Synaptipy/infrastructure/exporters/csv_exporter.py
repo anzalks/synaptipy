@@ -68,7 +68,7 @@ class CSVExporter:
 
         return success_count, error_count
 
-    def export_analysis_results(self, results: List[Dict[str, Any]], output_path: Path) -> bool:
+    def export_analysis_results(self, results: List[Dict[str, Any]], output_path: Path) -> bool:  # noqa: C901
         """
         Export a list of analysis result dictionaries to a single CSV file.
         Handles nested dictionaries (e.g., 'summary_stats', 'parameters') by flattening them.

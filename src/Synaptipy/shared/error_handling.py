@@ -66,5 +66,5 @@ class AnalysisError(SynaptipyError):
 
 class UnitError(SynaptipyError, ValueError):
     """Error raised when signal units or sampling rate are invalid (e.g. <100Hz)."""
-    
+
     pass

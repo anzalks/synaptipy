@@ -150,7 +150,7 @@ class AnalysisRegistry:
     def update_default_params(cls, analysis_name: str, new_defaults: Dict[str, Any]):
         """
         Update default values for a registered analysis.
-        
+
         Args:
             analysis_name: Name of anylsis
             new_defaults: Dictionary of {param_name: new_value}
@@ -168,7 +168,7 @@ class AnalysisRegistry:
             if p_name in new_defaults:
                 param["default"] = new_defaults[p_name]
                 updated_count += 1
-        
+
         log.debug(f"Updated {updated_count} default parameters for {analysis_name}")
 
     @classmethod

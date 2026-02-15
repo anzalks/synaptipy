@@ -69,7 +69,7 @@ log = logging.getLogger(__name__)
 class NWBExporter:
     """Handles exporting Recording domain objects to NWB files."""
 
-    def export(self, recording: Recording, output_path: Path, session_metadata: Dict[str, Any]):
+    def export(self, recording: Recording, output_path: Path, session_metadata: Dict[str, Any]):  # noqa: C901
         """
         Exports the given Recording object to an NWB file.
 

@@ -114,7 +114,7 @@ class AnalyserTab(QtWidgets.QWidget):
         """Returns the currently active global preprocessing settings."""
         return self._global_preprocessing_settings
 
-    def set_global_preprocessing(self, settings: Optional[Dict[str, Any]]):
+    def set_global_preprocessing(self, settings: Optional[Dict[str, Any]]):  # noqa: C901
         """
         Sets global preprocessing and propagates to all sub-tabs.
         Called by sub-tabs when user applies preprocessing.
@@ -131,7 +131,7 @@ class AnalyserTab(QtWidgets.QWidget):
             step_type = settings.get('type')
             if self._global_preprocessing_settings is None:
                 self._global_preprocessing_settings = {}
-            
+
             if step_type == 'baseline':
                 self._global_preprocessing_settings['baseline'] = settings
             elif step_type == 'filter':
@@ -140,9 +140,9 @@ class AnalyserTab(QtWidgets.QWidget):
                     self._global_preprocessing_settings['filters'] = {}
                 # Same filter method replaces old one
                 self._global_preprocessing_settings['filters'][filter_method] = settings
-        
+
         log.debug(f"Global preprocessing set: {self._global_preprocessing_settings is not None}")
-        
+
         # Propagate full accumulated settings to all loaded sub-tabs
         for tab in self._loaded_analysis_tabs:
             if hasattr(tab, "apply_global_preprocessing"):
@@ -157,12 +157,12 @@ class AnalyserTab(QtWidgets.QWidget):
         Returns True if user wants global application, False otherwise.
         """
         from PySide6.QtWidgets import QMessageBox
-        
+
         # Build description of current preprocessing
         # Settings use 'type' and 'method' keys
         settings_type = settings.get("type", "unknown")
         method = settings.get("method", "unknown")
-        
+
         if settings_type == "baseline":
             settings_desc = f"Baseline: {method}"
         elif settings_type == "filter":
@@ -170,7 +170,7 @@ class AnalyserTab(QtWidgets.QWidget):
             settings_desc = f"Filter: {method} ({cutoff} Hz)"
         else:
             settings_desc = f"{settings_type}: {method}"
-        
+
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Apply Preprocessing Globally?")
         msg_box.setText(f"Preprocessing is active:\n{settings_desc}")
@@ -178,14 +178,14 @@ class AnalyserTab(QtWidgets.QWidget):
             "Do you want to apply this preprocessing to all files during analysis?\n\n"
             "This will be applied across all analysis sub-tabs."
         )
-        
+
         apply_btn = msg_box.addButton("Apply Globally", QMessageBox.ButtonRole.AcceptRole)
-        this_only_btn = msg_box.addButton("This Tab Only", QMessageBox.ButtonRole.RejectRole)
+        msg_box.addButton("This Tab Only", QMessageBox.ButtonRole.RejectRole)
         reset_btn = msg_box.addButton("Reset Preprocessing", QMessageBox.ButtonRole.DestructiveRole)
-        
+
         msg_box.setDefaultButton(apply_btn)
         msg_box.exec()
-        
+
         clicked = msg_box.clickedButton()
         if clicked == apply_btn:
             return True
@@ -204,7 +204,7 @@ class AnalyserTab(QtWidgets.QWidget):
     def showEvent(self, event):
         """Override to check for pending preprocessing confirmation."""
         super().showEvent(event)
-        
+
         # Check SessionManager for preprocessing settings from Explorer
         session_preprocessing = self.session_manager.preprocessing_settings
         if session_preprocessing and not self._global_preprocessing_confirmed:
@@ -244,9 +244,9 @@ class AnalyserTab(QtWidgets.QWidget):
         # logic where we want to track it.
         # If we haven't confirmed yet, _check_preprocessing_on_enter will handle it.
         # But if we HAVE confirmed, we must update active settings.
-        
+
         if self._global_preprocessing_confirmed:
-            log.debug(f"Session preprocessing changed. Updating active global settings.")
+            log.debug("Session preprocessing changed. Updating active global settings.")
             self._global_preprocessing_settings = settings
             # Propagate to all tabs
             self.set_global_preprocessing(settings)
@@ -321,7 +321,7 @@ class AnalyserTab(QtWidgets.QWidget):
 
     # _connect_explorer_signals removed as we use SessionManager now
 
-    def _load_analysis_tabs(self):
+    def _load_analysis_tabs(self):  # noqa: C901
         # ... (Dynamic loading logic remains exactly the same as the previous correct version) ...
         log.debug("Loading analysis sub-tabs...")
         # Block signals during tab loading to prevent premature currentChanged signals
@@ -442,7 +442,7 @@ class AnalyserTab(QtWidgets.QWidget):
 
     # --- Batch Analysis Handler ---
     @QtCore.Slot()
-    def _on_batch_analysis_clicked(self):
+    def _on_batch_analysis_clicked(self):  # noqa: C901
         """Open the Batch Analysis Dialog."""
         if not self._analysis_items:
             QtWidgets.QMessageBox.warning(self, "No Files", "Please load files in the Explorer tab first.")
@@ -505,7 +505,7 @@ class AnalyserTab(QtWidgets.QWidget):
                         pipeline_config = [
                             {"analysis": registry_name, "scope": "all_trials", "params": params}  # Default scope
                         ]
-                        
+
                         # --- PREPEND Global Preprocessing ---
                         global_prep = self.get_global_preprocessing()
                         start_steps = []
@@ -514,14 +514,14 @@ class AnalyserTab(QtWidgets.QWidget):
                             if 'baseline' in global_prep:
                                 # Baseline is a step
                                 # Need to map 'method' to a registered function name
-                                
+
                                 # Assuming the 'method' key holds the registry name or something usable.
                                 start_steps.append({
                                     "analysis": global_prep['baseline'].get("method_id", "baseline_subtraction"),
-                                    "scope": "all_trials", # Preprocessing works on raw data usually?
+                                    "scope": "all_trials",  # Preprocessing works on raw data usually?
                                     "params": global_prep['baseline']
                                 })
-                            
+
                             if 'filters' in global_prep:
                                 for method, settings in global_prep['filters'].items():
                                     # settings['method'] might be 'Lowpass'.
@@ -529,21 +529,24 @@ class AnalyserTab(QtWidgets.QWidget):
                                     # This mapping is crucial.
                                     # For now, let's inject a "filter" task and hope Registry has it,
                                     # or we assume 'method_id' exists.
-                                    
+
                                     # If PreprocessingWidget doesn't provide method_id, we might rely on 'method'.
                                     # Ideally, we should update PreprocessingWidget to include registry key.
                                     # But let's try to infer or use 'method_id' if present, else lowercase+underscore.
-                                    
-                                    analysis_name = settings.get("method_id", settings.get("method", "").lower().replace(" ", "_"))
+
+                                    analysis_name = settings.get(
+                                        "method_id", settings.get(
+                                            "method", "").lower().replace(
+                                            " ", "_"))
                                     if "filter" not in analysis_name:
-                                        analysis_name += "_filter" # basic heuristic
-                                        
+                                        analysis_name += "_filter"  # basic heuristic
+
                                     start_steps.append({
                                         "analysis": analysis_name,
                                         "scope": "all_trials",
                                         "params": settings
                                     })
-                        
+
                         if start_steps:
                             log.debug(f"Prepending {len(start_steps)} preprocessing steps to batch pipeline.")
                             pipeline_config = start_steps + pipeline_config
@@ -580,7 +583,7 @@ class AnalyserTab(QtWidgets.QWidget):
         """
         log.debug(f"Batch Analysis requested load: {file_path}")
         self.load_file_requested.emit(file_path)
-        
+
         # TODO: Handle channel/trial auto-selection after load
         # This requires the load to complete first, which is async/decoupled.
         # For now, just loading the file is a huge win.
@@ -589,7 +592,7 @@ class AnalyserTab(QtWidgets.QWidget):
     def _copy_methods_to_clipboard(self):
         """Generates methods text for the current analysis result and copies to clipboard."""
         from Synaptipy.application.controllers.analysis_formatter import generate_methods_text
-        
+
         current_tab = self.sub_tab_widget.currentWidget()
         if not current_tab:
             return
@@ -600,12 +603,12 @@ class AnalyserTab(QtWidgets.QWidget):
             result = current_tab.last_result
         elif hasattr(current_tab, "current_result"):
             result = current_tab.current_result
-        
+
         if result:
             methods_text = generate_methods_text(result)
             clipboard = QtWidgets.QApplication.clipboard()
             clipboard.setText(methods_text)
-            
+
             # Feedback
             self.window().statusBar().showMessage("Methods description copied to clipboard.", 3000)
             log.info("Copied methods text to clipboard.")
@@ -614,7 +617,7 @@ class AnalyserTab(QtWidgets.QWidget):
 
     # --- Slot for Explorer Signal ---
     @QtCore.Slot(list)
-    def update_analysis_sources(self, analysis_items: List[Dict[str, Any]]):
+    def update_analysis_sources(self, analysis_items: List[Dict[str, Any]]):  # noqa: C901
         """
         Called when the analysis set changes in the ExplorerTab.
         Updates the list widget, central combo box, and internal state.
@@ -713,7 +716,7 @@ class AnalyserTab(QtWidgets.QWidget):
                 log.error(f"Error forwarding selection to tab: {e}", exc_info=True)
 
     @QtCore.Slot(int)
-    def _on_tab_changed(self, tab_index: int):
+    def _on_tab_changed(self, tab_index: int):  # noqa: C901
         """
         Called when user switches between analysis tabs.
         Updates the newly visible tab with the current combo selection.
@@ -727,9 +730,11 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Sync Zoom from Previous Tab ---
         if hasattr(self, "_last_active_tab") and self._last_active_tab and current_tab:
             try:
-                if (hasattr(self._last_active_tab, "plot_widget") and self._last_active_tab.plot_widget and
-                    hasattr(current_tab, "plot_widget") and current_tab.plot_widget):
-                    
+                if (hasattr(self._last_active_tab, "plot_widget")
+                    and self._last_active_tab.plot_widget
+                    and hasattr(current_tab, "plot_widget")
+                        and current_tab.plot_widget):
+
                     # Sync X-Range (Time axis) only
                     # We assume X-axis is compatible (e.g. Time vs Time)
                     x_range = self._last_active_tab.plot_widget.viewRange()[0]
@@ -737,7 +742,7 @@ class AnalyserTab(QtWidgets.QWidget):
                     log.debug(f"Synced X-range from previous tab: {x_range}")
             except Exception as e:
                 log.warning(f"Failed to sync zoom: {e}")
-        
+
         self._last_active_tab = current_tab
         # -----------------------------------
 
@@ -816,7 +821,6 @@ class AnalyserTab(QtWidgets.QWidget):
                 # Status bar update via parent if available?
                 # self.window().statusBar().showMessage("Parameters reset.", 3000)
             else:
-                 log.warning(f"Tab '{current_tab.get_display_name()}' does not support parameter reset.")
-                 QtWidgets.QMessageBox.information(self, "Not Supported", 
-                                                 f"Reset is not supported for {current_tab.get_display_name()}.")
-
+                log.warning(f"Tab '{current_tab.get_display_name()}' does not support parameter reset.")
+                QtWidgets.QMessageBox.information(self, "Not Supported",
+                                                  f"Reset is not supported for {current_tab.get_display_name()}.")

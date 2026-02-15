@@ -50,7 +50,7 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
         self.mode_combobox = QtWidgets.QComboBox()
         self.mode_combobox.addItems([self._MODE_INTERACTIVE, self._MODE_MANUAL, self._MODE_AUTOMATIC])
         self.mode_combobox.currentIndexChanged.connect(self._on_mode_changed)
-        
+
         # Add as a row in the form layout
         layout.addRow("Mode:", self.mode_combobox)
 
@@ -226,33 +226,33 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
             result_data = results["result"]
         else:
             result_data = results
-            
+
         if not result_data:
-             self.results_table.setRowCount(1)
-             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
-             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
-             return
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
+            return
 
         result_dict = result_data if isinstance(result_data, dict) else {}
-        
+
         if "rmp_error" in result_dict:
-             self.results_table.setRowCount(1)
-             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Error"))
-             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem(str(result_dict.get("rmp_error"))))
-             return
-             
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Error"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem(str(result_dict.get("rmp_error"))))
+            return
+
         mean = result_dict.get("rmp_mv")
         sd = result_dict.get("rmp_std")
         drift = result_dict.get("rmp_drift")
-        
+
         display_items = []
         if mean is not None:
-             display_items.append(("Mean RMP", f"{mean:.2f} mV"))
+            display_items.append(("Mean RMP", f"{mean:.2f} mV"))
         if sd is not None:
-             display_items.append(("SD", f"{sd:.3f} mV"))
+            display_items.append(("SD", f"{sd:.3f} mV"))
         if drift is not None:
-             display_items.append(("Drift", f"{drift:.4f} mV/s"))
-             
+            display_items.append(("Drift", f"{drift:.4f} mV/s"))
+
         self.results_table.setRowCount(len(display_items))
         for row, (k, v) in enumerate(display_items):
             self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))

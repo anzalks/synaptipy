@@ -122,7 +122,7 @@ def check_tests() -> bool:
         return False
 
 
-def check_no_emojis() -> bool:
+def check_no_emojis() -> bool:  # noqa: C901
     """Scan codebase for emojis."""
     print("Running: Emoji Scanner...")
     # Regex for emojis (simplified range, covers most common ones)

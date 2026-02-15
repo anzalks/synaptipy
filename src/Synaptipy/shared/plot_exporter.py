@@ -75,7 +75,7 @@ class PlotExporter:
         log.info(f"Exported raster plot to {filename}")
         return True
 
-    def _save_via_matplotlib(self, filename: str, fmt: str, dpi: int) -> bool:
+    def _save_via_matplotlib(self, filename: str, fmt: str, dpi: int) -> bool:  # noqa: C901
         """
         Save vector plots using Matplotlib for publication quality.
         Extracts data directly from pyqtgraph PlotDataItems to match screen.

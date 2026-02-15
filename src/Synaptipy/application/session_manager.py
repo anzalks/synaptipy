@@ -108,7 +108,7 @@ class SessionManager(QObject):
     def preprocessing_settings(self, settings: Optional[Dict[str, Any]]):
         """
         Sets global preprocessing settings and emits signal.
-        
+
         Settings can be:
         - None: Clear all preprocessing
         - A dict with 'type' key: Update specific slot (baseline or filter by method)
@@ -120,7 +120,7 @@ class SessionManager(QObject):
             log.debug("Preprocessing settings cleared")
             self.preprocessing_settings_changed.emit(None)
             return
-        
+
         # Check if this is a slot-based settings dict or a single step
         if 'baseline' in settings or 'filters' in settings:
             # Already in slot format
@@ -130,7 +130,7 @@ class SessionManager(QObject):
             step_type = settings.get('type')
             if self._preprocessing_settings is None:
                 self._preprocessing_settings = {}
-            
+
             if step_type == 'baseline':
                 self._preprocessing_settings['baseline'] = settings
             elif step_type == 'filter':
@@ -143,7 +143,7 @@ class SessionManager(QObject):
             else:
                 log.warning(f"Unknown preprocessing step type: {step_type}")
                 return
-        
+
         # Log current state
         has_baseline = self._preprocessing_settings.get('baseline') is not None
         filter_count = len(self._preprocessing_settings.get('filters', {}))
@@ -154,7 +154,7 @@ class SessionManager(QObject):
         """Clear a specific preprocessing slot ('baseline' or a specific filter method)."""
         if not self._preprocessing_settings:
             return
-            
+
         if slot_type == 'baseline' and 'baseline' in self._preprocessing_settings:
             del self._preprocessing_settings['baseline']
         elif slot_type == 'filter' and filter_method and 'filters' in self._preprocessing_settings:
@@ -162,7 +162,7 @@ class SessionManager(QObject):
                 del self._preprocessing_settings['filters'][filter_method]
                 if not self._preprocessing_settings['filters']:
                     del self._preprocessing_settings['filters']
-        
+
         if not self._preprocessing_settings:
             self._preprocessing_settings = None
         log.debug(f"Cleared preprocessing slot: {slot_type} {filter_method or ''}")

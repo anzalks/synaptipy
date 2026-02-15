@@ -7,7 +7,6 @@ import logging
 import time as time_mod
 
 import numpy as np
-import pytest
 
 from Synaptipy.core.analysis.intrinsic_properties import (
     calculate_tau,

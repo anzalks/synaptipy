@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple, List, Union
 import logging
-from Synaptipy.core.results import SpikeTrainResult, AnalysisResult, RinResult, RmpResult, BurstResult, EventDetectionResult
+from Synaptipy.core.results import SpikeTrainResult, AnalysisResult, RinResult
 
 log = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ class AnalysisResultFormatter:
     """
 
     @staticmethod
-    def format_result(result: Union[Dict[str, Any], AnalysisResult]) -> Tuple[str, List[str]]:
+    def format_result(result: Union[Dict[str, Any], AnalysisResult]) -> Tuple[str, List[str]]:  # noqa: C901
         """
         Formats a single analysis result (dict or object).
         Returns: (value_str, details_list)
@@ -30,27 +30,32 @@ class AnalysisResultFormatter:
                     "spike_count": len(result.spike_times) if result.spike_times is not None else 0,
                     "average_firing_rate_hz": result.mean_frequency,
                     "threshold": result.parameters.get("threshold"),
-                    "threshold_units": "mV", # Assumed
-                    "refractory_period_ms": result.parameters.get("refractory_period", 0) * 1000 if result.parameters.get("refractory_period") else None
+                    "threshold_units": "mV",  # Assumed
+                    "refractory_period_ms": (
+                        result.parameters.get("refractory_period", 0) * 1000
+                        if result.parameters.get("refractory_period") else None
+                    )
                 }
                 # Pass through
-                return AnalysisResultFormatter._format_spike_detection(res_dict), AnalysisResultFormatter._details_spike_detection(res_dict)
+                return AnalysisResultFormatter._format_spike_detection(
+                    res_dict), AnalysisResultFormatter._details_spike_detection(res_dict)
 
             elif isinstance(result, RinResult):
-                 # Reuse logic
-                 res_dict = {
-                     "Input Resistance (kOhm)": result.value if result.unit == "kOhm" else None,
-                     "Rin (MΩ)": result.value if result.unit == "MOhm" else None,
-                     "delta_mV": result.voltage_deflection,
-                     "delta_pA": result.current_injection
-                 }
-                 return AnalysisResultFormatter._format_input_resistance(res_dict), AnalysisResultFormatter._details_input_resistance(res_dict)
-            
+                # Reuse logic
+                res_dict = {
+                    "Input Resistance (kOhm)": result.value if result.unit == "kOhm" else None,
+                    "Rin (MΩ)": result.value if result.unit == "MOhm" else None,
+                    "delta_mV": result.voltage_deflection,
+                    "delta_pA": result.current_injection
+                }
+                return AnalysisResultFormatter._format_input_resistance(
+                    res_dict), AnalysisResultFormatter._details_input_resistance(res_dict)
+
             # ... Add other mappings as needed or default to:
             analysis_type = "Unknown object"
-        
+
         else:
-             analysis_type = result.get("analysis_type", "Unknown")
+            analysis_type = result.get("analysis_type", "Unknown")
 
         value_str = "N/A"
         details = []
@@ -316,7 +321,7 @@ class AnalysisResultFormatter:
         return "N/A"
 
     @staticmethod
-    def _details_event_detection(result: Dict[str, Any]) -> List[str]:
+    def _details_event_detection(result: Dict[str, Any]) -> List[str]:  # noqa: C901
         details = []
         method = result.get("method", "")
         if method:
@@ -445,10 +450,10 @@ def generate_methods_text(result: Any) -> str:
         )
 
         if "dvdt_threshold" in params:
-             text += (
-                 f"Spike features were calculated based on the derivative of the membrane potential, "
-                 f"using a dV/dt onset threshold of {params['dvdt_threshold']} V/s. "
-             )
+            text += (
+                f"Spike features were calculated based on the derivative of the membrane potential, "
+                f"using a dV/dt onset threshold of {params['dvdt_threshold']} V/s. "
+            )
 
         return text
 

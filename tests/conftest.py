@@ -15,6 +15,7 @@ for mod_name in list(sys.modules.keys()):
         if mod is not None and hasattr(mod, '__file__') and mod.__file__ and '.verify_venv' in mod.__file__:
             del sys.modules[mod_name]
 
+
 def pytest_ignore_collect(collection_path, config):
     """
     Hook to ignore files/directories during collection.
@@ -25,6 +26,7 @@ def pytest_ignore_collect(collection_path, config):
     if collection_path.name in [".git", ".idea", "__pycache__"]:
         return True
     return None
+
 
 @pytest.fixture(autouse=True)
 def reset_datacache():

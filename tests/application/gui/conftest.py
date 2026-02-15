@@ -15,7 +15,7 @@ def main_window(qtbot):
     """
     # Patch all file dialogs and message boxes before importing MainWindow
     with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, \
-         patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
+            patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
 
         # Configure dialog to return cancel by default
         mock_dialog.return_value.exec.return_value = False

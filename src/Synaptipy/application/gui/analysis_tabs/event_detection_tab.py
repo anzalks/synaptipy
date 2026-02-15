@@ -61,7 +61,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.analyze_button = QtWidgets.QPushButton("Detect Events")
         self.analyze_button.setToolTip("Run event detection")
         self.analyze_button.clicked.connect(self._trigger_analysis)
-        
+
         # Add button as a row (spanning or labelled?)
         # layout.addRow(self.analyze_button) works but puts it in the second column usually
         # Let's try to put it nicely
@@ -188,7 +188,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         elif self.threshold_line:
             self.threshold_line.setVisible(False)
 
-    def _display_analysis_results(self, results: Any):
+    def _display_analysis_results(self, results: Any):  # noqa: C901
         """Override to provide table result summary."""
         if not self.results_table:
             return
@@ -198,12 +198,12 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
             result_data = results["result"]
         else:
             result_data = results
-            
+
         if not result_data:
-             self.results_table.setRowCount(1)
-             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
-             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
-             return
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
+            return
 
         # Support both object and dict access for robustness
         def get_val(key, default=None):
@@ -218,20 +218,20 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         mean_amp = get_val("mean_amplitude")
         amp_sd = get_val("amplitude_sd")
         thresh = get_val("threshold")
-        
+
         display_items = []
         display_items.append(("Method", self.method_combobox.currentText()))
         display_items.append(("Count", str(count)))
-        
+
         if freq is not None:
-             display_items.append(("Frequency", f"{freq:.2f} Hz"))
-             
+            display_items.append(("Frequency", f"{freq:.2f} Hz"))
+
         if mean_amp is not None:
-             display_items.append(("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"))
-             
+            display_items.append(("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"))
+
         if thresh is not None:
-             display_items.append(("Threshold", str(thresh)))
-             
+            display_items.append(("Threshold", str(thresh)))
+
         self.results_table.setRowCount(len(display_items))
         for row, (k, v) in enumerate(display_items):
             self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))

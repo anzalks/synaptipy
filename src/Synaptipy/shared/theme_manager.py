@@ -148,7 +148,7 @@ def apply_theme(mode: Optional[ThemeMode] = None) -> None:
         app.setStyleSheet("")
         app.setPalette(app.style().standardPalette())
         log.debug("Applied active system theme (native)")
-        
+
     elif mode == ThemeMode.LIGHT:
         _apply_light_theme(app)
         log.debug("Applied light theme")
