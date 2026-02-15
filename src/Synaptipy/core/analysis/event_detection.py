@@ -318,6 +318,15 @@ def detect_events_deconvolution_custom(
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "filter_freq_hz",
+            "label": "Filter Freq (Hz):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0, 
+            "max": 100000.0,
+            "decimals": 1,
+        },
     ],
 )
 def run_event_detection_deconvolution_wrapper(
@@ -472,6 +481,24 @@ def detect_events_baseline_peak_kinetics(
             "default": 5.0,
             "hidden": True,
         },
+        {
+            "name": "baseline_window_s",
+            "label": "Baseline Win (s):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.01,
+            "max": 100.0,
+            "decimals": 2,
+        },
+        {
+            "name": "baseline_step_s",
+            "label": "Baseline Step (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.01,
+            "max": 100.0,
+            "decimals": 2,
+        },
     ],
 )
 def run_event_detection_baseline_peak_wrapper(
@@ -485,6 +512,8 @@ def run_event_detection_baseline_peak_wrapper(
         threshold_sd_factor=kwargs.get("threshold_sd_factor", 3.0),
         min_event_separation_ms=kwargs.get("min_event_separation_ms", 5.0),
         auto_baseline=kwargs.get("auto_baseline", True),
+        baseline_window_s=kwargs.get("baseline_window_s", 0.5),
+        baseline_step_s=kwargs.get("baseline_step_s", 0.1),
     )
     if not result.is_valid:
         return {"event_error": result.error_message}

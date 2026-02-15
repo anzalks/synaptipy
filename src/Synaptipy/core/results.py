@@ -73,6 +73,7 @@ class RmpResult(AnalysisResult):
     std_dev: Optional[float] = None  # Standard deviation of the trace segment
     drift: Optional[float] = None  # Linear drift (slope) in mV/s
     duration: Optional[float] = None  # Duration of analysis window in seconds
+    parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
 
     def __repr__(self):
         if self.is_valid:
@@ -117,6 +118,7 @@ class EventDetectionResult(AnalysisResult):
     detection_method: str = "threshold"
     threshold_value: Optional[float] = None
     direction: str = "negative"
+    parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
     summary_stats: Dict[str, Any] = field(default_factory=dict)
 
     # Deconvolution specific

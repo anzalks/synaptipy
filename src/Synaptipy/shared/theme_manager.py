@@ -144,17 +144,16 @@ def apply_theme(mode: Optional[ThemeMode] = None) -> None:
         return
 
     if mode == ThemeMode.SYSTEM:
-        # Detect and apply based on actual system setting
-        if _detect_system_dark_mode():
-            _apply_dark_theme(app)
-            log.debug("Applied system theme (detected: dark)")
-        else:
-            _apply_light_theme(app)
-            log.debug("Applied system theme (detected: light)")
+        # Use native system theme (clear stylesheet and custom palette)
+        app.setStyleSheet("")
+        app.setPalette(app.style().standardPalette())
+        log.debug("Applied active system theme (native)")
+        
     elif mode == ThemeMode.LIGHT:
         _apply_light_theme(app)
         log.debug("Applied light theme")
     elif mode == ThemeMode.DARK:
+        # Force dark stylesheet (custom)
         _apply_dark_theme(app)
         log.debug("Applied dark theme")
 

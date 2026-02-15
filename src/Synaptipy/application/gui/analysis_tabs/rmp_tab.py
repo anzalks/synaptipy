@@ -45,20 +45,14 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
     def get_display_name(self) -> str:
         return "Baseline Analysis"
 
-    def _setup_additional_controls(self, layout: QtWidgets.QVBoxLayout):
-        """Add custom mode selection if not covered by metadata."""
-        # Check if 'mode' is in metadata params. If not, add custom combo.
-        # RMP metadata usually has time ranges, but maybe not 'mode'.
-        # Let's check? AnalysisRegistry.get_metadata("rmp_analysis")
-        # Assuming we add a custom mode switcher on top of the auto-generated params.
-
-        mode_layout = QtWidgets.QHBoxLayout()
-        mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
+    def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
+        """Add custom mode selection to Parameters group."""
         self.mode_combobox = QtWidgets.QComboBox()
         self.mode_combobox.addItems([self._MODE_INTERACTIVE, self._MODE_MANUAL, self._MODE_AUTOMATIC])
         self.mode_combobox.currentIndexChanged.connect(self._on_mode_changed)
-        mode_layout.addWidget(self.mode_combobox)
-        layout.addLayout(mode_layout)
+        
+        # Add as a row in the form layout
+        layout.addRow("Mode:", self.mode_combobox)
 
     def _setup_custom_plot_items(self):
         """Initialize plot items."""
@@ -223,29 +217,46 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
             if self.baseline_minus_sd_line:
                 self.baseline_minus_sd_line.setVisible(False)
 
-    def _on_analysis_result(self, results: Any):
-        """Override to customize result display text."""
-        super()._on_analysis_result(results)
+    def _display_analysis_results(self, results: Any):
+        """Override to provide table result summary."""
+        if not self.results_table:
+            return
 
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:
             result_data = results
+            
+        if not result_data:
+             self.results_table.setRowCount(1)
+             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
+             return
 
-        if not result_data or "rmp_error" in result_data:
-            text = f"Error: {result_data.get('rmp_error', 'Unknown')}"
-        else:
-            mean = result_data.get("rmp_mv")
-            sd = result_data.get("rmp_std")
-            drift = result_data.get("rmp_drift")
-            text = "<h3>Baseline Analysis</h3>"
-            text += f"<b>Mean:</b> {mean:.2f} mV<br>"
-            text += f"<b>SD:</b> {sd:.3f} mV<br>"
-            if drift is not None:
-                text += f"<b>Drift:</b> {drift:.4f} mV/s"
-
-        if hasattr(self, "results_text"):
-            self.results_text.setHtml(text)
+        result_dict = result_data if isinstance(result_data, dict) else {}
+        
+        if "rmp_error" in result_dict:
+             self.results_table.setRowCount(1)
+             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Error"))
+             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem(str(result_dict.get("rmp_error"))))
+             return
+             
+        mean = result_dict.get("rmp_mv")
+        sd = result_dict.get("rmp_std")
+        drift = result_dict.get("rmp_drift")
+        
+        display_items = []
+        if mean is not None:
+             display_items.append(("Mean RMP", f"{mean:.2f} mV"))
+        if sd is not None:
+             display_items.append(("SD", f"{sd:.3f} mV"))
+        if drift is not None:
+             display_items.append(("Drift", f"{drift:.4f} mV/s"))
+             
+        self.results_table.setRowCount(len(display_items))
+        for row, (k, v) in enumerate(display_items):
+            self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))
+            self.results_table.setItem(row, 1, QtWidgets.QTableWidgetItem(v))
 
 
 # Export the class for dynamic loading

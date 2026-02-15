@@ -43,6 +43,9 @@ All analysis features must be split into two distinct parts:
 * **Mandatory Factory**: Always use `SynaptipyPlotFactory`.
     * *Code:* `from Synaptipy.shared.plot_factory import SynaptipyPlotFactory`
     * *Usage:* `self.plot = SynaptipyPlotFactory.create_plot_widget(...)`
+* **Performance Throttling**:
+    * **Downsampling**: For traces > 100,000 points, plotting widgets MUST implement 'Peak-to-Peak' or 'Subsample' downsampling logic to maintain 60 FPS.
+    * **Update Coalescing**: Real-time plot updates must be debounced (min interval 30ms) to prevent blocking the GUI thread.
 
 ### 4. IO & Data Abstraction
 * **No Direct I/O**: Never use `open()`, `numpy.load()`, or `pickle` directly in feature code. Use `NeoAdapter` or `DataLoader`.

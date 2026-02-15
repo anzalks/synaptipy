@@ -22,6 +22,7 @@ class AnalysisRegistry:
 
     _registry: Dict[str, Callable] = {}
     _metadata: Dict[str, Dict[str, Any]] = {}
+    _original_metadata: Dict[str, Dict[str, Any]] = {}  # Store factory defaults
 
     @classmethod
     def register(cls, name: str, type: str = "analysis", **kwargs) -> Callable:
@@ -42,6 +43,7 @@ class AnalysisRegistry:
                 # ... analysis logic ...
                 return results_dict
         """
+        import copy
 
         def decorator(func: Callable) -> Callable:
             if name in cls._registry:
@@ -51,6 +53,8 @@ class AnalysisRegistry:
             meta = kwargs.copy()
             meta["type"] = type
             cls._metadata[name] = meta
+            # Store deep copy as factory default
+            cls._original_metadata[name] = copy.deepcopy(meta)
             log.debug(f"Registered {type} function: {name} with metadata: {list(meta.keys())}")
             return func
 
@@ -139,4 +143,45 @@ class AnalysisRegistry:
         """
         cls._registry.clear()
         cls._metadata.clear()
+        cls._original_metadata.clear()
         log.debug("Analysis registry cleared")
+
+    @classmethod
+    def update_default_params(cls, analysis_name: str, new_defaults: Dict[str, Any]):
+        """
+        Update default values for a registered analysis.
+        
+        Args:
+            analysis_name: Name of anylsis
+            new_defaults: Dictionary of {param_name: new_value}
+        """
+        if analysis_name not in cls._metadata:
+            log.warning(f"Cannot update defaults: {analysis_name} not found.")
+            return
+
+        meta = cls._metadata[analysis_name]
+        ui_params = meta.get("ui_params", [])
+
+        updated_count = 0
+        for param in ui_params:
+            p_name = param.get("name")
+            if p_name in new_defaults:
+                param["default"] = new_defaults[p_name]
+                updated_count += 1
+        
+        log.debug(f"Updated {updated_count} default parameters for {analysis_name}")
+
+    @classmethod
+    def reset_to_factory(cls, analysis_name: str = None):
+        """
+        Reset metadata to factory defaults.
+        If analysis_name is None, resets ALL.
+        """
+        import copy
+        if analysis_name:
+            if analysis_name in cls._original_metadata:
+                cls._metadata[analysis_name] = copy.deepcopy(cls._original_metadata[analysis_name])
+                log.debug(f"Reset {analysis_name} to factory defaults.")
+        else:
+            cls._metadata = copy.deepcopy(cls._original_metadata)
+            log.debug("Reset ALL analyses to factory defaults.")

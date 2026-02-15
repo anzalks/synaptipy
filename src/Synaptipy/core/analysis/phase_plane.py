@@ -155,6 +155,31 @@ def detect_threshold_kink(
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "spike_threshold",
+            "label": "Spike Detect Thresh (mV):",
+            "type": "float",
+            "default": -20.0,
+            "min": -1000.0,
+            "max": 1000.0,
+            "decimals": 2,
+        },
+        {
+            "name": "kink_slope",
+            "label": "Kink Slope:",
+            "type": "float",
+            "default": 10.0,
+            "hidden": True, 
+        },
+        {
+            "name": "search_window_ms",
+            "label": "Search Window (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 0.1,
+            "max": 100.0,
+            "decimals": 2,
+        },
     ],
 )
 def phase_plane_analysis(
@@ -181,15 +206,19 @@ def phase_plane_analysis(
     # Calculate Phase Plane
     v, dvdt = get_phase_plane_trajectory(voltage, sampling_rate, sigma_ms)
 
+    spike_threshold = kwargs.get("spike_threshold", -20.0)
+    search_window_ms = kwargs.get("search_window_ms", 5.0)
+    kink_slope = kwargs.get("kink_slope", 10.0)
+
     # Detect Threshold
     # First detect peaks to guide threshold search
     # Use a simple threshold for peak detection
     from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 
-    spike_res = detect_spikes_threshold(voltage, time, -20.0, int(0.002 * sampling_rate))
+    spike_res = detect_spikes_threshold(voltage, time, spike_threshold, int(0.002 * sampling_rate))
 
     thresh_indices = detect_threshold_kink(
-        voltage, sampling_rate, dvdt_threshold=dvdt_threshold, peak_indices=spike_res.spike_indices
+        voltage, sampling_rate, dvdt_threshold=dvdt_threshold, kink_slope=kink_slope, search_window_ms=search_window_ms, peak_indices=spike_res.spike_indices
     )
 
     threshold_vals = voltage[thresh_indices] if thresh_indices.size > 0 else []

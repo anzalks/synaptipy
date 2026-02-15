@@ -56,6 +56,9 @@ class ParameterWidgetGenerator:
 
     def _create_widget_for_param(self, param: Dict[str, Any]):
         """Create and add a widget for a single parameter."""
+        if param.get("hidden", False):
+            return
+
         name = param.get("name")
         label = param.get("label", name)
         param_type = param.get("type", "float")
@@ -77,9 +80,11 @@ class ParameterWidgetGenerator:
             widget.setValue(int(param.get("default", 0)))
             widget.valueChanged.connect(self._on_param_changed)
 
-        elif param_type == "choice":
+        elif param_type == "choice" or param_type == "combo":
             widget = QtWidgets.QComboBox()
-            widget.addItems(param.get("choices", []))
+            # Handle both 'choices' and 'options' keys for flexibility
+            items = param.get("choices") or param.get("options") or []
+            widget.addItems(items)
             default = param.get("default")
             if default:
                 widget.setCurrentText(str(default))

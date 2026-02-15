@@ -37,17 +37,14 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
     def get_covered_analysis_names(self) -> list[str]:
         return ["rin_analysis", "tau_analysis"]
 
-    def _setup_additional_controls(self, layout: QtWidgets.QVBoxLayout):
-        """Add mode selection combobox."""
-        mode_layout = QtWidgets.QHBoxLayout()
-        mode_layout.addWidget(QtWidgets.QLabel("Mode:"))
+    def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
+        """Add mode selection to Parameters group."""
         self.mode_combobox = QtWidgets.QComboBox()
         self.mode_combobox.addItem(self._MODE_INTERACTIVE)
         self.mode_combobox.addItem(self._MODE_MANUAL)
         self.mode_combobox.currentIndexChanged.connect(self._on_mode_changed)
-        mode_layout.addWidget(self.mode_combobox)
 
-        layout.addLayout(mode_layout)
+        layout.addRow("Mode:", self.mode_combobox)
 
     def _setup_custom_plot_items(self):
         """Add regions and lines to the plot."""
@@ -135,14 +132,60 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
         # Call base class to trigger debounce
         super()._on_param_changed()
 
+    def _on_channel_changed(self):
+        """Handle channel selection change to update UI for clamp mode."""
+        super()._on_channel_changed()
+        self._update_ui_for_clamp_mode()
+        
+    def _update_ui_for_clamp_mode(self):
+        """Show/Hide parameters based on Current Clamp vs Voltage Clamp."""
+        if not hasattr(self, "param_generator") or not self.param_generator.widgets:
+            return
+
+        # Determine mode from units
+        is_voltage_clamp = False # Default to Current Clamp
+        units = "V" # Default
+        
+        if self._selected_item_channel:
+             units = self._selected_item_channel.units or "V"
+             if "A" in units or "amp" in units.lower():
+                 is_voltage_clamp = True
+        
+        # Identify widgets to toggle
+        # Current Step Params (for Current Clamp)
+        cc_widgets = ["pulse_amplitude_pa", "pulse_amplitude"] 
+        # Voltage Step Params (for Voltage Clamp - if they existed in metadata)
+        vc_widgets = ["pulse_amplitude_mv"] # Assuming this might exist or be mapped
+        
+        # If we reuse 'pulse_amplitude_pa' for both but just change label, that's easier.
+        # But 'pa' is hardcoded. 
+        # Let's assume metadata has 'pulse_amplitude_pa' and we rename it if Voltage Clamp?
+        # Or if metadata has both?
+        
+        # Strategy: Rename label of 'pulse_amplitude_pa' to 'pulse_amplitude_mv' if V-Clamp?
+        # And update unit label?
+        
+        widget = self.param_generator.widgets.get("pulse_amplitude_pa") or self.param_generator.widgets.get("pulse_amplitude")
+        
+        if widget:
+            # helper to find label in FormLayout
+            label_item = self.generated_params_layout.labelForField(widget)
+            if label_item:
+                if is_voltage_clamp:
+                     label_item.setText("Voltage Step (mV):")
+                     widget.setToolTip("Amplitude of the voltage step command (mV)")
+                else:
+                     label_item.setText("Current Step (pA):")
+                     widget.setToolTip("Amplitude of the current step command (pA)")
+
     def _gather_analysis_parameters(self) -> Dict[str, Any]:
         """Override to enforce mode-specific logic."""
         params = super()._gather_analysis_parameters()
-
+        
         # If interactive, force auto_detect to False (we are manually setting regions)
         if hasattr(self, "mode_combobox") and self.mode_combobox.currentText() == self._MODE_INTERACTIVE:
             params["auto_detect_pulse"] = False
-
+            
         return params
 
     def _ensure_custom_items_on_plot(self):

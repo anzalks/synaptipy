@@ -48,23 +48,24 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
     def get_covered_analysis_names(self) -> List[str]:
         return list(self.method_map.values())
 
-    def _setup_additional_controls(self, layout: QtWidgets.QVBoxLayout):
-        """Add method selection combobox."""
-        method_layout = QtWidgets.QFormLayout()
+    def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
+        """Add method selection to Parameters group."""
         self.method_combobox = QtWidgets.QComboBox()
         self.method_combobox.addItems(list(self.method_map.keys()))
         self.method_combobox.setToolTip("Choose the miniature event detection algorithm.")
         self.method_combobox.currentIndexChanged.connect(self._on_method_changed)
 
-        method_layout.addRow("Method:", self.method_combobox)
-        layout.addLayout(method_layout)
+        layout.addRow("Method:", self.method_combobox)
 
-        # We can also add an explicit "Detect" button if desired, though generic tab is reactive
-        # Let's add it for clarity/consistency with old behavior
+        # "Detect" button
         self.analyze_button = QtWidgets.QPushButton("Detect Events")
         self.analyze_button.setToolTip("Run event detection")
         self.analyze_button.clicked.connect(self._trigger_analysis)
-        layout.addWidget(self.analyze_button)
+        
+        # Add button as a row (spanning or labelled?)
+        # layout.addRow(self.analyze_button) works but puts it in the second column usually
+        # Let's try to put it nicely
+        layout.addRow("", self.analyze_button)
 
     def _setup_custom_plot_items(self):
         """Add markers and lines to the plot."""
@@ -188,26 +189,21 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
             self.threshold_line.setVisible(False)
 
     def _display_analysis_results(self, results: Any):
-        """Override to provide custom HTML result summary."""
-        # Base logic (BaseAnalysisTab._on_analysis_result) handles storage, plot hook, save button.
-        # We just need to update the text display.
+        """Override to provide table result summary."""
+        if not self.results_table:
+            return
 
-        # We also call super()._display_analysis_results(results) if we want the generic text
-        # but here we seem to want to REPLACE it with HTML.
-        # So we won't call super() unless we want both (which would be messy in one text box).
-        # MetadataDrivenAnalysisTab._display_analysis_results sets generic text.
-        # If we mistakenly implemented _on_analysis_result before, we overrode everything.
-        # Now we override _display_analysis_results.
-
-        # Let's just do our custom HTML and skip generic text.
-
+        # Handle simplified result structure
         if isinstance(results, dict) and "result" in results:
             result_data = results["result"]
         else:
             result_data = results
-
+            
         if not result_data:
-            return
+             self.results_table.setRowCount(1)
+             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+             self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
+             return
 
         # Support both object and dict access for robustness
         def get_val(key, default=None):
@@ -221,23 +217,25 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         freq = get_val("frequency_hz")
         mean_amp = get_val("mean_amplitude")
         amp_sd = get_val("amplitude_sd")
-
-        text = "<h3>Event Detection Results</h3>"
-        text += f"<b>Method:</b> {self.method_combobox.currentText()}<br>"
-        text += f"<b>Count:</b> {count}<br>"
-
-        if freq is not None:
-            text += f"<b>Frequency:</b> {freq:.2f} Hz<br>"
-
-        if mean_amp is not None:
-            text += f"<b>Mean Amplitude:</b> {mean_amp:.2f} ± {amp_sd:.2f}<br>"
-
         thresh = get_val("threshold")
+        
+        display_items = []
+        display_items.append(("Method", self.method_combobox.currentText()))
+        display_items.append(("Count", str(count)))
+        
+        if freq is not None:
+             display_items.append(("Frequency", f"{freq:.2f} Hz"))
+             
+        if mean_amp is not None:
+             display_items.append(("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"))
+             
         if thresh is not None:
-            text += f"<b>Threshold:</b> {thresh}<br>"
-
-        if hasattr(self, "results_text"):  # MetadataDriven uses results_text (TextEdit)
-            self.results_text.setHtml(text)
+             display_items.append(("Threshold", str(thresh)))
+             
+        self.results_table.setRowCount(len(display_items))
+        for row, (k, v) in enumerate(display_items):
+            self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))
+            self.results_table.setItem(row, 1, QtWidgets.QTableWidgetItem(v))
 
     def _on_threshold_dragged(self):
         """Handle threshold line drag event."""

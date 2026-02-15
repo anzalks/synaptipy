@@ -157,9 +157,14 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
             self.threshold_line.setVisible(True)
 
     def _display_analysis_results(self, result: Any):
-        """Display spike detection results in text edit."""
+        """Display spike detection results in table."""
+        if not self.results_table:
+            return
+
         if not result:
-            self.results_text.setText("Analysis failed.")
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("Analysis Failed"))
             return
 
         # Handle both object and dict
@@ -173,36 +178,31 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         threshold = metadata.get("threshold")
         refractory_ms = metadata.get("refractory_ms")
         units = metadata.get("units", "V")
-
-        # spike_times is already extracted above
         num_spikes = len(spike_times) if spike_times is not None else 0
 
-        results_str = "--- Spike Detection Results ---\n"
+        display_items = []
         if threshold is not None:
-            results_str += f"Threshold: {threshold:.3f} {units}\n"
+            display_items.append(("Threshold", f"{threshold:.3f} {units}"))
         if refractory_ms is not None:
-            results_str += f"Refractory: {refractory_ms:.2f} ms\n"
-        results_str += f"\nDetected Spikes: {num_spikes}\n"
+            display_items.append(("Refractory", f"{refractory_ms:.2f} ms"))
+        display_items.append(("Detected Spikes", str(num_spikes)))
 
         if num_spikes > 0:
             rate = metadata.get("average_firing_rate_hz")
             if rate:
-                results_str += f"Avg Firing Rate: {rate:.2f} Hz\n"
+                display_items.append(("Avg Firing Rate", f"{rate:.2f} Hz"))
 
             isi_mean = metadata.get("isi_mean_ms")
             isi_std = metadata.get("isi_std_ms")
             if isi_mean:
-                results_str += f"ISI: {isi_mean:.2f} ± {isi_std:.2f} ms\n"
-
-            results_str += "\n--- Feature Averages ---\n"
+                display_items.append(("ISI", f"{isi_mean:.2f} ± {isi_std:.2f} ms"))
 
             # Helper to add feature stats
             def add_stat(label, key_prefix, unit):
                 mean = metadata.get(f"{key_prefix}_mean")
                 std = metadata.get(f"{key_prefix}_std")
                 if mean is not None:
-                    nonlocal results_str
-                    results_str += f"{label}: {mean:.2f} ± {std:.2f} {unit}\n"
+                    display_items.append((label, f"{mean:.2f} ± {std:.2f} {unit}"))
 
             add_stat("Amplitude", "amplitude", "mV")
             add_stat("Half-Width", "half_width", "ms")
@@ -212,7 +212,10 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
             add_stat("AHP Duration", "ahp_duration", "ms")
             add_stat("ADP Amp", "adp_amplitude", "mV")
 
-        self.results_text.setText(results_str)
+        self.results_table.setRowCount(len(display_items))
+        for row, (k, v) in enumerate(display_items):
+            self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))
+            self.results_table.setItem(row, 1, QtWidgets.QTableWidgetItem(v))
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         # Use parent's stored result from _on_analysis_result

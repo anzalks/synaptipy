@@ -771,3 +771,18 @@ class AnalyserTab(QtWidgets.QWidget):
 
     # --- State Persistence ---
     # Methods removed as splitter is no longer used in this version of AnalyserTab
+
+    def reset_current_tab_parameters(self):
+        """Resets the parameters of the currently active analysis sub-tab."""
+        current_tab = self.sub_tab_widget.currentWidget()
+        if current_tab:
+            if hasattr(current_tab, "reset_parameters"):
+                current_tab.reset_parameters()
+                log.info(f"Reset parameters for {current_tab.get_display_name()}")
+                # Status bar update via parent if available?
+                # self.window().statusBar().showMessage("Parameters reset.", 3000)
+            else:
+                 log.warning(f"Tab '{current_tab.get_display_name()}' does not support parameter reset.")
+                 QtWidgets.QMessageBox.information(self, "Not Supported", 
+                                                 f"Reset is not supported for {current_tab.get_display_name()}.")
+

@@ -150,6 +150,15 @@ def calculate_fi_curve(
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "refractory_ms",
+            "label": "Refractory (ms):",
+            "type": "float",
+            "default": 2.0,
+            "min": 0.0,
+            "max": 1000.0,
+            "decimals": 2,
+        },
     ],
 )
 def run_excitability_analysis_wrapper(
@@ -199,8 +208,10 @@ def run_excitability_analysis_wrapper(
         num_sweeps = len(data_list)
         current_steps = [start_current + i * step_current for i in range(num_sweeps)]
 
+        refractory_ms = kwargs.get("refractory_ms", 2.0)
+
         results = calculate_fi_curve(
-            sweeps=data_list, time_vectors=time_list, current_steps=current_steps, threshold=threshold
+            sweeps=data_list, time_vectors=time_list, current_steps=current_steps, threshold=threshold, refractory_ms=refractory_ms
         )
 
         if "error" in results:

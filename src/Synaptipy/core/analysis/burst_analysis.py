@@ -14,7 +14,11 @@ log = logging.getLogger(__name__)
 
 
 def calculate_bursts_logic(
-    spike_times: np.ndarray, max_isi_start: float = 0.01, max_isi_end: float = 0.2, min_spikes: int = 2
+    spike_times: np.ndarray,
+    max_isi_start: float = 0.01,
+    max_isi_end: float = 0.2,
+    min_spikes: int = 2,
+    parameters: Dict[str, Any] = None,
 ) -> BurstResult:
     """
     Detects bursts in a spike train (Pure Logic).
@@ -38,6 +42,7 @@ def calculate_bursts_logic(
             burst_duration_avg=0.0,
             burst_freq_hz=0.0,
             bursts=[],
+            parameters=parameters or {},
         )
 
     isis = np.diff(spike_times)
@@ -67,7 +72,7 @@ def calculate_bursts_logic(
     # Calculate stats
     num_bursts = len(bursts)
     if num_bursts == 0:
-        return BurstResult(value=0, unit="bursts", is_valid=True, burst_count=0, bursts=[])
+        return BurstResult(value=0, unit="bursts", is_valid=True, burst_count=0, bursts=[], parameters=parameters or {})
 
     spikes_per_burst = [len(b) for b in bursts]
     burst_durations = [b[-1] - b[0] for b in bursts]
@@ -84,6 +89,7 @@ def calculate_bursts_logic(
         burst_duration_avg=np.mean(burst_durations),
         burst_freq_hz=burst_freq,
         bursts=bursts,
+        parameters=parameters or {},
     )
 
 
@@ -95,13 +101,14 @@ def analyze_spikes_and_bursts(
     max_isi_start: float,
     max_isi_end: float,
     refractory_ms: float = 2.0,
+    parameters: Dict[str, Any] = None,
 ) -> BurstResult:
     """
     Orchestration: Detects spikes then detects bursts.
     """
     refractory_samples = int((refractory_ms / 1000.0) * sampling_rate)
 
-    spike_result = detect_spikes_threshold(data, time, threshold, refractory_samples)
+    spike_result = detect_spikes_threshold(data, time, threshold, refractory_samples, parameters=parameters)
 
     if not spike_result.is_valid:
         res = BurstResult(value=0, unit="bursts", is_valid=False, error_message=spike_result.error_message)
@@ -111,7 +118,9 @@ def analyze_spikes_and_bursts(
     if spike_result.spike_times is None:
         return BurstResult(value=0, unit="bursts", is_valid=True, burst_count=0, bursts=[])
 
-    return calculate_bursts_logic(spike_result.spike_times, max_isi_start=max_isi_start, max_isi_end=max_isi_end)
+    return calculate_bursts_logic(
+        spike_result.spike_times, max_isi_start=max_isi_start, max_isi_end=max_isi_end, parameters=parameters
+    )
 
 
 @AnalysisRegistry.register(
@@ -144,6 +153,14 @@ def analyze_spikes_and_bursts(
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "min_spikes",
+            "label": "Min Spikes:",
+            "type": "int",
+            "default": 2,
+            "min": 2,
+            "max": 1000,
+        },
     ],
 )
 def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
@@ -163,6 +180,7 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
         threshold=threshold,
         max_isi_start=max_isi_start,
         max_isi_end=max_isi_end,
+        parameters=kwargs,
     )
 
     # 3. Flattener (Result -> Dict)
