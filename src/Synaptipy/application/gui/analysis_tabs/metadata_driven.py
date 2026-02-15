@@ -70,29 +70,53 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.global_controls_layout = QtWidgets.QVBoxLayout()
         control_layout.addLayout(self.global_controls_layout)
 
-        # Hook for subclasses to add controls (e.g. Method Selector)
-        self._setup_additional_controls(control_layout)
 
-        # Channel Selection (Standard for all tabs)
-        # Use BaseAnalysisTab's setup method for universal selection (Channel + Data Source)
+
+        # Channel Selection & Data Source (Standard for all tabs)
         self._setup_data_selection_ui(control_layout)
 
-        # self.signal_channel_combobox = QtWidgets.QComboBox()
-        # self.signal_channel_combobox.currentIndexChanged.connect(self._on_channel_changed)
-        # control_layout.addWidget(QtWidgets.QLabel("Signal Channel:"))
-        # control_layout.addWidget(self.signal_channel_combobox)
+        # --- Preprocessing Widget ---
+        # Explicitly place it here (after Data Source, before Params)
+        if self.preprocessing_widget:
+            control_layout.addWidget(self.preprocessing_widget)
+            self.preprocessing_widget.setVisible(True)
 
         # Parameters Group
         params_group = QtWidgets.QGroupBox("Parameters")
-        self.params_layout = QtWidgets.QFormLayout(params_group)
+        # Use a VBoxLayout for the group to stack permanent and generated layouts
+        params_group_layout = QtWidgets.QVBoxLayout(params_group)
 
-        # Use ParameterWidgetGenerator
+        # 1. Permanent/Custom Controls Layout (Hook for subclasses)
+        self.permanent_params_layout = QtWidgets.QFormLayout()
+        params_group_layout.addLayout(self.permanent_params_layout)
+
+        # Separator (Optional)
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        params_group_layout.addWidget(line)
+
+        # 2. Generated Parameters Layout
+        self.generated_params_layout = QtWidgets.QFormLayout()
+        params_group_layout.addLayout(self.generated_params_layout)
+
+        # Use ParameterWidgetGenerator on the GENERATED layout
         from Synaptipy.application.gui.ui_generator import ParameterWidgetGenerator
 
-        self.param_generator = ParameterWidgetGenerator(self.params_layout)
+        self.param_generator = ParameterWidgetGenerator(self.generated_params_layout)
 
         ui_params = self.metadata.get("ui_params", [])
         self.param_generator.generate_widgets(ui_params, self._on_param_changed)
+
+        # Hook for subclasses to add extra controls (e.g. Method Selector)
+        # We pass the PERMANENT params layout so they are NOT deleted by generator updates
+        self._setup_additional_controls(self.permanent_params_layout)
+        
+        # 3. Reset Button
+        reset_btn = QtWidgets.QPushButton("Reset Parameters")
+        reset_btn.setToolTip("Reset all parameters to default values")
+        reset_btn.clicked.connect(self.reset_parameters)
+        params_group_layout.addWidget(reset_btn)
 
         control_layout.addWidget(params_group)
 
@@ -103,10 +127,22 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # We don't know the result keys ahead of time, so we'll add them dynamically
         # or we could add a text area for generic output
-        self.results_text = QtWidgets.QTextEdit()
-        self.results_text.setReadOnly(True)
-        self.results_text.setMaximumHeight(150)
-        self.results_layout.addRow(self.results_text)
+        # self.results_text = QtWidgets.QTextEdit()
+        # self.results_text.setReadOnly(True)
+        # self.results_text.setMaximumHeight(150)
+        # self.results_layout.addRow(self.results_text)
+        
+        self.results_table = QtWidgets.QTableWidget()
+        self.results_table.setColumnCount(2)
+        self.results_table.setHorizontalHeaderLabels(["Metric", "Value"])
+        self.results_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.results_table.verticalHeader().setVisible(False)
+        self.results_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.results_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setMaximumHeight(200)
+        self.results_layout.addRow(self.results_table)
 
         control_layout.addWidget(results_group)
 
@@ -143,8 +179,22 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self.plot_widget.showGrid(x=True, y=True)
             self._setup_custom_plot_items()
 
-    def _setup_additional_controls(self, layout: QtWidgets.QVBoxLayout):
-        """Hook for subclasses to add extra controls (e.g., method selector)."""
+    def reset_parameters(self):
+        """Reset generated parameters to defaults defined in metadata."""
+        if hasattr(self, "param_generator") and self.metadata:
+            ui_params = self.metadata.get("ui_params", [])
+            # Re-generating widgets will reset them to defaults
+            self.param_generator.generate_widgets(ui_params, self._on_param_changed)
+            # Also notify any changes
+            self._on_param_changed()
+
+        # If subclass has custom logic for reset (e.g. RinTab logic), trigger it
+        if hasattr(self, "_on_channel_changed"):
+             # Re-apply mode logic
+             self._on_channel_changed()
+
+    def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
+        """Hook for subclasses to add extra controls (e.g., method selector) to the Parameters form."""
         pass
 
     def _setup_custom_plot_items(self):
@@ -249,33 +299,61 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         Display analysis results in text area.
         Implements abstract method from BaseAnalysisTab.
         """
-        if not self.results_text:
+        if not self.results_table:
             return
 
-        # Display text results
-        text_output = []
-
-        # robust extraction of items
-        items = []
-        if isinstance(results, dict):
-            items = list(results.items())
-        elif hasattr(results, "__dict__"):
-            items = [(k, v) for k, v in results.__dict__.items() if not k.startswith("_")]
-        else:
-            # Fallback
-            text_output.append(str(results))
-
-        for k, v in items:
-            if isinstance(v, (float, int)):
-                text_output.append(f"{k}: {v:.4g}")
-            elif isinstance(v, list):
-                text_output.append(f"{k}: {len(v)} items")
-            elif isinstance(v, np.ndarray):
-                text_output.append(f"{k}: Array shape {v.shape}")
+        try:
+            # robust extraction of items
+            items = []
+            if isinstance(results, dict):
+                items = list(results.items())
+            elif hasattr(results, "__dict__"):
+                items = [(k, v) for k, v in results.__dict__.items() if not k.startswith("_")]
             else:
-                text_output.append(f"{k}: {str(v)}")
+                # Fallback
+                items = [("Result", str(results))]
 
-        self.results_text.setText("\n".join(text_output))
+            # Filter out complex objects like arrays for the simple table view
+            display_items = []
+            for k, v in items:
+                try:
+                    # Sanitize Key
+                    key_str = str(k).replace("_", " ").title()
+                    
+                    # Sanitize Value
+                    if isinstance(v, (np.ndarray, list, dict)) and not isinstance(v, (float, int, str, bool)):
+                        # Skip large arrays or complex nested dicts in the summary table
+                        # or show a summary string
+                        if isinstance(v, (list, np.ndarray)):
+                             val_str = f"{type(v).__name__} (len={len(v)})"
+                        else:
+                             val_str = str(type(v))
+                    elif isinstance(v, float):
+                        val_str = f"{v:.4g}"
+                    else:
+                        val_str = str(v)
+                    
+                    display_items.append((key_str, val_str))
+                except Exception as e:
+                    log.warning(f"Skipping result item {k}: {e}")
+                    continue
+
+            self.results_table.setRowCount(len(display_items))
+            self.results_table.setColumnCount(2) # Ensure column count
+            
+            for row, (k, v) in enumerate(display_items):
+                key_item = QtWidgets.QTableWidgetItem(k)
+                val_item = QtWidgets.QTableWidgetItem(v)
+                
+                self.results_table.setItem(row, 0, key_item)
+                self.results_table.setItem(row, 1, val_item)
+                
+        except Exception as e:
+            log.error(f"Error displaying results: {e}")
+            # Fallback to simple popup if table fails
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Error"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("See Logs"))
 
 # Export key class (But do NOT export ANALYSIS_TAB_CLASS as this class requires arguments)
 # ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab

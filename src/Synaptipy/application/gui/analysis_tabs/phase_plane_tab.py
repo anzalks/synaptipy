@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtCore
+from PySide6 import QtCore, QtWidgets
 
 from .metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
@@ -136,21 +136,34 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
             self.max_dvdt_marker.setData([], [])
 
     def _display_analysis_results(self, result: Dict[str, Any]):
-        """Display results in text edit."""
-        if not result:
-            self.results_text.setText("Analysis failed.")
+        """Display results in table."""
+        if not self.results_table:
             return
 
-        threshold_v = result.get("threshold_v")
-        max_dvdt = result.get("max_dvdt")
+        if isinstance(result, dict) and "result" in result:
+             result_data = result["result"]
+        else:
+             result_data = result
 
-        text = "--- Phase Plane Analysis ---\n"
+        if not result_data:
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("Analysis Failed"))
+            return
+
+        threshold_v = result_data.get("threshold_v")
+        max_dvdt = result_data.get("max_dvdt")
+        
+        display_items = []
         if threshold_v is not None:
-            text += f"Threshold: {threshold_v:.2f} mV\n"
+             display_items.append(("Threshold", f"{threshold_v:.2f} mV"))
         if max_dvdt is not None:
-            text += f"Max dV/dt: {max_dvdt:.2f} V/s\n"
-
-        self.results_text.setText(text)
+             display_items.append(("Max dV/dt", f"{max_dvdt:.2f} V/s"))
+             
+        self.results_table.setRowCount(len(display_items))
+        for row, (k, v) in enumerate(display_items):
+            self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))
+            self.results_table.setItem(row, 1, QtWidgets.QTableWidgetItem(v))
 
 
 # Export the class for dynamic loading

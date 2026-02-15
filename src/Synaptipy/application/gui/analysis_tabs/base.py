@@ -98,7 +98,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # --- END ADDED ---
 
         # --- ADDED: Preprocessing State ---
-        self.preprocessing_widget: Optional[PreprocessingWidget] = None
+        # self.preprocessing_widget initialized below
         self._preprocessed_data: Optional[Dict[str, Any]] = None  # Cached preprocessed data
         self._is_preprocessing: bool = False
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None  # Persist settings
@@ -108,6 +108,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # --- ADDED: Global Analysis Window ---
         self.analysis_region: Optional[pg.LinearRegionItem] = None
         self.restrict_analysis_checkbox: Optional[QtWidgets.QCheckBox] = None
+        # --- END ADDED ---
+
+        # --- ADDED: Preprocessing Widget Init ---
+        # Initialize early so it's available for layout placement by subclasses
+        self.preprocessing_widget = PreprocessingWidget()
+        self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
         # --- END ADDED ---
         
         # --- PHASE 1: Data Selection and Plotting ---
@@ -278,7 +284,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # 2. Handle Combo Widget
         if self._global_combo_group is None:
             # Create container
-            self._global_combo_group = QtWidgets.QGroupBox("Analyze Item")
+            # RENAME: "Analyze Item" -> "Selected File"
+            self._global_combo_group = QtWidgets.QGroupBox("Selected File")
             layout_inner = QtWidgets.QVBoxLayout(self._global_combo_group)
             layout_inner.setContentsMargins(5, 5, 5, 5)
             # Insert after source group
@@ -288,19 +295,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._global_combo_group.layout().addWidget(item_combo)
         item_combo.setVisible(True)
 
-        # 3. Handle Preprocessing Widget (Inject below Analyze Item)
-        if not hasattr(self, "preprocessing_widget") or self.preprocessing_widget is None:
-            self.preprocessing_widget = PreprocessingWidget()
-            self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
-            layout.insertWidget(2, self.preprocessing_widget)
-            log.debug(f"{self.__class__.__name__}: Created and injected PreprocessingWidget.")
-        else:
-            # Ensure it's visible if it was hidden or reused
-            self.preprocessing_widget.setVisible(True)
-            # Ensure it's in the layout at the right spot?
-            # If we created it, it stays in the layout unless removed.
-            # But if we switch tabs, we want to make sure it's valid.
-
+        # REMOVED: Preprocessing Widget Injection
+        # We now rely on subclasses to place self.preprocessing_widget explicitly
+        # where they want it (between Data Source and Params usually).
+        
         log.debug(f"{self.__class__.__name__}: Global controls injected/reparented.")
 
     # --- Preprocessing Logic (Pipeline Integrated) ---

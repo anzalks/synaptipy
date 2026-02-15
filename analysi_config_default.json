@@ -1,0 +1,73 @@
+{
+    "burst_analysis": {
+        "threshold": -20.0,
+        "max_isi_start": 0.01,
+        "max_isi_end": 0.1,
+        "min_spikes": 2
+    },
+    "event_detection_baseline_peak": {
+        "direction": "negative",
+        "auto_baseline": true,
+        "threshold_sd_factor": 3.0,
+        "baseline_window_s": 0.5,
+        "baseline_step_s": 0.1
+    },
+    "event_detection_deconvolution": {
+        "tau_rise_ms": 0.5,
+        "tau_decay_ms": 5.0,
+        "threshold_sd": 4.0,
+        "min_event_separation_ms": 2.0,
+        "filter_freq_hz": 0.0
+    },
+    "event_detection_threshold": {
+        "threshold": 5.0,
+        "direction": "negative"
+    },
+    "excitability_analysis": {
+        "threshold": -20.0,
+        "start_current": 0.0,
+        "step_current": 10.0,
+        "refractory_ms": 2.0
+    },
+    "mini_detection": {
+        "threshold": 5.0,
+        "direction": "negative"
+    },
+    "phase_plane_analysis": {
+        "sigma_ms": 0.1,
+        "dvdt_threshold": 20.0,
+        "spike_threshold": -20.0,
+        "search_window_ms": 5.0
+    },
+    "rin_analysis": {
+        "current_amplitude": -50.0,
+        "voltage_step": -10.0,
+        "auto_detect_pulse": true,
+        "baseline_start": 0.0,
+        "baseline_end": 0.1,
+        "response_start": 0.3,
+        "response_end": 0.4
+    },
+    "rmp_analysis": {
+        "baseline_start": 0.0,
+        "baseline_end": 0.1,
+        "auto_detect": false,
+        "window_duration": 0.5,
+        "step_duration": 0.1
+    },
+    "spike_detection": {
+        "threshold": -20.0,
+        "refractory_period": 0.002,
+        "peak_search_window": 0.005,
+        "dvdt_threshold": 20.0,
+        "ahp_window": 0.05,
+        "onset_lookback": 0.01
+    },
+    "tau_analysis": {
+        "stim_start_time": 0.1,
+        "fit_duration": 0.05,
+        "tau_model": "mono",
+        "tau_bound_min": 0.0001,
+        "tau_bound_max": 1.0
+    }
+}

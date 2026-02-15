@@ -19,6 +19,7 @@ def calculate_rin(
     current_amplitude: float,  # Assume user provides this (e.g., in pA)
     baseline_window: Tuple[float, float],
     response_window: Tuple[float, float],
+    parameters: Dict[str, Any] = None,
 ) -> RinResult:
     """
     Calculates Input Resistance (Rin) from a voltage trace response to a current step.
@@ -38,7 +39,10 @@ def calculate_rin(
     """
     if current_amplitude == 0:
         log.warning("Cannot calculate Rin: Current amplitude is zero.")
-        return RinResult(value=None, unit="MOhm", is_valid=False, error_message="Current amplitude is zero")
+        return RinResult(
+            value=None, unit="MOhm", is_valid=False, error_message="Current amplitude is zero",
+            parameters=parameters or {}
+        )
 
     try:
         # Find indices for baseline and response windows
@@ -47,13 +51,19 @@ def calculate_rin(
 
         if not np.any(baseline_mask) or not np.any(response_mask):
             log.warning("Cannot calculate Rin: Time windows yielded no data points.")
-            return RinResult(value=None, unit="MOhm", is_valid=False, error_message="No data in windows")
+            return RinResult(
+                value=None, unit="MOhm", is_valid=False, error_message="No data in windows", parameters=parameters or {}
+            )
 
         # Calculate mean baseline and response voltages
         baseline_voltage = np.mean(voltage_trace[baseline_mask])
         response_voltage = np.mean(voltage_trace[response_mask])
 
-        delta_v = response_voltage - baseline_voltage
+        if np.isclose(response_voltage, baseline_voltage):
+            # Handle case where response equals baseline
+            delta_v = 0.0
+        else:
+            delta_v = response_voltage - baseline_voltage
         # Calculate Rin as magnitude (always positive) since resistance is a scalar property
         # Rin = |delta_V| / |delta_I|
         rin = abs(delta_v) / (abs(current_amplitude) / 1000.0)  # V=IR -> R = V/I. If V is mV, I is pA. We want MOhm.
@@ -73,14 +83,20 @@ def calculate_rin(
             current_injection=current_amplitude,
             baseline_voltage=baseline_voltage,
             steady_state_voltage=response_voltage,
+            parameters=parameters or {},
         )
 
     except IndexError:
         log.exception("IndexError during Rin calculation. Check trace/time vector alignment and window validity.")
-        return RinResult(value=None, unit="MOhm", is_valid=False, error_message="IndexError during calculation")
+        return RinResult(
+            value=None, unit="MOhm", is_valid=False, error_message="IndexError during calculation",
+            parameters=parameters or {}
+        )
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Rin calculation: {e}")
-        return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
+        return RinResult(
+            value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {}
+        )
 
 
 def calculate_conductance(
@@ -89,6 +105,7 @@ def calculate_conductance(
     voltage_step: float,  # Delta V in mV
     baseline_window: Tuple[float, float],
     response_window: Tuple[float, float],
+    parameters: Dict[str, Any] = None,
 ) -> RinResult:
     """
     Calculates Conductance (G) from a current trace response to a voltage step.
@@ -107,7 +124,9 @@ def calculate_conductance(
     """
     if voltage_step == 0:
         log.warning("Cannot calculate Conductance: Voltage step is zero.")
-        return RinResult(value=None, unit="MOhm", is_valid=False, error_message="Voltage step is zero")
+        return RinResult(
+            value=None, unit="MOhm", is_valid=False, error_message="Voltage step is zero", parameters=parameters or {}
+        )
 
     try:
         # Find indices
@@ -116,7 +135,9 @@ def calculate_conductance(
 
         if not np.any(baseline_mask) or not np.any(response_mask):
             log.warning("Cannot calculate Conductance: Time windows yielded no data points.")
-            return RinResult(value=None, unit="MOhm", is_valid=False, error_message="No data in windows")
+            return RinResult(
+                value=None, unit="MOhm", is_valid=False, error_message="No data in windows", parameters=parameters or {}
+            )
 
         # Calculate mean baseline and response currents
         baseline_current = np.mean(current_trace[baseline_mask])
@@ -150,11 +171,14 @@ def calculate_conductance(
             current_injection=delta_i,
             baseline_voltage=None,  # Not applicable for current trace
             steady_state_voltage=None,  # Not applicable
+            parameters=parameters or {},
         )
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Conductance calculation: {e}")
-        return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e))
+        return RinResult(
+            value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {}
+        )
 
 
 def _exp_growth(t, V_ss, V_0, tau):
@@ -246,7 +270,6 @@ def calculate_tau(
                 log.warning("Not enough data for bi-exponential fit (need >= 6).")
                 return None
 
-            delta_v = V_ss_guess - V_0
             # Initial guesses: split amplitude 60/40 fast/slow
             A_fast_guess = 0.6 * (V_0 - V_ss_guess)
             A_slow_guess = 0.4 * (V_0 - V_ss_guess)
@@ -495,13 +518,24 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                 f"Response=[{response_start:.3f}, {response_end:.3f}]"
             )
 
+        # Prepare params dict
+        params = {
+            "current_amplitude": current_amplitude,
+            "voltage_step": voltage_step,
+            "auto_detect_pulse": auto_detect_pulse,
+            "baseline_window": (baseline_start, baseline_end),
+            "response_window": (response_start, response_end),
+        }
+
         if is_voltage_clamp:
             result = calculate_conductance(
-                data, time, voltage_step, (baseline_start, baseline_end), (response_start, response_end)
+                data, time, voltage_step, (baseline_start, baseline_end), (response_start, response_end),
+                parameters=params
             )
         else:
             result = calculate_rin(
-                data, time, current_amplitude, (baseline_start, baseline_end), (response_start, response_end)
+                data, time, current_amplitude, (baseline_start, baseline_end), (response_start, response_end),
+                parameters=params
             )
 
         if result.is_valid and result.value is not None:
@@ -548,7 +582,7 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         {
             "name": "tau_model",
             "label": "Model:",
-            "type": "combo",
+            "type": "choice",
             "default": "mono",
             "options": ["mono", "bi"],
         },

@@ -38,6 +38,7 @@ from Synaptipy.shared.error_handling import (
     UnsupportedFormatError,
     SynaptipyFileNotFoundError,
 )
+from Synaptipy.core.signal_processor import validate_sampling_rate
 
 # Apply Patches
 try:
@@ -116,10 +117,19 @@ class NeoAdapter:
     """
 
     def _get_neo_io_class(self, filepath: Path) -> Type:  # Use generic Type hint
-        """Determines appropriate neo IO class using the predefined IODict."""
+        """Determines appropriate neo IO class using neo.io.get_io first, then fallback to IODict."""
         if not filepath.is_file():
             raise SynaptipyFileNotFoundError(f"File not found: {filepath}")
 
+        # Priority 1: Let Neo decide (Robust discovery)
+        try:
+            io_instance = neo.io.get_io(str(filepath))
+            log.debug(f"neo.io.get_io detected class: {io_instance.__class__.__name__}")
+            return io_instance.__class__
+        except Exception as e:
+            log.debug(f"neo.io.get_io failed to detect IO for {filepath}: {e}. Falling back to extension map.")
+
+        # Priority 2: Fallback to extension-based lookup (IODict)
         extension = filepath.suffix.lower().lstrip(".")
         log.debug(f"Attempting to find IO for extension: '{extension}'")
 
@@ -155,10 +165,6 @@ class NeoAdapter:
 
         try:
             io_class = getattr(nIO, selected_io_name)
-            # Optional check (can be removed if causing issues):
-            # if not (isinstance(io_class, type) and hasattr(nIO, 'baseio') and issubclass(io_class,
-            # nIO.baseio.BaseIO)):
-            #      log.warning(f"'{selected_io_name}' found via getattr but might not be a valid Neo IO class.")
             return io_class
         except AttributeError:
             log.error(
@@ -362,7 +368,8 @@ class NeoAdapter:
         recording.source_handle = source_handle
 
         # Stage 1: Discover ALL potential channels from the header first.
-        channel_metadata_map = self._discover_channels_from_header(reader)
+        num_segments = len(block.segments)
+        channel_metadata_map = self._discover_channels_from_header(reader, num_segments, lazy)
 
         # Helper map for SourceHandle: id -> {signal_index, offset}
         # We populate this during the first segment scan or iteratively
@@ -421,7 +428,7 @@ class NeoAdapter:
 
     # --- Refactored Helper Methods ---
 
-    def _discover_channels_from_header(self, reader) -> Dict[str, Dict]:
+    def _discover_channels_from_header(self, reader, num_segments: int, lazy: bool) -> Dict[str, Dict]:
         """Stage 1: Discover ALL potential channels from the header first."""
         channel_metadata_map: Dict[str, Dict] = {}
         header_channels = (
@@ -453,10 +460,12 @@ class NeoAdapter:
 
                 map_key = f"id_{ch_id}"
                 if map_key not in channel_metadata_map:
+                    # Pre-allocate data_trials list if not lazy
+                    data_trials_list = [None] * num_segments if not lazy else []
                     channel_metadata_map[map_key] = {
                         "id": ch_id,
                         "name": ch_name,
-                        "data_trials": [],
+                        "data_trials": data_trials_list,
                     }
 
             log.debug(f"Discovered {len(channel_metadata_map)} channels from header.")
@@ -509,11 +518,17 @@ class NeoAdapter:
 
             # Ensure entry exists
             if map_key not in channel_metadata_map:
+                # Dynamic discovery fallback (shouldn't happen often with strict header read)
+                # If we discover a channel late, we can't easily pre-allocate without knowing total segments here
+                # So we might fallback to append, or assume handled. 
+                # For safety, initialize with empty list or pre-filled if we knew num_segments.
+                # Since we don't pass num_segments here easily, let's just use append for fallback.
                 channel_metadata_map[map_key] = {
                     "id": anasig_id,
                     "name": f"Channel {anasig_id}",
                     "data_trials": [],
                 }
+                log.warning(f"Channel {anasig_id} discovered late (not in header). Pre-allocation skipped.")
 
             # --- Populate Handle Map ---
             if handle_map is not None and anasig_id not in handle_map:
@@ -538,7 +553,13 @@ class NeoAdapter:
                 channel_metadata_map[map_key]["num_trials"] += 1
             else:
                 signal_data = np.array(anasig.magnitude).ravel()
-                channel_metadata_map[map_key]["data_trials"].append(signal_data)
+                # Use direct assignment to pre-allocated slot if possible
+                trials_list = channel_metadata_map[map_key]["data_trials"]
+                if seg_idx < len(trials_list):
+                    trials_list[seg_idx] = signal_data
+                else:
+                    # Fallback if list was short (e.g. late discovery)
+                    trials_list.append(signal_data)
 
             # Metadata Extraction (First encounter)
             if "sampling_rate" not in channel_metadata_map[map_key]:
@@ -550,6 +571,8 @@ class NeoAdapter:
                             "t_start": float(anasig.t_start),
                         }
                     )
+                    # Phase 4: Validate sampling rate
+                    validate_sampling_rate(float(anasig.sampling_rate))
                 except Exception:
                     pass
 

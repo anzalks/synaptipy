@@ -175,7 +175,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.preferences_action = edit_menu.addAction("&Preferences...")
         self.preferences_action.setShortcut(QtGui.QKeySequence.StandardKey.Preferences)
         self.preferences_action.setToolTip("Open application preferences")
+        # Force it to appear in Edit menu on macOS (disable auto-move to App menu)
+        self.preferences_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.preferences_action.triggered.connect(self._show_preferences)
+
+        edit_menu.addSeparator()
+
+        # Configure Analysis Defaults Action
+        self.configure_analysis_action = edit_menu.addAction("&Configure Analysis Defaults...")
+        self.configure_analysis_action.setToolTip("Open the global analysis configuration dialog")
+        # Also ensure this doesn't get moved strangely
+        self.configure_analysis_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.configure_analysis_action.triggered.connect(self._show_analysis_config)
 
         # --- View Menu ---
         view_menu = menu_bar.addMenu("&View")
@@ -370,15 +381,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 try:
                     from Synaptipy.shared.plot_customization import update_plot_pens
 
-                    # Check if analyser_tab is a QTabWidget
-                    if hasattr(self.analyser_tab, "count"):
+                    # Check if analyser_tab has _loaded_analysis_tabs (AnalyserTab is QWidget)
+                    if hasattr(self.analyser_tab, "_loaded_analysis_tabs"):
+                        for analysis_widget in self.analyser_tab._loaded_analysis_tabs:
+                            if hasattr(analysis_widget, "plot_widget"):
+                                update_plot_pens([analysis_widget.plot_widget])
+                                log.debug(f"Updated plot pens for analysis tab: {analysis_widget.get_display_name()}")
+                    # Fallback for legacy QTabWidget structure
+                    elif hasattr(self.analyser_tab, "count"):
                         for i in range(self.analyser_tab.count()):
                             analysis_widget = self.analyser_tab.widget(i)
                             if hasattr(analysis_widget, "plot_widget"):
                                 update_plot_pens([analysis_widget.plot_widget])
                                 log.debug(f"Updated plot pens for analysis tab {i}")
                     else:
-                        # analyser_tab might be a single widget
+                        # analyser_tab might be a single widget (unlikely now but safe fallback)
                         if hasattr(self.analyser_tab, "plot_widget"):
                             update_plot_pens([self.analyser_tab.plot_widget])
                             log.debug("Updated plot pens for single analysis tab")
@@ -411,16 +428,44 @@ class MainWindow(QtWidgets.QMainWindow):
             log.error(f"Failed to show preferences dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open preferences:\n{e}")
 
+    def _show_analysis_config(self):
+        """Show the global analysis configuration dialog."""
+        try:
+            from .analysis_config_dialog import AnalysisConfigDialog
+            dialog = AnalysisConfigDialog(self)
+            if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+                # If accepted, we might want to notify active tabs to refresh if they are using defaults
+                # But typically defaults apply to NEW actions or Reset.
+                # Just log for now.
+                log.info("Global analysis defaults updated.")
+                self.status_bar.showMessage("Global analysis defaults updated.", 3000)
+        except Exception as e:
+            log.error(f"Failed to show analysis config dialog: {e}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open configuration:\n{e}")
+
     def _show_popup_windows(self):
         """Show/restore all popup windows from analysis tabs."""
         log.debug("Show popup windows action triggered")
 
         popup_count = 0
 
-        # Check if analyser_tab exists and has tabs
+        # Check if analyser_tab exists
         if hasattr(self, "analyser_tab") and self.analyser_tab:
-            # AnalyserTab is a QTabWidget containing analysis tabs
-            if hasattr(self.analyser_tab, "count"):
+            # Check for _loaded_analysis_tabs list (AnalyserTab is QWidget now)
+            if hasattr(self.analyser_tab, "_loaded_analysis_tabs"):
+                for analysis_tab in self.analyser_tab._loaded_analysis_tabs:
+                    if hasattr(analysis_tab, "_popup_windows"):
+                        for popup in analysis_tab._popup_windows:
+                            if popup and not popup.isVisible():
+                                popup.show()
+                                popup_count += 1
+                            elif popup and popup.isVisible():
+                                # Bring to front if already visible
+                                popup.raise_()
+                                popup.activateWindow()
+                                popup_count += 1
+            # Fallback for legacy QTabWidget structure
+            elif hasattr(self.analyser_tab, "count"):
                 for i in range(self.analyser_tab.count()):
                     analysis_tab = self.analyser_tab.widget(i)
                     if hasattr(analysis_tab, "_popup_windows"):
