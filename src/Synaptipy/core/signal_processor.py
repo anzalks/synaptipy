@@ -44,7 +44,7 @@ def validate_sampling_rate(fs: float) -> bool:
     return True
 
 
-def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any]:
+def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any]:  # noqa: C901
     """
     Assess the quality of a recording trace.
 
@@ -158,7 +158,7 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
 def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple:
     """
     Common validation for all filter functions.
-    
+
     Returns:
         (is_valid, data_or_error_msg)
         If valid: (True, data)
@@ -168,28 +168,28 @@ def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple
     if data is None or len(data) == 0:
         log.warning("Empty data provided to filter. Returning unchanged.")
         return False, data if data is not None else np.array([])
-    
+
     # Sampling rate check
     if fs <= 0:
         log.error(f"Sampling rate must be positive, got {fs}")
         return False, data
-    
+
     # Order validation
     if order < 1 or order > 10:
         log.warning(f"Filter order {order} outside recommended range [1, 10]. Clamping.")
         order = max(1, min(10, order))
-    
+
     # NaN/Inf check
     if np.any(np.isnan(data)) or np.any(np.isinf(data)):
         log.warning("Data contains NaN or Inf values. Returning unchanged.")
         return False, data
-    
+
     # Minimum length check for filtfilt (needs at least 3*order samples)
     min_length = 3 * order + 1
     if len(data) < min_length:
         log.warning(f"Data too short ({len(data)} samples) for filter order {order}. Need at least {min_length}.")
         return False, data
-    
+
     return True, data
 
 
@@ -197,14 +197,14 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
     """
     Apply a Butterworth bandpass filter to the data.
     Uses Second Order Sections (SOS) for numerical stability.
-    
+
     Args:
         data: Input signal array
         lowcut: Low cutoff frequency in Hz
         highcut: High cutoff frequency in Hz
         fs: Sampling frequency in Hz
         order: Filter order (1-10, default 5)
-    
+
     Returns:
         Filtered data, or original data if filtering fails
     """
@@ -217,7 +217,7 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
     is_valid, result = _validate_filter_input(data, fs, order)
     if not is_valid:
         return result
-    
+
     # Clamp order
     order = max(1, min(10, order))
 
@@ -250,13 +250,13 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     """
     Apply a Butterworth lowpass filter.
     Uses Second Order Sections (SOS) for numerical stability.
-    
+
     Args:
         data: Input signal array
         cutoff: Cutoff frequency in Hz
         fs: Sampling frequency in Hz
         order: Filter order (1-10, default 5)
-    
+
     Returns:
         Filtered data, or original data if filtering fails
     """
@@ -269,7 +269,7 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     is_valid, result = _validate_filter_input(data, fs, order)
     if not is_valid:
         return result
-    
+
     # Clamp order
     order = max(1, min(10, order))
 
@@ -295,13 +295,13 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
     """
     Apply a Butterworth highpass filter.
     Uses Second Order Sections (SOS) for numerical stability.
-    
+
     Args:
         data: Input signal array
         cutoff: Cutoff frequency in Hz
         fs: Sampling frequency in Hz
         order: Filter order (1-10, default 5)
-    
+
     Returns:
         Filtered data, or original data if filtering fails
     """
@@ -314,7 +314,7 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
     is_valid, result = _validate_filter_input(data, fs, order)
     if not is_valid:
         return result
-    
+
     # Clamp order
     order = max(1, min(10, order))
 
@@ -340,13 +340,13 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
     """
     Apply a notch filter to remove a specific frequency.
     Uses SOS format via zpk2sos for numerical stability.
-    
+
     Args:
         data: Input signal array
         freq: Notch frequency in Hz
         Q: Quality factor (higher = narrower notch)
         fs: Sampling frequency in Hz
-    
+
     Returns:
         Filtered data, or original data if filtering fails
     """
@@ -367,7 +367,7 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
     if freq_norm <= 0 or freq_norm >= 1:
         log.warning(f"Notch frequency {freq} Hz out of bounds for fs={fs} Hz. Returning original.")
         return data
-    
+
     # Q factor validation
     if Q <= 0:
         log.warning(f"Q factor must be positive, got {Q}. Using Q=30.")

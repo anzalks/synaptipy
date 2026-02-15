@@ -323,7 +323,7 @@ def detect_events_deconvolution_custom(
             "label": "Filter Freq (Hz):",
             "type": "float",
             "default": 0.0,
-            "min": 0.0, 
+            "min": 0.0,
             "max": 100000.0,
             "decimals": 1,
         },

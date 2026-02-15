@@ -22,6 +22,7 @@ __copyright__ = "Copyright 2024-, Anzal KS"
 __maintainer__ = "Anzal KS"
 __email__ = "anzalks@ncbs.res.in"
 
+import sys
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Tuple
@@ -228,7 +229,7 @@ class NeoAdapter:
                     all_exts.add(ext.lower())
         return sorted(list(all_exts))
 
-    def _extract_axon_metadata(
+    def _extract_axon_metadata(  # noqa: C901
         self, reader: nIO.AxonIO
     ) -> Tuple[Optional[str], Optional[float]]:
         """Extracts protocol name and estimated injected current range specifically for AxonIO."""
@@ -316,7 +317,7 @@ class NeoAdapter:
 
         return protocol_name, injected_current
 
-    def read_recording(
+    def read_recording(  # noqa: C901
         self,
         filepath: Path,
         lazy: bool = False,
@@ -473,7 +474,7 @@ class NeoAdapter:
             log.debug(f"Discovered {len(channel_metadata_map)} channels from header.")
         return channel_metadata_map
 
-    def _process_segment_signals(
+    def _process_segment_signals(  # noqa: C901
         self,
         segment: neo.Segment,
         seg_idx: int,
@@ -523,7 +524,7 @@ class NeoAdapter:
             if map_key not in channel_metadata_map:
                 # Dynamic discovery fallback (shouldn't happen often with strict header read)
                 # If we discover a channel late, we can't easily pre-allocate without knowing total segments here
-                # So we might fallback to append, or assume handled. 
+                # So we might fallback to append, or assume handled.
                 # For safety, initialize with empty list or pre-filled if we knew num_segments.
                 # Since we don't pass num_segments here easily, let's just use append for fallback.
                 channel_metadata_map[map_key] = {
@@ -568,7 +569,7 @@ class NeoAdapter:
             if "sampling_rate" not in channel_metadata_map[map_key]:
                 try:
                     raw_fs = float(anasig.sampling_rate)
-                    
+
                     if force_kHz_to_Hz:
                         # Apply Correction
                         fs = raw_fs * 1000.0
@@ -585,22 +586,22 @@ class NeoAdapter:
                             "t_start": float(anasig.t_start),
                         }
                     )
-                    
+
                     # Phase 4: Validate sampling rate
                     # If forced, we assume the new 'fs' is correct and we skip the 'UnitError' check
                     # (though we might still want to warn if it's STILL low, but the explicit intent was to fix it)
-                    
+
                     # Phase 4: Identify Suspicious Sampling Rates
                     # If forced, we assume the new 'fs' is correct.
                     # Otherwise, if < 100Hz, we suspect unit mismatch (kHz vs Hz).
-                    
-                    is_valid = validate_sampling_rate(fs)
-                    
+
+                    validate_sampling_rate(fs)
+
                     if not force_kHz_to_Hz and fs < 100.0:
-                         # Strict Scientific Safety Rule:
-                         # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
-                         raise UnitError(f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
-                                         f"Check if units are in kHz.")
+                        # Strict Scientific Safety Rule:
+                        # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
+                        raise UnitError(f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
+                                        f"Check if units are in kHz.")
                 except UnitError:
                     raise
                 except Exception:

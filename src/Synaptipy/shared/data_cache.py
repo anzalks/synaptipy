@@ -23,10 +23,10 @@ class DataCache:
     """
     Singleton in-memory cache for Recording objects and Active Trace state.
     Enforces 'Single Source of Truth' for the current analysis context.
-    
+
     Thread-safe Singleton implementation.
     """
-    
+
     _instance = None
     _lock = threading.RLock()
 
@@ -41,23 +41,23 @@ class DataCache:
     def __init__(self, max_size: int = 10):
         """
         Initialize the data cache.
-        
+
         Args:
             max_size: Maximum number of recordings to cache (default: 10)
         """
         if self._initialized:
             return
-            
+
         with self._lock:
             if self._initialized:
                 return
             self.max_size = max_size
             self._cache: OrderedDict[Path, Recording] = OrderedDict()
-            
+
             # Active Trace State (Single Source of Truth for Live Analysis)
             # Tuple: (data_array, sampling_rate, metadata_dict)
             self._active_trace: Optional[Tuple[np.ndarray, float, Dict[str, Any]]] = None
-            
+
             self._initialized = True
             log.debug(f"Initialized DataCache Singleton with max_size={max_size}")
 
@@ -199,7 +199,7 @@ class DataCache:
         """
         Update the currently active trace data.
         This is the "Source of Truth" for Live Analysis independent of the UI.
-        
+
         Args:
             data: Numpy array of the trace data.
             fs: Sampling rate in Hz.
@@ -212,7 +212,7 @@ class DataCache:
     def get_active_trace(self) -> Optional[Tuple[np.ndarray, float, Dict[str, Any]]]:
         """
         Retrieve the currently active trace.
-        
+
         Returns:
             Tuple (data, fs, metadata) or None if not set.
         """

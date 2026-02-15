@@ -169,7 +169,7 @@ def detect_threshold_kink(
             "label": "Kink Slope:",
             "type": "float",
             "default": 10.0,
-            "hidden": True, 
+            "hidden": True,
         },
         {
             "name": "search_window_ms",
@@ -218,7 +218,12 @@ def phase_plane_analysis(
     spike_res = detect_spikes_threshold(voltage, time, spike_threshold, int(0.002 * sampling_rate))
 
     thresh_indices = detect_threshold_kink(
-        voltage, sampling_rate, dvdt_threshold=dvdt_threshold, kink_slope=kink_slope, search_window_ms=search_window_ms, peak_indices=spike_res.spike_indices
+        voltage,
+        sampling_rate,
+        dvdt_threshold=dvdt_threshold,
+        kink_slope=kink_slope,
+        search_window_ms=search_window_ms,
+        peak_indices=spike_res.spike_indices
     )
 
     threshold_vals = voltage[thresh_indices] if thresh_indices.size > 0 else []

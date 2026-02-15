@@ -86,6 +86,7 @@ All analysis features must be split into two distinct parts:
 * **Unused Imports**: Remove them. (Exception: `__init__.py` files).
 * **Command**: Before finalizing code, the Agent should verify with: `flake8 src tests`
 * **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures (0 errors allowed).
+* **Whitespace Hygiene**: Agents MUST inspect and fix all flake8 whitespace warnings (W293, W391, W504, etc.) before finishing a task. Codebase should be pristine.
 
 **2. Cross-Platform Compatibility (The "Windows" Rule)**
 * **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).

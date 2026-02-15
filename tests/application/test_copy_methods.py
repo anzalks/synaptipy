@@ -1,7 +1,7 @@
 
-import pytest
 from Synaptipy.application.controllers.analysis_formatter import generate_methods_text
 from Synaptipy.core.results import SpikeTrainResult
+
 
 def test_generate_methods_text_spike_detection():
     """Verify generated text contains key parameters."""
@@ -13,9 +13,9 @@ def test_generate_methods_text_spike_detection():
         mean_frequency=0.0,
         parameters=params
     )
-    
+
     text = generate_methods_text(result)
-    
+
     assert "voltage threshold crossing algorithm" in text
     assert "-20.0 mV" in text
     assert "2.00 ms" in text  # 0.002s converted to ms

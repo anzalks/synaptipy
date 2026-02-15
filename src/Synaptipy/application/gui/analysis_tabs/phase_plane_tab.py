@@ -62,7 +62,7 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
         self._ensure_custom_items_on_plot()
         super()._on_data_plotted()
 
-    def _plot_analysis_visualizations(self, results: Any):
+    def _plot_analysis_visualizations(self, results: Any):  # noqa: C901
         """
         Visualize Phase Plane results.
         Called by BaseAnalysisTab._on_analysis_result.
@@ -141,9 +141,9 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
             return
 
         if isinstance(result, dict) and "result" in result:
-             result_data = result["result"]
+            result_data = result["result"]
         else:
-             result_data = result
+            result_data = result
 
         if not result_data:
             self.results_table.setRowCount(1)
@@ -153,13 +153,13 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
 
         threshold_v = result_data.get("threshold_v")
         max_dvdt = result_data.get("max_dvdt")
-        
+
         display_items = []
         if threshold_v is not None:
-             display_items.append(("Threshold", f"{threshold_v:.2f} mV"))
+            display_items.append(("Threshold", f"{threshold_v:.2f} mV"))
         if max_dvdt is not None:
-             display_items.append(("Max dV/dt", f"{max_dvdt:.2f} V/s"))
-             
+            display_items.append(("Max dV/dt", f"{max_dvdt:.2f} V/s"))
+
         self.results_table.setRowCount(len(display_items))
         for row, (k, v) in enumerate(display_items):
             self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))

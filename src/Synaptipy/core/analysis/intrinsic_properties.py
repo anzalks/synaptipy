@@ -671,4 +671,3 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_tau_analysis_wrapper: {e}", exc_info=True)
         return {"tau_ms": None, "tau_error": str(e)}
-

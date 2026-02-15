@@ -104,7 +104,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None  # Persist settings
         # Pipeline
         self.pipeline = SignalProcessingPipeline()
-        
+
         # --- ADDED: Global Analysis Window ---
         self.analysis_region: Optional[pg.LinearRegionItem] = None
         self.restrict_analysis_checkbox: Optional[QtWidgets.QCheckBox] = None
@@ -119,7 +119,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.preprocessing_widget = PreprocessingWidget()
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
         # --- END ADDED ---
-        
+
         # --- PHASE 1: Data Selection and Plotting ---
         self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
         self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
@@ -302,11 +302,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # REMOVED: Preprocessing Widget Injection
         # We now rely on subclasses to place self.preprocessing_widget explicitly
         # where they want it (between Data Source and Params usually).
-        
+
         log.debug(f"{self.__class__.__name__}: Global controls injected/reparented.")
 
     # --- Preprocessing Logic (Pipeline Integrated) ---
-    def _handle_preprocessing_request(self, settings: Dict[str, Any]):
+    def _handle_preprocessing_request(self, settings: Dict[str, Any]):  # noqa: C901
         """
         Handle signal from PreprocessingWidget.
         Updates the pipeline and triggers re-plotting.
@@ -318,12 +318,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         self._is_preprocessing = True
-        
+
         # Store settings in slot format - merge with existing
         step_type = settings.get('type')
         if self._active_preprocessing_settings is None:
             self._active_preprocessing_settings = {}
-        
+
         if step_type == 'baseline':
             self._active_preprocessing_settings['baseline'] = settings
         elif step_type == 'filter':
@@ -366,16 +366,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             log.error(f"Failed to start preprocessing: {e}", exc_info=True)
             self._on_preprocessing_error(e)
 
-    def apply_global_preprocessing(self, settings):
+    def apply_global_preprocessing(self, settings):  # noqa: C901
         """
         Called by parent AnalyserTab to apply global preprocessing.
         Updates local state and re-plots if data is loaded.
-        
+
         Args:
             settings: Can be None (clear), a single step dict, or slot-based dict
         """
         log.debug(f"{self.__class__.__name__}: Applying global preprocessing: {settings is not None}")
-        
+
         if settings is None:
             # Reset all preprocessing
             self._active_preprocessing_settings = None
@@ -389,7 +389,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             step_type = settings.get('type')
             if self._active_preprocessing_settings is None:
                 self._active_preprocessing_settings = {}
-            
+
             if step_type == 'baseline':
                 self._active_preprocessing_settings['baseline'] = settings
             elif step_type == 'filter':
@@ -397,9 +397,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 if 'filters' not in self._active_preprocessing_settings:
                     self._active_preprocessing_settings['filters'] = {}
                 self._active_preprocessing_settings['filters'][filter_method] = settings
-            
+
             self._rebuild_pipeline_from_settings()
-        
+
         # Re-plot if we have data loaded
         if self._selected_item_recording is not None and self._current_plot_data:
             try:
@@ -461,7 +461,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.error(f"Preprocessing error: {error}")
         QtWidgets.QMessageBox.critical(self, "Processing Error", f"An error occurred:\n{error}")
 
-    def _apply_preprocessing_to_cached_data(self):
+    def _apply_preprocessing_to_cached_data(self):  # noqa: C901
         """Apply current pipeline to cached raw data and re-plot efficiently."""
         if not self._current_plot_data or "raw_data" not in self._current_plot_data:
             # Fallback to full re-plot if no cached data
@@ -562,7 +562,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             line_edit.setToolTip(tooltip)
         return line_edit
 
-    def _update_plot_pens_only(self):
+    def _update_plot_pens_only(self):  # noqa: C901
         """Efficiently update only the pen properties of existing plot items without recreating data."""
         if not self.plot_widget:
             return
@@ -629,14 +629,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # For now, rely on canvas.
 
         self.analysis_region = pg.LinearRegionItem(
-            values=[0, 0], orientation=pg.LinearRegionItem.Vertical, 
+            values=[0, 0], orientation=pg.LinearRegionItem.Vertical,
             brush=pg.mkBrush(0, 255, 0, 50), movable=True
         )
         self.analysis_region.setVisible(False)
         self.analysis_region.setZValue(-10)  # Behind data traces
         self.plot_widget.addItem(self.analysis_region)
         self.analysis_region.sigRegionChanged.connect(self._on_region_changed)
-        
+
         # Add the plot widget (GraphicsLayoutWidget) to layout
         layout.addWidget(self.plot_canvas.widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
@@ -995,12 +995,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _apply_global_preprocessing_from_parent(self):
         """Check parent AnalyserTab for global preprocessing and apply if active.
-        
+
         Falls back to checking SessionManager directly if parent doesn't have
         global preprocessing set yet (e.g., before popup confirmation).
         """
         global_settings = None
-        
+
         # First try parent AnalyserTab's global preprocessing
         parent = self.parent()
         while parent is not None:
@@ -1008,7 +1008,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 global_settings = parent.get_global_preprocessing()
                 break
             parent = parent.parent()
-        
+
         # Fallback: check SessionManager directly (for preprocessing set in Explorer
         # but not yet confirmed via popup in AnalyserTab)
         if not global_settings:
@@ -1020,7 +1020,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     log.debug(f"{self.__class__.__name__}: Using preprocessing from SessionManager")
             except Exception as e:
                 log.debug(f"Could not check SessionManager for preprocessing: {e}")
-        
+
         if global_settings:
             log.debug(f"{self.__class__.__name__}: Applying global preprocessing from parent")
             self._active_preprocessing_settings = global_settings
@@ -1534,13 +1534,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._plot_selected_data()
 
     @QtCore.Slot()
-    def _plot_selected_data(self):
+    def _plot_selected_data(self):  # noqa: C901
         """
         Centralized plotting method that fetches data based on selected channel and source,
         plots it, and calls the _on_data_plotted hook for subclass-specific additions.
         """
         log.debug(f"{self.__class__.__name__}: Plotting selected data")
-        
 
         if not self.plot_widget:
             log.error(f"{self.__class__.__name__}: Plot widget is None!")
@@ -1628,7 +1627,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # 4. Plot Main Trace
             # When average is selected, plot all trials underneath with transparency
             if plot_package.data_source == "average":
-                log.debug(f"[TRIAL-OVERLAY] data_source is 'average', plotting background trials")
+                log.debug("[TRIAL-OVERLAY] data_source is 'average', plotting background trials")
                 # Get indices used for this average
                 indices_to_plot = []
                 if hasattr(self, "_filtered_indices") and self._filtered_indices:
@@ -1902,7 +1901,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         return plot_widget
 
     # --- ADDED: Helper for Saving Results ---
-    def _request_save_result(self, specific_result_data: Dict[str, Any]):
+    def _request_save_result(self, specific_result_data: Dict[str, Any]):  # noqa: C901
         """
         Collects common metadata and calls MainWindow's method to save the result.
 

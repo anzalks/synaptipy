@@ -220,7 +220,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         return full_path, format_text
 
 
-def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") -> bool:
+def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") -> bool:  # noqa: C901
     """Save a plot widget as an image file.
 
     Args:

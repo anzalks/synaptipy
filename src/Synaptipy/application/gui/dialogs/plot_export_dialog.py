@@ -10,6 +10,7 @@ class PlotExportDialog(QtWidgets.QDialog):
     """
     Dialog to select export format and DPI.
     """
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Export Plot")

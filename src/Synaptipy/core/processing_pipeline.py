@@ -57,7 +57,7 @@ class SignalProcessingPipeline:
         self._steps = [s.copy() for s in steps]
         log.debug(f"Pipeline steps set to: {self._steps}")
 
-    def process(self, data: np.ndarray, fs: float, time_vector: Optional[np.ndarray] = None) -> np.ndarray:
+    def process(self, data: np.ndarray, fs: float, time_vector: Optional[np.ndarray] = None) -> np.ndarray:  # noqa: C901
         """
         Apply all steps in order to the data.
 

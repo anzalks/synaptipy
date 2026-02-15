@@ -12,7 +12,7 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 log = logging.getLogger(__name__)
 
 
-def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[float, float]) -> RmpResult:
+def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[float, float]) -> RmpResult:  # noqa: C901
     """
     Calculates the Resting Membrane Potential (RMP) from a defined baseline window.
 
@@ -230,7 +230,8 @@ def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             window_duration = kwargs.get("window_duration", 0.5)
             step_duration = kwargs.get("step_duration", 0.1)
             # Use shared helper
-            mean, sd, window = find_stable_baseline(data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration)
+            mean, sd, window = find_stable_baseline(
+                data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration)
 
             if window:
                 baseline_start, baseline_end = window

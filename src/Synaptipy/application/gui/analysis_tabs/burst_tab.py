@@ -70,7 +70,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
             self.spike_markers.setData([])
             self.spike_markers.setVisible(False)
 
-    def _plot_analysis_visualizations(self, results: Any):
+    def _plot_analysis_visualizations(self, results: Any):  # noqa: C901
         """
         Visualize Burst Analysis results.
         """

@@ -54,13 +54,13 @@ class AnalysisRunnable(QtCore.QRunnable):
             # Run Vectorized Detection
             # Note: We pass the params dict as 'parameters' to be stored in result
             result = detect_spikes_threshold(
-                self.data, 
-                time_vector, 
-                threshold, 
+                self.data,
+                time_vector,
+                threshold,
                 refractory_samples,
                 parameters={**self.params, **self.metadata}
             )
-            
+
             self.signals.result.emit(result)
 
         except Exception as e:
@@ -76,19 +76,19 @@ class LiveAnalysisController(QtCore.QObject):
 
     sig_analysis_finished = QtCore.Signal(object)  # SpikeTrainResult
     sig_analysis_error = QtCore.Signal(str)
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
         # Debounce Timer
         self.debounce_timer = QtCore.QTimer()
         self.debounce_timer.setSingleShot(True)
         self.debounce_timer.setInterval(50)  # 50ms wait
         self.debounce_timer.timeout.connect(self._execute_analysis)
-        
+
         # Store params only - Data comes from DataCache
         self._pending_params: Optional[Dict[str, Any]] = None
-        
+
         # Thread Pool
         self.thread_pool = QtCore.QThreadPool.globalInstance()
 
@@ -96,7 +96,7 @@ class LiveAnalysisController(QtCore.QObject):
         """
         Public slot to request a new analysis run.
         Resets the debounce timer.
-        
+
         Args:
             params: Analysis parameters (threshold, etc.)
         """
@@ -110,13 +110,13 @@ class LiveAnalysisController(QtCore.QObject):
         """
         cache = DataCache.get_instance()
         active_trace = cache.get_active_trace()
-        
+
         if not active_trace:
             log.debug("LiveAnalysis: No active trace in DataCache. Skipping.")
             return
 
         data, fs, metadata = active_trace
-        
+
         if data is None or len(data) == 0:
             return
 
@@ -127,15 +127,15 @@ class LiveAnalysisController(QtCore.QObject):
 
         # Prepare Runnable
         runnable = AnalysisRunnable(
-            data, 
-            fs, 
+            data,
+            fs,
             self._pending_params.copy(),
             metadata
         )
-        
+
         runnable.signals.result.connect(self._on_result)
         runnable.signals.error.connect(self.sig_analysis_error.emit)
-        
+
         self.thread_pool.start(runnable)
 
     def _on_result(self, result: SpikeTrainResult):

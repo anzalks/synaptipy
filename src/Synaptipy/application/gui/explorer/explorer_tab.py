@@ -26,7 +26,6 @@ from .plot_canvas import ExplorerPlotCanvas
 from .y_controls import ExplorerYControls
 from .toolbar import ExplorerToolbar
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
-from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 
 # --- Live Analysis ---
@@ -126,14 +125,14 @@ class ExplorerTab(QtWidgets.QWidget):
         self.config_panel = ExplorerConfigPanel()
         self.plot_canvas = ExplorerPlotCanvas()
         self.toolbar = ExplorerToolbar()
-        
+
         # Instantiate FileIOController
         self.file_io = FileIOController(
-            self, 
-            QtCore.QSettings(APP_NAME, SETTINGS_SECTION), 
+            self,
+            QtCore.QSettings(APP_NAME, SETTINGS_SECTION),
             self.neo_adapter
         )
-        
+
         self.sidebar = ExplorerSidebar(self.neo_adapter, self.file_io)
         self.y_controls = ExplorerYControls()
 
@@ -181,7 +180,7 @@ class ExplorerTab(QtWidgets.QWidget):
             event.accept()
         else:
             super().keyPressEvent(event)
-            
+
     # --- Navigation Interface for ShortcutManager ---
     def next_file(self):
         """Public interface for ShortcutManager."""
@@ -338,14 +337,14 @@ class ExplorerTab(QtWidgets.QWidget):
         try:
             if not self.current_recording:
                 return
-                
+
             # For simplicity in Explorer, we analyze the First Visible Channel's current trial
             target_cid = None
             for cid, plot in self.plot_canvas.channel_plots.items():
                 if plot.isVisible():
                     target_cid = cid
                     break
-            
+
             if target_cid is None:
                 return
 
@@ -357,63 +356,63 @@ class ExplorerTab(QtWidgets.QWidget):
             params = {
                 "threshold": self.config_panel.threshold_spin.value(),
                 # Convert ms -> s carefully to avoid ZeroDivision if 0 (though spinbox usually has min)
-                "refractory_period": self.config_panel.refractory_spin.value() / 1000.0, 
+                "refractory_period": self.config_panel.refractory_spin.value() / 1000.0,
                 "channel_id": target_cid,
                 "trial_index": self.current_trial_index
             }
-            
+
             self.live_controller.request_analysis(params)
-            
+
         except Exception as e:
             log.error(f"Failed to prepare live analysis request: {e}")
 
     def _on_live_analysis_finished(self, result: SpikeTrainResult):
         """Handle new analysis result: Draw Red Dots."""
-        # 1. Check if result matches current view context? 
-        # (Controller cancels old ones, but we should verify channel/trial if possible, 
+        # 1. Check if result matches current view context?
+        # (Controller cancels old ones, but we should verify channel/trial if possible,
         # but parameters dict has it).
-        
+
         cid = result.parameters.get("channel_id")
         trial_idx = result.parameters.get("trial_index")
-        
+
         # Verify context match to avoid flashing wrong dots
         if trial_idx != self.current_trial_index:
-             return
-        
+            return
+
         item_key = f"spikes_{cid}"
-        
+
         # 2. Update Plot
         # We need to access the plot item.
         if cid in self.plot_canvas.channel_plots:
             plot_item = self.plot_canvas.channel_plots[cid]
-            
+
             # Remove old scatter if stored
             # We need a place to store the scatter item reference.
             # We can store it in a dict on ExplorerTab: self.active_scatter_items = {}
             if not hasattr(self, "active_scatter_items"):
                 self.active_scatter_items = {}
-            
+
             if item_key in self.active_scatter_items:
                 plot_item.removeItem(self.active_scatter_items[item_key])
-            
+
             if result.spike_times is not None and len(result.spike_times) > 0:
                 # Get Y-values for the dots. trace[spike_indices]
                 # But we only have times/indices. We need the data again?
-                # Or we can just plot at Threshold level? 
+                # Or we can just plot at Threshold level?
                 # Plotting at Threshold level is good for visualization.
                 threshold = result.parameters.get("threshold", 0)
-                
-                # Or better: plot on the trace? 
+
+                # Or better: plot on the trace?
                 # To plot on trace, we need data.
                 # Let's plot at Threshold for now as it shows the crossing clearly.
                 y_vals = np.full(len(result.spike_times), threshold)
-                
+
                 scatter = pg.ScatterPlotItem(
-                    x=result.spike_times, 
-                    y=y_vals, 
-                    pen=pg.mkPen(None), 
-                    brush=pg.mkBrush('r'), 
-                    size=10, 
+                    x=result.spike_times,
+                    y=y_vals,
+                    pen=pg.mkPen(None),
+                    brush=pg.mkBrush('r'),
+                    size=10,
                     pxMode=True
                 )
                 plot_item.addItem(scatter)
@@ -425,7 +424,7 @@ class ExplorerTab(QtWidgets.QWidget):
         """Worker function to read file."""
         return neo_adapter.read_recording(filepath, lazy=lazy, channel_whitelist=whitelist, force_kHz_to_Hz=force_units)
 
-    def load_recording_data(
+    def load_recording_data(  # noqa: C901
         self,
         filepath: Path,
         file_list: List[Path] = None,
@@ -436,7 +435,7 @@ class ExplorerTab(QtWidgets.QWidget):
     ):
         """
         Loads the recording data in a background thread.
-        
+
         Args:
             filepath: Path to the file.
             file_list: Optional list of sibling files for navigation.
@@ -522,12 +521,12 @@ class ExplorerTab(QtWidgets.QWidget):
         """Background task: Load file AND run quality check."""
         # 1. Load
         rec = adapter.read_recording(filepath)
-        
+
         # 2. Quality Check (on first channel or all?)
         # For 'Traffic Light', checking the first channel is usually enough for a quick indicator
         # unless it is empty.
         metrics = {"is_good": True, "warnings": []}
-        
+
         if rec and rec.channels:
             # Pick first channel
             first_ch = list(rec.channels.values())[0]
@@ -539,28 +538,28 @@ class ExplorerTab(QtWidgets.QWidget):
                     metrics = check_trace_quality(data, first_ch.sampling_rate)
             except Exception as e:
                 metrics = {"is_good": False, "error": str(e), "warnings": ["Quality check failed"]}
-        
+
         return rec, metrics
 
     def _on_file_load_success(self, result_tuple):
         # Unpack result
         if isinstance(result_tuple, tuple):
-             recording, metrics = result_tuple
+            recording, metrics = result_tuple
         else:
-             recording = result_tuple
-             metrics = {}
+            recording = result_tuple
+            metrics = {}
 
         self._display_recording(recording)
         self.session_manager.current_recording = recording
-        
+
         # Update Sidebar Indicator
         if recording and recording.source_file:
             self.sidebar.update_file_quality(recording.source_file, metrics)
-            
+
             # Also Auto-Trigger Live Analysis on load?
             # self._request_live_analysis() # Maybe too aggressive/slow
 
-    def _display_recording(self, recording: Recording):
+    def _display_recording(self, recording: Recording):  # noqa: C901
         if not recording:
             return
         self.current_recording = recording
@@ -704,7 +703,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.plot_canvas.widget:
             self.plot_canvas.widget.update()
 
-    def _update_plot(self):
+    def _update_plot(self):  # noqa: C901
         """Standard plot update."""
         if not self.current_recording or not self.plot_canvas.channel_plots:
             return
@@ -733,7 +732,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 if plot.isVisible():
                     primary_cid = cid
                     break
-            
+
             if primary_cid and self.current_recording:
                 # Get data for current trial
                 ch = self.current_recording.channels.get(primary_cid)
@@ -742,20 +741,20 @@ class ExplorerTab(QtWidgets.QWidget):
                         raw_data = ch.get_data(self.current_trial_index)
                         t_vec = ch.get_relative_time_vector(self.current_trial_index)
                         fs = ch.sampling_rate
-                        
+
                         # Apply Pipeline
                         proc_data = self.pipeline.process(raw_data, fs, time_vector=t_vec)
-                        
+
                         # Push to Cache
                         DataCache.get_instance().set_active_trace(
-                            proc_data, 
-                            fs, 
+                            proc_data,
+                            fs,
                             metadata={"channel_id": primary_cid, "trial_index": self.current_trial_index}
                         )
                     except Exception as e:
                         log.warning(f"Failed to push active trace to DataCache: {e}")
             else:
-                 DataCache.get_instance().clear_active_trace()
+                DataCache.get_instance().clear_active_trace()
 
             # 0. Preserve View State if possible
             view_state = {}
@@ -914,7 +913,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 pass
         self.plot_canvas.selected_average_plot_items.clear()
 
-    def update_plot_pens(self):
+    def update_plot_pens(self):  # noqa: C901
         """Update plot pens when customization preferences change."""
         # Prevent re-entrant calls
         if getattr(self, "_is_updating_pens", False):
@@ -995,7 +994,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._is_loading = False
         self.loading_overlay.hide()
         self.status_bar.showMessage(f"Error loading {filepath.name}", 5000)
-        
+
         error_msg = str(error)
         log.error(f"File load error: {error_msg}", exc_info=True)
 
@@ -1004,13 +1003,13 @@ class ExplorerTab(QtWidgets.QWidget):
             reply = QtWidgets.QMessageBox.question(
                 self,
                 "Ambiguous Units Detected",
-                f"The sampling rate is < 100Hz.\n\n"
-                f"This often means the file was recorded in kHz but read as Hz.\n"
-                f"Do you want to auto-convert it to Hz (multiply by 1000)?",
+                "The sampling rate is < 100Hz.\n\n"
+                "This often means the file was recorded in kHz but read as Hz.\n"
+                "Do you want to auto-convert it to Hz (multiply by 1000)?",
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.Cancel,
                 QtWidgets.QMessageBox.StandardButton.Yes
             )
-            
+
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
                 log.info(f"User requested Unit Correction for {filepath.name}")
                 # Re-trigger load with force_units=True
@@ -1018,7 +1017,10 @@ class ExplorerTab(QtWidgets.QWidget):
                 QtCore.QTimer.singleShot(100, lambda: self.load_recording_data(filepath, force_units=True))
                 return
 
-        QtWidgets.QMessageBox.critical(self, "Load Error", f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}")
+        QtWidgets.QMessageBox.critical(
+            self,
+            "Load Error",
+            f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}")
 
     def _finalize_loading_state(self):
         self._is_loading = False
@@ -1293,7 +1295,7 @@ class ExplorerTab(QtWidgets.QWidget):
         step_type = settings.get('type')
         if self._active_preprocessing_settings is None:
             self._active_preprocessing_settings = {}
-        
+
         # Store in slot format (baseline slot + filters dict keyed by method)
         if step_type == 'baseline':
             self._active_preprocessing_settings['baseline'] = settings
@@ -1343,10 +1345,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self._cache_dirty = True
         self._active_preprocessing_settings = None  # Clear slot-based settings
         self.pipeline.clear()  # Clear pipeline
-        
+
         # Notify SessionManager
         self.session_manager.preprocessing_settings = None
-        
+
         self._update_plot()
 
         # Auto-range to fit raw data
@@ -1466,7 +1468,6 @@ class ExplorerTab(QtWidgets.QWidget):
             # Silence excessive logging or only log if changed significantly
         # log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
 
-
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
                     continue
@@ -1538,7 +1539,7 @@ class ExplorerTab(QtWidgets.QWidget):
         finally:
             self._updating_viewranges = False
 
-    def _on_vb_y_range_changed(self, chan_id, new_range):
+    def _on_vb_y_range_changed(self, chan_id, new_range):  # noqa: C901
         if self._updating_viewranges:
             return
         self._updating_viewranges = True

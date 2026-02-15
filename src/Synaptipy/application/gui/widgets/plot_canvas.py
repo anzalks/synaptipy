@@ -93,7 +93,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             plot_item.getViewBox().sigYRangeChanged.connect(
                 lambda _, range: self.y_range_changed.emit(plot_id, range)
             )
-        
+
         # Apply consistent theme to axis colors, labels, etc.
         try:
             from Synaptipy.shared.plot_customization import apply_plot_theme

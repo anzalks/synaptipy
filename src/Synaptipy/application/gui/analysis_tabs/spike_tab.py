@@ -107,7 +107,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         # CRITICAL: Call parent to trigger analysis and enable save button
         super()._on_data_plotted()
 
-    def _plot_analysis_visualizations(self, results: Any):
+    def _plot_analysis_visualizations(self, results: Any):  # noqa: C901
         """
         Visualize spike detection results.
         Called by BaseAnalysisTab._on_analysis_result.
@@ -156,7 +156,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
             self.threshold_line.setValue(threshold)
             self.threshold_line.setVisible(True)
 
-    def _display_analysis_results(self, result: Any):
+    def _display_analysis_results(self, result: Any):  # noqa: C901
         """Display spike detection results in table."""
         if not self.results_table:
             return
@@ -244,7 +244,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
             if isinstance(widget, QtWidgets.QDoubleSpinBox):
                 widget.setValue(new_val)
             widget.blockSignals(signals_blocked)
-            
+
             # Manually trigger parameter change callback
             if hasattr(self, "_on_param_changed"):
                 self._on_param_changed()

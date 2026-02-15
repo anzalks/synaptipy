@@ -171,7 +171,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     def _setup_analysis_controls(self, parent_layout):
         group = QtWidgets.QGroupBox("Live Analysis")
         layout = QtWidgets.QFormLayout(group)
-        
+
         # Threshold
         self.threshold_spin = QtWidgets.QDoubleSpinBox()
         self.threshold_spin.setRange(-1000.0, 1000.0)
@@ -179,7 +179,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         self.threshold_spin.setSuffix(" mV")
         self.threshold_spin.valueChanged.connect(self.threshold_changed.emit)
         layout.addRow("Threshold:", self.threshold_spin)
-        
+
         # Refractory
         self.refractory_spin = QtWidgets.QDoubleSpinBox()
         self.refractory_spin.setRange(0.0, 100.0)
@@ -188,7 +188,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         self.refractory_spin.setSingleStep(0.1)
         self.refractory_spin.valueChanged.connect(self.refractory_changed.emit)
         layout.addRow("Refractory:", self.refractory_spin)
-        
+
         parent_layout.addWidget(group)
 
     def _setup_file_info(self, parent_layout):

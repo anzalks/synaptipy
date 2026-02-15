@@ -70,8 +70,6 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.global_controls_layout = QtWidgets.QVBoxLayout()
         control_layout.addLayout(self.global_controls_layout)
 
-
-
         # Channel Selection & Data Source (Standard for all tabs)
         self._setup_data_selection_ui(control_layout)
 
@@ -111,7 +109,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Hook for subclasses to add extra controls (e.g. Method Selector)
         # We pass the PERMANENT params layout so they are NOT deleted by generator updates
         self._setup_additional_controls(self.permanent_params_layout)
-        
+
         # 3. Reset Button
         reset_btn = QtWidgets.QPushButton("Reset Parameters")
         reset_btn.setToolTip("Reset all parameters to default values")
@@ -131,7 +129,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # self.results_text.setReadOnly(True)
         # self.results_text.setMaximumHeight(150)
         # self.results_layout.addRow(self.results_text)
-        
+
         self.results_table = QtWidgets.QTableWidget()
         self.results_table.setColumnCount(2)
         self.results_table.setHorizontalHeaderLabels(["Metric", "Value"])
@@ -190,8 +188,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # If subclass has custom logic for reset (e.g. RinTab logic), trigger it
         if hasattr(self, "_on_channel_changed"):
-             # Re-apply mode logic
-             self._on_channel_changed()
+            # Re-apply mode logic
+            self._on_channel_changed()
 
     def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
         """Hook for subclasses to add extra controls (e.g., method selector) to the Parameters form."""
@@ -239,7 +237,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if not self._selected_item_recording:
             if self.plot_widget:
                 self.plot_widget.clear()
-        
+
         # Update visibility based on new item context
         self._update_parameter_visibility()
 
@@ -247,7 +245,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Handle channel selection change."""
         # Trigger visibility update (channel units might have changed)
         self._update_parameter_visibility()
-        
+
         # BaseAnalysisTab._plot_selected_data calls _on_data_plotted hook.
         # We can trigger analysis there.
         pass
@@ -258,30 +256,30 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return
 
         context = {}
-        
+
         # 1. Determine Clamp Mode
         # Logic: If channel units contain 'A' (Amps), it's Voltage Clamp (measuring Current)
         # If channel units contain 'V' (Volts), it's Current Clamp (measuring Voltage)
         # Default to Current Clamp if unknown
-        
+
         is_voltage_clamp = False
-        
+
         if self.signal_channel_combobox:
             # Get channel name string
             channel_name = self.signal_channel_combobox.currentData()
-            
+
             # Fetch channel object
             channel = None
             if channel_name and self._selected_item_recording and channel_name in self._selected_item_recording.channels:
                 channel = self._selected_item_recording.channels[channel_name]
-            
+
             if channel:
                 units = channel.units or "V"
                 if "A" in units or "amp" in units.lower():
                     is_voltage_clamp = True
-        
+
         context["clamp_mode"] = "voltage_clamp" if is_voltage_clamp else "current_clamp"
-        
+
         # Update generator
         self.param_generator.update_visibility(context)
 
@@ -331,7 +329,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             log.error(f"Analysis execution failed: {e}")
             raise
 
-    def _display_analysis_results(self, results: Dict[str, Any]):
+    def _display_analysis_results(self, results: Dict[str, Any]):  # noqa: C901
         """
         Display analysis results in text area.
         Implements abstract method from BaseAnalysisTab.
@@ -356,35 +354,35 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 try:
                     # Sanitize Key
                     key_str = str(k).replace("_", " ").title()
-                    
+
                     # Sanitize Value
                     if isinstance(v, (np.ndarray, list, dict)) and not isinstance(v, (float, int, str, bool)):
                         # Skip large arrays or complex nested dicts in the summary table
                         # or show a summary string
                         if isinstance(v, (list, np.ndarray)):
-                             val_str = f"{type(v).__name__} (len={len(v)})"
+                            val_str = f"{type(v).__name__} (len={len(v)})"
                         else:
-                             val_str = str(type(v))
+                            val_str = str(type(v))
                     elif isinstance(v, float):
                         val_str = f"{v:.4g}"
                     else:
                         val_str = str(v)
-                    
+
                     display_items.append((key_str, val_str))
                 except Exception as e:
                     log.warning(f"Skipping result item {k}: {e}")
                     continue
 
             self.results_table.setRowCount(len(display_items))
-            self.results_table.setColumnCount(2) # Ensure column count
-            
+            self.results_table.setColumnCount(2)  # Ensure column count
+
             for row, (k, v) in enumerate(display_items):
                 key_item = QtWidgets.QTableWidgetItem(k)
                 val_item = QtWidgets.QTableWidgetItem(v)
-                
+
                 self.results_table.setItem(row, 0, key_item)
                 self.results_table.setItem(row, 1, val_item)
-                
+
         except Exception as e:
             log.error(f"Error displaying results: {e}")
             # Fallback to simple popup if table fails

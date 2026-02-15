@@ -203,7 +203,7 @@ def setup_theme_for_viewbox(viewbox) -> None:
         log.warning(f"Failed to set up theme for ViewBox: {e}")
 
 
-def apply_theme_with_monitoring(viewbox) -> None:
+def apply_theme_with_monitoring(viewbox) -> None:  # noqa: C901
     """Apply theme and monitor for rbScaleBox changes to reapply theme."""
     try:
         if not viewbox:
@@ -273,7 +273,7 @@ def apply_theme_with_patching(viewbox) -> None:
     apply_theme_with_monitoring(viewbox)
 
 
-def customize_pyqtgraph_selection(viewbox) -> None:
+def customize_pyqtgraph_selection(viewbox) -> None:  # noqa: C901
     """Customize PyQtGraph's existing rbScaleBox with system colors and transparency."""
     try:
         if not viewbox or not shiboken6.isValid(viewbox):

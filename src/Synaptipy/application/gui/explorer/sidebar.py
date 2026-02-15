@@ -7,7 +7,7 @@ Handles file system navigation (tree view) and file list management.
 import logging
 from pathlib import Path
 from PySide6 import QtCore, QtWidgets, QtGui
-from typing import Dict, Optional # Added Dict
+from typing import Dict, Optional  # Added Dict
 from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -28,8 +28,8 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         self.file_io = file_io_controller
         self.file_model: Optional[QtWidgets.QFileSystemModel] = None
         self.file_tree: Optional[QtWidgets.QTreeView] = None
-        
-        self.setAcceptDrops(True) # Screen-level drop support
+
+        self.setAcceptDrops(True)  # Screen-level drop support
         self._setup_ui()
 
     def _setup_ui(self):
@@ -157,7 +157,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
             delegate = self.file_tree.itemDelegate()
             if isinstance(delegate, QualityDelegate):
                 delegate.update_status(file_path, metrics)
-                
+
                 # Retrieve index for the file path
                 idx = self.file_model.index(str(file_path))
 
@@ -179,38 +179,38 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
 
         urls = event.mimeData().urls()
         if not urls:
-             return
-             
+            return
+
         file_paths = []
         for url in urls:
             if url.isLocalFile():
                 file_paths.append(Path(url.toLocalFile()))
-        
+
         if not file_paths:
             return
-            
+
         # Pass rigid paths to FileIOController
         context = self.file_io.load_files(file_paths)
-        
+
         if context:
             # Unpack context: (primary, list, index, lazy)
             primary_file, file_list, index, lazy = context
             log.debug(f"Drop accepted. Loading {primary_file}")
-            
+
             # Emit signal to trigger loading in ExplorerTab
             self.file_selected.emit(primary_file, file_list, index)
-            
+
             # Also sync sidebar to show this file
             self.sync_to_file(primary_file)
-            
-        event.acceptProposedAction()
 
+        event.acceptProposedAction()
 
 
 class QualityDelegate(QtWidgets.QStyledItemDelegate):
     """
     Delegate to draw a small colored circle indicating signal quality next to the filename.
     """
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.quality_cache: Dict[Path, Dict] = {}
@@ -218,7 +218,7 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
         self.color_good = QtGui.QColor("#2ecc71")   # Green
         self.color_warn = QtGui.QColor("#f1c40f")   # Yellow
         self.color_bad = QtGui.QColor("#e74c3c")    # Red
-        self.color_unknown = QtGui.QColor("transparent") # Default
+        self.color_unknown = QtGui.QColor("transparent")  # Default
 
     def update_status(self, path: Path, metrics: dict):
         self.quality_cache[path] = metrics
@@ -231,10 +231,10 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
         model = index.model()
         if isinstance(model, QtWidgets.QFileSystemModel):
             file_path = Path(model.filePath(index))
-            
+
             if file_path in self.quality_cache:
                 info = self.quality_cache[file_path]
-                
+
                 # Determine Color
                 if not info.get("is_good", False):
                     color = self.color_bad
@@ -242,14 +242,14 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
                     color = self.color_warn
                 else:
                     color = self.color_good
-                
+
                 # Draw Circle
                 painter.save()
                 painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
                 painter.setPen(QtCore.Qt.PenStyle.NoPen)
                 painter.setBrush(color)
-                
-                # Position: Right side of the item rect, or left of text? 
+
+                # Position: Right side of the item rect, or left of text?
                 # FileSystemModel usually has Icon then Text.
                 # Let's draw it on the far right of the column (Name column 0)
                 # Or just to the left of the text if possible?
@@ -257,15 +257,15 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
                 # Let's put it at fixed offset from left, assuming standard icon size.
                 # Or better: Draw it on top of the icon? No.
                 # Let's draw it in the right padding of the text?
-                
+
                 # Simple approach: Draw a small circle at (rect.right() - 15, center_y)
                 radius = 4
                 cx = option.rect.right() - 15
                 cy = option.rect.center().y()
-                
-                if cx > option.rect.left(): # Only if visible
+
+                if cx > option.rect.left():  # Only if visible
                     painter.drawEllipse(QtCore.QPointF(cx, cy), radius, radius)
-                
+
                 painter.restore()
 
     def helpEvent(self, event, view, option, index):
@@ -276,17 +276,17 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
                 file_path = Path(model.filePath(index))
                 if file_path in self.quality_cache:
                     info = self.quality_cache[file_path]
-                    
+
                     tooltip = "<b>Signal Quality analysis:</b><br>"
                     if not info.get("is_good"):
                         tooltip += f"<font color='red'>ERROR: {info.get('error', 'Unknown')}</font><br>"
-                    
+
                     if info.get("warnings"):
                         tooltip += "<b>Warnings:</b><ul>"
                         for w in info['warnings']:
                             tooltip += f"<li>{w}</li>"
                         tooltip += "</ul>"
-                    
+
                     # Add drift info if available
                     if 'metrics' in info:
                         m = info['metrics']
@@ -297,5 +297,5 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
 
                     QtWidgets.QToolTip.showText(event.globalPos(), tooltip, view)
                     return True
-                    
+
         return super().helpEvent(event, view, option, index)

@@ -7,7 +7,7 @@ import logging
 import json
 from typing import Dict, Any, Optional
 
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets, QtCore  # noqa: F401
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.application.gui.ui_generator import ParameterWidgetGenerator
@@ -25,10 +25,10 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Analysis Configuration")
         self.resize(800, 600)
-        
+
         # Store widget generators to retrieve values
         self._generators: Dict[str, ParameterWidgetGenerator] = {}
-        
+
         self._setup_ui()
         self._populate_tabs()
 
@@ -50,7 +50,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
 
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
-        
+
         # IO Buttons
         self.save_btn = QtWidgets.QPushButton("Save Config...")
         self.save_btn.clicked.connect(self._save_configuration)
@@ -58,7 +58,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
         self.load_btn.clicked.connect(self._load_configuration)
         self.factory_btn = QtWidgets.QPushButton("Restore Factory Defaults")
         self.factory_btn.clicked.connect(self._restore_factory_defaults)
-        
+
         button_layout.addWidget(self.save_btn)
         button_layout.addWidget(self.load_btn)
         button_layout.addWidget(self.factory_btn)
@@ -70,7 +70,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
         )
         self.button_box.accepted.connect(self._on_accepted)
         self.button_box.rejected.connect(self.reject)
-        
+
         button_layout.addWidget(self.button_box)
         main_layout.addLayout(button_layout)
 
@@ -78,38 +78,38 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
         """Populate tabs with registered analyses."""
         self.tab_widget.clear()
         self._generators.clear()
-        
+
         # Get all registered analyses
         analysis_names = sorted(AnalysisRegistry.list_analysis())
-        
+
         for name in analysis_names:
             meta = AnalysisRegistry.get_metadata(name)
             ui_params = meta.get("ui_params", [])
-            
+
             if not ui_params:
                 continue
 
             # Create tab page
             page = QtWidgets.QWidget()
             layout = QtWidgets.QFormLayout(page)
-            
+
             # Use ParameterWidgetGenerator to create UI
             # We use a NEW generator for each tab
             generator = ParameterWidgetGenerator(layout)
-            generator.generate_widgets(ui_params, callback=None) # No callback needed for realtime updates here
-            
+            generator.generate_widgets(ui_params, callback=None)  # No callback needed for realtime updates here
+
             # Store generator to gather params later
             self._generators[name] = generator
-            
+
             # Add to tab widget
             # Use display name if available, else registered name
             display_name = name.replace("_", " ").title()
-            
+
             # Scroll area for long lists
             scroll = QtWidgets.QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setWidget(page)
-            
+
             self.tab_widget.addTab(scroll, display_name)
 
     def _gather_all_params(self) -> Dict[str, Dict[str, Any]]:
@@ -139,7 +139,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
     def _save_configuration(self):
         """Save current configuration to JSON."""
         config = self._gather_all_params()
-        
+
         file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save Analysis Configuration", "", "JSON Files (*.json)"
         )
@@ -164,10 +164,10 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
         try:
             with open(file_path, 'r') as f:
                 config = json.load(f)
-            
+
             # Apply to UI
             self._apply_to_ui(config)
-            
+
             QtWidgets.QMessageBox.information(self, "Success", "Configuration loaded. Click OK to apply.")
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to load configuration:\n{e}")
@@ -182,7 +182,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
     def _restore_factory_defaults(self):
         """Reset UI to factory defaults."""
         reply = QtWidgets.QMessageBox.question(
-            self, "Restore Defaults", 
+            self, "Restore Defaults",
             "Are you sure you want to restore all parameters to factory defaults?",
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
         )

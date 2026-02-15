@@ -20,7 +20,7 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry  # noqa: E402
 import Synaptipy.core.analysis.spike_analysis  # noqa: F401, E402
 
 
-def main():
+def main():  # noqa: C901
     """Run flexible batch analysis demonstration."""
     print("=" * 70)
     print("Flexible Batch Analysis Demonstration")

@@ -265,7 +265,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Connect Signals FROM Tabs TO MainWindow ---
         self.explorer_tab.open_file_requested.connect(self._open_file_dialog)
-        
+
         # Connect AnalyserTab load request
         if hasattr(self.analyser_tab, "load_file_requested"):
             self.analyser_tab.load_file_requested.connect(self._on_analyser_load_file_request)
@@ -352,7 +352,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Add logic here to update analyser tab plots if they exist
             pass
 
-    def _update_plot_pens_only(self):
+    def _update_plot_pens_only(self):  # noqa: C901
         """Update only plot pens when user changes preferences in dialog."""
         try:
             log.debug("=== UPDATING PLOT PENS ONLY ===")
@@ -443,7 +443,7 @@ class MainWindow(QtWidgets.QMainWindow):
             log.error(f"Failed to show analysis config dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open configuration:\n{e}")
 
-    def _show_popup_windows(self):
+    def _show_popup_windows(self):  # noqa: C901
         """Show/restore all popup windows from analysis tabs."""
         log.debug("Show popup windows action triggered")
 
@@ -617,7 +617,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.status_bar.showMessage("File open action cancelled or failed.", 3000)
 
     # CHANGE: Signature updated to reflect the arguments passed from the modified _open_file_dialog
-    def _load_in_explorer(
+    def _load_in_explorer(  # noqa: C901
         self, initial_filepath_to_load: Path, file_list: List[Path], current_index: int, lazy_load: bool
     ):
         """Initiates background loading of the initial file and stores context for completion."""
@@ -678,18 +678,18 @@ class MainWindow(QtWidgets.QMainWindow):
             if not file_path.exists():
                 QtWidgets.QMessageBox.warning(self, "File Not Found", f"The file could not be found:\n{file_path}")
                 return
-            
+
             log.debug(f"MainWindow received request to load: {file_path}")
-            
+
             # Use _load_in_explorer to handle the loading
             # Treat as single file context if not already in list, or just load it.
             # _load_in_explorer expects: initial_filepath, file_list, index, lazy_load
             self._load_in_explorer(file_path, [file_path], 0, False)
-            
+
         except Exception as e:
             log.error(f"Error handling analyser load request: {e}")
 
-    def _export_to_nwb(self):
+    def _export_to_nwb(self):  # noqa: C901
         """Handles exporting the current recording (from Explorer tab) to NWB."""
         log.debug("Export to NWB action triggered.")
         if not hasattr(self, "explorer_tab") or not self.explorer_tab:
@@ -811,9 +811,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 current_geometry = self.geometry()
                 # Check if window is mostly off-screen
                 visible_width = min(current_geometry.right(), available_geometry.right()) - \
-                               max(current_geometry.left(), available_geometry.left())
+                    max(current_geometry.left(), available_geometry.left())
                 visible_height = min(current_geometry.bottom(), available_geometry.bottom()) - \
-                                max(current_geometry.top(), available_geometry.top())
+                    max(current_geometry.top(), available_geometry.top())
 
                 # If less than 50% visible, reset to fit screen
                 if visible_width < current_geometry.width() * 0.5 or \
@@ -837,7 +837,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Theme preference restoration removed - preserving original UI appearance
 
-    def closeEvent(self, event: QtGui.QCloseEvent):
+    def closeEvent(self, event: QtGui.QCloseEvent):  # noqa: C901
         """Handles the main window close event, saving state."""
         log.debug("Close event received. Cleaning up and saving state...")
 
