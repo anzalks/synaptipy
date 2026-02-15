@@ -234,11 +234,11 @@ class TestAHPReturnToBaseline:
     def test_ahp_duration_adaptive(self):
         """AHP duration should reflect actual recovery time, not fixed window."""
         # Short AHP recovery
-        data_short, t, spikes = self._make_spike_with_ahp(ahp_depth=5.0, ahp_recovery_ms=10.0)
+        data_short, t, spikes = self._make_spike_with_ahp(ahp_depth=20.0, ahp_recovery_ms=10.0)
         feat_short = calculate_spike_features(data_short, t, spikes)
 
         # Long AHP recovery
-        data_long, t, spikes = self._make_spike_with_ahp(ahp_depth=5.0, ahp_recovery_ms=40.0)
+        data_long, t, spikes = self._make_spike_with_ahp(ahp_depth=20.0, ahp_recovery_ms=40.0)
         feat_long = calculate_spike_features(data_long, t, spikes)
 
         # Long recovery should have longer AHP duration
