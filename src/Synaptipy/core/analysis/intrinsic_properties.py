@@ -384,6 +384,7 @@ def calculate_sag_ratio(
             "min": -1e9,
             "max": 1e9,
             "decimals": 4,
+            "visible_when": {"context": "clamp_mode", "value": "current_clamp"},
         },
         {
             "name": "voltage_step",
@@ -393,6 +394,7 @@ def calculate_sag_ratio(
             "min": -1e9,
             "max": 1e9,
             "decimals": 4,
+            "visible_when": {"context": "clamp_mode", "value": "voltage_clamp"},
         },
         {"name": "auto_detect_pulse", "label": "Auto-Detect Pulse", "type": "bool", "default": True},
         {
@@ -490,8 +492,10 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             dv = np.diff(smoothed_data)
 
             # Find start (largest change)
-            # If current is negative (hyperpolarizing), we look for min dv, else max dv
-            if current_amplitude < 0:
+            # If step is negative (hyperpolarizing), we look for min dv, else max dv
+            is_negative_step = (current_amplitude < 0) or (current_amplitude == 0 and voltage_step < 0)
+
+            if is_negative_step:
                 start_idx = np.argmin(dv)
                 # For end, we look for the opposite change (max dv) after start
                 end_idx = start_idx + np.argmax(dv[start_idx:])
@@ -543,6 +547,7 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                 "rin_mohm": result.value,
                 "conductance_us": result.conductance if result.conductance is not None else 0.0,
                 "voltage_deflection_mv": result.voltage_deflection if result.voltage_deflection is not None else 0.0,
+                "current_injection_pa": result.current_injection if result.current_injection is not None else 0.0,
                 "baseline_voltage_mv": result.baseline_voltage if result.baseline_voltage is not None else 0.0,
                 "steady_state_voltage_mv": (
                     result.steady_state_voltage if result.steady_state_voltage is not None else 0.0

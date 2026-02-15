@@ -25,6 +25,7 @@ class ParameterWidgetGenerator:
         self.layout = parent_layout
         self.widgets: Dict[str, QtWidgets.QWidget] = {}
         self.callbacks: List[callable] = []
+        self.visibility_map: Dict[str, Dict[str, Any]] = {}
 
     def generate_widgets(self, ui_params: List[Dict[str, Any]], callback: Optional[callable] = None):
         """
@@ -101,6 +102,41 @@ class ParameterWidgetGenerator:
 
         self.layout.addRow(label, widget)
         self.widgets[name] = widget
+        
+        # Store visibility rule if present
+        if "visible_when" in param:
+            self.visibility_map[name] = {
+                "widget": widget,
+                "label": label if isinstance(label, QtWidgets.QWidget) else None, # We might need to track the label widget too if we want to hide it
+                "rule": param["visible_when"]
+            }
+
+    def update_visibility(self, context: Dict[str, Any]):
+        """
+        Update widget visibility based on context.
+        
+        Args:
+            context: Dictionary of current context variables (e.g., {"clamp_mode": "voltage_clamp"})
+        """
+        for name, info in self.visibility_map.items():
+            rule = info["rule"]
+            widget = info["widget"]
+            
+            # Simple equality check for now
+            # rule format: {"context": "key", "value": "expected_value"}
+            context_key = rule.get("context")
+            expected_value = rule.get("value")
+            
+            if context_key and context_key in context:
+                is_visible = context[context_key] == expected_value
+                
+                # Use FormLayout to hide the row (Label + Widget)
+                if isinstance(self.layout, QtWidgets.QFormLayout):
+                    self.layout.setRowVisible(widget, is_visible)
+                else:
+                    widget.setVisible(is_visible)
+                    if info["label"]:
+                        info["label"].setVisible(is_visible)
 
     def _on_param_changed(self):
         """Trigger registered callbacks."""
