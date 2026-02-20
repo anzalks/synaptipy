@@ -32,7 +32,7 @@ class RinAnalysisTab(MetadataDrivenAnalysisTab):
         )
 
     def get_display_name(self) -> str:
-        return "Resistance/Conductance"
+        return "Input Resistance"
 
     def get_covered_analysis_names(self) -> list[str]:
         return ["rin_analysis", "tau_analysis"]

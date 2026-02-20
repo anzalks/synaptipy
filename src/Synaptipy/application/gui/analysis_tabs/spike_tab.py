@@ -23,15 +23,15 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
     """
 
     def __init__(self, neo_adapter: NeoAdapter, settings_ref: Optional[QtCore.QSettings] = None, parent=None):
-        # Initialize with the specific analysis name "spike_detection"
-        super().__init__(
-            analysis_name="spike_detection", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent
-        )
-
         # Spike-specific plot items
         self.spike_markers_item: Optional[pg.ScatterPlotItem] = None
         self.threshold_line: Optional[pg.InfiniteLine] = None
         self._last_spike_result: Optional[Dict[str, Any]] = None
+
+        # Initialize with the specific analysis name "spike_detection"
+        super().__init__(
+            analysis_name="spike_detection", neo_adapter=neo_adapter, settings_ref=settings_ref, parent=parent
+        )
 
     def _setup_ui(self):
         """Setup UI and initialize plot items."""
@@ -61,7 +61,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
             self.threshold_line.sigPositionChangeFinished.connect(self._on_threshold_dragged)
 
     def get_display_name(self) -> str:
-        return "Spike Detection (Threshold)"
+        return "Spike Detection"
 
     # _setup_ui is inherited from MetadataDrivenAnalysisTab
     # _gather_analysis_parameters is inherited
@@ -128,29 +128,35 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         # Update Plot
         if hasattr(result_obj, "spike_indices") and result_obj.spike_indices is not None:
             spike_indices = result_obj.spike_indices
+            import numpy as np
+            spike_indices = np.array(spike_indices, dtype=int)
             if len(spike_indices) > 0 and self._current_plot_data:
                 times = self._current_plot_data["time"][spike_indices]
                 voltages = self._current_plot_data["data"][spike_indices]
 
                 if self.spike_markers_item:
-                    self.spike_markers_item.setData(times, voltages)
+                    self.spike_markers_item.setData(x=times, y=voltages)
                     self.spike_markers_item.setVisible(True)
         elif isinstance(result_obj, dict) and "spike_indices" in result_obj:
             spike_indices = result_obj["spike_indices"]
+            import numpy as np
+            spike_indices = np.array(spike_indices, dtype=int)
             if spike_indices is not None and len(spike_indices) > 0 and self._current_plot_data:
                 times = self._current_plot_data["time"][spike_indices]
                 voltages = self._current_plot_data["data"][spike_indices]
                 if self.spike_markers_item:
-                    self.spike_markers_item.setData(times, voltages)
+                    self.spike_markers_item.setData(x=times, y=voltages)
                     self.spike_markers_item.setVisible(True)
 
-        # Update threshold line from result metadata (in case it changed)
+        # Update threshold line from result parameters (in case it changed)
         threshold = None
-        if hasattr(result_obj, "metadata"):
+        if hasattr(result_obj, "parameters"):
+            threshold = result_obj.parameters.get("threshold")
+        elif hasattr(result_obj, "metadata"):
             threshold = result_obj.metadata.get("threshold")
         elif isinstance(result_obj, dict):
-            metadata = result_obj.get("metadata", {})
-            threshold = metadata.get("threshold")
+            params = result_obj.get("parameters", result_obj.get("metadata", {}))
+            threshold = params.get("threshold")
 
         if threshold is not None and self.threshold_line:
             self.threshold_line.setValue(threshold)
@@ -169,15 +175,27 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
 
         # Handle both object and dict
         if isinstance(result, dict):
-            metadata = result.get("metadata", {})
+            metadata = result.get("parameters", result.get("metadata", {}))
             spike_times = result.get("spike_times")
+            
+            # Extract flat stats if present
+            rate = result.get("mean_freq_hz", metadata.get("average_firing_rate_hz"))
+            isi_mean = result.get("isi_mean_ms", metadata.get("isi_mean_ms"))
+            isi_std = result.get("isi_std_ms", metadata.get("isi_std_ms"))
         else:
-            metadata = getattr(result, "metadata", {})
+            metadata = getattr(result, "metadata", getattr(result, "parameters", {}))
             spike_times = getattr(result, "spike_times", None)
+            
+            rate = metadata.get("average_firing_rate_hz") if hasattr(result, "metadata") else getattr(result, "mean_frequency", None)
+            isi_mean = metadata.get("isi_mean_ms") if hasattr(result, "metadata") else None
+            isi_std = metadata.get("isi_std_ms") if hasattr(result, "metadata") else None
 
         threshold = metadata.get("threshold")
-        refractory_ms = metadata.get("refractory_ms")
-        units = metadata.get("units", "V")
+        refractory_ms = metadata.get("refractory_period", metadata.get("refractory_ms"))
+        if refractory_ms is not None and refractory_ms < 1.0:
+            refractory_ms = refractory_ms * 1000.0  # Convert to ms if it's in seconds
+        
+        units = metadata.get("units", "V") if hasattr(result, "metadata") else "mV"
         num_spikes = len(spike_times) if spike_times is not None else 0
 
         display_items = []
@@ -188,29 +206,32 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         display_items.append(("Detected Spikes", str(num_spikes)))
 
         if num_spikes > 0:
-            rate = metadata.get("average_firing_rate_hz")
-            if rate:
+            if rate is not None:
                 display_items.append(("Avg Firing Rate", f"{rate:.2f} Hz"))
 
-            isi_mean = metadata.get("isi_mean_ms")
-            isi_std = metadata.get("isi_std_ms")
-            if isi_mean:
+            if isi_mean is not None:
                 display_items.append(("ISI", f"{isi_mean:.2f} ± {isi_std:.2f} ms"))
 
             # Helper to add feature stats
-            def add_stat(label, key_prefix, unit):
-                mean = metadata.get(f"{key_prefix}_mean")
-                std = metadata.get(f"{key_prefix}_std")
-                if mean is not None:
-                    display_items.append((label, f"{mean:.2f} ± {std:.2f} {unit}"))
+            import numpy as np
+            def add_stat(label, key):
+                mean_val = result.get(f"{key}_mean", metadata.get(f"{key}_mean")) if isinstance(result, dict) else metadata.get(f"{key}_mean")
+                std_val = result.get(f"{key}_std", metadata.get(f"{key}_std")) if isinstance(result, dict) else metadata.get(f"{key}_std")
+                if mean_val is not None and std_val is not None and not np.isnan(mean_val):
+                    unit_str = "ms" if "width" in key or "time" in key else "mV"
+                    if "dvdt" in key:
+                        unit_str = "V/s"
+                    display_items.append((label, f"{mean_val:.2f} ± {std_val:.2f} {unit_str}"))
 
-            add_stat("Amplitude", "amplitude", "mV")
-            add_stat("Half-Width", "half_width", "ms")
-            add_stat("Rise Time", "rise_time", "ms")
-            add_stat("Decay Time", "decay_time", "ms")
-            add_stat("AHP Depth", "ahp_depth", "mV")
-            add_stat("AHP Duration", "ahp_duration", "ms")
-            add_stat("ADP Amp", "adp_amplitude", "mV")
+            add_stat("Amplitude", "amplitude")
+            add_stat("Half-Width", "half_width_ms")
+            add_stat("Rise Time", "rise_time_ms")
+            add_stat("Decay Time", "decay_time_ms")
+            add_stat("AHP Depth", "ahp_depth")
+            add_stat("Max dV/dt", "max_dvdt")
+            add_stat("Min dV/dt", "min_dvdt")
+            add_stat("AHP Duration", "ahp_duration")
+            add_stat("ADP Amp", "adp_amplitude")
 
         self.results_table.setRowCount(len(display_items))
         for row, (k, v) in enumerate(display_items):

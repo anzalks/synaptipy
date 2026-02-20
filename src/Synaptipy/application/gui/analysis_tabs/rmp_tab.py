@@ -43,7 +43,7 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
         self._on_mode_changed()
 
     def get_display_name(self) -> str:
-        return "Baseline Analysis"
+        return "Baseline"
 
     def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
         """Add custom mode selection to Parameters group."""
@@ -150,8 +150,8 @@ class BaselineAnalysisTab(MetadataDrivenAnalysisTab):
             if line and line not in self.plot_widget.items:
                 self.plot_widget.addItem(line)
 
-    def _on_channel_changed(self, channel_index: int):
-        """Handle channel switch to update interactive region."""
+    def _on_channel_changed(self, channel_index: int = None):
+        """Trigger update when channel changes to reset cursors."active region."""
         super()._on_channel_changed(channel_index)
 
         # Auto-scale region if it's currently at default [0, 0.1] or out of bounds

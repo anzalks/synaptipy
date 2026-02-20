@@ -64,7 +64,7 @@ def test_rin_tab_init(rin_tab):
     assert rin_tab is not None
     assert rin_tab.mode_combobox is not None
     assert rin_tab.plot_widget is not None
-    assert rin_tab.get_display_name() == "Resistance/Conductance"
+    assert rin_tab.get_display_name() == "Input Resistance"
 
 
 def test_mode_selection(rin_tab, qtbot):

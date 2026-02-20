@@ -5,8 +5,9 @@ Analysis functions for intrinsic membrane properties.
 """
 import logging
 import numpy as np
-from typing import Optional, Tuple, Dict, Any, Union
+from typing import Optional, Tuple, Dict, Any, Union, List
 from scipy.optimize import curve_fit
+from scipy.stats import linregress
 from Synaptipy.core.results import RinResult
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
@@ -188,6 +189,95 @@ def calculate_conductance(
         return RinResult(
             value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {}
         )
+
+
+def calculate_iv_curve(
+    sweeps: List[np.ndarray],
+    time_vectors: List[np.ndarray],
+    current_steps: List[float],
+    baseline_window: Tuple[float, float],
+    response_window: Tuple[float, float],
+) -> Dict[str, Any]:
+    """
+    Calculates the Current-Voltage (I-V) relationship and aggregate Input Resistance (Rin)
+    across multiple traces/sweeps.
+
+    Args:
+        sweeps: List of voltage traces.
+        time_vectors: List of corresponding time vectors.
+        current_steps: List of injected current step amplitudes in pA.
+        baseline_window: Tuple (start_time, end_time) for the baseline calculation.
+        response_window: Tuple (start_time, end_time) for steady-state response calculation.
+
+    Returns:
+        Dictionary with I-V Curve properties including aggregate Rin(MOhm).
+    """
+    num_sweeps = len(sweeps)
+    if num_sweeps == 0:
+        return {"error": "No sweeps provided"}
+
+    if len(current_steps) != num_sweeps:
+        log.warning(
+            f"Mismatch between sweeps ({num_sweeps}) and current_steps ({len(current_steps)}). Truncating to minimum."
+        )
+        min_len = min(num_sweeps, len(current_steps))
+        sweeps = sweeps[:min_len]
+        time_vectors = time_vectors[:min_len]
+        current_steps = current_steps[:min_len]
+
+    baseline_voltages = []
+    steady_state_voltages = []
+    delta_vs = []
+
+    for voltage_trace, time_vector in zip(sweeps, time_vectors):
+        baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
+        response_mask = (time_vector >= response_window[0]) & (time_vector < response_window[1])
+
+        if not np.any(baseline_mask) or not np.any(response_mask):
+            baseline_voltages.append(np.nan)
+            steady_state_voltages.append(np.nan)
+            delta_vs.append(np.nan)
+            continue
+
+        v_base = np.mean(voltage_trace[baseline_mask])
+        v_resp = np.mean(voltage_trace[response_mask])
+
+        baseline_voltages.append(v_base)
+        steady_state_voltages.append(v_resp)
+        delta_vs.append(v_resp - v_base)
+
+    # Filter out NaNs for linear regression
+    valid_indices = [i for i, dv in enumerate(delta_vs) if not np.isnan(dv)]
+    valid_currents = [current_steps[i] for i in valid_indices]
+    valid_delta_vs = [delta_vs[i] for i in valid_indices]
+
+    rin_mohm = None
+    r_squared = None
+    iv_intercept = None
+
+    if len(valid_currents) >= 2:
+        try:
+            # Rin is standardly (Delta V) / (Delta I).
+            # Convert current to nA to get Rin in MOhm (mV / nA = MOhm).
+            currents_na = np.array(valid_currents) / 1000.0
+
+            # Use delta V vs delta I for Rin calculation
+            slope, intercept, r_value, p_value, std_err = linregress(currents_na, valid_delta_vs)
+            rin_mohm = slope
+            iv_intercept = intercept
+            r_squared = r_value**2
+        except Exception as e:
+            log.warning(f"Linear regression failed during I-V curve trace calculation: {e}", exc_info=True)
+
+    return {
+        "rin_aggregate_mohm": rin_mohm,
+        "iv_intercept": iv_intercept,
+        "iv_r_squared": r_squared,
+        "baseline_voltages": baseline_voltages,
+        "steady_state_voltages": steady_state_voltages,
+        "delta_vs": delta_vs,
+        "current_steps": current_steps,
+    }
 
 
 def _exp_growth(t, V_ss, V_0, tau):
@@ -382,6 +472,7 @@ def calculate_sag_ratio(
 # --- Registry Wrappers for Batch Processing ---
 @AnalysisRegistry.register(
     "rin_analysis",
+    label="Input Resistance",
     ui_params=[
         {
             "name": "current_amplitude",
@@ -571,7 +662,7 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
 
 @AnalysisRegistry.register(
     "tau_analysis",
-    label="Membrane Time Constant (Tau)",
+    label="Tau (Time Constant)",
     ui_params=[
         {
             "name": "stim_start_time",
@@ -678,3 +769,126 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error in run_tau_analysis_wrapper: {e}", exc_info=True)
         return {"tau_ms": None, "tau_error": str(e)}
+
+
+@AnalysisRegistry.register(
+    "iv_curve_analysis",
+    label="I-V Curve",
+    requires_multi_trial=True,
+    ui_params=[
+        {
+            "name": "start_current",
+            "label": "Start Current (pA):",
+            "type": "float",
+            "default": -50.0,
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "step_current",
+            "label": "Step Current (pA):",
+            "type": "float",
+            "default": 10.0,
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "baseline_start",
+            "label": "Baseline Start (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "baseline_end",
+            "label": "Baseline End (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "response_start",
+            "label": "Response Start (s):",
+            "type": "float",
+            "default": 0.3,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "response_end",
+            "label": "Response End (s):",
+            "type": "float",
+            "default": 0.4,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+    ],
+)
+def run_iv_curve_wrapper(
+    data_list: List[np.ndarray], time_list: List[np.ndarray], sampling_rate: float, **kwargs
+) -> Dict[str, Any]:
+    """
+    Wrapper for Multi-Trial I-V Curve Analysis.
+    """
+    try:
+        start_current = kwargs.get("start_current", -50.0)
+        step_current = kwargs.get("step_current", 10.0)
+
+        baseline_start = kwargs.get("baseline_start", 0.0)
+        baseline_end = kwargs.get("baseline_end", 0.1)
+        response_start = kwargs.get("response_start", 0.3)
+        response_end = kwargs.get("response_end", 0.4)
+
+        # Handle formatting of inputs
+        if isinstance(data_list, np.ndarray):
+            if data_list.ndim == 1:
+                data_list = [data_list]
+                time_list = [time_list] if isinstance(time_list, np.ndarray) else time_list
+            elif data_list.ndim == 2:
+                data_list = [data_list[i] for i in range(data_list.shape[0])]
+                if isinstance(time_list, np.ndarray) and time_list.ndim == 1:
+                    time_list = [time_list for _ in range(len(data_list))]
+                elif isinstance(time_list, np.ndarray) and time_list.ndim == 2:
+                    time_list = [time_list[i] for i in range(time_list.shape[0])]
+
+        if isinstance(time_list, np.ndarray):
+            time_list = [time_list]
+
+        num_sweeps = len(data_list)
+        current_steps = [start_current + i * step_current for i in range(num_sweeps)]
+
+        baseline_window = (baseline_start, baseline_end)
+        response_window = (response_start, response_end)
+
+        results = calculate_iv_curve(
+            sweeps=data_list,
+            time_vectors=time_list,
+            current_steps=current_steps,
+            baseline_window=baseline_window,
+            response_window=response_window
+        )
+
+        if "error" in results:
+            return {"iv_curve_error": results["error"]}
+
+        return {
+            "rin_aggregate_mohm": results["rin_aggregate_mohm"],
+            "iv_intercept": results["iv_intercept"],
+            "iv_r_squared": results["iv_r_squared"],
+            "baseline_voltages": results["baseline_voltages"],
+            "steady_state_voltages": results["steady_state_voltages"],
+            "delta_vs": results["delta_vs"],
+            "current_steps": results["current_steps"],
+        }
+
+    except (ValueError, TypeError, KeyError, IndexError) as e:
+        log.error(f"Error in run_iv_curve_wrapper: {e}", exc_info=True)
+        return {"iv_curve_error": str(e)}
