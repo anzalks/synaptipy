@@ -247,11 +247,13 @@ class TestArtifactRejection:
         t = np.arange(0, 1.0, 1.0 / fs)
         data = np.zeros_like(t)
 
-        # Real event at 100ms (Positive)
-        data[100:110] = 10.0
+        # Real event at 100ms (Positive), peak at 104
+        data[100:105] = np.linspace(0, 10, 5)
+        data[105:110] = np.linspace(10, 0, 5)
 
         # Artifact at 500ms
-        data[500:510] = 10.0
+        data[500:505] = np.linspace(0, 10, 5)
+        data[505:510] = np.linspace(10, 0, 5)
         mask = np.zeros_like(data, dtype=bool)
         mask[500:510] = True
 
@@ -260,10 +262,10 @@ class TestArtifactRejection:
         res_nomask = detect_events_threshold(data, t, threshold=5.0, polarity='positive')
         assert res_nomask.event_count == 2
 
-        # With mask -> 1 event (at 100ms)
+        # With mask -> 1 event (at around 104ms)
         res_mask = detect_events_threshold(data, t, threshold=5.0, polarity='positive', artifact_mask=mask)
         assert res_mask.event_count == 1
-        assert np.abs(res_mask.event_indices[0] - 100) <= 1
+        assert np.abs(res_mask.event_indices[0] - 104) <= 1
 
     def test_template_detection_with_mask(self):
         """Test that detect_events_template ignores masked regions."""
