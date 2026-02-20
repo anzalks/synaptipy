@@ -86,7 +86,10 @@ def test_plot_limits_auto_range_on_switch(tab, mock_recording):
 
     # 1. Plot Initial Data
     # Mock AnalysisPlotManager to return our data
-    with patch("Synaptipy.application.controllers.analysis_plot_manager.AnalysisPlotManager.prepare_plot_data") as mock_prep:
+    mock_path = ("Synaptipy.application.controllers"
+                 ".analysis_plot_manager.AnalysisPlotManager"
+                 ".prepare_plot_data")
+    with patch(mock_path) as mock_prep:
         mock_prep.return_value.main_data = np.sin(np.linspace(0, 1, 100))
         mock_prep.return_value.main_time = np.linspace(0, 1, 100)
         mock_prep.return_value.channel_id = "0"
@@ -144,7 +147,10 @@ def test_plot_limits_sticky_zoom(tab, mock_recording):
     tab.data_source_combobox.setEnabled(True)
 
     # 1. Plot Initial Data (0-1s)
-    with patch("Synaptipy.application.controllers.analysis_plot_manager.AnalysisPlotManager.prepare_plot_data") as mock_prep:
+    mock_path = ("Synaptipy.application.controllers"
+                 ".analysis_plot_manager.AnalysisPlotManager"
+                 ".prepare_plot_data")
+    with patch(mock_path) as mock_prep:
         mock_prep.return_value.main_data = np.sin(np.linspace(0, 1, 100))
         mock_prep.return_value.main_time = np.linspace(0, 1, 100)
         mock_prep.return_value.channel_id = "0"
@@ -200,7 +206,10 @@ def test_plot_limits_preprocessing_preserves(tab, mock_recording):
     tab._active_preprocessing_settings = {"filter": "highpass"}
 
     # 1. Plot Initial Data (0-1s)
-    with patch("Synaptipy.application.controllers.analysis_plot_manager.AnalysisPlotManager.prepare_plot_data") as mock_prep:
+    mock_path = ("Synaptipy.application.controllers"
+                 ".analysis_plot_manager.AnalysisPlotManager"
+                 ".prepare_plot_data")
+    with patch(mock_path) as mock_prep:
         mock_prep.return_value.main_data = np.sin(np.linspace(0, 1, 100))
         mock_prep.return_value.main_time = np.linspace(0, 1, 100)
         mock_prep.return_value.channel_id = "0"

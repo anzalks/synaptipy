@@ -108,9 +108,11 @@ def detect_spikes_threshold(  # noqa: C901
 
         mean_freq = 0.0
         if len(peak_times_arr) > 1:
-            duration = time[-1] - time[0]
-            if duration > 0:
-                mean_freq = len(peak_times_arr) / duration
+            # Use the span between first and last spike, not total trace duration
+            spike_span = peak_times_arr[-1] - peak_times_arr[0]
+            if spike_span > 0:
+                # N-1 intervals for N spikes
+                mean_freq = (len(peak_times_arr) - 1) / spike_span
 
         return SpikeTrainResult(
             value=len(peak_indices_arr),
@@ -544,9 +546,12 @@ def calculate_spike_features(
 
     # We only care about the relevant subset for "max rise" (rising phase) and "max fall" (repolarization)
     # Rise: pre-peak. Fall: post-peak.
+    # Use sentinel values to avoid zeroing by boolean multiply
+    pre_peak_dvdt = np.where(is_pre_peak, full_dvdt, -np.inf)
+    post_peak_dvdt = np.where(is_post_peak, full_dvdt, np.inf)
 
-    max_dvdts = np.max(full_dvdt * is_pre_peak, axis=1)  # Max in pre-peak
-    min_dvdts = np.min(full_dvdt * is_post_peak, axis=1)  # Min in post-peak coverage
+    max_dvdts = np.max(pre_peak_dvdt, axis=1)  # Max rise rate
+    min_dvdts = np.min(post_peak_dvdt, axis=1)  # Max repolarization rate
 
     # --- Assemble Results ---
     features_list = []
@@ -653,8 +658,6 @@ def analyze_multi_sweep_spikes(
             "name": "ahp_window",
             "label": "AHP Window (s):",
             "type": "float",
-            "default": 0.05,
-            "min": 0.0,
             "default": 0.05,
             "min": 0.0,
             "max": 10.0,

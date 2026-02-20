@@ -1422,7 +1422,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """Add Prev/Next buttons below the plot to navigate trials."""
         nav_layout = QtWidgets.QHBoxLayout()
         # nav_layout.addStretch() # Center align or left align? Let's center.
-        
+
         self.prev_trial_btn = QtWidgets.QPushButton("Previous Trial")
         self.prev_trial_btn.setToolTip("Select the previous trial in the Data Source list.")
         self.prev_trial_btn.clicked.connect(self._on_prev_trial)
@@ -1444,13 +1444,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _update_nav_buttons_state(self):
         """Enable/disable buttons based on current selection."""
         if not self.data_source_combobox.isEnabled() or self.data_source_combobox.count() <= 1:
-             self.prev_trial_btn.setEnabled(False)
-             self.next_trial_btn.setEnabled(False)
-             return
-        
-        idx = self.data_source_combobox.currentIndex()
+            self.prev_trial_btn.setEnabled(False)
+            self.next_trial_btn.setEnabled(False)
+            return
+
         count = self.data_source_combobox.count()
-        
+
         # Enable if we can move (cyclic navigation is often preferred, but let's stick to bounds for clarity first)
         # Actually lets make them always enabled if >1 item so user can cycle.
         self.prev_trial_btn.setEnabled(count > 1)
@@ -1469,11 +1468,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         count = self.data_source_combobox.count()
         if count <= 1:
             return
-        
-        current = self.data_source_combobox.currentIndex()
-        new_idx = (current + delta) % count # Cycle
-        self.data_source_combobox.setCurrentIndex(new_idx)
 
+        current = self.data_source_combobox.currentIndex()
+        new_idx = (current + delta) % count  # Cycle
+        self.data_source_combobox.setCurrentIndex(new_idx)
 
     # --- END UI TWEAKS ---
 
@@ -1523,7 +1521,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # For now, let's keep it simple: Visualization only.
         pass
 
-    def _populate_channel_and_source_comboboxes(self):
+    def _populate_channel_and_source_comboboxes(self):  # noqa: C901
         """
         Populate channel and data source comboboxes based on the currently loaded recording.
         Called automatically by the base class when an analysis item is selected.
@@ -1575,10 +1573,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Force population of ALL options (Average + All Trials) to allow navigation
         # regardless of what was clicked in Explorer.
-        
+
         # 1. Add Average Trace (always available as overlay or calculation)
         self.data_source_combobox.addItem("Average Trace", userData="average")
-        
+
         # 2. Add All Trials
         for i in range(num_trials):
             self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
@@ -1596,8 +1594,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 self.data_source_combobox.setCurrentIndex(index)
         else:
             # Default to Average
-             index = self.data_source_combobox.findData("average")
-             if index >= 0:
+            index = self.data_source_combobox.findData("average")
+            if index >= 0:
                 self.data_source_combobox.setCurrentIndex(index)
 
         if self.data_source_combobox.count() > 0:
@@ -1619,7 +1617,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"{self.__class__.__name__}: Comboboxes populated - triggering plot")
         self._plot_selected_data()
-
 
     @QtCore.Slot()
     def _plot_selected_data(self):  # noqa: C901
@@ -2183,18 +2180,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.add_to_session_button:
             self.add_to_session_button.setEnabled(self._last_analysis_result is not None)
 
-    # --- NEW: Cross-Tab Highlighting Interface ---
-    def highlight_trial(self, segment_index: int):
-        """
-        Called when the user selects a specific trial in the sidebar.
-        Override this to update plots (e.g., highlight the trace).
-
-        Args:
-            segment_index: Index of the trial (segment) selected in the sidebar.
-                           If -1, clear highlighting.
-        """
-    # --- NEW: Cross-Tab Highlighting Interface ---
-    def highlight_trial(self, segment_index: int):
+    def highlight_trial(self, segment_index: int):  # noqa: C901
         """
         Called when the user selects a specific trial in the sidebar.
         Updates plots to highlight the trace corresponding to the selected trial.
@@ -2207,29 +2193,28 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # 1. Update Plot Highlighting
         if self.plot_widget:
             # Fetch pen colors from customization
-            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen
+            from Synaptipy.shared.plot_customization import get_single_trial_pen
 
             # Default pen for unselected (faded)
             unselected_pen = pg.mkPen((150, 150, 150, 50), width=1)
             # Selected pen
             selected_pen = pg.mkPen('b', width=2)
-            
+
             reset = (segment_index == -1)
             base_trial_pen = get_single_trial_pen()
-            
+
             # Access underlying PlotItem items if using Canvas
             plot_item = self.plot_widget
             if hasattr(self.plot_widget, "getPlotItem"):
-                 plot_item = self.plot_widget.getPlotItem()
+                plot_item = self.plot_widget.getPlotItem()
 
             items = plot_item.items
-            found_highlight = False
 
             for item in items:
                 if isinstance(item, pg.PlotDataItem):
                     # Check for our tag or dynamic attribute
                     t_idx = getattr(item, "trial_index", None)
-                    
+
                     if t_idx is not None:
                         # It is a trial trace
                         if reset:
@@ -2240,13 +2225,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                             if t_idx == segment_index:
                                 item.setPen(selected_pen)
                                 item.setZValue(10)  # Bring to front
-                                item.setShadowPen(pg.mkPen((0,0,0,100), width=3)) # Add shadow for pop
-                                found_highlight = True
+                                item.setShadowPen(pg.mkPen((0, 0, 0, 100), width=3))  # Shadow for pop
                             else:
                                 item.setPen(unselected_pen)
                                 item.setZValue(0)
                                 item.setShadowPen(None)
-        
+
         # 2. Sync Combobox (if selection came from outside, e.g. Sidebar)
         # We need to block signals so we don't re-trigger plotting if we just want to show selection
         if self.data_source_combobox:
@@ -2260,12 +2244,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 if ud == segment_index:
                     target_idx = i
                     break
-            
+
             if target_idx >= 0:
-                 was_blocked = self.data_source_combobox.blockSignals(True)
-                 self.data_source_combobox.setCurrentIndex(target_idx)
-                 self.data_source_combobox.blockSignals(was_blocked)
+                was_blocked = self.data_source_combobox.blockSignals(True)
+                self.data_source_combobox.setCurrentIndex(target_idx)
+                self.data_source_combobox.blockSignals(was_blocked)
 
         # 3. Update Buttons State
         self._update_nav_buttons_state()
-

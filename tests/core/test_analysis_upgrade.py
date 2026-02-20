@@ -81,10 +81,12 @@ def test_calculate_fi_curve():
 
     assert result["rheobase_pa"] == 10
     assert result["spike_counts"] == [0, 2, 5]
-    # Slope: (5-2)/(20-10) = 3/10 = 0.3 Hz/pA?
-    # Freqs: 0Hz, 2Hz, 5Hz (duration 1s)
-    # Slope: (5-2)/(20-10) = 0.3
-    assert np.isclose(result["fi_slope"], 0.3)
+    # Mean frequency now uses (N-1)/spike_span formula:
+    # Sweep 2: 2 spikes, freq = 1/(t[600]-t[200]) ~ 2.5 Hz
+    # Sweep 3: 5 spikes, freq = 4/(t[900]-t[100]) ~ 5.0 Hz
+    # fi_slope via linregress on 3 points (0Hz@0pA, ~2.5Hz@10pA, ~5Hz@20pA)
+    assert result["fi_slope"] is not None
+    assert np.isclose(result["fi_slope"], 0.25, atol=0.02)
 
 
 # --- 3. Spike Shape Statistics Tests ---

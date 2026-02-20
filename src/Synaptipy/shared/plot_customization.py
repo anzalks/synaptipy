@@ -383,7 +383,10 @@ class PlotCustomizationManager:
             log.warning(f"Could not check preference changes: {e}")
             return True  # Assume changed if we can't check
 
-    def update_preferences_batch(self, new_preferences: Dict[str, Dict[str, Any]], emit_signal: bool = True):  # noqa: C901
+    def update_preferences_batch(  # noqa: C901
+        self, new_preferences: Dict[str, Dict[str, Any]],
+        emit_signal: bool = True
+    ):
         """Update multiple preferences at once and optionally emit signal."""
         try:
             # Check if anything actually changed

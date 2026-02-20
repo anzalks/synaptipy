@@ -52,3 +52,9 @@ notebooks/.ipynb_checkpoints
 # Distribution / Installation
 *.tar.gz
 *.whl
+
+# Test / Coverage artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+.verify_venv*/
