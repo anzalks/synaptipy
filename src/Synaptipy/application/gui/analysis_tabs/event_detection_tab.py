@@ -31,7 +31,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.method_map = {
             "Threshold Based": "event_detection_threshold",
             "Deconvolution (Custom)": "event_detection_deconvolution",
-            # "Baseline + Peak + Kinetics": "event_detection_baseline_peak"  # Uncomment if available
+            "Baseline + Peak + Kinetics": "event_detection_baseline_peak"
         }
 
         # Initialize with default method
@@ -44,7 +44,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self._on_method_changed()
 
     def get_display_name(self) -> str:
-        return "Event Detection"
+        return "Mini Analysis"
 
     def get_covered_analysis_names(self) -> List[str]:
         return list(self.method_map.values())
@@ -131,7 +131,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
             self.plot_widget.addItem(self.artifact_curve_item)
             self.artifact_curve_item.setZValue(80)
 
-    def _on_channel_changed(self, index):
+    def _on_channel_changed(self, index=None):
         """Re-add items to plot if cleared."""
         super()._on_channel_changed(index)
         self._ensure_custom_items_on_plot()
@@ -200,6 +200,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
             and hasattr(self, "_current_plot_data")
             and self._current_plot_data
         ):
+            event_indices = np.array(event_indices, dtype=int)
             times = self._current_plot_data["time"][event_indices]
             voltages = self._current_plot_data["data"][event_indices]
 
@@ -302,7 +303,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         new_val = self.threshold_line.value()
         log.debug(f"Event threshold dragged to: {new_val}")
 
-        # Update parameter widget
+        # Update parameter widget if it exists (e.g. standard Threshold Based method)
         if hasattr(self, "param_generator") and "threshold" in self.param_generator.widgets:
             widget = self.param_generator.widgets["threshold"]
             # Block signals to prevent loop

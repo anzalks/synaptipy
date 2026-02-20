@@ -122,6 +122,7 @@ def calculate_fi_curve(  # noqa: C901
 
 @AnalysisRegistry.register(
     "excitability_analysis",
+    label="Excitability",
     requires_multi_trial=True,
     ui_params=[
         {

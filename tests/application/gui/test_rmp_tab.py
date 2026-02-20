@@ -56,7 +56,7 @@ def test_rmp_tab_init(rmp_tab):
     assert rmp_tab is not None
     assert rmp_tab.mode_combobox is not None
     assert rmp_tab.plot_widget is not None
-    assert rmp_tab.get_display_name() == "Baseline Analysis"
+    assert rmp_tab.get_display_name() == "Baseline"
 
 
 def test_has_data_selection_widgets(rmp_tab):

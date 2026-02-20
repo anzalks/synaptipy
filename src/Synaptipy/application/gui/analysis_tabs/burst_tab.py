@@ -31,7 +31,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         )
 
     def get_display_name(self) -> str:
-        return "Burst Analysis"
+        return "Burst"
 
     def _setup_ui(self):
         super()._setup_ui()
@@ -48,7 +48,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
         if self.spike_markers and self.spike_markers not in self.plot_widget.items:
             self.plot_widget.addItem(self.spike_markers)
 
-    def _on_channel_changed(self, index):
+    def _on_channel_changed(self, index=None):
         """Re-add items to plot if cleared."""
         super()._on_channel_changed(index)
         self._ensure_custom_items_on_plot()
@@ -138,7 +138,7 @@ class BurstAnalysisTab(MetadataDrivenAnalysisTab):
 
             spike_volts = volt_vec[spike_indices]
 
-            self.spike_markers.setData(all_burst_spikes, spike_volts)
+            self.spike_markers.setData(x=all_burst_spikes, y=spike_volts)
             self.spike_markers.setVisible(True)
         else:
             self.spike_markers.setVisible(False)

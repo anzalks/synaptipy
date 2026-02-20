@@ -134,7 +134,7 @@ def detect_threshold_kink(
 
 @AnalysisRegistry.register(
     "phase_plane_analysis",
-    label="Phase Plane Analysis",
+    label="Phase Plane",
     ui_params=[
         {
             "name": "sigma_ms",

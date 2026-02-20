@@ -150,7 +150,7 @@ detect_minis_threshold = detect_events_threshold
 
 @AnalysisRegistry.register(
     "event_detection_threshold",
-    label="Threshold Based (Adaptive)",
+    label="Event (Adaptive Thresh)",
     ui_params=[
         {
             "name": "threshold",
@@ -362,7 +362,7 @@ def detect_events_template(
 
 @AnalysisRegistry.register(
     "event_detection_deconvolution",
-    label="Event Detection (Template Match)",
+    label="Event (Template Match)",
     ui_params=[
         {
             "name": "tau_rise_ms",
@@ -558,6 +558,9 @@ def detect_events_baseline_peak_kinetics(
     min_dist = max(1, int(min_event_separation_ms / 1000.0 * sample_rate))
     peaks, _ = signal.find_peaks(filtered, height=threshold_val, distance=min_dist)
 
+    # Revert threshold to original data scale for visualization
+    display_threshold_val = -threshold_val if is_negative else threshold_val
+
     return EventDetectionResult(
         value=len(peaks),
         unit="counts",
@@ -566,13 +569,13 @@ def detect_events_baseline_peak_kinetics(
         event_indices=peaks,
         detection_method="baseline_peak",
         summary_stats={"baseline_mean": baseline_mean, "baseline_sd": baseline_sd},
-        threshold_value=threshold_val,
+        threshold_value=display_threshold_val,
     )
 
 
 @AnalysisRegistry.register(
     "event_detection_baseline_peak",
-    label="Event Detection (Baseline Peak)",
+    label="Event (Baseline Peak)",
     ui_params=[
         {
             "name": "direction",

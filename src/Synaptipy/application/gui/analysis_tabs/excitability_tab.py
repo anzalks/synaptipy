@@ -33,7 +33,7 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
         )
 
     def get_display_name(self) -> str:
-        return "Excitability Analysis"
+        return "Excitability"
 
     def cleanup(self):
         super().cleanup()

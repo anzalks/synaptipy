@@ -175,7 +175,7 @@ def find_stable_baseline(
 # --- Registry Wrapper for Batch Processing ---
 @AnalysisRegistry.register(
     "rmp_analysis",
-    label="Resting Membrane Potential",
+    label="Baseline (RMP)",
     ui_params=[
         {
             "name": "baseline_start",

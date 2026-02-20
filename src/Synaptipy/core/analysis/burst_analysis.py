@@ -125,6 +125,7 @@ def analyze_spikes_and_bursts(
 
 @AnalysisRegistry.register(
     "burst_analysis",
+    label="Burst",
     ui_params=[
         {
             "name": "threshold",
