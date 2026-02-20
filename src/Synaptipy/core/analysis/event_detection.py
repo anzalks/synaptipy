@@ -65,20 +65,28 @@ def detect_events_threshold(  # noqa: C901
         abs_threshold = abs(threshold)
         min_prominence = max(abs_threshold, 2.0 * noise_sd)
 
-        # 3. Refractory Filter
+        # 3. Refractory & Kinetics Filter
         if len(time) > 1:
             fs = 1.0 / (time[1] - time[0])
         else:
             fs = 10000.0
+
         distance_samples = max(1, int(refractory_period * fs))
 
+        # Biological Constraint: True synaptic events have a minimal physiological width (e.g., >0.2ms half-width).
+        # This explicitly rejects single-point electrical noise/artifacts that have huge prominence but no duration.
+        min_width_samples = max(2, int(0.0002 * fs))
+
         # 4. Prominence-Based Peak Detection
-        # Topological Prominence is robust for events "riding" on the tail of others,
-        # perfectly measuring relative deflection regardless of an absolute baseline shift.
+        # Topological Prominence handles overlapping "riding" events mathematically perfectly.
+        # However, the event must STILL cross the absolute value threshold from baseline (height)
+        # to qualify under "Threshold Based" user expectations, rejecting pure noise wiggles at +10pA.
         peaks, properties = signal.find_peaks(
             work_data,
             prominence=min_prominence,
-            distance=distance_samples
+            height=abs_threshold,
+            distance=distance_samples,
+            width=min_width_samples
         )
 
         n_artifacts_rejected = 0
