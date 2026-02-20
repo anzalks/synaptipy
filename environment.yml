@@ -6,7 +6,7 @@ channels:
   - defaults
 dependencies:
   # Core Python (let conda find compatible version)
-  - python=3.11
+  - python>=3.10
   
   # Core build tools
   - pip
@@ -43,3 +43,5 @@ dependencies:
       - pytest>=7.0.0
       - pytest-qt>=4.0.0
       - pytest-mock
+      - pytest-cov
+      - flake8

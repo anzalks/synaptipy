@@ -270,7 +270,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             # Fetch channel object
             channel = None
-            if channel_name and self._selected_item_recording and channel_name in self._selected_item_recording.channels:
+            if (channel_name and self._selected_item_recording
+                    and channel_name in self._selected_item_recording.channels):
                 channel = self._selected_item_recording.channels[channel_name]
 
             if channel:

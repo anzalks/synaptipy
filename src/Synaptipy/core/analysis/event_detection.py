@@ -5,7 +5,7 @@ Analysis functions for detecting synaptic events (miniature, evoked).
 Refactored to use Adaptive Peak Finding and Parametric Matched Filtering.
 """
 import logging
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Tuple, Dict, Any
 import numpy as np
 from scipy import signal
 from scipy.stats import median_abs_deviation
@@ -18,7 +18,8 @@ log = logging.getLogger(__name__)
 
 # --- 1. Adaptive Threshold Detection ---
 
-def detect_events_threshold(
+
+def detect_events_threshold(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,
     threshold: float,
@@ -28,7 +29,7 @@ def detect_events_threshold(
 ) -> EventDetectionResult:
     """
     Detects events using Adaptive Peak Finding within suprathreshold spans.
-    
+
     Args:
         data: Signal array.
         time: Time array (seconds).
@@ -46,38 +47,38 @@ def detect_events_threshold(
     try:
         # 1. Rectify Logic
         is_negative = polarity == "negative"
-        # Work with a copy to avoid modifying original in-place if not desired, 
+        # Work with a copy to avoid modifying original in-place if not desired,
         # though we just use it for detection.
         work_data = -data if is_negative else data
-        
+
         # Ensure threshold is positive for comparison logic
         abs_threshold = abs(threshold)
-        
+
         # 2. Identify Spans
         # Find all indices where data > threshold
         suprathreshold_indices = np.where(work_data > abs_threshold)[0]
-        
+
         event_indices = []
-        
+
         if len(suprathreshold_indices) > 0:
             # 3. Group Consecutive Indices
             # np.diff(indices) > 1 identifies breaks in continuity
             diffs = np.diff(suprathreshold_indices)
             split_points = np.where(diffs > 1)[0] + 1
             spans = np.split(suprathreshold_indices, split_points)
-            
+
             raw_peaks = []
             raw_peak_amps = []
-            
+
             # 4. Peak Search within Spans
             for span in spans:
                 if len(span) == 0:
                     continue
-                
+
                 # Check for artifact overlap
                 if artifact_mask is not None:
                     # If any point in the span is an artifact, we discard the whole event candidate?
-                    # Or just check the peak? 
+                    # Or just check the peak?
                     # Generally safely reject if any part is contaminated.
                     if np.any(artifact_mask[span]):
                         continue
@@ -87,27 +88,27 @@ def detect_events_threshold(
                 span_vals = work_data[span]
                 local_max_idx = np.argmax(span_vals)
                 peak_idx = span[local_max_idx]
-                
+
                 raw_peaks.append(peak_idx)
                 raw_peak_amps.append(span_vals[local_max_idx])
-            
+
             # 5. Refractory Filter
             # "If two peaks are closer than refractory_period, discard the smaller one."
-            # Approach: Sort all candidate peaks by Amplitude (Descending). 
+            # Approach: Sort all candidate peaks by Amplitude (Descending).
             # Iterate and keep if not within refractory of already accepted peaks.
-            
+
             # Convert to numpy for sorting
             raw_peaks = np.array(raw_peaks)
             raw_peak_amps = np.array(raw_peak_amps)
-            
+
             # Sort by amplitude descending
             sorted_order = np.argsort(raw_peak_amps)[::-1]
             sorted_peaks = raw_peaks[sorted_order]
-            
+
             accepted_peaks = []
-            
+
             refractory_samples = int(refractory_period * (1.0 / (time[1] - time[0]))) if len(time) > 1 else 0
-            
+
             for peak in sorted_peaks:
                 # Check distance to already accepted peaks
                 is_too_close = False
@@ -115,20 +116,20 @@ def detect_events_threshold(
                     if abs(peak - existing) < refractory_samples:
                         is_too_close = True
                         break
-                
+
                 if not is_too_close:
                     accepted_peaks.append(peak)
-            
+
             # Sort accepted peaks by time for the result
             accepted_peaks.sort()
             event_indices = np.array(accepted_peaks, dtype=int)
 
         event_indices = np.array(event_indices, dtype=int)
-        
+
         # Gather results
         if len(event_indices) > 0:
             event_times = time[event_indices]
-            #Return original amplitudes (with original sign)
+            # Return original amplitudes (with original sign)
             event_amplitudes = data[event_indices]
         else:
             event_times = np.array([])
@@ -154,13 +155,15 @@ def detect_events_threshold(
             detection_method="threshold_adaptive",
             threshold_value=threshold,
             direction=polarity,
-            n_artifacts_rejected=0, # Calculation of exact rejected count is tricky here without tracking, but we filtered candidates.
+            # Calculation of exact rejected count is tricky here without tracking, but we filtered candidates.
+            n_artifacts_rejected=0,
             artifact_mask=artifact_mask
         )
 
     except Exception as e:
         log.error(f"Error during adaptive threshold event detection: {e}", exc_info=True)
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
+
 
 # Backward compatibility alias (if needed by other modules not yet updated, though we updated wrappers below)
 detect_minis_threshold = detect_events_threshold
@@ -186,7 +189,7 @@ detect_minis_threshold = detect_events_threshold
             "choices": ["negative", "positive"],
             "default": "negative",
         },
-         {
+        {
             "name": "refractory_period",
             "label": "Refractory (s):",
             "type": "float",
@@ -196,11 +199,13 @@ detect_minis_threshold = detect_events_threshold
             "decimals": 4,
         },
         {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
-        {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:", "type": "float", "default": 20.0, "min": 0.0},
+        {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:",
+         "type": "float", "default": 20.0, "min": 0.0},
         {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
     ],
 )
-def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
+def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
+                                          sampling_rate: float, **kwargs) -> Dict[str, Any]:
     threshold = kwargs.get("threshold", 5.0)
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
@@ -240,7 +245,7 @@ def detect_events_template(
 ) -> EventDetectionResult:
     """
     Detects events using Parametric Template Matching (Matched Filter).
-    
+
     Args:
         data: Signal array.
         sampling_rate: Hz.
@@ -249,96 +254,95 @@ def detect_events_template(
         tau_decay: Decay time constant (seconds).
         polarity: 'positive' or 'negative'.
         artifact_mask: Optional boolean mask for artifact regions.
-        
+
     Returns:
         EventDetectionResult
     """
     try:
         dt = 1.0 / sampling_rate
         n_points = len(data)
-        
+
         # 1. Dynamic Template
         # Create kernel timeline. Ensure it's long enough to capture the shape.
         # 5 * tau_decay is usually sufficient for >99% settling.
         kernel_duration = 5 * max(tau_decay, tau_rise)
         t_kernel = np.arange(0, kernel_duration, dt)
-        
-        # Bi-exponential: (1 - exp(-t/rise)) * exp(-t/decay) ? 
+
+        # Bi-exponential: (1 - exp(-t/rise)) * exp(-t/decay) ?
         # Or diff of exps: exp(-t/decay) - exp(-t/rise) (common for PSPs)
         # Standard PSP shape: A * (exp(-t/tau_decay) - exp(-t/tau_rise))
         # Ensure tau_decay > tau_rise for valid shape constraints if using diff-of-exps.
         # If not, swap or handle? Usually decay > rise.
-        
+
         # Let's use the standard diff of exps which starts at 0 and goes up.
         if tau_decay == tau_rise:
             # Alpha function t * exp(-t/tau)
             kernel = t_kernel * np.exp(-t_kernel / tau_decay)
         else:
             kernel = np.exp(-t_kernel / tau_decay) - np.exp(-t_kernel / tau_rise)
-        
+
         # Normalize: Sum=1 preserves area (charge). Max=1 preserves amplitude.
         # For detection, Max=1 is often intuitive (template amplitude 1).
-        # "Normalize so its sum or max is 1.0" - let's use Max=1 so 'threshold' relates to signal amplitude if we weren't Z-scoring.
-        # But we ARE Z-scoring. 
-        # Actually, for matched filter, normalizing energy is common. 
+        # "Normalize so its sum or max is 1.0" - use Max=1 so 'threshold'
+        # relates to signal amplitude. We ARE Z-scoring, so this is mainly
+        # for matched filter convenience.
+        # Actually, for matched filter, normalizing energy is common.
         # Let's stick to Max=1 for simplicity unless noise properties dictate otherwise.
         if np.max(np.abs(kernel)) > 0:
             kernel /= np.max(np.abs(kernel))
-            
+
         # 2. Matched Filter (Cross-Correlation)
         is_negative = polarity == "negative"
         work_data = -data if is_negative else data
-        
+
         # "Calculate Cross-Correlation"
         # signal.correlate or fftconvolve. Correlate flips kernel?
         # A matched filter for signal s(t) is h(t) = s(-t). Convolution with h(t) is Correlation with s(t).
         # So we want to correlates data with the template.
         # mode='same' keeps size matching data.
-        
+
         # Note: fftconvolve is convolution. geometric correlation of f and g is f * g(-t).
         # We want to match the shape `kernel` in `work_data`.
         # So we convolve `work_data` with `kernel[::-1]` (time-reversed kernel).
-        
+
         template = kernel
         # Time-reverse for matched filtering via convolution
         matched_filter_kernel = template[::-1]
-        
+
         # Use fftconvolve for speed
         filtered_trace = signal.fftconvolve(work_data, matched_filter_kernel, mode='same')
-        
+
         # 3. Z-Scoring
         # Robust noise estimation using MAD
-        mad = median_abs_deviation(filtered_trace, scale="normal") 
+        mad = median_abs_deviation(filtered_trace, scale="normal")
         # (scale='normal' makes it consistent with SD for Gaussian noise)
-        
+
         if mad == 0:
-            mad = 1e-12 # Avoid div/0
-            
-        if mad == 0:
-            mad = 1e-12 # Avoid div/0
-            
-        z_score_trace = filtered_trace / mad
-        
+            mad = 1e-12  # Avoid div/0
+
+        # Proper z-score: subtract center (median) and divide by scale (MAD)
+        z_score_trace = (filtered_trace - np.median(filtered_trace)) / mad
+
         # 4. Detection
         # Find peaks where height > threshold_std
         # 5. Dynamic Distance
         # "Set the peak finding min_distance argument to tau_decay (in samples)"
         min_dist_samples = int(tau_decay * sampling_rate)
-        if min_dist_samples < 1: 
+        if min_dist_samples < 1:
             min_dist_samples = 1
-            
+
         peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
-        
+
         # Filter artifacts
         if artifact_mask is not None and len(peak_indices) > 0:
             # Keep only peaks where mask is False
             # Ensure indices are within bounds of mask
             n_mask = len(artifact_mask)
             valid_mask = peak_indices < n_mask
-            
+
             # Check mask value at peak index
             not_artifact = ~artifact_mask[peak_indices[valid_mask]]
-            
+
             # Combine
             final_indices = peak_indices[valid_mask][not_artifact]
             peak_indices = final_indices
@@ -346,15 +350,15 @@ def detect_events_template(
         # Map back to results
         event_count = len(peak_indices)
         event_indices = peak_indices.astype(int)
-        
+
         # For amplitudes, we might want the value from the ORIGINAL data at those indices?
         # Or the filtered amplitude? Usually original is preferred for "event amplitude".
         event_amplitudes = data[event_indices] if event_count > 0 else np.array([])
-        
+
         # Times
         time_axis = np.arange(n_points) * dt
         event_times = time_axis[event_indices] if event_count > 0 else np.array([])
-        
+
         return EventDetectionResult(
             value=event_count,
             unit="counts",
@@ -409,7 +413,9 @@ def detect_events_template(
             "decimals": 4,
         },
         {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
-        {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:", "type": "float", "default": 20.0, "min": 0.0},
+        {"name": "artifact_slope_threshold",
+         "label": "Artifact Slope Thresh:",
+         "type": "float", "default": 20.0, "min": 0.0},
         {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
         {
             "name": "filter_freq_hz",
@@ -419,7 +425,8 @@ def detect_events_template(
             "min": 0.0,
             "max": 100000.0,
             "decimals": 1,
-            "hidden": True # Template matching is a filter itself, simple lowpass might be redundant or handled elsewhere
+            # Template matching handles filtering; lowpass may be redundant
+            "hidden": True
         },
     ],
 )
@@ -471,11 +478,11 @@ def run_event_detection_template_wrapper(
     }
 
 
-# Keep the legacy simplified threshold crossing for now or remove? 
+# Keep the legacy simplified threshold crossing for now or remove?
 # The plan replaced "Mini Detection" (which was threshold) with `detect_events_threshold`.
 # And "Deconvolution" with `detect_events_template`.
-# There was a "Threshold Crossing (Legacy)" block - I will keep it for compatibility if I didn't verify it should be nuked.
-# But I removed it from the code above to keep it clean.
+# There was a "Threshold Crossing (Legacy)" block - keeping for
+# compatibility reference. Sticking to requested deliverables.
 # I'll stick to the requested deliverables which were "Generate the complete code for: event_detection.py".
 # The prompt implies I should rewrite it. Ideally I keep *other* unconnected logic if it exists,
 # but the file seemed to only contain:
@@ -489,6 +496,21 @@ def run_event_detection_template_wrapper(
 def _find_stable_baseline_segment(
     data: np.ndarray, sample_rate: float, window_duration_s: float = 0.5, step_duration_s: float = 0.1
 ) -> Tuple[Optional[float], Optional[float], Optional[Tuple[int, int]]]:
+    """
+    Find the most stable (lowest variance) segment for baseline estimation.
+
+    Slides a window across the data and returns the segment with minimum variance.
+
+    Args:
+        data: 1D signal array.
+        sample_rate: Sampling rate in Hz.
+        window_duration_s: Duration of each candidate window in seconds.
+        step_duration_s: Step size between windows in seconds.
+
+    Returns:
+        Tuple of (mean, std, (start_idx, end_idx)) for the most stable segment,
+        or (None, None, None) if no valid segment is found.
+    """
     n_points = len(data)
     window_samples = int(window_duration_s * sample_rate)
     step_samples = int(step_duration_s * sample_rate)

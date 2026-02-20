@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+
+**Publication Readiness Audit — Scientific Accuracy**
+- Fixed line-noise detection baseline overlap in `signal_processor.py`
+- Fixed max/min dV/dt zeroing bias in `spike_analysis.py` (sentinel values)
+- Fixed AHP depth sign convention in `spike_analysis.py`
+- Fixed mean frequency calculation to use spike span instead of trace duration
+- Fixed Rin unit conversion clarity (mV/pA → MOhm derivation)
+- Refined sag ratio calculation to use 5th percentile for robustness
+- Fixed z-score normalization in template matching (subtract median)
+- Added dV/dt unit conversion documentation in `phase_plane.py`
+- Removed duplicate dictionary keys in spike detection registry
+
+**Publication Readiness Audit — Code Quality**
+- Removed redundant imports, unused variables, and duplicate function definitions
+- Added edge-case handling for empty spike indices
+- Added docstring for `_find_stable_baseline_segment`
+- Converted unresolvable TODO to NOTE (async limitation in batch load)
+- Standardized all flake8 compliance to max-line-length 120
+
+**Publication Readiness Audit — CI/CD & Infrastructure**
+- Made flake8 lint failures blocking in CI (removed `--exit-zero`)
+- Added `pytest-cov` to CI dependencies
+- Aligned Python version floor to 3.10 in pyproject.toml, environment.yml, README
+- Standardized author email and license (AGPL-3.0-or-later)
+- Cleaned stale files, relocated tests, removed empty directories
+- Added `.coverage`, `htmlcov/`, `.pytest_cache/` to `.gitignore`
+- Removed stale Python 3.9 classifier from `pyproject.toml`
+- Added `pytest-cov` and `flake8` to `environment.yml`
+- Added 7 targeted scientific accuracy tests
+
 **Phase 1: Critical Performance & Data Loading**
 - **CRITICAL**: Fixed severe UI lag caused by repeated instantiation of PlotCustomizationManager in `get_plot_pens()`. Now uses singleton pattern, eliminating thousands of unnecessary disk reads.
 - **CRITICAL**: Optimized `update_plot_pens()` in explorer_tab to fetch pens once outside loop instead of hundreds of times inside nested loops. Reduces function calls from N×M to 2.

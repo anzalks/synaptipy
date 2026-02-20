@@ -8,9 +8,9 @@ electrophysiology data using the neo library and a Qt-based graphical interface.
 
 # PEP 396 style version marker
 __version__ = "0.1.0"
-__author__ = "Anzal KS"  # Or your name/organization
-__email__ = "anzalks@ncbs.res.in"  # Or relevant contact
-__license__ = "MIT"  # Defined in the LICENSE file
+__author__ = "Anzal KS"
+__email__ = "anzal.ks@gmail.com"
+__license__ = "AGPL-3.0-or-later"
 
 # Define the primary public API exposed directly by 'import Synaptipy'
 # Usually just metadata for library packages.

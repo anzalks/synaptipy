@@ -64,12 +64,21 @@ def calculate_rin(
             delta_v = 0.0
         else:
             delta_v = response_voltage - baseline_voltage
-        # Calculate Rin as magnitude (always positive) since resistance is a scalar property
-        # Rin = |delta_V| / |delta_I|
-        rin = abs(delta_v) / (abs(current_amplitude) / 1000.0)  # V=IR -> R = V/I. If V is mV, I is pA. We want MOhm.
-        # mV / nA = MOhm. pA / 1000 = nA.
+        # Calculate Rin = |delta_V| / |delta_I|
+        # Units: voltage in mV, current in pA
+        # mV / (pA / 1000) = mV / nA = MOhm
+        delta_i_nA = abs(current_amplitude) / 1000.0
+        if delta_i_nA == 0:
+            log.warning("Current amplitude effectively zero after conversion.")
+            return RinResult(
+                value=None, unit="MOhm", is_valid=False,
+                error_message="Current amplitude effectively zero",
+                parameters=parameters or {}
+            )
+        rin = abs(delta_v) / delta_i_nA
 
-        conductance_us = 1000.0 / rin if rin != 0 else 0.0  # G = 1/R. 1/MOhm = uS.
+        # Conductance: G = 1/R. 1/MOhm = uS (micro-Siemens)
+        conductance_us = 1000.0 / rin if rin != 0 else 0.0
 
         log.debug(
             f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}"
@@ -340,17 +349,15 @@ def calculate_sag_ratio(
         v_baseline = np.mean(voltage_trace[baseline_mask])
 
         # Peak hyperpolarization
+        # Use 5th percentile instead of absolute min to reduce single-point noise sensitivity
         peak_mask = (time_vector >= response_peak_window[0]) & (time_vector < response_peak_window[1])
         if not np.any(peak_mask):
             return None
-        v_peak = np.min(voltage_trace[peak_mask])
-
-        # Robustness Check: If peak is outlier, use percentile
-        # Use 1st percentile for hyperpolarizing peak to avoid single-point noise
-        if len(voltage_trace[peak_mask]) > 10:
-            v_peak = np.percentile(voltage_trace[peak_mask], 1)
+        peak_data = voltage_trace[peak_mask]
+        if len(peak_data) > 10:
+            v_peak = np.percentile(peak_data, 5)
         else:
-            v_peak = np.min(voltage_trace[peak_mask])
+            v_peak = np.min(peak_data)
 
         # Steady-state hyperpolarization
         ss_mask = (time_vector >= response_steady_state_window[0]) & (time_vector < response_steady_state_window[1])

@@ -107,8 +107,11 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
                 return 0.0
             power_in_band = np.mean(psd[idx])
 
-            # Compare to neighboring baseline (e.g. target +/- 10Hz)
-            base_idx = np.where((freqs >= target_freq - 10) & (freqs <= target_freq + 10))[0]
+            # Compare to neighboring baseline, EXCLUDING the target band
+            base_idx = np.where(
+                ((freqs >= target_freq - 10) & (freqs < target_freq - bandwidth))
+                | ((freqs > target_freq + bandwidth) & (freqs <= target_freq + 10))
+            )[0]
             baseline_power = np.mean(psd[base_idx]) if len(base_idx) > 0 else 1.0
 
             return power_in_band / baseline_power if baseline_power > 0 else 0.0
@@ -533,27 +536,26 @@ def find_artifact_windows(
         # Interpret padding_ms as Post-Padding (artifact tail).
         # We allow a small fixed Pre-Padding to cover the rising edge.
         post_padding_samples = int((padding_ms / 1000.0) * fs)
-        
+
         # Small fixed pre-padding (0.25 ms or 2 samples minimum)
         pre_padding_ms = 0.25
         pre_padding_samples = int((pre_padding_ms / 1000.0) * fs)
-        pre_padding_samples = max(2, pre_padding_samples) 
-        
+        pre_padding_samples = max(2, pre_padding_samples)
+
         # Create asymmetric structure
         # Size = 2 * max_reach + 1 to keep center aligned
         max_reach = max(pre_padding_samples, post_padding_samples)
         structure_len = 2 * max_reach + 1
         structure = np.zeros(structure_len, dtype=bool)
-        
+
         center = max_reach
-        
+
         # Left side of kernel (negative offsets) -> Looks at future (right) -> Dilates LEFT (Pre-padding)
         # Right side of kernel (positive offsets) -> Looks at past (left) -> Dilates RIGHT (Post-padding)
         start_idx = center - pre_padding_samples
         end_idx = center + post_padding_samples + 1
         structure[start_idx:end_idx] = True
-        
+
         mask = ndimage.binary_dilation(mask, structure=structure)
 
     return mask
-

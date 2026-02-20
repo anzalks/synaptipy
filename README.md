@@ -57,7 +57,7 @@ Synaptipy adheres to a strict "Separation of Concerns" architecture for maintain
 
 | Component | Technology | Version Requirement |
 |-----------|------------|---------------------|
-| **Language** | Python | 3.11+ |
+| **Language** | Python | 3.10+ |
 | **GUI Framework** | PySide6 | >= 6.7.0 |
 | **Plotting Engine** | PyQtGraph | >= 0.13.0 |
 | **Data Standard** | Neo / PyNWB | >= 0.14.0 / >= 3.1.0 |
@@ -106,7 +106,7 @@ python -m pytest
 ### Graphical Interface
 Launch the main application window:
 ```bash
-synaptipy-gui
+synaptipy
 ```
 Alternatively, run the module directly:
 ```bash

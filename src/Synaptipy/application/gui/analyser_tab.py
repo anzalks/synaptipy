@@ -301,7 +301,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.central_analysis_item_combo = QtWidgets.QComboBox()
         self.central_analysis_item_combo.setToolTip("Select the specific file or data item to analyze.")
         self.central_analysis_item_combo.currentIndexChanged.connect(self._on_central_item_selected)
-        
+
         # Connect Sidebar Selection Signal (Cross-Tab Navigation)
         self.source_list_widget.currentItemChanged.connect(self._on_sidebar_selection_changed)
 
@@ -587,9 +587,9 @@ class AnalyserTab(QtWidgets.QWidget):
         log.debug(f"Batch Analysis requested load: {file_path}")
         self.load_file_requested.emit(file_path)
 
-        # TODO: Handle channel/trial auto-selection after load
-        # This requires the load to complete first, which is async/decoupled.
-        # For now, just loading the file is a huge win.
+        # NOTE: Channel/trial auto-selection after batch load is not possible
+        # because file loading is asynchronous. The file is loaded via signal emission
+        # and processed by MainWindow, so we cannot select channels here.
 
     @QtCore.Slot()
     def _copy_methods_to_clipboard(self):
@@ -818,15 +818,15 @@ class AnalyserTab(QtWidgets.QWidget):
 
         selected_item = self._analysis_items[row]
         target_type = selected_item.get("target_type")
-        
+
         # Check if it's a specific trial selection (from Explorer expansion)
         # Note: The item dictionary structure from ExplorerTab typically is:
         # {"path": Path(...), "target_type": "Current Trial", "trial_index": 5}
-        
+
         trial_index = -1
         if target_type == "Current Trial":
             trial_index = selected_item.get("trial_index", -1)
-        
+
         # Forward to current tab
         current_tab = self.sub_tab_widget.currentWidget()
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
@@ -837,8 +837,8 @@ class AnalyserTab(QtWidgets.QWidget):
                 except Exception as e:
                     log.error(f"Error highlighting trial in tab: {e}")
 
-
     # --- Cleanup ---
+
     def cleanup(self):
         log.debug("Cleaning up main AnalyserTab and sub-tabs.")
         for tab in self._loaded_analysis_tabs:

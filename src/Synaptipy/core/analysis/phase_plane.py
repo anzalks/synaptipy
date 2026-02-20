@@ -38,8 +38,8 @@ def calculate_dvdt(voltage: np.ndarray, sampling_rate: float, sigma_ms: float = 
         voltage_smooth = voltage
 
     # Calculate derivative
-    # dV (mV) / dt (s) = mV/s.
-    # We usually want V/s. So divide by 1000.
+    # np.gradient(voltage_smooth, dt) yields mV/s since voltage is in mV.
+    # Convert to V/s by dividing by 1000.
     dvdt = np.gradient(voltage_smooth, dt) / 1000.0
 
     return dvdt
@@ -101,7 +101,6 @@ def detect_threshold_kink(
     dvdt = calculate_dvdt(voltage, sampling_rate, sigma_ms=0.1)
     threshold_indices = []
 
-    _dt = 1.0 / sampling_rate  # noqa: F841
     search_samples = int((search_window_ms / 1000.0) * sampling_rate)
 
     for peak_idx in peak_indices:

@@ -57,7 +57,10 @@ class SignalProcessingPipeline:
         self._steps = [s.copy() for s in steps]
         log.debug(f"Pipeline steps set to: {self._steps}")
 
-    def process(self, data: np.ndarray, fs: float, time_vector: Optional[np.ndarray] = None) -> np.ndarray:  # noqa: C901
+    def process(  # noqa: C901
+        self, data: np.ndarray, fs: float,
+        time_vector: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """
         Apply all steps in order to the data.
 
@@ -119,7 +122,6 @@ class SignalProcessingPipeline:
                         )
 
                 # Check for bad data after each step
-                import numpy as np
                 if result is not None:
                     if np.any(np.isnan(result)) or np.any(np.isinf(result)):
                         log.error(f"Step {op_type}/{step.get('method')} produced invalid data (NaN/Inf)")
