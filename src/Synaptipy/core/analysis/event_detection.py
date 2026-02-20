@@ -25,18 +25,23 @@ def detect_events_threshold(  # noqa: C901
     threshold: float,
     polarity: str = "negative",
     refractory_period: float = 0.002,
-    artifact_mask: Optional[np.ndarray] = None
+    artifact_mask: Optional[np.ndarray] = None,
 ) -> EventDetectionResult:
     """
-    Detects events using Adaptive Peak Finding within suprathreshold spans.
+    Detects events using Topological Prominence to handle shifting baselines
+    and overlapping events (e.g., EPSCs riding on top of earlier EPSCs).
+
+    Incorporates a 2-STD noise baseline check to prevent false positives
+    from noisy fluctuations, while accommodating a wide dynamic range
+    (from <10pA to >400pA).
 
     Args:
         data: Signal array.
         time: Time array (seconds).
-        threshold: Amplitude threshold (positive value).
+        threshold: Target prominence threshold (positive value).
         polarity: 'positive' or 'negative'.
         refractory_period: Minimum time between events (seconds).
-        artifact_mask: Boolean mask where True indicates an artifact region to ignore.
+        artifact_mask: Boolean mask for artifact regions.
 
     Returns:
         EventDetectionResult
@@ -45,91 +50,57 @@ def detect_events_threshold(  # noqa: C901
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message="Invalid data/time shape")
 
     try:
-        # 1. Rectify Logic
+        # 1. Rectification
         is_negative = polarity == "negative"
-        # Work with a copy to avoid modifying original in-place if not desired,
-        # though we just use it for detection.
         work_data = -data if is_negative else data
 
-        # Ensure threshold is positive for comparison logic
+        # 2. Noise Floor Estimation (Scientific Basis: 2-STD deviation rule)
+        # Use MAD for robust noise deviation estimation resistant to large events
+        noise_sd = median_abs_deviation(work_data, scale="normal")
+        if noise_sd == 0:
+            noise_sd = 1e-12
+
+        # The prominence must clear BOTH the user-defined threshold and
+        # the baseline noise floor (minimum 2 standard deviations) to be considered a true signal.
         abs_threshold = abs(threshold)
+        min_prominence = max(abs_threshold, 2.0 * noise_sd)
 
-        # 2. Identify Spans
-        # Find all indices where data > threshold
-        suprathreshold_indices = np.where(work_data > abs_threshold)[0]
+        # 3. Refractory Filter
+        if len(time) > 1:
+            fs = 1.0 / (time[1] - time[0])
+        else:
+            fs = 10000.0
+        distance_samples = max(1, int(refractory_period * fs))
 
-        event_indices = []
+        # 4. Prominence-Based Peak Detection
+        # Topological Prominence is robust for events "riding" on the tail of others,
+        # perfectly measuring relative deflection regardless of an absolute baseline shift.
+        peaks, properties = signal.find_peaks(
+            work_data,
+            prominence=min_prominence,
+            distance=distance_samples
+        )
 
-        if len(suprathreshold_indices) > 0:
-            # 3. Group Consecutive Indices
-            # np.diff(indices) > 1 identifies breaks in continuity
-            diffs = np.diff(suprathreshold_indices)
-            split_points = np.where(diffs > 1)[0] + 1
-            spans = np.split(suprathreshold_indices, split_points)
+        n_artifacts_rejected = 0
 
-            raw_peaks = []
-            raw_peak_amps = []
+        # 5. Artifact Filter
+        if artifact_mask is not None and len(peaks) > 0:
+            # Mask defines indices where artifacts occur (True = artifact)
+            # Ensure peaks are within bounds
+            valid_idx_mask = peaks < len(artifact_mask)
+            peaks = peaks[valid_idx_mask]
 
-            # 4. Peak Search within Spans
-            for span in spans:
-                if len(span) == 0:
-                    continue
+            not_artifact_mask = ~artifact_mask[peaks]
+            n_artifacts_rejected = int(np.sum(~not_artifact_mask))
 
-                # Check for artifact overlap
-                if artifact_mask is not None:
-                    # If any point in the span is an artifact, we discard the whole event candidate?
-                    # Or just check the peak?
-                    # Generally safely reject if any part is contaminated.
-                    if np.any(artifact_mask[span]):
-                        continue
+            peaks = peaks[not_artifact_mask]
 
-                # Find index of max value within this span
-                # span_max_idx relative to span start
-                span_vals = work_data[span]
-                local_max_idx = np.argmax(span_vals)
-                peak_idx = span[local_max_idx]
+        # 6. Gather Results
+        event_indices = peaks.astype(int)
 
-                raw_peaks.append(peak_idx)
-                raw_peak_amps.append(span_vals[local_max_idx])
-
-            # 5. Refractory Filter
-            # "If two peaks are closer than refractory_period, discard the smaller one."
-            # Approach: Sort all candidate peaks by Amplitude (Descending).
-            # Iterate and keep if not within refractory of already accepted peaks.
-
-            # Convert to numpy for sorting
-            raw_peaks = np.array(raw_peaks)
-            raw_peak_amps = np.array(raw_peak_amps)
-
-            # Sort by amplitude descending
-            sorted_order = np.argsort(raw_peak_amps)[::-1]
-            sorted_peaks = raw_peaks[sorted_order]
-
-            accepted_peaks = []
-
-            refractory_samples = int(refractory_period * (1.0 / (time[1] - time[0]))) if len(time) > 1 else 0
-
-            for peak in sorted_peaks:
-                # Check distance to already accepted peaks
-                is_too_close = False
-                for existing in accepted_peaks:
-                    if abs(peak - existing) < refractory_samples:
-                        is_too_close = True
-                        break
-
-                if not is_too_close:
-                    accepted_peaks.append(peak)
-
-            # Sort accepted peaks by time for the result
-            accepted_peaks.sort()
-            event_indices = np.array(accepted_peaks, dtype=int)
-
-        event_indices = np.array(event_indices, dtype=int)
-
-        # Gather results
         if len(event_indices) > 0:
             event_times = time[event_indices]
-            # Return original amplitudes (with original sign)
+            # Always return the real amplitudes (with original sign)
             event_amplitudes = data[event_indices]
         else:
             event_times = np.array([])
@@ -138,8 +109,8 @@ def detect_events_threshold(  # noqa: C901
         num_events = len(event_indices)
         duration = time[-1] - time[0] if len(time) > 0 else 0
         frequency = num_events / duration if duration > 0 else 0.0
-        mean_amplitude = np.mean(event_amplitudes) if num_events > 0 else 0.0
-        std_amplitude = np.std(event_amplitudes) if num_events > 0 else 0.0
+        mean_amplitude = float(np.mean(event_amplitudes)) if num_events > 0 else 0.0
+        std_amplitude = float(np.std(event_amplitudes)) if num_events > 0 else 0.0
 
         return EventDetectionResult(
             value=frequency,
@@ -152,12 +123,12 @@ def detect_events_threshold(  # noqa: C901
             event_indices=event_indices,
             event_times=event_times,
             event_amplitudes=event_amplitudes,
-            detection_method="threshold_adaptive",
+            detection_method="threshold_adaptive_prominence",
             threshold_value=threshold,
             direction=polarity,
-            # Calculation of exact rejected count is tricky here without tracking, but we filtered candidates.
-            n_artifacts_rejected=0,
-            artifact_mask=artifact_mask
+            n_artifacts_rejected=n_artifacts_rejected,
+            artifact_mask=artifact_mask,
+            summary_stats={"noise_sd": float(noise_sd), "min_prominence_used": float(min_prominence)}
         )
 
     except Exception as e:
