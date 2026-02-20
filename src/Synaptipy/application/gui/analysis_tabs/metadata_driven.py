@@ -298,24 +298,65 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Gather parameters from UI widgets."""
         return self.param_generator.gather_params()
 
-    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:  # noqa: C901
         """Run the registered analysis function."""
         func = AnalysisRegistry.get_function(self.analysis_name)
         if not func:
             raise ValueError(f"Analysis function '{self.analysis_name}' not found.")
 
-        # Prepare arguments
-        # Most analysis functions expect (data, time, sampling_rate, **kwargs)
-        # or similar. We need to be flexible or enforce a standard signature.
-        # Synaptipy standard seems to be: func(data, time, sampling_rate, **params)
-
-        voltage = data["data"]
-        time = data["time"]
-        fs = data["sampling_rate"]
+        # Check if the analysis requires all trials
+        metadata = AnalysisRegistry.get_metadata(self.analysis_name)
+        requires_multi_trial = metadata.get("requires_multi_trial", False)
 
         try:
-            # Call the function
-            results = func(voltage, time, fs, **params)
+            if requires_multi_trial and self._selected_item_recording and self.signal_channel_combobox:
+                # Fetch all trials systematically
+                chan_id = self.signal_channel_combobox.currentData()
+                channel = self._selected_item_recording.channels.get(chan_id)
+                if not channel:
+                    raise ValueError(f"Channel {chan_id} not found for multi-trial analysis.")
+
+                num_trials = getattr(channel, "num_trials", 0)
+                if num_trials == 0:
+                    num_trials = len(getattr(channel, "data_trials", []))
+                if num_trials == 0:
+                    num_trials = getattr(channel, "trial_count", 0)
+
+                if num_trials == 0:
+                    raise ValueError("No trials found in the selected channel.")
+
+                data_list = []
+                time_list = []
+                fs = data.get("sampling_rate", 10000.0)
+
+                for i in range(num_trials):
+                    trial_data = channel.get_data(i)
+                    trial_time = channel.get_relative_time_vector(i)
+
+                    if trial_data is not None and trial_time is not None:
+                        # Apply any global preprocessing if active
+                        if hasattr(self, "_active_preprocessing_settings") and self._active_preprocessing_settings:
+                            if hasattr(self, "pipeline"):
+                                processed = self.pipeline.process(trial_data, fs, trial_time)
+                                if processed is not None:
+                                    trial_data = processed
+
+                        data_list.append(trial_data)
+                        time_list.append(trial_time)
+
+                if not data_list:
+                    raise ValueError("Failed to load trial data.")
+
+                # Call the function with lists
+                results = func(data_list, time_list, fs, **params)
+            else:
+                # Standard single-trial execution
+                voltage = data["data"]
+                time = data["time"]
+                fs = data["sampling_rate"]
+
+                # Call the function with single arrays
+                results = func(voltage, time, fs, **params)
 
             # If results is a list (like spikes), wrap it?
             # Or if it's a dict, pass it through.
