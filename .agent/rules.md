@@ -57,6 +57,10 @@ All analysis features must be split into two distinct parts:
 * **QSettings**: Do not hardcode app names or keys in `QSettings`.
 * **Requirement**: Use constants from `src/Synaptipy/shared/constants.py` (e.g., `APP_NAME`).
 
+### 6. Zero-Tolerance for Dead Code & Duplication (AUDIT LESSON)
+* **Unused Variables & Imports**: Must be aggressively cleared. Do not leave `dt = 0.001` if `dt` is never used. Do not import types like `List` if unused. Flake8 F401/F841 rules MUST be respected.
+* **Duplicate Definitions**: Do not define a dictionary key twice in the same structure, and never define a method twice in the same class (e.g., leaving a stub above the real implementation).
+
 ## III. REQUIRED CONTEXT & REFERENCE ARCHETYPES
 
 **CRITICAL INSTRUCTION:** You MUST read the **Template Files** below before writing any code.
@@ -80,11 +84,11 @@ All analysis features must be split into two distinct parts:
 
 ## IV. CI/CD & QUALITY ASSURANCE
 
-**1. Linting Compliance (Flake8)**
-* **Line Length**: Strictly < 120 characters (matches `.flake8`).
-* **Complexity**: Keep function cyclomatic complexity under 10. Refactor if logic gets too nested.
-* **Unused Imports**: Remove them. (Exception: `__init__.py` files).
-* **Command**: Before finalizing code, the Agent should verify with: `flake8 src tests`
+**1. Linting Compliance (Flake8 Strictness)**
+* **Line Length**: Strictly <= 120 characters (matches `.flake8`). 
+* **Complexity**: Keep function cyclomatic complexity under 10. Refactor if logic gets too nested. Use `# noqa: C901` as a last resort, but you must manually suppress warnings if you do.
+* **Unused Imports/Vars**: Clean them up before finalizing code.
+* **Execution Constraint**: Before marking any Phase or batch of work completed, the Agent MUST run `python -m flake8 src/ tests/ --count --max-complexity=10 --max-line-length=120 --statistics` and verify it returns **0 errors**.
 * **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures (0 errors allowed).
 * **Whitespace Hygiene**: Agents MUST inspect and fix all flake8 whitespace warnings (W293, W391, W504, etc.) before finishing a task. Codebase should be pristine.
 
@@ -109,6 +113,13 @@ All analysis features must be split into two distinct parts:
 * **Native Discovery**: In `NeoAdapter`, strictly prioritize `neo.io.get_io(filename)` over manual extension mapping lists (`IODict`), which become stale.
 * **Memory Hygiene**: When aggregating signals from multiple segments, PRE-ALLOCATE NumPy arrays based on header info. Do not append to lists in a loop for massive datasets.
 
+**6. Dependency Management & Synchronization (The "Three-Pillar" Rule)**
+* **Unconditional Sync**: Dependency updates MUST be applied consistently across the entire ecosystem. If you add or remove an environment requirement, you MUST synchronize:
+    1. `pyproject.toml`
+    2. `environment.yml`
+    3. `requirements.txt`
+* **Mismatch Prevention**: Ensure Python floor versions match exactly (e.g., `>=3.10`). Do not leave old classifiers (e.g., Python 3.9) in `pyproject.toml` if the floor is 3.10.
+
 ## V. DOCUMENTATION & PROFESSIONALISM
 
 **1. Professional Tone & Style**
@@ -125,6 +136,9 @@ All analysis features must be split into two distinct parts:
     *   Headers: `#` for titles, `##` for sections, `###` for subsections.
     *   Code Blocks: Always specify the language (e.g., `python`, `bash`).
     *   Lists: Use `-` for bullet points.
+
+**3. Documentation & Changelog Standards**
+*   **Changelog Maintenance**: Any bug fixes, performance improvements, or features MUST be added to the `[Unreleased]` section of `CHANGELOG.md` exactly when the work completes. Do not wait for a formal release.
 
 ## VI. REFACTORING CONSTRAINTS
 
@@ -171,3 +185,13 @@ All analysis features must be split into two distinct parts:
 **5. Infrastructure Robustness (IO)**
 * **Native Discovery**: In `neo_adapter.py`, strictly prioritize `neo.io.get_io(filename)` over manual extension mapping lists (`IODict`). Manual mapping is only a fallback.
 * **Memory Hygiene**: When aggregating signals from multiple segments, PRE-ALLOCATE NumPy arrays based on header info. Do not use `.append()` on lists inside data loops.
+
+**6. Unit Safety, Conversion & Validation (AUDIT LESSON)**
+* **Explicit Conversions**: When a formula requires unit conversions (e.g., current in pA to resistance in MOhm), the mathematical conversion MUST be explicitly documented as an inline comment.
+    * *Example:* `# Rin = |delta_V| / |delta_I| -> mV / (pA / 1000) = MOhm`
+* **Thresholds & Derivatives**: If a parameter operates in one unit (e.g., V/s limit) but the data is in another (e.g., mV), explicit scaling (e.g., `* 1000.0`) must be done immediately, and testing must assert this conversion.
+
+**7. Edge-Case & Noise Robustness (AUDIT LESSON)**
+* **Sentinel Values**: Do NOT use `0.0` as a fallback or default for biological metrics like `max_dvdt` or `ap_threshold` when they are unable to be computed. Use `np.nan` or a representative baseline boundary. Using `0.0` creates severe statistical artifacts in Pandas aggregations.
+* **Noise Resistance**: Prefer percentiles (e.g., `np.percentile(data, 5)`) over absolute extrema (`np.min(data)`) for calculating baselines or maximum deflections (like sag potential), which are heavily susceptible to single-point hardware noise spikes.
+* **Empty Vectors**: Always check `if my_array.size == 0:` before executing math that causes RuntimeWarnings (e.g. `np.max()`, `np.mean()`) to handle edge cases where zero spikes/events are found.
