@@ -37,9 +37,12 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.metadata = AnalysisRegistry.get_metadata(analysis_name)
         self.param_widgets: Dict[str, QtWidgets.QWidget] = {}
         self._popup_windows = []
+        self._interactive_regions = {}
+        self._syncing_regions = False
 
         super().__init__(neo_adapter, settings_ref, parent)
         self._setup_ui()
+        self._setup_interactive_regions()
 
     def get_registry_name(self) -> str:
         return self.analysis_name
@@ -183,6 +186,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             ui_params = self.metadata.get("ui_params", [])
             # Re-generating widgets will reset them to defaults
             self.param_generator.generate_widgets(ui_params, self._on_param_changed)
+            self._setup_interactive_regions()
             # Also notify any changes
             self._on_param_changed()
 
@@ -198,6 +202,63 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _setup_custom_plot_items(self):
         """Hook for subclasses to add extra plot items (e.g., regions)."""
         pass
+
+    def _setup_interactive_regions(self):
+        """Setup pg.LinearRegionItem for window parameters if they exist."""
+        if not self.plot_widget:
+            return
+            
+        # Clear old regions
+        for region in self._interactive_regions.values():
+            if region in self.plot_widget.items:
+                self.plot_widget.removeItem(region)
+                
+        self._interactive_regions.clear()
+        
+        if not hasattr(self, "param_generator"):
+            return
+            
+        widgets = self.param_generator.widgets
+        
+        # Helper to bind a region to start/end spinboxes
+        def bind_region(start_key, end_key, color_tuple):
+            if start_key in widgets and end_key in widgets:
+                start_w = widgets[start_key]
+                end_w = widgets[end_key]
+                
+                region = pg.LinearRegionItem(
+                    values=[start_w.value(), end_w.value()],
+                    brush=pg.mkBrush(*color_tuple, 50),
+                    pen=pg.mkPen(*color_tuple, 200)
+                )
+                self.plot_widget.addItem(region)
+                self._interactive_regions[start_key] = region
+                
+                def update_spinboxes():
+                    if self._syncing_regions: return
+                    self._syncing_regions = True
+                    minX, maxX = region.getRegion()
+                    start_w.setValue(minX)
+                    end_w.setValue(maxX)
+                    # Manually trigger param change since setValue blocks signal if unchanged?
+                    # valueChanged will fire, which triggers _on_param_changed via param_generator
+                    self._syncing_regions = False
+                    
+                region.sigRegionChangeFinished.connect(update_spinboxes)
+                
+                def update_region():
+                    if self._syncing_regions: return
+                    self._syncing_regions = True
+                    region.setRegion([start_w.value(), end_w.value()])
+                    self._syncing_regions = False
+                    
+                start_w.valueChanged.connect(update_region)
+                end_w.valueChanged.connect(update_region)
+
+        bind_region("baseline_start_s", "baseline_end_s", (0, 0, 255))
+        bind_region("response_start_s", "response_end_s", (255, 0, 0))
+        bind_region("response_peak_start_s", "response_peak_end_s", (255, 165, 0)) # Orange
+        bind_region("response_steady_start_s", "response_steady_end_s", (0, 255, 0)) # Green
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         """Return the last analysis result for saving."""

@@ -28,6 +28,8 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         self.file_io = file_io_controller
         self.file_model: Optional[QtWidgets.QFileSystemModel] = None
         self.file_tree: Optional[QtWidgets.QTreeView] = None
+        self.project_tree: Optional[QtWidgets.QTreeWidget] = None
+        self.tabs: Optional[QtWidgets.QTabWidget] = None
 
         self.setAcceptDrops(True)  # Screen-level drop support
         self._setup_ui()
@@ -63,14 +65,122 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         # Set Custom Delegate
         self.delegate = QualityDelegate(self.file_tree)
         self.file_tree.setItemDelegate(self.delegate)
-
         self.file_tree.doubleClicked.connect(self._on_tree_double_clicked)
 
+        # Setup Project Tree Widget
+        self.project_tree = QtWidgets.QTreeWidget()
+        self.project_tree.setHeaderLabel("Project Structure (Animal -> Slice -> Cell)")
+        self.project_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.project_tree.itemDoubleClicked.connect(self._on_project_tree_double_clicked)
+        
+        # Tabs for Sidebar
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(self.file_tree, "File System")
+        
+        project_widget = QtWidgets.QWidget()
+        project_layout = QtWidgets.QVBoxLayout(project_widget)
+        project_layout.setContentsMargins(0, 0, 0, 0)
+        
+        btn_layout = QtWidgets.QHBoxLayout()
+        refresh_btn = QtWidgets.QPushButton("Refresh Project Tree")
+        refresh_btn.setToolTip("Scans current directory and builds Animal->Slice->Cell hierarchy")
+        refresh_btn.clicked.connect(self._refresh_project_tree)
+        btn_layout.addWidget(refresh_btn)
+        
+        # Add checkbox for batch selection (if needed)
+        # We enabled ExtendedSelection on the project tree already
+        
+        project_layout.addLayout(btn_layout)
+        project_layout.addWidget(self.project_tree)
+        self.tabs.addTab(project_widget, "Project Tree")
+        
         # Async Sync Handling
         self.file_model.directoryLoaded.connect(self._on_directory_loaded)
         self._pending_sync_path: Optional[Path] = None
 
-        layout.addWidget(self.file_tree)
+        layout.addWidget(self.tabs)
+
+    def _refresh_project_tree(self):
+        """Scans the current root directory and builds the Animal/Slice/Cell hierarchy."""
+        root_path = Path(self.file_model.rootPath())
+        self.project_tree.clear()
+        
+        if not root_path.exists() or not root_path.is_dir():
+            return
+            
+        supported_exts = self.neo_adapter.get_supported_extensions()
+        
+        # Simple heuristic: scan up to 5 levels deep
+        # Assuming structure: Root / Animal / Slice / Cell / Protocol / Sweep.abf
+        # We'll group by relative path parts.
+        
+        tree_dict = {}
+        for ext in supported_exts:
+            for filepath in root_path.rglob(f"*.{ext}"):
+                rel_parts = filepath.relative_to(root_path).parts
+                current_level = tree_dict
+                for part in rel_parts:
+                    if part not in current_level:
+                        current_level[part] = {}
+                    current_level = current_level[part]
+        
+        def dict_to_tree(d, parent_item, current_path):
+            for key, val in sorted(d.items()):
+                item = QtWidgets.QTreeWidgetItem(parent_item)
+                item.setText(0, key)
+                full_path = current_path / key
+                item.setData(0, QtCore.Qt.ItemDataRole.UserRole, str(full_path))
+                if val:  # is directory
+                    dict_to_tree(val, item, full_path)
+                else:    # is file
+                    pass 
+                    
+        dict_to_tree(tree_dict, self.project_tree.invisibleRootItem(), root_path)
+        self.project_tree.expandToDepth(2) # Expand first few levels
+
+    def _on_project_tree_double_clicked(self, item: QtWidgets.QTreeWidgetItem, column: int):
+        """Handle double click on project tree to load file."""
+        path_str = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        if not path_str:
+            return
+            
+        file_path = Path(path_str)
+        if file_path.is_file():
+            log.debug(f"Project Tree double-click: Loading {file_path}")
+            
+            # Find siblings in the same folder for next/prev
+            parent_dir = file_path.parent
+            file_list = []
+            selected_index = 0
+            
+            if parent_dir.exists():
+                supported_exts = self.neo_adapter.get_supported_extensions()
+                for ext in supported_exts:
+                    file_list.extend(parent_dir.glob(f"*.{ext}"))
+                file_list = sorted(list(set(file_list)))
+                
+                try:
+                    selected_index = file_list.index(file_path)
+                except ValueError:
+                    selected_index = 0
+                    
+            self.file_selected.emit(file_path, file_list, selected_index)
+
+    def get_selected_project_files(self) -> list[Path]:
+        """Returns a list of selected files from the project tree (batch selection)."""
+        files = []
+        for item in self.project_tree.selectedItems():
+            path_str = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if path_str:
+                path = Path(path_str)
+                if path.is_file():
+                    files.append(path)
+                elif path.is_dir():
+                    # If directory selected, grab all supported files inside
+                    supported_exts = self.neo_adapter.get_supported_extensions()
+                    for ext in supported_exts:
+                        files.extend(path.rglob(f"*.{ext}"))
+        return list(set(files))
 
     def _on_tree_double_clicked(self, index: QtCore.QModelIndex):
         """Handle double click on file tree to load file."""

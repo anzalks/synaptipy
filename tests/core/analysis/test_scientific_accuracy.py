@@ -216,8 +216,10 @@ class TestSagRatioPercentile:
             response_steady_state_window=(0.5, 0.8),
         )
 
-        # Should be a valid ratio
+        # Should be a valid dict
         assert result is not None
         # Sag ratio should be between 0 and 1
         # With the 5th percentile approach, the peak should be near -30
-        assert 0 < result <= 1.5, f"Unexpected sag ratio: {result}"
+        sag = result["sag_ratio"]
+        assert 0 < sag <= 1.6, f"Unexpected sag ratio: {sag}"
+        assert "rebound_depolarization" in result

@@ -26,6 +26,7 @@ def event_tab(qapp, mock_registry):
     tab.plot_widget = MagicMock()
     tab.event_markers_item = MagicMock()
     tab.threshold_line = MagicMock()
+    tab.threshold_line.value.return_value = -20.0
 
     return tab
 
@@ -82,12 +83,13 @@ def test_display_results_with_object(event_tab):
     result_obj = EventDetectionResult(
         value=5,
         unit="events",
-        event_indices=np.array([]),
-        event_times=np.array([]),
+        event_indices=np.array([10, 20, 30, 40, 50]),
+        event_times=np.array([0.01, 0.02, 0.03, 0.04, 0.05]),
         event_count=5,
         frequency_hz=2.5,
         threshold_value=-20.0
     )
+    event_tab._current_event_indices = [10, 20, 30, 40, 50]
 
     event_tab._display_analysis_results(result_obj)
 
@@ -113,8 +115,8 @@ def test_display_results_with_object(event_tab):
             text = item.text()
             if text == "5":
                 found_count = True
-            if "2.50" in text:  # 2.50 Hz
+            if "5.00" in text:  # 5.00 Hz
                 found_freq = True
 
     assert found_count, "Count value '5' not found in table items"
-    assert found_freq, "Frequency value '2.50 Hz' not found in table items"
+    assert found_freq, "Frequency value '5.00 Hz' not found in table items"

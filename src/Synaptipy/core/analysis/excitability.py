@@ -37,6 +37,7 @@ def calculate_fi_curve(  # noqa: C901
         - max_freq: Maximum firing frequency observed.
         - spike_counts: List of spike counts per sweep.
         - frequencies: List of firing frequencies per sweep.
+        - adaptation_ratios: List of spike frequency adaptation ratios (last ISI / first ISI) per sweep.
         - current_steps: List of current steps used.
     """
     num_sweeps = len(sweeps)
@@ -60,6 +61,7 @@ def calculate_fi_curve(  # noqa: C901
 
     spike_counts = []
     frequencies = []
+    adaptation_ratios = []
 
     # 1. Detect spikes in each sweep
     for i, (data, time) in enumerate(zip(sweeps, time_vectors)):
@@ -73,6 +75,18 @@ def calculate_fi_curve(  # noqa: C901
 
         spike_counts.append(count)
         frequencies.append(freq)
+
+        # Calculate Spike Frequency Adaptation (ISI ratio = last / first)
+        if count >= 3 and result.spike_times is not None:
+            isis = np.diff(result.spike_times)
+            first_isi = isis[0]
+            last_isi = isis[-1]
+            if first_isi > 0:
+                adaptation_ratios.append(last_isi / first_isi)
+            else:
+                adaptation_ratios.append(np.nan)
+        else:
+            adaptation_ratios.append(np.nan)
 
     # 2. Calculate Rheobase
     rheobase_pa = None
@@ -116,6 +130,7 @@ def calculate_fi_curve(  # noqa: C901
         "max_freq": np.max(frequencies) if frequencies else 0.0,
         "spike_counts": spike_counts,
         "frequencies": frequencies,
+        "adaptation_ratios": adaptation_ratios,
         "current_steps": current_steps,
     }
 
@@ -229,6 +244,7 @@ def run_excitability_analysis_wrapper(
             "fi_r_squared": results["fi_r_squared"],
             "max_freq_hz": results["max_freq"],
             "frequencies": results["frequencies"],
+            "adaptation_ratios": results["adaptation_ratios"],
             "current_steps": results["current_steps"],
         }
 

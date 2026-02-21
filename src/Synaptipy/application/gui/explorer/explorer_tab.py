@@ -149,9 +149,9 @@ class ExplorerTab(QtWidgets.QWidget):
         agl.addWidget(self.analysis_set_label)
 
         abtn_layout = QtWidgets.QHBoxLayout()
-        self.add_analysis_btn = QtWidgets.QPushButton("Add Recording to Set")
-        self.add_analysis_btn.setEnabled(False)
-        self.add_analysis_btn.clicked.connect(self._add_current_to_analysis_set)
+        self.add_analysis_btn = QtWidgets.QPushButton("Add Selection to Set")
+        self.add_analysis_btn.setEnabled(True)
+        self.add_analysis_btn.clicked.connect(self._add_selection_to_analysis_set)
         abtn_layout.addWidget(self.add_analysis_btn)
 
         self.clear_analysis_btn = QtWidgets.QPushButton("Clear Analysis Set")
@@ -325,7 +325,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.plot_canvas.y_range_changed.connect(self._on_vb_y_range_changed)
 
         # Analysis Buttons
-        self.add_analysis_btn.clicked.connect(self._add_current_to_analysis_set)
+        self.add_analysis_btn.clicked.connect(self._add_selection_to_analysis_set)
         self.clear_analysis_btn.clicked.connect(self._clear_analysis_set)
 
         # Live Analysis Controls
@@ -1046,38 +1046,60 @@ class ExplorerTab(QtWidgets.QWidget):
         self.preprocessing_widget.setEnabled(self.current_recording is not None)
 
     # --- Placeholders for remaining logic ---
-    def _add_current_to_analysis_set(self):
-        if not self.current_recording or not self.current_recording.source_file:
-            log.warning("Cannot add recording to analysis set: No recording loaded.")
+    def _add_selection_to_analysis_set(self):
+        """Add current file or batch selection from project tree to analysis set."""
+        files_to_add = []
+        
+        # 1. Check if there are selections in the project tree
+        if hasattr(self.sidebar, "get_selected_project_files"):
+            files = self.sidebar.get_selected_project_files()
+            if files:
+                for f in files:
+                    item = {
+                        "path": f,
+                        "target_type": "Recording",
+                        "trial_index": None,
+                        "recording_ref": None, # Will be loaded during analysis if None
+                    }
+                    # If this is the currently loaded recording, use its reference
+                    if self.current_recording and self.current_recording.source_file == f:
+                        item["recording_ref"] = self.current_recording
+                    files_to_add.append(item)
+                    
+        # 2. Add current recording if no batch selection
+        if not files_to_add and self.current_recording and self.current_recording.source_file:
+            item = {
+                "path": self.current_recording.source_file,
+                "target_type": "Recording",
+                "trial_index": None,
+                "recording_ref": self.current_recording,
+            }
+            files_to_add.append(item)
+
+        if not files_to_add:
+            self.status_bar.showMessage("No files selected to add.", 3000)
             return
 
-        file_path = self.current_recording.source_file
-        target_type = "Recording"
-        trial_index = None
-
-        analysis_item = {
-            "path": file_path,
-            "target_type": target_type,
-            "trial_index": trial_index,
-            "recording_ref": self.current_recording,
-        }
-
-        is_duplicate = any(
-            item.get("path") == file_path and item.get("target_type") == target_type for item in self._analysis_items
-        )
-        if is_duplicate:
-            log.debug(f"Recording already in analysis set: {file_path.name}")
-            self.status_bar.showMessage(f"Recording '{file_path.name}' is already in the analysis set.", 3000)
-            return
-
-        self._analysis_items.append(analysis_item)
-        log.debug(f"Added to analysis set: {analysis_item}")
-        self.status_bar.showMessage(f"Added Recording '{file_path.name}' to the analysis set.", 3000)
-
+        added_count = 0
+        for item in files_to_add:
+            # Check if already present to avoid duplicates
+            is_duplicate = any(
+                a.get("path") == item["path"] and a.get("target_type") == item["target_type"]
+                for a in self._analysis_items
+            )
+            if not is_duplicate:
+                self._analysis_items.append(item)
+                added_count += 1
+                
         self._update_analysis_set_display()
 
         if self.session_manager:
             self.session_manager.selected_analysis_items = self._analysis_items[:]
+
+        if added_count > 0:
+            self.status_bar.showMessage(f"Added {added_count} items to Analysis Set", 3000)
+        else:
+            self.status_bar.showMessage("Selected items were already in the Analysis Set.", 3000)
 
         self._update_all_ui_state()
 

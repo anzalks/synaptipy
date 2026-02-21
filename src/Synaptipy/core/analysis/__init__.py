@@ -20,6 +20,7 @@ from . import event_detection  # noqa: F401 - registers: mini_detection, event_d
 from . import phase_plane  # noqa: F401 - registers: phase_plane_analysis
 from . import burst_analysis  # noqa: F401 - registers: burst_analysis
 from . import excitability  # noqa: F401 - registers: fi_curve_analysis
+from . import capacitance  # noqa: F401 - registers: capacitance_analysis
 
 # Expose key functions for easier import
 from .basic_features import calculate_rmp

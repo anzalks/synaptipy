@@ -309,6 +309,7 @@ def calculate_tau(
     fit_duration: float,
     model: str = 'mono',
     tau_bounds: Optional[Tuple[float, float]] = None,
+    artifact_blanking_ms: float = 0.5,
 ) -> Optional[Union[float, Dict[str, float]]]:
     """
     Calculate Membrane Time Constant (Tau) by fitting an exponential
@@ -323,6 +324,8 @@ def calculate_tau(
                for bi-exponential.
         tau_bounds: Tuple (min_tau, max_tau) in seconds. Constrains
                     allowed tau values. Defaults to (1e-4, 1.0) if None.
+        artifact_blanking_ms: Time to skip after stimulus onset to ignore
+                              the fast capacitive artifact, in ms.
 
     Returns:
         For model='mono': Tau in ms (float), or None if fitting fails.
@@ -334,7 +337,7 @@ def calculate_tau(
     tau_min, tau_max = tau_bounds
 
     try:
-        fit_start_time = stim_start_time
+        fit_start_time = stim_start_time + (artifact_blanking_ms / 1000.0)
         fit_end_time = stim_start_time + fit_duration
 
         fit_mask = (time_vector >= fit_start_time) & (time_vector < fit_end_time)
@@ -425,35 +428,46 @@ def calculate_sag_ratio(
     baseline_window: Tuple[float, float],
     response_peak_window: Tuple[float, float],  # Window to find the peak hyperpolarization
     response_steady_state_window: Tuple[float, float],  # Window for steady-state hyperpolarization
-) -> Optional[float]:
+) -> Optional[Dict[str, float]]:
     """
     Placeholder for Sag Potential Ratio calculation.
     Sag = (V_peak - V_baseline) / (V_steady_state - V_baseline) or similar definitions.
     Requires a hyperpolarizing current step.
     """
     try:
+        dt = time_vector[1] - time_vector[0] if len(time_vector) > 1 else 1.0
+
         # Baseline
         baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
         if not np.any(baseline_mask):
             return None
-        v_baseline = np.mean(voltage_trace[baseline_mask])
+        v_baseline = float(np.mean(voltage_trace[baseline_mask]))
 
         # Peak hyperpolarization
-        # Use 5th percentile instead of absolute min to reduce single-point noise sensitivity
+        # Use a smoothed version of the early stimulus phase to robustly find the peak
         peak_mask = (time_vector >= response_peak_window[0]) & (time_vector < response_peak_window[1])
         if not np.any(peak_mask):
             return None
         peak_data = voltage_trace[peak_mask]
-        if len(peak_data) > 10:
-            v_peak = np.percentile(peak_data, 5)
+        
+        from scipy.signal import savgol_filter
+        window_length = int(0.005 / dt)  # 5ms smoothing window
+        if window_length % 2 == 0:
+            window_length += 1
+        if window_length < 5:
+            window_length = 5
+            
+        if len(peak_data) >= window_length:
+            smoothed_peak = savgol_filter(peak_data, window_length, 3)
+            v_peak = float(np.min(smoothed_peak))
         else:
-            v_peak = np.min(peak_data)
+            v_peak = float(np.min(peak_data))
 
         # Steady-state hyperpolarization
         ss_mask = (time_vector >= response_steady_state_window[0]) & (time_vector < response_steady_state_window[1])
         if not np.any(ss_mask):
             return None
-        v_ss = np.mean(voltage_trace[ss_mask])
+        v_ss = float(np.mean(voltage_trace[ss_mask]))
 
         delta_v_peak = v_peak - v_baseline
         delta_v_ss = v_ss - v_baseline
@@ -461,9 +475,31 @@ def calculate_sag_ratio(
         if delta_v_ss == 0:
             return None  # Avoid division by zero
 
-        sag_ratio = delta_v_peak / delta_v_ss
-        log.debug(f"Calculated Sag Ratio: {sag_ratio:.3f}")
-        return sag_ratio
+        sag_ratio = float(delta_v_peak / delta_v_ss)
+        
+        # Rebound depolarization (100ms window following stimulus offset)
+        rebound_start = response_steady_state_window[1]
+        rebound_end = rebound_start + 0.100  # +100ms
+        rebound_mask = (time_vector >= rebound_start) & (time_vector < rebound_end)
+        
+        if np.any(rebound_mask):
+            rebound_data = voltage_trace[rebound_mask]
+            if len(rebound_data) >= window_length:
+                smoothed_rebound = savgol_filter(rebound_data, window_length, 3)
+                v_rebound_max = float(np.max(smoothed_rebound))
+            else:
+                v_rebound_max = float(np.max(rebound_data))
+            rebound_depolarization = v_rebound_max - v_baseline
+        else:
+            rebound_depolarization = 0.0
+
+        log.debug(f"Calculated Sag Ratio: {sag_ratio:.3f}, Rebound: {rebound_depolarization:.3f}")
+        return {
+            "sag_ratio": sag_ratio,
+            "v_peak": v_peak,
+            "v_ss": v_ss,
+            "rebound_depolarization": rebound_depolarization
+        }
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Sag calculation: {e}")
         return None
@@ -690,6 +726,15 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             "options": ["mono", "bi"],
         },
         {
+            "name": "artifact_blanking_ms",
+            "label": "Blanking (ms):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 2,
+        },
+        {
             "name": "tau_bound_min",
             "label": "Tau Min (s):",
             "type": "float",
@@ -721,6 +766,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             - stim_start_time: Time when stimulus starts (s, default: 0.1)
             - fit_duration: Duration of fit window (s, default: 0.05)
             - tau_model: 'mono' or 'bi' (default: 'mono')
+            - artifact_blanking_ms: Blanking period in ms (default: 0.5)
             - tau_bound_min: Minimum tau bound (s, default: 0.0001)
             - tau_bound_max: Maximum tau bound (s, default: 1.0)
 
@@ -734,10 +780,12 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         tau_bound_min = kwargs.get("tau_bound_min", 0.0001)
         tau_bound_max = kwargs.get("tau_bound_max", 1.0)
         tau_bounds = (tau_bound_min, tau_bound_max)
+        artifact_blanking_ms = kwargs.get("artifact_blanking_ms", 0.5)
 
         result = calculate_tau(
             data, time, stim_start_time, fit_duration,
-            model=model, tau_bounds=tau_bounds
+            model=model, tau_bounds=tau_bounds,
+            artifact_blanking_ms=artifact_blanking_ms
         )
 
         params = {

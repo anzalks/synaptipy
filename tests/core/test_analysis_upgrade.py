@@ -63,21 +63,29 @@ def test_calculate_fi_curve():
     # Sweep 1: 0 spikes (flat line)
     s1 = np.zeros_like(t)
 
-    # Sweep 2: 2 spikes (sine wave peaks)
+    def add_spike(s, idx):
+        # 2 samples rise from 0 to 100
+        # 2 samples fall from 100 to 0
+        s[idx - 2:idx] = np.linspace(0, 50, 2)
+        s[idx] = 100
+        s[idx + 1:idx + 3] = np.linspace(50, 0, 2)
+
+    # Sweep 2: 2 spikes
     s2 = np.zeros_like(t)
-    s2[200] = 20  # Spike 1
-    s2[600] = 20  # Spike 2
+    add_spike(s2, 200)
+    add_spike(s2, 600)
 
     # Sweep 3: 5 spikes
     s3 = np.zeros_like(t)
     indices = [100, 300, 500, 700, 900]
-    s3[indices] = 20
+    for idx in indices:
+        add_spike(s3, idx)
 
     sweeps = [s1, s2, s3]
     times = [t, t, t]
     currents = [0, 10, 20]  # pA
 
-    result = calculate_fi_curve(sweeps, times, current_steps=currents, threshold=10.0)
+    result = calculate_fi_curve(sweeps, times, current_steps=currents, threshold=10.0, refractory_ms=5.0)
 
     assert result["rheobase_pa"] == 10
     assert result["spike_counts"] == [0, 2, 5]
