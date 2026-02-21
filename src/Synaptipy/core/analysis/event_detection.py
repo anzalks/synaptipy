@@ -25,6 +25,7 @@ def detect_events_threshold(  # noqa: C901
     threshold: float,
     polarity: str = "negative",
     refractory_period: float = 0.002,
+    rolling_baseline_window_ms: Optional[float] = 100.0,
     artifact_mask: Optional[np.ndarray] = None,
 ) -> EventDetectionResult:
     """
@@ -50,9 +51,28 @@ def detect_events_threshold(  # noqa: C901
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message="Invalid data/time shape")
 
     try:
+        # Rolling Baseline
+        if len(time) > 1:
+            fs = 1.0 / (time[1] - time[0])
+        else:
+            fs = 10000.0
+
+        if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
+            from scipy.ndimage import median_filter
+            window_samples = int((rolling_baseline_window_ms / 1000.0) * fs)
+            if window_samples % 2 == 0:
+                window_samples += 1
+            if window_samples >= 3:
+                baseline = median_filter(data, size=window_samples)
+                baseline_corrected_data = data - baseline
+            else:
+                baseline_corrected_data = data
+        else:
+            baseline_corrected_data = data
+
         # 1. Rectification
         is_negative = polarity == "negative"
-        work_data = -data if is_negative else data
+        work_data = -baseline_corrected_data if is_negative else baseline_corrected_data
 
         # 2. Noise Floor Estimation (Scientific Basis: 2-STD deviation rule)
         # Use MAD for robust noise deviation estimation resistant to large events
@@ -109,7 +129,7 @@ def detect_events_threshold(  # noqa: C901
         if len(event_indices) > 0:
             event_times = time[event_indices]
             # Always return the real amplitudes (with original sign)
-            event_amplitudes = data[event_indices]
+            event_amplitudes = baseline_corrected_data[event_indices]
         else:
             event_times = np.array([])
             event_amplitudes = np.array([])
@@ -177,6 +197,15 @@ detect_minis_threshold = detect_events_threshold
             "max": 1.0,
             "decimals": 4,
         },
+        {
+            "name": "rolling_baseline_window_ms",
+            "label": "Rolling Baseline (ms):",
+            "type": "float",
+            "default": 100.0,
+            "min": 0.0,
+            "max": 5000.0,
+            "decimals": 1,
+        },
         {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
         {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:",
          "type": "float", "default": 20.0, "min": 0.0},
@@ -188,6 +217,7 @@ def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
     threshold = kwargs.get("threshold", 5.0)
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
+    rolling_baseline_window_ms = kwargs.get("rolling_baseline_window_ms", 100.0)
 
     # Artifact rejection
     reject_artifacts = kwargs.get("reject_artifacts", False)
@@ -197,7 +227,11 @@ def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
         padding_ms = kwargs.get("artifact_padding_ms", 2.0)
         artifact_mask = find_artifact_windows(data, sampling_rate, slope_thresh, padding_ms)
 
-    result = detect_events_threshold(data, time, threshold, direction, refractory_period, artifact_mask=artifact_mask)
+    result = detect_events_threshold(
+        data, time, threshold, direction, refractory_period,
+        rolling_baseline_window_ms=rolling_baseline_window_ms,
+        artifact_mask=artifact_mask
+    )
 
     if not result.is_valid:
         return {"event_error": result.error_message}
@@ -220,6 +254,7 @@ def detect_events_template(
     tau_rise: float,
     tau_decay: float,
     polarity: str = "negative",
+    rolling_baseline_window_ms: Optional[float] = 100.0,
     artifact_mask: Optional[np.ndarray] = None
 ) -> EventDetectionResult:
     """
@@ -270,9 +305,23 @@ def detect_events_template(
         if np.max(np.abs(kernel)) > 0:
             kernel /= np.max(np.abs(kernel))
 
+        # Rolling Baseline
+        if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
+            from scipy.ndimage import median_filter
+            window_samples = int((rolling_baseline_window_ms / 1000.0) * sampling_rate)
+            if window_samples % 2 == 0:
+                window_samples += 1
+            if window_samples >= 3:
+                baseline = median_filter(data, size=window_samples)
+                baseline_corrected_data = data - baseline
+            else:
+                baseline_corrected_data = data
+        else:
+            baseline_corrected_data = data
+
         # 2. Matched Filter (Cross-Correlation)
         is_negative = polarity == "negative"
-        work_data = -data if is_negative else data
+        work_data = -baseline_corrected_data if is_negative else baseline_corrected_data
 
         # "Calculate Cross-Correlation"
         # signal.correlate or fftconvolve. Correlate flips kernel?
@@ -332,7 +381,7 @@ def detect_events_template(
 
         # For amplitudes, we might want the value from the ORIGINAL data at those indices?
         # Or the filtered amplitude? Usually original is preferred for "event amplitude".
-        event_amplitudes = data[event_indices] if event_count > 0 else np.array([])
+        event_amplitudes = baseline_corrected_data[event_indices] if event_count > 0 else np.array([])
 
         # Times
         time_axis = np.arange(n_points) * dt
@@ -391,6 +440,15 @@ def detect_events_template(
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "rolling_baseline_window_ms",
+            "label": "Rolling Baseline (ms):",
+            "type": "float",
+            "default": 100.0,
+            "min": 0.0,
+            "max": 5000.0,
+            "decimals": 1,
+        },
         {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
         {"name": "artifact_slope_threshold",
          "label": "Artifact Slope Thresh:",
@@ -441,6 +499,7 @@ def run_event_detection_template_wrapper(
         tau_rise=tau_rise,
         tau_decay=tau_decay,
         polarity=direction,
+        rolling_baseline_window_ms=kwargs.get("rolling_baseline_window_ms", 100.0),
         artifact_mask=artifact_mask
     )
 

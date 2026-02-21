@@ -6,6 +6,7 @@ Analysis functions related to action potential detection and characterization.
 import logging
 from typing import List, Dict, Any
 import numpy as np
+from scipy.signal import savgol_filter
 from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
@@ -19,6 +20,7 @@ def detect_spikes_threshold(  # noqa: C901
     refractory_samples: int,
     peak_search_window_samples: int = None,
     parameters: Dict[str, Any] = None,
+    dvdt_threshold: float = 20.0,
 ) -> SpikeTrainResult:
     """
     Detects spikes based on a simple voltage threshold crossing with refractory period.
@@ -52,10 +54,14 @@ def detect_spikes_threshold(  # noqa: C901
                                 error_message="Invalid refractory period", parameters=parameters or {})
 
     try:
-        # 1. Find indices where the data crosses the threshold upwards
-        crossings = np.where((data[:-1] < threshold) & (data[1:] >= threshold))[0] + 1
+        # 1. Find indices where the data crosses the dv/dt threshold upwards
+        dt = time[1] - time[0] if len(time) > 1 else 1.0
+        dvdt = np.gradient(data, dt)
+        dvdt_thresh_mvs = dvdt_threshold * 1000.0
+        
+        crossings = np.where((dvdt[:-1] < dvdt_thresh_mvs) & (dvdt[1:] >= dvdt_thresh_mvs))[0] + 1
         if crossings.size == 0:
-            log.debug("No threshold crossings found.")
+            log.debug("No dv/dt threshold crossings found.")
             return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array(
                 []), spike_indices=np.array([]), parameters=parameters or {})
 
@@ -98,7 +104,10 @@ def detect_spikes_threshold(  # noqa: C901
                     log.warning(f"ValueError finding peak after crossing index {crossing_idx}. Using crossing index.")
                     peak_idx = crossing_idx
 
-            peak_indices_list.append(peak_idx)
+            # Secondary confirmation: The peak voltage must be at least above the voltage threshold 
+            # (which acts as a minimum absolute voltage required for a spike, e.g., -20mV)
+            if data[peak_idx] >= threshold:
+                peak_indices_list.append(peak_idx)
 
         peak_indices_arr = np.array(peak_indices_list).astype(int)  # Ensure integer indices
 
@@ -421,19 +430,48 @@ def calculate_spike_features(
     decay_times[valid_decay] = (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay]) * dt * 1000.0
 
     # --- AHP Depth & Duration ---
-    # Window: From peak to peak + ahp_max_samples
+    # Window: From peak to max ahp_max_samples, but capped by next spike for high-freq firing
+    ahp_max_samples_per_spike = np.full(n_spikes, ahp_max_samples)
+    if n_spikes > 1:
+        dist_to_next = spike_indices[1:] - spike_indices[:-1]
+        ahp_max_samples_per_spike[:-1] = np.minimum(ahp_max_samples, dist_to_next)
+
     ahp_range = np.arange(0, ahp_max_samples)
     ahp_indices = spike_indices[:, None] + ahp_range
     np.clip(ahp_indices, 0, n_data - 1, out=ahp_indices)
 
     ahp_waveforms = data[ahp_indices]  # (n_spikes, ahp_max_samples)
+    
+    # Mask invalid parts that bleed into next spike
+    col_idxs_ahp = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
+    valid_ahp_mask = col_idxs_ahp < ahp_max_samples_per_spike[:, None]
 
-    # Min value in window
-    # We ignore the first few samples to avoid catching the decay phase as "min" if it keeps going down?
-    # No, AHP is usually the global min in the window after peak.
+    # Smooth before peak/trough detection to reduce noise sensitivity
+    window_length = int(0.005 / dt)  # 5ms smoothing window
+    if window_length % 2 == 0:
+        window_length += 1
+    if window_length < 5:
+        window_length = 5
+        
+    if ahp_waveforms.shape[1] >= window_length:
+        smoothed_ahp = savgol_filter(ahp_waveforms, window_length, 3, axis=1)
+    else:
+        smoothed_ahp = ahp_waveforms
 
-    ahp_min_vals = np.min(ahp_waveforms, axis=1)
-    ahp_min_rel_indices = np.argmin(ahp_waveforms, axis=1)
+    temp_ahp = smoothed_ahp.copy()
+    temp_ahp[~valid_ahp_mask] = np.inf  # Prevent selecting points in the next spike
+
+    # Find relative index of the minimum
+    ahp_min_rel_indices = np.argmin(temp_ahp, axis=1)
+
+    # Calculate dynamic window mean (e.g., +/- 1ms around the minimum index)
+    mean_window = int(0.001 / dt)
+    ahp_min_vals = np.zeros(n_spikes)
+    for i in range(n_spikes):
+        idx = ahp_min_rel_indices[i]
+        start = max(0, idx - mean_window)
+        end = min(ahp_max_samples_per_spike[i], idx + mean_window + 1)
+        ahp_min_vals[i] = np.mean(ahp_waveforms[i, start:end])
 
     ahp_depths = ap_thresholds - ahp_min_vals
 
@@ -452,11 +490,10 @@ def calculate_spike_features(
     rec_target_bcast = rec_targets[:, None]
 
     # Search AFTER the minimum
-    # Mask: index > min_index AND value >= target
-    col_idxs_ahp = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
+    # Mask: index > min_index AND value >= target AND within valid mask
     is_after_min = col_idxs_ahp > ahp_min_rel_indices[:, None]
     is_recovered = ahp_waveforms >= rec_target_bcast
-    valid_recovery = is_after_min & is_recovered
+    valid_recovery = is_after_min & is_recovered & valid_ahp_mask
 
     # First index where this is true
     # If never recovers, set to end
@@ -580,7 +617,8 @@ def calculate_isi(spike_times):
 
 
 def analyze_multi_sweep_spikes(
-    data_trials: List[np.ndarray], time_vector: np.ndarray, threshold: float, refractory_samples: int
+    data_trials: List[np.ndarray], time_vector: np.ndarray, threshold: float, refractory_samples: int,
+    dvdt_threshold: float = 20.0
 ) -> List[SpikeTrainResult]:
     """
     Analyzes spikes across multiple sweeps (trials).
@@ -597,7 +635,9 @@ def analyze_multi_sweep_spikes(
     results = []
     for i, trial_data in enumerate(data_trials):
         try:
-            result = detect_spikes_threshold(trial_data, time_vector, threshold, refractory_samples)
+            result = detect_spikes_threshold(
+                trial_data, time_vector, threshold, refractory_samples, dvdt_threshold=dvdt_threshold
+            )
             # Add trial index to metadata
             result.metadata["sweep_index"] = i
             results.append(result)
@@ -714,7 +754,8 @@ def run_spike_detection_wrapper(
 
         # Run detection
         result = detect_spikes_threshold(
-            data, time, threshold, refractory_samples, peak_search_window_samples=peak_window_samples, parameters=params
+            data, time, threshold, refractory_samples, peak_search_window_samples=peak_window_samples, parameters=params,
+            dvdt_threshold=dvdt_threshold
         )
 
         if result.is_valid:

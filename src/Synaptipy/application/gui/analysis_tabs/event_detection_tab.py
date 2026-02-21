@@ -42,6 +42,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
 
         # Trigger initial params load
         self._on_method_changed()
+        self._current_event_indices = []
 
     def get_display_name(self) -> str:
         return "Mini Analysis"
@@ -91,6 +92,10 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.plot_widget.addItem(self.event_markers_item)
         self.event_markers_item.setVisible(False)
         self.event_markers_item.setZValue(100)  # On top
+        self.event_markers_item.sigClicked.connect(self._on_marker_clicked)
+        
+        # Intercept clicks on the plot for adding markers
+        self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_clicked)
 
         # Artifact Mask Visualization (Green overlay)
         # Use a pleasant sea green color for artifact regions to distinguish from red events
@@ -196,18 +201,12 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
 
         if (
             event_indices is not None
-            and len(event_indices) > 0
-            and hasattr(self, "_current_plot_data")
-            and self._current_plot_data
+            # Do not check len > 0 here, so we capture empty results too
         ):
-            event_indices = np.array(event_indices, dtype=int)
-            times = self._current_plot_data["time"][event_indices]
-            voltages = self._current_plot_data["data"][event_indices]
-
-            if self.event_markers_item:
-                self.event_markers_item.setData(x=times, y=voltages)
-                self.event_markers_item.setVisible(True)
+            self._current_event_indices = list(np.array(event_indices, dtype=int))
+            self._update_event_markers()
         else:
+            self._current_event_indices = []
             if self.event_markers_item:
                 self.event_markers_item.setVisible(False)
 
@@ -246,54 +245,116 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         elif self.threshold_line:
             self.threshold_line.setVisible(False)
 
-    def _display_analysis_results(self, results: Any):  # noqa: C901
-        """Override to provide table result summary."""
+    def _display_analysis_results(self, results: Any):
+        """Override to provide table result summary directly from the curated list."""
+        self._update_table_from_curation()
+        
+    def _update_event_markers(self):
+        """Redraw markers based on current valid indices."""
+        if not hasattr(self, "_current_plot_data") or not self._current_plot_data:
+            return
+            
+        indices = np.array(self._current_event_indices, dtype=int)
+        if len(indices) > 0:
+            times = self._current_plot_data["time"][indices]
+            voltages = self._current_plot_data["data"][indices]
+            self.event_markers_item.setData(x=times, y=voltages)
+            self.event_markers_item.setVisible(True)
+        else:
+            self.event_markers_item.setData(x=[], y=[])
+            self.event_markers_item.setVisible(False)
+
+    def _update_table_from_curation(self):
+        """Update the results table using the latest curated indices."""
         if not self.results_table:
             return
 
-        # Handle simplified result structure
-        if isinstance(results, dict) and "result" in results:
-            result_data = results["result"]
-        else:
-            result_data = results
-
-        if not result_data:
+        count = len(self._current_event_indices)
+        if count == 0:
             self.results_table.setRowCount(1)
             self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
-            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Results"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Events"))
             return
 
-        # Support both object and dict access for robustness
-        def get_val(key, default=None):
-            if hasattr(result_data, key):
-                return getattr(result_data, key)
-            elif isinstance(result_data, dict):
-                return result_data.get(key, default)
-            return default
+        if not hasattr(self, "_current_plot_data") or not self._current_plot_data:
+            return
 
-        count = get_val("event_count", 0)
-        freq = get_val("frequency_hz")
-        mean_amp = get_val("mean_amplitude")
-        amp_sd = get_val("amplitude_sd")
-        thresh = get_val("threshold")
+        indices = np.array(self._current_event_indices, dtype=int)
+        try:
+            times = self._current_plot_data["time"][indices]
+            amplitudes = self._current_plot_data["data"][indices]
+        except IndexError:
+            return
 
-        display_items = []
-        display_items.append(("Method", self.method_combobox.currentText()))
-        display_items.append(("Count", str(count)))
+        duration = self._current_plot_data["time"][-1] - self._current_plot_data["time"][0]
+        freq = count / duration if duration > 0 else 0.0
+        mean_amp = float(np.mean(amplitudes))
+        amp_sd = float(np.std(amplitudes))
 
-        if freq is not None:
-            display_items.append(("Frequency", f"{freq:.2f} Hz"))
+        display_items = [
+            ("Method", self.method_combobox.currentText() + " (Curated)"),
+            ("Count", str(count)),
+            ("Frequency", f"{freq:.2f} Hz"),
+            ("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"),
+        ]
 
-        if mean_amp is not None:
-            display_items.append(("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"))
-
-        if thresh is not None:
-            display_items.append(("Threshold", str(thresh)))
+        # Add Threshold if available from UI
+        if self.threshold_line and self.threshold_line.isVisible():
+            display_items.append(("Threshold", f"{self.threshold_line.value():.2f}"))
 
         self.results_table.setRowCount(len(display_items))
         for row, (k, v) in enumerate(display_items):
             self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))
             self.results_table.setItem(row, 1, QtWidgets.QTableWidgetItem(v))
+
+    def _on_marker_clicked(self, scatter, points, ev):
+        """Remove event marker on click."""
+        if len(points) == 0:
+            return
+        ev.accept()
+        
+        pos = points[0].pos()
+        clicked_time = pos.x()
+        times = self._current_plot_data["time"]
+        
+        # Add slight tolerance for floating point matching
+        dt = times[1] - times[0] if len(times) > 1 else 0.001
+        tolerance = dt * 1.5
+        
+        for i, e_idx in enumerate(self._current_event_indices):
+            if abs(times[e_idx] - clicked_time) <= tolerance:
+                self._current_event_indices.pop(i)
+                break
+                
+        self._update_event_markers()
+        self._update_table_from_curation()
+        
+    def _on_plot_clicked(self, ev):
+        """Add event marker on ctrl-click."""
+        if not ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
+            return
+            
+        if not getattr(self, "_current_plot_data", None):
+            return
+            
+        # Map scene coordinates to data coordinates
+        pos = self.plot_widget.plotItem.vb.mapSceneToView(ev.scenePos())
+        clicked_time = pos.x()
+        
+        times = self._current_plot_data["time"]
+        if clicked_time < times[0] or clicked_time > times[-1]:
+            return
+            
+        # Find closest index
+        idx = int(np.argmin(np.abs(times - clicked_time)))
+        
+        # Add to indices if not already present
+        if idx not in self._current_event_indices:
+            self._current_event_indices.append(idx)
+            self._current_event_indices.sort()
+            
+            self._update_event_markers()
+            self._update_table_from_curation()
 
     def _on_threshold_dragged(self):
         """Handle threshold line drag event."""

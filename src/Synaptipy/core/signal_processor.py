@@ -389,6 +389,54 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
         return data
 
 
+def comb_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarray:
+    """
+    Apply an IIR comb filter to remove a fundamental frequency and its harmonics.
+    Useful for line noise (e.g., 50Hz or 60Hz).
+
+    Args:
+        data: Input signal array
+        freq: Fundamental frequency to remove in Hz (e.g., 50 or 60)
+        Q: Quality factor (higher = narrower notches)
+        fs: Sampling frequency in Hz
+
+    Returns:
+        Filtered data, or original data if filtering fails
+    """
+    signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        log.warning("Scipy not available. Cannot apply comb filter.")
+        return data
+
+    # Validate input (order=2 equivalent validation)
+    is_valid, result = _validate_filter_input(data, fs, order=2)
+    if not is_valid:
+        return result
+
+    nyq = 0.5 * fs
+    freq_norm = freq / nyq
+
+    if freq_norm <= 0 or freq_norm >= 1:
+        log.warning(f"Comb fundamental frequency {freq} Hz out of bounds for fs={fs} Hz. Returning original.")
+        return data
+
+    if Q <= 0:
+        log.warning(f"Q factor must be positive, got {Q}. Using Q=30.")
+        Q = 30.0
+
+    try:
+        # scipy.signal.iircomb removes harmonics of the base frequency
+        b, a = signal.iircomb(freq, Q, ftype='notch', fs=fs)
+        # Convert to SOS for stability
+        z, p, k = signal.tf2zpk(b, a)
+        sos = signal.zpk2sos(z, p, k)
+        y = signal.sosfiltfilt(sos, data, padtype='odd')
+        return y
+    except Exception as e:
+        log.error(f"Comb filter failed: {e}")
+        return data
+
+
 def subtract_baseline_mode(data: np.ndarray, decimals: Optional[int] = None) -> np.ndarray:
     """
     Subtract baseline using the mode of the distribution of values.
