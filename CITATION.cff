@@ -9,8 +9,8 @@ abstract: >-
   recordings, with support for batch processing and multiple file
   formats via the Neo library.
 authors:
-  - family-names: "KS"
-    given-names: "Anzal"
+  - family-names: "Shahul"
+    given-names: "Anzal K"
     email: "anzal.ks@gmail.com"
 version: "0.1.0"
 date-released: "2025-05-06"
