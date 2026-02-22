@@ -68,26 +68,29 @@ class ExplorerToolbar(QtWidgets.QWidget):
         # 2. Plot Controls Row
         plot_layout = QtWidgets.QHBoxLayout()
 
-        # View Group
-        self.view_group = QtWidgets.QGroupBox("View")
-        view_layout = QtWidgets.QHBoxLayout(self.view_group)
-        self.reset_btn = QtWidgets.QPushButton("Reset View")
-        self.reset_btn.clicked.connect(self.reset_view_clicked.emit)
+        # View Controls
         self.save_btn = QtWidgets.QPushButton("Save Plot")
         self.save_btn.clicked.connect(self.save_plot_clicked.emit)
-        view_layout.addWidget(self.reset_btn)
-        view_layout.addWidget(self.save_btn)
-        plot_layout.addWidget(self.view_group)
 
-        # X Zoom Group
-        self.x_zoom_group = QtWidgets.QGroupBox("Time Zoom (X-Axis)")
-        x_zoom_layout = QtWidgets.QHBoxLayout(self.x_zoom_group)
+        self.reset_btn = QtWidgets.QPushButton("Reset View")
+        self.reset_btn.clicked.connect(self.reset_view_clicked.emit)
+
+        self.lock_zoom_cb = QtWidgets.QCheckBox("Lock Zoom")
+        self.lock_zoom_cb.setToolTip("Lock viewport across files")
+
+        plot_layout.addWidget(self.save_btn)
+        plot_layout.addWidget(self.reset_btn)
+        plot_layout.addWidget(self.lock_zoom_cb)
+
+        # X Zoom Controls
+        self.x_zoom_lbl = QtWidgets.QLabel("Time (X):")
         self.x_zoom_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.x_zoom_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)
         self.x_zoom_slider.setValue(self.SLIDER_DEFAULT_VALUE)
         self.x_zoom_slider.valueChanged.connect(self._on_x_zoom_changed)
-        x_zoom_layout.addWidget(self.x_zoom_slider)
-        plot_layout.addWidget(self.x_zoom_group, 1)
+
+        plot_layout.addWidget(self.x_zoom_lbl)
+        plot_layout.addWidget(self.x_zoom_slider)
 
         # Trial Group
         self.trial_group = QtWidgets.QGroupBox("Trial (Cycle)")

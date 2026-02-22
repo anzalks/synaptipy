@@ -58,7 +58,7 @@ def detect_spikes_threshold(  # noqa: C901
         dt = time[1] - time[0] if len(time) > 1 else 1.0
         dvdt = np.gradient(data, dt)
         dvdt_thresh_mvs = dvdt_threshold * 1000.0
-        
+
         crossings = np.where((dvdt[:-1] < dvdt_thresh_mvs) & (dvdt[1:] >= dvdt_thresh_mvs))[0] + 1
         if crossings.size == 0:
             log.debug("No dv/dt threshold crossings found.")
@@ -104,7 +104,7 @@ def detect_spikes_threshold(  # noqa: C901
                     log.warning(f"ValueError finding peak after crossing index {crossing_idx}. Using crossing index.")
                     peak_idx = crossing_idx
 
-            # Secondary confirmation: The peak voltage must be at least above the voltage threshold 
+            # Secondary confirmation: The peak voltage must be at least above the voltage threshold
             # (which acts as a minimum absolute voltage required for a spike, e.g., -20mV)
             if data[peak_idx] >= threshold:
                 peak_indices_list.append(peak_idx)
@@ -148,7 +148,7 @@ def detect_spikes_threshold(  # noqa: C901
 
 
 # --- Add other spike analysis functions here later ---
-def calculate_spike_features(
+def calculate_spike_features(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,
     spike_indices: np.ndarray,
@@ -441,7 +441,7 @@ def calculate_spike_features(
     np.clip(ahp_indices, 0, n_data - 1, out=ahp_indices)
 
     ahp_waveforms = data[ahp_indices]  # (n_spikes, ahp_max_samples)
-    
+
     # Mask invalid parts that bleed into next spike
     col_idxs_ahp = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
     valid_ahp_mask = col_idxs_ahp < ahp_max_samples_per_spike[:, None]
@@ -452,7 +452,7 @@ def calculate_spike_features(
         window_length += 1
     if window_length < 5:
         window_length = 5
-        
+
     if ahp_waveforms.shape[1] >= window_length:
         smoothed_ahp = savgol_filter(ahp_waveforms, window_length, 3, axis=1)
     else:
@@ -754,8 +754,9 @@ def run_spike_detection_wrapper(
 
         # Run detection
         result = detect_spikes_threshold(
-            data, time, threshold, refractory_samples, peak_search_window_samples=peak_window_samples, parameters=params,
-            dvdt_threshold=dvdt_threshold
+            data, time, threshold, refractory_samples,
+            peak_search_window_samples=peak_window_samples,
+            parameters=params, dvdt_threshold=dvdt_threshold
         )
 
         if result.is_valid:

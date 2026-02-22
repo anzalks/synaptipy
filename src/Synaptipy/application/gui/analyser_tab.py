@@ -90,6 +90,7 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Global Preprocessing State ---
         self._global_preprocessing_settings: Optional[Dict[str, Any]] = None
         self._global_preprocessing_confirmed: bool = False  # Tracks if user confirmed for this session
+        self._preprocessing_popup_active: bool = False  # Prevent double popups
 
         # --- UI References ---
         # self.source_file_label: Optional[QtWidgets.QLabel] = None  # Replaced by list
@@ -215,17 +216,24 @@ class AnalyserTab(QtWidgets.QWidget):
 
     def _check_preprocessing_on_enter(self):
         """Called when entering Analyser tab to check preprocessing state."""
+        if getattr(self, "_preprocessing_popup_active", False):
+            return
+
         session_preprocessing = self.session_manager.preprocessing_settings
         if session_preprocessing and not self._global_preprocessing_confirmed:
-            self._global_preprocessing_settings = session_preprocessing
-            apply_globally = self._show_global_preprocessing_popup(session_preprocessing)
-            if apply_globally:
-                self._global_preprocessing_confirmed = True
-                # Propagate to all tabs
-                self.set_global_preprocessing(session_preprocessing)
-            else:
-                # Don't show popup again for this session (until reset)
-                self._global_preprocessing_confirmed = True
+            self._preprocessing_popup_active = True
+            try:
+                self._global_preprocessing_settings = session_preprocessing
+                apply_globally = self._show_global_preprocessing_popup(session_preprocessing)
+                if apply_globally:
+                    self._global_preprocessing_confirmed = True
+                    # Propagate to all tabs
+                    self.set_global_preprocessing(session_preprocessing)
+                else:
+                    # Don't show popup again for this session (until reset)
+                    self._global_preprocessing_confirmed = True
+            finally:
+                self._preprocessing_popup_active = False
 
         # Process deferred initial selection if any
         if getattr(self, "_pending_initial_selection", False):
@@ -260,7 +268,7 @@ class AnalyserTab(QtWidgets.QWidget):
     def _setup_ui(self):
         """Setup UI with sub-tabs only. Global controls are injected into each tab's left panel."""
         main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setContentsMargins(10, 30, 10, 10)  # Top margin prevents macOS traffic light clipping
         main_layout.setSpacing(5)
 
         # --- Top Toolbar with Batch Analysis Button ---

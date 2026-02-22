@@ -247,7 +247,7 @@ def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
 
 # --- 2. Parametric Template Matching (Deconvolution Replacement) ---
 
-def detect_events_template(
+def detect_events_template(  # noqa: C901
     data: np.ndarray,
     sampling_rate: float,
     threshold_std: float,

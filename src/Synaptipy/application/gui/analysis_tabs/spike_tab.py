@@ -177,7 +177,7 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         if isinstance(result, dict):
             metadata = result.get("parameters", result.get("metadata", {}))
             spike_times = result.get("spike_times")
-            
+
             # Extract flat stats if present
             rate = result.get("mean_freq_hz", metadata.get("average_firing_rate_hz"))
             isi_mean = result.get("isi_mean_ms", metadata.get("isi_mean_ms"))
@@ -185,16 +185,21 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
         else:
             metadata = getattr(result, "metadata", getattr(result, "parameters", {}))
             spike_times = getattr(result, "spike_times", None)
-            
-            rate = metadata.get("average_firing_rate_hz") if hasattr(result, "metadata") else getattr(result, "mean_frequency", None)
-            isi_mean = metadata.get("isi_mean_ms") if hasattr(result, "metadata") else None
-            isi_std = metadata.get("isi_std_ms") if hasattr(result, "metadata") else None
+
+            if hasattr(result, "metadata"):
+                rate = metadata.get("average_firing_rate_hz")
+                isi_mean = metadata.get("isi_mean_ms")
+                isi_std = metadata.get("isi_std_ms")
+            else:
+                rate = getattr(result, "mean_frequency", None)
+                isi_mean = None
+                isi_std = None
 
         threshold = metadata.get("threshold")
         refractory_ms = metadata.get("refractory_period", metadata.get("refractory_ms"))
         if refractory_ms is not None and refractory_ms < 1.0:
             refractory_ms = refractory_ms * 1000.0  # Convert to ms if it's in seconds
-        
+
         units = metadata.get("units", "V") if hasattr(result, "metadata") else "mV"
         num_spikes = len(spike_times) if spike_times is not None else 0
 
@@ -214,9 +219,15 @@ class SpikeAnalysisTab(MetadataDrivenAnalysisTab):
 
             # Helper to add feature stats
             import numpy as np
+
             def add_stat(label, key):
-                mean_val = result.get(f"{key}_mean", metadata.get(f"{key}_mean")) if isinstance(result, dict) else metadata.get(f"{key}_mean")
-                std_val = result.get(f"{key}_std", metadata.get(f"{key}_std")) if isinstance(result, dict) else metadata.get(f"{key}_std")
+                if isinstance(result, dict):
+                    mean_val = result.get(f"{key}_mean", metadata.get(f"{key}_mean"))
+                    std_val = result.get(f"{key}_std", metadata.get(f"{key}_std"))
+                else:
+                    mean_val = metadata.get(f"{key}_mean")
+                    std_val = metadata.get(f"{key}_std")
+
                 if mean_val is not None and std_val is not None and not np.isnan(mean_val):
                     unit_str = "ms" if "width" in key or "time" in key else "mV"
                     if "dvdt" in key:

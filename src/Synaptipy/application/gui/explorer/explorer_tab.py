@@ -218,40 +218,48 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Reparent widgets
         nav_row_layout.addWidget(self.toolbar.prev_file_btn)
+        nav_row_layout.addWidget(self.toolbar.file_index_lbl)
         nav_row_layout.addStretch()
         nav_row_layout.addWidget(self.toolbar.trial_group)
         nav_row_layout.addStretch()
         nav_row_layout.addWidget(self.toolbar.next_file_btn)
+        nav_row_layout.addWidget(self.toolbar.save_btn)
 
-        # Also include the file index label somewhere? The user's request:
-        # "the seco row acomodates the next previous as it isand put trial cycle int he centre of that region"
-        # The original toolbar had the file label in the middle.
-        # I'll put the file index label with the file buttons to keep context?
-        # Or maybe putting trial cycle in center implicitly displaces the index label.
-        # I'll add the index label next to the buttons for clarity.
-        # [Prev] [Index] ... [Trial] ... [Next] - actually User said "put trial cycle in the centre".
-        # So I will do: [Prev] [Index] [Stretch] [Trial] [Stretch] [Next]
-
-        # Wait, I can't easily insert into the middle of the "nav_row" if I just steal buttons.
-        # Let's clean up the toolbar layout first? No, reparenting removes from old layout automatically.
-        # I will grab the file_index_lbl too.
-
-        nav_row_layout.insertWidget(1, self.toolbar.file_index_lbl)  # Place index next to Prev?
-        # Or maybe better: [Prev] [Stretch] [Trial] [Stretch] [Index] [Next]?
-        # Let's stick to the user request: "trial cycle in the centre... between the two buttons".
-        # I'll put index label next to Next or Prev. Let's put it next to Next.
-
-        # Re-doing nav row layout:
-        # [Prev File] [Stretch] [Trial Group] [Stretch] [Index Label] [Next File]
-
-        # 5. Zoom/View Row (Row 3: X Zoom | Y Zoom | View)
+        # 5. Zoom Row (Row 3: Zoom Controls)
         zoom_row_widget = QtWidgets.QWidget()
         zoom_row_layout = QtWidgets.QHBoxLayout(zoom_row_widget)
         zoom_row_layout.setContentsMargins(0, 0, 0, 0)
 
-        zoom_row_layout.addWidget(self.toolbar.x_zoom_group, 1)  # Time Zoom
-        zoom_row_layout.addWidget(self.y_controls.y_zoom_widget, 1)  # Amplitude Zoom
-        zoom_row_layout.addWidget(self.toolbar.view_group)  # View Controls
+        # Unified Zoom Controls Group Box
+        zoom_controls_group = QtWidgets.QGroupBox("Zoom Controls")
+        zoom_controls_layout = QtWidgets.QGridLayout(zoom_controls_group)
+
+        # Row 0: Labels
+        zoom_controls_layout.addWidget(self.toolbar.x_zoom_lbl, 0, 0, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(self.y_controls.global_y_lbl, 0, 1,
+                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        # Row 1: Sliders
+        zoom_controls_layout.addWidget(self.toolbar.x_zoom_slider, 1, 0)
+        zoom_controls_layout.addWidget(self.y_controls.global_y_slider, 1, 1)
+
+        # Row 2: Checkboxes
+        zoom_controls_layout.addWidget(self.toolbar.lock_zoom_cb, 2, 0, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(self.y_controls.y_lock_checkbox, 2, 1,
+                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        # Row 3: Individual Y Sliders (if any)
+        zoom_controls_layout.addWidget(self.y_controls.individual_y_sliders_container, 3, 1)
+
+        # Row 0-3 (Spanning) Col 2: Reset View Button
+        zoom_controls_layout.addWidget(self.toolbar.reset_btn, 0, 2, 4, 1,
+                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        zoom_controls_layout.setColumnStretch(0, 1)
+        zoom_controls_layout.setColumnStretch(1, 1)
+        zoom_controls_layout.setColumnStretch(2, 0)
+
+        zoom_row_layout.addWidget(zoom_controls_group)
 
         center_layout.addWidget(nav_row_widget, 2, 0)
         center_layout.addWidget(zoom_row_widget, 3, 0)
@@ -459,43 +467,25 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # --- Capture State if Requested ---
         if preserve_state:
-            # CHECK: Only preserve if user has actually modified the view or processing
-            # 1. Check Preprocessing
-            preprocessing_active = bool(self.pipeline.get_steps())
+            # Check manual Lock Zoom checkbox
+            is_zoom_locked = False
+            if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'lock_zoom_cb'):
+                is_zoom_locked = self.toolbar.lock_zoom_cb.isChecked()
 
-            # 2. Check Zoom
-            is_zoomed = False
-            try:
-                # Check X-Zoom ratio against base range
-                if self.base_x_range:
-                    base_span = self.base_x_range[1] - self.base_x_range[0]
-                    for cid, plot in self.plot_canvas.channel_plots.items():
-                        if plot.isVisible():
-                            view_range = plot.viewRange()[0]
-                            current_span = view_range[1] - view_range[0]
-                            # If we are seeing less than 95% of data, we are zoomed
-                            if base_span > 0 and (current_span / base_span) < 0.95:
-                                is_zoomed = True
-                                break
-            except Exception as e:
-                log.debug(f"Error checking zoom state: {e}")
-
-            if not (preprocessing_active or is_zoomed):
-                preserve_state = False
-                log.debug("State preservation skipped: View is default and no preprocessing active.")
-
-        if preserve_state:
-            # 1. Capture View State (Zoom/Pan)
-            self._pending_view_state = {}
-            for cid, plot in self.plot_canvas.channel_plots.items():
-                if plot.isVisible():
-                    # capture ((xmin, xmax), (ymin, ymax))
-                    self._pending_view_state[cid] = (plot.viewRange()[0], plot.viewRange()[1])
+            if is_zoom_locked:
+                # 1. Capture View State (Zoom/Pan)
+                self._pending_view_state = {}
+                for cid, plot in self.plot_canvas.channel_plots.items():
+                    if plot.isVisible():
+                        self._pending_view_state[cid] = (plot.viewRange()[0], plot.viewRange()[1])
+            else:
+                self._pending_view_state = None
 
             # 2. Capture Trial Selection Params
             self._pending_trial_params = self._current_trial_selection_params
+            num_plots = len(self._pending_view_state) if self._pending_view_state else 0
             log.debug(
-                f"State captured for restoration: View for {len(self._pending_view_state)} plots, "
+                f"State captured for restoration: View for {num_plots} plots, "
                 f"Trial Params: {self._pending_trial_params}"
             )
         else:
@@ -1046,10 +1036,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self.preprocessing_widget.setEnabled(self.current_recording is not None)
 
     # --- Placeholders for remaining logic ---
-    def _add_selection_to_analysis_set(self):
+    def _add_selection_to_analysis_set(self):  # noqa: C901
         """Add current file or batch selection from project tree to analysis set."""
         files_to_add = []
-        
+
         # 1. Check if there are selections in the project tree
         if hasattr(self.sidebar, "get_selected_project_files"):
             files = self.sidebar.get_selected_project_files()
@@ -1059,13 +1049,13 @@ class ExplorerTab(QtWidgets.QWidget):
                         "path": f,
                         "target_type": "Recording",
                         "trial_index": None,
-                        "recording_ref": None, # Will be loaded during analysis if None
+                        "recording_ref": None,  # Will be loaded during analysis if None
                     }
                     # If this is the currently loaded recording, use its reference
                     if self.current_recording and self.current_recording.source_file == f:
                         item["recording_ref"] = self.current_recording
                     files_to_add.append(item)
-                    
+
         # 2. Add current recording if no batch selection
         if not files_to_add and self.current_recording and self.current_recording.source_file:
             item = {
@@ -1090,7 +1080,7 @@ class ExplorerTab(QtWidgets.QWidget):
             if not is_duplicate:
                 self._analysis_items.append(item)
                 added_count += 1
-                
+
         self._update_analysis_set_display()
 
         if self.session_manager:
@@ -1177,9 +1167,36 @@ class ExplorerTab(QtWidgets.QWidget):
             if base_x and base_y and plot.isVisible():
                 plot.setXRange(*base_x, padding=0)
                 plot.setYRange(*base_y, padding=0)
-        self.x_scrollbar.setValue(0)
-        self.y_controls.set_global_scrollbar(5000)  # Center?
-        # Reset individual scrollbars too
+
+        # Reset X Controls
+        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'x_zoom_slider'):
+            self.toolbar.x_zoom_slider.blockSignals(True)
+            self.toolbar.x_zoom_slider.setValue(self.toolbar.SLIDER_DEFAULT_VALUE)
+            self.toolbar.x_zoom_slider.blockSignals(False)
+
+        if hasattr(self, 'x_scrollbar'):
+            self.x_scrollbar.blockSignals(True)
+            self.x_scrollbar.setValue(5000)
+            self.x_scrollbar.blockSignals(False)
+
+        # Reset Y Controls
+        if hasattr(self, 'y_controls'):
+            if hasattr(self.y_controls, 'global_y_slider'):
+                self.y_controls.global_y_slider.blockSignals(True)
+                self.y_controls.global_y_slider.setValue(self.y_controls.SLIDER_DEFAULT_VALUE)
+                self.y_controls.global_y_slider.blockSignals(False)
+
+            self.y_controls.set_global_scrollbar(self.y_controls.SCROLLBAR_MAX_RANGE // 2)
+
+            for cid, slider in self.y_controls.individual_y_sliders.items():
+                slider.blockSignals(True)
+                slider.setValue(self.y_controls.SLIDER_DEFAULT_VALUE)
+                slider.blockSignals(False)
+
+            for cid, sb in self.y_controls.individual_y_scrollbars.items():
+                sb.blockSignals(True)
+                sb.setValue(self.y_controls.SCROLLBAR_MAX_RANGE // 2)
+                sb.blockSignals(False)
 
     # ... Implement Zoom/Scroll applying ...
     # --- Interaction Logic (Zoom/Scroll) ---

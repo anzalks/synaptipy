@@ -96,45 +96,29 @@ class ExplorerYControls(QtWidgets.QWidget):
 
         layout.addWidget(self.y_scroll_widget, 1)
 
-        # Zoom Group
-        self.y_zoom_widget = QtWidgets.QWidget()
-        y_zoom_layout = QtWidgets.QVBoxLayout(self.y_zoom_widget)
-        y_zoom_layout.setContentsMargins(0, 0, 0, 0)
-        self.y_zoom_group = QtWidgets.QGroupBox("Amplitude Zoom (Y-Axis)")
-        y_zoom_layout.addWidget(self.y_zoom_group)
-        y_zoom_group_layout = QtWidgets.QVBoxLayout(self.y_zoom_group)
+        # Zoom Controls (Exposed for external grid layout)
 
         # Lock Checkbox
         self.y_lock_checkbox = QtWidgets.QCheckBox("Lock Y Views")
         self.y_lock_checkbox.setToolTip("Link Y axes across channels")
         self.y_lock_checkbox.setChecked(True)
         self.y_lock_checkbox.stateChanged.connect(self._on_lock_changed)
-        y_zoom_group_layout.addWidget(self.y_lock_checkbox)
 
         # Global Slider
+        self.global_y_lbl = QtWidgets.QLabel("Signal (Y):")
+
         self.global_y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.global_y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)
         self.global_y_slider.setValue(self.SLIDER_DEFAULT_VALUE)
         self.global_y_slider.setToolTip("Y zoom (All)")
         self.global_y_slider.valueChanged.connect(self._on_global_zoom_changed)
 
-        gz_layout = QtWidgets.QHBoxLayout()
-        gz_layout.setSpacing(5)
-        gz_layout.addWidget(QtWidgets.QLabel(
-            "Global", alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
-        ))
-        gz_layout.addWidget(self.global_y_slider, 1)
-        y_zoom_group_layout.addLayout(gz_layout)
-
-        # Individual Sliders Container
+        # We keep individual sliders container for later use
         self.individual_y_sliders_container = QtWidgets.QWidget()
         self.individual_y_sliders_layout = QtWidgets.QVBoxLayout(self.individual_y_sliders_container)
         self.individual_y_sliders_layout.setContentsMargins(0, 5, 0, 0)
         self.individual_y_sliders_layout.setSpacing(2)
         self.individual_y_sliders_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        y_zoom_group_layout.addWidget(self.individual_y_sliders_container, 1)
-
-        layout.addWidget(self.y_zoom_widget, 1)
 
     def rebuild(self, recording: Optional[Recording]):
         """Rebuild individual controls for the recording channels."""

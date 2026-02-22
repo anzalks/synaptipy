@@ -1989,6 +1989,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         return plot_widget
 
     # --- ADDED: Helper for Saving Results ---
+
     def _request_save_result(self, specific_result_data: Dict[str, Any]):  # noqa: C901
         """
         Collects common metadata and calls MainWindow's method to save the result.
