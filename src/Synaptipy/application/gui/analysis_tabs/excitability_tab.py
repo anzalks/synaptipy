@@ -35,14 +35,6 @@ class ExcitabilityTab(MetadataDrivenAnalysisTab):
     def get_display_name(self) -> str:
         return "Excitability"
 
-    def cleanup(self):
-        super().cleanup()
-        if self.popup_plot:
-            try:
-                self.popup_plot.window().close()
-            except Exception:
-                pass
-
     def _plot_analysis_visualizations(self, results: Any):
         """
         Visualize Excitability results (F-I Curve).

@@ -7,6 +7,7 @@ from Synaptipy.core.analysis.intrinsic_properties import calculate_rin, calculat
 
 log = logging.getLogger(__name__)
 
+
 def calculate_capacitance_cc(tau_ms: float, rin_mohm: float) -> Optional[float]:
     """
     Calculate Cell Capacitance (Cm) from Current-Clamp data.
@@ -24,6 +25,7 @@ def calculate_capacitance_cc(tau_ms: float, rin_mohm: float) -> Optional[float]:
     cm_nf = tau_ms / rin_mohm
     return cm_nf * 1000.0
 
+
 def calculate_capacitance_vc(
     current_trace: np.ndarray,
     time_vector: np.ndarray,
@@ -32,7 +34,7 @@ def calculate_capacitance_vc(
     voltage_step_amplitude_mv: float
 ) -> Optional[float]:
     """
-    Calculate Cell Capacitance (Cm) from Voltage-Clamp using the 
+    Calculate Cell Capacitance (Cm) from Voltage-Clamp using the
     area under the capacitive transient.
     Cm = Q / Delta_V
     Q = integral(I_transient(t) - I_steady_state) dt
@@ -60,27 +62,27 @@ def calculate_capacitance_vc(
         trans_mask = (time_vector >= transient_window[0]) & (time_vector < transient_window[1])
         if not np.any(trans_mask):
             return None
-        
+
         t_trans = time_vector[trans_mask]
         i_trans = current_trace[trans_mask]
-        
-        # Calculate Steady-State during the step. 
+
+        # Calculate Steady-State during the step.
         # Typically the last 10-20% of the transient window is considered steady-state.
         end_idx = len(i_trans)
         ss_start_idx = int(end_idx * 0.8)
         if ss_start_idx >= end_idx:
             ss_start_idx = end_idx - 1
-            
+
         i_steadystate = np.mean(i_trans[ss_start_idx:])
-        
+
         # 3. Integrate area under transient curve (subtracting steady state)
         # We integrate the absolute difference to correctly handle both positive and negative steps
         delta_i = i_trans - i_steadystate
-        
+
         # Integration via Trapezoidal rule
         # Q in pC (pA * s = pC)
         Q_pc = integrate.trapezoid(delta_i, t_trans)
-        
+
         # Cm = Q / DeltaV.
         # Q is in pC, DeltaV is in mV.
         # C = pC / mV = (10^-12 C) / (10^-3 V) = 10^-9 F = nF
@@ -88,12 +90,13 @@ def calculate_capacitance_vc(
         # So Cm will be positive.
         cm_nf = Q_pc / voltage_step_amplitude_mv
         cm_pf = cm_nf * 1000.0
-        
+
         return float(cm_pf)
-        
+
     except Exception as e:
         log.error(f"Error calculating VC capacitance: {e}")
         return None
+
 
 @AnalysisRegistry.register(
     "capacitance_analysis",
@@ -168,35 +171,35 @@ def run_capacitance_analysis_wrapper(
     mode = kwargs.get("mode", "Current-Clamp")
     base_window = (kwargs.get("baseline_start_s", 0.0), kwargs.get("baseline_end_s", 0.1))
     resp_window = (kwargs.get("response_start_s", 0.1), kwargs.get("response_end_s", 0.3))
-    
+
     if mode == "Current-Clamp":
         current_step = kwargs.get("current_amplitude_pa", -100.0)
         # Calculate Rin
         rin_result = calculate_rin(data, time, current_step, base_window, resp_window)
         if not rin_result.is_valid:
             return {"error": f"Rin calculation failed: {rin_result.error_message}"}
-            
+
         fit_duration = min(0.1, resp_window[1] - resp_window[0])
         tau_result = calculate_tau(data, time, resp_window[0], fit_duration)
         if tau_result is None:
             return {"error": "Tau calculation failed (no fit)."}
-            
+
         if isinstance(tau_result, dict):
             tau_ms = tau_result.get("tau_slow_ms", 0)  # bi-exponential
         else:
             tau_ms = tau_result
-            
+
         cm_pf = calculate_capacitance_cc(tau_ms, rin_result.value)
         if cm_pf is None:
             return {"error": "Failed to calculate Cm from Tau/Rin"}
-            
+
         return {
             "capacitance_pf": cm_pf,
             "tau_ms": tau_ms,
             "rin_mohm": rin_result.value,
             "mode": mode
         }
-        
+
     elif mode == "Voltage-Clamp":
         voltage_step = kwargs.get("voltage_step_mv", -5.0)
         cm_pf = calculate_capacitance_vc(data, time, base_window, resp_window, voltage_step)

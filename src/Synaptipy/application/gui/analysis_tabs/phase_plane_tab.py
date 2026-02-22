@@ -50,41 +50,12 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
             self.plot_widget.addItem(self.threshold_line)
             self.threshold_line.setVisible(False)
 
-    def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
-        """Override to add a side-by-side phase plane plot."""
-        super()._setup_plot_area(layout, stretch_factor)
-
-        # Now, add the Phase Plane plot to the same canvas
-        if hasattr(self, "plot_canvas") and self.plot_canvas:
-            self.phase_plot = self.plot_canvas.add_plot("phase_plane_plot", row=0, col=1)
-            self.phase_plot.setLabel("bottom", "Voltage", units="mV")
-            self.phase_plot.setLabel("left", "dV/dt", units="V/s")
-            self.phase_plot.showGrid(x=True, y=True, alpha=0.3)
-
-            # Initialize curves
-            self.phase_curve = self.phase_plot.plot(pen="b", name="Phase Loop")
-            self.threshold_marker = self.phase_plot.plot(
-                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"
-            )
-            self.max_dvdt_marker = self.phase_plot.plot(
-                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt"
-            )
-            
-            # Give main plot more width
-            self.plot_canvas.widget.ci.layout.setColumnStretchFactor(0, 2)
-            self.plot_canvas.widget.ci.layout.setColumnStretchFactor(1, 1)
-
     def _ensure_custom_items_on_plot(self):
         """Re-add custom plot items if they were removed by plot_widget.clear()."""
         if not self.plot_widget:
             return
         if self.threshold_line and self.threshold_line not in self.plot_widget.items:
             self.plot_widget.addItem(self.threshold_line)
-            
-        # The phase plane plot is resilient on the canvas, but its lines might be cleared?
-        # Actually, plot_canvas.rebuild_plots might clear them. But phase_plot is separate.
-        # We don't dynamically rebuild phase_plot curves here, just check existence.
-        pass
 
     def _on_data_plotted(self):
         """Re-add custom items after plot_widget.clear() in _plot_selected_data."""
@@ -114,11 +85,22 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
         elif self.threshold_line:
             self.threshold_line.setVisible(False)
 
-        # --- 2. Update Embedded Phase Plane Plot ---
+        # --- 2. Update Popup Phase Plane Plot ---
         voltage = result_data.get("voltage")
         dvdt = result_data.get("dvdt")
 
         if voltage is not None and dvdt is not None:
+            # Create popup if needed
+            if self.popup_plot is None:
+                self.popup_plot = self.create_popup_plot("Phase Plane", "Voltage (mV)", "dV/dt (V/s)")
+                self.phase_curve = self.popup_plot.plot(pen="b", name="Phase Loop")
+                self.threshold_marker = self.popup_plot.plot(
+                    pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"
+                )
+                self.max_dvdt_marker = self.popup_plot.plot(
+                    pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt"
+                )
+
             if hasattr(self, "phase_curve") and self.phase_curve:
                 if len(voltage) == len(dvdt):
                     self.phase_curve.setData(voltage, dvdt)
@@ -126,20 +108,20 @@ class PhasePlaneTab(MetadataDrivenAnalysisTab):
                     min_len = min(len(voltage), len(dvdt))
                     self.phase_curve.setData(voltage[:min_len], dvdt[:min_len])
 
-        # Plot markers
-        threshold_dvdt = result_data.get("threshold_dvdt")
-        if threshold_v is not None and threshold_dvdt is not None and hasattr(self, "threshold_marker") and self.threshold_marker:
-            self.threshold_marker.setData([threshold_v], [threshold_dvdt])
-        elif hasattr(self, "threshold_marker") and self.threshold_marker:
-            self.threshold_marker.setData([], [])
+            # Plot markers inside popup
+            threshold_dvdt = result_data.get("threshold_dvdt")
+            if threshold_v is not None and threshold_dvdt is not None:
+                self.threshold_marker.setData([threshold_v], [threshold_dvdt])
+            else:
+                self.threshold_marker.setData([], [])
 
-        max_dvdt = result_data.get("max_dvdt")
-        if max_dvdt is not None and voltage is not None and dvdt is not None and hasattr(self, "max_dvdt_marker") and self.max_dvdt_marker:
-            idx = np.argmax(dvdt)
-            if idx < len(voltage):
-                self.max_dvdt_marker.setData([voltage[idx]], [dvdt[idx]])
-        elif hasattr(self, "max_dvdt_marker") and self.max_dvdt_marker:
-            self.max_dvdt_marker.setData([], [])
+            max_dvdt = result_data.get("max_dvdt")
+            if max_dvdt is not None:
+                idx = np.argmax(dvdt)
+                if idx < len(voltage):
+                    self.max_dvdt_marker.setData([voltage[idx]], [dvdt[idx]])
+            else:
+                self.max_dvdt_marker.setData([], [])
 
     def _display_analysis_results(self, result: Dict[str, Any]):
         """Display results in table."""

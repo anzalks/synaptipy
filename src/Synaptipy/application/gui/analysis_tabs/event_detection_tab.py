@@ -45,7 +45,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self._current_event_indices = []
 
     def get_display_name(self) -> str:
-        return "Mini Analysis"
+        return "Event Detection"
 
     def get_covered_analysis_names(self) -> List[str]:
         return list(self.method_map.values())
@@ -93,7 +93,7 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         self.event_markers_item.setVisible(False)
         self.event_markers_item.setZValue(100)  # On top
         self.event_markers_item.sigClicked.connect(self._on_marker_clicked)
-        
+
         # Intercept clicks on the plot for adding markers
         self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_clicked)
 
@@ -248,12 +248,12 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
     def _display_analysis_results(self, results: Any):
         """Override to provide table result summary directly from the curated list."""
         self._update_table_from_curation()
-        
+
     def _update_event_markers(self):
         """Redraw markers based on current valid indices."""
         if not hasattr(self, "_current_plot_data") or not self._current_plot_data:
             return
-            
+
         indices = np.array(self._current_event_indices, dtype=int)
         if len(indices) > 0:
             times = self._current_plot_data["time"][indices]
@@ -281,7 +281,6 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
 
         indices = np.array(self._current_event_indices, dtype=int)
         try:
-            times = self._current_plot_data["time"][indices]
             amplitudes = self._current_plot_data["data"][indices]
         except IndexError:
             return
@@ -312,47 +311,47 @@ class EventDetectionTab(MetadataDrivenAnalysisTab):
         if len(points) == 0:
             return
         ev.accept()
-        
+
         pos = points[0].pos()
         clicked_time = pos.x()
         times = self._current_plot_data["time"]
-        
+
         # Add slight tolerance for floating point matching
         dt = times[1] - times[0] if len(times) > 1 else 0.001
         tolerance = dt * 1.5
-        
+
         for i, e_idx in enumerate(self._current_event_indices):
             if abs(times[e_idx] - clicked_time) <= tolerance:
                 self._current_event_indices.pop(i)
                 break
-                
+
         self._update_event_markers()
         self._update_table_from_curation()
-        
+
     def _on_plot_clicked(self, ev):
         """Add event marker on ctrl-click."""
         if not ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
             return
-            
+
         if not getattr(self, "_current_plot_data", None):
             return
-            
+
         # Map scene coordinates to data coordinates
         pos = self.plot_widget.plotItem.vb.mapSceneToView(ev.scenePos())
         clicked_time = pos.x()
-        
+
         times = self._current_plot_data["time"]
         if clicked_time < times[0] or clicked_time > times[-1]:
             return
-            
+
         # Find closest index
         idx = int(np.argmin(np.abs(times - clicked_time)))
-        
+
         # Add to indices if not already present
         if idx not in self._current_event_indices:
             self._current_event_indices.append(idx)
             self._current_event_indices.sort()
-            
+
             self._update_event_markers()
             self._update_table_from_curation()
 

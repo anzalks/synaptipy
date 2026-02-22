@@ -80,6 +80,7 @@ def test_preserve_state_on_cycle(explorer_tab, qtbot):
     target_y_range = (-5.0, 5.0)
     plot_a.setXRange(*target_x_range, padding=0)
     plot_a.setYRange(*target_y_range, padding=0)
+    explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
 
     # Set Trial Selection (Every 2nd trial)
     gap_n = 1  # Every 2nd
@@ -171,6 +172,7 @@ def test_preserve_state_on_sidebar_selection(explorer_tab):
     plot_a = explorer_tab.plot_canvas.channel_plots["ch1"]
     plot_a.isVisible = MagicMock(return_value=True)
     plot_a.setXRange(0.2, 0.4, padding=0)
+    explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
     explorer_tab._on_trial_selection_requested(1, 0)  # Gap 1
 
     # 2. Emit Signal from Sidebar (simulate user double-click)

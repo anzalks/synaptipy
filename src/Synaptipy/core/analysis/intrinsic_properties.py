@@ -422,7 +422,7 @@ def calculate_tau(
 
 
 # Placeholder for Sag potential calculation
-def calculate_sag_ratio(
+def calculate_sag_ratio(  # noqa: C901
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
     baseline_window: Tuple[float, float],
@@ -449,14 +449,14 @@ def calculate_sag_ratio(
         if not np.any(peak_mask):
             return None
         peak_data = voltage_trace[peak_mask]
-        
+
         from scipy.signal import savgol_filter
         window_length = int(0.005 / dt)  # 5ms smoothing window
         if window_length % 2 == 0:
             window_length += 1
         if window_length < 5:
             window_length = 5
-            
+
         if len(peak_data) >= window_length:
             smoothed_peak = savgol_filter(peak_data, window_length, 3)
             v_peak = float(np.min(smoothed_peak))
@@ -476,12 +476,12 @@ def calculate_sag_ratio(
             return None  # Avoid division by zero
 
         sag_ratio = float(delta_v_peak / delta_v_ss)
-        
+
         # Rebound depolarization (100ms window following stimulus offset)
         rebound_start = response_steady_state_window[1]
         rebound_end = rebound_start + 0.100  # +100ms
         rebound_mask = (time_vector >= rebound_start) & (time_vector < rebound_end)
-        
+
         if np.any(rebound_mask):
             rebound_data = voltage_trace[rebound_mask]
             if len(rebound_data) >= window_length:
