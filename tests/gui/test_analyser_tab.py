@@ -16,9 +16,12 @@ def mock_neo_adapter():
     return adapter
 
 
-def test_analyser_tab_init(app, mock_neo_adapter):
+def test_analyser_tab_init(qtbot, mock_neo_adapter, monkeypatch):
     """Test that AnalyserTab initializes without error."""
+    # Prevent heavy pyqtgraph instantiation to avoid macOS SIGABRT in offscreen runner
+    monkeypatch.setattr(AnalyserTab, "_load_analysis_tabs", MagicMock())
     tab = AnalyserTab(neo_adapter=mock_neo_adapter)
+    qtbot.addWidget(tab)
     assert tab is not None
     assert isinstance(tab, QtWidgets.QWidget)
     assert tab.sub_tab_widget is not None

@@ -29,21 +29,20 @@ def registered_analysis():
 
     yield
 
-    # Cleanup helps if other tests rely on clean state, though not strictly required if everything registers what it
-    # needs
-    # AnalysisRegistry._registry.pop("test_analysis", None)
-    # AnalysisRegistry._metadata.pop("test_analysis", None)
-
 
 @pytest.fixture
-def app(qapp):
-    return qapp
-
-
-def test_metadata_tab_creation(app, registered_analysis):
-    """Test that the tab creates widgets based on metadata."""
+def test_tab(qtbot, registered_analysis, monkeypatch):
     neo_adapter = MagicMock()
+    # Prevent heavy pyqtgraph instantiation to avoid macOS SIGABRT in offscreen runner
+    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
+    qtbot.addWidget(tab)
+    return tab
+
+
+def test_metadata_tab_creation(test_tab):
+    """Test that the tab creates widgets based on metadata."""
+    tab = test_tab
 
     # Check if widgets were created
     widgets = tab.param_generator.widgets
@@ -65,10 +64,9 @@ def test_metadata_tab_creation(app, registered_analysis):
     assert widgets["param4"].isChecked() is True
 
 
-def test_parameter_gathering(app, registered_analysis):
+def test_parameter_gathering(test_tab):
     """Test that parameters are correctly gathered from widgets."""
-    neo_adapter = MagicMock()
-    tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
+    tab = test_tab
 
     # Modify values
     widgets = tab.param_generator.widgets
