@@ -1,6 +1,24 @@
 import sys
 import os
 import pytest
+import gc
+
+
+def pytest_configure(config):
+    """Disable garbage collection entirely during pytest headless mode to prevent mid-test PySide6 Abort trap 6."""
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        gc.disable()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    On macOS headless (offscreen), PySide6 and pyqtgraph frequently crash with Abort trap 6
+    during the C++ garbage collection phase at the very end of the test session.
+    A common workaround is to forcefully exit the process exactly after tests complete.
+    """
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        os._exit(exitstatus)
+
 
 # Remove .verify_venv from sys.path to prevent its Python 3.13 scipy
 # from shadowing the conda environment's scipy (Python 3.11)

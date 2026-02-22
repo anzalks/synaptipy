@@ -6,8 +6,10 @@ from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture
-def tab(qtbot):
+def tab(qtbot, monkeypatch):
     neo_adapter = MagicMock(spec=NeoAdapter)
+    # Prevent heavy pyqtgraph instantiation to avoid macOS SIGABRT in offscreen runner
+    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
     # Use a real tab that inherits BaseAnalysisTab
     widget = MetadataDrivenAnalysisTab("spike_detection", neo_adapter)
     qtbot.addWidget(widget)

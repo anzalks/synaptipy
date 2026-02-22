@@ -37,6 +37,9 @@ class TestTrialSelection(unittest.TestCase):
         )
         self.explorer._display_recording(self.recording)
 
+    def tearDown(self):
+        self.explorer.deleteLater()
+
     def test_trial_selection_logic(self):
         """Test that requesting 'Every Nth trial' (gap-based) updates selection.
 
