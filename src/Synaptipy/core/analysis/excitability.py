@@ -139,6 +139,16 @@ def calculate_fi_curve(  # noqa: C901
     "excitability_analysis",
     label="Excitability",
     requires_multi_trial=True,
+    plots=[
+        {
+            "type": "popup_xy",
+            "title": "F-I Curve",
+            "x": "current_steps",
+            "y": "frequencies",
+            "x_label": "Current (pA)",
+            "y_label": "Frequency (Hz)",
+        },
+    ],
     ui_params=[
         {
             "name": "threshold",

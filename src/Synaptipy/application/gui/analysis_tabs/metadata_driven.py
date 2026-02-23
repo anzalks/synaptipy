@@ -54,6 +54,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._method_map: Dict[str, str] = {}  # display_label -> registry_name
         self.method_combobox: Optional[QtWidgets.QComboBox] = None
 
+        # --- Secondary channel selector (for TTL/trigger channels) ---
+        self._secondary_channel_combobox: Optional[QtWidgets.QComboBox] = None
+        self._secondary_channel_param_name: Optional[str] = None
+
         # --- Interactive event-marker state ---
         self._current_event_indices: List[int] = []
         self._event_markers_item: Optional[pg.ScatterPlotItem] = None
@@ -238,6 +242,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         * ``method_selector``: dict mapping display labels to registry names.
           Renders a QComboBox that switches the active analysis function and
           rebuilds the generated parameter widgets on each change.
+        * ``requires_secondary_channel``: dict with ``param_name``, ``label``,
+          and optional ``tooltip``.  Renders a channel selector combo that
+          provides a secondary data channel (e.g. TTL/trigger) to the
+          analysis function.
         """
         method_selector = self.metadata.get("method_selector")
         if method_selector and isinstance(method_selector, dict):
@@ -254,6 +262,21 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             analyze_btn.setToolTip("Run the analysis with current parameters")
             analyze_btn.clicked.connect(self._trigger_analysis)
             layout.addRow("", analyze_btn)
+
+        # --- Secondary channel selector (e.g. TTL channel for optogenetics) ---
+        sec_chan = self.metadata.get("requires_secondary_channel")
+        if sec_chan and isinstance(sec_chan, dict):
+            self._secondary_channel_param_name = sec_chan.get("param_name", "secondary_data")
+            label = sec_chan.get("label", "Secondary Channel:")
+            tooltip = sec_chan.get("tooltip", "Select a secondary data channel.")
+
+            self._secondary_channel_combobox = QtWidgets.QComboBox()
+            self._secondary_channel_combobox.setToolTip(tooltip)
+            self._secondary_channel_combobox.setEnabled(False)
+            self._secondary_channel_combobox.currentIndexChanged.connect(
+                self._on_param_changed
+            )
+            layout.addRow(label, self._secondary_channel_combobox)
 
     def _on_method_selector_changed(self):
         """Handle switching between analysis methods via the method combo box."""
@@ -526,8 +549,81 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             if self.plot_widget:
                 self.plot_widget.clear()
 
+        # Populate secondary channel combobox if configured
+        self._populate_secondary_channel_combobox()
+
         # Update visibility based on new item context
         self._update_parameter_visibility()
+
+    def _populate_secondary_channel_combobox(self):
+        """Populate the secondary channel combobox from the current recording."""
+        if not self._secondary_channel_combobox:
+            return
+        self._secondary_channel_combobox.blockSignals(True)
+        self._secondary_channel_combobox.clear()
+
+        # Add a "None" option for when no secondary channel is needed
+        self._secondary_channel_combobox.addItem("(None)", userData=None)
+
+        if self._selected_item_recording and self._selected_item_recording.channels:
+            for chan_id, channel in sorted(self._selected_item_recording.channels.items()):
+                units = getattr(channel, "units", "")
+                display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{units}]"
+                self._secondary_channel_combobox.addItem(display_name, userData=chan_id)
+            self._secondary_channel_combobox.setEnabled(True)
+        else:
+            self._secondary_channel_combobox.setEnabled(False)
+
+        self._secondary_channel_combobox.blockSignals(False)
+
+    def _inject_secondary_channel_data(self, params: Dict[str, Any], data: Dict[str, Any]):
+        """Load data from the secondary channel and inject it into params.
+
+        When *requires_secondary_channel* metadata is configured and the
+        user has selected a valid secondary channel, this method reads the
+        raw data from that channel (same data-source / trial as the primary)
+        and stores it in ``params[param_name]`` so the analysis wrapper
+        receives it via **kwargs.
+        """
+        if (
+            not self._secondary_channel_combobox
+            or not self._secondary_channel_param_name
+            or not self._selected_item_recording
+        ):
+            return
+
+        sec_chan_id = self._secondary_channel_combobox.currentData()
+        if sec_chan_id is None:
+            return  # user chose "(None)"
+
+        channel = self._selected_item_recording.channels.get(sec_chan_id)
+        if channel is None:
+            log.warning("Secondary channel '%s' not found in recording.", sec_chan_id)
+            return
+
+        # Determine which trial / data-source the primary channel is using
+        trial_index = 0
+        if self.data_source_combobox:
+            ds = self.data_source_combobox.currentData()
+            if isinstance(ds, int):
+                trial_index = ds
+            elif ds == "average":
+                # Use average of the secondary channel if available
+                avg = getattr(channel, "average_data", None)
+                if avg is not None:
+                    params[self._secondary_channel_param_name] = avg
+                    return
+                # Fall back to trial 0
+                trial_index = 0
+
+        sec_data = channel.get_data(trial_index)
+        if sec_data is not None:
+            params[self._secondary_channel_param_name] = sec_data
+        else:
+            log.warning(
+                "Could not load data from secondary channel '%s' trial %d.",
+                sec_chan_id, trial_index,
+            )
 
     def _on_channel_changed(self, index=None):
         """Handle channel selection change."""
@@ -657,6 +753,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Check if the analysis requires all trials
         metadata = AnalysisRegistry.get_metadata(self.analysis_name)
         requires_multi_trial = metadata.get("requires_multi_trial", False)
+
+        # --- Inject secondary channel data if configured ---
+        self._inject_secondary_channel_data(params, data)
 
         try:
             if requires_multi_trial and self._selected_item_recording and self.signal_channel_combobox:
@@ -867,6 +966,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif plot_type == "popup_phase":
                 self._viz_popup_phase(plot_cfg, result_item)
 
+            # --- overlay fit curve (e.g. tau exponential) ---
+            elif plot_type == "overlay_fit":
+                self._viz_overlay_fit(plot_cfg, result_item)
+
             # trace — no extra visualisation needed
             elif plot_type == "trace":
                 pass
@@ -877,10 +980,12 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _val(self, obj, key, default=None):
         """Extract a value from either a dict or an object attribute."""
-        if hasattr(obj, key):
-            return getattr(obj, key)
+        if key is None:
+            return default
         if isinstance(obj, dict):
             return obj.get(key, default)
+        if isinstance(key, str) and hasattr(obj, key):
+            return getattr(obj, key)
         return default
 
     def _viz_markers(self, cfg, result):
@@ -1026,6 +1131,23 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self._result_hlines[key].setVisible(True)
             elif key in self._result_hlines:
                 self._result_hlines[key].setVisible(False)
+
+    def _viz_overlay_fit(self, cfg, result):
+        """Draw a fit curve overlay on the main plot (e.g. exponential fit for Tau)."""
+        x_key = cfg.get("x")
+        y_key = cfg.get("y")
+        x_data = self._val(result, x_key)
+        y_data = self._val(result, y_key)
+        if x_data is None or y_data is None:
+            return
+        if not hasattr(x_data, '__len__') or len(x_data) == 0:
+            return
+        color = cfg.get("color", "r")
+        width = cfg.get("width", 2)
+        pen = pg.mkPen(color, width=width, style=QtCore.Qt.PenStyle.SolidLine)
+        curve = pg.PlotCurveItem(x=np.array(x_data), y=np.array(y_data), pen=pen)
+        self.plot_widget.addItem(curve)
+        self._dynamic_plot_items.append(curve)
 
     def _viz_popup_xy(self, cfg, result):
         """Show scatter + optional regression line in a popup."""

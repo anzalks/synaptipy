@@ -185,7 +185,10 @@ def run_capacitance_analysis_wrapper(
             return {"error": "Tau calculation failed (no fit)."}
 
         if isinstance(tau_result, dict):
-            tau_ms = tau_result.get("tau_slow_ms", 0)  # bi-exponential
+            # Mono model returns {tau_ms: ...}, bi returns {tau_slow_ms: ...}
+            tau_ms = tau_result.get(
+                "tau_ms", tau_result.get("tau_slow_ms", 0)
+            )
         else:
             tau_ms = tau_result
 

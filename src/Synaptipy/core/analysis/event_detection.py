@@ -81,7 +81,8 @@ def detect_events_threshold(  # noqa: C901
             noise_sd = 1e-12
 
         # The prominence must clear BOTH the user-defined threshold and
-        # the baseline noise floor (minimum 2 standard deviations) to be considered a true signal.
+        # the baseline noise floor (minimum 2 standard deviations) to be
+        # considered a true signal.
         abs_threshold = abs(threshold)
         min_prominence = max(abs_threshold, 2.0 * noise_sd)
 
@@ -266,7 +267,9 @@ def detect_events_template(  # noqa: C901
     tau_decay: float,
     polarity: str = "negative",
     rolling_baseline_window_ms: Optional[float] = 100.0,
-    artifact_mask: Optional[np.ndarray] = None
+    artifact_mask: Optional[np.ndarray] = None,
+    time: Optional[np.ndarray] = None,
+    min_event_distance_ms: float = 0.0,
 ) -> EventDetectionResult:
     """
     Detects events using Parametric Template Matching (Matched Filter).
@@ -365,8 +368,11 @@ def detect_events_template(  # noqa: C901
         # 4. Detection
         # Find peaks where height > threshold_std
         # 5. Dynamic Distance
-        # "Set the peak finding min_distance argument to tau_decay (in samples)"
-        min_dist_samples = int(tau_decay * sampling_rate)
+        # Use user-specified min distance, or fall back to tau_decay
+        if min_event_distance_ms > 0:
+            min_dist_samples = int((min_event_distance_ms / 1000.0) * sampling_rate)
+        else:
+            min_dist_samples = int(tau_decay * sampling_rate)
         if min_dist_samples < 1:
             min_dist_samples = 1
 
@@ -395,7 +401,10 @@ def detect_events_template(  # noqa: C901
         event_amplitudes = baseline_corrected_data[event_indices] if event_count > 0 else np.array([])
 
         # Times
-        time_axis = np.arange(n_points) * dt
+        if time is not None and len(time) == n_points:
+            time_axis = time
+        else:
+            time_axis = np.arange(n_points) * dt
         event_times = time_axis[event_indices] if event_count > 0 else np.array([])
 
         return EventDetectionResult(
@@ -458,6 +467,13 @@ def detect_events_template(  # noqa: C901
             "decimals": 4,
         },
         {
+            "name": "direction",
+            "label": "Direction:",
+            "type": "choice",
+            "choices": ["negative", "positive"],
+            "default": "negative",
+        },
+        {
             "name": "rolling_baseline_window_ms",
             "label": "Rolling Baseline (ms):",
             "type": "float",
@@ -471,6 +487,16 @@ def detect_events_template(  # noqa: C901
          "label": "Artifact Slope Thresh:",
          "type": "float", "default": 20.0, "min": 0.0},
         {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
+        {
+            "name": "min_event_distance_ms",
+            "label": "Min Event Distance (ms):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1000.0,
+            "decimals": 1,
+            "tooltip": "Minimum distance between events (ms). 0 = use tau_decay.",
+        },
         {
             "name": "filter_freq_hz",
             "label": "Filter Freq (Hz):",
@@ -517,7 +543,9 @@ def run_event_detection_template_wrapper(
         tau_decay=tau_decay,
         polarity=direction,
         rolling_baseline_window_ms=kwargs.get("rolling_baseline_window_ms", 100.0),
-        artifact_mask=artifact_mask
+        artifact_mask=artifact_mask,
+        time=time,
+        min_event_distance_ms=kwargs.get("min_event_distance_ms", 0.0),
     )
 
     if not result.is_valid:
@@ -604,24 +632,45 @@ def detect_events_baseline_peak_kinetics(
     filter_freq_hz: Optional[float] = None,
     min_event_separation_ms: float = 5.0,
     auto_baseline: bool = True,
+    rolling_baseline_window_ms: float = 0.0,
 ) -> EventDetectionResult:
     if direction not in ["negative", "positive"]:
         return EventDetectionResult(value=0, unit="counts", is_valid=False, error_message="Invalid direction")
 
-    # Detect Baseline
+    # Detect Baseline from most stable segment
     baseline_mean, baseline_sd, _ = _find_stable_baseline_segment(data, sample_rate, baseline_window_s, baseline_step_s)
     if baseline_mean is None:
         return EventDetectionResult(value=0, unit="counts", is_valid=True, event_count=0)
 
     is_negative = direction == "negative"
-    signal_to_process = -data if is_negative else data
-    baseline_mean_processed = -baseline_mean if is_negative else baseline_mean
 
-    # Threshold
-    threshold_val = baseline_mean_processed + (threshold_sd_factor * baseline_sd)
+    # Optional rolling baseline subtraction to handle slow drift
+    if rolling_baseline_window_ms > 0:
+        from scipy.ndimage import median_filter
+        window_samples = int((rolling_baseline_window_ms / 1000.0) * sample_rate)
+        if window_samples % 2 == 0:
+            window_samples += 1
+        if window_samples >= 3:
+            rolling_bl = median_filter(data, size=window_samples)
+            work_data = data - rolling_bl
+        else:
+            work_data = data
+    else:
+        work_data = data
+
+    # Rectify for peak detection
+    signal_to_process = -work_data if is_negative else work_data
+
+    # Use robust noise estimate (MAD) to avoid overly sensitive thresholds
+    noise_sd = median_abs_deviation(signal_to_process, scale="normal")
+    if noise_sd == 0:
+        noise_sd = baseline_sd if baseline_sd > 0 else 1e-12
+
+    # Threshold: SD-factor applied to robust noise estimate
+    threshold_val = threshold_sd_factor * noise_sd
 
     # Filtering
-    if filter_freq_hz:
+    if filter_freq_hz and filter_freq_hz > 0:
         try:
             sos = signal.butter(4, filter_freq_hz, "low", fs=sample_rate, output="sos")
             filtered = signal.sosfiltfilt(sos, signal_to_process)
@@ -630,9 +679,17 @@ def detect_events_baseline_peak_kinetics(
     else:
         filtered = signal_to_process
 
-    # Peaks
+    # Peak detection with prominence requirement to reject noise
     min_dist = max(1, int(min_event_separation_ms / 1000.0 * sample_rate))
-    peaks, _ = signal.find_peaks(filtered, height=threshold_val, distance=min_dist)
+    # Minimum width to reject single-sample noise spikes (>0.2ms)
+    min_width = max(2, int(0.0002 * sample_rate))
+    peaks, _ = signal.find_peaks(
+        filtered,
+        height=threshold_val,
+        prominence=threshold_val * 0.5,
+        distance=min_dist,
+        width=min_width,
+    )
 
     # Revert threshold to original data scale for visualization
     display_threshold_val = -threshold_val if is_negative else threshold_val
@@ -644,7 +701,7 @@ def detect_events_baseline_peak_kinetics(
         event_count=len(peaks),
         event_indices=peaks,
         detection_method="baseline_peak",
-        summary_stats={"baseline_mean": baseline_mean, "baseline_sd": baseline_sd},
+        summary_stats={"baseline_mean": baseline_mean, "baseline_sd": float(noise_sd)},
         threshold_value=display_threshold_val,
     )
 
@@ -672,7 +729,18 @@ def detect_events_baseline_peak_kinetics(
             "label": "Min Separation (ms):",
             "type": "float",
             "default": 5.0,
-            "hidden": True,
+            "min": 0.1,
+            "max": 1000.0,
+            "decimals": 1,
+        },
+        {
+            "name": "rolling_baseline_window_ms",
+            "label": "Rolling Baseline (ms):",
+            "type": "float",
+            "default": 100.0,
+            "min": 0.0,
+            "max": 5000.0,
+            "decimals": 1,
         },
         {
             "name": "baseline_window_s",
@@ -707,6 +775,7 @@ def run_event_detection_baseline_peak_wrapper(
         auto_baseline=kwargs.get("auto_baseline", True),
         baseline_window_s=kwargs.get("baseline_window_s", 0.5),
         baseline_step_s=kwargs.get("baseline_step_s", 0.1),
+        rolling_baseline_window_ms=kwargs.get("rolling_baseline_window_ms", 100.0),
     )
     if not result.is_valid:
         return {"event_error": result.error_message}
