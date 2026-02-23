@@ -17,6 +17,7 @@ import numpy as np
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.results import AnalysisResult
+from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 
 log = logging.getLogger(__name__)
 
@@ -263,19 +264,25 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
     # assuming 'data' is the voltage trace.
     ap_times = kwargs.get("action_potential_times", None)
     if ap_times is None:
-        # Detect spikes natively using simple threshold crossing
-        is_spike = data > ap_threshold
-        # Find rising edges of spikes
-        spike_idx = np.where(np.diff(is_spike.astype(int)) == 1)[0]
-        ap_times = time[spike_idx]
+        # Detect spikes using proper threshold + refractory period method
+        dt = 1.0 / sampling_rate
+        refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms refractory
+        spike_result = detect_spikes_threshold(
+            data, time, threshold=ap_threshold,
+            refractory_samples=refractory_samples
+        )
+        ap_times = time[spike_result.spike_indices] if spike_result.spike_indices is not None and len(spike_result.spike_indices) > 0 else np.array([])
 
-    # We need TTL data. If not provided, we might be looking at a single trace that has both.
-    # But usually it's in a separate channel. We will look for 'ttl_data' in kwargs.
+    # We need TTL data. This should be a separate digital/trigger channel.
     ttl_data = kwargs.get("ttl_data", None)
 
-    # FOR STANDALONE USAGE / DEMO: If ttl_data is not provided, we will assume `data` contains
-    # massive TTL pulses (optical artifact) > ttl_threshold, so we can self-extract.
     if ttl_data is None:
+        log.warning(
+            "No TTL data provided. Using the voltage trace as a fallback for "
+            "TTL edge detection. This is only valid if the trace contains "
+            "large optical artifacts (> ttl_threshold V). For accurate results, "
+            "provide a dedicated TTL channel via the 'ttl_data' keyword argument."
+        )
         ttl_data = data
 
     result = calculate_optogenetic_sync(

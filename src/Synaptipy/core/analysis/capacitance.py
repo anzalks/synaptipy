@@ -89,7 +89,7 @@ def calculate_capacitance_vc(
         # But wait. If step is negative (e.g., -5 mV), Q will be negative.
         # So Cm will be positive.
         cm_nf = Q_pc / voltage_step_amplitude_mv
-        cm_pf = cm_nf * 1000.0
+        cm_pf = abs(cm_nf * 1000.0)  # abs() ensures positive Cm regardless of step polarity
 
         return float(cm_pf)
 

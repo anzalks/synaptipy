@@ -170,7 +170,18 @@ detect_minis_threshold = detect_events_threshold
 
 @AnalysisRegistry.register(
     "event_detection_threshold",
-    label="Event (Adaptive Thresh)",
+    label="Event Detection",
+    method_selector={
+        "Threshold Based": "event_detection_threshold",
+        "Deconvolution (Custom)": "event_detection_deconvolution",
+        "Baseline + Peak + Kinetics": "event_detection_baseline_peak",
+    },
+    plots=[
+        {"name": "Trace", "type": "trace", "show_spikes": True},
+        {"type": "event_markers"},
+        {"type": "threshold_line", "param": "threshold"},
+        {"type": "artifact_overlay"},
+    ],
     ui_params=[
         {
             "name": "threshold",
@@ -412,6 +423,12 @@ def detect_events_template(  # noqa: C901
 @AnalysisRegistry.register(
     "event_detection_deconvolution",
     label="Event (Template Match)",
+    plots=[
+        {"name": "Trace", "type": "trace", "show_spikes": True},
+        {"type": "event_markers"},
+        {"type": "threshold_line", "param": "threshold_sd"},
+        {"type": "artifact_overlay"},
+    ],
     ui_params=[
         {
             "name": "tau_rise_ms",
@@ -635,6 +652,11 @@ def detect_events_baseline_peak_kinetics(
 @AnalysisRegistry.register(
     "event_detection_baseline_peak",
     label="Event (Baseline Peak)",
+    plots=[
+        {"name": "Trace", "type": "trace", "show_spikes": True},
+        {"type": "event_markers"},
+        {"type": "artifact_overlay"},
+    ],
     ui_params=[
         {
             "name": "direction",

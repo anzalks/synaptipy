@@ -23,6 +23,7 @@ import numpy as np
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.results import AnalysisResult
+from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +93,21 @@ def calculate_train_dynamics(
             isis=isis
         )
 
+    # Guard against zero ISIs (duplicate spike times) which cause division by zero
+    isis = isis[isis > 0]
+    if len(isis) < 2:
+        return TrainDynamicsResult(
+            value=mean_isi,
+            unit="s",
+            is_valid=True,
+            spike_count=spike_count,
+            mean_isi_s=mean_isi,
+            cv=cv,
+            cv2=np.nan,
+            lv=np.nan,
+            isis=isis
+        )
+
     # Consecutive ISIs: ISI_i and ISI_{i+1}
     isi_i = isis[:-1]
     isi_i_plus_1 = isis[1:]
@@ -149,11 +165,13 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
 
     ap_times = kwargs.get("action_potential_times", None)
     if ap_times is None:
-        # Detect spikes natively
-        is_spike = data > ap_threshold
-        # Find rising edges
-        spike_idx = np.where(np.diff(is_spike.astype(int)) == 1)[0]
-        ap_times = time[spike_idx]
+        # Detect spikes using proper threshold + refractory period method
+        refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms refractory
+        spike_result = detect_spikes_threshold(
+            data, time, threshold=ap_threshold,
+            refractory_samples=refractory_samples
+        )
+        ap_times = time[spike_result.spike_indices] if spike_result.spike_indices is not None and len(spike_result.spike_indices) > 0 else np.array([])
 
     result = calculate_train_dynamics(ap_times)
 

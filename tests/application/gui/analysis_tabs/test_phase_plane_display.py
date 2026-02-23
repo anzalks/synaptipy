@@ -1,8 +1,16 @@
+"""
+Tests for Phase Plane analysis via MetadataDrivenAnalysisTab.
 
+Validates that the generic metadata-driven tab correctly handles
+popup phase-plane plots and result display for phase plane analysis.
+"""
 import pytest
 from unittest.mock import MagicMock
 from PySide6 import QtWidgets
-from Synaptipy.application.gui.analysis_tabs.phase_plane_tab import PhasePlaneTab
+from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+
+# Ensure the analysis modules are imported so registrations are active
+import Synaptipy.core.analysis  # noqa: F401
 
 
 @pytest.fixture
@@ -13,9 +21,12 @@ def app():
 
 
 def test_phase_plane_result_display(app):
-    """Verify PhasePlaneTab result display operates without NameError."""
+    """Verify MetadataDrivenAnalysisTab result display for phase plane operates correctly."""
     mock_neo = MagicMock()
-    tab = PhasePlaneTab(mock_neo)
+    tab = MetadataDrivenAnalysisTab(
+        analysis_name="phase_plane_analysis",
+        neo_adapter=mock_neo,
+    )
 
     # Mock results
     results = {
@@ -24,17 +35,15 @@ def test_phase_plane_result_display(app):
             "max_dvdt": 120.0,
             "voltage": [1, 2, 3],
             "dvdt": [1, 2, 3],
-            "threshold_dvdt": 10.0
+            "threshold_dvdt": 10.0,
         }
     }
 
-    # This should not raise NameError
+    # This should not raise errors
     tab._display_analysis_results(results)
 
-    # Verify table population
-    assert tab.results_table.rowCount() == 2
-    assert tab.results_table.item(0, 0).text() == "Threshold"
-    assert tab.results_table.item(0, 1).text() == "-45.00 mV"
+    # Verify table was populated (generic display shows all keys)
+    assert tab.results_table.rowCount() > 0
 
 
 if __name__ == "__main__":

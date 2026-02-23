@@ -108,8 +108,9 @@ class TestRinUnitConversion:
         )
 
         assert result.is_valid
-        # Rin = 100 MOhm → G = 1000/100 = 10 uS
-        assert abs(result.conductance - 10.0) < 0.01
+        # Rin = 100 MOhm → G = 1/100 = 0.01 μS
+        # (1 MOhm = 10^6 Ω, so 1/MOhm = 10^-6 S = 1 μS)
+        assert abs(result.conductance - 0.01) < 0.001
 
 
 class TestDvdtUnitConsistency:
@@ -153,13 +154,13 @@ class TestDvdtUnitConsistency:
         assert len(features) == 1
         feat = features[0]
 
-        # max_dvdt should be in mV/s (large positive value)
+        # max_dvdt should be in V/s (positive value, consistent with phase_plane.py)
         assert feat["max_dvdt"] > 0, (
             f"max_dvdt should be positive, got {feat['max_dvdt']}"
         )
-        # The rise is ~100 mV / 1ms = 100,000 mV/s
-        assert feat["max_dvdt"] > 10000, (
-            f"max_dvdt too small: {feat['max_dvdt']} mV/s"
+        # The rise is ~100 mV / 1ms = 100,000 mV/s = 100 V/s
+        assert feat["max_dvdt"] > 10, (
+            f"max_dvdt too small: {feat['max_dvdt']} V/s"
         )
 
     def test_dvdt_threshold_too_high_no_onset(self):

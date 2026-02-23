@@ -557,6 +557,34 @@ class NeoAdapter:
                 channel_metadata_map[map_key]["num_trials"] += 1
             else:
                 signal_data = np.array(anasig.magnitude).ravel()
+
+                # --- Data unit standardization ---
+                # Electrophysiology convention: voltage in mV, current in pA.
+                # Neo files may store data in base SI units (V, A) or
+                # scaled units (mV, pA, nA, etc.). Detect and rescale.
+                try:
+                    unit_str = str(anasig.units.dimensionality).strip()
+                    # Voltage rescaling
+                    if unit_str in ("V", "volt", "Volt"):
+                        signal_data = signal_data * 1e3  # V -> mV
+                        log.info(f"Channel {anasig_id}: rescaled data from V to mV")
+                    elif unit_str in ("uV", "µV", "microvolt"):
+                        signal_data = signal_data * 1e-3  # µV -> mV
+                        log.info(f"Channel {anasig_id}: rescaled data from µV to mV")
+                    # Current rescaling
+                    elif unit_str in ("A", "amp", "ampere", "Amp"):
+                        signal_data = signal_data * 1e12  # A -> pA
+                        log.info(f"Channel {anasig_id}: rescaled data from A to pA")
+                    elif unit_str in ("nA", "nanoampere"):
+                        signal_data = signal_data * 1e3  # nA -> pA
+                        log.info(f"Channel {anasig_id}: rescaled data from nA to pA")
+                    elif unit_str in ("uA", "µA", "microampere"):
+                        signal_data = signal_data * 1e6  # µA -> pA
+                        log.info(f"Channel {anasig_id}: rescaled data from µA to pA")
+                    # mV and pA are already in the expected units — no rescaling needed
+                except Exception as e:
+                    log.debug(f"Could not determine units for channel {anasig_id}: {e}")
+
                 # Use direct assignment to pre-allocated slot if possible
                 trials_list = channel_metadata_map[map_key]["data_trials"]
                 if seg_idx < len(trials_list):

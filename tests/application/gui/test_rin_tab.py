@@ -1,5 +1,5 @@
 """
-Unit tests for the Input Resistance Analysis Tab
+Unit tests for the Input Resistance Analysis Tab (via MetadataDrivenAnalysisTab).
 """
 
 import pytest
@@ -7,9 +7,12 @@ import numpy as np
 from unittest.mock import MagicMock
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.analysis_tabs.rin_tab import RinAnalysisTab
+from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.data_model import Channel, Recording
+
+# Ensure the analysis modules are imported so registrations are active
+import Synaptipy.core.analysis  # noqa: F401
 
 
 # Fixtures for reuse in multiple tests
@@ -52,8 +55,11 @@ def mock_neo_adapter():
 
 @pytest.fixture
 def rin_tab(qtbot, mock_neo_adapter):
-    """Fixture providing a RinAnalysisTab instance"""
-    tab = RinAnalysisTab(neo_adapter=mock_neo_adapter)
+    """Fixture providing a MetadataDrivenAnalysisTab for rin_analysis."""
+    tab = MetadataDrivenAnalysisTab(
+        analysis_name="rin_analysis",
+        neo_adapter=mock_neo_adapter,
+    )
     qtbot.addWidget(tab)
     return tab
 
@@ -62,55 +68,19 @@ def rin_tab(qtbot, mock_neo_adapter):
 def test_rin_tab_init(rin_tab):
     """Test that the tab initializes correctly"""
     assert rin_tab is not None
-    assert rin_tab.mode_combobox is not None
     assert rin_tab.plot_widget is not None
     assert rin_tab.get_display_name() == "Input Resistance"
 
 
-def test_mode_selection(rin_tab, qtbot):
-    """Test that mode selection works properly"""
-    # Check if mode combobox exists and has at least two modes
-    assert hasattr(rin_tab, "mode_combobox")
-    assert isinstance(rin_tab.mode_combobox, QtWidgets.QComboBox)
-    assert rin_tab.mode_combobox.count() >= 2
-
-    # Verify tab has the necessary structure
-    assert hasattr(rin_tab, "plot_widget")
-    # Verify tab has the necessary structure
-    assert hasattr(rin_tab, "plot_widget")
-    # assert hasattr(rin_tab, 'run_button')  # Removed in refactor
-
-    # Test mode switching works
-    initial_mode = rin_tab.mode_combobox.currentText()
-    if rin_tab.mode_combobox.count() > 1:
-        # Switch to another mode
-        next_index = (rin_tab.mode_combobox.currentIndex() + 1) % rin_tab.mode_combobox.count()
-        rin_tab.mode_combobox.setCurrentIndex(next_index)
-        # Verify mode changed
-        assert rin_tab.mode_combobox.currentText() != initial_mode
+def test_interactive_regions_present(rin_tab):
+    """Test that interactive regions are created from baseline/response params."""
+    # The metadata has baseline_start/baseline_end and response_start/response_end
+    # so _setup_interactive_regions should create LinearRegionItems
+    assert len(rin_tab._interactive_regions) > 0
 
 
-def test_interactive_calculation(rin_tab, qtbot, mock_neo_adapter):
-    """Test interactive region components are present"""
-    # Check if interactive regions exist
-    assert hasattr(rin_tab, "baseline_region")
-    assert hasattr(rin_tab, "response_region")
-
-    # Check we have save functionality
-    assert hasattr(rin_tab, "save_button")
-    assert isinstance(rin_tab.save_button, QtWidgets.QPushButton)
-
-
-def test_manual_calculation(rin_tab, qtbot, mock_neo_adapter):
-    """Test resistance calculation in manual mode"""
-    # Test that the tab initializes properly in manual mode
-    # Get the actual mode values
-    if rin_tab.mode_combobox.count() >= 2:
-        manual_mode = rin_tab.mode_combobox.itemText(1)
-        rin_tab.mode_combobox.setCurrentText(manual_mode)
-
-    # Check that essential UI elements exist
-    # assert hasattr(rin_tab, 'run_button')  # Removed in refactor (reactive)
+def test_has_save_button(rin_tab):
+    """Test that save button exists."""
     assert hasattr(rin_tab, "save_button")
     assert isinstance(rin_tab.save_button, QtWidgets.QPushButton)
 
@@ -136,3 +106,17 @@ def test_get_specific_result_data(rin_tab):
     # Check keys based on what's actually in the return value
     assert "Rin (MΩ)" in result_data or "Input Resistance (MΩ)" in result_data
     assert "Conductance (μS)" in result_data
+
+
+def test_result_hlines_visualization(rin_tab):
+    """Test that result h-lines are plotted from analysis results."""
+    result_data = {
+        "baseline_voltage_mv": -65.0,
+        "steady_state_voltage_mv": -75.0,
+        "rin_mohm": 200.0,
+    }
+
+    rin_tab._plot_analysis_visualizations(result_data)
+
+    # Should have created h-lines for baseline and steady-state voltages
+    assert len(rin_tab._result_hlines) > 0
