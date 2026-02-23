@@ -641,6 +641,21 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         layout.addWidget(self.plot_canvas.widget, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
 
+        # --- X Scrollbar for panning when zoomed ---
+        self._x_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Horizontal)
+        self._x_scrollbar.setRange(0, 10000)
+        self._x_scrollbar.setFixedHeight(15)
+        self._x_scrollbar.setValue(5000)
+        self._x_scrollbar.setPageStep(10000)
+        self._x_scrollbar.valueChanged.connect(self._on_x_scrollbar_changed)
+        self._x_scroll_updating = False
+        self._base_x_range = None  # Full data x range (set when data is plotted)
+        layout.addWidget(self._x_scrollbar)
+
+        # Connect view range changes to update scrollbar
+        if vb:
+            vb.sigXRangeChanged.connect(self._on_viewbox_x_range_changed)
+
         # Add Plot Navigation Controls (Prev/Next Trial)
         self._setup_plot_navigation_controls(layout)
 
@@ -657,6 +672,68 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._setup_zoom_sync()
 
         log.debug(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
+
+    def _on_x_scrollbar_changed(self, value):
+        """Pan the plot horizontally when the scrollbar is dragged."""
+        if self._x_scroll_updating or not self._base_x_range:
+            return
+        self._x_scroll_updating = True
+        try:
+            vb = self.plot_widget.getViewBox()
+            if not vb:
+                return
+            x_range = vb.viewRange()[0]
+            visible_span = x_range[1] - x_range[0]
+            total_min, total_max = self._base_x_range
+            total_span = total_max - total_min
+            if total_span <= 0 or visible_span >= total_span:
+                return
+            # Map scrollbar value (0-10000) to center position
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if min_center >= max_center:
+                return
+            scroll_ratio = value / 10000.0
+            center = min_center + (max_center - min_center) * scroll_ratio
+            new_min = center - visible_span / 2
+            new_max = center + visible_span / 2
+            self.plot_widget.setXRange(new_min, new_max, padding=0)
+        finally:
+            self._x_scroll_updating = False
+
+    def _on_viewbox_x_range_changed(self, vb, x_range):
+        """Update scrollbar position/size when the plot view range changes."""
+        if self._x_scroll_updating or not self._base_x_range:
+            return
+        self._x_scroll_updating = True
+        try:
+            x_min, x_max = x_range
+            total_min, total_max = self._base_x_range
+            total_span = total_max - total_min
+            if total_span <= 0:
+                return
+            visible_span = x_max - x_min
+            # Calculate scrollbar position
+            center = (x_min + x_max) / 2
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if max_center <= min_center:
+                scroll_val = 5000
+            else:
+                scroll_ratio = (center - min_center) / (max_center - min_center)
+                scroll_ratio = max(0.0, min(1.0, scroll_ratio))
+                scroll_val = int(scroll_ratio * 10000)
+            # Calculate page step (thumb size proportional to visible fraction)
+            ratio = max(0.0, min(1.0, visible_span / total_span))
+            page_step = max(1, int(ratio * 10000))
+            self._x_scrollbar.blockSignals(True)
+            self._x_scrollbar.setValue(scroll_val)
+            self._x_scrollbar.setPageStep(page_step)
+            self._x_scrollbar.blockSignals(False)
+        except Exception as e:
+            log.debug(f"Error updating scrollbar: {e}")
+        finally:
+            self._x_scroll_updating = False
 
     # --- END ADDED ---
 
@@ -1779,6 +1856,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 x_range = (float(np.min(plot_package.main_time)), float(np.max(plot_package.main_time)))
                 y_range = (float(np.min(plot_package.main_data)), float(np.max(plot_package.main_data)))
                 self.set_data_ranges(x_range, y_range)
+                # Update base x range for scrollbar panning
+                self._base_x_range = x_range
 
             # 6. Store State (including raw data for efficient preprocessing)
             self._current_plot_data = {

@@ -172,6 +172,7 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     ap_threshold = kwargs.get("spike_threshold", 0.0)
 
     ap_times = kwargs.get("action_potential_times", None)
+    spike_indices = None
     if ap_times is None:
         # Detect spikes using proper threshold + refractory period method
         refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms refractory
@@ -183,7 +184,12 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
             spike_result.spike_indices is not None
             and len(spike_result.spike_indices) > 0
         )
-        ap_times = time[spike_result.spike_indices] if has_spikes else np.array([])
+        if has_spikes:
+            spike_indices = spike_result.spike_indices
+            ap_times = time[spike_indices]
+        else:
+            spike_indices = np.array([], dtype=int)
+            ap_times = np.array([])
 
     result = calculate_train_dynamics(ap_times)
 
@@ -197,7 +203,7 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
         isi_ms = (result.isis * 1000.0).tolist()  # convert s → ms
         isi_numbers = list(range(1, len(isi_ms) + 1))
 
-    return {
+    out = {
         "spike_count": result.spike_count,
         "mean_isi_s": result.mean_isi_s,
         "cv": result.cv,
@@ -206,3 +212,6 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
         "isi_numbers": isi_numbers,
         "isi_ms": isi_ms,
     }
+    if spike_indices is not None:
+        out["spike_indices"] = spike_indices
+    return out

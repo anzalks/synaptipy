@@ -378,6 +378,21 @@ def detect_events_template(  # noqa: C901
 
         peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
 
+        # Correct peak positions: the matched filter output peak may
+        # not align exactly with the actual signal peak due to the
+        # template kernel's asymmetry. For each detected position,
+        # find the true peak in the original (polarity-corrected)
+        # signal within a local window around the detection.
+        half_kernel = len(kernel) // 2
+        if len(peak_indices) > 0:
+            corrected_indices = np.empty_like(peak_indices)
+            for i, idx in enumerate(peak_indices):
+                win_start = max(0, idx - half_kernel)
+                win_end = min(n_points, idx + half_kernel + 1)
+                local_peak = np.argmax(work_data[win_start:win_end])
+                corrected_indices[i] = win_start + local_peak
+            peak_indices = corrected_indices
+
         # Filter artifacts
         if artifact_mask is not None and len(peak_indices) > 0:
             # Keep only peaks where mask is False

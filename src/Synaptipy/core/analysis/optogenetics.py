@@ -48,7 +48,8 @@ class OptoSyncResult(AnalysisResult):
 def extract_ttl_epochs(
     ttl_data: np.ndarray,
     time: np.ndarray,
-    threshold: float = 2.5
+    threshold: float = 2.5,
+    auto_threshold: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts rising and falling edges of a digital TTL signal.
@@ -57,6 +58,10 @@ def extract_ttl_epochs(
         ttl_data: The digital signal array (e.g. 0V to 5V pulses).
         time: The timestamp array matching ttl_data.
         threshold: Voltage threshold to define HIGH state (default 2.5V).
+        auto_threshold: If True and the given *threshold* produces no
+            edges (or only one edge), automatically compute a midpoint
+            threshold from the data range.  This makes detection robust
+            against unit rescaling (e.g. V → mV).
 
     Returns:
         Tuple of (onsets, offsets) arrays in seconds.
@@ -66,6 +71,24 @@ def extract_ttl_epochs(
 
     # Binarize signal based on threshold
     is_high = ttl_data > threshold
+
+    # Auto-threshold: if the supplied threshold leaves everything high
+    # or everything low (typically due to unit mismatches), fall back to
+    # midpoint of the signal's range.
+    if auto_threshold:
+        n_high = np.count_nonzero(is_high)
+        if n_high == 0 or n_high == len(is_high):
+            data_min = float(np.min(ttl_data))
+            data_max = float(np.max(ttl_data))
+            data_range = data_max - data_min
+            if data_range > 0:
+                auto_thr = data_min + data_range * 0.5
+                log.info(
+                    "TTL threshold %.3f produced no edges; auto-adjusting "
+                    "to midpoint %.3f (data range %.3f – %.3f).",
+                    threshold, auto_thr, data_min, data_max,
+                )
+                is_high = ttl_data > auto_thr
 
     # Use numpy.diff to find edges
     # diff evaluates to True at indices where signal crosses
