@@ -298,15 +298,15 @@ def customize_pyqtgraph_selection(viewbox) -> None:  # noqa: C901
                             p, b = get_cached_pen_brush()
                             rb.setPen(p)
                             rb.setBrush(b)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.debug(f"Could not apply scale box styling: {e}")
                     return result
 
                 cls.updateScaleBox = _patched_updateScaleBox
                 _PATCHED_CLASSES.add(cls)
                 log.debug("Installed global ViewBox.updateScaleBox patch for selection styling")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Could not install ViewBox scale box patch: {e}")
 
         # Apply immediately if already present for this instance
         try:
@@ -314,8 +314,8 @@ def customize_pyqtgraph_selection(viewbox) -> None:  # noqa: C901
             if rb is not None and shiboken6.isValid(viewbox) and shiboken6.isValid(rb):
                 rb.setPen(pen)
                 rb.setBrush(brush)
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"Could not apply immediate scale box styling: {e}")
 
         log.debug("Selection customization active (class patch)")
 

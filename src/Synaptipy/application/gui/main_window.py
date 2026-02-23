@@ -140,8 +140,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Notify listeners that initialization is complete
         try:
             self.initialized.emit()
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"Could not emit initialized signal: {e}")
 
     def _setup_menu_and_status_bar(self):
         """Creates the main menu bar and status bar, and connects menu actions."""
@@ -349,8 +349,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 log.warning("Explorer tab missing update_plot_pens method")
         if hasattr(self, "analyser_tab") and self.analyser_tab:
-            # Add logic here to update analyser tab plots if they exist
-            pass
+            # Analyser tab plot pen updates handled via its own refresh mechanism
+            log.debug("Analyser tab plot pens refresh deferred to tab's own mechanism")
 
     def _update_plot_pens_only(self):  # noqa: C901
         """Update only plot pens when user changes preferences in dialog."""

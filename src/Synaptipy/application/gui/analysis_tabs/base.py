@@ -1042,12 +1042,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         QtWidgets.QMessageBox.critical(self, "Load Error", f"Failed to load data:\n{value}")
         self._selected_item_recording = None
 
-        # Still update UI to reflect potential empty state or error state
-        # Still update UI to reflect potential empty state or error state
+        # Update UI to reflect potential empty state or error state
         try:
             self._update_ui_for_selected_item()
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"Could not update UI after item load error: {e}")
 
     def _on_item_load_finished(self):
         """Cleanup after loading (success or error)."""
@@ -1514,12 +1513,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # So we might NOT update _current_plot_data, or update it to None to prevent analysis on mixed data?
         # Or just leave specific selection as "Data Source" active.
 
-        # Let's verify: user wants "plot selected trials" option.
-        # They probably just want to see them.
-        # If they run analysis, it should probably run on the "Data Source" selection?
-        # Or should we disable analysis?
-        # For now, let's keep it simple: Visualization only.
-        pass
+        # Multi-trial plot is visualization-only; analysis runs via the
+        # Data Source selection in the analysis controls.
+        return
 
     def _populate_channel_and_source_comboboxes(self):  # noqa: C901
         """

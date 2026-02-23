@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 # Default location for 3rd-party user plugins
 PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 
+
 class PluginManager:
     """Manages the discovery, loading, and registration of third-party plugins."""
 
@@ -39,7 +40,7 @@ class PluginManager:
         """Returns a list of all .py files in the plugin directory."""
         if not PLUGIN_DIR.exists():
             return []
-        
+
         # Only loading top-level python files for safety and simplicity
         plugin_files = list(PLUGIN_DIR.glob("*.py"))
         # Exclude __init__.py if it exists
@@ -54,7 +55,7 @@ class PluginManager:
         """
         cls.create_plugin_directory()
         plugin_files = cls.get_plugin_files()
-        
+
         if not plugin_files:
             log.debug("No third-party plugins found.")
             return
@@ -75,23 +76,22 @@ class PluginManager:
                 if spec is None or spec.loader is None:
                     log.warning(f"Could not load plugin specification for {p_file.name}")
                     continue
-                    
+
                 module = importlib.util.module_from_spec(spec)
-                
+
                 # We need to manually add the module to sys.modules
                 sys.modules[module_name] = module
-                
+
                 # Execute the module (This triggers the @AnalysisRegistry.register decorators!)
                 spec.loader.exec_module(module)
-                
+
                 log.info(f"Successfully loaded plugin: {p_file.name}")
-                
+
             except ImportError as e:
                 log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
             except SyntaxError as e:
                 log.error(f"SyntaxError in plugin '{p_file.name}': {e}", exc_info=False)
             except Exception as e:
                 log.error(f"Unexpected error loading plugin '{p_file.name}': {e}", exc_info=False)
-                
-        log.info("Finished loading plugins.")
 
+        log.info("Finished loading plugins.")

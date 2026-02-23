@@ -847,8 +847,8 @@ class ExplorerTab(QtWidgets.QWidget):
                                 item.setClipToView(clip_view)
 
                                 self.plot_canvas.channel_plot_data_items[cid].append(item)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            log.debug(f"Skipped trial plot for channel {cid}: {e}")
 
                     # 2. Plot Average on Top
                     try:
@@ -899,8 +899,8 @@ class ExplorerTab(QtWidgets.QWidget):
         for cid, item in self.plot_canvas.selected_average_plot_items.items():
             try:
                 self.plot_canvas.channel_plots[cid].removeItem(item)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Could not remove average plot for channel {cid}: {e}")
         self.plot_canvas.selected_average_plot_items.clear()
 
     def update_plot_pens(self):  # noqa: C901
@@ -943,8 +943,8 @@ class ExplorerTab(QtWidgets.QWidget):
                                 item.setPen(avg_pen)
                             else:
                                 item.setPen(trial_pen)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            log.debug(f"Could not update pen for plot item: {e}")
             finally:
                 # Re-enable updates and force single repaint
                 if self.plot_canvas.widget:
@@ -1714,9 +1714,6 @@ class ExplorerTab(QtWidgets.QWidget):
                 except Exception as e:
                     self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
 
-        # Helper methods removed in favor of shared.plot_exporter.PlotExporter
-        pass
-
     def _on_trial_selection_requested(self, n, start_index=0):
         """Filter trials to every Nth trial, starting from start_index."""
         if not self.current_recording:
@@ -1785,12 +1782,10 @@ class ExplorerTab(QtWidgets.QWidget):
         if plot:
             if visible:
                 plot.show()
-                pass
             else:
                 plot.hide()
         self._update_plot()
 
     def _auto_select_trials(self):
-        # Removed auto-selection logic to avoid interfering with default view (Show All)
-        # self.selected_trial_indices = set(range(min(5, self.max_trials_current_recording)))
-        pass
+        # Auto-selection disabled to preserve default view (Show All).
+        return

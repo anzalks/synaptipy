@@ -48,10 +48,8 @@ class ShortcutManager(QtCore.QObject):
             else:
                 log.warning("NavigationController missing 'next_file' method.")
 
-        elif key == QtCore.Qt.Key_Back:  # Or Backspace? or Left?
-            # Optional: Add Previous File on Backspace?
-            # User constraint only mentioned Space -> next_file explicitly.
-            # But let's add Backspace -> Prev File for symmetry if method exists
-            pass
+        elif key == QtCore.Qt.Key_Back:
+            # Reserved for future "previous file" navigation
+            log.debug("Key_Back pressed — no action bound")
 
         return False

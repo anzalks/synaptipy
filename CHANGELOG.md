@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Publication Readiness Audit — Error Handling & Robustness**
+- Replaced ~25 silent `except: pass` blocks with diagnostic `log.debug()` calls across 15 files
+- Added logging to error-swallowing blocks in neo_adapter, analysis_formatter, explorer_tab,
+  plot_canvas (widgets & explorer), analysis_plot_manager, main_window, startup_manager,
+  zoom_theme, plot_customization, and analysis_tabs/base
+- Added docstrings to NWB exporter fallback sentinel classes
+- Removed trailing `pass` statements and dead placeholder code from explorer_tab,
+  shortcut_manager, main_window, file_io_controller, data_loader, and base analysis tab
+- Cleaned up duplicate comment in base analysis tab error handler
+- Removed unnecessary `pass` after `log.debug` in theme_manager
+
+**Publication Readiness Audit — Code Quality**
+- Fixed unused variable `param_key` in metadata_driven analysis tab
+- Fixed unused variable `dt` in optogenetics wrapper
+- Replaced long conditional expressions with readable intermediate variables in
+  optogenetics.py and train_dynamics.py
+- Rewrote conversational docstring in optogenetics wrapper with proper Args/Returns format
+- Fixed all flake8 violations: trailing whitespace, missing blank lines, line length, W391
+- Cleaned up CLI placeholder module with proper docstrings (removed 50 lines of dead scaffolding)
+- Removed stale `CSVExporter` comments from exporters `__init__.py`
+
+**Publication Readiness Audit — Package Structure**
+- Populated `__all__` exports in `application/controllers/__init__.py` (9 symbols)
+- Populated `__all__` exports in `application/gui/analysis_tabs/__init__.py` (3 symbols)
+- Added `__all__` and module docstring to `application/gui/explorer/__init__.py`
+
+**Publication Readiness Audit — CI/CD**
+- Added Python 3.12 to CI test matrix (now tests 3.10, 3.11, 3.12)
+- Added `pytest-cov` coverage reporting to CI (`--cov=Synaptipy --cov-report=term-missing`)
+- Added coverage XML artifact upload for ubuntu/3.11 builds
+
 **Publication Readiness Audit — Scientific Accuracy**
 - Fixed line-noise detection baseline overlap in `signal_processor.py`
 - Fixed max/min dV/dt zeroing bias in `spike_analysis.py` (sentinel values)

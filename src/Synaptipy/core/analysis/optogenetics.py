@@ -226,34 +226,28 @@ def calculate_optogenetic_sync(
 )
 def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
-    Wrapper for optogenetic synchronization.
-    If the data array represents the raw trace (V or mV), we must first detect the spikes.
-    Wait, the user requested "correlate TTL with action potentials". 
-    In a typical experiment, we might have a multi-channel setup, or we need to extract APs from the same trace.
-    Assuming `data` here is the TTL trace OR we use a separate channel? 
-    Usually, Synaptipy passes the selected channel as `data`. If `data` is the voltage trace, we can't extract TTL from it.
-    If `data` is the TTL trace, we need the Action Potential times.
+    Wrapper for optogenetic synchronization analysis.
 
-    Let's handle this carefully:
-    For this to be purely standalone, we can either:
-    1. Extract APs from `data` (if it's a voltage trace), assuming the TTL is applied optically but the electrical trace contains optical artifacts?
-    2. Assume `data` is a dual-channel array (not standard for Synaptipy).
+    Correlates TTL/optical stimulus pulses with detected action potentials.
 
-    Let's check the API: `data` is a 1D numpy array representing the signal from the selected channel.
-    If we need two channels, we'd need a dual-channel selector in the UI. 
-    But standard analysis receives `data` (1D). 
-    Let's assume for this specific analysis, the user expects to pass the TTL trace *as* `data` and then we need AP times? Or pass Voltage trace as `data` and extract APs, but where is TTL?
-    Most commonly in our architecture, to use multi-channels, we'd pass kwargs providing the other channel, OR we pass a Multi-Channel Object.
+    When ``data`` is the voltage trace, spikes are detected automatically
+    using a threshold-crossing algorithm.  TTL timestamps should be
+    supplied via the ``ttl_data`` keyword argument (a separate digital
+    channel).  If ``ttl_data`` is not provided, the voltage trace itself
+    is used as a fallback — this is only valid when the trace contains
+    large optical artifacts exceeding ``ttl_threshold``.
 
-    Wait, "natively extract digital/TTL optical stimulus pulses AND correlate them with action potentials".
-    To do this cleanly within `data`, if the user selects the Voltage channel, we need another channel for TTL.
-    Let's assume the user selects the Voltage channel, and we add an `ui_params` of type "channel_selector" to pick the TTL channel, but Synaptipy's generic UI generator doesn't have a built-in cross-channel selector yet unless defined.
+    Args:
+        data: 1-D array of the selected channel signal (typically voltage).
+        time: Corresponding time vector (seconds).
+        sampling_rate: Sampling rate in Hz.
+        **kwargs: Optional keys include ``ttl_threshold``,
+            ``response_window_ms``, ``spike_threshold``,
+            ``action_potential_times``, and ``ttl_data``.
 
-    For now, let's implement the pure logic perfectly.
-    For the wrapper, we will assume `data` is the Voltage trace, and we'll detect spikes on it. 
-    But where does TTL come from? Let's add an optional `ttl_data` kwarg. If it's missing, we fall back to a mock or raise an error for now, until we ensure cross-channel injection is supported.
-    Better yet, some users record TTL on the same channel (optical artifacts). Usually it's a separate channel.
-    Let's write the wrapper strictly handling the core logic.
+    Returns:
+        dict with ``optical_latency_ms``, ``response_probability``,
+        ``spike_jitter_ms``, ``stimulus_count``; or ``error`` on failure.
     """
 
     ttl_threshold = kwargs.get("ttl_threshold", 2.5)
@@ -265,13 +259,16 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
     ap_times = kwargs.get("action_potential_times", None)
     if ap_times is None:
         # Detect spikes using proper threshold + refractory period method
-        dt = 1.0 / sampling_rate
         refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms refractory
         spike_result = detect_spikes_threshold(
             data, time, threshold=ap_threshold,
             refractory_samples=refractory_samples
         )
-        ap_times = time[spike_result.spike_indices] if spike_result.spike_indices is not None and len(spike_result.spike_indices) > 0 else np.array([])
+        has_spikes = (
+            spike_result.spike_indices is not None
+            and len(spike_result.spike_indices) > 0
+        )
+        ap_times = time[spike_result.spike_indices] if has_spikes else np.array([])
 
     # We need TTL data. This should be a separate digital/trigger channel.
     ttl_data = kwargs.get("ttl_data", None)

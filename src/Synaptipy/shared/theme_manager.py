@@ -113,8 +113,7 @@ def _detect_system_dark_mode() -> bool:
             return is_dark
         except Exception as e:
             log.debug(f"Could not read Windows theme setting: {e}")
-            # Fallback to palette detection
-            pass
+            # Fallback to palette detection below
 
     # Fallback: use palette luminance detection
     app = QtWidgets.QApplication.instance()

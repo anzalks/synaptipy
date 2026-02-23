@@ -180,8 +180,8 @@ class AnalysisResultFormatter:
                 if g is not None:
                     g_val = AnalysisResultFormatter._to_float(g)
                     details.append(f"Cond: {g_val:.2f} uS")
-            except (ValueError, TypeError, AttributeError):
-                pass
+            except (ValueError, TypeError, AttributeError) as e:
+                log.debug(f"Skipped conductance formatting: {e}")
         return value_str, details
 
     # --- Baseline / RMP ---
@@ -249,8 +249,8 @@ class AnalysisResultFormatter:
                 drift = result.get("rmp_drift")
                 if drift is not None:
                     details.append(f"Drift: {drift} mV/s")
-            except (ValueError, TypeError, AttributeError):
-                pass
+            except (ValueError, TypeError, AttributeError) as e:
+                log.debug(f"Skipped RMP drift formatting: {e}")
         return value_str, details
 
     # --- Spike Detection ---
@@ -267,8 +267,8 @@ class AnalysisResultFormatter:
                     try:
                         rate_float = AnalysisResultFormatter._to_float(rate)
                         value_str += f" ({rate_float:.2f} Hz)"
-                    except (ValueError, TypeError, AttributeError):
-                        pass
+                    except (ValueError, TypeError, AttributeError) as e:
+                        log.debug(f"Skipped firing rate formatting: {e}")
                 return value_str
             except (ValueError, TypeError, AttributeError):
                 return f"{spike_count} spikes"
@@ -313,8 +313,8 @@ class AnalysisResultFormatter:
                     try:
                         freq_float = AnalysisResultFormatter._to_float(freq)
                         value_str += f" ({freq_float:.2f} Hz)"
-                    except (ValueError, TypeError, AttributeError):
-                        pass
+                    except (ValueError, TypeError, AttributeError) as e:
+                        log.debug(f"Skipped event frequency formatting: {e}")
                 return value_str
             except (ValueError, TypeError, AttributeError):
                 return f"{event_count} events"
@@ -373,8 +373,8 @@ class AnalysisResultFormatter:
             try:
                 val = AnalysisResultFormatter._to_float(thresh)
                 details.append(f"Mean Thresh: {val:.2f} mV")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Skipped threshold formatting: {e}")
         return details
 
     # --- Excitability ---
@@ -401,8 +401,8 @@ class AnalysisResultFormatter:
             try:
                 val = AnalysisResultFormatter._to_float(max_freq)
                 details.append(f"Max Freq: {val:.2f} Hz")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Skipped max frequency formatting: {e}")
         return details
 
     # --- Tau ---

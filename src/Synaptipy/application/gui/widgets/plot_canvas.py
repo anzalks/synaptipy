@@ -120,8 +120,8 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         for item in plot.listDataItems():
             try:
                 plot.removeItem(item)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Could not remove plot item during clearing: {e}")
 
         # Also remove any InfiniteLines or other items if needed?
         # Typically we just want to remove data.

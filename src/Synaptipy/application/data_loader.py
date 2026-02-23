@@ -156,6 +156,3 @@ class DataLoader(QtCore.QObject):
         if hasattr(self, "cache"):
             self.cache.clear()
             log.debug("Cleared data cache")
-        # Currently no other specific cleanup needed, but this method
-        # provides a hook for future resource management
-        pass

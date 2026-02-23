@@ -171,7 +171,11 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
             data, time, threshold=ap_threshold,
             refractory_samples=refractory_samples
         )
-        ap_times = time[spike_result.spike_indices] if spike_result.spike_indices is not None and len(spike_result.spike_indices) > 0 else np.array([])
+        has_spikes = (
+            spike_result.spike_indices is not None
+            and len(spike_result.spike_indices) > 0
+        )
+        ap_times = time[spike_result.spike_indices] if has_spikes else np.array([])
 
     result = calculate_train_dynamics(ap_times)
 

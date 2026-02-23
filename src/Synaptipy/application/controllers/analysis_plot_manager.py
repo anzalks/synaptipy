@@ -115,8 +115,8 @@ class AnalysisPlotManager:
                             settings,
                             time_vector=ctx_t
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.debug(f"Could not apply filter to context trace: {e}")
                 traces.append(PlotContextTrace(ctx_t, ctx_d))
         return traces
 
