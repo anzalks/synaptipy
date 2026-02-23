@@ -49,6 +49,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._popup_windows = []
         self._interactive_regions = {}
         self._syncing_regions = False
+        self._region_mode_combo: Optional[QtWidgets.QComboBox] = None
 
         # --- Method selector state (populated from metadata "method_selector") ---
         self._method_map: Dict[str, str] = {}  # display_label -> registry_name
@@ -278,6 +279,34 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             )
             layout.addRow(label, self._secondary_channel_combobox)
 
+        # --- Region selection mode (Interactive / Manual) ---
+        # Auto-detect: if this analysis has paired start/end region params,
+        # offer a mode selector so the user can toggle draggable regions.
+        region_param_names = [
+            ("baseline_start", "baseline_end"),
+            ("baseline_start_s", "baseline_end_s"),
+            ("response_start", "response_end"),
+            ("response_start_s", "response_end_s"),
+            ("response_peak_start_s", "response_peak_end_s"),
+            ("response_steady_start_s", "response_steady_end_s"),
+        ]
+        ui_param_names = {p.get("name") for p in self.metadata.get("ui_params", [])}
+        has_regions = any(
+            s in ui_param_names and e in ui_param_names
+            for s, e in region_param_names
+        )
+        if has_regions:
+            self._region_mode_combo = QtWidgets.QComboBox()
+            self._region_mode_combo.addItems(["Interactive", "Manual"])
+            self._region_mode_combo.setToolTip(
+                "Interactive: drag regions on the plot to set windows.\n"
+                "Manual: type start/end values in the spinboxes directly."
+            )
+            self._region_mode_combo.currentIndexChanged.connect(
+                self._on_region_mode_changed
+            )
+            layout.addRow("Region Mode:", self._region_mode_combo)
+
     def _on_method_selector_changed(self):
         """Handle switching between analysis methods via the method combo box."""
         if not self.method_combobox:
@@ -427,6 +456,22 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         bind_region("baseline_start", "baseline_end", (0, 0, 255))
         bind_region("response_start", "response_end", (255, 0, 0))
 
+        # Apply region mode visibility
+        self._apply_region_mode()
+
+    def _on_region_mode_changed(self, _index=None):
+        """Toggle interactive region items visible/hidden."""
+        self._apply_region_mode()
+        self._on_param_changed()
+
+    def _apply_region_mode(self):
+        """Show/hide interactive region items based on the current mode."""
+        if not self._region_mode_combo:
+            return
+        interactive = self._region_mode_combo.currentText() == "Interactive"
+        for region in self._interactive_regions.values():
+            region.setVisible(interactive)
+
     # ------------------------------------------------------------------
     # Interactive event-marker helpers
     # ------------------------------------------------------------------
@@ -452,6 +497,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         for region in self._interactive_regions.values():
             if region not in self.plot_widget.items:
                 self.plot_widget.addItem(region)
+        # Re-apply region mode visibility
+        self._apply_region_mode()
 
     def _on_event_marker_clicked(self, scatter, points, ev):
         """Remove event marker on click (curation)."""

@@ -120,6 +120,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
         # --- END ADDED ---
 
+        # --- Scrollbar State (initialised early so signal handlers
+        #     never encounter missing attributes) ---
+        self._x_scrollbar: Optional[QtWidgets.QScrollBar] = None
+        self._x_scroll_updating: bool = False
+        self._base_x_range: Optional[Tuple[float, float]] = None
+        self._y_scrollbar: Optional[QtWidgets.QScrollBar] = None
+        self._y_scroll_updating: bool = False
+        self._base_y_range: Optional[Tuple[float, float]] = None
+
         # --- PHASE 1: Data Selection and Plotting ---
         self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
         self.data_source_combobox: Optional[QtWidgets.QComboBox] = None
@@ -637,8 +646,20 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.addItem(self.analysis_region)
         self.analysis_region.sigRegionChanged.connect(self._on_region_changed)
 
-        # Add the plot widget (GraphicsLayoutWidget) to layout
-        layout.addWidget(self.plot_canvas.widget, stretch=stretch_factor)
+        # --- Layout: plot + Y scrollbar side by side, X scrollbar below ---
+        plot_row_layout = QtWidgets.QHBoxLayout()
+        plot_row_layout.addWidget(self.plot_canvas.widget, stretch=1)
+
+        # Y scrollbar (vertical panning when zoomed)
+        self._y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Vertical)
+        self._y_scrollbar.setRange(0, 10000)
+        self._y_scrollbar.setFixedWidth(15)
+        self._y_scrollbar.setValue(5000)
+        self._y_scrollbar.setPageStep(10000)
+        self._y_scrollbar.valueChanged.connect(self._on_y_scrollbar_changed)
+        plot_row_layout.addWidget(self._y_scrollbar)
+
+        layout.addLayout(plot_row_layout, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
 
         # --- X Scrollbar for panning when zoomed ---
@@ -648,13 +669,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._x_scrollbar.setValue(5000)
         self._x_scrollbar.setPageStep(10000)
         self._x_scrollbar.valueChanged.connect(self._on_x_scrollbar_changed)
-        self._x_scroll_updating = False
-        self._base_x_range = None  # Full data x range (set when data is plotted)
         layout.addWidget(self._x_scrollbar)
 
-        # Connect view range changes to update scrollbar
+        # Connect view range changes to update scrollbars
         if vb:
             vb.sigXRangeChanged.connect(self._on_viewbox_x_range_changed)
+            vb.sigYRangeChanged.connect(self._on_viewbox_y_range_changed)
 
         # Add Plot Navigation Controls (Prev/Next Trial)
         self._setup_plot_navigation_controls(layout)
@@ -731,9 +751,70 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._x_scrollbar.setPageStep(page_step)
             self._x_scrollbar.blockSignals(False)
         except Exception as e:
-            log.debug(f"Error updating scrollbar: {e}")
+            log.debug(f"Error updating x-scrollbar: {e}")
         finally:
             self._x_scroll_updating = False
+
+    def _on_y_scrollbar_changed(self, value):
+        """Pan the plot vertically when the Y scrollbar is dragged."""
+        if self._y_scroll_updating or not self._base_y_range:
+            return
+        self._y_scroll_updating = True
+        try:
+            vb = self.plot_widget.getViewBox()
+            if not vb:
+                return
+            y_range = vb.viewRange()[1]
+            visible_span = y_range[1] - y_range[0]
+            total_min, total_max = self._base_y_range
+            total_span = total_max - total_min
+            if total_span <= 0 or visible_span >= total_span:
+                return
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if min_center >= max_center:
+                return
+            # Invert: scrollbar value 0 = top of data, 10000 = bottom
+            scroll_ratio = 1.0 - (value / 10000.0)
+            center = min_center + (max_center - min_center) * scroll_ratio
+            new_min = center - visible_span / 2
+            new_max = center + visible_span / 2
+            self.plot_widget.setYRange(new_min, new_max, padding=0)
+        finally:
+            self._y_scroll_updating = False
+
+    def _on_viewbox_y_range_changed(self, vb, y_range):
+        """Update Y scrollbar position/size when the plot view range changes."""
+        if self._y_scroll_updating or not self._base_y_range:
+            return
+        self._y_scroll_updating = True
+        try:
+            y_min, y_max = y_range
+            total_min, total_max = self._base_y_range
+            total_span = total_max - total_min
+            if total_span <= 0:
+                return
+            visible_span = y_max - y_min
+            center = (y_min + y_max) / 2
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if max_center <= min_center:
+                scroll_val = 5000
+            else:
+                scroll_ratio = (center - min_center) / (max_center - min_center)
+                scroll_ratio = max(0.0, min(1.0, scroll_ratio))
+                # Invert for scrollbar (0=top, 10000=bottom)
+                scroll_val = int((1.0 - scroll_ratio) * 10000)
+            ratio = max(0.0, min(1.0, visible_span / total_span))
+            page_step = max(1, int(ratio * 10000))
+            self._y_scrollbar.blockSignals(True)
+            self._y_scrollbar.setValue(scroll_val)
+            self._y_scrollbar.setPageStep(page_step)
+            self._y_scrollbar.blockSignals(False)
+        except Exception as e:
+            log.debug(f"Error updating y-scrollbar: {e}")
+        finally:
+            self._y_scroll_updating = False
 
     # --- END ADDED ---
 
@@ -1856,8 +1937,22 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 x_range = (float(np.min(plot_package.main_time)), float(np.max(plot_package.main_time)))
                 y_range = (float(np.min(plot_package.main_data)), float(np.max(plot_package.main_data)))
                 self.set_data_ranges(x_range, y_range)
-                # Update base x range for scrollbar panning
+                # Update base x/y ranges for scrollbar panning.
+                # Expand _base_y_range to cover ALL plotted traces
+                # (including background trial curves) so the Y
+                # scrollbar thumb scales correctly.
                 self._base_x_range = x_range
+                all_y_min, all_y_max = y_range
+                for item in self.plot_widget.listDataItems():
+                    _, y_data = item.getData()
+                    if y_data is not None and len(y_data) > 0:
+                        item_min = float(np.nanmin(y_data))
+                        item_max = float(np.nanmax(y_data))
+                        if item_min < all_y_min:
+                            all_y_min = item_min
+                        if item_max > all_y_max:
+                            all_y_max = item_max
+                self._base_y_range = (all_y_min, all_y_max)
 
             # 6. Store State (including raw data for efficient preprocessing)
             self._current_plot_data = {
