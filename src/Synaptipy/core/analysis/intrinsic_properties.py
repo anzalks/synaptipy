@@ -364,8 +364,18 @@ def calculate_tau(
             )
 
             tau_ms = popt[2] * 1000  # convert tau to ms
+
+            # Generate fit curve for overlay visualisation
+            fit_values = _exp_growth(t_fit, *popt)
+            fit_time = (t_fit + fit_start_time).tolist()
+            fit_values_list = fit_values.tolist()
+
             log.debug("Calculated Tau (mono): %.3f ms", tau_ms)
-            return tau_ms
+            return {
+                'tau_ms': tau_ms,
+                'fit_time': fit_time,
+                'fit_values': fit_values_list,
+            }
 
         elif model == 'bi':
             # --- Bi-exponential fit ---
@@ -397,12 +407,19 @@ def calculate_tau(
                 tau_fast, tau_slow = tau_slow, tau_fast
                 A_fast, A_slow = A_slow, A_fast
 
+            # Generate fit curve for overlay visualisation
+            fit_values = _bi_exp_growth(t_fit, *popt)
+            fit_time = (t_fit + fit_start_time).tolist()
+            fit_values_list = fit_values.tolist()
+
             result = {
                 'tau_fast_ms': tau_fast * 1000,
                 'tau_slow_ms': tau_slow * 1000,
                 'amplitude_fast': A_fast,
                 'amplitude_slow': A_slow,
                 'V_ss': V_ss_fit,
+                'fit_time': fit_time,
+                'fit_values': fit_values_list,
             }
             log.debug(
                 "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms",
@@ -708,6 +725,17 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
 @AnalysisRegistry.register(
     "tau_analysis",
     label="Tau (Time Constant)",
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {
+            "type": "overlay_fit",
+            "x": "fit_time",
+            "y": "fit_values",
+            "color": "r",
+            "width": 2,
+            "label": "Exp Fit",
+        },
+    ],
     ui_params=[
         {
             "name": "stim_start_time",
@@ -805,7 +833,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         }
 
         if result is not None:
-            if model == 'bi' and isinstance(result, dict):
+            if model == 'bi' and isinstance(result, dict) and 'tau_fast_ms' in result:
                 return {
                     "tau_fast_ms": result['tau_fast_ms'],
                     "tau_slow_ms": result['tau_slow_ms'],
@@ -813,10 +841,21 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                     "amplitude_slow": result['amplitude_slow'],
                     "tau_model": model,
                     "parameters": params,
+                    "fit_time": result.get('fit_time', []),
+                    "fit_values": result.get('fit_values', []),
+                }
+            elif isinstance(result, dict) and 'tau_ms' in result:
+                return {
+                    "tau_ms": result['tau_ms'],
+                    "tau_model": model,
+                    "parameters": params,
+                    "fit_time": result.get('fit_time', []),
+                    "fit_values": result.get('fit_values', []),
                 }
             else:
+                # Legacy fallback (shouldn't happen with updated calculate_tau)
                 return {
-                    "tau_ms": result,
+                    "tau_ms": result if isinstance(result, (int, float)) else None,
                     "tau_model": model,
                     "parameters": params,
                 }

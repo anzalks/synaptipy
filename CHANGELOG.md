@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Analysis Module Bug Fixes**
+- **Tau (Time Constant)**: Added exponential fit overlay plot — `calculate_tau` now returns
+  fit curve data (`fit_time`, `fit_values`) alongside `tau_ms`, and the registration
+  includes `overlay_fit` plot metadata so the fit curve is drawn on the main trace
+- **Excitability (F-I Curve)**: Added `popup_xy` plot metadata to show F-I Curve popup
+  (Frequency vs Current) after multi-trial analysis
+- **Spike Train Dynamics**: Added ISI popup plot — wrapper now returns `isi_numbers` and
+  `isi_ms` arrays, and registration includes `popup_xy` plot metadata
+- **Optogenetic Synchronization**: Added secondary channel selector (`requires_secondary_channel`
+  metadata) so users can pick a dedicated TTL/trigger channel instead of falling back to
+  the voltage trace; added stimulus onset vertical line markers to the plot
+- **Event Detection (Template Match)**: Lowered default threshold from 4.0 SD to 3.0 SD
+  for better sensitivity; added `direction` parameter to UI so users can switch polarity;
+  fixed time-axis reconstruction to use actual `time` array instead of synthesising from
+  sampling rate (fixes event time accuracy when data doesn't start at t=0)
+- **Event Detection (Threshold)**: Fixed noise-floor guard that could override user threshold —
+  the 2-SD noise guard now only activates when the user's threshold is below 1 SD, otherwise
+  the user's explicit threshold is honoured
+- Added `overlay_fit` visualisation type to `MetadataDrivenAnalysisTab` for drawing
+  analysis fit curves on the main plot
+- Added `_inject_secondary_channel_data` to `MetadataDrivenAnalysisTab` for loading
+  data from a user-selected secondary channel and passing it to analysis functions
+
 **Publication Readiness Audit — Error Handling & Robustness**
 - Replaced ~25 silent `except: pass` blocks with diagnostic `log.debug()` calls across 15 files
 - Added logging to error-swallowing blocks in neo_adapter, analysis_formatter, explorer_tab,

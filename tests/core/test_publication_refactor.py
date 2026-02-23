@@ -48,9 +48,12 @@ class TestTauMonoModel:
         result = calculate_tau(v_full, t_full, stim_start_time=0.05, fit_duration=0.15, model='mono')
 
         assert result is not None
-        assert isinstance(result, float)
+        assert isinstance(result, dict)
+        assert 'tau_ms' in result
+        assert 'fit_time' in result
+        assert 'fit_values' in result
         # Should recover ~20ms within 5ms tolerance
-        assert abs(result - 20.0) < 5.0
+        assert abs(result['tau_ms'] - 20.0) < 5.0
 
     def test_mono_model_custom_bounds(self):
         """Custom tau_bounds should be respected."""
@@ -72,7 +75,7 @@ class TestTauMonoModel:
             model='mono', tau_bounds=(0.001, 0.005)
         )
         if result_tight is not None:
-            assert result_tight <= 5.0 + 0.1  # Should respect upper bound
+            assert result_tight['tau_ms'] <= 5.0 + 0.1  # Should respect upper bound
 
 
 class TestTauBiModel:

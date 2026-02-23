@@ -187,6 +187,11 @@ def calculate_optogenetic_sync(
 @AnalysisRegistry.register(
     name="optogenetic_sync",
     label="Optogenetic Synchronization",
+    requires_secondary_channel={
+        "param_name": "ttl_data",
+        "label": "TTL Channel:",
+        "tooltip": "Select the digital/TTL channel containing optical stimulus pulses.",
+    },
     ui_params=[
         {
             "name": "ttl_threshold",
@@ -222,6 +227,11 @@ def calculate_optogenetic_sync(
     # Adding visualization metadata to help the generic tab
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
+        {
+            "type": "vlines",
+            "data": "stimulus_onsets",
+            "color": "c",
+        },
     ]
 )
 def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
@@ -297,5 +307,10 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         "optical_latency_ms": result.optical_latency_ms,
         "response_probability": result.response_probability,
         "spike_jitter_ms": result.spike_jitter_ms,
-        "stimulus_count": result.stimulus_count
+        "stimulus_count": result.stimulus_count,
+        "stimulus_onsets": (
+            result.stimulus_onsets.tolist()
+            if result.stimulus_onsets is not None
+            else []
+        ),
     }

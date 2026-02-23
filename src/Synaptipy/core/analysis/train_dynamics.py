@@ -154,6 +154,14 @@ def calculate_train_dynamics(
     ],
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
+        {
+            "type": "popup_xy",
+            "title": "ISI Plot",
+            "x": "isi_numbers",
+            "y": "isi_ms",
+            "x_label": "ISI Number",
+            "y_label": "ISI (ms)",
+        },
     ]
 )
 def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
@@ -182,10 +190,19 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     if not result.is_valid:
         return {"error": result.error_message}
 
+    # Build ISI arrays for popup plot
+    isi_numbers = []
+    isi_ms = []
+    if result.isis is not None and len(result.isis) > 0:
+        isi_ms = (result.isis * 1000.0).tolist()  # convert s → ms
+        isi_numbers = list(range(1, len(isi_ms) + 1))
+
     return {
         "spike_count": result.spike_count,
         "mean_isi_s": result.mean_isi_s,
         "cv": result.cv,
         "cv2": result.cv2,
-        "lv": result.lv
+        "lv": result.lv,
+        "isi_numbers": isi_numbers,
+        "isi_ms": isi_ms,
     }
