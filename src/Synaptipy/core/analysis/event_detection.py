@@ -378,20 +378,30 @@ def detect_events_template(  # noqa: C901
 
         peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
 
-        # Correct peak positions: the matched filter output peak may
-        # not align exactly with the actual signal peak due to the
-        # template kernel's asymmetry. For each detected position,
-        # find the true peak in the original (polarity-corrected)
-        # signal within a local window around the detection.
-        half_kernel = len(kernel) // 2
+        # Correct peak positions: the matched filter output peak is
+        # offset from the actual signal peak due to the template
+        # kernel's asymmetry.  With fftconvolve(data, kernel[::-1],
+        # mode='same'), the z-score peak at index i corresponds to
+        # an actual signal peak near  i + (kernel_peak - kernel_center).
+        # For a fast-rise / slow-decay kernel this offset is large
+        # and negative (e.g. -223 samples for tau_rise=0.5 ms,
+        # tau_decay=5 ms at 20 kHz).  We apply this analytical
+        # shift first, then refine with a small local argmax.
+        kernel_peak_idx = int(np.argmax(kernel))
+        kernel_center = (len(kernel) - 1) // 2
+        template_offset = kernel_peak_idx - kernel_center  # negative
+        refine_window = max(3, int(tau_rise * sampling_rate))
         if len(peak_indices) > 0:
             corrected_indices = np.empty_like(peak_indices)
             for i, idx in enumerate(peak_indices):
-                win_start = max(0, idx - half_kernel)
-                win_end = min(n_points, idx + half_kernel + 1)
+                shifted = idx + template_offset
+                win_start = max(0, shifted - refine_window)
+                win_end = min(n_points, shifted + refine_window + 1)
                 local_peak = np.argmax(work_data[win_start:win_end])
                 corrected_indices[i] = win_start + local_peak
-            peak_indices = corrected_indices
+            # Deduplicate: if multiple detections snap to the same
+            # corrected index, keep only the first occurrence.
+            peak_indices = np.unique(corrected_indices)
 
         # Filter artifacts
         if artifact_mask is not None and len(peak_indices) > 0:
