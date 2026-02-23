@@ -215,6 +215,11 @@ def find_stable_baseline(
             "decimals": 4,
         },
     ],
+    plots=[
+        {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "g"},
+        {"type": "hlines", "data": ["rmp_mv"], "color": "r", "styles": ["solid"]},
+        {"type": "hlines", "data": ["rmp_mv_plus_sd", "rmp_mv_minus_sd"], "color": "r", "styles": ["dash", "dash"]}
+    ]
 )
 def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
@@ -252,11 +257,14 @@ def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         result = calculate_rmp(data, time, (baseline_start, baseline_end))
 
         if result.is_valid and result.value is not None:
+            sd = result.std_dev if result.std_dev is not None else 0.0
             return {
                 "rmp_mv": result.value,
-                "rmp_std": result.std_dev if result.std_dev is not None else 0.0,
+                "rmp_std": sd,
                 "rmp_drift": result.drift if result.drift is not None else 0.0,
                 "rmp_duration": result.duration if result.duration is not None else 0.0,
+                "rmp_mv_plus_sd": result.value + sd,
+                "rmp_mv_minus_sd": result.value - sd,
             }
         else:
             return {"rmp_mv": None, "rmp_std": None, "rmp_error": result.error_message or "Unknown error"}

@@ -21,6 +21,8 @@ from . import phase_plane  # noqa: F401 - registers: phase_plane_analysis
 from . import burst_analysis  # noqa: F401 - registers: burst_analysis
 from . import excitability  # noqa: F401 - registers: fi_curve_analysis
 from . import capacitance  # noqa: F401 - registers: capacitance_analysis
+from . import optogenetics  # noqa: F401 - registers: optogenetic_sync
+from . import train_dynamics  # noqa: F401 - registers: train_dynamics
 
 # Expose key functions for easier import
 from .basic_features import calculate_rmp

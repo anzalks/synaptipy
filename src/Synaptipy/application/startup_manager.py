@@ -65,6 +65,13 @@ class StartupManager(QtCore.QObject):
 
         # Step 0: Initial setup
         self._update_progress(0)
+        
+        # Load external plugins safely before building the GUI
+        try:
+            from Synaptipy.application.plugin_manager import PluginManager
+            PluginManager.load_plugins()
+        except Exception as e:
+            log.error(f"Critical error loading plugins during startup: {e}")
 
         # Step 1: Create main window and configure PyQtGraph in parallel
         QtCore.QTimer.singleShot(50, self._load_gui_components)
