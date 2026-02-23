@@ -562,28 +562,40 @@ class NeoAdapter:
                 # Electrophysiology convention: voltage in mV, current in pA.
                 # Neo files may store data in base SI units (V, A) or
                 # scaled units (mV, pA, nA, etc.). Detect and rescale.
+                # Track the *display* unit after rescaling so downstream
+                # code (e.g. TTL threshold) knows the data's actual unit.
+                rescaled_unit: Optional[str] = None
                 try:
                     unit_str = str(anasig.units.dimensionality).strip()
                     # Voltage rescaling
                     if unit_str in ("V", "volt", "Volt"):
                         signal_data = signal_data * 1e3  # V -> mV
+                        rescaled_unit = "mV"
                         log.info(f"Channel {anasig_id}: rescaled data from V to mV")
                     elif unit_str in ("uV", "µV", "microvolt"):
                         signal_data = signal_data * 1e-3  # µV -> mV
+                        rescaled_unit = "mV"
                         log.info(f"Channel {anasig_id}: rescaled data from µV to mV")
                     # Current rescaling
                     elif unit_str in ("A", "amp", "ampere", "Amp"):
                         signal_data = signal_data * 1e12  # A -> pA
+                        rescaled_unit = "pA"
                         log.info(f"Channel {anasig_id}: rescaled data from A to pA")
                     elif unit_str in ("nA", "nanoampere"):
                         signal_data = signal_data * 1e3  # nA -> pA
+                        rescaled_unit = "pA"
                         log.info(f"Channel {anasig_id}: rescaled data from nA to pA")
                     elif unit_str in ("uA", "µA", "microampere"):
                         signal_data = signal_data * 1e6  # µA -> pA
+                        rescaled_unit = "pA"
                         log.info(f"Channel {anasig_id}: rescaled data from µA to pA")
                     # mV and pA are already in the expected units — no rescaling needed
                 except Exception as e:
                     log.debug(f"Could not determine units for channel {anasig_id}: {e}")
+
+                # Store rescaled unit so the metadata reflects the actual data units
+                if rescaled_unit is not None:
+                    channel_metadata_map[map_key]["_rescaled_unit"] = rescaled_unit
 
                 # Use direct assignment to pre-allocated slot if possible
                 trials_list = channel_metadata_map[map_key]["data_trials"]
@@ -605,7 +617,12 @@ class NeoAdapter:
                         log.info(f"Applying Unit Correction: {raw_fs} -> {fs} Hz for Channel {anasig_id}")
                     else:
                         fs = raw_fs
-                        units_dim = str(anasig.units.dimensionality)
+                        # Use rescaled unit if data was standardized,
+                        # otherwise keep the original Neo dimensionality.
+                        units_dim = channel_metadata_map[map_key].get(
+                            "_rescaled_unit",
+                            str(anasig.units.dimensionality),
+                        )
 
                     channel_metadata_map[map_key].update(
                         {

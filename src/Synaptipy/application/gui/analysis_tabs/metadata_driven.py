@@ -970,9 +970,24 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif plot_type == "overlay_fit":
                 self._viz_overlay_fit(plot_cfg, result_item)
 
-            # trace — no extra visualisation needed
+            # trace — optional spike markers overlay
             elif plot_type == "trace":
-                pass
+                if plot_cfg.get("show_spikes") and self._current_plot_data:
+                    spike_idx = self._val(result_item, "spike_indices")
+                    if spike_idx is not None and len(spike_idx) > 0:
+                        time_arr = self._current_plot_data["time"]
+                        data_arr = self._current_plot_data["data"]
+                        valid = np.array(spike_idx, dtype=int)
+                        valid = valid[(valid >= 0) & (valid < len(data_arr))]
+                        if len(valid) > 0:
+                            scatter = pg.ScatterPlotItem(
+                                x=time_arr[valid], y=data_arr[valid],
+                                size=8, pen=pg.mkPen(None),
+                                brush=pg.mkBrush(255, 0, 0, 180),
+                            )
+                            scatter.setZValue(50)
+                            self.plot_widget.addItem(scatter)
+                            self._dynamic_plot_items.append(scatter)
 
     # ------------------------------------------------------------------
     # Visualisation helpers (called by _plot_analysis_visualizations)
