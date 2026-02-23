@@ -985,7 +985,6 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _viz_threshold_line(self, cfg, result):
         """Update threshold line position from result."""
-        param_key = cfg.get("param", "threshold")
         threshold_val = self._val(result, "threshold") or self._val(result, "threshold_value")
         if threshold_val is not None and self._threshold_line:
             self._threshold_line.setValue(threshold_val)

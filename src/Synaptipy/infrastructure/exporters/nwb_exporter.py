@@ -23,24 +23,35 @@ try:
 
     PYNWB_AVAILABLE = True
 except ImportError:
-    # Define dummy classes if pynwb not installed, so rest of file can be parsed
+    # Define sentinel classes if pynwb not installed, so rest of file can be parsed.
+    # The export() method checks PYNWB_AVAILABLE and raises ExportError before
+    # any of these classes would be instantiated.
     log_fallback = logging.getLogger(__name__)
-    log_fallback.error(
-        "pynwb library not found. NWB Export functionality will be disabled. Please install it (`pip install pynwb`)."
+    log_fallback.warning(
+        "pynwb library not found. NWB Export functionality will be disabled. "
+        "Install it with: pip install pynwb"
     )
     PYNWB_AVAILABLE = False
 
-    class NWBHDF5IO:
-        pass
+    class NWBHDF5IO:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
-    class NWBFile:
-        pass
+    class NWBFile:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
-    class PatchClampSeries:
-        pass
+    class PatchClampSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
-    class IntracellularElectrode:
-        pass
+    class IntracellularElectrode:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
 
 # Import from our package structure using relative paths
@@ -52,13 +63,16 @@ except ImportError:
     log_fallback = logging.getLogger(__name__)
     log_fallback.warning("Could not perform relative imports for data_model/error_handling. Using placeholders.")
 
-    class Recording:
+    class Recording:  # type: ignore[no-redef]
+        """Sentinel: package imports not resolved."""
         pass
 
-    class Channel:
+    class Channel:  # type: ignore[no-redef]
+        """Sentinel: package imports not resolved."""
         pass
 
-    class ExportError(IOError):
+    class ExportError(IOError):  # type: ignore[no-redef]
+        """Sentinel: package imports not resolved."""
         pass
 
 

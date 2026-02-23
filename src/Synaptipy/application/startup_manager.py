@@ -65,7 +65,7 @@ class StartupManager(QtCore.QObject):
 
         # Step 0: Initial setup
         self._update_progress(0)
-        
+
         # Load external plugins safely before building the GUI
         try:
             from Synaptipy.application.plugin_manager import PluginManager
@@ -102,8 +102,8 @@ class StartupManager(QtCore.QObject):
             # Connect to initialized signal for fast transition
             try:
                 self.main_window.initialized.connect(self._on_main_window_initialized)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Could not connect to initialized signal: {e}")
 
             log.debug("Main window created successfully")
             self._update_progress(1)

@@ -417,8 +417,8 @@ class NeoAdapter:
                         recording.duration = (
                             float(sig.duration) if hasattr(sig, 'duration') else 0.0
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f"Could not extract recording duration: {e}")
 
         # Store block reference on recording (Crucial for keeping lazy file handles alive/accessible)
         # recording.neo_block = block # REMOVED: Replaced by source_handle
@@ -632,11 +632,11 @@ class NeoAdapter:
                                         f"Check if units are in kHz.")
                 except UnitError:
                     raise
-                except Exception:
+                except Exception as e:
                     # Re-raise UnitError to be caught by UI
                     if isinstance(sys.exc_info()[1], UnitError):
                         raise
-                    pass
+                    log.debug(f"Skipped non-critical error during data loading: {e}")
 
     def _build_channels(
         self, channel_metadata_map: Dict[str, Dict], lazy: bool, recording: Recording

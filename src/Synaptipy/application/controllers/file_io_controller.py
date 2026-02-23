@@ -170,12 +170,9 @@ class FileIOController:
         # Or simpler: just use valid_files.
 
         if len(valid_files) == 1:
-            # Maybe scan siblings?
-            # Let's just return the file as the list for now to stay simple and strict.
-            # Actually, reusing scan logic is better UX.
-            # But constraint says "do NOT parse locally... pass strictly".
-            # It enables validation.
-            pass
+            # Single file selected — no sibling scanning per design constraint.
+            # Validation is handled by the file list below.
+            log.debug("Single file selected, proceeding without sibling scan")
 
         file_list = sorted(valid_files)
         current_index = file_list.index(primary_file)

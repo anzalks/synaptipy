@@ -48,8 +48,8 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             for item in self.channel_plot_data_items[chan_id]:
                 try:
                     plot.removeItem(item)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f"Could not remove plot item for channel {chan_id}: {e}")
             self.channel_plot_data_items[chan_id].clear()
 
         # 2. Use base class clear mechanism for robustness

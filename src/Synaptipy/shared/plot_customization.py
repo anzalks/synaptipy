@@ -404,8 +404,8 @@ class PlotCustomizationManager:
             # Clear and reset pen cache so subsequent get_* calls create and reuse fresh pens once
             try:
                 self._pen_cache.clear()
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Could not clear pen cache: {e}")
             self._cache_dirty = False
 
             # Save to QSettings for persistence
