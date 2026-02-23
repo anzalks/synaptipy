@@ -78,8 +78,9 @@ def calculate_rin(
             )
         rin = abs(delta_v) / delta_i_nA
 
-        # Conductance: G = 1/R. 1/MOhm = uS (micro-Siemens)
-        conductance_us = 1000.0 / rin if rin != 0 else 0.0
+        # Conductance: G = 1/R. 1/MOhm = μS (micro-Siemens)
+        # 1 MOhm = 10^6 Ohm, so 1/(MOhm) = 10^-6 S = 1 μS
+        conductance_us = 1.0 / rin if rin != 0 else 0.0
 
         log.debug(
             f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}"
@@ -509,6 +510,14 @@ def calculate_sag_ratio(  # noqa: C901
 @AnalysisRegistry.register(
     "rin_analysis",
     label="Input Resistance",
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {
+            "type": "result_hlines",
+            "keys": ["baseline_voltage_mv", "steady_state_voltage_mv"],
+            "colors": {"baseline_voltage_mv": "b", "steady_state_voltage_mv": "r"},
+        },
+    ],
     ui_params=[
         {
             "name": "current_amplitude",
@@ -823,6 +832,20 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     "iv_curve_analysis",
     label="I-V Curve",
     requires_multi_trial=True,
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {
+            "type": "popup_xy",
+            "title": "I-V Curve",
+            "x": "current_steps",
+            "y": "delta_vs",
+            "x_label": "Current (pA)",
+            "y_label": "Voltage Response (mV)",
+            "slope_key": "rin_aggregate_mohm",
+            "intercept_key": "iv_intercept",
+            "x_scale": 0.001,
+        },
+    ],
     ui_params=[
         {
             "name": "start_current",

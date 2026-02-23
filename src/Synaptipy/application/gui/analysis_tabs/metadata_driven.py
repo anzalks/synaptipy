@@ -5,10 +5,18 @@ Generic Analysis Tab that generates its UI from metadata.
 
 This module provides a generic implementation of BaseAnalysisTab that can
 adapt to any registered analysis function by reading its metadata (ui_params)
-from the AnalysisRegistry.
+from the AnalysisRegistry.  It also provides built-in support for:
+
+* **method_selector**: switching between multiple registered analysis functions
+  within a single tab (e.g. Event Detection methods).
+* **Interactive event markers**: click-to-remove, Ctrl+click-to-add scatter
+  points for manual curation of detected events.
+* **Draggable threshold lines**: horizontal lines synced with a parameter widget.
+* **Popup plots**: secondary plot windows for I-V curves, phase-plane loops, etc.
+* **Result-aware h-lines**: horizontal lines positioned by result dict keys.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import numpy as np
 from PySide6 import QtWidgets, QtCore
 import pyqtgraph as pg
@@ -21,7 +29,8 @@ log = logging.getLogger(__name__)
 
 class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     """
-    A generic analysis tab that builds its UI from metadata.
+    A generic analysis tab that builds its UI entirely from AnalysisRegistry
+    metadata.  Supports single-analysis and multi-method-selector modes.
     """
 
     def __init__(self, analysis_name: str, neo_adapter, settings_ref=None, parent=None):
@@ -41,6 +50,25 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._interactive_regions = {}
         self._syncing_regions = False
 
+        # --- Method selector state (populated from metadata "method_selector") ---
+        self._method_map: Dict[str, str] = {}  # display_label -> registry_name
+        self.method_combobox: Optional[QtWidgets.QComboBox] = None
+
+        # --- Interactive event-marker state ---
+        self._current_event_indices: List[int] = []
+        self._event_markers_item: Optional[pg.ScatterPlotItem] = None
+        self._artifact_curve_item: Optional[pg.PlotCurveItem] = None
+
+        # --- Draggable threshold line ---
+        self._threshold_line: Optional[pg.InfiniteLine] = None
+
+        # --- Result h-lines ---
+        self._result_hlines: Dict[str, pg.InfiniteLine] = {}
+
+        # --- Popup plot handles ---
+        self._popup_plot: Optional[pg.PlotItem] = None
+        self._popup_curves: Dict[str, Any] = {}
+
         super().__init__(neo_adapter, settings_ref, parent)
         self._setup_ui()
         self._setup_interactive_regions()
@@ -51,6 +79,12 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def get_display_name(self) -> str:
         # Use label from metadata if available, else format the name
         return self.metadata.get("label", self.analysis_name.replace("_", " ").title())
+
+    def get_covered_analysis_names(self) -> List[str]:
+        """Return all registry names this tab covers (including method selector alternatives)."""
+        names = [self.analysis_name]
+        names.extend(self._method_map.values())
+        return list(set(names))
 
     def _setup_ui(self):
         """Setup the UI components dynamically based on metadata."""
@@ -197,12 +231,115 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._on_channel_changed()
 
     def _setup_additional_controls(self, layout: QtWidgets.QFormLayout):
-        """Hook for subclasses to add extra controls (e.g., method selector) to the Parameters form."""
-        pass
+        """
+        Auto-generate extra controls from metadata.
+
+        Supports:
+        * ``method_selector``: dict mapping display labels to registry names.
+          Renders a QComboBox that switches the active analysis function and
+          rebuilds the generated parameter widgets on each change.
+        """
+        method_selector = self.metadata.get("method_selector")
+        if method_selector and isinstance(method_selector, dict):
+            self._method_map = dict(method_selector)  # copy
+
+            self.method_combobox = QtWidgets.QComboBox()
+            self.method_combobox.addItems(list(self._method_map.keys()))
+            self.method_combobox.setToolTip("Choose the analysis algorithm.")
+            self.method_combobox.currentIndexChanged.connect(self._on_method_selector_changed)
+            layout.addRow("Method:", self.method_combobox)
+
+            # "Run" button (useful for event detection where auto-run may be slow)
+            analyze_btn = QtWidgets.QPushButton("Run Analysis")
+            analyze_btn.setToolTip("Run the analysis with current parameters")
+            analyze_btn.clicked.connect(self._trigger_analysis)
+            layout.addRow("", analyze_btn)
+
+    def _on_method_selector_changed(self):
+        """Handle switching between analysis methods via the method combo box."""
+        if not self.method_combobox:
+            return
+        display_label = self.method_combobox.currentText()
+        registry_key = self._method_map.get(display_label)
+        if not registry_key:
+            return
+
+        log.debug(f"Switching analysis method to: {registry_key}")
+        self.analysis_name = registry_key
+        self.metadata = AnalysisRegistry.get_metadata(registry_key)
+
+        # Rebuild generated parameter widgets
+        if hasattr(self, "param_generator"):
+            ui_params = self.metadata.get("ui_params", [])
+            self.param_generator.generate_widgets(ui_params, self._on_param_changed)
+
+        # Re-setup interactive regions for the new parameter set
+        self._setup_interactive_regions()
+
+        # Clear previous results
+        if self.results_table:
+            self.results_table.setRowCount(0)
+        self._current_event_indices = []
+        if self._event_markers_item:
+            self._event_markers_item.setData(x=[], y=[])
+            self._event_markers_item.setVisible(False)
+        if self._artifact_curve_item:
+            self._artifact_curve_item.setData([], [])
+            self._artifact_curve_item.setVisible(False)
 
     def _setup_custom_plot_items(self):
-        """Hook for subclasses to add extra plot items (e.g., regions)."""
-        pass
+        """
+        Create persistent plot items based on metadata ``plots`` list.
+
+        Recognised persistent types (created once, updated per-analysis):
+        * ``event_markers`` — interactive scatter (click remove / ctrl-click add)
+        * ``threshold_line`` — draggable horizontal line synced w/ a param widget
+        * ``artifact_overlay`` — curve item for artifact mask visualisation
+        """
+        if not self.plot_widget:
+            return
+
+        plots_meta = self.metadata.get("plots", [])
+
+        for pcfg in plots_meta:
+            ptype = pcfg.get("type")
+
+            if ptype == "event_markers":
+                self._event_markers_item = pg.ScatterPlotItem(
+                    size=10, pen=pg.mkPen(None),
+                    brush=pg.mkBrush(255, 0, 0, 150))
+                self.plot_widget.addItem(self._event_markers_item)
+                self._event_markers_item.setVisible(False)
+                self._event_markers_item.setZValue(100)
+                self._event_markers_item.sigClicked.connect(self._on_event_marker_clicked)
+                self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_ctrl_clicked)
+
+            elif ptype == "threshold_line":
+                param_key = pcfg.get("param", "threshold")
+                self._threshold_line = pg.InfiniteLine(
+                    angle=0, movable=True,
+                    pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine))
+                self.plot_widget.addItem(self._threshold_line)
+                self._threshold_line.setZValue(90)
+
+                def _on_threshold_dragged(pk=param_key):
+                    val = self._threshold_line.value()
+                    if hasattr(self, "param_generator") and pk in self.param_generator.widgets:
+                        w = self.param_generator.widgets[pk]
+                        blocked = w.blockSignals(True)
+                        if isinstance(w, QtWidgets.QDoubleSpinBox):
+                            w.setValue(val)
+                        w.blockSignals(blocked)
+                        self._on_param_changed()
+
+                self._threshold_line.sigPositionChangeFinished.connect(_on_threshold_dragged)
+
+            elif ptype == "artifact_overlay":
+                self._artifact_curve_item = pg.PlotCurveItem(
+                    pen=pg.mkPen(color=(60, 179, 113, 200), width=3))
+                self.plot_widget.addItem(self._artifact_curve_item)
+                self._artifact_curve_item.setVisible(False)
+                self._artifact_curve_item.setZValue(80)
 
     def _setup_interactive_regions(self):  # noqa: C901
         """Setup pg.LinearRegionItem for window parameters if they exist."""
@@ -262,6 +399,93 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         bind_region("response_start_s", "response_end_s", (255, 0, 0))
         bind_region("response_peak_start_s", "response_peak_end_s", (255, 165, 0))  # Orange
         bind_region("response_steady_start_s", "response_steady_end_s", (0, 255, 0))  # Green
+
+        # Also bind Rin-style param names (without _s suffix)
+        bind_region("baseline_start", "baseline_end", (0, 0, 255))
+        bind_region("response_start", "response_end", (255, 0, 0))
+
+    # ------------------------------------------------------------------
+    # Interactive event-marker helpers
+    # ------------------------------------------------------------------
+
+    def _ensure_custom_items_on_plot(self):
+        """Re-add persistent plot items after ``plot_widget.clear()``."""
+        if not self.plot_widget:
+            return
+        if self._event_markers_item and self._event_markers_item not in self.plot_widget.items:
+            self.plot_widget.addItem(self._event_markers_item)
+            self._event_markers_item.setZValue(100)
+        if self._threshold_line and self._threshold_line not in self.plot_widget.items:
+            self.plot_widget.addItem(self._threshold_line)
+            self._threshold_line.setZValue(90)
+        if self._artifact_curve_item and self._artifact_curve_item not in self.plot_widget.items:
+            self.plot_widget.addItem(self._artifact_curve_item)
+            self._artifact_curve_item.setZValue(80)
+        # Re-add any result h-lines
+        for line in self._result_hlines.values():
+            if line not in self.plot_widget.items:
+                self.plot_widget.addItem(line)
+        # Re-add interactive regions
+        for region in self._interactive_regions.values():
+            if region not in self.plot_widget.items:
+                self.plot_widget.addItem(region)
+
+    def _on_event_marker_clicked(self, scatter, points, ev):
+        """Remove event marker on click (curation)."""
+        if len(points) == 0:
+            return
+        ev.accept()
+
+        pos = points[0].pos()
+        clicked_time = pos.x()
+        if not self._current_plot_data:
+            return
+        times = self._current_plot_data["time"]
+        dt = times[1] - times[0] if len(times) > 1 else 0.001
+        tolerance = dt * 1.5
+
+        for i, e_idx in enumerate(self._current_event_indices):
+            if e_idx < len(times) and abs(times[e_idx] - clicked_time) <= tolerance:
+                self._current_event_indices.pop(i)
+                break
+
+        self._refresh_event_markers()
+
+    def _on_plot_ctrl_clicked(self, ev):
+        """Add event marker on Ctrl+click."""
+        if not ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
+            return
+        if not self._current_plot_data or self._event_markers_item is None:
+            return
+
+        pos = self.plot_widget.plotItem.vb.mapSceneToView(ev.scenePos())
+        clicked_time = pos.x()
+        times = self._current_plot_data["time"]
+        if clicked_time < times[0] or clicked_time > times[-1]:
+            return
+
+        idx = int(np.argmin(np.abs(times - clicked_time)))
+        if idx not in self._current_event_indices:
+            self._current_event_indices.append(idx)
+            self._current_event_indices.sort()
+            self._refresh_event_markers()
+
+    def _refresh_event_markers(self):
+        """Redraw markers based on ``_current_event_indices``."""
+        if not self._current_plot_data or self._event_markers_item is None:
+            return
+        indices = np.array(self._current_event_indices, dtype=int)
+        if len(indices) > 0:
+            times = self._current_plot_data["time"][indices]
+            volts = self._current_plot_data["data"][indices]
+            self._event_markers_item.setData(x=times, y=volts)
+            self._event_markers_item.setVisible(True)
+        else:
+            self._event_markers_item.setData(x=[], y=[])
+            self._event_markers_item.setVisible(False)
+
+        # Update results table with curated stats
+        self._update_curated_event_table()
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
         """Return the last analysis result for saving."""
@@ -349,8 +573,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.param_generator.update_visibility(context)
 
     def _on_data_plotted(self):
-        """Hook called after data is plotted."""
-        # Trigger analysis when new data is plotted
+        """Hook called after data is plotted — re-add persistent items then trigger analysis."""
+        self._ensure_custom_items_on_plot()
         self._trigger_analysis()
 
     def _on_param_changed(self):
@@ -359,8 +583,70 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     def _gather_analysis_parameters(self) -> Dict[str, Any]:
-        """Gather parameters from UI widgets."""
-        return self.param_generator.gather_params()
+        """Gather parameters from UI widgets, with clamp-mode-aware overrides."""
+        params = self.param_generator.gather_params()
+
+        # Rin-style clamp-mode exclusivity: zero out the irrelevant stimulus
+        if self.analysis_name == "rin_analysis":
+            is_voltage_clamp = False
+            if self.signal_channel_combobox:
+                channel_name = self.signal_channel_combobox.currentData()
+                if (channel_name and self._selected_item_recording
+                        and channel_name in self._selected_item_recording.channels):
+                    ch = self._selected_item_recording.channels[channel_name]
+                    units = ch.units or "V"
+                    if "A" in units or "amp" in units.lower():
+                        is_voltage_clamp = True
+            if is_voltage_clamp:
+                params["current_amplitude"] = 0.0
+            else:
+                params["voltage_step"] = 0.0
+
+        return params
+
+    def _update_curated_event_table(self):
+        """Update the results table with curated event stats (used by event markers)."""
+        if not self.results_table:
+            return
+        count = len(self._current_event_indices)
+        if count == 0:
+            self.results_table.setRowCount(1)
+            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Events"))
+            return
+        if not self._current_plot_data:
+            return
+
+        indices = np.array(self._current_event_indices, dtype=int)
+        try:
+            amplitudes = self._current_plot_data["data"][indices]
+        except IndexError:
+            return
+
+        duration = self._current_plot_data["time"][-1] - self._current_plot_data["time"][0]
+        freq = count / duration if duration > 0 else 0.0
+        mean_amp = float(np.mean(amplitudes))
+        amp_sd = float(np.std(amplitudes))
+
+        method_label = ""
+        if self.method_combobox:
+            method_label = self.method_combobox.currentText() + " (Curated)"
+
+        display_items = []
+        if method_label:
+            display_items.append(("Method", method_label))
+        display_items += [
+            ("Count", str(count)),
+            ("Frequency", f"{freq:.2f} Hz"),
+            ("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"),
+        ]
+        if self._threshold_line and self._threshold_line.isVisible():
+            display_items.append(("Threshold", f"{self._threshold_line.value():.2f}"))
+
+        self.results_table.setRowCount(len(display_items))
+        for row, (k, v) in enumerate(display_items):
+            self.results_table.setItem(row, 0, QtWidgets.QTableWidgetItem(k))
+            self.results_table.setItem(row, 1, QtWidgets.QTableWidgetItem(v))
 
     def _execute_core_analysis(self, params: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:  # noqa: C901
         """Run the registered analysis function."""
@@ -496,12 +782,28 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _plot_analysis_visualizations(self, results: Dict[str, Any]):  # noqa: C901
         """
-        Dynamically plot visualizations based on registry metadata.
+        Dynamically plot visualizations based on registry metadata ``plots`` list.
+
+        Supported plot types
+        --------------------
+        trace            — (default) nothing extra on the main plot
+        markers          — scatter points at (x_key, y_key) from result
+        brackets         — horizontal bracket lines for burst groups
+        vlines / hlines  — infinite lines at result-derived positions
+        interactive_region — draggable region bound to param widgets
+        event_markers    — interactive scatter (curation, threshold line, artifact)
+        threshold_line   — draggable h-line (handled in _setup_custom_plot_items)
+        artifact_overlay — curve overlay (handled in _setup_custom_plot_items)
+        result_hlines    — h-lines positioned by named result keys
+        popup_xy         — scatter + optional fit line in a popup window
+        popup_phase      — phase-plane (dV/dt vs V) popup with markers
         """
         if not self.plot_widget:
             return
 
-        # Clear generic visualization items
+        self._ensure_custom_items_on_plot()
+
+        # Clear generic dynamic items
         if not hasattr(self, "_dynamic_plot_items"):
             self._dynamic_plot_items = []
 
@@ -510,7 +812,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self.plot_widget.removeItem(item)
         self._dynamic_plot_items.clear()
 
-        # Handle different result structures (Dict wrapper or Result Object)
+        # Normalise result structure
         if isinstance(results, dict) and "result" in results:
             result_item = results["result"]
         else:
@@ -521,123 +823,294 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         for plot_cfg in plots_meta:
             plot_type = plot_cfg.get("type")
 
-            # --- Marker Plotting ---
+            # --- simple markers ---
             if plot_type == "markers":
-                x_key = plot_cfg.get("x")
-                y_key = plot_cfg.get("y")
+                self._viz_markers(plot_cfg, result_item)
 
-                # Extract data from result object or dict
-                x_data = getattr(result_item, x_key, []) if hasattr(result_item, x_key) else (
-                    result_item.get(x_key, []) if isinstance(result_item, dict) else [])
+            # --- brackets (bursts) ---
+            elif plot_type == "brackets":
+                self._viz_brackets(plot_cfg, result_item)
 
-                y_data = getattr(result_item, y_key, []) if hasattr(result_item, y_key) else (
-                    result_item.get(y_key, []) if isinstance(result_item, dict) else [])
+            # --- vertical lines ---
+            elif plot_type == "vlines":
+                self._viz_vlines(plot_cfg, result_item)
 
-                if len(x_data) > 0 and len(y_data) > 0:
-                    color = plot_cfg.get("color", "r")
-                    scatter = pg.ScatterPlotItem(
-                        x=x_data, y=y_data, size=10, pen=pg.mkPen(None), brush=pg.mkBrush(color))
+            # --- horizontal lines ---
+            elif plot_type == "hlines":
+                self._viz_hlines(plot_cfg, result_item)
+
+            # --- interactive region ---
+            elif plot_type == "interactive_region":
+                self._viz_interactive_region(plot_cfg)
+
+            # --- event markers (interactive curation) ---
+            elif plot_type == "event_markers":
+                self._viz_event_markers(plot_cfg, result_item)
+
+            # --- threshold line update ---
+            elif plot_type == "threshold_line":
+                self._viz_threshold_line(plot_cfg, result_item)
+
+            # --- artifact overlay ---
+            elif plot_type == "artifact_overlay":
+                self._viz_artifact_overlay(plot_cfg, result_item)
+
+            # --- result-driven h-lines (e.g. baseline/response voltage) ---
+            elif plot_type == "result_hlines":
+                self._viz_result_hlines(plot_cfg, result_item)
+
+            # --- popup scatter / line (I-V curve) ---
+            elif plot_type == "popup_xy":
+                self._viz_popup_xy(plot_cfg, result_item)
+
+            # --- popup phase-plane ---
+            elif plot_type == "popup_phase":
+                self._viz_popup_phase(plot_cfg, result_item)
+
+            # trace — no extra visualisation needed
+            elif plot_type == "trace":
+                pass
+
+    # ------------------------------------------------------------------
+    # Visualisation helpers (called by _plot_analysis_visualizations)
+    # ------------------------------------------------------------------
+
+    def _val(self, obj, key, default=None):
+        """Extract a value from either a dict or an object attribute."""
+        if hasattr(obj, key):
+            return getattr(obj, key)
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return default
+
+    def _viz_markers(self, cfg, result):
+        x_key = cfg.get("x")
+        y_key = cfg.get("y")
+        x_data = self._val(result, x_key, [])
+        y_data = self._val(result, y_key, [])
+        if hasattr(x_data, '__len__') and hasattr(y_data, '__len__') and len(x_data) > 0 and len(y_data) > 0:
+            color = cfg.get("color", "r")
+            scatter = pg.ScatterPlotItem(x=x_data, y=y_data, size=10,
+                                         pen=pg.mkPen(None), brush=pg.mkBrush(color))
+            self.plot_widget.addItem(scatter)
+            self._dynamic_plot_items.append(scatter)
+
+    def _viz_brackets(self, cfg, result):
+        data_key = cfg.get("data")
+        bursts = self._val(result, data_key, [])
+        if not bursts:
+            return
+        y_offset = 0
+        if self._current_plot_data:
+            try:
+                y_offset = float(np.max(self._current_plot_data["data"])) + 10
+            except Exception:
+                y_offset = 50
+        color = cfg.get("color", "r")
+        for burst_spikes in bursts:
+            if len(burst_spikes) >= 2:
+                item = pg.PlotCurveItem([burst_spikes[0], burst_spikes[-1]], [y_offset, y_offset],
+                                        pen=pg.mkPen(color, width=3))
+                self.plot_widget.addItem(item)
+                self._dynamic_plot_items.append(item)
+                if self._current_plot_data:
+                    tv = self._current_plot_data["time"]
+                    vv = self._current_plot_data["data"]
+                    si = np.clip(np.searchsorted(tv, burst_spikes), 0, len(vv) - 1)
+                    scatter = pg.ScatterPlotItem(x=burst_spikes, y=vv[si], size=8,
+                                                 pen=pg.mkPen(None), brush=pg.mkBrush(color))
                     self.plot_widget.addItem(scatter)
                     self._dynamic_plot_items.append(scatter)
 
-            # --- Line/Brackets Plotting (e.g. for Bursts) ---
-            elif plot_type == "brackets":
-                data_key = plot_cfg.get("data")  # e.g. 'bursts' which is a list of lists of times
-                bursts = getattr(result_item, data_key, []) if hasattr(result_item, data_key) else (
-                    result_item.get(data_key, []) if isinstance(result_item, dict) else [])
+    def _viz_vlines(self, cfg, result):
+        data_key = cfg.get("data")
+        vals = self._val(result, data_key, [])
+        color = cfg.get("color", "b")
+        if isinstance(vals, (int, float)):
+            vals = [vals]
+        for x in vals:
+            if x is not None and not np.isnan(x):
+                line = pg.InfiniteLine(pos=x, angle=90, pen=pg.mkPen(color, width=2, style=QtCore.Qt.DashLine))
+                self.plot_widget.addItem(line)
+                self._dynamic_plot_items.append(line)
 
-                if bursts:
-                    y_offset = 0
-                    if hasattr(self, "_current_plot_data") and self._current_plot_data:
-                        try:
-                            # Plot slightly above the max voltage
-                            y_offset = float(np.max(self._current_plot_data["data"])) + 10
-                        except Exception:
-                            y_offset = 50
+    def _viz_hlines(self, cfg, result):
+        data_keys = cfg.get("data", [])
+        if isinstance(data_keys, str):
+            data_keys = [data_keys]
+        color = cfg.get("color", "r")
+        styles = cfg.get("styles", ["solid"] * len(data_keys))
+        for idx, key in enumerate(data_keys):
+            y = self._val(result, key)
+            if y is not None and not np.isnan(y):
+                s = styles[idx] if idx < len(styles) else "solid"
+                ps = QtCore.Qt.DashLine if s == "dash" else QtCore.Qt.SolidLine
+                line = pg.InfiniteLine(pos=y, angle=0, pen=pg.mkPen(color, width=2, style=ps))
+                self.plot_widget.addItem(line)
+                self._dynamic_plot_items.append(line)
 
-                    color = plot_cfg.get("color", "r")
-                    for burst_spikes in bursts:
-                        if len(burst_spikes) >= 2:
-                            start_t = burst_spikes[0]
-                            end_t = burst_spikes[-1]
-                            item = pg.PlotCurveItem([start_t, end_t], [y_offset, y_offset],
-                                                    pen=pg.mkPen(color, width=3))
-                            self.plot_widget.addItem(item)
-                            self._dynamic_plot_items.append(item)
+    def _viz_interactive_region(self, cfg):
+        if getattr(self, "_interactive_region_created", False):
+            return
+        param_keys = cfg.get("data", ["baseline_start", "baseline_end"])
+        color = cfg.get("color", "g")
+        region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, None], movable=True)
+        region.setBrush(pg.mkBrush(color))
+        self.plot_widget.addItem(region)
+        self._dynamic_plot_items.append(region)
+        self._interactive_region_created = True
 
-                            # Also add markers for spikes within the burst
-                            if hasattr(self, "_current_plot_data") and self._current_plot_data:
-                                time_vec = self._current_plot_data["time"]
-                                volt_vec = self._current_plot_data["data"]
-                                spike_indices = np.searchsorted(time_vec, burst_spikes)
-                                spike_indices = np.clip(spike_indices, 0, len(volt_vec) - 1)
-                                spike_volts = volt_vec[spike_indices]
+        def on_region_changed():
+            mn, mx = region.getRegion()
+            if hasattr(self, "param_generator"):
+                self.param_generator.set_params({param_keys[0]: mn, param_keys[1]: mx})
+                self._on_param_changed()
+        region.sigRegionChanged.connect(on_region_changed)
 
-                                scatter = pg.ScatterPlotItem(
-                                    x=burst_spikes, y=spike_volts, size=8, pen=pg.mkPen(None), brush=pg.mkBrush(color))
-                                self.plot_widget.addItem(scatter)
-                                self._dynamic_plot_items.append(scatter)
+    def _viz_event_markers(self, cfg, result):
+        """Update interactive event markers from result."""
+        is_obj = hasattr(result, "event_indices")
+        event_indices = (
+            result.event_indices if is_obj
+            else (result.get("event_indices") if isinstance(result, dict) else None)
+        )
 
-            # --- V-Lines Plotting (e.g. for phases or regions) ---
-            elif plot_type == "vlines":
-                data_key = plot_cfg.get("data")
-                vlines = getattr(result_item, data_key, []) if hasattr(result_item, data_key) else (
-                    result_item.get(data_key, []) if isinstance(result_item, dict) else [])
+        if event_indices is not None:
+            self._current_event_indices = list(np.array(event_indices, dtype=int))
+            self._refresh_event_markers()
+        else:
+            self._current_event_indices = []
+            if self._event_markers_item:
+                self._event_markers_item.setVisible(False)
 
-                color = plot_cfg.get("color", "b")
+    def _viz_threshold_line(self, cfg, result):
+        """Update threshold line position from result."""
+        param_key = cfg.get("param", "threshold")
+        threshold_val = self._val(result, "threshold") or self._val(result, "threshold_value")
+        if threshold_val is not None and self._threshold_line:
+            self._threshold_line.setValue(threshold_val)
+            self._threshold_line.setVisible(True)
+        elif self._threshold_line:
+            self._threshold_line.setVisible(False)
 
-                if isinstance(vlines, (int, float)):
-                    vlines = [vlines]
+    def _viz_artifact_overlay(self, cfg, result):
+        """Draw artifact mask as a green overlay on the trace."""
+        if not self._artifact_curve_item:
+            return
+        artifact_mask = self._val(result, "artifact_mask")
+        if artifact_mask is not None and self._current_plot_data:
+            full_data = self._current_plot_data["data"]
+            full_time = self._current_plot_data["time"]
+            if len(full_data) == len(artifact_mask):
+                overlay = full_data.copy().astype(float)
+                overlay[~artifact_mask] = np.nan
+                self._artifact_curve_item.setData(full_time, overlay, connect="finite")
+                self._artifact_curve_item.setVisible(True)
+            else:
+                self._artifact_curve_item.setVisible(False)
+        else:
+            self._artifact_curve_item.setVisible(False)
 
-                for x_val in vlines:
-                    if x_val is not None and not np.isnan(x_val):
-                        line = pg.InfiniteLine(
-                            pos=x_val, angle=90, pen=pg.mkPen(
-                                color, width=2, style=QtCore.Qt.DashLine))
-                        self.plot_widget.addItem(line)
-                        self._dynamic_plot_items.append(line)
+    def _viz_result_hlines(self, cfg, result):
+        """Draw h-lines from named result keys (e.g. baseline_voltage_mv)."""
+        keys = cfg.get("keys", [])
+        colors = cfg.get("colors", {})  # mapping key -> color string
+        for key in keys:
+            y = self._val(result, key)
+            if y is not None and not np.isnan(y):
+                color = colors.get(key, "b")
+                if key not in self._result_hlines:
+                    line = pg.InfiniteLine(angle=0, pen=pg.mkPen(color, style=QtCore.Qt.PenStyle.DashLine))
+                    self.plot_widget.addItem(line)
+                    self._result_hlines[key] = line
+                self._result_hlines[key].setValue(y)
+                self._result_hlines[key].setVisible(True)
+            elif key in self._result_hlines:
+                self._result_hlines[key].setVisible(False)
 
-            # --- H-Lines Plotting (e.g. for Thresholds, Mean, SD) ---
-            elif plot_type == "hlines":
-                data_keys = plot_cfg.get("data", [])
-                if isinstance(data_keys, str):
-                    data_keys = [data_keys]
+    def _viz_popup_xy(self, cfg, result):
+        """Show scatter + optional regression line in a popup."""
+        x_key = cfg.get("x")
+        y_key = cfg.get("y")
+        x_data = self._val(result, x_key)
+        y_data = self._val(result, y_key)
+        if x_data is None or y_data is None:
+            return
+        # Filter NaNs
+        valid = [i for i in range(len(y_data)) if not np.isnan(y_data[i])]
+        if not valid:
+            return
+        px = [x_data[i] for i in valid]
+        py = [y_data[i] for i in valid]
 
-                color = plot_cfg.get("color", "r")
-                styles = plot_cfg.get("styles", ["solid"] * len(data_keys))
+        title = cfg.get("title", "Popup Plot")
+        x_label = cfg.get("x_label", "X")
+        y_label = cfg.get("y_label", "Y")
 
-                for idx, key in enumerate(data_keys):
-                    y_val = getattr(result_item, key, None) if hasattr(result_item, key) else (
-                        result_item.get(key, None) if isinstance(result_item, dict) else None)
+        if self._popup_plot is None:
+            self._popup_plot = self.create_popup_plot(title, x_label, y_label)
+            self._popup_curves["scatter"] = self._popup_plot.plot(pen=None, symbol="o", symbolBrush="b")
+            self._popup_curves["fit"] = self._popup_plot.plot(
+                pen=pg.mkPen("r", width=2, style=QtCore.Qt.PenStyle.DashLine))
 
-                    if y_val is not None and not np.isnan(y_val):
-                        style_str = styles[idx] if idx < len(styles) else "solid"
-                        pen_style = QtCore.Qt.DashLine if style_str == "dash" else QtCore.Qt.SolidLine
-                        line = pg.InfiniteLine(pos=y_val, angle=0, pen=pg.mkPen(color, width=2, style=pen_style))
-                        self.plot_widget.addItem(line)
-                        self._dynamic_plot_items.append(line)
+        self._popup_curves["scatter"].setData(px, py)
 
-            # --- Interactive Region Plotting (e.g. for Baseline window) ---
-            elif plot_type == "interactive_region":
-                if not getattr(self, "_interactive_region_created", False):
-                    param_keys = plot_cfg.get("data", ["baseline_start", "baseline_end"])
-                    color = plot_cfg.get("color", "g")
+        # Optional regression line
+        slope_key = cfg.get("slope_key")
+        intercept_key = cfg.get("intercept_key")
+        slope = self._val(result, slope_key)
+        intercept = self._val(result, intercept_key)
 
-                    region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, None], movable=True)
-                    region.setBrush(pg.mkBrush(color))
-                    self.plot_widget.addItem(region)
-                    self._dynamic_plot_items.append(region)
-                    self._interactive_region_created = True
+        if slope is not None and intercept is not None and px:
+            # slope is in MOhm and currents in pA → convert
+            scale = cfg.get("x_scale", 1.0)
+            y_min = slope * (min(px) * scale) + intercept
+            y_max = slope * (max(px) * scale) + intercept
+            self._popup_curves["fit"].setData([min(px), max(px)], [y_min, y_max])
+        else:
+            self._popup_curves["fit"].setData([], [])
 
-                    # Connect signal to update param_generator
-                    def on_region_changed():
-                        min_x, max_x = region.getRegion()
-                        if hasattr(self, "param_generator"):
-                            update_dict = {param_keys[0]: min_x, param_keys[1]: max_x}
-                            self.param_generator.set_params(update_dict)
-                            self._on_param_changed()
+    def _viz_popup_phase(self, cfg, result):
+        """Show dV/dt vs V phase-plane in a popup with threshold + max markers."""
+        voltage = self._val(result, "voltage")
+        dvdt = self._val(result, "dvdt")
+        if voltage is None or dvdt is None:
+            return
 
-                    region.sigRegionChanged.connect(on_region_changed)
+        if self._popup_plot is None:
+            title = cfg.get("title", "Phase Plane")
+            self._popup_plot = self.create_popup_plot(title, "Voltage (mV)", "dV/dt (V/s)")
+            self._popup_curves["phase"] = self._popup_plot.plot(pen="b", name="Phase Loop")
+            self._popup_curves["thresh_marker"] = self._popup_plot.plot(
+                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold")
+            self._popup_curves["max_marker"] = self._popup_plot.plot(
+                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt")
 
-# Export key class (But do NOT export ANALYSIS_TAB_CLASS as this class requires arguments)
-# ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab
+        min_len = min(len(voltage), len(dvdt))
+        self._popup_curves["phase"].setData(np.array(voltage)[:min_len], np.array(dvdt)[:min_len])
+
+        threshold_v = self._val(result, "threshold_v")
+        threshold_dvdt = self._val(result, "threshold_dvdt")
+        if threshold_v is not None and threshold_dvdt is not None:
+            self._popup_curves["thresh_marker"].setData([threshold_v], [threshold_dvdt])
+        else:
+            self._popup_curves["thresh_marker"].setData([], [])
+
+        max_dvdt = self._val(result, "max_dvdt")
+        if max_dvdt is not None and len(dvdt) > 0:
+            idx = int(np.argmax(dvdt))
+            if idx < len(voltage):
+                self._popup_curves["max_marker"].setData([voltage[idx]], [dvdt[idx]])
+        else:
+            self._popup_curves["max_marker"].setData([], [])
+
+        # Also draw threshold line on main plot
+        if threshold_v is not None:
+            if "main_thresh" not in self._result_hlines:
+                line = pg.InfiniteLine(angle=0, pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine))
+                self.plot_widget.addItem(line)
+                self._result_hlines["main_thresh"] = line
+            self._result_hlines["main_thresh"].setValue(threshold_v)
+            self._result_hlines["main_thresh"].setVisible(True)
+        elif "main_thresh" in self._result_hlines:
+            self._result_hlines["main_thresh"].setVisible(False)

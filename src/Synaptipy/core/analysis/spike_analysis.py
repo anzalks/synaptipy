@@ -376,21 +376,30 @@ def calculate_spike_features(  # noqa: C901
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
 
-    # Interpolation for better precision?
-    # t = t1 + (level - y1) / (y2 - y1) * dt
-    # Let's stick to simple index diff * dt per requirement "using nanoseconds...".
-    # Standard logic: (idx_fall - idx_rise) * dt
-    # But idx_rise is point BEFORE, idx_fall is point AFTER.
-    # So Width is roughly (idx_fall - idx_rise) * dt ?
-    # Refinement: Linear Interp.
-    # Code below implements simple index diff for speed and robustness first.
+    # Linear interpolation for sub-sample precision
+    # Rise crossing: waveform[i] <= level, waveform[i+1] > level
+    # Fractional index = i + (level - y[i]) / (y[i+1] - y[i])
+    # Fall crossing: waveform[j-1] >= level, waveform[j] < level
+    # Fractional index = j - (level_flat - y[j]) / (y[j-1] - y[j])
+    lev_50_flat = lev_50.ravel()
+    rise_frac = np.zeros(n_spikes)
+    fall_frac = np.zeros(n_spikes)
+    for k in np.where(valid_width)[0]:
+        ri = idx_rise_50_rel[k]
+        if ri + 1 < waveforms.shape[1]:
+            y_lo, y_hi = waveforms[k, ri], waveforms[k, ri + 1]
+            denom = y_hi - y_lo
+            rise_frac[k] = (lev_50_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+        fi = idx_fall_50_rel[k]
+        if fi - 1 >= 0:
+            y_hi2, y_lo2 = waveforms[k, fi - 1], waveforms[k, fi]
+            denom2 = y_hi2 - y_lo2
+            fall_frac[k] = (lev_50_flat[k] - y_lo2) / denom2 if abs(denom2) > 1e-12 else 0.5
 
-    # Correcting "point before" vs "point after":
-    # Rise: y[i] <= 50, y[i+1] >= 50. Crossing is at i + frac
-    # Fall: y[j-1] >= 50, y[j] <= 50. Crossing is at j - frac
-    # Let's just use indices.
-
-    half_widths[valid_width] = (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width]) * dt * 1000.0
+    half_widths[valid_width] = (
+        (idx_fall_50_rel[valid_width] - fall_frac[valid_width])
+        - (idx_rise_50_rel[valid_width] + rise_frac[valid_width])
+    ) * dt * 1000.0
 
     # --- Rise Time (10-90) ---
     lev_10 = amp_10[:, None]
@@ -412,7 +421,28 @@ def calculate_spike_features(  # noqa: C901
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
 
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
-    rise_times[valid_rise] = (idx_90_rel[valid_rise] - idx_10_rel[valid_rise]) * dt * 1000.0
+
+    # Linear interpolation for rise time sub-sample precision
+    lev_10_flat = amp_10
+    lev_90_flat = amp_90
+    rise_frac_10 = np.zeros(n_spikes)
+    rise_frac_90 = np.zeros(n_spikes)
+    for k in np.where(valid_rise)[0]:
+        ri10 = idx_10_rel[k]
+        if ri10 + 1 < waveforms.shape[1]:
+            y_lo, y_hi = waveforms[k, ri10], waveforms[k, ri10 + 1]
+            denom = y_hi - y_lo
+            rise_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+        ri90 = idx_90_rel[k]
+        if ri90 + 1 < waveforms.shape[1]:
+            y_lo, y_hi = waveforms[k, ri90], waveforms[k, ri90 + 1]
+            denom = y_hi - y_lo
+            rise_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+
+    rise_times[valid_rise] = (
+        (idx_90_rel[valid_rise] + rise_frac_90[valid_rise])
+        - (idx_10_rel[valid_rise] + rise_frac_10[valid_rise])
+    ) * dt * 1000.0
 
     # --- Decay Time (90-10) ---
     # Post peak
@@ -427,7 +457,26 @@ def calculate_spike_features(  # noqa: C901
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
 
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
-    decay_times[valid_decay] = (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay]) * dt * 1000.0
+
+    # Linear interpolation for decay time sub-sample precision
+    decay_frac_90 = np.zeros(n_spikes)
+    decay_frac_10 = np.zeros(n_spikes)
+    for k in np.where(valid_decay)[0]:
+        di90 = idx_dec_90_rel[k]
+        if di90 - 1 >= 0:
+            y_hi, y_lo = waveforms[k, di90 - 1], waveforms[k, di90]
+            denom = y_hi - y_lo
+            decay_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+        di10 = idx_dec_10_rel[k]
+        if di10 - 1 >= 0:
+            y_hi, y_lo = waveforms[k, di10 - 1], waveforms[k, di10]
+            denom = y_hi - y_lo
+            decay_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+
+    decay_times[valid_decay] = (
+        (idx_dec_10_rel[valid_decay] - decay_frac_10[valid_decay])
+        - (idx_dec_90_rel[valid_decay] - decay_frac_90[valid_decay])
+    ) * dt * 1000.0
 
     # --- AHP Depth & Duration ---
     # Window: From peak to max ahp_max_samples, but capped by next spike for high-freq firing
@@ -579,16 +628,18 @@ def calculate_spike_features(  # noqa: C901
     # full_window is [-lookback, +post_peak] -> usually [-10ms, +10ms].
     # We need dV/dt of that.
 
-    full_dvdt = np.gradient(waveforms, axis=1) / dt  # Gradient of the windowed voltage
+    full_dvdt = np.gradient(waveforms, axis=1) / dt  # mV/s gradient of windowed voltage
+    # Convert to V/s for consistency with phase_plane.py dV/dt convention
+    full_dvdt_vs = full_dvdt / 1000.0  # mV/s -> V/s
 
     # We only care about the relevant subset for "max rise" (rising phase) and "max fall" (repolarization)
     # Rise: pre-peak. Fall: post-peak.
     # Use sentinel values to avoid zeroing by boolean multiply
-    pre_peak_dvdt = np.where(is_pre_peak, full_dvdt, -np.inf)
-    post_peak_dvdt = np.where(is_post_peak, full_dvdt, np.inf)
+    pre_peak_dvdt = np.where(is_pre_peak, full_dvdt_vs, -np.inf)
+    post_peak_dvdt = np.where(is_post_peak, full_dvdt_vs, np.inf)
 
-    max_dvdts = np.max(pre_peak_dvdt, axis=1)  # Max rise rate
-    min_dvdts = np.min(post_peak_dvdt, axis=1)  # Max repolarization rate
+    max_dvdts = np.max(pre_peak_dvdt, axis=1)  # Max rise rate (V/s)
+    min_dvdts = np.min(post_peak_dvdt, axis=1)  # Max repolarization rate (V/s)
 
     # --- Assemble Results ---
     features_list = []

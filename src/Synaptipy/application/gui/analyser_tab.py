@@ -505,7 +505,7 @@ class AnalyserTab(QtWidgets.QWidget):
                         if hasattr(current_tab, "analysis_name"):
                             registry_name = current_tab.analysis_name
 
-                    # Handle special case for EventDetectionTab which returns registry_key in params
+                    # Handle special case for method-selector tabs which may return registry_key in params
                     if "registry_key" in params:
                         registry_name = params.pop("registry_key")
 

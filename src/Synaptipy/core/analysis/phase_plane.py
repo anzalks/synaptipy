@@ -135,6 +135,10 @@ def detect_threshold_kink(
 @AnalysisRegistry.register(
     "phase_plane_analysis",
     label="Phase Plane",
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {"type": "popup_phase", "title": "Phase Plane"},
+    ],
     ui_params=[
         {
             "name": "sigma_ms",
