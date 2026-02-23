@@ -493,8 +493,151 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             log.error(f"Error displaying results: {e}")
             # Fallback to simple popup if table fails
             self.results_table.setRowCount(1)
-            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Error"))
-            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("See Logs"))
+
+    def _plot_analysis_visualizations(self, results: Dict[str, Any]):  # noqa: C901
+        """
+        Dynamically plot visualizations based on registry metadata.
+        """
+        if not self.plot_widget:
+            return
+
+        # Clear generic visualization items
+        if not hasattr(self, "_dynamic_plot_items"):
+            self._dynamic_plot_items = []
+
+        for item in self._dynamic_plot_items:
+            if item in self.plot_widget.items:
+                self.plot_widget.removeItem(item)
+        self._dynamic_plot_items.clear()
+
+        # Handle different result structures (Dict wrapper or Result Object)
+        if isinstance(results, dict) and "result" in results:
+            result_item = results["result"]
+        else:
+            result_item = results
+
+        plots_meta = self.metadata.get("plots", [])
+
+        for plot_cfg in plots_meta:
+            plot_type = plot_cfg.get("type")
+
+            # --- Marker Plotting ---
+            if plot_type == "markers":
+                x_key = plot_cfg.get("x")
+                y_key = plot_cfg.get("y")
+
+                # Extract data from result object or dict
+                x_data = getattr(result_item, x_key, []) if hasattr(result_item, x_key) else (
+                    result_item.get(x_key, []) if isinstance(result_item, dict) else [])
+
+                y_data = getattr(result_item, y_key, []) if hasattr(result_item, y_key) else (
+                    result_item.get(y_key, []) if isinstance(result_item, dict) else [])
+
+                if len(x_data) > 0 and len(y_data) > 0:
+                    color = plot_cfg.get("color", "r")
+                    scatter = pg.ScatterPlotItem(
+                        x=x_data, y=y_data, size=10, pen=pg.mkPen(None), brush=pg.mkBrush(color))
+                    self.plot_widget.addItem(scatter)
+                    self._dynamic_plot_items.append(scatter)
+
+            # --- Line/Brackets Plotting (e.g. for Bursts) ---
+            elif plot_type == "brackets":
+                data_key = plot_cfg.get("data")  # e.g. 'bursts' which is a list of lists of times
+                bursts = getattr(result_item, data_key, []) if hasattr(result_item, data_key) else (
+                    result_item.get(data_key, []) if isinstance(result_item, dict) else [])
+
+                if bursts:
+                    y_offset = 0
+                    if hasattr(self, "_current_plot_data") and self._current_plot_data:
+                        try:
+                            # Plot slightly above the max voltage
+                            y_offset = float(np.max(self._current_plot_data["data"])) + 10
+                        except Exception:
+                            y_offset = 50
+
+                    color = plot_cfg.get("color", "r")
+                    for burst_spikes in bursts:
+                        if len(burst_spikes) >= 2:
+                            start_t = burst_spikes[0]
+                            end_t = burst_spikes[-1]
+                            item = pg.PlotCurveItem([start_t, end_t], [y_offset, y_offset],
+                                                    pen=pg.mkPen(color, width=3))
+                            self.plot_widget.addItem(item)
+                            self._dynamic_plot_items.append(item)
+
+                            # Also add markers for spikes within the burst
+                            if hasattr(self, "_current_plot_data") and self._current_plot_data:
+                                time_vec = self._current_plot_data["time"]
+                                volt_vec = self._current_plot_data["data"]
+                                spike_indices = np.searchsorted(time_vec, burst_spikes)
+                                spike_indices = np.clip(spike_indices, 0, len(volt_vec) - 1)
+                                spike_volts = volt_vec[spike_indices]
+
+                                scatter = pg.ScatterPlotItem(
+                                    x=burst_spikes, y=spike_volts, size=8, pen=pg.mkPen(None), brush=pg.mkBrush(color))
+                                self.plot_widget.addItem(scatter)
+                                self._dynamic_plot_items.append(scatter)
+
+            # --- V-Lines Plotting (e.g. for phases or regions) ---
+            elif plot_type == "vlines":
+                data_key = plot_cfg.get("data")
+                vlines = getattr(result_item, data_key, []) if hasattr(result_item, data_key) else (
+                    result_item.get(data_key, []) if isinstance(result_item, dict) else [])
+
+                color = plot_cfg.get("color", "b")
+
+                if isinstance(vlines, (int, float)):
+                    vlines = [vlines]
+
+                for x_val in vlines:
+                    if x_val is not None and not np.isnan(x_val):
+                        line = pg.InfiniteLine(
+                            pos=x_val, angle=90, pen=pg.mkPen(
+                                color, width=2, style=QtCore.Qt.DashLine))
+                        self.plot_widget.addItem(line)
+                        self._dynamic_plot_items.append(line)
+
+            # --- H-Lines Plotting (e.g. for Thresholds, Mean, SD) ---
+            elif plot_type == "hlines":
+                data_keys = plot_cfg.get("data", [])
+                if isinstance(data_keys, str):
+                    data_keys = [data_keys]
+
+                color = plot_cfg.get("color", "r")
+                styles = plot_cfg.get("styles", ["solid"] * len(data_keys))
+
+                for idx, key in enumerate(data_keys):
+                    y_val = getattr(result_item, key, None) if hasattr(result_item, key) else (
+                        result_item.get(key, None) if isinstance(result_item, dict) else None)
+
+                    if y_val is not None and not np.isnan(y_val):
+                        style_str = styles[idx] if idx < len(styles) else "solid"
+                        pen_style = QtCore.Qt.DashLine if style_str == "dash" else QtCore.Qt.SolidLine
+                        line = pg.InfiniteLine(pos=y_val, angle=0, pen=pg.mkPen(color, width=2, style=pen_style))
+                        self.plot_widget.addItem(line)
+                        self._dynamic_plot_items.append(line)
+
+            # --- Interactive Region Plotting (e.g. for Baseline window) ---
+            elif plot_type == "interactive_region":
+                if not getattr(self, "_interactive_region_created", False):
+                    param_keys = plot_cfg.get("data", ["baseline_start", "baseline_end"])
+                    color = plot_cfg.get("color", "g")
+
+                    region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, None], movable=True)
+                    region.setBrush(pg.mkBrush(color))
+                    self.plot_widget.addItem(region)
+                    self._dynamic_plot_items.append(region)
+                    self._interactive_region_created = True
+
+                    # Connect signal to update param_generator
+                    def on_region_changed():
+                        min_x, max_x = region.getRegion()
+                        if hasattr(self, "param_generator"):
+                            update_dict = {param_keys[0]: min_x, param_keys[1]: max_x}
+                            self.param_generator.set_params(update_dict)
+                            self._on_param_changed()
+
+                    region.sigRegionChanged.connect(on_region_changed)
 
 # Export key class (But do NOT export ANALYSIS_TAB_CLASS as this class requires arguments)
 # ANALYSIS_TAB_CLASS = MetadataDrivenAnalysisTab

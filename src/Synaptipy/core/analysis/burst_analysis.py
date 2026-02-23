@@ -163,6 +163,9 @@ def analyze_spikes_and_bursts(
             "max": 1000,
         },
     ],
+    plots=[
+        {"type": "brackets", "data": "bursts", "color": "r"},
+    ]
 )
 def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """

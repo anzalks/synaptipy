@@ -713,6 +713,10 @@ def analyze_multi_sweep_spikes(
             "decimals": 3,
         },
     ],
+    plots=[
+        {"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]},
+        {"type": "markers", "x": "spike_times", "y": "spike_voltages", "color": "r"}
+    ]
 )
 def run_spike_detection_wrapper(
     data: np.ndarray,
@@ -784,11 +788,16 @@ def run_spike_detection_wrapper(
                         stats[f"{key}_mean"] = np.nan
                         stats[f"{key}_std"] = np.nan
 
+            if result.spike_indices is not None and len(result.spike_indices) > 0:
+                v_data = data[result.spike_indices]
+            else:
+                v_data = np.array([])
             output = {
                 "spike_count": len(result.spike_indices) if result.spike_indices is not None else 0,
                 "mean_freq_hz": result.mean_frequency if result.mean_frequency is not None else 0.0,
                 "spike_times": result.spike_times,
                 "spike_indices": result.spike_indices,
+                "spike_voltages": v_data,
                 "parameters": params,
             }
             output.update(stats)
