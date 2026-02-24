@@ -122,23 +122,56 @@ All analysis features must be split into two distinct parts:
 
 ## V. DOCUMENTATION & PROFESSIONALISM
 
-**1. Professional Tone & Style**
-*   **No Emojis**: Emojis are strictly forbidden in **ALL** files (Source Code, Documentation, Commit Messages).
-    *   *Forbidden*: "🚀 Key Features", "# TODO: Fix this 🐛", "print('Done! 🎉')"
-    *   *Required*: "Key Features", "# TODO: Fix this bug", "print('Done!')"
-*   **Objective Language**: Use formal, technical language. Avoid marketing fluff or casual slang.
-    *   *Bad*: "This app is super fast and cool."
-    *   *Good*: "The application utilizes optimized algorithms for high-performance signal processing."
+**1. Zero-Tolerance Emoji Policy**
+*   **Scope**: Emojis are strictly forbidden in **ALL** project files without exception: source code, documentation (`.md`, `.rst`), commit messages, docstrings, and inline comments.
+*   *Forbidden patterns*:
+    *   `🚀 Key Features` → `Key Features`
+    *   `# TODO: Fix this 🐛` → `# TODO: Fix this bug`
+    *   `## ✅ Benefits` → `## Benefits`
+    *   `- ❌ Removed: ...` → `- Removed: ...`
+    *   `print('Done! 🎉')` → `print('Done!')`
+*   **Enforcement**: Before completing any documentation task, run a grep for Unicode codepoints above U+007F in non-code contexts. Box-drawing characters (U+2500–U+257F) used in directory tree diagrams are the only permitted exception.
 
-**2. Documentation Standards**
-*   **Comprehensive Detail**: Documentation must accurately reflect the codebase capabilities. Do not omit technical details for the sake of brevity if they are crucial for understanding.
-*   **Formatting**: Use standard Markdown consistently.
-    *   Headers: `#` for titles, `##` for sections, `###` for subsections.
-    *   Code Blocks: Always specify the language (e.g., `python`, `bash`).
-    *   Lists: Use `-` for bullet points.
+**2. Source-Verified Accuracy (The "Ground Truth" Rule)**
+*   **CRITICAL**: Every technical statement in documentation MUST be verified against the actual source code before being written. Never document from memory, assumption, or from other documentation files.
+*   **CLI entry points**: ALWAYS read `pyproject.toml` `[project.scripts]` to confirm the exact command name(s) before documenting CLI usage. The command is `synaptipy` (NOT `synaptipy-gui`).
+*   **CLI flags**: ALWAYS read `src/Synaptipy/__main__.py` to confirm argument names before documenting them.
+*   **Python version floor**: ALWAYS check `pyproject.toml` `requires-python` field. Current floor is `>=3.10`.
+*   **Import paths**: ALWAYS verify module paths by reading the actual `src/` tree. Do not invent paths. Analysis functions live in `src/Synaptipy/core/analysis/`, not in a top-level `analysis/` module.
+*   **Function signatures**: ALWAYS read the function definition before documenting its arguments. Do not add parameters that do not exist in the actual code.
+*   **Default paths**: ALWAYS read the relevant config/shared module to verify default directory paths (e.g., log directory is `~/.synaptipy/logs/` — confirmed from `src/Synaptipy/shared/logging_config.py`).
 
-**3. Documentation & Changelog Standards**
-*   **Changelog Maintenance**: Any bug fixes, performance improvements, or features MUST be added to the `[Unreleased]` section of `CHANGELOG.md` exactly when the work completes. Do not wait for a formal release.
+**3. Publication-Quality Language**
+*   **Objective Language**: Use formal, precise, technical language throughout. Avoid marketing language, casual phrasing, or informal abbreviations.
+    *   *Forbidden*: "This app is super fast and cool."
+    *   *Required*: "The application uses optimized rendering with automatic downsampling for high-performance signal visualization."
+*   **Prohibited filler phrases**: Never use: "simply", "just", "easy", "quick", "seamlessly", "powerful", "robust" (unless quantified), "blazing fast", "out of the box", "no-brainer", "super", "awesome", "cool".
+*   **Active, factual constructions**: State what the system does, not vague claims about what it "can" or "might" do.
+    *   *Forbidden*: "You can easily load files."
+    *   *Required*: "Load a file by selecting File > Open or pressing Ctrl+O."
+
+**4. Markdown & reStructuredText Formatting Standards**
+*   **Header hierarchy**: Strict and consistent — `#` for document title, `##` for major sections, `###` for subsections, `####` for sub-subsections. No skipping levels.
+*   **Code blocks**: ALL code blocks MUST include a language specifier. No bare triple-backtick blocks.
+    *   Shell commands: ` ```bash `
+    *   Python code: ` ```python `
+    *   YAML config: ` ```yaml `
+    *   Plain output: ` ```text ` (not ` ``` `)
+*   **Lists**: Use `-` for unordered lists. Use `1.` only for genuinely ordered/sequential steps.
+*   **Inline code**: Wrap all command names, file paths, function names, class names, and identifiers in backticks.
+*   **No raw HTML** in Markdown files unless absolutely required (e.g., image sizing in .rst).
+
+**5. Sphinx Build Compliance**
+*   **Zero Warnings Policy**: The Sphinx build (`make html` from `docs/`) MUST produce zero warnings. Any new documentation change must be validated by running the build.
+    *   Command: `conda run -n synaptipy sphinx-build -W -b html docs/ docs/_build/html`
+    *   The `-W` flag treats all warnings as errors.
+*   **Valid cross-references**: All `:ref:`, `:doc:`, and `.. toctree::` entries must resolve without error.
+*   **No placeholder content**: Documentation MUST NOT contain lorem ipsum, `TODO:`, `FIXME:`, or incomplete sections marked with `[TBD]` or similar. Every section must be complete before merging.
+
+**6. Documentation & Changelog Standards**
+*   **Changelog Maintenance**: Any bug fixes, performance improvements, or new features MUST be added to the `[Unreleased]` section of `CHANGELOG.md` immediately when the work completes. Do not defer changelog entries to release time.
+*   **Consistent Terminology**: Use the exact project name `Synaptipy` (capital S, lowercase the rest) throughout. Do not use `SynaptiPy`, `synaptipy`, or `SYNAPTIPY` in prose (only in code/CLI contexts).
+*   **Cross-reference accuracy**: When one documentation file references another, verify the link target exists. Dead links are not acceptable.
 
 ## VI. REFACTORING CONSTRAINTS
 

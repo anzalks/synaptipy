@@ -1,7 +1,7 @@
 # Rendering Performance Optimizations
 
 **Date:** October 20, 2025  
-**Author:** Anzal  
+**Author:** Anzal K Shahul  
 **Branch:** zoom_customisation_from_system_theme  
 **Status:** ✅ COMPLETED
 

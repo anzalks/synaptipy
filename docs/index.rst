@@ -10,14 +10,14 @@ processing engine, and standards-compliant data export (NWB, CSV).
 
 .. grid:: 2
 
-   .. grid-item-card:: 🚀 Quick-start Tutorial
+   .. grid-item-card:: Quick-start Tutorial
       :link: tutorial/index
       :link-type: doc
 
       A full walkthrough of every feature — Explorer, Analyser, Batch
       Processing, and Exporter — with the maths behind each analysis module.
 
-   .. grid-item-card:: 📖 User Guide
+   .. grid-item-card:: User Guide
       :link: user_guide
       :link-type: doc
 
@@ -26,13 +26,13 @@ processing engine, and standards-compliant data export (NWB, CSV).
 
 .. grid:: 2
 
-   .. grid-item-card:: 🔌 API Reference
+   .. grid-item-card:: API Reference
       :link: api_reference
       :link-type: doc
 
       Public Python API for using Synaptipy as a library in your own scripts.
 
-   .. grid-item-card:: 🛠 Developer Guide
+   .. grid-item-card:: Developer Guide
       :link: developer_guide
       :link-type: doc
 

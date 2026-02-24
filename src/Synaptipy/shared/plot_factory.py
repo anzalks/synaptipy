@@ -5,7 +5,7 @@ Unified Plot Factory for Synaptipy
 This module provides a centralized way to create and configure PyQtGraph plots
 with proper Windows compatibility and consistent styling across the application.
 
-Author: Anzal
+Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 

@@ -33,7 +33,7 @@ This guide provides detailed instructions for installing, configuring, and using
 
 ### Requirements
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - Dependencies are automatically installed during package installation:
   - PySide6 (Qt bindings for Python)
   - pyqtgraph (plotting library)
@@ -44,25 +44,25 @@ This guide provides detailed instructions for installing, configuring, and using
 
 ### Standard Installation
 
-1. **Install from PyPI (recommended):**
-   ```bash
-   pip install synaptipy
-   ```
-
-2. **Install from source:**
-   ```bash
-   git clone https://github.com/anzalks/synaptipy.git
-   cd synaptipy
-   pip install .
-   ```
-
-### Developer Installation
-
-For contributing to Synaptipy, install with development dependencies:
+Synaptipy is not yet published on PyPI. Install from source using the conda environment:
 
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
 cd synaptipy
+conda env create -f environment.yml
+conda activate synaptipy
+pip install .
+```
+
+### Developer Installation
+
+For contributing to Synaptipy, install in editable mode with development dependencies:
+
+```bash
+git clone https://github.com/anzalks/synaptipy.git
+cd synaptipy
+conda env create -f environment.yml
+conda activate synaptipy
 pip install -e ".[dev]"
 ```
 
@@ -74,7 +74,7 @@ After installation, run the application using one of these methods:
 
 1. **Using the installed entry point:**
    ```bash
-   synaptipy-gui
+   synaptipy
    ```
 
 2. **Using the Python module:**
@@ -180,9 +180,11 @@ Synaptipy supports a wide variety of electrophysiology file formats through the 
 Synaptipy supports several command-line arguments:
 
 ```bash
-synaptipy-gui --help                     # Show help
-synaptipy-gui --dev                      # Run in development mode with detailed logging
-synaptipy-gui --log-dir /path/to/logs    # Specify custom log directory
+synaptipy --help                          # Show help
+synaptipy --dev                           # Run in development mode with detailed logging
+synaptipy --log-dir /path/to/logs         # Specify custom log directory
+synaptipy --verbose                       # Enable verbose output
+synaptipy --file /path/to/data.abf        # Open a file directly on launch
 ```
 
 ### Logging and Debugging
@@ -193,10 +195,10 @@ To activate development mode:
 
 ```bash
 # Using command line flag
-synaptipy-gui --dev
+synaptipy --dev
 
 # Using environment variable
-SYNAPTIPY_DEV_MODE=1 synaptipy-gui
+SYNAPTIPY_DEV_MODE=1 synaptipy
 ```
 
 ## Licensing

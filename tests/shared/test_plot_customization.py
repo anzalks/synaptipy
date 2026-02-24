@@ -2,7 +2,7 @@
 """
 Unit tests for the plot customization module.
 
-Author: Anzal
+Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 

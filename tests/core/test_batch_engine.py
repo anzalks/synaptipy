@@ -4,7 +4,7 @@ Tests for the Batch Analysis System.
 This module tests the AnalysisRegistry and BatchAnalysisEngine components
 of the Synaptipy batch analysis system.
 
-Author: Anzal KS <anzal.ks@gmail.com>
+Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 
 import pytest

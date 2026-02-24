@@ -17,9 +17,9 @@ for WCP, ABF, and other supported file formats.
 
 Also provides a method to generate a Qt file dialog filter based on its supported IOs.
 """
-__author__ = "Anzal KS"
-__copyright__ = "Copyright 2024-, Anzal KS"
-__maintainer__ = "Anzal KS"
+__author__ = "Anzal K Shahul"
+__copyright__ = "Copyright 2024-, Anzal K Shahul"
+__maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
 import sys

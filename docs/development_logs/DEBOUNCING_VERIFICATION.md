@@ -1,6 +1,6 @@
 # Debouncing Implementation Verification
 
-**Author:** Anzal  
+**Author:** Anzal K Shahul  
 **Email:** anzal.ks@gmail.com  
 **Date:** October 21, 2025
 
