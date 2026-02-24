@@ -2,6 +2,32 @@ import sys
 import os
 import pytest
 import gc
+from unittest.mock import MagicMock, patch as mock_patch
+
+
+@pytest.fixture(scope="session", autouse=True)
+def patch_viewbox_menu_globally():
+    """
+    On macOS and Windows, PySide6 6.8+ crashes inside ViewBoxMenu.__init__
+    when pyqtgraph plots are created in offscreen mode. This session-scoped
+    fixture patches ViewBoxMenu to a MagicMock for the entire test session,
+    guaranteeing it is active before any fixture or widget is constructed.
+
+    ViewBoxMenu is only the right-click context menu; all plot state methods
+    (viewRange, setXRange, setYRange, autoRange, etc.) live in ViewBox and
+    are completely unaffected. Linux runs under xvfb-run and is fine.
+    """
+    if sys.platform in ('darwin', 'win32'):
+        try:
+            import pyqtgraph.graphicsItems.ViewBox.ViewBox as _vb_mod
+            patcher = mock_patch.object(_vb_mod, 'ViewBoxMenu', MagicMock)
+            patcher.start()
+            yield
+            patcher.stop()
+            return
+        except (ImportError, AttributeError):
+            pass
+    yield
 
 
 def pytest_configure(config):
