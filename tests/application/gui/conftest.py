@@ -1,6 +1,7 @@
 """
 Fixtures for application/gui tests.
 """
+import gc
 import pytest
 from unittest.mock import patch
 
@@ -12,6 +13,7 @@ def main_window(qtbot):
 
     This fixture creates a real MainWindow but patches all QFileDialog
     and QMessageBox calls to prevent blocking in headless mode.
+    Includes robust cleanup to prevent segfaults during teardown.
     """
     # Patch all file dialogs and message boxes before importing MainWindow
     with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, \
@@ -38,9 +40,24 @@ def main_window(qtbot):
 
         yield window
 
-        # Cleanup: stop background threads
+        # Cleanup: stop background threads before widget destruction
         if hasattr(window, 'data_loader_thread') and window.data_loader_thread:
             window.data_loader_thread.quit()
-            window.data_loader_thread.wait(1000)
+            if not window.data_loader_thread.wait(2000):
+                window.data_loader_thread.terminate()
+                window.data_loader_thread.wait(1000)
+
+        # Process pending events before closing
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            app.processEvents()
 
         window.close()
+
+        # Process events again after close
+        if app:
+            app.processEvents()
+
+        # Force garbage collection to clean up C++ objects
+        gc.collect()
