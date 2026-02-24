@@ -1,5 +1,4 @@
 
-import gc
 import pytest
 from unittest.mock import MagicMock
 from pathlib import Path
@@ -29,7 +28,7 @@ def explorer_tab(qtbot):
     app = QApplication.instance()
     if app:
         app.processEvents()
-    gc.collect()
+    tab.deleteLater()
     if app:
         app.processEvents()
 

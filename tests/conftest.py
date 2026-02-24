@@ -116,7 +116,13 @@ def main_window(qtbot):
             window.data_loader_thread.wait(2000)
 
         window.close()
-        gc.collect()
+        from PySide6.QtWidgets import QApplication
+        _app = QApplication.instance()
+        if _app:
+            _app.processEvents()
+        window.deleteLater()
+        if _app:
+            _app.processEvents()
 
 
 # --- Fixtures for test_neo_adapter.py ---
