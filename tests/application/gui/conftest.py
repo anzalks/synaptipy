@@ -1,7 +1,6 @@
 """
 Fixtures for application/gui tests.
 """
-import gc
 import sys
 import pytest
 from unittest.mock import patch, MagicMock
@@ -60,8 +59,10 @@ def main_window(qtbot):
         if app:
             app.processEvents()
 
-        # Force garbage collection to clean up C++ objects
-        gc.collect()
+        # Schedule C++ object deletion and drain the event queue
+        window.deleteLater()
+        if app:
+            app.processEvents()
 
 
 @pytest.fixture(autouse=True)
