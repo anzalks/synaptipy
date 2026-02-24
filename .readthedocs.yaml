@@ -9,7 +9,7 @@ build:
   tools:
     # Use mambaforge so that the conda environment.yml (name: synaptipy) is
     # recreated on ReadTheDocs with all runtime + docs dependencies.
-    python: "mambaforge-23.1"
+    python: "mambaforge-23.11"
   # System packages required even in a headless doc build
   apt_packages:
     - libgl1
