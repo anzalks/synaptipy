@@ -6,16 +6,19 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-@pytest.fixture
-def main_window(qtbot):
+@pytest.fixture(scope="module")
+def main_window(qapp):
     """
     Create a MainWindow instance for testing with all dialogs mocked.
 
-    This fixture creates a real MainWindow but patches all QFileDialog
-    and QMessageBox calls to prevent blocking in headless mode.
-    Includes robust cleanup to prevent segfaults during teardown.
+    Module-scoped to avoid repeated Qt object creation/destruction cycles
+    that crash with PySide6 6.8+ in offscreen mode (PlotItem.ctrl is a
+    parentless QWidget whose teardown corrupts global Qt state, causing
+    the second MainWindow creation to crash at PlotItem.__init__:235).
+
+    State modified by individual tests is reset by the reset_main_window_state
+    autouse fixture defined in test_main_window.py.
     """
-    # Patch all file dialogs and message boxes before importing MainWindow
     with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, \
             patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
 
@@ -33,10 +36,13 @@ def main_window(qtbot):
         from Synaptipy.application.gui.main_window import MainWindow
 
         window = MainWindow()
-        qtbot.addWidget(window)
 
         # Wait for initialization
-        qtbot.wait(100)
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            for _ in range(5):
+                app.processEvents()
 
         yield window
 
@@ -47,15 +53,12 @@ def main_window(qtbot):
                 window.data_loader_thread.terminate()
                 window.data_loader_thread.wait(1000)
 
-        # Process pending events before closing
-        from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
         if app:
             app.processEvents()
 
         window.close()
 
-        # Process events again after close
         if app:
             app.processEvents()
 

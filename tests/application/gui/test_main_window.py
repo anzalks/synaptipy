@@ -7,6 +7,38 @@ from unittest.mock import patch, MagicMock  # Use unittest.mock or pytest-mock
 # Assuming qtbot fixture is available from pytest-qt
 from Synaptipy.core.data_model import Recording, Channel  # For creating mock data
 
+
+@pytest.fixture(autouse=True)
+def reset_main_window_state(main_window):
+    """
+    Reset MainWindow state modified by individual tests.
+
+    Because main_window is module-scoped (created once for the whole module
+    to avoid crash-on-second-creation in offscreen mode), each test gets the
+    same window instance. This fixture runs after every test to undo any
+    state mutations so the next test starts clean.
+    """
+    yield
+    # Clear data loader cache (test_data_loader_cache_integration adds entries)
+    if hasattr(main_window, 'data_loader') and hasattr(main_window.data_loader, 'cache'):
+        main_window.data_loader.cache.clear()
+    # Clear pending file loading attributes (test_background_* sets these)
+    for attr in ('_pending_file_list', '_pending_current_index'):
+        if hasattr(main_window, attr):
+            delattr(main_window, attr)
+    # Clear current recording (test_background_file_loading sets this)
+    if hasattr(main_window, 'session_manager'):
+        main_window.session_manager.current_recording = None
+    # Clear status bar messages
+    if hasattr(main_window, 'status_bar'):
+        main_window.status_bar.clearMessage()
+    # Process events to flush any pending Qt callbacks
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app:
+        app.processEvents()
+
+
 # --- Basic Window Tests ---
 
 
