@@ -6,7 +6,7 @@ Batch Analysis Dialog for Synaptipy.
 Provides a user-friendly dialog for configuring and running batch analysis
 across multiple files using a pipeline-based approach.
 
-Author: Anzal KS <anzal.ks@gmail.com>
+Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 import logging
 from pathlib import Path

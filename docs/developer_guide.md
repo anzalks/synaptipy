@@ -15,7 +15,7 @@ This guide is intended for developers who want to understand, modify, or contrib
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Git
 - pip or conda package manager
 
@@ -27,10 +27,10 @@ This guide is intended for developers who want to understand, modify, or contrib
    cd synaptipy
    ```
 
-2. Create a virtual environment:
+2. Create and activate the conda environment:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   conda env create -f environment.yml
+   conda activate synaptipy
    ```
 
 3. Install in development mode:
@@ -51,10 +51,17 @@ src/Synaptipy/                  # Main package
 ├── application/                # GUI application components
 │   ├── app.py                  # Main application entry
 │   └── gui/                    # UI components and tabs
-├── core/                       # Core data structures
-│   └── data_model.py           # Recording and Channel classes
-├── analysis/                   # Analysis algorithms
-│   └── resistance_analysis.py  # Input resistance calculations
+├── core/                       # Core data structures and analysis
+│   ├── data_model.py           # Recording and Channel classes
+│   ├── results.py              # Typed result dataclasses
+│   └── analysis/               # Analysis algorithms
+│       ├── intrinsic_properties.py  # Rin, tau, conductance, sag
+│       ├── spike_analysis.py        # Spike detection and features
+│       ├── basic_features.py        # RMP, baseline statistics
+│       ├── excitability.py          # F-I curve
+│       ├── burst_analysis.py        # Burst detection
+│       ├── phase_plane.py           # Phase-plane analysis
+│       └── ...                      # Additional analysis modules
 ├── infrastructure/             # Supporting components
 │   ├── file_readers/           # Data file readers
 │   └── exporters/              # Data exporters

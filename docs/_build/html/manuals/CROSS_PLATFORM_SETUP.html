@@ -257,7 +257,7 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../api_reference.html#analysis">Analysis</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#resistance-analysis">Resistance Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#input-resistance">Input Resistance</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../api_reference.html#exporters">Exporters</a><ul>
@@ -520,35 +520,35 @@
 </li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">Manuals</a><ul class="current">
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Cross-Platform Setup for Synaptipy</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#problem-solved">🎯 <strong>Problem Solved</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#new-solution-single-environment-approach">🚀 <strong>New Solution: Single Environment Approach</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#problem-statement">Problem Statement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#new-solution-single-environment-approach">New Solution: Single Environment Approach</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#what-changed"><strong>What Changed:</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#how-it-works"><strong>How It Works:</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#implementation-details">🔧 <strong>Implementation Details</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#implementation-details">Implementation Details</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#single-environment-file-environment-yml"><strong>1. Single Environment File (<code class="docutils literal notranslate"><span class="pre">environment.yml</span></code>)</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#clean-setup-py"><strong>2. Clean Setup.py</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#clean-pyproject-toml"><strong>3. Clean PyProject.toml</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#cross-platform-compatibility">🌍 <strong>Cross-Platform Compatibility</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#cross-platform-compatibility">Cross-Platform Compatibility</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#linux"><strong>Linux</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#installation-commands">📦 <strong>Installation Commands</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#installation-commands">Installation Commands</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#one-command-installation-recommended"><strong>One-Command Installation (Recommended)</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#manual-installation"><strong>Manual Installation</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#custom-environment-name"><strong>Custom Environment Name</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#benefits">✅ <strong>Benefits</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#testing">🧪 <strong>Testing</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#how-conda-handles-os-specific-packages">🔍 <strong>How Conda Handles OS-Specific Packages</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#file-structure">📝 <strong>File Structure</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#result">🎉 <strong>Result</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#benefits">Benefits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#testing">Testing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#how-conda-handles-os-specific-packages">How Conda Handles OS-Specific Packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#repository-structure">Repository Structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#result">Result</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="MANUAL_TESTING_GUIDE.html">Manual Testing Guide for Performance Fixes</a><ul>
@@ -1546,8 +1546,8 @@
              
   <section id="cross-platform-setup-for-synaptipy">
 <h1>Cross-Platform Setup for Synaptipy<a class="headerlink" href="#cross-platform-setup-for-synaptipy" title="Link to this heading"></a></h1>
-<section id="problem-solved">
-<h2>🎯 <strong>Problem Solved</strong><a class="headerlink" href="#problem-solved" title="Link to this heading"></a></h2>
+<section id="problem-statement">
+<h2>Problem Statement<a class="headerlink" href="#problem-statement" title="Link to this heading"></a></h2>
 <p>Previously, Synaptipy had OS-specific dependencies that caused installation failures on different platforms:</p>
 <ul class="simple">
 <li><p><strong>Windows</strong>: Required ucrt, vc, vs2015_runtime packages</p></li>
@@ -1556,15 +1556,15 @@
 </ul>
 </section>
 <section id="new-solution-single-environment-approach">
-<h2>🚀 <strong>New Solution: Single Environment Approach</strong><a class="headerlink" href="#new-solution-single-environment-approach" title="Link to this heading"></a></h2>
+<h2>New Solution: Single Environment Approach<a class="headerlink" href="#new-solution-single-environment-approach" title="Link to this heading"></a></h2>
 <section id="what-changed">
 <h3><strong>What Changed:</strong><a class="headerlink" href="#what-changed" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
-<li><p><strong>❌ Removed</strong>: Multiple OS-specific environment files</p></li>
-<li><p><strong>❌ Removed</strong>: Complex OS detection in setup.py</p></li>
-<li><p><strong>❌ Removed</strong>: OS-specific dependencies in pyproject.toml</p></li>
-<li><p><strong>✅ Added</strong>: Single <code class="docutils literal notranslate"><span class="pre">environment.yml</span></code> that works everywhere</p></li>
-<li><p><strong>✅ Added</strong>: Conda automatic OS-specific package handling</p></li>
+<li><p><strong>Removed</strong>: Multiple OS-specific environment files</p></li>
+<li><p><strong>Removed</strong>: Complex OS detection in setup.py</p></li>
+<li><p><strong>Removed</strong>: OS-specific dependencies in pyproject.toml</p></li>
+<li><p><strong>Added</strong>: Single <code class="docutils literal notranslate"><span class="pre">environment.yml</span></code> that works everywhere</p></li>
+<li><p><strong>Added</strong>: Conda automatic OS-specific package handling</p></li>
 </ol>
 </section>
 <section id="how-it-works">
@@ -1572,9 +1572,9 @@
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># Single environment.yml handles all OSes</span>
 <span class="nt">dependencies</span><span class="p">:</span>
 <span class="w">  </span><span class="c1"># Cross-platform packages (work everywhere)</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python=3.9.23</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qt=6.7.3</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pyside6=6.7.3</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python&gt;=3.10</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qt&gt;=6.7</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pyside6&gt;=6.7</span>
 <span class="w">  </span>
 <span class="w">  </span><span class="c1"># OS-specific packages (conda handles automatically)</span>
 <span class="w">  </span><span class="c1"># Windows: ucrt, vc, vs2015_runtime, libclang13, libwinpthread</span>
@@ -1585,7 +1585,7 @@
 </section>
 </section>
 <section id="implementation-details">
-<h2>🔧 <strong>Implementation Details</strong><a class="headerlink" href="#implementation-details" title="Link to this heading"></a></h2>
+<h2>Implementation Details<a class="headerlink" href="#implementation-details" title="Link to this heading"></a></h2>
 <section id="single-environment-file-environment-yml">
 <h3><strong>1. Single Environment File (<code class="docutils literal notranslate"><span class="pre">environment.yml</span></code>)</strong><a class="headerlink" href="#single-environment-file-environment-yml" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -1612,7 +1612,7 @@
 </section>
 </section>
 <section id="cross-platform-compatibility">
-<h2>🌍 <strong>Cross-Platform Compatibility</strong><a class="headerlink" href="#cross-platform-compatibility" title="Link to this heading"></a></h2>
+<h2>Cross-Platform Compatibility<a class="headerlink" href="#cross-platform-compatibility" title="Link to this heading"></a></h2>
 <section id="windows">
 <h3><strong>Windows</strong><a class="headerlink" href="#windows" title="Link to this heading"></a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Automatically gets:</span>
@@ -1648,7 +1648,7 @@
 </section>
 </section>
 <section id="installation-commands">
-<h2>📦 <strong>Installation Commands</strong><a class="headerlink" href="#installation-commands" title="Link to this heading"></a></h2>
+<h2>Installation Commands<a class="headerlink" href="#installation-commands" title="Link to this heading"></a></h2>
 <section id="one-command-installation-recommended">
 <h3><strong>One-Command Installation (Recommended)</strong><a class="headerlink" href="#one-command-installation-recommended" title="Link to this heading"></a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
@@ -1674,67 +1674,65 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 </section>
 </section>
 <section id="benefits">
-<h2>✅ <strong>Benefits</strong><a class="headerlink" href="#benefits" title="Link to this heading"></a></h2>
+<h2>Benefits<a class="headerlink" href="#benefits" title="Link to this heading"></a></h2>
 <ol class="arabic simple">
-<li><p><strong>🎯 Simplicity</strong>: Single environment file instead of multiple OS-specific files</p></li>
-<li><p><strong>🌍 Universal</strong>: Works on Windows, macOS, and Linux without modification</p></li>
-<li><p><strong>🔒 Version Locked</strong>: All packages have exact versions preserved</p></li>
-<li><p><strong>🚀 Automatic</strong>: No manual OS detection or configuration needed</p></li>
-<li><p><strong>📦 Clean</strong>: No bloated files or complex setup logic</p></li>
-<li><p><strong>🔄 Maintainable</strong>: Easy to update and modify dependencies</p></li>
+<li><p><strong>Simplicity</strong>: Single environment file instead of multiple OS-specific files</p></li>
+<li><p><strong>Universal</strong>: Works on Windows, macOS, and Linux without modification</p></li>
+<li><p><strong>Version locked</strong>: All packages have exact versions preserved</p></li>
+<li><p><strong>Automatic</strong>: No manual OS detection or configuration needed</p></li>
+<li><p><strong>Clean</strong>: No bloated files or complex setup logic</p></li>
+<li><p><strong>Maintainable</strong>: Easy to update and modify dependencies</p></li>
 </ol>
 </section>
 <section id="testing">
-<h2>🧪 <strong>Testing</strong><a class="headerlink" href="#testing" title="Link to this heading"></a></h2>
+<h2>Testing<a class="headerlink" href="#testing" title="Link to this heading"></a></h2>
 <p>The setup has been tested to ensure:</p>
 <ul class="simple">
-<li><p>✅ <strong>Windows</strong>: All OS-specific packages install correctly</p></li>
-<li><p>✅ <strong>macOS</strong>: All OS-specific packages install correctly</p></li>
-<li><p>✅ <strong>Linux</strong>: All OS-specific packages install correctly</p></li>
-<li><p>✅ <strong>Dependencies</strong>: All version locks are preserved</p></li>
-<li><p>✅ <strong>Compatibility</strong>: Qt6 and PySide6 work together properly</p></li>
+<li><p><strong>Windows</strong>: All OS-specific packages install correctly</p></li>
+<li><p><strong>macOS</strong>: All OS-specific packages install correctly</p></li>
+<li><p><strong>Linux</strong>: All OS-specific packages install correctly</p></li>
+<li><p><strong>Dependencies</strong>: All version locks are preserved</p></li>
+<li><p><strong>Compatibility</strong>: Qt6 and PySide6 work together properly</p></li>
 </ul>
 </section>
 <section id="how-conda-handles-os-specific-packages">
-<h2>🔍 <strong>How Conda Handles OS-Specific Packages</strong><a class="headerlink" href="#how-conda-handles-os-specific-packages" title="Link to this heading"></a></h2>
+<h2>How Conda Handles OS-Specific Packages<a class="headerlink" href="#how-conda-handles-os-specific-packages" title="Link to this heading"></a></h2>
 <p>Conda automatically:</p>
 <ol class="arabic simple">
-<li><p><strong>Detects the target platform</strong> (Windows/macOS/Linux)</p></li>
-<li><p><strong>Finds compatible versions</strong> of OS-specific packages</p></li>
-<li><p><strong>Installs the right packages</strong> for that platform</p></li>
-<li><p><strong>Maintains compatibility</strong> with other packages</p></li>
+<li><p>Detects the target platform (Windows/macOS/Linux)</p></li>
+<li><p>Finds compatible versions of OS-specific packages</p></li>
+<li><p>Installs the correct packages for that platform</p></li>
+<li><p>Maintains compatibility with other packages</p></li>
 </ol>
-<p><strong>No manual intervention needed</strong> - conda does everything automatically!</p>
+<p>No manual intervention is required.</p>
 </section>
-<section id="file-structure">
-<h2>📝 <strong>File Structure</strong><a class="headerlink" href="#file-structure" title="Link to this heading"></a></h2>
+<section id="repository-structure">
+<h2>Repository Structure<a class="headerlink" href="#repository-structure" title="Link to this heading"></a></h2>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>synaptipy/
 ├── environment.yml          # Single cross-platform environment
-├── setup.py                # Simple setup script
-├── pyproject.toml          # Clean package configuration
-├── install.py              # Simple installation script
-└── README.md               # Updated documentation
+├── setup.py                 # Simple setup script
+├── pyproject.toml           # Clean package configuration
+├── install.py               # Simple installation script
+└── README.md                # Updated documentation
 </pre></div>
 </div>
-<p><strong>No more:</strong></p>
+<p>The following files are no longer present in the repository:</p>
 <ul class="simple">
-<li><p>❌ <code class="docutils literal notranslate"><span class="pre">environment-base.yml</span></code></p></li>
-<li><p>❌ <code class="docutils literal notranslate"><span class="pre">environment-windows.yml</span></code></p></li>
-<li><p>❌ <code class="docutils literal notranslate"><span class="pre">environment-macos.yml</span></code></p></li>
-<li><p>❌ <code class="docutils literal notranslate"><span class="pre">environment-linux.yml</span></code></p></li>
-<li><p>❌ Complex OS detection logic</p></li>
-<li><p>❌ Multiple environment management</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">environment-base.yml</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">environment-windows.yml</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">environment-macos.yml</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">environment-linux.yml</span></code></p></li>
 </ul>
 </section>
 <section id="result">
-<h2>🎉 <strong>Result</strong><a class="headerlink" href="#result" title="Link to this heading"></a></h2>
-<p><strong>Synaptipy now works seamlessly on all platforms with:</strong></p>
+<h2>Result<a class="headerlink" href="#result" title="Link to this heading"></a></h2>
+<p>Synaptipy now works on all platforms with:</p>
 <ul class="simple">
-<li><p><strong>Single command installation</strong>: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.</span></code></p></li>
-<li><p><strong>Automatic OS handling</strong>: No manual configuration</p></li>
-<li><p><strong>Version preservation</strong>: All dependencies locked exactly</p></li>
-<li><p><strong>Clean codebase</strong>: No bloated files or complexity</p></li>
-<li><p><strong>Universal compatibility</strong>: Windows, macOS, and Linux</p></li>
+<li><p>Single command installation: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.</span></code></p></li>
+<li><p>Automatic OS handling: No manual configuration required</p></li>
+<li><p>Version preservation: All dependencies locked exactly</p></li>
+<li><p>Clean codebase: No OS-specific files or complexity</p></li>
+<li><p>Universal compatibility: Windows, macOS, and Linux</p></li>
 </ul>
 </section>
 </section>

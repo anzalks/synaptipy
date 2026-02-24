@@ -4,9 +4,9 @@
 Exporter for saving Recording data to the NWB:N 2.0 format.
 Utilizes metadata extracted by NeoAdapter and stored in data_model objects.
 """
-__author__ = "Anzal KS"
-__copyright__ = "Copyright 2024-, Anzal KS"
-__maintainer__ = "Anzal KS"
+__author__ = "Anzal K Shahul"
+__copyright__ = "Copyright 2024-, Anzal K Shahul"
+__maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
 import logging

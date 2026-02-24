@@ -1,7 +1,7 @@
 # Manual Testing Guide for Performance Fixes
 
 **Date:** October 20, 2025  
-**Author:** Anzal  
+**Author:** Anzal K Shahul  
 **Purpose:** Verify all 6 critical performance fixes are working correctly
 
 ---

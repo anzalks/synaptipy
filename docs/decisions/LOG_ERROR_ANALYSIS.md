@@ -1,7 +1,7 @@
 # Log Error Analysis - All Errors from File Addition Onwards
 
 **Date**: November 17, 2025  
-**Author**: Anzal  
+**Author**: Anzal K Shahul  
 **Analysis Scope**: All errors that occurred when adding files to analysis
 
 ---

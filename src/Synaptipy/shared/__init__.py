@@ -10,7 +10,7 @@ This module contains:
 - Error handling utilities
 - Unified plot factory for Windows compatibility
 
-Author: Anzal
+Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 

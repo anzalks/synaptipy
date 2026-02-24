@@ -6,7 +6,7 @@ The engine uses a registry-based architecture where analysis functions register
 themselves via decorators, and the pipeline configuration defines what analyses
 to run on which data scopes.
 
-Author: Anzal KS <anzal.ks@gmail.com>
+Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 
 import logging

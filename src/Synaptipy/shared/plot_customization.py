@@ -5,7 +5,7 @@ Centralized Plot Customization for Synaptipy
 This module provides a unified system for managing plot styling preferences
 including colors, line widths, and transparency for different plot types.
 
-Author: Anzal
+Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 

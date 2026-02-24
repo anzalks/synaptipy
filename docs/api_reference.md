@@ -43,8 +43,7 @@ channel = Channel(
     name="Vm",
     units="mV",
     sampling_rate=10000.0,
-    data_trials=[numpy_array_with_data],
-    trial_t_starts=[0.0]
+    data_trials=[numpy_array_with_data]
 )
 
 # Access channel properties
@@ -72,25 +71,23 @@ files = adapter.list_compatible_files("/path/to/directory")
 
 ### Analysis
 
-#### Resistance Analysis
+#### Input Resistance
 
 ```python
-from Synaptipy.analysis.resistance_analysis import calculate_input_resistance
+from Synaptipy.core.analysis.intrinsic_properties import calculate_rin
 
-# Calculate input resistance from voltage and current channels
-result = calculate_input_resistance(
-    v_channel=voltage_channel,
-    i_channel=current_channel,
-    baseline_window=[0.1, 0.2],  # seconds
-    response_window=[0.5, 0.6],  # seconds
-    trial_index=0
+# Calculate input resistance from a voltage trace and a known current step
+result = calculate_rin(
+    voltage_trace=voltage_array,       # 1D NumPy array (mV)
+    time_vector=time_array,            # 1D NumPy array (s)
+    current_amplitude=-100.0,          # Current step amplitude (pA)
+    baseline_window=(0.1, 0.2),        # seconds
+    response_window=(0.5, 0.6),        # seconds
 )
 
-# Access results
-input_resistance = result["Rin (MΩ)"]
-conductance = result["Conductance (μS)"]
-delta_v = result["ΔV (mV)"]
-delta_i = result["ΔI (pA)"]
+# result is a RinResult dataclass
+if result.is_valid:
+    input_resistance = result.value    # Input resistance in MOhm
 ```
 
 ### Exporters

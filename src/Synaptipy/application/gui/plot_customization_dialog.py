@@ -5,7 +5,7 @@ Plot Customization Dialog for Synaptipy
 This module provides a dialog interface for users to customize plot styling
 including colors, line widths, and transparency for different plot types.
 
-Author: Anzal
+Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 
