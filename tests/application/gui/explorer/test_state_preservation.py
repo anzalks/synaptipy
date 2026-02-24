@@ -1,4 +1,5 @@
 
+import gc
 import pytest
 from unittest.mock import MagicMock
 from pathlib import Path
@@ -19,7 +20,18 @@ def explorer_tab(qtbot):
 
     tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
     qtbot.addWidget(tab)
-    return tab
+    yield tab
+
+    # Explicit teardown: ensure Qt C++ objects are released before the next
+    # test creates new pyqtgraph items (prevents segfaults on macOS/Windows).
+    tab.close()
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app:
+        app.processEvents()
+    gc.collect()
+    if app:
+        app.processEvents()
 
 
 def create_mock_recording(name="test.wcp", duration=1.0, channels=["ch1"]):

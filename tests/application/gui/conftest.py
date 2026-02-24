@@ -2,8 +2,9 @@
 Fixtures for application/gui tests.
 """
 import gc
+import sys
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -61,3 +62,24 @@ def main_window(qtbot):
 
         # Force garbage collection to clean up C++ objects
         gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def patch_viewbox_menu():
+    """
+    Patch pyqtgraph's ViewBoxMenu on macOS and Windows to prevent segfaults/
+    access violations with PySide6 6.8+ in offscreen mode.
+
+    The ViewBoxMenu is only the right-click context menu; it has no effect on
+    viewRange(), setXRange(), setYRange() or any other state tested here.
+    Linux (xvfb) handles this correctly so no patch is needed there.
+    """
+    if sys.platform in ('darwin', 'win32'):
+        try:
+            import pyqtgraph.graphicsItems.ViewBox.ViewBox as _vb_mod
+            with patch.object(_vb_mod, 'ViewBoxMenu', MagicMock):
+                yield
+            return
+        except (ImportError, AttributeError):
+            pass
+    yield
