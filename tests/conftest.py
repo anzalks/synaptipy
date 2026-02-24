@@ -121,8 +121,13 @@ def main_window(qtbot):
         if _app:
             _app.processEvents()
         window.deleteLater()
-        if _app:
-            _app.processEvents()
+        try:
+            from PySide6.QtTest import QTest
+            QTest.qWait(50)
+        except Exception:
+            for _ in range(5):
+                if _app:
+                    _app.processEvents()
 
 
 # --- Fixtures for test_neo_adapter.py ---

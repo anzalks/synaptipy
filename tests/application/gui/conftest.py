@@ -59,10 +59,16 @@ def main_window(qtbot):
         if app:
             app.processEvents()
 
-        # Schedule C++ object deletion and drain the event queue
+        # Schedule C++ object deletion then wait for cascading child
+        # deletions to complete (macOS/Windows need multiple event rounds).
         window.deleteLater()
-        if app:
-            app.processEvents()
+        try:
+            from PySide6.QtTest import QTest
+            QTest.qWait(50)  # 50 ms: processes events continuously
+        except Exception:
+            for _ in range(5):
+                if app:
+                    app.processEvents()
 
 
 @pytest.fixture(autouse=True)

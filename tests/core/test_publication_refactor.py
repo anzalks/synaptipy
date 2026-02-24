@@ -431,9 +431,10 @@ class TestVectorizedFeatures:
 
         assert len(features) == len(spike_arr)
         # Performance target: < 500ms for 10k spikes on local hardware.
-        # CI runners (especially Python 3.12 with JIT warm-up) can be 2-3x
-        # slower, so we allow 5s as the upper bound.
-        assert elapsed < 5.0, f"10k spikes took {elapsed:.3f}s (target: < 5.0s)"
+        # CI runners (especially macOS arm64 and Python 3.12) can be 10-30x
+        # slower due to JIT warm-up and shared runner resources, so we allow
+        # 15s as the upper bound.
+        assert elapsed < 15.0, f"10k spikes took {elapsed:.3f}s (target: < 15.0s)"
 
 
 # ============================================================

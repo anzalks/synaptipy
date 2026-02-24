@@ -35,8 +35,13 @@ def explorer_tab(qapp):
     if app:
         app.processEvents()
     tab.deleteLater()
-    if app:
-        app.processEvents()
+    try:
+        from PySide6.QtTest import QTest
+        QTest.qWait(50)
+    except Exception:
+        for _ in range(5):
+            if app:
+                app.processEvents()
 
 
 @pytest.fixture(autouse=True)
