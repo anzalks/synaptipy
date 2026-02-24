@@ -222,8 +222,6 @@ python scripts/run_tests.py
 
 ---
 
----
-
 ## Fix 4: Eliminate Double-Loading Architectural Flaw
 
 ### Problem
