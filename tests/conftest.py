@@ -57,18 +57,40 @@ def reset_datacache():
     except ImportError:
         yield
 
+
 # --- Fixtures for test_main_window.py ---
+
 
 @pytest.fixture
 def main_window(qtbot):
-    """Create a MainWindow instance for testing."""
-    from Synaptipy.application.gui.main_window import MainWindow
+    """Create a MainWindow instance for testing with proper cleanup."""
+    from unittest.mock import patch
 
-    # Create main window
-    window = MainWindow()
-    qtbot.addWidget(window)
+    with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, \
+            patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
 
-    return window
+        mock_dialog.return_value.exec.return_value = False
+        mock_dialog.getSaveFileName.return_value = ("", "")
+        mock_dialog.getOpenFileName.return_value = ("", "")
+        mock_msgbox.critical.return_value = None
+        mock_msgbox.warning.return_value = None
+        mock_msgbox.information.return_value = None
+
+        from Synaptipy.application.gui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+        qtbot.wait(100)
+
+        yield window
+
+        # Cleanup: stop background threads before widget destruction
+        if hasattr(window, 'data_loader_thread') and window.data_loader_thread:
+            window.data_loader_thread.quit()
+            window.data_loader_thread.wait(2000)
+
+        window.close()
+        gc.collect()
 
 
 # --- Fixtures for test_neo_adapter.py ---
