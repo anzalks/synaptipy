@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture(scope="module")
-def main_window(qapp):
+def main_window(qapp):  # noqa: C901
     """
     Create a MainWindow instance for testing with all dialogs mocked.
 
