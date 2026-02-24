@@ -1,3 +1,4 @@
+import gc
 import sys
 import unittest
 import numpy as np
@@ -38,7 +39,16 @@ class TestTrialSelection(unittest.TestCase):
         self.explorer._display_recording(self.recording)
 
     def tearDown(self):
+        self.explorer.close()
+        app = QtWidgets.QApplication.instance()
+        if app:
+            app.processEvents()
         self.explorer.deleteLater()
+        if app:
+            app.processEvents()
+        gc.collect()
+        if app:
+            app.processEvents()
 
     def test_trial_selection_logic(self):
         """Test that requesting 'Every Nth trial' (gap-based) updates selection.
