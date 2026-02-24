@@ -11,18 +11,24 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.core.data_model import Recording, Channel
 
 
-@pytest.fixture
-def explorer_tab(qtbot):
+@pytest.fixture(scope="module")
+def explorer_tab(qapp):
+    """Module-scoped ExplorerTab to avoid Windows CI crashes.
+
+    Creating/destroying ExplorerTab per-test causes access violations on
+    Windows with PySide6 6.10.2 in offscreen mode: each PlotItem.__init__
+    allocates a parentless QWidget for its control panel, and with GC
+    disabled the rapid C++ create/destroy cycle corrupts Qt's internal
+    state before the next test's PlotItem can initialise its signal
+    connections.  Reusing one tab for the entire module avoids this.
+    """
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
     status_bar = QtWidgets.QStatusBar()
 
     tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
-    qtbot.addWidget(tab)
     yield tab
 
-    # Explicit teardown: ensure Qt C++ objects are released before the next
-    # test creates new pyqtgraph items (prevents segfaults on macOS/Windows).
     tab.close()
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance()
@@ -31,6 +37,21 @@ def explorer_tab(qtbot):
     tab.deleteLater()
     if app:
         app.processEvents()
+
+
+@pytest.fixture(autouse=True)
+def reset_explorer_tab_state(explorer_tab):
+    """Reset ExplorerTab state before each test for isolation."""
+    explorer_tab._pending_view_state = None
+    explorer_tab._pending_trial_params = None
+    explorer_tab._current_trial_selection_params = None
+    explorer_tab.selected_trial_indices = set()
+    explorer_tab._is_loading = False
+    try:
+        explorer_tab.toolbar.lock_zoom_cb.setChecked(False)
+    except Exception:
+        pass
+    yield
 
 
 def create_mock_recording(name="test.wcp", duration=1.0, channels=["ch1"]):
@@ -61,7 +82,7 @@ def create_mock_recording(name="test.wcp", duration=1.0, channels=["ch1"]):
     return recording
 
 
-def test_preserve_state_on_cycle(explorer_tab, qtbot):
+def test_preserve_state_on_cycle(explorer_tab):
     """
     Verify that view state (zoom) and trial selection parameters are preserved
     when 'preserve_state=True' is used during file loading.
