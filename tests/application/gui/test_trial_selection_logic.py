@@ -1,4 +1,3 @@
-import gc
 import sys
 import unittest
 import numpy as np
@@ -44,9 +43,6 @@ class TestTrialSelection(unittest.TestCase):
         if app:
             app.processEvents()
         self.explorer.deleteLater()
-        if app:
-            app.processEvents()
-        gc.collect()
         if app:
             app.processEvents()
 
