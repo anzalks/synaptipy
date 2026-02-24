@@ -9,11 +9,11 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from PySide6.QtCore import QTimer            # noqa: E402
 from Synaptipy.application.gui.main_window import MainWindow  # noqa: E402
 
-DOCS_DIR = Path(__file__).parent
+DOCS_DIR = Path(__file__).parent.parent / "docs" / "tutorial"
 SCREENSHOTS_DIR = DOCS_DIR / "screenshots"
 SCREENSHOTS_DIR.mkdir(exist_ok=True, parents=True)
 
-TUTORIAL_FILE = DOCS_DIR / "tutorial.md"
+TUTORIAL_FILE = DOCS_DIR / "index.md"
 
 # ---------------------------------------------------------------------------
 # Tutorial text
