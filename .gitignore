@@ -58,3 +58,6 @@ notebooks/.ipynb_checkpoints
 htmlcov/
 .pytest_cache/
 .verify_venv*/
+
+# Sphinx documentation build output (generated; not committed)
+docs/_build/
