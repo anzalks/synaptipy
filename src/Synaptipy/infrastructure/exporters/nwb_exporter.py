@@ -248,7 +248,7 @@ class NWBExporter:
                         continue
 
                     ts_name = f"{channel.name}_trial_{trial_idx:03d}"
-                    ts_desc = f"Raw data for channel '{channel.name}', trial {trial_idx+1}"
+                    ts_desc = f"Raw data for channel '{channel.name}', trial {trial_idx + 1}"
 
                     # Units & Verification
                     # If units imply voltage -> CurrentClampSeries (measures V)

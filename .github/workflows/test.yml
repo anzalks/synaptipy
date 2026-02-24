@@ -49,14 +49,18 @@ jobs:
       run: |
         # Stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Style violations fail the build
-        flake8 . --count --max-complexity=10 --max-line-length=120 --statistics
+        # Style violations — scoped to src/ and tests/, uses .flake8 config
+        flake8 src/ tests/
 
     - name: Run tests with coverage
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        python -m pytest --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          xvfb-run python -m pytest --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+        else
+          python -m pytest --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+        fi
 
     - name: Upload coverage report
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
