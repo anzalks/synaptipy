@@ -13,7 +13,8 @@ exclude =
     .idea,
     .vscode,
     site-packages,
-    documents
-ignore = E203, W503
+    documents,
+    docs
+ignore = E203, W503, E226
 per-file-ignores =
     __init__.py:F401

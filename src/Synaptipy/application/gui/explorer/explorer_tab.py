@@ -802,7 +802,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                             if data is not None and t is not None:
                                 item = plot_item.plot(
-                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1}"
+                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index + 1}"
                                 )
                                 _apply_item_opts(item, ds_enabled)
                                 self.plot_canvas.channel_plot_data_items[cid].append(item)
