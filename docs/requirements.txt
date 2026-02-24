@@ -1,0 +1,24 @@
+# Sphinx documentation build dependencies
+# Install with: pip install -r docs/requirements.txt
+
+# Core Sphinx
+sphinx>=7.2.0
+sphinx-rtd-theme>=2.0.0
+
+# Markdown support
+myst-parser>=2.0.0
+
+# Auto-documentation extensions
+sphinx-autodoc-typehints>=1.25.0
+sphinx-autoapi>=3.0.0
+
+# Napoleon for NumPy / Google style docstrings (bundled with Sphinx but pinned here for clarity)
+# sphinx.ext.napoleon is bundled with Sphinx
+
+# Nice extras
+sphinx-copybutton>=0.5.0
+sphinx-design>=0.5.0
+
+# Stub packages so autodoc can import modules that pull in heavy optional deps
+# without failing at doc build time.
+mock>=5.0.0

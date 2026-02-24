@@ -1,0 +1,26 @@
+/*
+ * Custom Sphinx / ReadTheDocs overrides for Synaptipy documentation.
+ *
+ * Keep this file minimal — prefer relying on the sphinx_rtd_theme defaults
+ * and only override what is strictly necessary.
+ */
+
+/* ── Typography ─────────────────────────────────────────────────── */
+.wy-nav-content {
+    max-width: 1000px;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────── */
+table.docutils {
+    width: 100%;
+}
+
+/* ── Code blocks ─────────────────────────────────────────────────── */
+.highlight pre {
+    font-size: 0.88em;
+}
+
+/* ── Cards (sphinx-design) ──────────────────────────────────────── */
+.sd-card {
+    border-radius: 6px;
+}

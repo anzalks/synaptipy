@@ -1,0 +1,54 @@
+# Development Logs
+
+Session-by-session development history: bug reports, verification guides, refactoring
+summaries, and implementation records produced during active development sprints.
+
+```{toctree}
+:maxdepth: 1
+:caption: Bug Fixes
+
+BUG_13_FIX
+BUG_14_AUTO_TRIGGER_FIX
+BUG_15_DATA_CLEARED_FIX
+BUGFIX_SUMMARY
+BUGFIX_VERIFICATION_REPORT
+ERROR_REPORT
+USER_EXPERIENCE_FIX
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Refactoring
+
+ANALYSER_TAB_REFACTORING
+REFACTORING_FINAL_SUMMARY
+REFACTORING_IMPLEMENTATION_SUMMARY
+REFACTORING_SUCCESS
+REFACTORING_TEST_PLAN
+REFACTORING_TEST_RESULTS
+ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS
+EXPLORER_TAB_RIGHT_PANEL_UPDATE
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Feature Implementation
+
+DEBOUNCING_IMPLEMENTATION
+DEBOUNCING_VERIFICATION
+INTERACTION_DEBOUNCING_COMPLETE
+IMPLEMENTATION_SUMMARY
+FINAL_IMPLEMENTATION_REPORT
+FINAL_VERIFICATION_GUIDE
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Phase Summaries
+
+PHASE1_COMPLETE
+PHASE1_FINAL_SUMMARY
+PHASE2_AND_3_COMPLETE
+PHASES_2_3_COMPLETE
+ALL_TESTS_PASSING
+```
