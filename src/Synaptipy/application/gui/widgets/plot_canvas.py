@@ -109,21 +109,27 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def clear_plots(self):
         """Remove all plots from the layout."""
-        # Flush deferred-delete queue before destroying C++ PlotItem objects.
-        # sendPostedEvents is safe on all platforms (unlike gc.collect which
-        # races with PySide6 tp_dealloc on macOS/ARM -> SIGBUS on PySide6>=6.7).
-        try:
-            from PySide6.QtCore import QCoreApplication
-            QCoreApplication.sendPostedEvents(None, 0)
-        except Exception:
-            pass
-        self.widget.clear()
+        # Step 1: Disconnect ViewBox signals BEFORE Qt deletes the C++ objects.
+        # sigXRangeChanged / sigYRangeChanged lambdas hold Python closures that
+        # reference PlotItem; if these fire (or are queued) after widget.clear()
+        # destroys the C++ ViewBox, PySide6 dereferences a stale pointer
+        # (SIGBUS / segfault on macOS and Windows with PySide6 >= 6.7).
+        for plot_item in list(self.plot_items.values()):
+            try:
+                vb = plot_item.getViewBox()
+                if vb is not None:
+                    vb.sigXRangeChanged.disconnect()
+                    vb.sigYRangeChanged.disconnect()
+            except Exception:
+                pass
+        # Step 2: Drop Python references before Qt teardown.
         self.plot_items.clear()
         self._main_plot_id = None
-        # On Windows/Linux also run a GC pass to flush stale C++ pointers from
-        # pyqtgraph's global registry before new plots are added (prevents
-        # crashes on Python 3.10). Skipped on macOS: gc.collect() inside a Qt
-        # slot races with PySide6 tp_dealloc -> SIGBUS on PySide6 >= 6.7.
+        # Step 3: Clear the Qt layout.
+        self.widget.clear()
+        # Step 4: On Windows/Linux, flush stale C++ PlotItem pointers from
+        # pyqtgraph's global registry (prevents crashes on Python 3.10).
+        # Skipped on macOS: gc.collect() races with PySide6 tp_dealloc -> SIGBUS.
         import sys
         if sys.platform != 'darwin':
             import gc
