@@ -1,11 +1,13 @@
 # Synaptipy User Tutorial and Documentation
 
-Synaptipy is a comprehensive electrophysiology visualization and analysis suite for
-patch-clamp and intracellular recording data. Built on Python and Qt6, it provides
-high-performance signal visualization, 14 dedicated analysis modules, a batch
-processing engine, and standards-compliant data export. This tutorial covers every
-feature of the application in detail, including the mathematical methods used under
-the hood.
+Synaptipy is a comprehensive electrophysiology visualisation and analysis suite.
+The primary focus is whole-cell patch-clamp and intracellular recordings; however,
+any electrophysiology signal whose file format is supported by the
+[Neo](https://neo.readthedocs.io) I/O library can be loaded, visualised, and processed.
+Built on Python and Qt6, it provides OpenGL-accelerated signal visualisation,
+14 built-in analysis modules, a composable batch processing engine, and an extensible
+plugin interface. This tutorial covers every feature of the application in detail,
+including the mathematical methods used in each analysis module.
 
 ---
 
