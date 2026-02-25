@@ -208,7 +208,6 @@ def test_clear_plots_no_gc_on_darwin():
     if sys.platform != 'darwin':
         pytest.skip("macOS-specific regression test")
 
-    import gc
     import unittest.mock as mock
 
     canvas = ExplorerPlotCanvas()
@@ -232,7 +231,6 @@ def test_rebuild_plots_no_gc_on_darwin():
     if sys.platform != 'darwin':
         pytest.skip("macOS-specific regression test")
 
-    import gc
     import unittest.mock as mock
 
     canvas = ExplorerPlotCanvas()
