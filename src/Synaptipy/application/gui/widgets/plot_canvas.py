@@ -77,12 +77,18 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             # PySide6 >= 6.9 those callbacks dereference C++ pointers inside
             # __init__ causing an access violation when they fire there instead
             # of being processed first.  processEvents() *executes* them (safe
-            # on all platforms) whereas removePostedEvents() would discard them
-            # (unsafe on macOS: corrupts pyqtgraph AllViews / geometry caches).
-            try:
-                QtCore.QCoreApplication.processEvents()
-            except Exception:
-                pass
+            # on Win/Linux) whereas removePostedEvents() would discard them.
+            #
+            # macOS is excluded: _unlink_all_plots() + _close_all_plots()
+            # disconnect all signals before widget.clear(), so no stale
+            # callbacks are queued by the time add_plot() is called.
+            # Calling processEvents() on macOS can execute post-widget.clear()
+            # callbacks that reference freed C++ ViewBox objects → SIGSEGV.
+            if sys.platform != 'darwin':
+                try:
+                    QtCore.QCoreApplication.processEvents()
+                except Exception:
+                    pass
 
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)

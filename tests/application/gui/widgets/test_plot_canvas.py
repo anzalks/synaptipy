@@ -1,4 +1,5 @@
 
+import sys
 import pytest
 from PySide6 import QtCore, QtWidgets  # noqa: F401
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
@@ -12,21 +13,28 @@ def plot_canvas(qapp):
 
 @pytest.fixture(autouse=True)
 def reset_canvas(plot_canvas):
-    """Clear all plots before and drain events after every test.
+    """Clear all plots before and drain events after every test (Win/Linux).
 
     Runs clear_plots() BEFORE each test so each starts with a clean canvas.
-    After the test, drains the Qt posted-event queue so pyqtgraph deferred
-    callbacks from the just-run test (range/layout events queued during plot
-    operations) do not fire during the C++ teardown in the next test's
-    clear_plots() call, which would cause SIGBUS / access-violations.
-    removePostedEvents discards events without executing callbacks -- safe
-    on all platforms and not re-entrant.
+    After the test, executes the Qt posted-event queue so pyqtgraph deferred
+    callbacks fire while C++ objects are still alive.  This prevents them from
+    firing during C++ object construction in the next test (inside addPlot /
+    PlotItem.__init__) which causes access-violations / SIGBUS.
+
+    processEvents() is used instead of removePostedEvents() because discarding
+    callbacks leaves ViewBox in a dirty state that causes crashes on the next
+    setXLink(None) or widget.clear() call.  Executing them is safe here since
+    all C++ objects are alive at post-test teardown time.
+
+    macOS excluded: see conftest._drain_qt_events_after_test for rationale.
     """
     plot_canvas.clear_plots()
     yield
+    if sys.platform == 'darwin':
+        return
     try:
         from PySide6.QtCore import QCoreApplication
-        QCoreApplication.removePostedEvents(None, 0)
+        QCoreApplication.processEvents()
     except Exception:
         pass
 
