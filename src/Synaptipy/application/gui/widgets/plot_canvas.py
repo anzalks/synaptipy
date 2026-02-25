@@ -167,16 +167,23 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def clear_plots(self):
         """Remove all plots from the layout."""
-        # Step 1: Cancel any queued pyqtgraph internal events (Win/Linux only).
-        # Prevents stale-pointer crash when widget.clear() destroys ViewBox.
+        # Step 1: Discard stale deferred events before teardown (Win/Linux).
+        # This prevents callbacks queued by the previous rebuild from firing
+        # during widget.clear()'s C++ destructor chain.
         self._cancel_pending_qt_events()
-        # Step 2: Disconnect our signal lambdas before C++ teardown.
-        self._disconnect_viewbox_signals()
-        # Step 3: Drop Python references, then destroy Qt layout.
+        # Step 2: Destroy C++ layout children FIRST.
+        # widget.clear() runs Qt's destructor chain which automatically
+        # disconnects all signals on the destroyed objects.  Python wrappers
+        # in self.plot_items remain valid throughout so PySide6 can cleanly
+        # resolve any C++ → Python back-references during destruction.
+        # Calling plot_items.clear() BEFORE widget.clear() drops Python refs
+        # while C++ objects are still live -- on macOS PySide6 ≥ 6.7 this
+        # causes a segfault when the destructor tries to reach the Python side.
+        self.widget.clear()
+        # Step 3: Drop Python references after C++ teardown is complete.
         self.plot_items.clear()
         self._main_plot_id = None
-        self.widget.clear()
-        # Step 4: Flush pyqtgraph registry (Win/Linux only).
+        # Step 4: Discard any events posted BY widget.clear() (Win/Linux).
         self._flush_qt_registry()
 
     def clear_items(self, plot_id: str):

@@ -67,9 +67,9 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         Rebuilds the plot layout based on the recording channels.
         Returns the list of channel keys in order.
         """
-        # Drain stale Qt events before and after clear() to prevent stale C++
-        # pointer crashes on Windows/Linux.  macOS is handled by
-        # _disconnect_viewbox_signals() inside clear_plots().
+        # Drain stale Qt events before and after clear() (Win/Linux only).
+        # clear_plots() calls widget.clear() first so Qt's destructor chain
+        # auto-disconnects signals while C++ objects are still valid.
         self._cancel_pending_qt_events()
         self.clear()
         self._flush_qt_registry()
