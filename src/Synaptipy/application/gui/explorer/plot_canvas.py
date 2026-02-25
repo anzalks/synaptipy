@@ -89,6 +89,23 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
 
         self.clear()
 
+        # Second flush: self.clear() calls plot_widgets.clear() as its LAST
+        # step, dropping the final Python refs to the old PlotItems AFTER the
+        # gc+processEvents inside clear_plots() has already run.  So
+        # PlotItem.__del__ -> deleteLater may have been queued only now.
+        # Run gc.collect() + processEvents() again to drain those events before
+        # any add_plot() call creates new PlotItems.
+        import gc
+        gc.collect()
+        try:
+            from PySide6.QtWidgets import QApplication
+            _app = QApplication.instance()
+            if _app:
+                for _ in range(3):
+                    _app.processEvents()
+        except Exception:
+            pass
+
         if not recording or not recording.channels:
             return []
 
