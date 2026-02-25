@@ -4,11 +4,17 @@ from PySide6 import QtCore, QtWidgets  # noqa: F401
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
 
-@pytest.fixture
-def plot_canvas(qtbot):
+@pytest.fixture(scope="module")
+def plot_canvas(qapp):
     canvas = SynaptipyPlotCanvas()
-    qtbot.addWidget(canvas.widget)
     return canvas
+
+
+@pytest.fixture(autouse=True)
+def reset_canvas(plot_canvas):
+    """Clear all plots before every test so each starts with a clean canvas."""
+    plot_canvas.clear_plots()
+    yield
 
 
 def test_add_plot(plot_canvas):

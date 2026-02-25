@@ -8,14 +8,10 @@ from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def session_manager():
-    # Reset singleton state for testing
-    if SessionManager._instance:
-        SessionManager._instance = None
-    sm = SessionManager()
-    yield sm
-    SessionManager._instance = None
+    """Module-scoped: same SessionManager singleton that AnalyserTab connects to."""
+    return SessionManager()
 
 
 @pytest.fixture
@@ -23,12 +19,19 @@ def mock_neo_adapter():
     return MagicMock(spec=NeoAdapter)
 
 
-@pytest.fixture
-def analyser_tab(mock_neo_adapter, session_manager, qtbot):
-    # Retrieve the class - currently it's imported in the test file
-    tab = AnalyserTab(mock_neo_adapter)
-    qtbot.addWidget(tab)
+@pytest.fixture(scope="module")
+def analyser_tab(qapp):
+    """Module-scoped to prevent PlotItem recreation crashes in offscreen mode."""
+    tab = AnalyserTab(MagicMock(spec=NeoAdapter))
     return tab
+
+
+@pytest.fixture(autouse=True)
+def reset_analyser_state(analyser_tab):
+    """Reset per-test state so each test starts with a clean AnalyserTab."""
+    analyser_tab._global_preprocessing_confirmed = False
+    analyser_tab._global_preprocessing_settings = None
+    yield
 
 
 def test_preprocessing_sync_after_confirmation(analyser_tab, session_manager, qtbot):

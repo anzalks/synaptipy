@@ -17,15 +17,13 @@ def session_manager():
     return sm
 
 
-@pytest.fixture
-def explorer_tab(qtbot, session_manager):
+@pytest.fixture(scope="module")
+def explorer_tab(qapp):
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
     status_bar = QtWidgets.QStatusBar()
 
-    # Create tab
     tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
-    qtbot.addWidget(tab)
     return tab
 
 

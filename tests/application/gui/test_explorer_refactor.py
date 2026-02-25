@@ -8,14 +8,13 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.core.data_model import Recording, Channel
 
 
-@pytest.fixture
-def explorer_tab(qtbot):
+@pytest.fixture(scope="module")
+def explorer_tab(qapp):
     neo_adapter = NeoAdapter()
     nwb_exporter = NWBExporter()
     status_bar = QtWidgets.QStatusBar()
 
     tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
-    qtbot.addWidget(tab)
     return tab
 
 

@@ -16,7 +16,7 @@ from Synaptipy.core.results import EventDetectionResult
 import Synaptipy.core.analysis  # noqa: F401
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def event_tab(qapp):
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab(

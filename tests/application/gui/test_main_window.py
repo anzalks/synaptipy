@@ -157,9 +157,14 @@ def test_background_file_loading(main_window, qtbot, mock_recording):
     main_window._pending_file_list = [mock_recording.source_file]
     main_window._pending_current_index = 0
 
-    # Act: Trigger the data_ready signal
-    with qtbot.waitSignal(main_window.data_loader.data_ready, timeout=1000):
-        main_window.data_loader.data_ready.emit(mock_recording)
+    # Patch _display_recording to prevent ExplorerTab from rebuilding PlotItems.
+    # The test verifies signal-handler state logic (pending attrs / current_recording),
+    # not plot rendering.  Rebuilding plots in an offscreen session after many
+    # earlier widget create/destroy cycles causes a PySide6 segfault.
+    with patch.object(main_window.explorer_tab, '_display_recording'):
+        # Act: Trigger the data_ready signal
+        with qtbot.waitSignal(main_window.data_loader.data_ready, timeout=1000):
+            main_window.data_loader.data_ready.emit(mock_recording)
 
     # Assert: Check that SessionManager was updated with the recording
     assert main_window.session_manager.current_recording == mock_recording
