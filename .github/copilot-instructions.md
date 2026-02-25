@@ -45,23 +45,31 @@ disconnect all signals before `widget.clear()` so no stale callbacks queue up;
 calling `processEvents()` there would instead execute post-`widget.clear()`
 callbacks that reference freed C++ ViewBox objects → SIGSEGV.
 
-### Drain fixtures use processEvents(), not removePostedEvents() — skip macOS
+### _cancel_pending_qt_events() uses processEvents() on Windows/Linux
+`SynaptipyPlotCanvas._cancel_pending_qt_events()` calls
+`QCoreApplication.processEvents()` (not `removePostedEvents()`) on Win/Linux
+BEFORE `widget.clear()`.  This executes pending ViewBox geometry callbacks
+while all C++ objects are still alive.  On PySide6 >= 6.10, simply discarding
+with `removePostedEvents()` does NOT prevent crashes — PySide6 internally
+re-queues some callbacks during `connect()` sequences in `PlotItem.__init__`.
+macOS is excluded because `_unlink_all_plots()` prevents new callbacks from
+being queued during `widget.clear()`.
+
+### Drain fixtures use removePostedEvents() — skip macOS
 All per-test drain fixtures (global conftest, `test_explorer_refactor.py`,
-`test_plot_canvas.py`) call `QCoreApplication.processEvents()` (not
-`removePostedEvents(None, 0)`) and guard with `if sys.platform != 'darwin': return`.
+`test_plot_canvas.py`) call `QCoreApplication.removePostedEvents(None, 0)`
+and guard with `if sys.platform != 'darwin': return`.
 
-**Why processEvents not removePostedEvents?**  *Discarding* callbacks with
-`removePostedEvents` leaves ViewBox in a "dirty" state — it believes a geometry
-recalculation is pending.  Subsequent `setXLink(None)` or `widget.clear()` calls
-then try to flush that state and crash (access-violation on Windows, SIGSEGV on
-macOS).  *Executing* them with `processEvents()` is safe at post-test teardown
-time because all C++ Qt objects are still alive.
+**Why removePostedEvents in fixtures vs processEvents in _cancel_pending_qt_events?**
+In drain fixtures, `processEvents()` would run events belonging to session-scoped
+widgets of OTHER tests, risking interaction crashes.  `removePostedEvents()` safely
+discards inter-test residue; any remaining dirty ViewBox state is resolved by the
+`processEvents()` call inside `_cancel_pending_qt_events()` at the START of the
+next `rebuild_plots()`.
 
-**Why skip macOS?**  On macOS, pyqtgraph posts events between tests that maintain
-`AllViews` / geometry caches.  Executing them with `processEvents()` can fire
-post-`widget.clear()` callbacks that reference freed C++ ViewBox objects → SIGSEGV.
-On macOS the `_unlink_all_plots()` + `_close_all_plots()` teardown order prevents
-signal cascades during `widget.clear()` entirely.
+**Why skip macOS in drain fixtures?**  On macOS, pyqtgraph posts geometry events
+between tests that maintain `AllViews` / geometry caches.  Draining them globally
+corrupts session-scoped widget state and causes segfaults in `widget.clear()`.
 
 ### enableMenu=False in offscreen mode
 `add_plot()` passes `enableMenu=False` to `widget.addPlot()` when offscreen.
@@ -72,14 +80,14 @@ crashing on Windows/macOS without a real display.
 The mandatory sequence is:
 1. `_unlink_all_plots()` — break axis links before teardown
 2. `_close_all_plots()` — disconnect ctrl signals and call `PlotItem.close()` while scene is valid
-3. `_cancel_pending_qt_events()` — discard stale events (Win/Linux only)
+3. `_cancel_pending_qt_events()` — **execute** (not discard) stale events on Win/Linux while
+   all C++ objects are alive; macOS skipped (unlink+close prevent queuing)
 4. `widget.clear()` — destroy C++ children
 5. `plot_items.clear()` — drop Python refs *after* C++ teardown
 6. `_flush_qt_registry()` — drain events posted *by* `widget.clear()`:
-   - Win/Linux: discard with `removePostedEvents()`
-   - macOS: execute with `processEvents()` (after unlink+close, signals are disconnected,
-     so no freed-object callbacks can be queued; executing ensures AllViews/geometry
-     caches stay consistent across repeated rebuilds, preventing cumulative segfaults)
+   - macOS: `processEvents()` (signals already disconnected by step 2, so no freed-object
+     callbacks can fire; executing ensures AllViews/geometry caches stay consistent)
+   - Win/Linux: `removePostedEvents()` (post-clear events already executed in step 3)
 
 ## numpy / scipy rules
 - `np.searchsorted` only accepts `side="left"` or `side="right"` — not `"nearest"`.

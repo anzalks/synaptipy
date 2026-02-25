@@ -32,24 +32,18 @@ def _drain_qt_events_after_test():
     PlotItem.__init__) they dereference already-freed C++ pointers causing
     access-violations (Windows).
 
-    We use processEvents() (execute) rather than removePostedEvents() (discard).
-    Executing callbacks at end-of-test is safe because all C++ Qt objects from
-    the current test are still alive at this point (teardown has not run yet).
-    Discarding them with removePostedEvents() leaves ViewBox internal state
-    in a "dirty" / inconsistent state which causes later calls to setXLink(None)
-    or widget.clear() to crash on Windows (access-violation) or macOS (SIGSEGV).
-
-    macOS is excluded: pyqtgraph keeps live state in its AllViews registry via
-    posted events between tests.  Calling processEvents() globally on macOS can
-    fire stale post-widget.clear() callbacks that reference freed C++ ViewBox
-    objects.  On macOS the X-link unlink + _close_all_plots() sequence prevents
-    signals from being queued during widget.clear() entirely.
+    macOS is excluded: pyqtgraph keeps live state in its AllViews registry
+    and internal geometry caches via posted events between tests.  Draining
+    those events globally corrupts the long-lived session-scoped widget state
+    and causes later widget.clear() calls to segfault.
+    On macOS the X-link unlink in _unlink_all_plots() and the correct
+    widget.clear()-first order are the only mechanisms needed.
     """
     yield
     if sys.platform != 'darwin':
         try:
             from PySide6.QtCore import QCoreApplication
-            QCoreApplication.processEvents()
+            QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass
 

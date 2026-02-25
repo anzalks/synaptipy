@@ -39,7 +39,7 @@ def drain_qt_events_between_tests():
         return
     try:
         from PySide6.QtCore import QCoreApplication
-        QCoreApplication.processEvents()
+        QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass
 

@@ -254,30 +254,48 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 pass
 
     def _cancel_pending_qt_events(self):
-        """Discard stale posted events BEFORE C++ object teardown (Win/Linux).
+        """Execute (not discard) stale posted events BEFORE C++ teardown (Win/Linux).
 
-        macOS is excluded: pyqtgraph on macOS queues internal layout/range
-        update events between tests.  Discarding them globally corrupts
-        ViewBox geometry caches and causes segfaults.  On macOS the
-        _unlink_all_plots() + _close_all_plots() steps and the correct
-        widget.clear()-first order are sufficient.
+        pyqtgraph queues geometry/range-update callbacks in ViewBox deferred
+        events.  On PySide6 ≥ 6.9 (Windows), these fire DURING subsequent
+        Qt signal-connection calls (e.g. inside PlotItem.__init__ at the
+        ctrl-widget connect() calls) if they are still pending when the next
+        widget.addPlot() runs.  Simply discarding them with removePostedEvents()
+        does NOT prevent the crash on 6.10.x because PySide6 internally
+        re-queues some callbacks during the connect() sequence itself.
+
+        Executing them with processEvents() while ALL current C++ objects are
+        still alive (before widget.clear()) is the only reliable fix.  At this
+        point _unlink_all_plots() + _close_all_plots() have NOT yet run, so
+        all signals are still connected, and executing the callbacks against
+        live objects is safe.
+
+        macOS is excluded: see _flush_qt_registry() for the macOS drain path.
+        _unlink_all_plots() on macOS prevents new callbacks from queuing during
+        widget.clear(), so no pre-clear drain is needed.
         """
         if sys.platform == 'darwin':
             return
-        self._remove_posted_events()
+        try:
+            QtCore.QCoreApplication.processEvents()
+        except Exception:
+            pass
 
     def _flush_qt_registry(self):
-        """Execute events posted BY widget.clear() to drain the queue.
+        """Drain events posted BY widget.clear().
 
-        On Win/Linux: uses removePostedEvents to discard them.
-        On macOS: uses processEvents() to *execute* them.  At this point
-        _unlink_all_plots() + _close_all_plots() have already disconnected
-        all signals so no new callbacks referencing freed C++ objects can
-        be queued by widget.clear().  Executing the already-queued events
-        now (while PySide6 still has the newly-cleared scene) keeps
-        pyqtgraph's AllViews / geometry caches consistent and prevents
-        the next rebuild iteration from crashing because of stale
-        accumulated callbacks.
+        On Win/Linux: discards with removePostedEvents().  The processEvents()
+        guard in add_plot() executes any stragglers in a controlled window
+        before PlotItem.__init__ runs.
+
+        On macOS: executes with processEvents().  At this point
+        _unlink_all_plots() + _close_all_plots() have already disconnected all
+        signals so widget.clear() cannot have queued any new callbacks that
+        reference freed C++ objects.  Executing the queued events now keeps
+        pyqtgraph's AllViews / geometry caches consistent across repeated
+        rebuild loops, preventing cumulative segfaults.  (On macOS
+        removePostedEvents is a no-op per _remove_posted_events() guard --
+        this is the only safe drain path there.)
         """
         if sys.platform == 'darwin':
             try:
