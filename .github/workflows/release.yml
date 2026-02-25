@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"          # triggers on v0.1.0b1, v0.1.0, v1.0.0, etc.
+
+permissions:
+  contents: write    # needed to create GitHub Releases
+
+jobs:
+  # ── 1. Run the full test suite first ─────────────────────────────────────────
+  test:
+    name: Test (${{ matrix.os }} / py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xfixes0 libegl1 libxcb-cursor0
+
+      - name: Install package + test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" -r requirements.txt
+
+      - name: Lint (syntax errors / undefined names)
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            xvfb-run python -m pytest --cov=Synaptipy --cov-report=xml
+          else
+            python -m pytest --cov=Synaptipy --cov-report=xml
+          fi
+
+  # ── 2. Build wheel + sdist ────────────────────────────────────────────────────
+  build:
+    name: Build distribution
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # ── 3. Publish GitHub Release ─────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0               # needed to read full CHANGELOG
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Determine pre-release flag
+        id: pre
+        # Tags containing a/b/rc (e.g. v0.1.0b1) are marked as pre-release
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if echo "$TAG" | grep -qE '[ab]|rc'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "label=beta-nightly" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "label=stable" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract CHANGELOG section for this release
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"           # strip leading 'v'
+          # Grab everything between this version header and the next one
+          NOTES=$(awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # Write to file to preserve newlines safely
+          echo "$NOTES" > release_notes.md
+          echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "${{ github.ref_name }} (${{ steps.pre.outputs.label }})"
+          body_path: release_notes.md
+          prerelease: ${{ steps.pre.outputs.prerelease }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

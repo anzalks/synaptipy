@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0b1] - 2026-02-25
+
+> **Beta nightly release.** Core GUI, all 14 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
+
 ### Fixed
 
 **Analysis Module Bug Fixes**
