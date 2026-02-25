@@ -2,20 +2,11 @@
 import pytest
 from unittest.mock import MagicMock
 from PySide6 import QtWidgets
-from Synaptipy.application.gui.main_window import MainWindow
 
 
-@pytest.fixture
-def app():
-    if not QtWidgets.QApplication.instance():
-        return QtWidgets.QApplication([])
-    return QtWidgets.QApplication.instance()
-
-
-def test_show_popup_windows_logic(app):
+def test_show_popup_windows_logic(main_window):
     """Verify _show_popup_windows iterates _loaded_analysis_tabs correctly."""
-    # Mock MainWindow and dependencies
-    window = MainWindow()
+    window = main_window
 
     # Mock AnalyserTab (it's a QWidget now)
     window.analyser_tab = MagicMock(spec=QtWidgets.QWidget)

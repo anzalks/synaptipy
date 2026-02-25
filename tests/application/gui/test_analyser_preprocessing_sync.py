@@ -8,9 +8,9 @@ from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def session_manager():
-    """Module-scoped: same SessionManager singleton that AnalyserTab connects to."""
+    """Session-scoped: same SessionManager singleton that AnalyserTab connects to."""
     return SessionManager()
 
 
@@ -19,9 +19,9 @@ def mock_neo_adapter():
     return MagicMock(spec=NeoAdapter)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def analyser_tab(qapp):
-    """Module-scoped to prevent PlotItem recreation crashes in offscreen mode."""
+    """Session-scoped to prevent PlotItem recreation crashes in offscreen mode."""
     tab = AnalyserTab(MagicMock(spec=NeoAdapter))
     return tab
 
