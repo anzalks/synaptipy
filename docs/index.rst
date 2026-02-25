@@ -19,15 +19,23 @@ Welcome to Synaptipy's Documentation
    :target: https://github.com/anzalks/synaptipy/actions/workflows/test.yml
    :alt: CI status
 
+.. image:: https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white
+   :target: https://github.com/anzalks/synaptipy
+   :alt: Collaborators Welcome
+
 |
 
-Synaptipy is a comprehensive electrophysiology visualisation and analysis suite for
-patch-clamp and intracellular recording data. Built on Python and Qt6, it provides
-high-performance signal visualisation, 14 dedicated analysis modules, a batch
-processing engine, and standards-compliant data export (NWB, CSV).
+Synaptipy is a cross-platform, open-source electrophysiology visualisation and analysis suite
+for patch-clamp and intracellular recording data. Built on Python and Qt6, it provides
+OpenGL-accelerated signal visualisation, 14 built-in analysis modules spanning intrinsic
+membrane properties, action potential characterisation, synaptic event detection, and
+optogenetics, a composable batch processing engine, and an extensible plugin interface
+that allows custom analysis routines to be integrated without modifying the core package.
+File I/O is handled through the Neo library, supporting over 30 acquisition formats including
+Axon ABF, WinWCP, CED/Spike2, Intan, Igor Pro, NWB, Open Ephys, and more.
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
-Bug reports and pull requests are welcome there.
+Collaborations, bug reports, and pull requests are welcome.
 
 .. grid:: 2
 
@@ -61,7 +69,7 @@ Bug reports and pull requests are welcome there.
 
 .. grid:: 2
 
-   .. grid-item-card:: :fab:`github` Source on GitHub
+   .. grid-item-card:: Source on GitHub
       :link: https://github.com/anzalks/synaptipy
       :link-type: url
 
