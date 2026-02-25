@@ -112,20 +112,24 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         from PySide6.QtCore import QCoreApplication
         import sys
 
-        # Step 1: Flush ALL pending Qt events while C++ objects are still alive.
-        # setXRange / setYRange calls queue internal pyqtgraph range/layout events
-        # on the ViewBox.  If those fire AFTER widget.clear() destroys the C++
-        # ViewBox, PySide6 dereferences a stale pointer (SIGBUS on macOS, segfault
-        # on Windows with PySide6 >= 6.7).  processEvents() is safe here because
-        # gc.disable() is active in CI offscreen mode (conftest.py), so no Python
-        # GC cycle can race with PySide6 tp_dealloc.
-        try:
-            QCoreApplication.processEvents()
-        except Exception:
-            pass
+        # On Windows/Linux: CANCEL all pending posted events before destroying
+        # any C++ objects.  We use removePostedEvents (not processEvents) because:
+        #   - removePostedEvents simply discards events from the queue -- no code
+        #     is executed, so there is zero re-entrant risk.
+        #   - processEvents *executes* queued callbacks; on Windows in offscreen
+        #     mode this can trigger re-entrant Qt calls that crash PySide6 >= 6.7.
+        # Any pyqtgraph internal range/layout events queued by setXRange() or
+        # signal emissions in tests would crash if they fired *after* widget.clear()
+        # destroys their target C++ ViewBox -- cancelling them here is safe.
+        # macOS: skip entirely; macOS passes with only the disconnect() below.
+        if sys.platform != 'darwin':
+            try:
+                QCoreApplication.removePostedEvents(None, 0)
+            except Exception:
+                pass
 
-        # Step 2: Disconnect our ViewBox signal lambdas so they cannot fire
-        # during or after widget.clear().
+        # Disconnect our ViewBox signal lambdas so they cannot fire during or
+        # after widget.clear() destroys the C++ ViewBox objects.
         for plot_item in list(self.plot_items.values()):
             try:
                 vb = plot_item.getViewBox()
@@ -135,15 +139,15 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             except Exception:
                 pass
 
-        # Step 3: Drop Python references before Qt teardown.
+        # Drop Python references before Qt teardown.
         self.plot_items.clear()
         self._main_plot_id = None
 
-        # Step 4: Clear the Qt layout.
+        # Destroy the Qt layout.
         self.widget.clear()
 
-        # Step 5: On Windows/Linux, flush stale C++ PlotItem pointers from
-        # pyqtgraph's global registry (prevents crashes on Python 3.10).
+        # On Windows/Linux: flush stale C++ PlotItem pointers from pyqtgraph's
+        # global registry after clearing (prevents crashes on Python 3.10).
         # Skipped on macOS: gc.collect() races with PySide6 tp_dealloc -> SIGBUS.
         if sys.platform != 'darwin':
             import gc

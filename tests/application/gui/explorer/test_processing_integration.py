@@ -29,13 +29,13 @@ def reset_processing_state(explorer_tab):
     explorer_tab._active_preprocessing_settings = {}
     yield
     # Drain any pending Qt events queued during the test (e.g. from signal
-    # emissions via preprocessing_widget).  Without this, deferred events
-    # referencing the current PlotItem C++ objects may fire inside the NEXT
-    # test's clear_plots() → widget.clear() → ViewBox destruction, causing
-    # a segfault on macOS/PySide6 >= 6.7.
+    # emissions via preprocessing_widget).  Use removePostedEvents rather than
+    # processEvents: the former cancels queued events (safe, no code executed)
+    # while the latter executes them and can cause re-entrant crashes on Windows
+    # in offscreen mode with PySide6 >= 6.7.
     try:
         from PySide6.QtCore import QCoreApplication
-        QCoreApplication.processEvents()
+        QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass
 

@@ -42,13 +42,13 @@ def reset_explorer_tab_state(explorer_tab):
         pass
     yield
     # Drain any pending Qt events queued during the test (e.g. from zoom
-    # changes, sidebar signals, lock_zoom_cb toggles).  Without this, deferred
-    # events referencing current PlotItem C++ objects fire inside the NEXT
-    # test's clear_plots() → widget.clear() → ViewBox destruction, causing
-    # a segfault on macOS/PySide6 >= 6.7.
+    # changes, sidebar signals, lock_zoom_cb toggles).  Use removePostedEvents
+    # rather than processEvents: the former cancels queued events (safe, no code
+    # executed) while the latter executes them and can cause re-entrant crashes
+    # on Windows in offscreen mode with PySide6 >= 6.7.
     try:
         from PySide6.QtCore import QCoreApplication
-        QCoreApplication.processEvents()
+        QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass
 
