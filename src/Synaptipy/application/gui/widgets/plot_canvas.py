@@ -111,8 +111,8 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # hasn't run yet.  Without this, Python 3.10's less-aggressive GC
         # leaves PlotItem.__del__ uncalled until a later collection pass;
         # the deferred deleteLater events for their ctrl QWidgets are not yet
-        # queued, so processEvents() below can't flush them, and the next
-        # add_plot() call finds stale C++ pointers in pyqtgraph's global
+        # queued, so the sendPostedEvents() below can't flush them, and the
+        # next add_plot() call finds stale C++ pointers in pyqtgraph's global
         # registry -> segfault.
         import gc
         gc.collect()
@@ -121,17 +121,19 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self.plot_items.clear()
         self._main_plot_id = None
 
-        # Flush Qt's event queue so that any deferred C++ destructor calls
-        # (deleteLater) for removed PlotItem ctrl widgets complete *before* the
-        # caller creates new PlotItems.  Without this, pyqtgraph's global
-        # PlotItem registry retains stale C++ pointers that crash the very next
-        # PlotItem.__init__ on macOS/Windows in offscreen (CI) mode.
+        # Drain Qt's deferred-delete queue so that any deleteLater() calls
+        # scheduled by PlotItem.__del__ for removed ctrl QWidgets complete
+        # *before* the caller creates new PlotItems.
+        #
+        # We use QCoreApplication.sendPostedEvents() rather than
+        # QApplication.processEvents():  sendPostedEvents() dispatches only
+        # already-queued posted events (including DeferredDelete) without
+        # starting a nested event loop, so it is safe to call from inside a
+        # Qt signal handler.  processEvents() starts a nested loop and can
+        # cause re-entrant signal delivery -> SIGBUS on macOS in production.
         try:
-            from PySide6.QtWidgets import QApplication
-            _app = QApplication.instance()
-            if _app:
-                for _ in range(3):
-                    _app.processEvents()
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.sendPostedEvents(None, 0)
         except Exception:
             pass
 

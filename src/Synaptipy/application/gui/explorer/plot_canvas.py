@@ -67,44 +67,34 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         Rebuilds the plot layout based on the recording channels.
         Returns the list of channel keys in order.
         """
-        # Before touching the Qt scene, force Python's cycle GC to collect
-        # any PlotItem objects (including from *other* live ExplorerTab
-        # instances) that have pending cyclic references.  This ensures their
-        # __del__ methods run and queue deleteLater events for ctrl QWidgets
-        # BEFORE we call self.clear() -> widget.clear().  The processEvents()
-        # inside clear_plots() then drains those events so all stale C++
-        # PlotItem pointers are gone before add_plot() creates new ones.
-        # This is critical on Python 3.10 where the cycle GC runs less
-        # frequently than on 3.11+.
         import gc
-        gc.collect()
-        try:
-            from PySide6.QtWidgets import QApplication
-            _app = QApplication.instance()
-            if _app:
-                for _ in range(3):
-                    _app.processEvents()
-        except Exception:
-            pass
+        from PySide6.QtCore import QCoreApplication
 
+        def _drain():
+            """gc.collect() + sendPostedEvents() -- safe to call from slots."""
+            gc.collect()
+            try:
+                QCoreApplication.sendPostedEvents(None, 0)
+            except Exception:
+                pass
+
+        # Pass 1: collect any cycle-referenced PlotItems from OTHER live tabs
+        # so their deleteLater events are queued before we touch the scene.
+        _drain()
+
+        # self.clear() calls:
+        #   super().clear_plots()  -> gc.collect() + widget.clear() +
+        #                             plot_items.clear() + sendPostedEvents()
+        #   self.plot_widgets.clear()  <- drops LAST refs to old PlotItems;
+        #                                their __del__ -> deleteLater is QUEUED
+        #                                after the sendPostedEvents inside
+        #                                clear_plots() has already run.
         self.clear()
 
-        # Second flush: self.clear() calls plot_widgets.clear() as its LAST
-        # step, dropping the final Python refs to the old PlotItems AFTER the
-        # gc+processEvents inside clear_plots() has already run.  So
-        # PlotItem.__del__ -> deleteLater may have been queued only now.
-        # Run gc.collect() + processEvents() again to drain those events before
-        # any add_plot() call creates new PlotItems.
-        import gc
-        gc.collect()
-        try:
-            from PySide6.QtWidgets import QApplication
-            _app = QApplication.instance()
-            if _app:
-                for _ in range(3):
-                    _app.processEvents()
-        except Exception:
-            pass
+        # Pass 2: drain the deleteLater events that were just queued by
+        # plot_widgets.clear() so no stale C++ PlotItem pointer remains in
+        # pyqtgraph's global registry when add_plot() is called below.
+        _drain()
 
         if not recording or not recording.channels:
             return []
