@@ -5,64 +5,21 @@ import gc
 
 
 def pytest_configure(config):
-    """Apply critical patches and GC settings before any fixture runs.
+    """Apply GC settings before any fixture runs.
 
-    1. Disable cyclic GC in offscreen mode.
-       Python's GC can trigger tp_dealloc on PySide6 wrapper objects while
-       Qt's own C++ destructor chain is still running, causing SIGBUS on
-       macOS and access-violations on Windows.  With GC disabled, objects
-       are only freed when their refcount hits zero -- deterministic and safe.
+    Disable cyclic GC in offscreen mode.
+    Python's GC can trigger tp_dealloc on PySide6 wrapper objects while
+    Qt's own C++ destructor chain is still running, causing SIGBUS on
+    macOS and access-violations on Windows.  With GC disabled, objects
+    are only freed when their refcount hits zero -- deterministic and safe.
 
-    2. Patch pyqtgraph's ViewBoxMenu with a minimal QMenu subclass.
-       ViewBoxMenu.__init__ calls QShortcut/QAction APIs that crash PySide6
-       in headless/offscreen mode (no real display platform).  We replace it
-       with _SafeViewBoxMenu which:
-         - Is a real QMenu subclass  → has proper C++ backing
-         - Skips ViewBoxMenu's init  → never touches QShortcut/QAction
-         - Is safely destructible    → Qt's C++ destructor works correctly
-       MagicMock was used previously but has no C++ backing, so Qt's C++
-       ViewBox destructor would SIGBUS  macOS / AV Windows when running
-       widget.clear().
-       This hook fires before any conftest fixture or widget is constructed.
+    Note: ViewBoxMenu crashes in offscreen mode are prevented upstream by
+    passing enableMenu=False to addPlot() in SynaptipyPlotCanvas.add_plot()
+    when QT_QPA_PLATFORM=offscreen.  This uses PyQtGraph's own API to skip
+    ViewBoxMenu construction entirely -- no monkey-patching needed.
     """
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         gc.disable()
-
-    _install_safe_viewbox_menu()
-
-
-def _install_safe_viewbox_menu():
-    """Monkey-patch ViewBoxMenu in the pyqtgraph module namespace.
-
-    Called once from pytest_configure (before any fixture / widget is created).
-    Safe to call multiple times -- only patches if not already patched.
-    """
-    try:
-        import pyqtgraph.graphicsItems.ViewBox.ViewBox as _vb_mod
-        from PySide6.QtWidgets import QMenu
-
-        if getattr(_vb_mod, '_synaptipy_menu_patched', False):
-            return  # Already patched this session
-
-        class _SafeViewBoxMenu(QMenu):
-            """Minimal ViewBoxMenu for headless test mode.
-
-            ViewBoxMenu inherits QMenu and on __init__ creates QShortcuts and
-            QActions that require a real display platform -- PySide6 crashes
-            in offscreen/CI mode.  This subclass inherits from QMenu directly
-            (giving it proper C++ backing so Qt can safely destruct it) but
-            skips all the problematic pyqtgraph setup.
-
-            The right-click menu is irrelevant for automated tests.
-            """
-            def __init__(self, view):
-                super().__init__()
-                self.view = view  # pyqtgraph may read vb.menu.view
-
-        _vb_mod.ViewBoxMenu = _SafeViewBoxMenu
-        _vb_mod._synaptipy_menu_patched = True
-    except Exception:
-        pass  # Non-fatal: tests will crash on first plot if this fails
 
 
 @pytest.fixture(autouse=True)
