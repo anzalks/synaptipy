@@ -110,6 +110,20 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self.plot_items.clear()
         self._main_plot_id = None
 
+        # Flush Qt's event queue so that any deferred C++ destructor calls
+        # (deleteLater) for removed PlotItem ctrl widgets complete *before* the
+        # caller creates new PlotItems.  Without this, pyqtgraph's global
+        # PlotItem registry retains stale C++ pointers that crash the very next
+        # PlotItem.__init__ on macOS/Windows in offscreen (CI) mode.
+        try:
+            from PySide6.QtWidgets import QApplication
+            _app = QApplication.instance()
+            if _app:
+                for _ in range(3):
+                    _app.processEvents()
+        except Exception:
+            pass
+
     def clear_items(self, plot_id: str):
         """Clear data items from a specific plot (keeping axis/labels)."""
         plot = self.get_plot(plot_id)
