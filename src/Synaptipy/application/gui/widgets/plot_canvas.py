@@ -136,10 +136,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 pass
 
     def _flush_qt_registry(self):
-        """Flush stale C++ PlotItem pointers from pyqtgraph's registry.
+        """Discard any Qt events queued during widget.clear() / gc (Win/Linux).
 
-        Runs gc.collect() + sendPostedEvents on Windows/Linux only.
-        Skipped on macOS: gc.collect() races with PySide6 tp_dealloc -> SIGBUS.
+        After widget.clear() destroys C++ objects, pyqtgraph may queue
+        deferred callbacks that reference those just-deleted objects.
+        We discard (removePostedEvents) rather than execute (sendPostedEvents)
+        to avoid access-violation when those callbacks fire during the NEXT
+        rebuild.  macOS skipped: gc.collect() races with PySide6 tp_dealloc.
         """
         import sys
         if sys.platform == 'darwin':
@@ -148,7 +151,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         gc.collect()
         try:
             from PySide6.QtCore import QCoreApplication
-            QCoreApplication.sendPostedEvents(None, 0)
+            QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass
 
