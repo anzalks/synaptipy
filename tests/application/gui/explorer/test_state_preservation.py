@@ -41,6 +41,16 @@ def reset_explorer_tab_state(explorer_tab):
     except Exception:
         pass
     yield
+    # Drain any pending Qt events queued during the test (e.g. from zoom
+    # changes, sidebar signals, lock_zoom_cb toggles).  Without this, deferred
+    # events referencing current PlotItem C++ objects fire inside the NEXT
+    # test's clear_plots() → widget.clear() → ViewBox destruction, causing
+    # a segfault on macOS/PySide6 >= 6.7.
+    try:
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication.processEvents()
+    except Exception:
+        pass
 
 
 def create_mock_recording(name="test.wcp", duration=1.0, channels=["ch1"]):
