@@ -5,6 +5,7 @@ Unified Plot Canvas Base Class.
 Wraps PyQtGraph's GraphicsLayoutWidget with standard Synaptipy configuration.
 """
 import logging
+import os
 from typing import Dict, Optional
 import pyqtgraph as pg
 from PySide6 import QtCore
@@ -62,6 +63,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         if plot_id in self.plot_items:
             log.warning(f"Plot ID '{plot_id}' already exists. Returning existing.")
             return self.plot_items[plot_id]
+
+        # In headless/offscreen mode (CI), ViewBoxMenu.__init__ calls
+        # QWidgetAction which crashes PySide6 on Windows and macOS without a
+        # real display.  PyQtGraph's own enableMenu=False flag tells ViewBox
+        # to skip menu creation entirely -- no monkey-patching required.
+        if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            kwargs.setdefault("enableMenu", False)
 
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
