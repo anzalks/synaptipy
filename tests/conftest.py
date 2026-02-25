@@ -41,19 +41,8 @@ def _drain_qt_events_after_test():
     """
     yield
     if sys.platform != 'darwin':
-        # Finalize cyclic-garbage PySide6 wrappers from the previous test.
-        # gc.disable() (set in pytest_configure) suppresses automatic
-        # collection; cycle-trapped PlotItem/ctrl wrappers accumulate across
-        # tests.  Their C++ backing was already destroyed by widget.clear()
-        # and their Python refs were dropped by plot_items.clear(), so it is
-        # safe to force-collect them here.  Without this, the zombie wrappers
-        # remain in Qt's internal signal connection tables and the next test's
-        # PlotItem.__init__ crashes when it hits the stale entry at line 235.
-        gc.collect()
         try:
             from PySide6.QtCore import QCoreApplication
-            # Discard any DeferredDelete events posted by tp_dealloc during
-            # the gc.collect() pass above.
             QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass

@@ -5,7 +5,6 @@ Unified Plot Canvas Base Class.
 Wraps PyQtGraph's GraphicsLayoutWidget with standard Synaptipy configuration.
 """
 import logging
-import gc
 import os
 import sys
 from typing import Dict, Optional
@@ -161,53 +160,92 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             except Exception:
                 pass
 
+    def _close_all_plots(self):
+        """Call PlotItem.close() while each item is still in the scene.
+
+        PlotItem.close() is pyqtgraph's own teardown method.  It:
+          - removes ctrlMenu and autoBtn from their Qt parent (breaking Qt
+            parent-child ownership for those widgets)
+          - removes the ViewBox from the scene
+          - nulls self.vb, self.autoBtn, self.ctrlMenu
+
+        Critically, the ctrl QWidget (ui_template widgets: averageGroup,
+        alphaGroup, etc.) holds Qt signal connections whose C++ connection
+        table keeps a Py_INCREF'd bound-method reference to PlotItem
+        (e.g. averageGroup.toggled → PlotItem.avgToggled).  This forms a
+        Python/C++ reference cycle that gc.disable() prevents from being
+        broken automatically.
+
+        We explicitly disconnect these ctrl signals here (all connections
+        via .disconnect() with no args) so that the C++ signal table
+        releases its Python bound-method references, breaking the cycle.
+        After this step PlotItem's refcount reaches zero as soon as
+        plot_items.clear() drops the last Python ref, and no gc.collect()
+        is needed.
+
+        This must be called while each PlotItem still has a valid scene()
+        (i.e. before widget.clear()), because PlotItem.close() calls
+        self.scene().removeItem(self.vb) internally.
+        """
+        _ctrl_signals = [
+            'alphaGroup', 'alphaSlider', 'autoAlphaCheck',
+            'xGridCheck', 'yGridCheck', 'gridAlphaSlider',
+            'fftCheck', 'logXCheck', 'logYCheck',
+            'derivativeCheck', 'phasemapCheck',
+            'downsampleSpin', 'downsampleCheck', 'autoDownsampleCheck',
+            'subsampleRadio', 'meanRadio', 'clipToViewCheck',
+            'avgParamList', 'averageGroup',
+            'maxTracesCheck', 'forgetTracesCheck', 'maxTracesSpin',
+        ]
+        for plot_item in list(self.plot_items.values()):
+            try:
+                # Disconnect all ctrl widget signals to break the
+                # C++ connection-table → Python bound-method reference cycles.
+                ctrl = getattr(plot_item, 'ctrl', None)
+                if ctrl is not None:
+                    for attr in _ctrl_signals:
+                        widget = getattr(ctrl, attr, None)
+                        if widget is None:
+                            continue
+                        # Each widget may have multiple signals; disconnect all
+                        # signals that have Python connections to PlotItem.
+                        for sig_name in ('toggled', 'valueChanged',
+                                         'itemClicked', 'clicked',
+                                         'currentIndexChanged'):
+                            try:
+                                sig = getattr(widget, sig_name, None)
+                                if sig is not None:
+                                    sig.disconnect()
+                            except (RuntimeError, TypeError):
+                                # RuntimeError: no connections; TypeError: already invalid
+                                pass
+                    # autoBtn has a clicked signal connected to autoBtnClicked
+                    try:
+                        if plot_item.autoBtn is not None:
+                            plot_item.autoBtn.clicked.disconnect()
+                    except (RuntimeError, TypeError, AttributeError):
+                        pass
+                # Call pyqtgraph's own close() to detach ctrlMenu, autoBtn,
+                # and remove vb from the scene.
+                plot_item.close()
+            except Exception:
+                pass
+
     def _cancel_pending_qt_events(self):
         """Discard stale posted events BEFORE C++ object teardown (Win/Linux).
 
-        Also runs gc.collect() on Win/Linux to free reference-cycle-trapped
-        PySide6 wrappers from prior rebuilds.  With gc.disable() active (set
-        in pytest_configure for offscreen mode), cyclic garbage accumulates
-        across tests.  Zombie wrappers appear in Qt's internal connection
-        tables; when the next PlotItem.__init__ connects a signal it hits
-        these stale entries and crashes.  gc.collect() frees the cycles while
-        all current C++ objects are still alive (safe), then removePostedEvents
-        discards any DeferredDelete events the finalizers posted.
-
-        macOS is excluded: gc.collect() races with PySide6 tp_dealloc during
-        Qt's C++ destructor chain on macOS PySide6 >= 6.7 -> SIGBUS.
-        The _unlink_all_plots() step handles macOS crash prevention instead.
+        macOS is excluded: pyqtgraph on macOS queues internal layout/range
+        update events between tests.  Discarding them globally corrupts
+        ViewBox geometry caches and causes segfaults.  On macOS the
+        _unlink_all_plots() + _close_all_plots() steps and the correct
+        widget.clear()-first order are sufficient.
         """
         if sys.platform == 'darwin':
             return
-        gc.collect()
         self._remove_posted_events()
 
     def _flush_qt_registry(self):
-        """Finalize zombie wrappers and discard stale events (Win/Linux).
-
-        Called after widget.clear() + plot_items.clear().  At this point the
-        C++ backing of all removed plots is already destroyed and Python refs
-        in plot_items are dropped.  Any remaining cyclic-garbage wrappers
-        (PlotItem / ctrl widgets etc.) are unreachable but not yet finalised
-        because gc.disable() suppresses automatic collection in offscreen mode.
-
-        gc.collect() forces finalisation of those cycles now -- before the
-        next add_plot() call -- so Qt's internal signal connection table is
-        clean when PlotItem.__init__ tries to connect at line 235.  This is
-        safe because the wrappers being collected have no live C++ backing
-        (widget.clear() already destroyed it); PySide6 tp_dealloc skips C++
-        interaction when isValid() is False.
-
-        A second removePostedEvents then discards DeferredDelete events that
-        PySide6 tp_dealloc may post during the GC pass.
-
-        macOS is excluded: gc.collect() causes a SIGBUS on macOS PySide6
-        >= 6.7 regardless of C++ validity (race in PySide6's type system).
-        The _unlink_all_plots() + widget.clear()-first ordering handles macOS.
-        """
-        if sys.platform == 'darwin':
-            return
-        gc.collect()
+        """Discard events posted BY widget.clear() (Win/Linux)."""
         self._remove_posted_events()
 
     def clear_plots(self):
@@ -216,22 +254,26 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # Prevents sigXRangeChanged/sigResized cascade through partially-
         # destroyed C++ ViewBox objects during widget.clear() on macOS.
         self._unlink_all_plots()
-        # Step 2: Discard stale deferred events before teardown (Win/Linux).
-        # macOS skip is inside _cancel_pending_qt_events / _remove_posted_events.
+        # Step 2: Disconnect ctrl widget signals and call PlotItem.close().
+        # Breaks the C++ signal-table → Python bound-method → PlotItem
+        # reference cycles so Python refcounting can collect freed objects
+        # without needing gc.collect() (which is unsafe on macOS PySide6 >= 6.7).
+        # Must be called BEFORE widget.clear() because PlotItem.close()
+        # internally calls scene().removeItem(self.vb).
+        self._close_all_plots()
+        # Step 3: Discard stale deferred events before teardown (Win/Linux).
         self._cancel_pending_qt_events()
-        # Step 3: Destroy C++ layout children FIRST.
-        # widget.clear() runs Qt's destructor chain which automatically
-        # disconnects all signals on the destroyed objects.  Python wrappers
-        # in self.plot_items remain valid throughout so PySide6 can cleanly
-        # resolve any C++ → Python back-references during destruction.
+        # Step 4: Destroy C++ layout children FIRST via Qt's scene graph.
+        # Python wrappers in self.plot_items remain valid throughout so
+        # PySide6 can cleanly resolve any C++ → Python back-references.
         # Calling plot_items.clear() BEFORE widget.clear() drops Python refs
         # while C++ objects are still live -- on macOS PySide6 ≥ 6.7 this
         # causes a segfault when the destructor tries to reach the Python side.
         self.widget.clear()
-        # Step 4: Drop Python references after C++ teardown is complete.
+        # Step 5: Drop Python references after C++ teardown is complete.
         self.plot_items.clear()
         self._main_plot_id = None
-        # Step 5: Discard any events posted BY widget.clear() (Win/Linux).
+        # Step 6: Discard any events posted BY widget.clear() (Win/Linux).
         self._flush_qt_registry()
 
     def clear_items(self, plot_id: str):
