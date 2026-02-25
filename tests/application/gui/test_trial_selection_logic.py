@@ -10,6 +10,17 @@ from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 
 
 class TestTrialSelection(unittest.TestCase):
+    """Trial-selection logic tests.
+
+    The ExplorerTab (and its PlotItems) is created once per class
+    (setUpClass) rather than once per test (setUp/tearDown).  Recreating
+    the widget per-test requires destroying and re-creating PlotItem C++
+    objects between successive setUp calls; on macOS/Windows in offscreen
+    mode the deferred C++ deletion via deleteLater races the next
+    PlotItem.__init__, corrupting pyqtgraph's global registry and causing
+    a fatal segfault at PlotItem.__init__:162+.
+    """
+
     @classmethod
     def setUpClass(cls):
         if not QtWidgets.QApplication.instance():
@@ -17,8 +28,15 @@ class TestTrialSelection(unittest.TestCase):
         else:
             cls.app = QtWidgets.QApplication.instance()
 
+        cls.neo_adapter = MagicMock()
+        cls.nwb_exporter = MagicMock()
+        cls.status_bar = QtWidgets.QStatusBar()
+        cls.explorer = ExplorerTab(
+            cls.neo_adapter, cls.nwb_exporter, cls.status_bar
+        )
+
     def setUp(self):
-        # Create Dummy Recording
+        # Rebuild recording data (pure Python, no Qt objects)
         self.recording = Recording(source_file=MagicMock())
         self.recording.sampling_rate = 1000.0
 
@@ -27,24 +45,12 @@ class TestTrialSelection(unittest.TestCase):
         self.channel = Channel("0", "Ch0", "mV", 1000.0, trials)
         self.recording.channels["0"] = self.channel
 
-        # Mocks
-        self.neo_adapter = MagicMock()
-        self.nwb_exporter = MagicMock()
-        self.status_bar = QtWidgets.QStatusBar()
-
-        self.explorer = ExplorerTab(
-            self.neo_adapter, self.nwb_exporter, self.status_bar
-        )
+        # Reload into the shared ExplorerTab widget
+        # clear_plots() flushes deferred destructors before add_plot() runs
         self.explorer._display_recording(self.recording)
 
     def tearDown(self):
-        self.explorer.close()
-        app = QtWidgets.QApplication.instance()
-        if app:
-            app.processEvents()
-        self.explorer.deleteLater()
-        if app:
-            app.processEvents()
+        pass  # Widget is reused; os._exit(0) and Python GC handle final cleanup
 
     def test_trial_selection_logic(self):
         """Test that requesting 'Every Nth trial' (gap-based) updates selection.
