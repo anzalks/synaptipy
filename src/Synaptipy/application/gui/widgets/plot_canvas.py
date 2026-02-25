@@ -71,6 +71,18 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # to skip menu creation entirely -- no monkey-patching required.
         if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
             kwargs.setdefault("enableMenu", False)
+            # Execute any pending deferred callbacks (ViewBox geometry /
+            # layout recalculations) queued by previous clear() or widget
+            # construction before entering PlotItem.__init__.  On Windows +
+            # PySide6 >= 6.9 those callbacks dereference C++ pointers inside
+            # __init__ causing an access violation when they fire there instead
+            # of being processed first.  processEvents() *executes* them (safe
+            # on all platforms) whereas removePostedEvents() would discard them
+            # (unsafe on macOS: corrupts pyqtgraph AllViews / geometry caches).
+            try:
+                QtCore.QCoreApplication.processEvents()
+            except Exception:
+                pass
 
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)

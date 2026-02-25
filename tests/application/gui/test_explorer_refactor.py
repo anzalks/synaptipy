@@ -1,3 +1,4 @@
+import sys
 import pytest
 import numpy as np
 from unittest.mock import MagicMock
@@ -20,16 +21,22 @@ def explorer_tab(qapp):
 
 @pytest.fixture(autouse=True)
 def drain_qt_events_between_tests():
-    """Drain Qt posted events after every test in this file.
+    """Drain Qt posted events after every test in this file (Win/Linux only).
 
-    pyqtgraph queues internal deferred callbacks (range/layout events)
-    during plot operations.  Without draining, those callbacks fire during
-    the NEXT test's C++ object construction (ViewBox/PlotItem.__init__)
-    causing access-violations / SIGBUS on PySide6 >= 6.7.
-    removePostedEvents discards events without executing them -- safe on
-    all platforms and not re-entrant.
+    pyqtgraph queues internal deferred callbacks (range/layout events) during
+    plot operations.  Without draining, those callbacks fire during the NEXT
+    test's C++ object construction (ViewBox/PlotItem.__init__) causing
+    access-violations / SIGBUS on PySide6 >= 6.7.
+
+    macOS is excluded: pyqtgraph on macOS keeps live state in its AllViews
+    registry and internal geometry caches via posted events between tests.
+    Discarding those events corrupts ViewBox geometry and causes segfaults
+    in later widget.clear() calls.  The global conftest drain already omits
+    macOS, so this local fixture mirrors that behaviour.
     """
     yield
+    if sys.platform == 'darwin':
+        return
     try:
         from PySide6.QtCore import QCoreApplication
         QCoreApplication.removePostedEvents(None, 0)
