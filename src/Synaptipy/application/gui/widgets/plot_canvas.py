@@ -6,6 +6,7 @@ Wraps PyQtGraph's GraphicsLayoutWidget with standard Synaptipy configuration.
 """
 import logging
 import os
+import sys
 from typing import Dict, Optional
 import pyqtgraph as pg
 from PySide6 import QtCore
@@ -116,21 +117,8 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         return self.plot_items.get(plot_id)
 
     @staticmethod
-    def _drain_posted_events():
-        """Discard stale posted Qt events without executing them (Win/Linux).
-
-        macOS is explicitly excluded: pyqtgraph on macOS queues internal
-        lifecycle events that it needs to process during C++ object teardown
-        (ViewBox/PlotItem destructor sequence).  Discarding those events on
-        macOS causes SIGBUS.  On macOS, disconnecting ViewBox signals before
-        widget.clear() is sufficient.
-
-        On Windows/Linux, removePostedEvents(None, 0) removes every pending
-        posted event without executing any callbacks -- no re-entrancy risk.
-        """
-        import sys
-        if sys.platform == 'darwin':
-            return
+    def _remove_posted_events():
+        """Call QCoreApplication.removePostedEvents(None, 0) — all platforms."""
         try:
             from PySide6.QtCore import QCoreApplication
             QCoreApplication.removePostedEvents(None, 0)
@@ -138,38 +126,41 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             pass
 
     def _cancel_pending_qt_events(self):
-        """Cancel pending Qt events before C++ object teardown (Win/Linux)."""
-        self._drain_posted_events()
+        """Discard stale posted events BEFORE C++ object teardown.
 
-    def _disconnect_viewbox_signals(self):
-        """Disconnect range-change lambdas from every live ViewBox."""
-        for plot_item in list(self.plot_items.values()):
-            try:
-                vb = plot_item.getViewBox()
-                if vb is not None:
-                    vb.sigXRangeChanged.disconnect()
-                    vb.sigYRangeChanged.disconnect()
-            except Exception:
-                pass
+        Called before widget.clear() so that events queued by a previous
+        rebuild do not fire during the upcoming C++ destructor chain.
+
+        macOS is excluded here: pyqtgraph on macOS needs to process certain
+        internal events as part of the C++ ViewBox/PlotItem destructor
+        sequence.  Discarding them before widget.clear() leaves teardown
+        incomplete and causes SIGBUS.
+        """
+        if sys.platform == 'darwin':
+            return
+        self._remove_posted_events()
 
     def _flush_qt_registry(self):
-        """Discard events that widget.clear() may have posted during teardown.
+        """Discard events posted BY widget.clear() AFTER teardown completes.
 
-        widget.clear() can internally queue deferred pyqtgraph callbacks
-        that reference already-destroyed C++ objects.  We drain those
-        immediately after the clear so they never fire during the next
-        rebuild.  gc.collect() is intentionally omitted: forcing Python
-        finalization of PySide6 wrapper objects whose C++ backing has
-        already been freed causes tp_dealloc access-violations on Windows
-        and SIGBUS on macOS.
+        widget.clear() runs Qt's C++ destructor chain and may post deferred-
+        delete events for the objects it just destroyed.  By the time this
+        method is called those destructors have already finished, so there is
+        no live C++ state that depends on those events being processed.
+        Discarding them (removePostedEvents, not sendPostedEvents) is safe on
+        all platforms and prevents them from firing during the next rebuild.
+
+        gc.collect() is intentionally omitted: forcing Python finalization of
+        PySide6 wrapper objects whose C++ backing has already been freed causes
+        tp_dealloc access-violations (Windows) or SIGBUS (macOS).
         """
-        self._drain_posted_events()
+        self._remove_posted_events()
 
     def clear_plots(self):
         """Remove all plots from the layout."""
-        # Step 1: Discard stale deferred events before teardown (Win/Linux).
-        # This prevents callbacks queued by the previous rebuild from firing
-        # during widget.clear()'s C++ destructor chain.
+        # Step 1: Discard stale deferred events before teardown (Win/Linux only;
+        # macOS skipped via _cancel_pending_qt_events to avoid disturbing
+        # pyqtgraph's own destructor-time event processing).
         self._cancel_pending_qt_events()
         # Step 2: Destroy C++ layout children FIRST.
         # widget.clear() runs Qt's destructor chain which automatically
@@ -183,7 +174,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # Step 3: Drop Python references after C++ teardown is complete.
         self.plot_items.clear()
         self._main_plot_id = None
-        # Step 4: Discard any events posted BY widget.clear() (Win/Linux).
+        # Step 4: Discard any events posted BY widget.clear() (all platforms).
         self._flush_qt_registry()
 
     def clear_items(self, plot_id: str):
