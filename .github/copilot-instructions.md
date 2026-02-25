@@ -75,10 +75,11 @@ The mandatory sequence is:
 3. `_cancel_pending_qt_events()` — discard stale events (Win/Linux only)
 4. `widget.clear()` — destroy C++ children
 5. `plot_items.clear()` — drop Python refs *after* C++ teardown
-6. `_flush_qt_registry()` — discard events posted *by* `widget.clear()`
-
-Dropping Python refs before `widget.clear()` causes PySide6 ≥ 6.7 to segfault
-on macOS.
+6. `_flush_qt_registry()` — drain events posted *by* `widget.clear()`:
+   - Win/Linux: discard with `removePostedEvents()`
+   - macOS: execute with `processEvents()` (after unlink+close, signals are disconnected,
+     so no freed-object callbacks can be queued; executing ensures AllViews/geometry
+     caches stay consistent across repeated rebuilds, preventing cumulative segfaults)
 
 ## numpy / scipy rules
 - `np.searchsorted` only accepts `side="left"` or `side="right"` — not `"nearest"`.

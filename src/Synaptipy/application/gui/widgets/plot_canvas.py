@@ -267,8 +267,25 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self._remove_posted_events()
 
     def _flush_qt_registry(self):
-        """Discard events posted BY widget.clear() (Win/Linux)."""
-        self._remove_posted_events()
+        """Execute events posted BY widget.clear() to drain the queue.
+
+        On Win/Linux: uses removePostedEvents to discard them.
+        On macOS: uses processEvents() to *execute* them.  At this point
+        _unlink_all_plots() + _close_all_plots() have already disconnected
+        all signals so no new callbacks referencing freed C++ objects can
+        be queued by widget.clear().  Executing the already-queued events
+        now (while PySide6 still has the newly-cleared scene) keeps
+        pyqtgraph's AllViews / geometry caches consistent and prevents
+        the next rebuild iteration from crashing because of stale
+        accumulated callbacks.
+        """
+        if sys.platform == 'darwin':
+            try:
+                QtCore.QCoreApplication.processEvents()
+            except Exception:
+                pass
+        else:
+            self._remove_posted_events()
 
     def clear_plots(self):
         """Remove all plots from the layout."""

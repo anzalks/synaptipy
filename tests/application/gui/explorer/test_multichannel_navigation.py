@@ -194,6 +194,11 @@ def test_xrange_signal_contains_correct_channel_id(qapp, qtbot):
             )
     finally:
         canvas.x_range_changed.disconnect(_collector)
+        # Clear plots so all pending ViewBox callbacks fire while C++ objects
+        # are still alive.  Without this the global processEvents() drain runs
+        # after this test and executes stale callbacks against freed objects
+        # causing an access-violation on Windows.
+        canvas.clear_plots()
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +227,8 @@ def test_clear_plots_no_gc_on_darwin():
         "gc.collect() must not be called from clear_plots() on macOS — "
         "races with PySide6 tp_dealloc -> SIGBUS."
     )
+    # Canvas is already cleared; explicit no-op for symmetry with other tests.
+    canvas.clear_plots()
 
 
 def test_rebuild_plots_no_gc_on_darwin():
@@ -243,3 +250,5 @@ def test_rebuild_plots_no_gc_on_darwin():
         "gc.collect() must not be called from rebuild_plots() on macOS — "
         "races with PySide6 tp_dealloc -> SIGBUS."
     )
+    # Clear so no stale callbacks remain for the global processEvents() drain.
+    canvas.clear_plots()
