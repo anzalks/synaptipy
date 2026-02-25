@@ -13,7 +13,7 @@
 
 Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
 
-Synaptipy is a cross-platform, open-source application for the visualization and analysis of electrophysiological recordings. It is designed around a modular, extensible architecture that supports interactive single-recording analysis, large-scale batch processing, and integration of custom user-written analysis routines via a plugin interface. The primary focus is patch-clamp and intracellular recordings, with broad file-format support through the Neo I/O library.
+Synaptipy is a cross-platform, open-source application for the visualization and analysis of electrophysiological recordings. It is designed around a modular, extensible architecture that supports interactive single-recording analysis, large-scale batch processing, and integration of custom user-written analysis routines via a plugin interface. The primary focus is whole-cell patch-clamp and intracellular recordings; however, any electrophysiology signal whose file format is supported by the Neo I/O library can be loaded, visualised, and processed — including extracellular, sharp-electrode, and multi-channel recordings. File-format support is therefore not a limitation of Synaptipy itself but of the underlying Neo reader for a given format.
 
 ## Analysis Capabilities
 
@@ -190,6 +190,19 @@ Full API reference, tutorials, and the developer guide are hosted on ReadTheDocs
 ## Contributing
 
 Collaborations and contributions are welcome. Whether you are adding a new analysis module, supporting an additional file format, or improving the documentation, please refer to the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project structure, coding standards, and the contribution workflow. The plugin interface provides the lowest-friction path to integrating custom analysis routines.
+
+## Dependencies and Citations
+
+Synaptipy builds on the following open-source libraries. If you use Synaptipy in published research, please consider citing the relevant upstream packages alongside the Synaptipy repository.
+
+| Library | Role in Synaptipy | Citation |
+|---|---|---|
+| [Neo](https://neo.readthedocs.io) | Electrophysiology file I/O (all supported formats) | Garcia S et al. (2014). *Neo: an object model for handling electrophysiology data in multiple formats.* Front. Neuroinformatics 8:10. [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010) |
+| [PyNWB](https://pynwb.readthedocs.io) | NWB data export | Rubel O et al. (2022). *The Neurodata Without Borders ecosystem for neurophysiological data science.* eLife 11:e78362. [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362) |
+| [PySide6](https://doc.qt.io/qtforpython/) | Qt6 GUI framework | Qt for Python, The Qt Company. https://doc.qt.io/qtforpython/ |
+| [PyQtGraph](https://www.pyqtgraph.org) | OpenGL-accelerated signal plotting | Campagnola L et al. PyQtGraph. https://www.pyqtgraph.org |
+| [SciPy](https://scipy.org) | Signal processing and numerical fitting | Virtanen P et al. (2020). *SciPy 1.0: Fundamental algorithms for scientific computing in Python.* Nature Methods 17:261–272. [doi:10.1038/s41592-019-0686-2](https://doi.org/10.1038/s41592-019-0686-2) |
+| [NumPy](https://numpy.org) | Array computation | Harris CR et al. (2020). *Array programming with NumPy.* Nature 585:357–362. [doi:10.1038/s41586-020-2649-2](https://doi.org/10.1038/s41586-020-2649-2) |
 
 ## License
 

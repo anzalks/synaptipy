@@ -35,12 +35,11 @@ This guide provides detailed instructions for installing, configuring, and using
 
 - Python 3.10 or higher
 - Dependencies are automatically installed during package installation:
-  - PySide6 (Qt bindings for Python)
-  - pyqtgraph (plotting library)
-  - neo (data loading library)
-  - numpy, scipy (numerical processing)
-  - pynwb (NWB export functionality)
-  - Other utility libraries
+  - [PySide6](https://doc.qt.io/qtforpython/) — Qt6 bindings for Python (GUI framework)
+  - [PyQtGraph](https://www.pyqtgraph.org) — OpenGL-accelerated plotting library
+  - [Neo](https://neo.readthedocs.io) — electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
+  - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) — numerical computation and signal processing
+  - [PyNWB](https://pynwb.readthedocs.io) — NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
 
 ### Standard Installation
 
@@ -94,12 +93,32 @@ The Synaptipy interface consists of three main tabs:
 
 ### Supported File Formats
 
-Synaptipy supports a wide variety of electrophysiology file formats through the neo library, including:
+File I/O is handled through the [Neo](https://neo.readthedocs.io) library
+(Garcia et al., 2014, *Front. Neuroinformatics*, [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010)).
+Synaptipy can load any recording format for which Neo provides a reader — this includes
+whole-cell patch-clamp and intracellular recordings as well as extracellular, sharp-electrode,
+and multi-channel data, provided the file format is supported. Confirmed formats include:
 
-- Axon ABF files (.abf)
-- Spike2 files (.smr, .smrx)
-- NeuroExplorer files (.nex)
-- Many others (see the [neo documentation](https://neo.readthedocs.io/en/latest/iolist.html) for the full list)
+| Format | Extension(s) | Acquisition System |
+|---|---|---|
+| Axon Binary Format | `.abf` | Axon / Molecular Devices |
+| WinWCP | `.wcp` | Strathclyde Electrophysiology Software |
+| CED / Spike2 | `.smr`, `.smrx` | Cambridge Electronic Design |
+| Igor Pro | `.ibw`, `.pxp` | WaveMetrics |
+| Intan | `.rhd`, `.rhs` | Intan Technologies |
+| Neurodata Without Borders | `.nwb` | NWB standard |
+| BrainVision | `.vhdr` | Brain Products |
+| European Data Format | `.edf` | EDF/EDF+ |
+| Plexon | `.plx`, `.pl2` | Plexon |
+| Open Ephys | `.continuous`, `.oebin` | Open Ephys |
+| Tucker Davis Technologies | `.tev`, `.tbk` | TDT |
+| Neuralynx | `.ncs`, `.nse`, `.nev` | Neuralynx |
+| NeuroExplorer | `.nex` | NeuroExplorer |
+| MATLAB | `.mat` | — |
+| ASCII / CSV | `.txt`, `.csv`, `.tsv` | — |
+
+For the full list of Neo-supported formats, see the
+[Neo I/O documentation](https://neo.readthedocs.io/en/latest/iolist.html).
 
 ### Opening Files
 

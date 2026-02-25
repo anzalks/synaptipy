@@ -56,6 +56,11 @@ data = channel.data_trials[0]  # Get first trial's data
 
 #### NeoAdapter
 
+File reading is implemented via the [Neo](https://neo.readthedocs.io) library
+(Garcia et al., 2014, *Frontiers in Neuroinformatics* 8:10,
+[doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010)).
+`NeoAdapter` translates Neo blocks into the Synaptipy core data model.
+
 ```python
 from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 

@@ -25,14 +25,20 @@ Welcome to Synaptipy's Documentation
 
 |
 
-Synaptipy is a cross-platform, open-source electrophysiology visualisation and analysis suite
-for patch-clamp and intracellular recording data. Built on Python and Qt6, it provides
-OpenGL-accelerated signal visualisation, 14 built-in analysis modules spanning intrinsic
-membrane properties, action potential characterisation, synaptic event detection, and
-optogenetics, a composable batch processing engine, and an extensible plugin interface
-that allows custom analysis routines to be integrated without modifying the core package.
-File I/O is handled through the Neo library, supporting over 30 acquisition formats including
+Synaptipy is a cross-platform, open-source electrophysiology visualisation and analysis suite.
+The primary focus is whole-cell patch-clamp and intracellular recordings; however, any
+electrophysiology signal whose file format is supported by the
+`Neo <https://neo.readthedocs.io>`_ I/O library can be loaded, visualised, and processed
+— including extracellular and multi-channel recordings.
+
+Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
+14 built-in analysis modules spanning intrinsic membrane properties, action potential
+characterisation, synaptic event detection, and optogenetics, a composable batch processing
+engine, and an extensible plugin interface that allows custom analysis routines to be
+integrated without modifying the core package. File I/O is handled through
+`Neo <https://neo.readthedocs.io>`_, supporting over 30 acquisition formats including
 Axon ABF, WinWCP, CED/Spike2, Intan, Igor Pro, NWB, Open Ephys, and more.
+NWB export is provided via `PyNWB <https://pynwb.readthedocs.io>`_.
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 Collaborations, bug reports, and pull requests are welcome.
