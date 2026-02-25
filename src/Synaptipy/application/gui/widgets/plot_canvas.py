@@ -63,12 +63,6 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             log.warning(f"Plot ID '{plot_id}' already exists. Returning existing.")
             return self.plot_items[plot_id]
 
-        # Drain any stale posted events left over from a previous clear_plots()
-        # cycle before new C++ objects are constructed.  Belt-and-suspenders:
-        # clear_plots() already drains but Python GC or signal teardown may
-        # repost events between the clear and this point.
-        self._drain_posted_events()
-
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
 
@@ -115,15 +109,20 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     @staticmethod
     def _drain_posted_events():
-        """Discard all pending posted Qt events without executing them.
+        """Discard stale posted Qt events without executing them (Win/Linux).
 
-        removePostedEvents(None, 0) removes every pending posted event for
-        every object from the event queue without executing any callbacks.
-        Safe on all platforms: no code runs, no re-entrancy risk.
-        Called both before and after widget.clear() so that pyqtgraph
-        internal deferred callbacks never fire against already-destroyed
-        C++ ViewBox/PlotItem objects.
+        macOS is explicitly excluded: pyqtgraph on macOS queues internal
+        lifecycle events that it needs to process during C++ object teardown
+        (ViewBox/PlotItem destructor sequence).  Discarding those events on
+        macOS causes SIGBUS.  On macOS, disconnecting ViewBox signals before
+        widget.clear() is sufficient.
+
+        On Windows/Linux, removePostedEvents(None, 0) removes every pending
+        posted event without executing any callbacks -- no re-entrancy risk.
         """
+        import sys
+        if sys.platform == 'darwin':
+            return
         try:
             from PySide6.QtCore import QCoreApplication
             QCoreApplication.removePostedEvents(None, 0)
@@ -131,7 +130,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             pass
 
     def _cancel_pending_qt_events(self):
-        """Cancel pending Qt events before C++ object teardown."""
+        """Cancel pending Qt events before C++ object teardown (Win/Linux)."""
         self._drain_posted_events()
 
     def _disconnect_viewbox_signals(self):

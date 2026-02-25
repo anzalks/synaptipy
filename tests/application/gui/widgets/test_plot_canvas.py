@@ -12,9 +12,23 @@ def plot_canvas(qapp):
 
 @pytest.fixture(autouse=True)
 def reset_canvas(plot_canvas):
-    """Clear all plots before every test so each starts with a clean canvas."""
+    """Clear all plots before and drain events after every test.
+
+    Runs clear_plots() BEFORE each test so each starts with a clean canvas.
+    After the test, drains the Qt posted-event queue so pyqtgraph deferred
+    callbacks from the just-run test (range/layout events queued during plot
+    operations) do not fire during the C++ teardown in the next test's
+    clear_plots() call, which would cause SIGBUS / access-violations.
+    removePostedEvents discards events without executing callbacks -- safe
+    on all platforms and not re-entrant.
+    """
     plot_canvas.clear_plots()
     yield
+    try:
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication.removePostedEvents(None, 0)
+    except Exception:
+        pass
 
 
 def test_add_plot(plot_canvas):
