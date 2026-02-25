@@ -8,6 +8,7 @@
 [![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
 [![Code style: flake8](https://img.shields.io/badge/code%20style-flake8-black)](https://flake8.pycqa.org/)
 [![Collaborators Welcome](https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white)](https://github.com/anzalks/synaptipy)
+[![Release](https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange)](https://github.com/anzalks/synaptipy/releases)
 
 **Open-Source Electrophysiology Visualization and Analysis Suite**
 
