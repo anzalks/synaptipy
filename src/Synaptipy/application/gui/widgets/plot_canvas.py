@@ -109,11 +109,23 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def clear_plots(self):
         """Remove all plots from the layout."""
-        # Step 1: Disconnect ViewBox signals BEFORE Qt deletes the C++ objects.
-        # sigXRangeChanged / sigYRangeChanged lambdas hold Python closures that
-        # reference PlotItem; if these fire (or are queued) after widget.clear()
-        # destroys the C++ ViewBox, PySide6 dereferences a stale pointer
-        # (SIGBUS / segfault on macOS and Windows with PySide6 >= 6.7).
+        from PySide6.QtCore import QCoreApplication
+        import sys
+
+        # Step 1: Flush ALL pending Qt events while C++ objects are still alive.
+        # setXRange / setYRange calls queue internal pyqtgraph range/layout events
+        # on the ViewBox.  If those fire AFTER widget.clear() destroys the C++
+        # ViewBox, PySide6 dereferences a stale pointer (SIGBUS on macOS, segfault
+        # on Windows with PySide6 >= 6.7).  processEvents() is safe here because
+        # gc.disable() is active in CI offscreen mode (conftest.py), so no Python
+        # GC cycle can race with PySide6 tp_dealloc.
+        try:
+            QCoreApplication.processEvents()
+        except Exception:
+            pass
+
+        # Step 2: Disconnect our ViewBox signal lambdas so they cannot fire
+        # during or after widget.clear().
         for plot_item in list(self.plot_items.values()):
             try:
                 vb = plot_item.getViewBox()
@@ -122,20 +134,21 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                     vb.sigYRangeChanged.disconnect()
             except Exception:
                 pass
-        # Step 2: Drop Python references before Qt teardown.
+
+        # Step 3: Drop Python references before Qt teardown.
         self.plot_items.clear()
         self._main_plot_id = None
-        # Step 3: Clear the Qt layout.
+
+        # Step 4: Clear the Qt layout.
         self.widget.clear()
-        # Step 4: On Windows/Linux, flush stale C++ PlotItem pointers from
+
+        # Step 5: On Windows/Linux, flush stale C++ PlotItem pointers from
         # pyqtgraph's global registry (prevents crashes on Python 3.10).
         # Skipped on macOS: gc.collect() races with PySide6 tp_dealloc -> SIGBUS.
-        import sys
         if sys.platform != 'darwin':
             import gc
             gc.collect()
             try:
-                from PySide6.QtCore import QCoreApplication
                 QCoreApplication.sendPostedEvents(None, 0)
             except Exception:
                 pass
