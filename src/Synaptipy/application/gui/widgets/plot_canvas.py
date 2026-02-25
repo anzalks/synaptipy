@@ -106,6 +106,17 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def clear_plots(self):
         """Remove all plots from the layout."""
+        # Force Python's cycle GC to collect any PlotItem objects (from THIS
+        # tab or any other) that have cyclic references and whose __del__
+        # hasn't run yet.  Without this, Python 3.10's less-aggressive GC
+        # leaves PlotItem.__del__ uncalled until a later collection pass;
+        # the deferred deleteLater events for their ctrl QWidgets are not yet
+        # queued, so processEvents() below can't flush them, and the next
+        # add_plot() call finds stale C++ pointers in pyqtgraph's global
+        # registry -> segfault.
+        import gc
+        gc.collect()
+
         self.widget.clear()
         self.plot_items.clear()
         self._main_plot_id = None
