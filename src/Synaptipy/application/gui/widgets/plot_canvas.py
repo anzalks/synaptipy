@@ -63,6 +63,12 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             log.warning(f"Plot ID '{plot_id}' already exists. Returning existing.")
             return self.plot_items[plot_id]
 
+        # Drain any stale posted events left over from a previous clear_plots()
+        # cycle before new C++ objects are constructed.  Belt-and-suspenders:
+        # clear_plots() already drains but Python GC or signal teardown may
+        # repost events between the clear and this point.
+        self._drain_posted_events()
+
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
 
@@ -107,22 +113,26 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     def get_plot(self, plot_id: str) -> Optional[pg.PlotItem]:
         return self.plot_items.get(plot_id)
 
-    def _cancel_pending_qt_events(self):
-        """Cancel all pending posted Qt events (Windows/Linux only).
+    @staticmethod
+    def _drain_posted_events():
+        """Discard all pending posted Qt events without executing them.
 
-        Uses removePostedEvents (discard, no execution) rather than
-        processEvents (execute) to avoid re-entrant PySide6 crashes in
-        offscreen/headless mode.  macOS is a no-op; the disconnect below
-        is sufficient there.
+        removePostedEvents(None, 0) removes every pending posted event for
+        every object from the event queue without executing any callbacks.
+        Safe on all platforms: no code runs, no re-entrancy risk.
+        Called both before and after widget.clear() so that pyqtgraph
+        internal deferred callbacks never fire against already-destroyed
+        C++ ViewBox/PlotItem objects.
         """
-        import sys
-        if sys.platform == 'darwin':
-            return
         try:
             from PySide6.QtCore import QCoreApplication
             QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass
+
+    def _cancel_pending_qt_events(self):
+        """Cancel pending Qt events before C++ object teardown."""
+        self._drain_posted_events()
 
     def _disconnect_viewbox_signals(self):
         """Disconnect range-change lambdas from every live ViewBox."""
@@ -136,24 +146,17 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 pass
 
     def _flush_qt_registry(self):
-        """Discard any Qt events queued during widget.clear() / gc (Win/Linux).
+        """Discard events that widget.clear() may have posted during teardown.
 
-        After widget.clear() destroys C++ objects, pyqtgraph may queue
-        deferred callbacks that reference those just-deleted objects.
-        We discard (removePostedEvents) rather than execute (sendPostedEvents)
-        to avoid access-violation when those callbacks fire during the NEXT
-        rebuild.  macOS skipped: gc.collect() races with PySide6 tp_dealloc.
+        widget.clear() can internally queue deferred pyqtgraph callbacks
+        that reference already-destroyed C++ objects.  We drain those
+        immediately after the clear so they never fire during the next
+        rebuild.  gc.collect() is intentionally omitted: forcing Python
+        finalization of PySide6 wrapper objects whose C++ backing has
+        already been freed causes tp_dealloc access-violations on Windows
+        and SIGBUS on macOS.
         """
-        import sys
-        if sys.platform == 'darwin':
-            return
-        import gc
-        gc.collect()
-        try:
-            from PySide6.QtCore import QCoreApplication
-            QCoreApplication.removePostedEvents(None, 0)
-        except Exception:
-            pass
+        self._drain_posted_events()
 
     def clear_plots(self):
         """Remove all plots from the layout."""

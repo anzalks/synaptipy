@@ -18,6 +18,25 @@ def explorer_tab(qapp):
     return tab
 
 
+@pytest.fixture(autouse=True)
+def drain_qt_events_between_tests():
+    """Drain Qt posted events after every test in this file.
+
+    pyqtgraph queues internal deferred callbacks (range/layout events)
+    during plot operations.  Without draining, those callbacks fire during
+    the NEXT test's C++ object construction (ViewBox/PlotItem.__init__)
+    causing access-violations / SIGBUS on PySide6 >= 6.7.
+    removePostedEvents discards events without executing them -- safe on
+    all platforms and not re-entrant.
+    """
+    yield
+    try:
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication.removePostedEvents(None, 0)
+    except Exception:
+        pass
+
+
 def test_explorer_tab_init(explorer_tab):
     assert explorer_tab is not None
     assert explorer_tab.plot_canvas is not None
