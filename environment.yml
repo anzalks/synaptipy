@@ -39,7 +39,7 @@ dependencies:
       - tzdata>=2025.0
       - tzlocal>=5.3.0
       - pyqtgraph>=0.13.0
-      - pyside6>=6.7.0
+      - pyside6>=6.7.0,<6.10
       - pytest>=7.0.0
       - pytest-qt>=4.0.0
       - pytest-mock
