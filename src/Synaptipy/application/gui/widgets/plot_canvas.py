@@ -107,29 +107,25 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     def get_plot(self, plot_id: str) -> Optional[pg.PlotItem]:
         return self.plot_items.get(plot_id)
 
-    def clear_plots(self):
-        """Remove all plots from the layout."""
-        from PySide6.QtCore import QCoreApplication
+    def _cancel_pending_qt_events(self):
+        """Cancel all pending posted Qt events (Windows/Linux only).
+
+        Uses removePostedEvents (discard, no execution) rather than
+        processEvents (execute) to avoid re-entrant PySide6 crashes in
+        offscreen/headless mode.  macOS is a no-op; the disconnect below
+        is sufficient there.
+        """
         import sys
+        if sys.platform == 'darwin':
+            return
+        try:
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.removePostedEvents(None, 0)
+        except Exception:
+            pass
 
-        # On Windows/Linux: CANCEL all pending posted events before destroying
-        # any C++ objects.  We use removePostedEvents (not processEvents) because:
-        #   - removePostedEvents simply discards events from the queue -- no code
-        #     is executed, so there is zero re-entrant risk.
-        #   - processEvents *executes* queued callbacks; on Windows in offscreen
-        #     mode this can trigger re-entrant Qt calls that crash PySide6 >= 6.7.
-        # Any pyqtgraph internal range/layout events queued by setXRange() or
-        # signal emissions in tests would crash if they fired *after* widget.clear()
-        # destroys their target C++ ViewBox -- cancelling them here is safe.
-        # macOS: skip entirely; macOS passes with only the disconnect() below.
-        if sys.platform != 'darwin':
-            try:
-                QCoreApplication.removePostedEvents(None, 0)
-            except Exception:
-                pass
-
-        # Disconnect our ViewBox signal lambdas so they cannot fire during or
-        # after widget.clear() destroys the C++ ViewBox objects.
+    def _disconnect_viewbox_signals(self):
+        """Disconnect range-change lambdas from every live ViewBox."""
         for plot_item in list(self.plot_items.values()):
             try:
                 vb = plot_item.getViewBox()
@@ -139,23 +135,36 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             except Exception:
                 pass
 
-        # Drop Python references before Qt teardown.
+    def _flush_qt_registry(self):
+        """Flush stale C++ PlotItem pointers from pyqtgraph's registry.
+
+        Runs gc.collect() + sendPostedEvents on Windows/Linux only.
+        Skipped on macOS: gc.collect() races with PySide6 tp_dealloc -> SIGBUS.
+        """
+        import sys
+        if sys.platform == 'darwin':
+            return
+        import gc
+        gc.collect()
+        try:
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.sendPostedEvents(None, 0)
+        except Exception:
+            pass
+
+    def clear_plots(self):
+        """Remove all plots from the layout."""
+        # Step 1: Cancel any queued pyqtgraph internal events (Win/Linux only).
+        # Prevents stale-pointer crash when widget.clear() destroys ViewBox.
+        self._cancel_pending_qt_events()
+        # Step 2: Disconnect our signal lambdas before C++ teardown.
+        self._disconnect_viewbox_signals()
+        # Step 3: Drop Python references, then destroy Qt layout.
         self.plot_items.clear()
         self._main_plot_id = None
-
-        # Destroy the Qt layout.
         self.widget.clear()
-
-        # On Windows/Linux: flush stale C++ PlotItem pointers from pyqtgraph's
-        # global registry after clearing (prevents crashes on Python 3.10).
-        # Skipped on macOS: gc.collect() races with PySide6 tp_dealloc -> SIGBUS.
-        if sys.platform != 'darwin':
-            import gc
-            gc.collect()
-            try:
-                QCoreApplication.sendPostedEvents(None, 0)
-            except Exception:
-                pass
+        # Step 4: Flush pyqtgraph registry (Win/Linux only).
+        self._flush_qt_registry()
 
     def clear_items(self, plot_id: str):
         """Clear data items from a specific plot (keeping axis/labels)."""
