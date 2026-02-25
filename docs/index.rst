@@ -11,6 +11,10 @@ Welcome to Synaptipy's Documentation
    :target: https://www.python.org/
    :alt: Python 3.10+
 
+.. image:: https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
+   :target: https://github.com/anzalks/synaptipy
+   :alt: Platform: Windows | macOS | Linux
+
 .. image:: https://img.shields.io/badge/license-AGPL--3.0-blue
    :target: https://github.com/anzalks/synaptipy/blob/main/LICENSE
    :alt: License: AGPL-3.0
@@ -19,9 +23,25 @@ Welcome to Synaptipy's Documentation
    :target: https://github.com/anzalks/synaptipy/actions/workflows/test.yml
    :alt: CI status
 
+.. image:: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml/badge.svg?branch=main
+   :target: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml
+   :alt: Docs build
+
+.. image:: https://readthedocs.org/projects/synaptipy/badge/?version=latest
+   :target: https://synaptipy.readthedocs.io/en/latest/
+   :alt: Documentation Status
+
+.. image:: https://img.shields.io/badge/code%20style-flake8-black
+   :target: https://flake8.pycqa.org/
+   :alt: Code style: flake8
+
 .. image:: https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white
    :target: https://github.com/anzalks/synaptipy
    :alt: Collaborators Welcome
+
+.. image:: https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange
+   :target: https://github.com/anzalks/synaptipy/releases
+   :alt: Release
 
 |
 

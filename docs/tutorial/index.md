@@ -161,6 +161,15 @@ Each sub-tab provides:
 
 - **Parameter Panel** — Auto-generated spin boxes, combo boxes, and checkboxes.
   All include tooltips, unit suffixes, valid min/max ranges.
+  - *Free-form numeric entry* — Number fields accept typed values directly;
+    intermediate states (a lone `−`, an empty field, etc.) are tolerated while
+    typing and validated only on commit. Stepping uses adaptive decimal increments.
+  - *Interactive / Manual mode* — Sub-tabs with draggable plot regions expose a
+    mode selector. In **Interactive** mode the time-window spinboxes are read-only
+    (their values are driven by the plot regions); switching to **Manual** mode
+    unlocks all spinboxes for direct entry.
+  - *Conditional visibility* — Parameters that are irrelevant for the current
+    clamp mode, analysis type, or detection method are hidden automatically.
 - **Interactive Plot**
   - *Draggable Regions* — Color-coded overlays (blue = baseline, red = response,
     orange = peak, green = steady-state) bidirectionally linked to parameter boxes.
@@ -396,14 +405,19 @@ Computes passive membrane input resistance from step protocols.
 | Current Amplitude | float (pA) | CC mode step (hidden in VC) |
 | Voltage Step | float (mV) | VC mode step (hidden in CC) |
 | Auto Detect Pulse | bool | Derivative-based pulse edge detection |
-| Baseline Start / End | float (s) | Baseline window |
-| Response Start / End | float (s) | Steady-state window |
+| Baseline Start / End | float (s) | Baseline window (read-only in Interactive mode) |
+| Response Start / End | float (s) | Steady-state window (read-only in Interactive mode) |
 
 #### Methods
 
 - Ohm's Law: Rin (MΩ) = |ΔV| / |ΔI|, where ΔV = V_ss − V_baseline.
 - Conductance: G (μS) = ΔI / ΔV.
-- Auto-detection uses the derivative of the stimulus channel to find step edges.
+- **Auto-detection** uses the first and second derivatives of the stimulus channel
+  to locate step edges. The detected windows are validated for adequacy (≥ 2
+  samples each); if validation fails (e.g. the trace contains action potentials
+  that mislead the derivative search), the analysis transparently falls back to
+  the user-specified spinbox values. After a successful run, the spinboxes are
+  updated to reflect the windows actually used.
 
 #### Results
 
@@ -585,26 +599,56 @@ Popup F-I scatter with regression line and slope annotation.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | TTL Threshold | float (V) | Binarize threshold for TTL channel |
-| Response Window | float (ms) | Post-stimulus spike search window |
+| Response Window | float (ms) | Post-stimulus event search window |
+| Event Detection Type | combo | `Spikes` / `Events (Threshold)` / `Events (Template)` |
+
+**Spike mode** (`Event Detection Type = Spikes`):
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
 | Spike Threshold | float (mV) | AP detection threshold |
+
+**Threshold-event mode** (`Event Detection Type = Events (Threshold)`):
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Event Threshold | float (same units as signal) | Amplitude threshold |
+| Event Direction | combo | `positive` / `negative` |
+| Refractory Period | float (s) | Minimum inter-event interval |
+
+**Template mode** (`Event Detection Type = Events (Template)`):
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Rise Tau | float (ms) | Double-exponential template rise time constant |
+| Decay Tau | float (ms) | Double-exponential template decay time constant |
+| Template Threshold | float (SD) | Detection threshold in units of template SD |
+| Template Direction | combo | `positive` / `negative` |
+
+Parameters for the inactive detection modes are hidden automatically.
 
 #### Methods
 
 1. TTL edge detection: binarize → `numpy.diff` for rising edges.
-   Auto-threshold applied if specified value fails.
-2. Per-stimulus: detect first AP within response window.
-3. Optical latency = mean(t_spike − t_onset).
-4. Response probability = stimuli_with_spikes / total_stimuli.
+2. For each stimulus onset, the response window is searched for an event using
+   the selected detection method:
+   - **Spikes** — threshold-crossing AP detection with refractory filtering.
+   - **Events (Threshold)** — prominence-based threshold crossing with direction
+     and refractory filtering (`detect_events_threshold`).
+   - **Events (Template)** — double-exponential template deconvolution
+     (`detect_events_template`).
+3. Optical latency = mean(t_event − t_onset).
+4. Response probability = stimuli_with_events / total_stimuli.
 5. Jitter = std(latencies).
 
 #### Results
 
 `optical_latency_ms`, `response_probability`, `spike_jitter_ms`,
-`stimulus_count`, `stimulus_onsets`
+`stimulus_count`, `event_count`, `stimulus_onsets`
 
 #### Visualization
 
-Spike markers on voltage trace; cyan dashed vertical lines at TTL onsets.
+Event markers on signal trace; cyan dashed vertical lines at TTL onsets.
 
 ---
 

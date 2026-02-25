@@ -637,11 +637,9 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         # Auto-detection logic
         if auto_detect_pulse:
             # Detect sharp transitions in voltage (proxy for current step start/end)
-            # A better way would be to use the stimulus trace if available, but here we only have voltage.
-            # We look for the largest derivatives.
+            # We look for the largest derivatives in a smoothed trace.
 
             # Smooth slightly to reduce noise
-            # simple moving average
             window_size = int(0.001 * sampling_rate)  # 1ms
             if window_size > 1:
                 kernel = np.ones(window_size) / window_size
@@ -663,24 +661,40 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                 start_idx = np.argmax(dv)
                 end_idx = start_idx + np.argmin(dv[start_idx:])
 
-            start_time = time[start_idx]
-            end_time = time[end_idx]
+            auto_start_time = time[start_idx]
+            auto_end_time = time[end_idx]
 
             # Define windows relative to pulse
             # Baseline: 100ms before pulse start
-            baseline_end = start_time - 0.005  # 5ms buffer
-            baseline_start = max(time[0], baseline_end - 0.1)
+            auto_baseline_end = auto_start_time - 0.005  # 5ms buffer
+            auto_baseline_start = max(time[0], auto_baseline_end - 0.1)
 
-            # Response: End of pulse (steady state)
-            # Take last 100ms of the pulse
-            response_end = end_time - 0.005  # 5ms buffer
-            response_start = max(start_time, response_end - 0.1)
+            # Response: End of pulse (steady state), last 100ms of the pulse
+            auto_response_end = auto_end_time - 0.005  # 5ms buffer
+            auto_response_start = max(auto_start_time, auto_response_end - 0.1)
 
-            log.debug(
-                f"Auto-detected pulse: Start={start_time:.3f}s, End={end_time:.3f}s. "
-                f"Baseline=[{baseline_start:.3f}, {baseline_end:.3f}], "
-                f"Response=[{response_start:.3f}, {response_end:.3f}]"
-            )
+            # Validate: ensure both windows contain at least a few samples
+            bl_mask = (time >= auto_baseline_start) & (time < auto_baseline_end)
+            resp_mask = (time >= auto_response_start) & (time < auto_response_end)
+            auto_windows_valid = np.sum(bl_mask) >= 2 and np.sum(resp_mask) >= 2
+
+            if auto_windows_valid:
+                baseline_start = auto_baseline_start
+                baseline_end = auto_baseline_end
+                response_start = auto_response_start
+                response_end = auto_response_end
+                log.debug(
+                    f"Auto-detected pulse: Start={auto_start_time:.3f}s, End={auto_end_time:.3f}s. "
+                    f"Baseline=[{baseline_start:.3f}, {baseline_end:.3f}], "
+                    f"Response=[{response_start:.3f}, {response_end:.3f}]"
+                )
+            else:
+                log.warning(
+                    "Auto-detected windows are empty "
+                    f"(baseline=[{auto_baseline_start:.3f}, {auto_baseline_end:.3f}], "
+                    f"response=[{auto_response_start:.3f}, {auto_response_end:.3f}]). "
+                    "Falling back to user-provided spinbox values."
+                )
 
         # Prepare params dict
         params = {
@@ -703,7 +717,7 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             )
 
         if result.is_valid and result.value is not None:
-            return {
+            out = {
                 "rin_mohm": result.value,
                 "conductance_us": result.conductance if result.conductance is not None else 0.0,
                 "voltage_deflection_mv": result.voltage_deflection if result.voltage_deflection is not None else 0.0,
@@ -714,6 +728,12 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                 ),
                 "auto_detected": auto_detect_pulse,
             }
+            # Emit the actual windows used so the GUI can sync spinboxes
+            out["_used_baseline_start"] = baseline_start
+            out["_used_baseline_end"] = baseline_end
+            out["_used_response_start"] = response_start
+            out["_used_response_end"] = response_end
+            return out
         else:
             return {"rin_mohm": None, "conductance_us": None, "rin_error": result.error_message or "Unknown error"}
 

@@ -59,6 +59,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._secondary_channel_combobox: Optional[QtWidgets.QComboBox] = None
         self._secondary_channel_param_name: Optional[str] = None
 
+        # --- Interactive region spinbox tracking: start_key -> end_key ---
+        self._region_spinbox_keys: Dict[str, str] = {}
+
         # --- Interactive event-marker state ---
         self._current_event_indices: List[int] = []
         self._event_markers_item: Optional[pg.ScatterPlotItem] = None
@@ -447,14 +450,22 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 start_w.valueChanged.connect(update_region)
                 end_w.valueChanged.connect(update_region)
 
-        bind_region("baseline_start_s", "baseline_end_s", (0, 0, 255))
-        bind_region("response_start_s", "response_end_s", (255, 0, 0))
-        bind_region("response_peak_start_s", "response_peak_end_s", (255, 165, 0))  # Orange
-        bind_region("response_steady_start_s", "response_steady_end_s", (0, 255, 0))  # Green
+        # Track pairs so _apply_region_mode can enable/disable them
+        self._region_spinbox_keys.clear()
+
+        def bind_region_tracked(start_key, end_key, color_tuple):
+            bind_region(start_key, end_key, color_tuple)
+            if start_key in widgets and end_key in widgets:
+                self._region_spinbox_keys[start_key] = end_key
+
+        bind_region_tracked("baseline_start_s", "baseline_end_s", (0, 0, 255))
+        bind_region_tracked("response_start_s", "response_end_s", (255, 0, 0))
+        bind_region_tracked("response_peak_start_s", "response_peak_end_s", (255, 165, 0))  # Orange
+        bind_region_tracked("response_steady_start_s", "response_steady_end_s", (0, 255, 0))  # Green
 
         # Also bind Rin-style param names (without _s suffix)
-        bind_region("baseline_start", "baseline_end", (0, 0, 255))
-        bind_region("response_start", "response_end", (255, 0, 0))
+        bind_region_tracked("baseline_start", "baseline_end", (0, 0, 255))
+        bind_region_tracked("response_start", "response_end", (255, 0, 0))
 
         # Apply region mode visibility
         self._apply_region_mode()
@@ -465,12 +476,24 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._on_param_changed()
 
     def _apply_region_mode(self):
-        """Show/hide interactive region items based on the current mode."""
+        """Show/hide interactive region items and enable/disable paired spinboxes."""
         if not self._region_mode_combo:
             return
         interactive = self._region_mode_combo.currentText() == "Interactive"
         for region in self._interactive_regions.values():
             region.setVisible(interactive)
+        # In Interactive mode the draggable regions control the spinboxes,
+        # so disable direct editing of them to avoid confusion.
+        widgets = self.param_generator.widgets if hasattr(self, "param_generator") else {}
+        for start_key, end_key in self._region_spinbox_keys.items():
+            for key in (start_key, end_key):
+                w = widgets.get(key)
+                if w is not None:
+                    # QDoubleSpinBox: setReadOnly exists
+                    if hasattr(w, "setReadOnly"):
+                        w.setReadOnly(interactive)
+                    else:
+                        w.setEnabled(not interactive)
 
     # ------------------------------------------------------------------
     # Interactive event-marker helpers
@@ -722,6 +745,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _on_param_changed(self):
         """Handle parameter changes."""
+        # Re-evaluate visibility in case a choice/bool param controls others
+        if hasattr(self, "param_generator"):
+            self._update_parameter_visibility()
         if self._analysis_debounce_timer:
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
@@ -890,6 +916,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             display_items = []
             for k, v in items:
                 try:
+                    # Skip internal/private keys (prefixed with _)
+                    if str(k).startswith("_"):
+                        continue
+
                     # Sanitize Key
                     key_str = str(k).replace("_", " ").title()
 
@@ -925,6 +955,28 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             log.error(f"Error displaying results: {e}")
             # Fallback to simple popup if table fails
             self.results_table.setRowCount(1)
+
+        # --- Sync Rin spinboxes if auto-detect was used and returned window values ---
+        if isinstance(results, dict) and results.get("auto_detected") and hasattr(self, "param_generator"):
+            spinbox_map = {
+                "_used_baseline_start": "baseline_start",
+                "_used_baseline_end": "baseline_end",
+                "_used_response_start": "response_start",
+                "_used_response_end": "response_end",
+            }
+            widgets = self.param_generator.widgets
+            for result_key, param_key in spinbox_map.items():
+                val = results.get(result_key)
+                if val is not None and param_key in widgets:
+                    w = widgets[param_key]
+                    was_read_only = getattr(w, "isReadOnly", lambda: False)()
+                    if was_read_only and hasattr(w, "setReadOnly"):
+                        w.setReadOnly(False)
+                    blocked = w.blockSignals(True)
+                    w.setValue(val)
+                    w.blockSignals(blocked)
+                    if was_read_only and hasattr(w, "setReadOnly"):
+                        w.setReadOnly(True)
 
     def _plot_analysis_visualizations(self, results: Dict[str, Any]):  # noqa: C901
         """
