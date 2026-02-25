@@ -160,73 +160,77 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             except Exception:
                 pass
 
-    def _close_all_plots(self):
-        """Call PlotItem.close() while each item is still in the scene.
+    # Exact (ctrl_widget_attr, signal_name, plotitem_slot_name) triples
+    # from PlotItem.__init__ (pyqtgraph 0.13.x lines 119, 213-239).
+    # Used by _disconnect_ctrl_signals() to break the C++ signal-table ->
+    # Python bound-method -> PlotItem reference cycles without warnings.
+    _CTRL_CONNECTIONS = (
+        ('alphaGroup', 'toggled', 'updateAlpha'),
+        ('alphaSlider', 'valueChanged', 'updateAlpha'),
+        ('autoAlphaCheck', 'toggled', 'updateAlpha'),
+        ('xGridCheck', 'toggled', 'updateGrid'),
+        ('yGridCheck', 'toggled', 'updateGrid'),
+        ('gridAlphaSlider', 'valueChanged', 'updateGrid'),
+        ('fftCheck', 'toggled', 'updateSpectrumMode'),
+        ('logXCheck', 'toggled', 'updateLogMode'),
+        ('logYCheck', 'toggled', 'updateLogMode'),
+        ('derivativeCheck', 'toggled', 'updateDerivativeMode'),
+        ('phasemapCheck', 'toggled', 'updatePhasemapMode'),
+        ('downsampleSpin', 'valueChanged', 'updateDownsampling'),
+        ('downsampleCheck', 'toggled', 'updateDownsampling'),
+        ('autoDownsampleCheck', 'toggled', 'updateDownsampling'),
+        ('subsampleRadio', 'toggled', 'updateDownsampling'),
+        ('meanRadio', 'toggled', 'updateDownsampling'),
+        ('clipToViewCheck', 'toggled', 'updateDownsampling'),
+        ('avgParamList', 'itemClicked', 'avgParamListClicked'),
+        ('averageGroup', 'toggled', 'avgToggled'),
+        ('maxTracesCheck', 'toggled', '_handle_max_traces_toggle'),
+        ('forgetTracesCheck', 'toggled', 'updateDecimation'),
+        ('maxTracesSpin', 'valueChanged', 'updateDecimation'),
+    )
 
-        PlotItem.close() is pyqtgraph's own teardown method.  It:
-          - removes ctrlMenu and autoBtn from their Qt parent (breaking Qt
-            parent-child ownership for those widgets)
-          - removes the ViewBox from the scene
-          - nulls self.vb, self.autoBtn, self.ctrlMenu
+    @staticmethod
+    def _disconnect_ctrl_signals(plot_item):
+        """Disconnect PlotItem ctrl-widget signals to break reference cycles.
 
-        Critically, the ctrl QWidget (ui_template widgets: averageGroup,
-        alphaGroup, etc.) holds Qt signal connections whose C++ connection
-        table keeps a Py_INCREF'd bound-method reference to PlotItem
-        (e.g. averageGroup.toggled → PlotItem.avgToggled).  This forms a
-        Python/C++ reference cycle that gc.disable() prevents from being
-        broken automatically.
-
-        We explicitly disconnect these ctrl signals here (all connections
-        via .disconnect() with no args) so that the C++ signal table
-        releases its Python bound-method references, breaking the cycle.
-        After this step PlotItem's refcount reaches zero as soon as
-        plot_items.clear() drops the last Python ref, and no gc.collect()
-        is needed.
-
-        This must be called while each PlotItem still has a valid scene()
-        (i.e. before widget.clear()), because PlotItem.close() calls
-        self.scene().removeItem(self.vb) internally.
+        Each entry in _CTRL_CONNECTIONS is (widget_attr, signal_name,
+        slot_method_name).  We call signal.disconnect(slot) with the specific
+        bound method rather than signal.disconnect() (no args) so that Qt
+        does NOT emit a qWarning when the connection does not exist — the
+        specific-slot form raises RuntimeError silently instead.
         """
-        _ctrl_signals = [
-            'alphaGroup', 'alphaSlider', 'autoAlphaCheck',
-            'xGridCheck', 'yGridCheck', 'gridAlphaSlider',
-            'fftCheck', 'logXCheck', 'logYCheck',
-            'derivativeCheck', 'phasemapCheck',
-            'downsampleSpin', 'downsampleCheck', 'autoDownsampleCheck',
-            'subsampleRadio', 'meanRadio', 'clipToViewCheck',
-            'avgParamList', 'averageGroup',
-            'maxTracesCheck', 'forgetTracesCheck', 'maxTracesSpin',
-        ]
+        ctrl = getattr(plot_item, 'ctrl', None)
+        if ctrl is None:
+            return
+        for widget_attr, sig_name, method_name in \
+                SynaptipyPlotCanvas._CTRL_CONNECTIONS:
+            widget = getattr(ctrl, widget_attr, None)
+            if widget is None:
+                continue
+            sig = getattr(widget, sig_name, None)
+            slot = getattr(plot_item, method_name, None)
+            if sig is not None and slot is not None:
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
+        # autoBtn.clicked → autoBtnClicked (line 119 of PlotItem.__init__)
+        try:
+            btn = getattr(plot_item, 'autoBtn', None)
+            if btn is not None:
+                btn.clicked.disconnect(plot_item.autoBtnClicked)
+        except (RuntimeError, TypeError, AttributeError):
+            pass
+
+    def _close_all_plots(self):
+        """Disconnect ctrl signals and call PlotItem.close() for every plot.
+
+        Must be called while items still have a valid scene() because
+        PlotItem.close() internally calls scene().removeItem(self.vb).
+        """
         for plot_item in list(self.plot_items.values()):
             try:
-                # Disconnect all ctrl widget signals to break the
-                # C++ connection-table → Python bound-method reference cycles.
-                ctrl = getattr(plot_item, 'ctrl', None)
-                if ctrl is not None:
-                    for attr in _ctrl_signals:
-                        widget = getattr(ctrl, attr, None)
-                        if widget is None:
-                            continue
-                        # Each widget may have multiple signals; disconnect all
-                        # signals that have Python connections to PlotItem.
-                        for sig_name in ('toggled', 'valueChanged',
-                                         'itemClicked', 'clicked',
-                                         'currentIndexChanged'):
-                            try:
-                                sig = getattr(widget, sig_name, None)
-                                if sig is not None:
-                                    sig.disconnect()
-                            except (RuntimeError, TypeError):
-                                # RuntimeError: no connections; TypeError: already invalid
-                                pass
-                    # autoBtn has a clicked signal connected to autoBtnClicked
-                    try:
-                        if plot_item.autoBtn is not None:
-                            plot_item.autoBtn.clicked.disconnect()
-                    except (RuntimeError, TypeError, AttributeError):
-                        pass
-                # Call pyqtgraph's own close() to detach ctrlMenu, autoBtn,
-                # and remove vb from the scene.
+                self._disconnect_ctrl_signals(plot_item)
                 plot_item.close()
             except Exception:
                 pass
