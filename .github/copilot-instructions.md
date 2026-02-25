@@ -34,19 +34,34 @@ conda run -n synaptipy python -m pytest tests/ 2>&1 | grep "FAILED\|ERROR "
 `tp_dealloc` while Qt's C++ destructor chain is running, causing SIGBUS /
 access violations.
 
-### processEvents() before addPlot() in offscreen mode
+### processEvents() before addPlot() — Windows/Linux offscreen only
 `SynaptipyPlotCanvas.add_plot()` calls `QCoreApplication.processEvents()`
-before `widget.addPlot()` when offscreen.  Do not remove this.  On Windows +
+before `widget.addPlot()` when `QT_QPA_PLATFORM=offscreen` **and**
+`sys.platform != 'darwin'`.  Do not remove either condition.  On Windows +
 PySide6 ≥ 6.9 deferred callbacks pending from a prior `widget.clear()` fire
 *inside* `PlotItem.__init__()`, dereference freed C++ pointers, and silently
-kill the test worker process.
+kill the test worker process.  On macOS `_unlink_all_plots()` + `_close_all_plots()`
+disconnect all signals before `widget.clear()` so no stale callbacks queue up;
+calling `processEvents()` there would instead execute post-`widget.clear()`
+callbacks that reference freed C++ ViewBox objects → SIGSEGV.
 
-### removePostedEvents() must skip macOS
-Both the global conftest drain fixture and the per-file drain in
-`test_explorer_refactor.py` guard `removePostedEvents(None, 0)` with
-`if sys.platform != 'darwin': return`.  On macOS this call discards pyqtgraph
-internal events needed to maintain `AllViews` / geometry caches, corrupting
-session-scoped widget state and causing segfaults in `widget.clear()`.
+### Drain fixtures use processEvents(), not removePostedEvents() — skip macOS
+All per-test drain fixtures (global conftest, `test_explorer_refactor.py`,
+`test_plot_canvas.py`) call `QCoreApplication.processEvents()` (not
+`removePostedEvents(None, 0)`) and guard with `if sys.platform != 'darwin': return`.
+
+**Why processEvents not removePostedEvents?**  *Discarding* callbacks with
+`removePostedEvents` leaves ViewBox in a "dirty" state — it believes a geometry
+recalculation is pending.  Subsequent `setXLink(None)` or `widget.clear()` calls
+then try to flush that state and crash (access-violation on Windows, SIGSEGV on
+macOS).  *Executing* them with `processEvents()` is safe at post-test teardown
+time because all C++ Qt objects are still alive.
+
+**Why skip macOS?**  On macOS, pyqtgraph posts events between tests that maintain
+`AllViews` / geometry caches.  Executing them with `processEvents()` can fire
+post-`widget.clear()` callbacks that reference freed C++ ViewBox objects → SIGSEGV.
+On macOS the `_unlink_all_plots()` + `_close_all_plots()` teardown order prevents
+signal cascades during `widget.clear()` entirely.
 
 ### enableMenu=False in offscreen mode
 `add_plot()` passes `enableMenu=False` to `widget.addPlot()` when offscreen.
