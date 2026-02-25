@@ -18,6 +18,7 @@ import numpy as np
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.results import AnalysisResult
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.analysis.event_detection import detect_events_threshold, detect_events_template
 
 log = logging.getLogger(__name__)
 
@@ -221,9 +222,9 @@ def calculate_optogenetic_sync(
             "type": "float",
             "label": "TTL Threshold (V)",
             "default": 2.5,
-            "min": 0.1,
-            "max": 10.0,
-            "step": 0.1,
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 4,
             "tooltip": "Voltage threshold to define stimulus ON state."
         },
         {
@@ -231,23 +232,107 @@ def calculate_optogenetic_sync(
             "type": "float",
             "label": "Response Window (ms)",
             "default": 20.0,
-            "min": 1.0,
-            "max": 1000.0,
-            "step": 1.0,
-            "tooltip": "Time window after stimulus onset to search for action potentials."
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 2,
+            "tooltip": "Time window after stimulus onset to search for events."
         },
+        # ── Event type selector ──────────────────────────────────────────
+        {
+            "name": "event_detection_type",
+            "type": "choice",
+            "label": "Event Type:",
+            "choices": ["Spikes", "Events (Threshold)", "Events (Template)"],
+            "default": "Spikes",
+            "tooltip": (
+                "Spikes: detect action potentials by threshold crossing.\n"
+                "Events (Threshold): detect synaptic events by adaptive prominence.\n"
+                "Events (Template): detect events by template/matched-filter."
+            ),
+        },
+        # ── Spike-detection params (visible only when Spikes is chosen) ─
         {
             "name": "spike_threshold",
             "type": "float",
             "label": "AP Threshold (mV)",
             "default": 0.0,
-            "min": -50.0,
-            "max": 50.0,
-            "step": 1.0,
-            "tooltip": "Voltage crossing threshold to detect action potentials if they are not pre-calculated."
-        }
+            "min": -1e9,
+            "max": 1e9,
+            "decimals": 2,
+            "tooltip": "Voltage threshold to detect action potentials.",
+            "visible_when": {"param": "event_detection_type", "value": "Spikes"},
+        },
+        # ── Event-threshold params (visible when Events (Threshold)) ────
+        {
+            "name": "event_threshold",
+            "type": "float",
+            "label": "Event Threshold (pA/mV)",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Prominence threshold for event detection.",
+            "visible_when": {"param": "event_detection_type", "value": "Events (Threshold)"},
+        },
+        {
+            "name": "event_direction",
+            "type": "choice",
+            "label": "Event Direction:",
+            "choices": ["negative", "positive"],
+            "default": "negative",
+            "visible_when": {"param": "event_detection_type", "value": "Events (Threshold)"},
+        },
+        {
+            "name": "event_refractory_s",
+            "type": "float",
+            "label": "Refractory (s)",
+            "default": 0.002,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 4,
+            "visible_when": {"param": "event_detection_type", "value": "Events (Threshold)"},
+        },
+        # ── Template params (visible when Events (Template)) ────────────
+        {
+            "name": "template_tau_rise_ms",
+            "type": "float",
+            "label": "Tau Rise (ms)",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 3,
+            "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
+        },
+        {
+            "name": "template_tau_decay_ms",
+            "type": "float",
+            "label": "Tau Decay (ms)",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 3,
+            "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
+        },
+        {
+            "name": "template_threshold_sd",
+            "type": "float",
+            "label": "Template Threshold (SD)",
+            "default": 4.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 2,
+            "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
+        },
+        {
+            "name": "template_direction",
+            "type": "choice",
+            "label": "Template Direction:",
+            "choices": ["negative", "positive"],
+            "default": "negative",
+            "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
+        },
     ],
-    # Adding visualization metadata to help the generic tab
+    # Visualization metadata
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
         {
@@ -261,51 +346,88 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
     """
     Wrapper for optogenetic synchronization analysis.
 
-    Correlates TTL/optical stimulus pulses with detected action potentials.
+    Correlates TTL/optical stimulus pulses with detected events.  The
+    type of event detection is controlled by ``event_detection_type``:
 
-    When ``data`` is the voltage trace, spikes are detected automatically
-    using a threshold-crossing algorithm.  TTL timestamps should be
-    supplied via the ``ttl_data`` keyword argument (a separate digital
-    channel).  If ``ttl_data`` is not provided, the voltage trace itself
-    is used as a fallback — this is only valid when the trace contains
-    large optical artifacts exceeding ``ttl_threshold``.
+    * ``"Spikes"`` — action potentials via threshold crossing.
+    * ``"Events (Threshold)"`` — synaptic events via adaptive prominence.
+    * ``"Events (Template)"`` — events via matched-filter (template).
 
     Args:
         data: 1-D array of the selected channel signal (typically voltage).
         time: Corresponding time vector (seconds).
         sampling_rate: Sampling rate in Hz.
-        **kwargs: Optional keys include ``ttl_threshold``,
-            ``response_window_ms``, ``spike_threshold``,
-            ``action_potential_times``, and ``ttl_data``.
+        **kwargs: See ``ui_params`` in the registration decorator.
 
     Returns:
         dict with ``optical_latency_ms``, ``response_probability``,
         ``spike_jitter_ms``, ``stimulus_count``; or ``error`` on failure.
     """
-
     ttl_threshold = kwargs.get("ttl_threshold", 2.5)
     response_window_ms = kwargs.get("response_window_ms", 20.0)
-    ap_threshold = kwargs.get("spike_threshold", 0.0)
+    event_detection_type = kwargs.get("event_detection_type", "Spikes")
 
-    # We need AP times. If they aren't provided in kwargs, we detect them from 'data'
-    # assuming 'data' is the voltage trace.
+    # ------------------------------------------------------------------
+    # 1. Detect events/spikes from the primary channel
+    # ------------------------------------------------------------------
     ap_times = kwargs.get("action_potential_times", None)
+
     if ap_times is None:
-        # Detect spikes using proper threshold + refractory period method
-        refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms refractory
-        spike_result = detect_spikes_threshold(
-            data, time, threshold=ap_threshold,
-            refractory_samples=refractory_samples
-        )
-        has_spikes = (
-            spike_result.spike_indices is not None
-            and len(spike_result.spike_indices) > 0
-        )
-        ap_times = time[spike_result.spike_indices] if has_spikes else np.array([])
+        if event_detection_type == "Spikes":
+            ap_threshold = kwargs.get("spike_threshold", 0.0)
+            refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms
+            spike_result = detect_spikes_threshold(
+                data, time, threshold=ap_threshold,
+                refractory_samples=refractory_samples
+            )
+            has_spikes = (
+                spike_result.spike_indices is not None
+                and len(spike_result.spike_indices) > 0
+            )
+            ap_times = time[spike_result.spike_indices] if has_spikes else np.array([])
 
-    # We need TTL data. This should be a separate digital/trigger channel.
+        elif event_detection_type == "Events (Threshold)":
+            ev_threshold = kwargs.get("event_threshold", 5.0)
+            direction = kwargs.get("event_direction", "negative")
+            refractory = kwargs.get("event_refractory_s", 0.002)
+            ev_result = detect_events_threshold(
+                data, time,
+                threshold=ev_threshold,
+                polarity=direction,
+                refractory_period=refractory,
+            )
+            if ev_result.is_valid and ev_result.event_times is not None and len(ev_result.event_times) > 0:
+                ap_times = ev_result.event_times
+            else:
+                ap_times = np.array([])
+
+        elif event_detection_type == "Events (Template)":
+            tau_rise = kwargs.get("template_tau_rise_ms", 0.5) / 1000.0   # ms → s
+            tau_decay = kwargs.get("template_tau_decay_ms", 5.0) / 1000.0  # ms → s
+            threshold_sd = kwargs.get("template_threshold_sd", 4.0)
+            direction = kwargs.get("template_direction", "negative")
+            ev_result = detect_events_template(
+                data=data,
+                sampling_rate=sampling_rate,
+                threshold_std=threshold_sd,
+                tau_rise=tau_rise,
+                tau_decay=tau_decay,
+                polarity=direction,
+                time=time,
+            )
+            if ev_result.is_valid and ev_result.event_times is not None and len(ev_result.event_times) > 0:
+                ap_times = ev_result.event_times
+            else:
+                ap_times = np.array([])
+
+        else:
+            ap_times = np.array([])
+            log.warning("Unknown event_detection_type '%s'; defaulting to no events.", event_detection_type)
+
+    # ------------------------------------------------------------------
+    # 2. TTL / optical stimulus data
+    # ------------------------------------------------------------------
     ttl_data = kwargs.get("ttl_data", None)
-
     if ttl_data is None:
         log.warning(
             "No TTL data provided. Using the voltage trace as a fallback for "
@@ -315,6 +437,9 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         )
         ttl_data = data
 
+    # ------------------------------------------------------------------
+    # 3. Core synchronisation analysis
+    # ------------------------------------------------------------------
     result = calculate_optogenetic_sync(
         ttl_data=ttl_data,
         action_potential_times=ap_times,
@@ -331,6 +456,7 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         "response_probability": result.response_probability,
         "spike_jitter_ms": result.spike_jitter_ms,
         "stimulus_count": result.stimulus_count,
+        "event_count": len(ap_times),
         "stimulus_onsets": (
             result.stimulus_onsets.tolist()
             if result.stimulus_onsets is not None

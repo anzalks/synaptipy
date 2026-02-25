@@ -5,9 +5,46 @@ Helper module to generate UI widgets from metadata parameters.
 """
 import logging
 from typing import Dict, Any, List, Optional
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 
 log = logging.getLogger(__name__)
+
+
+class FlexibleDoubleSpinBox(QtWidgets.QDoubleSpinBox):
+    """
+    A QDoubleSpinBox that allows truly free-form numeric entry.
+
+    Standard QDoubleSpinBox rejects intermediate text states during editing
+    (e.g. clearing the field, typing a lone "-", or entering more decimal
+    places than `decimals`).  This subclass relaxes the validator so users
+    can freely type a value and have it committed on focus-out / Enter.
+    Adaptive decimal step-type is enabled so the arrow-key increment
+    matches the magnitude of the current value.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStepType(QtWidgets.QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
+
+    # ------------------------------------------------------------------
+    # Relax the validator so partial / intermediate text is not rejected
+    # ------------------------------------------------------------------
+
+    def validate(self, text: str, pos: int):
+        """Allow empty, lone sign, or lone decimal point as intermediate states."""
+        stripped = text.strip()
+        if stripped in ("", "-", "+", ".", "-.", "+."):
+            return (QtGui.QValidator.State.Intermediate, text, pos)
+        return super().validate(text, pos)
+
+    def fixup(self, text: str) -> str:
+        """On invalid committed text keep the current value rather than snapping to minimum."""
+        try:
+            val = float(text)
+            clamped = max(self.minimum(), min(self.maximum(), val))
+            return f"{clamped:.{self.decimals()}f}"
+        except (ValueError, TypeError):
+            return f"{self.value():.{self.decimals()}f}"
 
 
 class ParameterWidgetGenerator:
@@ -67,12 +104,11 @@ class ParameterWidgetGenerator:
         widget = None
 
         if param_type == "float":
-            widget = QtWidgets.QDoubleSpinBox()
+            widget = FlexibleDoubleSpinBox()
             # Use a very wide range by default to avoid restricting the user
             widget.setRange(param.get("min", -1e9), param.get("max", 1e9))
             widget.setDecimals(param.get("decimals", 4))
             widget.setValue(param.get("default", 0.0))
-            widget.setSingleStep(10 ** (-param.get("decimals", 4)))
             widget.valueChanged.connect(self._on_param_changed)
 
         elif param_type == "int":
@@ -117,27 +153,44 @@ class ParameterWidgetGenerator:
         Update widget visibility based on context.
 
         Args:
-            context: Dictionary of current context variables (e.g., {"clamp_mode": "voltage_clamp"})
+            context: Dictionary of current context variables
+                     (e.g. ``{"clamp_mode": "voltage_clamp"}``).
+                     In addition, the current values of all parameter
+                     widgets are automatically merged in so that
+                     ``visible_when: {param: "event_type", value: "Events"}``
+                     works without extra plumbing.
         """
+        # Augment fixed context with live widget values
+        live_context: Dict[str, Any] = dict(context)
+        for wname, w in self.widgets.items():
+            if isinstance(w, QtWidgets.QComboBox):
+                live_context[wname] = w.currentText()
+            elif isinstance(w, (QtWidgets.QDoubleSpinBox, QtWidgets.QSpinBox)):
+                live_context[wname] = w.value()
+            elif isinstance(w, QtWidgets.QCheckBox):
+                live_context[wname] = w.isChecked()
+
         for name, info in self.visibility_map.items():
             rule = info["rule"]
             widget = info["widget"]
 
-            # Simple equality check for now
-            # rule format: {"context": "key", "value": "expected_value"}
-            context_key = rule.get("context")
+            # Support both "context" key (fixed context var) and "param" key
+            # (another param widget's live value); "context" takes precedence.
+            context_key = rule.get("context") or rule.get("param")
             expected_value = rule.get("value")
 
-            if context_key and context_key in context:
-                is_visible = context[context_key] == expected_value
+            if context_key and context_key in live_context:
+                is_visible = live_context[context_key] == expected_value
+            else:
+                continue  # rule cannot be evaluated — leave as-is
 
-                # Use FormLayout to hide the row (Label + Widget)
-                if isinstance(self.layout, QtWidgets.QFormLayout):
-                    self.layout.setRowVisible(widget, is_visible)
-                else:
-                    widget.setVisible(is_visible)
-                    if info["label"]:
-                        info["label"].setVisible(is_visible)
+            # Use FormLayout to hide the row (Label + Widget)
+            if isinstance(self.layout, QtWidgets.QFormLayout):
+                self.layout.setRowVisible(widget, is_visible)
+            else:
+                widget.setVisible(is_visible)
+                if info["label"]:
+                    info["label"].setVisible(is_visible)
 
     def _on_param_changed(self):
         """Trigger registered callbacks."""

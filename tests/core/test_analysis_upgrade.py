@@ -157,3 +157,46 @@ def test_auto_windowing_rin():
     # Check if calculated Rin is reasonable
     # V = -10 mV, I = -50 pA. R = V/I = -10 / -0.05 nA = 200 MOhm
     assert np.isclose(result["rin_mohm"], 200.0, atol=1.0)
+    # Returned used-window keys should be present
+    assert "_used_baseline_start" in result
+    assert "_used_response_start" in result
+
+
+def test_auto_windowing_rin_fallback_to_spinbox_values():
+    """When auto-detect cannot compute valid windows, it falls back to the user-provided values."""
+    # Pathological trace: constant zero → dv = 0 everywhere, so argmin/argmax
+    # both land at index 0, making response_end < start → empty windows.
+    # The wrapper must then silently fall back to the provided start/end kwargs.
+    t = np.linspace(0, 1, 1000)
+    data = np.zeros_like(t)
+
+    # Provide explicit valid windows via kwargs (simulating the spinbox values)
+    result = run_rin_analysis_wrapper(
+        data, t, 1000.0,
+        current_amplitude=-50.0,
+        auto_detect_pulse=True,
+        baseline_start=0.0,
+        baseline_end=0.1,
+        response_start=0.9,
+        response_end=1.0,
+    )
+
+    # All-zero trace → delta_v = 0, but no "No data in windows" error
+    assert result.get("rin_error") != "No data in windows", (
+        "Fallback windows should avoid the 'No data in windows' error"
+    )
+    # Rin = 0 / 0.05 = 0, which is technically valid (zero deflection)
+    # The wrapper may return rin_mohm = 0 or None; what matters is no window error.
+
+
+def test_rin_auto_detect_returns_used_window_keys():
+    """Result dict includes _used_* keys when auto-detect succeeds."""
+    t = np.linspace(0, 1, 1000)
+    data = np.zeros_like(t)
+    data[300:700] = -10.0
+
+    result = run_rin_analysis_wrapper(data, t, 1000.0, current_amplitude=-50.0, auto_detect_pulse=True)
+
+    for key in ("_used_baseline_start", "_used_baseline_end", "_used_response_start", "_used_response_end"):
+        assert key in result, f"Expected '{key}' in result dict"
+        assert isinstance(result[key], float)

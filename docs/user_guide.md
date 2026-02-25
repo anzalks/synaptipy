@@ -20,6 +20,7 @@ This guide provides detailed instructions for installing, configuring, and using
 - [Using the Analyser Tab](#using-the-analyser-tab)
   - [Input Resistance/Conductance Analysis](#input-resistanceconductance-analysis)
   - [Baseline/RMP Analysis](#baselinermp-analysis)
+  - [Optogenetic Synchronization](#optogenetic-synchronization)
 - [Using the Exporter Tab](#using-the-exporter-tab)
   - [Exporting to NWB](#exporting-to-nwb)
   - [Exporting Analysis Results](#exporting-analysis-results)
@@ -148,18 +149,37 @@ For the full list of Neo-supported formats, see the
 
 ## Using the Analyser Tab
 
+All analysis sub-tabs share the following interface behaviours:
+
+- **Free-form numeric input** — Number fields accept freely typed values;
+  intermediate states (empty field, a lone minus sign, etc.) are tolerated while
+  typing. Stepping uses adaptive decimal increments.
+- **Interactive vs Manual mode** — Sub-tabs that have draggable plot regions
+  (e.g. Rin, Tau, Capacitance) expose a mode selector. In **Interactive** mode
+  the time-window spinboxes are read-only and driven by the plot regions.
+  Switching to **Manual** mode unlocks all spinboxes for direct entry.
+- **Conditional parameter visibility** — Parameters irrelevant to the current
+  clamp mode or analysis type are hidden automatically.
+
 ### Input Resistance/Conductance Analysis
 
 1. Select data for analysis from the Explorer tab
-2. Switch to the Analyser tab and select "Resistance/Conductance" sub-tab
+2. Switch to the Analyser tab and select the *Input Resistance* sub-tab
 3. Choose analysis mode:
-   - **Interactive Mode**: Drag the baseline and response regions directly on the plot
-   - **Manual Mode**: Enter specific time windows for baseline and response
-4. Results will be displayed showing:
+   - **Interactive Mode**: Drag the blue (baseline) and red (response) regions
+     on the plot — the time-window spinboxes update in real time and become
+     read-only
+   - **Manual Mode**: Unlock the spinboxes and type time windows directly
+4. Enable **Auto Detect Pulse** to let the analysis locate step edges
+   automatically from the stimulus derivative. If auto-detection produces
+   invalid windows (e.g. due to action potentials in the trace), the analysis
+   falls back to the current spinbox values and updates the spinboxes
+   to reflect the windows actually used
+5. Results will be displayed showing:
    - Input resistance in MΩ
    - Conductance in μS
    - Voltage and current changes
-5. Click "Save Result" to store the analysis for later export
+6. Click "Save Result" to store the analysis for later export
 
 ### Baseline/RMP Analysis
 
@@ -170,6 +190,27 @@ For the full list of Neo-supported formats, see the
    - **Median**: Uses the median (more robust to outliers)
 4. Results will display the baseline value and variability metrics
 5. Save results as needed
+
+### Optogenetic Synchronization
+
+1. Load a recording that contains a TTL/digital stimulus channel alongside the
+   signal channel
+2. Switch to the *Optogenetic Synchronization* sub-tab in the Analyser
+3. Select the TTL channel from the channel selector and set the **TTL Threshold**
+   voltage used to binarise the stimulus signal
+4. Choose the **Event Detection Type**:
+   - **Spikes** — threshold-crossing AP detection; set the **Spike Threshold** (mV)
+   - **Events (Threshold)** — prominence-based threshold event detection; set
+     **Event Threshold**, **Event Direction**, and **Refractory Period**
+   - **Events (Template)** — double-exponential template matching; set
+     **Rise Tau**, **Decay Tau**, **Template Threshold** (SD), and
+     **Template Direction**
+   Only the parameters relevant to the selected detection mode are shown.
+5. Set the **Response Window** (ms) to define how far after each TTL onset
+   to search for an event
+6. Results include optical latency, response probability, jitter, stimulus
+   count, and event count
+7. Click "Save Result" to store for later export
 
 ## Using the Exporter Tab
 
