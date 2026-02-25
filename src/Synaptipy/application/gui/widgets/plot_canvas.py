@@ -5,6 +5,7 @@ Unified Plot Canvas Base Class.
 Wraps PyQtGraph's GraphicsLayoutWidget with standard Synaptipy configuration.
 """
 import logging
+import gc
 import os
 import sys
 from typing import Dict, Optional
@@ -161,7 +162,24 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 pass
 
     def _cancel_pending_qt_events(self):
-        """Discard stale posted events BEFORE C++ object teardown (Win/Linux)."""
+        """Discard stale posted events BEFORE C++ object teardown (Win/Linux).
+
+        Also runs gc.collect() on Win/Linux to free reference-cycle-trapped
+        PySide6 wrappers from prior rebuilds.  With gc.disable() active (set
+        in pytest_configure for offscreen mode), cyclic garbage accumulates
+        across tests.  Zombie wrappers appear in Qt's internal connection
+        tables; when the next PlotItem.__init__ connects a signal it hits
+        these stale entries and crashes.  gc.collect() frees the cycles while
+        all current C++ objects are still alive (safe), then removePostedEvents
+        discards any DeferredDelete events the finalizers posted.
+
+        macOS is excluded: gc.collect() races with PySide6 tp_dealloc during
+        Qt's C++ destructor chain on macOS PySide6 >= 6.7 -> SIGBUS.
+        The _unlink_all_plots() step handles macOS crash prevention instead.
+        """
+        if sys.platform == 'darwin':
+            return
+        gc.collect()
         self._remove_posted_events()
 
     def _flush_qt_registry(self):
