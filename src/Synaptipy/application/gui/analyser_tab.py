@@ -364,7 +364,7 @@ class AnalyserTab(QtWidgets.QWidget):
 
             for finder, name, ispkg in modules_found:
                 log.debug(f"Processing module: name='{name}', ispkg={ispkg}")  # Log each module attempt
-                if not ispkg and name != "base":
+                if not ispkg and name not in ("base", "metadata_driven"):
                     module_name = f"{analysis_module_prefix}{name}"
                     log.debug(f"Attempting to import module: {module_name}")  # Log before import
                     try:
