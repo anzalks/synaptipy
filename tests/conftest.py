@@ -4,42 +4,84 @@ import pytest
 import gc
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _disable_gc_in_offscreen():
-    """Disable Python GC for the entire session when running headless.
+def pytest_configure(config):
+    """Apply critical patches and GC settings before any fixture runs.
 
-    In offscreen / CI mode pyqtgraph queues deferred C++ destructors that
-    rely on the Qt event loop.  Python's cyclic GC can trigger tp_dealloc
-    for PySide6 wrapper objects at any point -- including inside Qt signal
-    handlers -- which races with the C++ finalisation sequence and causes
-    SIGBUS on macOS and access-violations on Windows.
+    1. Disable cyclic GC in offscreen mode.
+       Python's GC can trigger tp_dealloc on PySide6 wrapper objects while
+       Qt's own C++ destructor chain is still running, causing SIGBUS on
+       macOS and access-violations on Windows.  With GC disabled, objects
+       are only freed when their refcount hits zero -- deterministic and safe.
 
-    gc.disable() prevents that by ensuring Python wrappers are only
-    collected deterministically (refcount = 0), not by the cycle collector.
-    pytest_sessionfinish calls os._exit() so we never need to re-enable GC.
+    2. Patch pyqtgraph's ViewBoxMenu with a minimal QMenu subclass.
+       ViewBoxMenu.__init__ calls QShortcut/QAction APIs that crash PySide6
+       in headless/offscreen mode (no real display platform).  We replace it
+       with _SafeViewBoxMenu which:
+         - Is a real QMenu subclass  → has proper C++ backing
+         - Skips ViewBoxMenu's init  → never touches QShortcut/QAction
+         - Is safely destructible    → Qt's C++ destructor works correctly
+       MagicMock was used previously but has no C++ backing, so Qt's C++
+       ViewBox destructor would SIGBUS  macOS / AV Windows when running
+       widget.clear().
+       This hook fires before any conftest fixture or widget is constructed.
     """
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         gc.disable()
-    yield
+
+    _install_safe_viewbox_menu()
+
+
+def _install_safe_viewbox_menu():
+    """Monkey-patch ViewBoxMenu in the pyqtgraph module namespace.
+
+    Called once from pytest_configure (before any fixture / widget is created).
+    Safe to call multiple times -- only patches if not already patched.
+    """
+    try:
+        import pyqtgraph.graphicsItems.ViewBox.ViewBox as _vb_mod
+        from PySide6.QtWidgets import QMenu
+
+        if getattr(_vb_mod, '_synaptipy_menu_patched', False):
+            return  # Already patched this session
+
+        class _SafeViewBoxMenu(QMenu):
+            """Minimal ViewBoxMenu for headless test mode.
+
+            ViewBoxMenu inherits QMenu and on __init__ creates QShortcuts and
+            QActions that require a real display platform -- PySide6 crashes
+            in offscreen/CI mode.  This subclass inherits from QMenu directly
+            (giving it proper C++ backing so Qt can safely destruct it) but
+            skips all the problematic pyqtgraph setup.
+
+            The right-click menu is irrelevant for automated tests.
+            """
+            def __init__(self, view):
+                super().__init__()
+                self.view = view  # pyqtgraph may read vb.menu.view
+
+        _vb_mod.ViewBoxMenu = _SafeViewBoxMenu
+        _vb_mod._synaptipy_menu_patched = True
+    except Exception:
+        pass  # Non-fatal: tests will crash on first plot if this fails
 
 
 @pytest.fixture(autouse=True)
 def _drain_qt_events_after_test():
     """Global per-test drain of the Qt posted-event queue (Win/Linux only).
 
-    After every test, pyqtgraph may have queued internal deferred callbacks
-    (range/layout recalculations, ViewBox geometry updates) against C++ objects
-    that will be destroyed in the *next* test's setup (clear_plots / clear).
-    If those callbacks fire during C++ object construction in the next test they
-    cause access-violations (Windows) or SIGBUS (macOS).
+    pyqtgraph queues internal deferred callbacks (range/layout recalculations,
+    ViewBox geometry updates) during plot operations.  If those callbacks fire
+    during C++ object construction in the next test (inside widget.addPlot /
+    PlotItem.__init__) they dereference already-freed C++ pointers causing
+    access-violations (Windows) or SIGBUS (macOS).
 
     removePostedEvents(None, 0) discards every pending posted event for every
-    object without executing any callbacks -- zero re-entrancy risk.
+    object without executing callbacks -- no re-entrancy risk, no side effects.
 
     macOS is excluded: pyqtgraph on macOS needs to process certain posted events
-    during its own C++ ViewBox/PlotItem teardown sequence.  On macOS the
-    per-canvas _disconnect_viewbox_signals() (called inside clear_plots) is
-    sufficient to prevent dangling-lambda crashes.
+    as part of its own C++ ViewBox/PlotItem teardown sequence.  Discarding them
+    leaves teardown incomplete and causes SIGBUS.  On macOS the signal
+    disconnect inside clear_plots() is sufficient.
     """
     yield
     if sys.platform != 'darwin':
@@ -48,12 +90,6 @@ def _drain_qt_events_after_test():
             QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass
-
-
-def pytest_configure(config):
-    """Disable garbage collection entirely during pytest headless mode to prevent mid-test PySide6 Abort trap 6."""
-    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
-        gc.disable()
 
 
 def pytest_sessionfinish(session, exitstatus):

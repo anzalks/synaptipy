@@ -50,16 +50,7 @@ def main_window(qapp):  # noqa: C901
         # Qt destructor runs and avoids the PlotItem dangling-pointer crash.
 
 
-@pytest.fixture(autouse=True)
-def patch_viewbox_menu():
-    """Formerly patched ViewBoxMenu to prevent crashes during offscreen tests.
-
-    No longer needed: the underlying race condition (stale posted events firing
-    during ViewBox C++ construction/destruction) is now handled globally by
-    SynaptipyPlotCanvas._drain_posted_events() which discards pending Qt events
-    before and after widget.clear().  Patching ViewBoxMenu with a MagicMock was
-    actively harmful: MagicMock instances have no C++ backing, so when Qt's
-    C++ ViewBox destructor ran (via widget.clear()) it found a null C++ menu
-    pointer and raised SIGBUS on macOS with Python ≤ 3.10.
-    """
-    yield
+# ViewBoxMenu is patched globally in tests/conftest.py::pytest_configure
+# (before any widget is created) with a real QMenu subclass that is safe
+# to construct and destruct in headless/offscreen mode.  No per-test
+# patching needed here.
