@@ -4,7 +4,7 @@ from PySide6 import QtCore, QtWidgets  # noqa: F401
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def plot_canvas(qapp):
     canvas = SynaptipyPlotCanvas()
     return canvas

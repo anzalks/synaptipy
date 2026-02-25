@@ -11,16 +11,13 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.core.data_model import Recording, Channel
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def explorer_tab(qapp):
-    """Module-scoped ExplorerTab to avoid Windows CI crashes.
+    """Session-scoped ExplorerTab to avoid PlotItem teardown crashes.
 
-    Creating/destroying ExplorerTab per-test causes access violations on
-    Windows with PySide6 6.10.2 in offscreen mode: each PlotItem.__init__
-    allocates a parentless QWidget for its control panel, and with GC
-    disabled the rapid C++ create/destroy cycle corrupts Qt's internal
-    state before the next test's PlotItem can initialise its signal
-    connections.  Reusing one tab for the entire module avoids this.
+    scope="module" tears down between test modules, corrupting Qt state
+    for any subsequent module that creates a PlotItem.  scope="session"
+    defers teardown to session-end, which os._exit(0) skips entirely.
     """
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
@@ -28,20 +25,7 @@ def explorer_tab(qapp):
 
     tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
     yield tab
-
-    tab.close()
-    from PySide6.QtWidgets import QApplication
-    app = QApplication.instance()
-    if app:
-        app.processEvents()
-    tab.deleteLater()
-    try:
-        from PySide6.QtTest import QTest
-        QTest.qWait(50)
-    except Exception:
-        for _ in range(5):
-            if app:
-                app.processEvents()
+    # No teardown — session-end is handled by os._exit(0).
 
 
 @pytest.fixture(autouse=True)

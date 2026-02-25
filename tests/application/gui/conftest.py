@@ -6,15 +6,16 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def main_window(qapp):  # noqa: C901
     """
     Create a MainWindow instance for testing with all dialogs mocked.
 
-    Module-scoped to avoid repeated Qt object creation/destruction cycles
-    that crash with PySide6 6.8+ in offscreen mode (PlotItem.ctrl is a
-    parentless QWidget whose teardown corrupts global Qt state, causing
-    the second MainWindow creation to crash at PlotItem.__init__:235).
+    Session-scoped to avoid PlotItem teardown/recreation crashes with
+    PySide6 6.8+ in offscreen mode.  scope="module" tears down between
+    modules, corrupting Qt's global PlotItem registry for the next
+    module that creates a PlotItem.  scope="session" defers teardown to
+    session-end, which pytest_sessionfinish skips via os._exit(0).
 
     State modified by individual tests is reset by the reset_main_window_state
     autouse fixture defined in test_main_window.py.
@@ -45,33 +46,9 @@ def main_window(qapp):  # noqa: C901
                 app.processEvents()
 
         yield window
-
-        # Cleanup: stop background threads before widget destruction
-        if hasattr(window, 'data_loader_thread') and window.data_loader_thread:
-            window.data_loader_thread.quit()
-            if not window.data_loader_thread.wait(2000):
-                window.data_loader_thread.terminate()
-                window.data_loader_thread.wait(1000)
-
-        app = QApplication.instance()
-        if app:
-            app.processEvents()
-
-        window.close()
-
-        if app:
-            app.processEvents()
-
-        # Schedule C++ object deletion then wait for cascading child
-        # deletions to complete (macOS/Windows need multiple event rounds).
-        window.deleteLater()
-        try:
-            from PySide6.QtTest import QTest
-            QTest.qWait(50)  # 50 ms: processes events continuously
-        except Exception:
-            for _ in range(5):
-                if app:
-                    app.processEvents()
+        # No teardown: session-end is handled by os._exit(0) in
+        # pytest_sessionfinish (root conftest.py), which exits before any
+        # Qt destructor runs and avoids the PlotItem dangling-pointer crash.
 
 
 @pytest.fixture(autouse=True)

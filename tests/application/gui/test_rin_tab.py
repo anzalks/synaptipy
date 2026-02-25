@@ -53,9 +53,9 @@ def mock_neo_adapter():
     return adapter
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def rin_tab(qapp):  # noqa: C901
-    """Module-scoped to prevent PlotItem recreation crashes in offscreen mode."""
+    """Session-scoped to prevent PlotItem recreation crashes in offscreen mode."""
     adapter = MagicMock(spec=NeoAdapter)
 
     recording = Recording(source_file=None)

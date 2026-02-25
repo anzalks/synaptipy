@@ -6,27 +6,31 @@ popup phase-plane plots and result display for phase plane analysis.
 """
 import pytest
 from unittest.mock import MagicMock
-from PySide6 import QtWidgets
 from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 
 # Ensure the analysis modules are imported so registrations are active
 import Synaptipy.core.analysis  # noqa: F401
 
 
-@pytest.fixture
-def app():
-    if not QtWidgets.QApplication.instance():
-        return QtWidgets.QApplication([])
-    return QtWidgets.QApplication.instance()
+@pytest.fixture(scope="session")
+def phase_plane_tab(qapp):
+    """Session-scoped to prevent PlotItem teardown/recreation crashes.
 
-
-def test_phase_plane_result_display(app):
-    """Verify MetadataDrivenAnalysisTab result display for phase plane operates correctly."""
+    Creating/destroying a MetadataDrivenAnalysisTab per-test (or even
+    per-module) crashes with PySide6 6.8+ in offscreen mode because
+    PlotItem.ctrl teardown corrupts a Qt global registry.  Pinning to
+    session scope avoids all inter-module teardown.
+    """
     mock_neo = MagicMock()
-    tab = MetadataDrivenAnalysisTab(
+    return MetadataDrivenAnalysisTab(
         analysis_name="phase_plane_analysis",
         neo_adapter=mock_neo,
     )
+
+
+def test_phase_plane_result_display(phase_plane_tab):
+    """Verify MetadataDrivenAnalysisTab result display for phase plane operates correctly."""
+    tab = phase_plane_tab
 
     # Mock results
     results = {

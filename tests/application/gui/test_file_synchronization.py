@@ -17,7 +17,7 @@ def session_manager():
     return sm
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def explorer_tab(qapp):
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
