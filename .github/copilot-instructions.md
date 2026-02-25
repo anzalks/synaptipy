@@ -18,6 +18,20 @@
 
 ## CI / test rules — DO NOT VIOLATE
 
+### PySide6 version constraint — DO NOT WIDEN
+`requirements.txt`, `pyproject.toml`, and `environment.yml` all pin
+`pyside6>=6.7.0,<6.10`.  **Do not remove or loosen this upper bound.**
+
+PySide6 6.10.x changed the internal signal-connection machinery so that
+deferred ViewBox geometry callbacks re-queue themselves *during* `connect()`
+calls inside `PlotItem.__init__`.  Because the canvas reuses a single
+`GraphicsLayoutWidget` across many test invocations, stale post-`widget.clear()`
+events that are still in the queue when the next `addPlot()` runs dereference
+already-freed C++ pointers → access violation (Windows) / segfault (macOS).
+This was diagnosed across CI runs 22418950288 – 22420935486 on all platforms.
+The constraint must stay until pyqtgraph ships a fix or we switch to creating
+a fresh `GraphicsLayoutWidget` per rebuild cycle.
+
 ### Local macOS exit codes are misleading
 `pytest_sessionfinish` calls `os._exit()` in offscreen mode; the process always
 prints `Abort trap: 6` on macOS even when all tests passed.  **Never judge a
