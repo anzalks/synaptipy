@@ -183,12 +183,31 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self._remove_posted_events()
 
     def _flush_qt_registry(self):
-        """Discard stale events posted BY widget.clear() (Win/Linux).
+        """Finalize zombie wrappers and discard stale events (Win/Linux).
 
-        gc.collect() is intentionally omitted: forcing Python finalization of
-        PySide6 wrapper objects whose C++ backing has already been freed causes
-        tp_dealloc access-violations (Windows) or SIGBUS (macOS).
+        Called after widget.clear() + plot_items.clear().  At this point the
+        C++ backing of all removed plots is already destroyed and Python refs
+        in plot_items are dropped.  Any remaining cyclic-garbage wrappers
+        (PlotItem / ctrl widgets etc.) are unreachable but not yet finalised
+        because gc.disable() suppresses automatic collection in offscreen mode.
+
+        gc.collect() forces finalisation of those cycles now -- before the
+        next add_plot() call -- so Qt's internal signal connection table is
+        clean when PlotItem.__init__ tries to connect at line 235.  This is
+        safe because the wrappers being collected have no live C++ backing
+        (widget.clear() already destroyed it); PySide6 tp_dealloc skips C++
+        interaction when isValid() is False.
+
+        A second removePostedEvents then discards DeferredDelete events that
+        PySide6 tp_dealloc may post during the GC pass.
+
+        macOS is excluded: gc.collect() causes a SIGBUS on macOS PySide6
+        >= 6.7 regardless of C++ validity (race in PySide6's type system).
+        The _unlink_all_plots() + widget.clear()-first ordering handles macOS.
         """
+        if sys.platform == 'darwin':
+            return
+        gc.collect()
         self._remove_posted_events()
 
     def clear_plots(self):
