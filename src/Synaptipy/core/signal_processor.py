@@ -63,6 +63,14 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
     if data is None or len(data) == 0:
         return {"is_good": False, "error": "Empty data"}
 
+    # Ensure C-contiguous, float64 layout before any scipy/LAPACK call.
+    # ABF (and many other formats) return strided numpy views whose base
+    # pointer is not 64-byte aligned.  numpy.linalg.solve (used internally
+    # by scipy.signal.sosfiltfilt → lfilter_zi) triggers a SIGBUS on macOS
+    # when given a non-aligned buffer.  np.ascontiguousarray copies only
+    # when needed (no-op for arrays that are already contiguous float64).
+    data = np.ascontiguousarray(data, dtype=np.float64)
+
     results = {"is_good": True, "warnings": [], "metrics": {}}
 
     try:

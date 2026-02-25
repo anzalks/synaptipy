@@ -86,12 +86,15 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             plot_item.getViewBox().setBackgroundColor("white")
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
 
-            # Connect range signals
+            # Connect range signals.
+            # Use default-arg capture (pid=plot_id) so each lambda closes over
+            # the correct plot_id value, not a shared late-binding reference.
+            # Use 'r' not 'range' to avoid shadowing the Python builtin.
             plot_item.getViewBox().sigXRangeChanged.connect(
-                lambda _, range: self.x_range_changed.emit(plot_id, range)
+                lambda _, r, pid=plot_id: self.x_range_changed.emit(pid, r)
             )
             plot_item.getViewBox().sigYRangeChanged.connect(
-                lambda _, range: self.y_range_changed.emit(plot_id, range)
+                lambda _, r, pid=plot_id: self.y_range_changed.emit(pid, r)
             )
 
         # Apply consistent theme to axis colors, labels, etc.
@@ -106,36 +109,23 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def clear_plots(self):
         """Remove all plots from the layout."""
-        # Force Python's cycle GC to collect any PlotItem objects (from THIS
-        # tab or any other) that have cyclic references and whose __del__
-        # hasn't run yet.  Without this, Python 3.10's less-aggressive GC
-        # leaves PlotItem.__del__ uncalled until a later collection pass;
-        # the deferred deleteLater events for their ctrl QWidgets are not yet
-        # queued, so the sendPostedEvents() below can't flush them, and the
-        # next add_plot() call finds stale C++ pointers in pyqtgraph's global
-        # registry -> segfault.
-        import gc
-        gc.collect()
-
         self.widget.clear()
         self.plot_items.clear()
         self._main_plot_id = None
-
-        # Drain Qt's deferred-delete queue so that any deleteLater() calls
-        # scheduled by PlotItem.__del__ for removed ctrl QWidgets complete
-        # *before* the caller creates new PlotItems.
-        #
-        # We use QCoreApplication.sendPostedEvents() rather than
-        # QApplication.processEvents():  sendPostedEvents() dispatches only
-        # already-queued posted events (including DeferredDelete) without
-        # starting a nested event loop, so it is safe to call from inside a
-        # Qt signal handler.  processEvents() starts a nested loop and can
-        # cause re-entrant signal delivery -> SIGBUS on macOS in production.
-        try:
-            from PySide6.QtCore import QCoreApplication
-            QCoreApplication.sendPostedEvents(None, 0)
-        except Exception:
-            pass
+        # On Windows/Linux, force GC + sendPostedEvents so stale C++ PlotItem
+        # pointers are flushed from pyqtgraph's global registry before the
+        # caller adds new plots (prevents crashes on Python 3.10).
+        # Skipped on macOS: gc.collect() inside a Qt signal handler races with
+        # PySide6 tp_dealloc -> SIGBUS with PySide6 >= 6.7.
+        import sys
+        if sys.platform != 'darwin':
+            import gc
+            gc.collect()
+            try:
+                from PySide6.QtCore import QCoreApplication
+                QCoreApplication.sendPostedEvents(None, 0)
+            except Exception:
+                pass
 
     def clear_items(self, plot_id: str):
         """Clear data items from a specific plot (keeping axis/labels)."""
