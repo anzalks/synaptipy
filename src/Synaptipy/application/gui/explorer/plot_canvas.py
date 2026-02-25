@@ -62,11 +62,31 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
 
-    def rebuild_plots(self, recording: Recording) -> List[str]:
+    def rebuild_plots(self, recording: Recording) -> List[str]:  # noqa: C901
         """
         Rebuilds the plot layout based on the recording channels.
         Returns the list of channel keys in order.
         """
+        # Before touching the Qt scene, force Python's cycle GC to collect
+        # any PlotItem objects (including from *other* live ExplorerTab
+        # instances) that have pending cyclic references.  This ensures their
+        # __del__ methods run and queue deleteLater events for ctrl QWidgets
+        # BEFORE we call self.clear() -> widget.clear().  The processEvents()
+        # inside clear_plots() then drains those events so all stale C++
+        # PlotItem pointers are gone before add_plot() creates new ones.
+        # This is critical on Python 3.10 where the cycle GC runs less
+        # frequently than on 3.11+.
+        import gc
+        gc.collect()
+        try:
+            from PySide6.QtWidgets import QApplication
+            _app = QApplication.instance()
+            if _app:
+                for _ in range(3):
+                    _app.processEvents()
+        except Exception:
+            pass
+
         self.clear()
 
         if not recording or not recording.channels:
