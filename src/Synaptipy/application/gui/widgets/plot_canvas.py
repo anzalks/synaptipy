@@ -109,14 +109,21 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
     def clear_plots(self):
         """Remove all plots from the layout."""
+        # Flush deferred-delete queue before destroying C++ PlotItem objects.
+        # sendPostedEvents is safe on all platforms (unlike gc.collect which
+        # races with PySide6 tp_dealloc on macOS/ARM -> SIGBUS on PySide6>=6.7).
+        try:
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.sendPostedEvents(None, 0)
+        except Exception:
+            pass
         self.widget.clear()
         self.plot_items.clear()
         self._main_plot_id = None
-        # On Windows/Linux, force GC + sendPostedEvents so stale C++ PlotItem
-        # pointers are flushed from pyqtgraph's global registry before the
-        # caller adds new plots (prevents crashes on Python 3.10).
-        # Skipped on macOS: gc.collect() inside a Qt signal handler races with
-        # PySide6 tp_dealloc -> SIGBUS with PySide6 >= 6.7.
+        # On Windows/Linux also run a GC pass to flush stale C++ pointers from
+        # pyqtgraph's global registry before new plots are added (prevents
+        # crashes on Python 3.10). Skipped on macOS: gc.collect() inside a Qt
+        # slot races with PySide6 tp_dealloc -> SIGBUS on PySide6 >= 6.7.
         import sys
         if sys.platform != 'darwin':
             import gc
