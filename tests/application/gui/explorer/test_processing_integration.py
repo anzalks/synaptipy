@@ -28,6 +28,16 @@ def reset_processing_state(explorer_tab):
     """Clear accumulated preprocessing settings before every test."""
     explorer_tab._active_preprocessing_settings = {}
     yield
+    # Drain any pending Qt events queued during the test (e.g. from signal
+    # emissions via preprocessing_widget).  Without this, deferred events
+    # referencing the current PlotItem C++ objects may fire inside the NEXT
+    # test's clear_plots() → widget.clear() → ViewBox destruction, causing
+    # a segfault on macOS/PySide6 >= 6.7.
+    try:
+        from PySide6.QtCore import QCoreApplication
+        QCoreApplication.processEvents()
+    except Exception:
+        pass
 
 
 def create_mock_recording(name="test.wcp", duration=1.0):
