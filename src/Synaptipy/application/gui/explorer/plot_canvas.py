@@ -67,33 +67,26 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         Rebuilds the plot layout based on the recording channels.
         Returns the list of channel keys in order.
         """
+        import sys
         import gc
         from PySide6.QtCore import QCoreApplication
 
         def _drain():
-            """gc.collect() + sendPostedEvents() -- safe to call from slots."""
+            """Flush GC cycles and Qt deferred-delete queue.
+            Skipped on macOS: gc.collect() inside a Qt slot races with
+            PySide6 tp_dealloc -> SIGBUS (PySide6 >= 6.7). Safe on
+            Windows/Linux where it prevents stale C++ PlotItem pointers.
+            """
+            if sys.platform == 'darwin':
+                return
             gc.collect()
             try:
                 QCoreApplication.sendPostedEvents(None, 0)
             except Exception:
                 pass
 
-        # Pass 1: collect any cycle-referenced PlotItems from OTHER live tabs
-        # so their deleteLater events are queued before we touch the scene.
         _drain()
-
-        # self.clear() calls:
-        #   super().clear_plots()  -> gc.collect() + widget.clear() +
-        #                             plot_items.clear() + sendPostedEvents()
-        #   self.plot_widgets.clear()  <- drops LAST refs to old PlotItems;
-        #                                their __del__ -> deleteLater is QUEUED
-        #                                after the sendPostedEvents inside
-        #                                clear_plots() has already run.
         self.clear()
-
-        # Pass 2: drain the deleteLater events that were just queued by
-        # plot_widgets.clear() so no stale C++ PlotItem pointer remains in
-        # pyqtgraph's global registry when add_plot() is called below.
         _drain()
 
         if not recording or not recording.channels:

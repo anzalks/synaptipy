@@ -525,6 +525,11 @@ class ExplorerTab(QtWidgets.QWidget):
             try:
                 data = first_ch.get_data(0)
                 if data is not None:
+                    # Ensure C-contiguous float64 — strided views from
+                    # memory-mapped files (ABF etc.) cause SIGBUS in
+                    # scipy LAPACK on macOS if memory is not aligned.
+                    import numpy as _np
+                    data = _np.ascontiguousarray(data, dtype=_np.float64)
                     metrics = check_trace_quality(data, first_ch.sampling_rate)
             except Exception as e:
                 metrics = {"is_good": False, "error": str(e), "warnings": ["Quality check failed"]}
@@ -594,6 +599,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if self._pending_view_state:
             log.debug("Restoring view state...")
             try:
+                self._updating_viewranges = True
                 for cid, ranges in self._pending_view_state.items():
                     # Only restore if channel exists in new recording
                     if cid in self.plot_canvas.channel_plots:
@@ -607,6 +613,8 @@ class ExplorerTab(QtWidgets.QWidget):
                 self._pending_view_state = None
             except Exception as e:
                 log.warning(f"Failed to restore view state: {e}")
+            finally:
+                self._updating_viewranges = False
 
         if not restored_view:
             pass  # _reset_view already called above
@@ -802,7 +810,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                             if data is not None and t is not None:
                                 item = plot_item.plot(
-                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index + 1}"
+                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1}"
                                 )
                                 _apply_item_opts(item, ds_enabled)
                                 self.plot_canvas.channel_plot_data_items[cid].append(item)
@@ -874,14 +882,17 @@ class ExplorerTab(QtWidgets.QWidget):
                     except Exception as e:
                         log.error(f"Error plotting avg for {cid}: {e}")
 
-            # Restore View State
+            # Restore View State — guard against XLink cascade on multi-channel
             if view_state:
-                for cid, state in view_state.items():
-                    plot = self.plot_canvas.get_plot(cid)
-                    if plot and plot.isVisible():
-                        # We restore the view range to preserve zoom
-                        plot.setXRange(state[0][0], state[0][1], padding=0)
-                        plot.setYRange(state[1][0], state[1][1], padding=0)
+                self._updating_viewranges = True
+                try:
+                    for cid, state in view_state.items():
+                        plot = self.plot_canvas.get_plot(cid)
+                        if plot and plot.isVisible():
+                            plot.setXRange(state[0][0], state[0][1], padding=0)
+                            plot.setYRange(state[1][0], state[1][1], padding=0)
+                finally:
+                    self._updating_viewranges = False
         finally:
             if self.plot_canvas.widget:
                 self.plot_canvas.widget.setUpdatesEnabled(True)
@@ -982,7 +993,12 @@ class ExplorerTab(QtWidgets.QWidget):
     def _on_file_load_error(self, error: Exception, filepath: Path):
         """Handle errors during file loading."""
         self._is_loading = False
-        self.loading_overlay.hide()
+        overlay = getattr(self, "loading_overlay", None)
+        if overlay is not None:
+            try:
+                overlay.hide()
+            except Exception:
+                pass
         self.status_bar.showMessage(f"Error loading {filepath.name}", 5000)
 
         error_msg = str(error)
@@ -1161,12 +1177,21 @@ class ExplorerTab(QtWidgets.QWidget):
             self._update_all_ui_state()
 
     def _reset_view(self):
-        for cid, plot in self.plot_canvas.channel_plots.items():
-            base_x = self.base_x_range
-            base_y = self.base_y_ranges.get(cid)
-            if base_x and base_y and plot.isVisible():
-                plot.setXRange(*base_x, padding=0)
-                plot.setYRange(*base_y, padding=0)
+        # Block x/y range signal cascade while setting ranges on XLinked plots.
+        # Without this, setXRange on one plot propagates via XLink to all others
+        # and each fires sigXRangeChanged -> _on_vb_x_range_changed.  With 4
+        # linked channels that's 16+ re-entrant signal emissions -> SIGBUS.
+        prev = self._updating_viewranges
+        self._updating_viewranges = True
+        try:
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                base_x = self.base_x_range
+                base_y = self.base_y_ranges.get(cid)
+                if base_x and base_y and plot.isVisible():
+                    plot.setXRange(*base_x, padding=0)
+                    plot.setYRange(*base_y, padding=0)
+        finally:
+            self._updating_viewranges = prev
 
         # Reset X Controls
         if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'x_zoom_slider'):
@@ -1390,9 +1415,11 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self._update_plot()
 
-        # Auto-range to fit raw data
-        for plot in self.plot_canvas.channel_plots.values():
-            plot.autoRange()
+        # Auto-range to fit raw data using calculated base ranges
+        # (avoids per-plot autoRange() which fires sigXRangeChanged without
+        # the _updating_viewranges guard -> re-entrant cascade -> SIGBUS)
+        self._calculate_base_ranges()
+        self._reset_view()
 
         self.status_bar.showMessage("Preprocessing reset to raw data.", 3000)
 
