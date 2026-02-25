@@ -67,27 +67,12 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         Rebuilds the plot layout based on the recording channels.
         Returns the list of channel keys in order.
         """
-        import sys
-        import gc
-        from PySide6.QtCore import QCoreApplication
-
-        def _drain():
-            """Flush GC cycles and Qt deferred-delete queue.
-            Skipped on macOS: gc.collect() inside a Qt slot races with
-            PySide6 tp_dealloc -> SIGBUS (PySide6 >= 6.7). Safe on
-            Windows/Linux where it prevents stale C++ PlotItem pointers.
-            """
-            if sys.platform == 'darwin':
-                return
-            gc.collect()
-            try:
-                QCoreApplication.sendPostedEvents(None, 0)
-            except Exception:
-                pass
-
-        _drain()
+        # Drain stale Qt events before and after clear() to prevent stale C++
+        # pointer crashes on Windows/Linux.  macOS is handled by
+        # _disconnect_viewbox_signals() inside clear_plots().
+        self._cancel_pending_qt_events()
         self.clear()
-        _drain()
+        self._flush_qt_registry()
 
         if not recording or not recording.channels:
             return []
