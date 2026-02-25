@@ -9,7 +9,7 @@ pandas>=2.3.0
 
 # GUI
 pyqtgraph>=0.13.0
-pyside6>=6.7.0,<6.10
+pyside6==6.7.3
 
 # Data format support
 neo>=0.14.0
