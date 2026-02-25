@@ -11,7 +11,7 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.core.data_model import Recording, Channel
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def explorer_tab(qapp):
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
