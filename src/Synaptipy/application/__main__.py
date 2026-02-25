@@ -21,7 +21,6 @@ import logging
 import argparse
 import os
 import faulthandler
-faulthandler.enable()  # Print Python traceback to stderr on SIGBUS/SIGSEGV
 from PySide6 import QtWidgets, QtCore
 
 # --- Import Core Components ---
@@ -31,6 +30,10 @@ from Synaptipy.shared.logging_config import setup_logging
 # Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyqtgraph")
+
+# Enable low-level C traceback on SIGBUS/SIGSEGV so fatal crashes include a
+# Python stack trace in the log (zero overhead in normal operation).
+faulthandler.enable()
 
 # Log instance to be initialized after setting up logging
 log = logging.getLogger(__name__)
