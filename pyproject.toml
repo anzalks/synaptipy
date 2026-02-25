@@ -12,6 +12,10 @@ authors = [
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.10"
+keywords = [
+    "electrophysiology", "patch-clamp", "neuroscience", "visualization",
+    "ephys", "neo", "nwb", "signal-processing", "batch-processing",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -20,9 +24,17 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
+
+[project.urls]
+Homepage = "https://github.com/anzalks/synaptipy"
+Documentation = "https://synaptipy.readthedocs.io/en/latest/"
+"Bug Tracker" = "https://github.com/anzalks/synaptipy/issues"
+Changelog = "https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"
+Source = "https://github.com/anzalks/synaptipy"
 dependencies = [
     "numpy>=2.0.0",
     "scipy>=1.13.0",
@@ -75,7 +87,12 @@ synaptipy = "Synaptipy.application.__main__:run_gui"
 where = ["src"]
 
 [tool.setuptools.package-data]
-Synaptipy = ["*.yml", "*.yaml", "*.txt"]
+Synaptipy = [
+    "*.yml", "*.yaml", "*.txt", "*.json",
+    "resources/**/*",
+    "templates/**/*",
+    "**/*.png", "**/*.svg", "**/*.ico",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
