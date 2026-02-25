@@ -698,7 +698,12 @@ def detect_events_baseline_peak_kinetics(
     if filter_freq_hz and filter_freq_hz > 0:
         try:
             sos = signal.butter(4, filter_freq_hz, "low", fs=sample_rate, output="sos")
-            filtered = signal.sosfiltfilt(sos, signal_to_process)
+            # Use sosfilt forward+backward instead of sosfiltfilt to avoid
+            # lfilter_zi → numpy.linalg.solve SIGBUS on macOS ARM + scipy 1.16 + numpy 1.26
+            signal_c = np.ascontiguousarray(signal_to_process, dtype=np.float64)
+            sos_c = np.ascontiguousarray(sos, dtype=np.float64)
+            fwd = signal.sosfilt(sos_c, signal_c)
+            filtered = signal.sosfilt(sos_c, fwd[::-1])[::-1]
         except (ValueError, TypeError, IndexError):
             filtered = signal_to_process
     else:

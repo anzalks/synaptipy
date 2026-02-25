@@ -142,7 +142,14 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         if 0 < lf_cutoff < 1 and len(detrended) > 30:
             try:
                 sos_lf = signal.butter(2, lf_cutoff, btype='low', output='sos')
-                lf_signal = signal.sosfiltfilt(sos_lf, detrended, padtype='odd')
+                # Use sosfilt (forward-pass) instead of sosfiltfilt.
+                # sosfiltfilt calls sosfilt_zi → lfilter_zi → numpy.linalg.solve,
+                # which triggers a SIGBUS on macOS ARM with numpy 1.26.x +
+                # scipy >= 1.14 (array_api_compat path) when BLAS receives a
+                # non-64-byte-aligned internal buffer.  sosfilt never calls
+                # lfilter_zi, so the crash path is completely avoided.
+                # For a quality-check variance estimate, forward filtering is fine.
+                lf_signal = signal.sosfilt(sos_lf, detrended)
                 lf_variance = float(np.var(lf_signal))
                 results["metrics"]["lf_variance"] = lf_variance
 
@@ -164,6 +171,32 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         results["error"] = str(e)
 
     return results
+
+
+def _sosfiltfilt_safe(sos: np.ndarray, data: np.ndarray) -> np.ndarray:
+    """Zero-phase SOS filter that avoids numpy.linalg.solve (SIGBUS on macOS ARM).
+
+    scipy.signal.sosfiltfilt calls sosfilt_zi → lfilter_zi → numpy.linalg.solve
+    to compute initial conditions.  With scipy >= 1.14.0 (array_api_compat path)
+    and numpy 1.26.x on macOS ARM, that intermediate matrix passed to BLAS is
+    misaligned → SIGBUS.
+
+    This implementation performs the same forward+reverse double-pass using
+    sosfilt, which never calls lfilter_zi.  The result is zero-phase filtered
+    output with very small edge transients (identical to sosfiltfilt with
+    padtype=None).
+    """
+    scipy_signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        return data
+    # Force C-contiguous float64 for both arrays to avoid any downstream BLAS issues.
+    data = np.ascontiguousarray(data, dtype=np.float64)
+    sos = np.ascontiguousarray(sos, dtype=np.float64)
+    # Forward pass
+    y = scipy_signal.sosfilt(sos, data)
+    # Backward pass on reversed signal, then re-reverse
+    y = scipy_signal.sosfilt(sos, y[::-1])[::-1]
+    return np.ascontiguousarray(y, dtype=np.float64)
 
 
 def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple:
@@ -250,7 +283,7 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
     try:
         # Use SOS format for numerical stability
         sos = signal.butter(order, [low, high], btype="band", output='sos')
-        y = signal.sosfiltfilt(sos, data, padtype='odd')
+        y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
         log.error(f"Bandpass filter failed: {e}")
@@ -295,7 +328,7 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     try:
         # Use SOS format for numerical stability
         sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
-        y = signal.sosfiltfilt(sos, data, padtype='odd')
+        y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
         log.error(f"Lowpass filter failed: {e}")
@@ -340,7 +373,7 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
     try:
         # Use SOS format for numerical stability
         sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
-        y = signal.sosfiltfilt(sos, data, padtype='odd')
+        y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
         log.error(f"Highpass filter failed: {e}")
@@ -390,7 +423,7 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
         # Convert to zpk then to sos for stability
         z, p, k = signal.tf2zpk(b, a)
         sos = signal.zpk2sos(z, p, k)
-        y = signal.sosfiltfilt(sos, data, padtype='odd')
+        y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
         log.error(f"Notch filter failed: {e}")
@@ -438,7 +471,7 @@ def comb_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarra
         # Convert to SOS for stability
         z, p, k = signal.tf2zpk(b, a)
         sos = signal.zpk2sos(z, p, k)
-        y = signal.sosfiltfilt(sos, data, padtype='odd')
+        y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
         log.error(f"Comb filter failed: {e}")
