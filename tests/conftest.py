@@ -24,25 +24,28 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def _drain_qt_events_after_test():
-    """Global per-test drain of the Qt posted-event queue (all platforms).
+    """Global per-test drain of the Qt posted-event queue (Win/Linux only).
 
     pyqtgraph queues internal deferred callbacks (range/layout recalculations,
     ViewBox geometry updates) during plot operations.  If those callbacks fire
     during C++ object construction in the next test (inside widget.addPlot /
     PlotItem.__init__) they dereference already-freed C++ pointers causing
-    access-violations (Windows) or segfaults (macOS).
+    access-violations (Windows).
 
-    This fixture fires between tests, not during widget.clear() / C++ teardown,
-    so removePostedEvents is safe on all platforms.  The per-clear draining in
-    SynaptipyPlotCanvas._cancel_pending_qt_events() still skips macOS for the
-    pre-clear call (where pyqtgraph needs to process its own destructor events).
+    macOS is excluded: pyqtgraph keeps live state in its AllViews registry
+    and internal geometry caches via posted events between tests.  Draining
+    those events globally corrupts the long-lived session-scoped widget state
+    and causes later widget.clear() calls to segfault.
+    On macOS the X-link unlink in _unlink_all_plots() and the correct
+    widget.clear()-first order are the only mechanisms needed.
     """
     yield
-    try:
-        from PySide6.QtCore import QCoreApplication
-        QCoreApplication.removePostedEvents(None, 0)
-    except Exception:
-        pass
+    if sys.platform != 'darwin':
+        try:
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.removePostedEvents(None, 0)
+        except Exception:
+            pass
 
 
 def pytest_sessionfinish(session, exitstatus):
