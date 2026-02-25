@@ -16,15 +16,13 @@ def reset_canvas(plot_canvas):
     """Clear all plots before and drain events after every test (Win/Linux).
 
     Runs clear_plots() BEFORE each test so each starts with a clean canvas.
-    After the test, executes the Qt posted-event queue so pyqtgraph deferred
-    callbacks fire while C++ objects are still alive.  This prevents them from
-    firing during C++ object construction in the next test (inside addPlot /
-    PlotItem.__init__) which causes access-violations / SIGBUS.
-
-    processEvents() is used instead of removePostedEvents() because discarding
-    callbacks leaves ViewBox in a dirty state that causes crashes on the next
-    setXLink(None) or widget.clear() call.  Executing them is safe here since
-    all C++ objects are alive at post-test teardown time.
+    After the test, drains the Qt posted-event queue so pyqtgraph deferred
+    callbacks from the just-run test (range/layout events queued during plot
+    operations) do not fire during the C++ teardown in the next test's
+    clear_plots() call, which would cause SIGBUS / access-violations.
+    removePostedEvents discards events without executing callbacks -- safe
+    for this single-canvas fixture; clear_plots() has already handled all
+    live canvas teardown via _unlink_all_plots + _close_all_plots.
 
     macOS excluded: see conftest._drain_qt_events_after_test for rationale.
     """
@@ -34,7 +32,7 @@ def reset_canvas(plot_canvas):
         return
     try:
         from PySide6.QtCore import QCoreApplication
-        QCoreApplication.processEvents()
+        QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass
 
