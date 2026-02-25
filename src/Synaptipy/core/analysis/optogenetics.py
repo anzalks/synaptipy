@@ -334,7 +334,7 @@ def calculate_optogenetic_sync(
     ],
     # Visualization metadata
     plots=[
-        {"name": "Trace", "type": "trace", "show_spikes": True},
+        {"name": "Trace", "type": "trace", "show_events": True},
         {
             "type": "vlines",
             "data": "stimulus_onsets",
@@ -457,6 +457,7 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         "spike_jitter_ms": result.spike_jitter_ms,
         "stimulus_count": result.stimulus_count,
         "event_count": len(ap_times),
+        "event_times": ap_times.tolist() if hasattr(ap_times, 'tolist') else list(ap_times),
         "stimulus_onsets": (
             result.stimulus_onsets.tolist()
             if result.stimulus_onsets is not None

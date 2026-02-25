@@ -8,6 +8,7 @@ This guide is intended for developers who want to understand, modify, or contrib
 - [Project Structure](#project-structure)
 - [Development Workflow](#development-workflow)
 - [Testing](#testing)
+- [CI Behaviour and Platform-Specific Test Rules](#ci-behaviour-and-platform-specific-test-rules)
 - [Coding Standards](#coding-standards)
 - [License Compliance](#license-compliance)
 
@@ -140,9 +141,87 @@ python scripts/run_tests.py --coverage
 - Use pytest fixtures for setup and teardown
 - Mock external dependencies where appropriate
 
-## Coding Standards
+## CI Behaviour and Platform-Specific Test Rules
 
-Synaptipy follows these coding standards:
+The test suite involves PySide6 and pyqtgraph widgets running under
+`QT_QPA_PLATFORM=offscreen`.  Several platform-specific crash patterns have been
+resolved; the rules below **must not be reverted** or the CI will break again.
+
+### Why local macOS tests always exit non-zero
+
+`pytest_sessionfinish` in `tests/conftest.py` calls `os._exit(exitstatus)` when
+`QT_QPA_PLATFORM=offscreen` is set.  This causes the macOS process to terminate
+with a `QThread: Destroyed while thread is still running` message and an
+`Abort trap: 6` printed by the shell — **even when every test passed**.  The
+exit code written to the OS is the real pytest exit code (0 = all passed).  The
+shell may still report exit code 1 because conda intercepts the abnormal
+termination.
+
+**Rule:** Do not judge local macOS test runs by the shell exit code or the
+`Abort trap` message.  Always check the pytest output lines (`N passed`, no
+`FAILED`) or use:
+```bash
+conda run -n synaptipy python -m pytest tests/ 2>&1 | grep -c PASSED
+conda run -n synaptipy python -m pytest tests/ 2>&1 | grep "FAILED\|ERROR "
+```
+
+### GC must be disabled in offscreen mode
+
+`pytest_configure` disables Python's cyclic GC when `QT_QPA_PLATFORM=offscreen`
+(see `tests/conftest.py`).  Do **not** remove this.  With GC enabled, Python can
+trigger `tp_dealloc` on PySide6 wrapper objects while Qt's C++ destructor chain
+is still running, causing `SIGBUS` on macOS and access violations on Windows.
+
+### processEvents() before addPlot() in offscreen mode
+
+`SynaptipyPlotCanvas.add_plot()` calls
+`QCoreApplication.processEvents()` before `widget.addPlot()` when
+`QT_QPA_PLATFORM=offscreen`.  This **must not be removed**.  On Windows +
+PySide6 ≥ 6.9, deferred callbacks queued by a prior `widget.clear()` or widget
+construction fire *inside* `PlotItem.__init__()` if they are still pending,
+dereferences freed C++ pointers, and causes an access violation that silently
+kills the test worker process (all remaining tests never run).
+
+Using `processEvents()` (execute callbacks) rather than `removePostedEvents()`
+(discard callbacks) is intentional:
+- `removePostedEvents` on macOS discards events that pyqtgraph needs to maintain
+  its `AllViews` registry and internal geometry caches; discarding them corrupts
+  session-scoped widget state and causes segfaults in `widget.clear()` on the
+  next test.
+- `processEvents` is safe on all platforms.
+
+### removePostedEvents() must skip macOS
+
+The global `_drain_qt_events_after_test` fixture in `tests/conftest.py` and the
+per-file drain in `tests/application/gui/test_explorer_refactor.py` both guard
+the `removePostedEvents(None, 0)` call with `if sys.platform != 'darwin': return`.
+Do **not** remove this guard.  On macOS, draining the global event queue between
+tests discards pyqtgraph's internal range/layout events and corrupts
+`ViewBox` geometry caches, causing later `widget.clear()` calls to segfault.
+
+### enableMenu=False in offscreen mode
+
+`SynaptipyPlotCanvas.add_plot()` passes `enableMenu=False` to `widget.addPlot()`
+when `QT_QPA_PLATFORM=offscreen`.  This prevents `ViewBoxMenu.__init__` from
+calling `QWidgetAction`, which crashes PySide6 on Windows and macOS when there
+is no real display available.
+
+### Plot teardown order
+
+`SynaptipyPlotCanvas.clear_plots()` must follow this exact sequence:
+1. `_unlink_all_plots()` — break `setXLink` / `setYLink` connections before teardown.
+2. `_close_all_plots()` — disconnect ctrl signals and call `PlotItem.close()`
+   while the scene is still valid.
+3. `_cancel_pending_qt_events()` — discard stale events (Win/Linux only).
+4. `widget.clear()` — destroy C++ layout children via Qt's scene graph.
+5. `plot_items.clear()` — drop Python references *after* C++ teardown.
+6. `_flush_qt_registry()` — discard any events posted *by* `widget.clear()`.
+
+Dropping Python references (step 5) **before** `widget.clear()` (step 4) causes
+PySide6 ≥ 6.7 to segfault on macOS when the C++ destructor tries to reach the
+Python side.
+
+## Coding Standards
 
 - **PEP 8**: Follow Python style guidelines
 - **Docstrings**: All public functions, classes, and methods should have docstrings

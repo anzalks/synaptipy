@@ -88,6 +88,8 @@ class TestOptoSyncWrapperSpikes:
         assert "response_probability" in result
         assert "stimulus_count" in result
         assert result["stimulus_count"] == 3
+        assert "event_times" in result
+        assert isinstance(result["event_times"], list)
 
     def test_response_probability_full(self):
         """All three stimuli get a response → probability == 1.0."""
@@ -156,6 +158,8 @@ class TestOptoSyncWrapperEventsThreshold:
         )
 
         assert "event_count" in result
+        assert "event_times" in result
+        assert isinstance(result["event_times"], list)
 
 
 # ---------------------------------------------------------------------------

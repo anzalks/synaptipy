@@ -1088,6 +1088,32 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                             self.plot_widget.addItem(scatter)
                             self._dynamic_plot_items.append(scatter)
 
+                if plot_cfg.get("show_events") and self._current_plot_data:
+                    ev_times = self._val(result_item, "event_times")
+                    if ev_times is not None and len(ev_times) > 0:
+                        time_arr = self._current_plot_data["time"]
+                        data_arr = self._current_plot_data["data"]
+                        # Map float times → nearest sample indices
+                        ev_arr = np.asarray(ev_times)
+                        idx = np.searchsorted(time_arr, ev_arr, side="left")
+                        idx = np.clip(idx, 0, len(time_arr) - 1)
+                        # For each insertion point, also check the element to
+                        # the left and keep whichever is closer in time.
+                        prev = np.clip(idx - 1, 0, len(time_arr) - 1)
+                        idx = np.where(
+                            np.abs(time_arr[prev] - ev_arr) < np.abs(time_arr[idx] - ev_arr),
+                            prev, idx,
+                        )
+                        scatter = pg.ScatterPlotItem(
+                            x=time_arr[idx], y=data_arr[idx],
+                            size=10, pen=pg.mkPen(None),
+                            brush=pg.mkBrush(255, 165, 0, 200),
+                            symbol="t",
+                        )
+                        scatter.setZValue(50)
+                        self.plot_widget.addItem(scatter)
+                        self._dynamic_plot_items.append(scatter)
+
     # ------------------------------------------------------------------
     # Visualisation helpers (called by _plot_analysis_visualizations)
     # ------------------------------------------------------------------
