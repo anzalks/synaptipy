@@ -20,6 +20,8 @@ import sys
 import logging
 import argparse
 import os
+import faulthandler
+faulthandler.enable()  # Print Python traceback to stderr on SIGBUS/SIGSEGV
 from PySide6 import QtWidgets, QtCore
 
 # --- Import Core Components ---
