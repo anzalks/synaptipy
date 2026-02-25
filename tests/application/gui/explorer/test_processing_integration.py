@@ -11,17 +11,23 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.core.data_model import Recording, Channel
 
 
-@pytest.fixture
-def explorer_tab(qtbot):
+@pytest.fixture(scope="module")
+def explorer_tab(qapp):
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
     status_bar = QtWidgets.QStatusBar()
 
-    # Mock styles to avoid theme issues
+    # Mock styles to avoid theme issues; patch only wraps construction
     with patch('Synaptipy.shared.styling.style_button'):
         tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
-        qtbot.addWidget(tab)
-        return tab
+    return tab
+
+
+@pytest.fixture(autouse=True)
+def reset_processing_state(explorer_tab):
+    """Clear accumulated preprocessing settings before every test."""
+    explorer_tab._active_preprocessing_settings = {}
+    yield
 
 
 def create_mock_recording(name="test.wcp", duration=1.0):

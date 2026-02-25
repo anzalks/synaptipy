@@ -53,14 +53,36 @@ def mock_neo_adapter():
     return adapter
 
 
-@pytest.fixture
-def rin_tab(qtbot, mock_neo_adapter):
-    """Fixture providing a MetadataDrivenAnalysisTab for rin_analysis."""
+@pytest.fixture(scope="module")
+def rin_tab(qapp):  # noqa: C901
+    """Module-scoped to prevent PlotItem recreation crashes in offscreen mode."""
+    adapter = MagicMock(spec=NeoAdapter)
+
+    recording = Recording(source_file=None)
+    recording.sampling_rate = 10000.0
+    recording.t_start = 0.0
+    recording.duration = 1.0
+
+    time_vec = np.linspace(0, 1, 10000)
+    voltage_data = np.zeros_like(time_vec)
+    voltage_data[2000:5000] = -10.0
+    v_channel = Channel(id="1", name="Vm", units="mV", sampling_rate=10000.0,
+                        data_trials=[voltage_data])
+    v_channel.t_start = 0.0
+
+    current_data = np.zeros_like(time_vec)
+    current_data[2000:5000] = -0.050
+    i_channel = Channel(id="2", name="Im", units="pA", sampling_rate=10000.0,
+                        data_trials=[current_data])
+    i_channel.t_start = 0.0
+
+    recording.channels = {"1": v_channel, "2": i_channel}
+    adapter.current_recording = recording
+
     tab = MetadataDrivenAnalysisTab(
         analysis_name="rin_analysis",
-        neo_adapter=mock_neo_adapter,
+        neo_adapter=adapter,
     )
-    qtbot.addWidget(tab)
     return tab
 
 
