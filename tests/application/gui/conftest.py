@@ -1,9 +1,8 @@
 """
 Fixtures for application/gui tests.
 """
-import sys
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 @pytest.fixture(scope="session")
@@ -53,20 +52,14 @@ def main_window(qapp):  # noqa: C901
 
 @pytest.fixture(autouse=True)
 def patch_viewbox_menu():
-    """
-    Patch pyqtgraph's ViewBoxMenu on macOS and Windows to prevent segfaults/
-    access violations with PySide6 6.8+ in offscreen mode.
+    """Formerly patched ViewBoxMenu to prevent crashes during offscreen tests.
 
-    The ViewBoxMenu is only the right-click context menu; it has no effect on
-    viewRange(), setXRange(), setYRange() or any other state tested here.
-    Linux (xvfb) handles this correctly so no patch is needed there.
+    No longer needed: the underlying race condition (stale posted events firing
+    during ViewBox C++ construction/destruction) is now handled globally by
+    SynaptipyPlotCanvas._drain_posted_events() which discards pending Qt events
+    before and after widget.clear().  Patching ViewBoxMenu with a MagicMock was
+    actively harmful: MagicMock instances have no C++ backing, so when Qt's
+    C++ ViewBox destructor ran (via widget.clear()) it found a null C++ menu
+    pointer and raised SIGBUS on macOS with Python ≤ 3.10.
     """
-    if sys.platform in ('darwin', 'win32'):
-        try:
-            import pyqtgraph.graphicsItems.ViewBox.ViewBox as _vb_mod
-            with patch.object(_vb_mod, 'ViewBoxMenu', MagicMock):
-                yield
-            return
-        except (ImportError, AttributeError):
-            pass
     yield
