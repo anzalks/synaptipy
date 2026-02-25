@@ -7,71 +7,101 @@
 [![Docs](https://github.com/anzalks/synaptipy/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/anzalks/synaptipy/actions/workflows/docs.yml)
 [![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
 [![Code style: flake8](https://img.shields.io/badge/code%20style-flake8-black)](https://flake8.pycqa.org/)
+[![Collaborators Welcome](https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white)](https://github.com/anzalks/synaptipy)
 
-**Electrophysiology Visualization & Analysis Suite**
+**Open-Source Electrophysiology Visualization and Analysis Suite**
 
-> 📖 **Full documentation**: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
+Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
 
-Synaptipy is a high-performance graphical user interface (GUI) designed for the visualization and analysis of electrophysiological data, specifically focusing on Patch Clamp and intracellular recordings. Built on Python and the Qt6 framework, it provides a robust, cross-platform solution for managing complex datasets and executing batch analysis pipelines.
+Synaptipy is a cross-platform, open-source application for the visualization and analysis of electrophysiological recordings. It is designed around a modular, extensible architecture that supports interactive single-recording analysis, large-scale batch processing, and integration of custom user-written analysis routines via a plugin interface. The primary focus is patch-clamp and intracellular recordings, with broad file-format support through the Neo I/O library.
 
-## Key Features
+## Analysis Capabilities
 
-### Advanced Signal Visualization
-The application leverages hardware-accelerated plotting to handle high-frequency sampling data with minimal latency.
-- **High-Performance Rendering**: Capable of displaying traces with millions of data points at 60 fps using OpenGL-based rendering.
-- **Interactive Navigation**: Seamless zooming, panning, and scaling of waveforms.
-- **Multi-File Explorer**: A tree-based file management system that synchronizes with the analysis view, allowing for rapid dataset traversal.
+Synaptipy provides 14 built-in analysis modules, each available interactively in the GUI and as a composable unit in the batch processing pipeline.
 
-### Analysis Modules
-Synaptipy includes a comprehensive suite of analysis tools designed for neuronal characterization.
+**Intrinsic Membrane Properties**
+- Resting Membrane Potential (RMP) — statistical baseline extraction from a user-defined window
+- Input Resistance (Rin) — delta-V / delta-I from voltage response to a hyperpolarizing current step
+- Membrane Time Constant (Tau) — single-exponential fit to the voltage decay after a current step
+- I-V Curve — current–voltage relationship and aggregate Rin from multi-trial step protocols
+- Cell Capacitance (Cm) — derived from Tau/Rin in current-clamp, or capacitive-transient integration in voltage-clamp
 
-#### Spike Detection & Analysis
-Automated detection and parameterization of Action Potentials (APs).
-- **Detection Logic**: Configurable threshold-based detection with refractory period filtering.
-- **Metrics**: Calculates AP amplitude, half-width, rise time, decay time, and after-hyperpolarization (AHP).
+**Action Potential Analysis**
+- Spike Detection — threshold- and dV/dt-based AP detection with refractory period filtering; extracts amplitude, half-width, rise time, decay time, threshold voltage, and after-hyperpolarisation (AHP)
+- Burst Analysis — max-ISI burst detection; reports burst count, mean spikes per burst, burst duration, and intra-burst frequency
+- Spike Train Dynamics — inter-spike interval (ISI) statistics, coefficient of variation (CV), CV2, and local variation (LV)
+- Excitability / F-I Curve (multi-trial) — rheobase, F-I slope, maximum firing frequency, and spike-frequency adaptation ratio
+- Phase Plane Analysis — dV/dt versus voltage plot for AP initiation dynamics and threshold characterisation
 
-#### Burst Analysis
-Identification of firing bursts based on inter-spike intervals (ISI).
-- **Algorithms**: Implements standard burst detection algorithms (e.g., Poisson Surprise or max interval methods).
-- **Metrics**: Burst duration, spike count per burst, intra-burst frequency.
+**Synaptic Event Detection**
+- Adaptive Threshold — prominence-based detection that accommodates shifting baselines and overlapping events
+- Template Matching — parametric deconvolution using a user-defined double-exponential template for miniature event detection
+- Baseline-Peak — direct baseline-to-peak amplitude detection for evoked or spontaneous events
 
-#### Intrinsic Properties
-Automated extraction of sub-threshold membrane properties.
-- **Resting Membrane Potential (RMP)**: Statistical calculation of baseline voltage.
-- **Input Resistance (Rin)**: Derived from voltage responses to hyperpolarizing current steps.
-- **Membrane Time Constant (Tau)**: Exponential fitting of the voltage decay.
+**Optogenetics**
+- Optogenetic Synchronisation — extracts TTL/digital stimulus pulses from a secondary channel and correlates them with spikes to compute optical latency, response probability, and jitter
 
-#### Event Detection (Miniature Analysis)
-Detection of spontaneous synaptic events in voltage or current clamp.
-- **Methods**: Template matching and threshold-crossing detection algorithms.
-- **Filtering**: Integrated digital filters (Low-pass, High-pass, Notch) for signal conditioning prior to detection.
+## Extensibility and Plugin Interface
 
-#### Phase Plane Analysis
-Visualization of Action Potential dynamics in phase space.
-- **Plotting**: Generates dV/dt versus Voltage plots for analyzing initiation dynamics and threshold voltages.
+Synaptipy is built around a central `AnalysisRegistry` that maps named analysis functions to the GUI and batch engine via a decorator. Any Python script placed in `~/.synaptipy/plugins/` that uses the `@AnalysisRegistry.register` decorator is automatically discovered at startup and made available in both the interactive analyser and the batch processing pipeline — no modification to the core package is required.
 
-### Batch Processing Engine
-A dedicated engine for processing large datasets without manual intervention.
-- **Pipeline Architecture**: Users can define sequential analysis steps (e.g., Filter -> Spike Detect -> Burst Analysis).
-- **Background Execution**: Analysis tasks run in separate threads to maintain GUI responsiveness.
-- **Metadata Handling**: Automatic extraction of recording metadata (Gain, Sampling Rate, DateTime) for structured results.
-- **Data Export**: Aggregated results are exported to CSV formats compatible with statistical software (Python/Pandas, R, MATLAB).
+A fully documented template (`src/Synaptipy/templates/analysis_template.py`) defines the required function signature and return types, enabling researchers to integrate custom algorithms without any knowledge of the GUI internals.
+
+## Supported File Formats
+
+File I/O is handled through the [Neo](https://neo.readthedocs.io) library, giving Synaptipy broad compatibility across acquisition systems:
+
+| Format | Extension(s) | Acquisition System |
+|---|---|---|
+| Axon Binary Format | `.abf` | Axon / Molecular Devices |
+| WinWCP | `.wcp` | Strathclyde Electrophysiology Software |
+| CED / Spike2 | `.smr`, `.smrx` | Cambridge Electronic Design |
+| Igor Pro | `.ibw`, `.pxp` | WaveMetrics |
+| Intan | `.rhd`, `.rhs` | Intan Technologies |
+| Neurodata Without Borders | `.nwb` | NWB standard |
+| BrainVision | `.vhdr` | Brain Products |
+| European Data Format | `.edf` | EDF/EDF+ |
+| Plexon | `.plx`, `.pl2` | Plexon |
+| Open Ephys | `.continuous`, `.oebin` | Open Ephys |
+| Tucker Davis Technologies | `.tev`, `.tbk` | TDT |
+| Neuralynx | `.ncs`, `.nse`, `.nev` | Neuralynx |
+| NeuroExplorer | `.nex` | NeuroExplorer |
+| MATLAB | `.mat` | — |
+| ASCII / CSV | `.txt`, `.csv`, `.tsv` | — |
+
+Any format supported by Neo but not listed above can be made available by adding a corresponding entry to the `IODict` in the infrastructure layer.
+
+## Visualization
+
+- OpenGL-accelerated trace rendering capable of displaying multi-million sample recordings at interactive frame rates
+- Tree-based multi-file explorer with synchronised analysis view
+- Interactive zooming, panning, and per-channel scaling
+- Batch result overlays and popup plots (I-V curves, F-I curves, phase planes) generated directly within the GUI
+
+## Batch Processing
+
+- Composable pipeline architecture: chain any registered analysis steps in sequence
+- Background execution in worker threads — the GUI remains responsive during batch runs
+- Automatic metadata extraction (sampling rate, gain, recording datetime)
+- Results exported to CSV, compatible with Python/Pandas, R, and MATLAB
+- NWB export for standards-compliant data archival
 
 ## Technical Architecture
 
-Synaptipy adheres to a strict "Separation of Concerns" architecture for maintainability and scientific accuracy.
+Synaptipy follows a strict separation-of-concerns design:
 
-- **Core Layer**: Contains pure Python logic for signal processing and analysis. It is strictly decoupled from the GUI, ensuring that analysis algorithms can be tested and verified independently.
-- **Application Layer**: Manages the PySide6 (Qt6) based user interface, handling user interactions and visualization state.
-- **Infrastructure Layer**: Handles file I/O operations using the Neo and PyNWB libraries, ensuring broad compatibility with electrophysiology file formats (ABF, NWB, etc.).
+- **Core layer** — pure Python analysis logic, fully decoupled from the GUI and independently testable
+- **Application layer** — PySide6 (Qt6) user interface and plugin manager
+- **Infrastructure layer** — file I/O via Neo and PyNWB; NWB export
 
-| Component | Technology | Version Requirement |
-|-----------|------------|---------------------|
-| **Language** | Python | 3.10+ |
-| **GUI Framework** | PySide6 | >= 6.7.0 |
-| **Plotting Engine** | PyQtGraph | >= 0.13.0 |
-| **Data Standard** | Neo / PyNWB | >= 0.14.0 / >= 3.1.0 |
-| **Computation** | SciPy / NumPy | >= 1.13.0 / >= 2.0.0 |
+| Component | Technology | Minimum Version |
+|---|---|---|
+| Language | Python | 3.10 |
+| GUI Framework | PySide6 | 6.7.0 |
+| Plotting Engine | PyQtGraph | 0.13.0 |
+| Electrophysiology I/O | Neo | 0.14.0 |
+| NWB Export | PyNWB | 3.1.0 |
+| Numerical Computation | SciPy / NumPy | 1.13.0 / 2.0.0 |
 
 ## Installation
 
@@ -152,17 +182,15 @@ print(results)
 
 Full API reference, tutorials, and the developer guide are hosted on ReadTheDocs:
 
-- **Stable / latest**: https://synaptipy.readthedocs.io/en/latest/
-- **Tutorial**: https://synaptipy.readthedocs.io/en/latest/tutorial/index.html
-- **API Reference**: https://synaptipy.readthedocs.io/en/latest/api_reference.html
+- [Full documentation (stable)](https://synaptipy.readthedocs.io/en/latest/)
+- [Quick-start tutorial](https://synaptipy.readthedocs.io/en/latest/tutorial/index.html)
+- [API reference](https://synaptipy.readthedocs.io/en/latest/api_reference.html)
+- [Developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html)
 
 ## Contributing
 
-Contributions are welcome. Please refer to the [online developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) or the `docs/` directory for development standards. Use the `rules.md` file as the authoritative source for architectural compliance and code style.
+Collaborations and contributions are welcome. Whether you are adding a new analysis module, supporting an additional file format, or improving the documentation, please refer to the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project structure, coding standards, and the contribution workflow. The plugin interface provides the lowest-friction path to integrating custom analysis routines.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for complete details.
-
----
-**Synaptipy Development Team**
+Synaptipy is free and open-source software licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for full terms.
