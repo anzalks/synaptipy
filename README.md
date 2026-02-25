@@ -10,6 +10,8 @@
 
 **Electrophysiology Visualization & Analysis Suite**
 
+> 📖 **Full documentation**: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
+
 Synaptipy is a high-performance graphical user interface (GUI) designed for the visualization and analysis of electrophysiological data, specifically focusing on Patch Clamp and intracellular recordings. Built on Python and the Qt6 framework, it provides a robust, cross-platform solution for managing complex datasets and executing batch analysis pipelines.
 
 ## Key Features
@@ -146,9 +148,17 @@ results = engine.run_batch([file_path], pipeline)
 print(results)
 ```
 
+## Documentation
+
+Full API reference, tutorials, and the developer guide are hosted on ReadTheDocs:
+
+- **Stable / latest**: https://synaptipy.readthedocs.io/en/latest/
+- **Tutorial**: https://synaptipy.readthedocs.io/en/latest/tutorial/index.html
+- **API Reference**: https://synaptipy.readthedocs.io/en/latest/api_reference.html
+
 ## Contributing
 
-Contributions are welcome. Please refer to the documentation in the `docs/` directory for development standards. Use the `rules.md` file as the authoritative source for architectural compliance and code style.
+Contributions are welcome. Please refer to the [online developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) or the `docs/` directory for development standards. Use the `rules.md` file as the authoritative source for architectural compliance and code style.
 
 ## License
 

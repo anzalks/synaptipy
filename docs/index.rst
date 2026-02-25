@@ -3,10 +3,31 @@
 Welcome to Synaptipy's Documentation
 ======================================
 
+.. image:: https://img.shields.io/badge/source-GitHub-181717?logo=github&logoColor=white
+   :target: https://github.com/anzalks/synaptipy
+   :alt: GitHub repository
+
+.. image:: https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white
+   :target: https://www.python.org/
+   :alt: Python 3.10+
+
+.. image:: https://img.shields.io/badge/license-AGPL--3.0-blue
+   :target: https://github.com/anzalks/synaptipy/blob/main/LICENSE
+   :alt: License: AGPL-3.0
+
+.. image:: https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg?branch=main
+   :target: https://github.com/anzalks/synaptipy/actions/workflows/test.yml
+   :alt: CI status
+
+|
+
 Synaptipy is a comprehensive electrophysiology visualisation and analysis suite for
 patch-clamp and intracellular recording data. Built on Python and Qt6, it provides
 high-performance signal visualisation, 14 dedicated analysis modules, a batch
 processing engine, and standards-compliant data export (NWB, CSV).
+
+The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
+Bug reports and pull requests are welcome there.
 
 .. grid:: 2
 
@@ -37,6 +58,20 @@ processing engine, and standards-compliant data export (NWB, CSV).
       :link-type: doc
 
       Project structure, coding standards, testing, and contribution workflow.
+
+.. grid:: 2
+
+   .. grid-item-card:: :fab:`github` Source on GitHub
+      :link: https://github.com/anzalks/synaptipy
+      :link-type: url
+
+      Browse the source code, open issues, or submit pull requests on GitHub.
+
+   .. grid-item-card:: Changelog
+      :link: https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md
+      :link-type: url
+
+      Release history and notable changes between versions.
 
 ----
 
