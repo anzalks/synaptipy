@@ -57,23 +57,31 @@ def pytest_sessionfinish(session, exitstatus):
 
     - macOS/Linux: os._exit() calls libc _exit() which skips C++ destructors,
       atexit handlers and Python GC — safe on these platforms.
-    - Windows: os._exit() internally calls ExitProcess() which fires
-      DLL_PROCESS_DETACH on all loaded DLLs (including Qt) → access violation
-      on freed Qt C++ objects → process exits with code 127 (Windows crash
-      code from SEH in DLL teardown).  RtlExitUserProcess() in ntdll.dll is
-      the true Windows equivalent of POSIX _exit(): it calls NtTerminateProcess
-      directly at the kernel boundary, bypassing ALL user-mode cleanup
-      (DLL_PROCESS_DETACH, CRT atexit, Python GC, everything).
+    - Windows: os._exit() calls ExitProcess() which fires DLL_PROCESS_DETACH
+      on all loaded DLLs (including Qt) → access violation on freed Qt C++
+      objects.  RtlExitUserProcess() still runs LdrShutdownProcess() and
+      therefore also fires DLL_PROCESS_DETACH → same crash.
+      kernel32.TerminateProcess() is the ONLY Windows API that truly bypasses
+      DLL_PROCESS_DETACH (per MSDN: "does not run the DLL entry function with
+      DLL_PROCESS_DETACH").  argtypes must be set explicitly: without them,
+      ctypes defaults GetCurrentProcess() restype to c_int (32-bit), and the
+      pseudo-handle −1 is truncated to 0xFFFFFFFF instead of the correct 64-bit
+      0xFFFFFFFFFFFFFFFF, causing TerminateProcess to fail with
+      ERROR_INVALID_HANDLE and fall through to a normal (crashing) exit.
+      We pass the pseudo-handle as ctypes.c_void_p(-1) directly to avoid the
+      GetCurrentProcess return-type issue entirely.
     """
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         if sys.platform == 'win32':
             import ctypes
-            # NtDll RtlExitUserProcess = Windows kernel-level _exit().
-            # Bypasses ExitProcess() DLL teardown that crashes Qt on exit.
-            ntdll = ctypes.WinDLL('ntdll')
-            ntdll.RtlExitUserProcess.argtypes = [ctypes.c_uint]
-            ntdll.RtlExitUserProcess.restype = None
-            ntdll.RtlExitUserProcess(int(exitstatus))
+            # kernel32.TerminateProcess bypasses DLL_PROCESS_DETACH per MSDN.
+            # Must set argtypes so the 64-bit pseudo-handle (-1) is not
+            # truncated to 32-bit 0xFFFFFFFF by ctypes' default c_int behaviour.
+            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            kernel32.TerminateProcess.restype = ctypes.c_bool
+            # -1 == pseudo-handle constant for current process (GetCurrentProcess)
+            kernel32.TerminateProcess(ctypes.c_void_p(-1), int(exitstatus))
         else:
             os._exit(exitstatus)
 
