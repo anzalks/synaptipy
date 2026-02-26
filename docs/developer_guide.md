@@ -147,6 +147,41 @@ The test suite involves PySide6 and pyqtgraph widgets running under
 `QT_QPA_PLATFORM=offscreen`.  Several platform-specific crash patterns have been
 resolved; the rules below **must not be reverted** or the CI will break again.
 
+### Analysis Registry import rule — DO NOT import only registry.py
+
+To populate the `AnalysisRegistry`, **always import the full package**:
+```python
+import Synaptipy.core.analysis  # triggers __init__.py → from . import basic_features, etc.
+```
+
+**Never** rely on `from Synaptipy.core.analysis.registry import AnalysisRegistry`
+alone — that only imports the registry *class* and does NOT execute the analysis
+sub-modules' `@AnalysisRegistry.register` decorators.
+
+This was the root cause of a Windows-only bug where the Analyser tab showed 0
+tabs while macOS showed 14: on macOS the batch engine happened to import the
+full package earlier via a different path (masking the issue), but on Windows no
+other code path triggered the import and the registry remained empty.
+
+The fix is in two places:
+- `startup_manager._begin_loading()` — imports the full package before building
+  the GUI so the registry is pre-populated.
+- `analyser_tab._load_analysis_tabs()` — imports the full package immediately
+  before calling `AnalysisRegistry.list_registered()` as a safety net.
+
+### Editable install must point to the active workspace
+
+`pip install -e .` stores the editable project location.  If the repo is cloned
+to a new directory, the old editable link still points to the previous path.
+Run `pip install -e .` **from the new workspace** to update.
+
+Symptom: modules visible on disk (e.g. `capacitance.py`, `optogenetics.py`,
+`train_dynamics.py`) throw `ModuleNotFoundError` because Python resolves the
+package from the stale path.  Verify with:
+```bash
+pip show Synaptipy | grep "Editable project location"
+```
+
 ### Why local macOS tests always exit non-zero
 
 `pytest_sessionfinish` in `tests/conftest.py` calls `os._exit(exitstatus)` when
