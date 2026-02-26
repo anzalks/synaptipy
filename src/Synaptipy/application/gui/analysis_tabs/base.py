@@ -118,6 +118,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Initialize early so it's available for layout placement by subclasses
         self.preprocessing_widget = PreprocessingWidget()
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
+        self.preprocessing_widget.preprocessing_reset_requested.connect(self._handle_preprocessing_reset)
         # --- END ADDED ---
 
         # --- Scrollbar State (initialised early so signal handlers
@@ -388,7 +389,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if settings is None:
             # Reset all preprocessing
             self._active_preprocessing_settings = None
+            self._preprocessed_data = None
             self.pipeline.clear()
+            # Reset the PreprocessingWidget UI so combos show "None"
+            if self.preprocessing_widget:
+                self.preprocessing_widget.reset_ui()
         elif 'baseline' in settings or 'filters' in settings:
             # Slot-based format - apply all steps
             self._active_preprocessing_settings = settings
@@ -418,6 +423,49 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     self._plot_selected_data()
             except Exception as e:
                 log.error(f"Failed to re-plot after global preprocessing: {e}")
+
+    def _handle_preprocessing_reset(self):
+        """Handle the Reset Preprocessing button click.
+
+        Clears all preprocessing state (pipeline, cached data, settings),
+        resets the PreprocessingWidget UI controls to their default state,
+        notifies the parent AnalyserTab to propagate the reset globally,
+        and re-plots with raw data.
+        """
+        log.debug(f"{self.__class__.__name__}: Preprocessing reset requested.")
+
+        # 1. Clear local state
+        self._active_preprocessing_settings = None
+        self._preprocessed_data = None
+        self.pipeline.clear()
+
+        # 2. Reset the PreprocessingWidget UI controls (combos back to "None")
+        if self.preprocessing_widget:
+            self.preprocessing_widget.reset_ui()
+
+        # 3. Notify parent AnalyserTab to propagate reset to all sibling tabs
+        #    and update SessionManager
+        parent_analyser = self.parent()
+        while parent_analyser is not None:
+            if hasattr(parent_analyser, "set_global_preprocessing"):
+                parent_analyser.set_global_preprocessing(None)
+                log.debug("Notified parent AnalyserTab about preprocessing reset.")
+                break
+            parent_analyser = parent_analyser.parent()
+
+        # 4. Update SessionManager directly as well
+        try:
+            from Synaptipy.application.session_manager import SessionManager
+            SessionManager().preprocessing_settings = None
+        except Exception as e:
+            log.warning(f"Could not clear SessionManager preprocessing: {e}")
+
+        # 5. Re-plot with raw data if data is loaded
+        if self._selected_item_recording is not None:
+            try:
+                self._plot_selected_data()
+            except Exception as e:
+                log.error(f"Failed to re-plot after preprocessing reset: {e}")
 
     def _rebuild_pipeline_from_settings(self):
         """Rebuild pipeline from current slot-based settings."""

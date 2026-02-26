@@ -225,6 +225,15 @@ class PreprocessingWidget(QtWidgets.QWidget):
         log.debug("Reset preprocessing requested")
         self.preprocessing_reset_requested.emit()
 
+    def reset_ui(self):
+        """Reset all UI controls to their default ("None") state.
+
+        Called after a preprocessing reset so the widget visually reflects
+        that no preprocessing is active.
+        """
+        self.baseline_type_combo.setCurrentIndex(0)  # "None"
+        self.filter_type_combo.setCurrentIndex(0)    # "None"
+
     def _on_baseline_type_changed(self, index):
         self.bl_param_stack.setCurrentIndex(index)
         self.apply_baseline_btn.setEnabled(index != 0)

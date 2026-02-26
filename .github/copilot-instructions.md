@@ -33,6 +33,19 @@ Run `pip install -e .` from the new workspace to update.  Symptom: modules
 visible on disk (`capacitance.py`, `optogenetics.py`, `train_dynamics.py`) throw
 `ModuleNotFoundError` because Python resolves the package from the stale path.
 
+### Preprocessing reset must propagate globally
+`BaseAnalysisTab._handle_preprocessing_reset()` is connected to
+`PreprocessingWidget.preprocessing_reset_requested`.  When fired it must:
+1. Clear `_active_preprocessing_settings`, `_preprocessed_data`, and `pipeline`
+2. Call `preprocessing_widget.reset_ui()` to reset combo boxes to "None"
+3. Walk up to the parent `AnalyserTab` and call `set_global_preprocessing(None)`
+   so **all** sibling tabs also reset
+4. Clear `SessionManager().preprocessing_settings`
+5. Re-plot with raw data
+
+`apply_global_preprocessing(None)` (called on sibling tabs) must also call
+`preprocessing_widget.reset_ui()` so every tab's UI visually reflects the reset.
+
 ## CI / test rules — DO NOT VIOLATE
 
 ### PySide6 version constraint — DO NOT WIDEN

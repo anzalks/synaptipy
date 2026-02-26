@@ -124,6 +124,9 @@ class AnalyserTab(QtWidgets.QWidget):
         if settings is None:
             # Clear all
             self._global_preprocessing_settings = None
+            # Reset the confirmation flag so the popup can re-appear
+            # if preprocessing is later re-applied from the Explorer tab
+            self._global_preprocessing_confirmed = False
         elif 'baseline' in settings or 'filters' in settings:
             # Already in slot format
             self._global_preprocessing_settings = settings
