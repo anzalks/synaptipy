@@ -20,7 +20,7 @@
 
 ### PySide6 version constraint — DO NOT WIDEN
 `requirements.txt`, `pyproject.toml`, and `environment.yml` all pin
-`pyside6>=6.7.0,<6.10`.  **Do not remove or loosen this upper bound.**
+`pyside6==6.7.3` (exact).  **Do not remove or loosen this pin.**
 
 PySide6 6.10.x changed the internal signal-connection machinery so that
 deferred ViewBox geometry callbacks re-queue themselves *during* `connect()`
@@ -33,14 +33,35 @@ The constraint must stay until pyqtgraph ships a fix or we switch to creating
 a fresh `GraphicsLayoutWidget` per rebuild cycle.
 
 ### Local macOS exit codes are misleading
-`pytest_sessionfinish` calls `os._exit()` in offscreen mode; the process always
-prints `Abort trap: 6` on macOS even when all tests passed.  **Never judge a
+`pytest_sessionfinish` calls `os._exit()` (macOS/Linux) or
+`kernel32.TerminateProcess()` (Windows) in offscreen mode; the macOS process
+always prints `Abort trap: 6` even when all tests passed.  **Never judge a
 local macOS run by the shell exit code.**  Check the pytest output lines
 (`N passed`, zero `FAILED`):
 ```bash
 conda run -n synaptipy python -m pytest tests/ 2>&1 | grep -c PASSED
 conda run -n synaptipy python -m pytest tests/ 2>&1 | grep "FAILED\|ERROR "
 ```
+
+### Windows pytest_sessionfinish uses TerminateProcess — DO NOT CHANGE
+`pytest_sessionfinish` calls `kernel32.TerminateProcess(ctypes.c_void_p(-1), int(exitstatus))`
+on Windows.  **Do not replace with `os._exit()`, `RtlExitUserProcess`, or any
+other function.**
+
+- `os._exit()` calls `ExitProcess()` which fires `DLL_PROCESS_DETACH` on all
+  loaded DLLs (including Qt) → access violation on freed Qt C++ objects.
+- `ntdll.RtlExitUserProcess()` still calls `LdrShutdownProcess()` which also
+  fires `DLL_PROCESS_DETACH` → same crash.  Confirmed via faulthandler traceback
+  in CI run 22433271920: crash at `conftest.py::pytest_sessionfinish` line 76.
+- `kernel32.TerminateProcess()` is the only API that truly bypasses
+  `DLL_PROCESS_DETACH` (MSDN: "does not run the DLL entry function with
+  DLL_PROCESS_DETACH").
+
+`argtypes` and `ctypes.c_void_p(-1)` are mandatory:
+without them, ctypes defaults `GetCurrentProcess()` restype to `c_int` (32-bit),
+truncating the pseudo-handle from `0xFFFFFFFFFFFFFFFF` to `0xFFFFFFFF`.
+`TerminateProcess` then receives the wrong handle, returns `ERROR_INVALID_HANDLE`,
+falls through to normal Qt-cleanup exit → crash → exit code 127.
 
 ### GC must stay disabled in offscreen mode
 `tests/conftest.py::pytest_configure` calls `gc.disable()` when
