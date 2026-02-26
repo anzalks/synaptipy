@@ -7,12 +7,13 @@ on:
       - "docs/**"
       - "src/**"
       - ".readthedocs.yaml"
-      - "environment.yml"
+      - "pyproject.toml"
   pull_request:
     branches: ["main", "master"]
     paths:
       - "docs/**"
       - "src/**"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -20,34 +21,26 @@ permissions:
 
 jobs:
   docs:
-    name: Sphinx build (synaptipy env)
+    name: Sphinx build
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y libgl1 libglib2.0-0
-
-      - name: Set up Conda (Miniforge)
-        uses: conda-incubator/setup-miniconda@v3
+      # Docs build mocks all Qt/PySide6 imports via conf.py — no GUI libs needed.
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          miniforge-version: latest
-          environment-file: environment.yml
-          activate-environment: synaptipy
-          auto-activate-base: false
+          python-version: "3.11"
 
-      - name: Install package (editable) + docs extras
-        shell: bash -el {0}
+      - name: Install package + docs dependencies
         run: |
-          pip install -e ".[docs]" --no-deps
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
 
       - name: Build HTML documentation
-        shell: bash -el {0}
         run: |
-          sphinx-build -b html docs docs/_build/html --keep-going -q
+          sphinx-build -b html docs docs/_build/html --keep-going -W --no-color 2>&1
 
       - name: Upload HTML docs as artifact
         uses: actions/upload-artifact@v4

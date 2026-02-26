@@ -7,18 +7,10 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    # Use mambaforge so that the conda environment.yml (name: synaptipy) is
-    # recreated on ReadTheDocs with all runtime + docs dependencies.
-    python: "mambaforge-23.11"
-  # System packages required even in a headless doc build
-  apt_packages:
-    - libgl1
-    - libglib2.0-0
-
-# Recreate the synaptipy conda environment from environment.yml.
-# All Sphinx / MyST / RTD-theme deps are listed there under pip:.
-conda:
-  environment: environment.yml
+    # Use Python 3.11 with pip — no conda needed.
+    # docs/conf.py mocks all heavy imports (PySide6, pyqtgraph, neo, etc.)
+    # so the docs build never needs the full runtime environment.
+    python: "3.11"
 
 sphinx:
   configuration: docs/conf.py
@@ -26,7 +18,7 @@ sphinx:
 
 python:
   install:
-    # Install the package itself (editable) so autodoc can import it.
+    # Install the package + all Sphinx/extension deps declared in [docs] extras.
     - method: pip
       path: .
       extra_requirements:
