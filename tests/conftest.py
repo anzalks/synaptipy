@@ -52,20 +52,28 @@ def pytest_sessionfinish(session, exitstatus):
     """Force-exit after tests to prevent crashes during Python/Qt teardown.
 
     PySide6 + pyqtgraph leave C++ objects partially alive at session end.
-    Normal process exit (or os._exit on Windows) triggers cleanup code that
-    dereferences freed pointers, causing crashes.
+    Normal process exit triggers Qt DLL_PROCESS_DETACH / CRT atexit cleanup
+    that dereferences freed C++ pointers → crash on all platforms.
 
-    - macOS/Linux: os._exit() skips Python GC and atexit but still calls
-      libc _exit() which is safe on these platforms.
-    - Windows: os._exit() calls ExitProcess() which runs DLL_PROCESS_DETACH
-      on Qt DLLs — that cleanup accesses freed Qt objects → access violation.
-      TerminateProcess() is the only Windows API that truly skips all cleanup.
+    - macOS/Linux: os._exit() calls libc _exit() which skips C++ destructors,
+      atexit handlers and Python GC — safe on these platforms.
+    - Windows: os._exit() internally calls ExitProcess() which fires
+      DLL_PROCESS_DETACH on all loaded DLLs (including Qt) → access violation
+      on freed Qt C++ objects → process exits with code 127 (Windows crash
+      code from SEH in DLL teardown).  RtlExitUserProcess() in ntdll.dll is
+      the true Windows equivalent of POSIX _exit(): it calls NtTerminateProcess
+      directly at the kernel boundary, bypassing ALL user-mode cleanup
+      (DLL_PROCESS_DETACH, CRT atexit, Python GC, everything).
     """
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         if sys.platform == 'win32':
             import ctypes
-            ctypes.windll.kernel32.TerminateProcess(
-                ctypes.windll.kernel32.GetCurrentProcess(), int(exitstatus))
+            # NtDll RtlExitUserProcess = Windows kernel-level _exit().
+            # Bypasses ExitProcess() DLL teardown that crashes Qt on exit.
+            ntdll = ctypes.WinDLL('ntdll')
+            ntdll.RtlExitUserProcess.argtypes = [ctypes.c_uint]
+            ntdll.RtlExitUserProcess.restype = None
+            ntdll.RtlExitUserProcess(int(exitstatus))
         else:
             os._exit(exitstatus)
 
