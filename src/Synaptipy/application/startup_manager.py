@@ -66,6 +66,17 @@ class StartupManager(QtCore.QObject):
         # Step 0: Initial setup
         self._update_progress(0)
 
+        # Load built-in analysis modules FIRST so that all @AnalysisRegistry.register
+        # decorators run and populate the registry before the GUI is constructed.
+        # Importing only registry.py (as analyser_tab used to do) does not trigger
+        # the sub-module imports in core/analysis/__init__.py — this explicit import
+        # of the package does.  This is the root cause of analyses missing on Windows.
+        try:
+            import Synaptipy.core.analysis  # noqa: F401 — side-effect: registers all built-in analyses
+            log.debug("Built-in analysis modules loaded and registered.")
+        except Exception as e:
+            log.error(f"Failed to import built-in analysis modules: {e}")
+
         # Load external plugins safely before building the GUI
         try:
             from Synaptipy.application.plugin_manager import PluginManager

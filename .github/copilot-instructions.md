@@ -16,6 +16,23 @@
 - `ui_params` entries drive the GUI automatically; use `visible_when: {"param": "...", "value": "..."}` for conditional visibility
 - Wrapper functions must return a plain `dict`; private keys (starting with `_`) are hidden from the results table
 
+### Registry import rule — DO NOT import only registry.py
+To populate the `AnalysisRegistry`, **import the full package**
+`import Synaptipy.core.analysis` (which triggers `__init__.py` → `from . import
+basic_features`, etc.).  **Never** rely on
+`from Synaptipy.core.analysis.registry import AnalysisRegistry` alone — that
+only imports the class and does NOT execute the analysis sub-modules' decorators.
+This was the root cause of the Windows bug where the Analyser tab showed 0 tabs
+while macOS showed 14 (on macOS the batch engine happened to be imported earlier
+via a different path, masking the issue).
+
+### Editable install must point to the active workspace
+`pip install -e .` stores the editable project location.  If the repo is cloned
+to a new directory, the old editable link still points to the previous path.
+Run `pip install -e .` from the new workspace to update.  Symptom: modules
+visible on disk (`capacitance.py`, `optogenetics.py`, `train_dynamics.py`) throw
+`ModuleNotFoundError` because Python resolves the package from the stale path.
+
 ## CI / test rules — DO NOT VIOLATE
 
 ### PySide6 version constraint — DO NOT WIDEN
