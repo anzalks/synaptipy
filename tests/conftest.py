@@ -52,9 +52,14 @@ def pytest_sessionfinish(session, exitstatus):
     """
     On macOS headless (offscreen), PySide6 and pyqtgraph frequently crash with Abort trap 6
     during the C++ garbage collection phase at the very end of the test session.
-    A common workaround is to forcefully exit the process exactly after tests complete.
+    Force-exit the process to skip GC teardown.
+
+    Windows is excluded: os._exit() on Windows triggers ExitProcess() which
+    invokes DLL_PROCESS_DETACH on Qt DLLs.  If any C++ Qt objects are
+    partially freed at that point the DLL cleanup accesses freed memory
+    causing an access violation.  On Windows, normal process exit is safe.
     """
-    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen" and sys.platform == "darwin":
         os._exit(exitstatus)
 
 
