@@ -49,18 +49,25 @@ def _drain_qt_events_after_test():
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """
-    On macOS headless (offscreen), PySide6 and pyqtgraph frequently crash with Abort trap 6
-    during the C++ garbage collection phase at the very end of the test session.
-    Force-exit the process to skip GC teardown.
+    """Force-exit after tests to prevent crashes during Python/Qt teardown.
 
-    Windows is excluded: os._exit() on Windows triggers ExitProcess() which
-    invokes DLL_PROCESS_DETACH on Qt DLLs.  If any C++ Qt objects are
-    partially freed at that point the DLL cleanup accesses freed memory
-    causing an access violation.  On Windows, normal process exit is safe.
+    PySide6 + pyqtgraph leave C++ objects partially alive at session end.
+    Normal process exit (or os._exit on Windows) triggers cleanup code that
+    dereferences freed pointers, causing crashes.
+
+    - macOS/Linux: os._exit() skips Python GC and atexit but still calls
+      libc _exit() which is safe on these platforms.
+    - Windows: os._exit() calls ExitProcess() which runs DLL_PROCESS_DETACH
+      on Qt DLLs — that cleanup accesses freed Qt objects → access violation.
+      TerminateProcess() is the only Windows API that truly skips all cleanup.
     """
-    if os.environ.get("QT_QPA_PLATFORM") == "offscreen" and sys.platform == "darwin":
-        os._exit(exitstatus)
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        if sys.platform == 'win32':
+            import ctypes
+            ctypes.windll.kernel32.TerminateProcess(
+                ctypes.windll.kernel32.GetCurrentProcess(), int(exitstatus))
+        else:
+            os._exit(exitstatus)
 
 
 # Remove .verify_venv from sys.path to prevent its Python 3.13 scipy
