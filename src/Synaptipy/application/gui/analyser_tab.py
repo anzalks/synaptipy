@@ -124,6 +124,9 @@ class AnalyserTab(QtWidgets.QWidget):
         if settings is None:
             # Clear all
             self._global_preprocessing_settings = None
+            # Reset the confirmation flag so the popup can re-appear
+            # if preprocessing is later re-applied from the Explorer tab
+            self._global_preprocessing_confirmed = False
         elif 'baseline' in settings or 'filters' in settings:
             # Already in slot format
             self._global_preprocessing_settings = settings
@@ -407,6 +410,13 @@ class AnalyserTab(QtWidgets.QWidget):
             # Re-enable signals after all tabs are loaded
             self.sub_tab_widget.blockSignals(False)
         # --- NEW: Load Metadata-Driven Tabs for remaining registered analyses ---
+        # Import the full core.analysis package to trigger all @AnalysisRegistry.register
+        # decorators.  Importing only the registry sub-module (registry.py) is NOT
+        # enough — the individual analysis modules (basic_features, spike_analysis, …)
+        # must be executed so their decorators run and populate the registry.
+        # On Windows the import order never causes this package to be loaded earlier,
+        # so without this explicit import the registry is always empty at this point.
+        import Synaptipy.core.analysis  # noqa: F401 — side-effect: registers all built-in analyses
         from Synaptipy.core.analysis.registry import AnalysisRegistry
         from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 

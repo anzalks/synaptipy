@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0b2] - 2026-02-26
+
+> **Beta nightly release.** Fixes Windows-specific analysis loading bug and preprocessing reset propagation across all analysis tabs.
+
+### Fixed
+
+- **Windows Analysis Loading**: Fixed registry import bug where `AnalysisRegistry` remained
+  empty on Windows because only `registry.py` was imported (not the full
+  `Synaptipy.core.analysis` package that triggers `@register` decorators). Added
+  `import Synaptipy.core.analysis` in `analyser_tab.py` and `startup_manager.py`.
+- **Preprocessing Reset**: Connected the `preprocessing_reset_requested` signal in
+  `BaseAnalysisTab` and added `_handle_preprocessing_reset()` handler. Added
+  `reset_ui()` method to `PreprocessingWidget`. Reset now propagates globally to
+  all sibling analysis tabs via `AnalyserTab.set_global_preprocessing(None)`.
+
+### Added
+
+- Regression tests for registry population (`test_registry_metadata.py`)
+- Regression tests for preprocessing reset propagation (`test_preprocessing_reset.py`)
+- Developer documentation for registry import rule, editable install, and
+  preprocessing reset propagation (copilot-instructions.md, developer_guide.md)
+
 ## [0.1.0b1] - 2026-02-25
 
 > **Beta nightly release.** Core GUI, all 14 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
