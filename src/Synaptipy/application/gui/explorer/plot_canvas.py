@@ -118,4 +118,28 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             else:
                 plot_item.getAxis("bottom").showLabel(False)
 
+        # Windows fix: pyqtgraph bug #3195 — the base add_plot() already sets stretch
+        # per-row, but after a full rebuild we make a second pass here to be robust
+        # against any remaining layout-geometry stale state on Windows.
+        # We also schedule a deferred invalidate() so the QGraphicsGridLayout
+        # recalculates geometry inside the event loop (after the widget has been
+        # re-parented / shown), which is the step Windows DWM skips implicitly.
+        try:
+            from PySide6 import QtCore as _QtCore
+            internal_layout = self.widget.ci.layout
+            for row_idx in range(len(channel_keys)):
+                internal_layout.setRowStretchFactor(row_idx, 1)
+            internal_layout.setColumnStretchFactor(0, 1)
+
+            def _deferred_invalidate():
+                try:
+                    self.widget.ci.layout.invalidate()
+                    self.widget.ci.layout.activate()
+                except Exception:
+                    pass
+
+            _QtCore.QTimer.singleShot(0, _deferred_invalidate)
+        except Exception:
+            pass  # Non-fatal; gracefully fall back on unsupported platforms
+
         return channel_keys

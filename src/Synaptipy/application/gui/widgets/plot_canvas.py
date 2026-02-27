@@ -93,6 +93,21 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
 
+        # Windows fix: pyqtgraph bug #3195 — after widget.clear() + re-addPlot(),
+        # the internal QGraphicsGridLayout (widget.ci.layout) leaves each row at its
+        # near-zero sizeHint height on Windows (DWM skips the implicit re-layout pass
+        # that macOS/Linux Qt compositors perform).  Setting explicit stretch factors
+        # on the internal graphics layout — completely separate from the outer Qt
+        # widget SizePolicy — forces equal space distribution across all rows/cols.
+        try:
+            internal_layout = self.widget.ci.layout
+            actual_row = row if row is not None else (internal_layout.rowCount() - 1)
+            actual_col = col if col is not None else 0
+            internal_layout.setRowStretchFactor(actual_row, 1)
+            internal_layout.setColumnStretchFactor(actual_col, 1)
+        except Exception:
+            pass  # Non-fatal; fall back to default layout behaviour
+
         # Apply standard configuration
         self._configure_plot_item(plot_item, plot_id)
 
