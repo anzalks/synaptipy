@@ -105,6 +105,14 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             actual_col = col if col is not None else 0
             internal_layout.setRowStretchFactor(actual_row, 1)
             internal_layout.setColumnStretchFactor(actual_col, 1)
+            
+            def _deferred_invalidate():
+                try:
+                    internal_layout.invalidate()
+                    internal_layout.activate()
+                except Exception:
+                    pass
+            QtCore.QTimer.singleShot(0, _deferred_invalidate)
         except Exception:
             pass  # Non-fatal; fall back to default layout behaviour
 

@@ -493,22 +493,119 @@ class ExporterTab(QtWidgets.QWidget):
             return
 
         try:
+            # Flatten any nested '__dict__' from result objects BEFORE DataFrame creation
+            processed_results = []
+            for res in results_to_export:
+                # Copy to avoid modifying the original data stored in memory
+                flat_res = dict(res)
+                
+                # Check if there is a 'result' object that we need to unpack
+                nested_obj = flat_res.get("result")
+                if hasattr(nested_obj, "__dict__"):
+                    nested_dict = nested_obj.__dict__
+                    for k, v in nested_dict.items():
+                        # Don't overwrite top-level keys if they already exist
+                        if k not in flat_res:
+                            flat_res[k] = v
+                
+                # Expand summary_stats if present
+                if isinstance(flat_res.get("summary_stats"), dict):
+                    for k, v in flat_res["summary_stats"].items():
+                        if k not in flat_res:
+                            flat_res[k] = v
+                            
+                # Expand parameters if present
+                if isinstance(flat_res.get("parameters"), dict):
+                    for k, v in flat_res["parameters"].items():
+                        if k not in flat_res:
+                            flat_res[k] = v
+                            
+                processed_results.append(flat_res)
+
             # Create DataFrame
-            df = pd.DataFrame(results_to_export)
+            df = pd.DataFrame(processed_results)
 
             if output_path.lower().endswith(".json"):
                 # JSON Export
                 df.to_json(output_path, orient="records", indent=2, default_handler=str)
                 log.debug(f"Exported analysis results to JSON: {output_path}")
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
             else:
-                # CSV Export (Default)
-                # Flatten or stringify complex columns for CSV if needed, but pandas usually handles basic types.
-                # For complex types like arrays, we might want to stringify them explicitly if pandas doesn't.
-                # But for now, let's rely on pandas default behavior or string conversion.
-                df.to_csv(output_path, index=False)
-                log.debug(f"Exported analysis results to CSV: {output_path}")
+                # CSV Export (Tidy Export)
+                import tempfile
+                import zipfile
+                import shutil
+                import numpy as np
 
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
+                # Flatten nested dicts using json_normalize
+                df = pd.json_normalize(processed_results, sep='.')
+                
+                # Apply value conversion similar to CSVExporter
+                def convert_val(val):
+                    if val is None:
+                        return np.nan
+                    if hasattr(val, "tolist") and callable(getattr(val, "tolist")):
+                        try:
+                            return str(val.tolist())
+                        except:
+                            pass
+                    if hasattr(val, "item") and callable(getattr(val, "item")):
+                        try:
+                            return val.item()
+                        except:
+                            pass
+                    if isinstance(val, (list, tuple)):
+                        if len(val) == 0:
+                            return np.nan
+                        return str(val)
+                    return val
+
+                df = df.apply(lambda col: col.map(convert_val))
+                
+                # Clean up empty strings or NA-like strings to be pure np.nan
+                df = df.replace(r'^\s*$', np.nan, regex=True)
+                df = df.replace(['NaN', 'Na', 'None', 'NA', 'N/A', '<NA>'], np.nan)
+
+
+                out_p = Path(output_path)
+                
+                if "analysis_type" in df.columns:
+                    grouped = df.groupby("analysis_type")
+                else:
+                    grouped = [("Results", df)]
+                    
+                if out_p.is_dir():
+                    output_dir = out_p
+                    zip_path = None
+                else:
+                    output_dir = Path(tempfile.mkdtemp())
+                    if out_p.suffix.lower() == ".csv":
+                        zip_path = out_p.with_suffix(".zip")
+                    else:
+                        zip_path = out_p
+
+                csv_files = []
+                for analysis_type, group_df in grouped:
+                    # Drop columns that are entirely NA
+                    cleaned_df = group_df.dropna(axis=1, how="all")
+                    
+                    safe_name = str(analysis_type).replace(" ", "_").replace("/", "_")
+                    csv_filename = f"{safe_name}.csv"
+                    csv_filepath = output_dir / csv_filename
+                    cleaned_df.to_csv(csv_filepath, index=False, na_rep="")
+                    csv_files.append(csv_filepath)
+
+                if zip_path is not None:
+                    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                        for f in csv_files:
+                            zf.write(f, f.name)
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                    final_path = zip_path
+                else:
+                    final_path = output_dir
+
+                log.debug(f"Exported analysis results to: {final_path}")
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{final_path}")
 
         except Exception as e:
             log.error(f"Failed to export analysis results: {e}", exc_info=True)

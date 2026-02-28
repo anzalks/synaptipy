@@ -22,10 +22,6 @@ class AnalysisResultFormatter:
             # Map object types to legacy string IDs or new logic
             if isinstance(result, SpikeTrainResult):
                 analysis_type = "Spike Detection (Threshold)"
-                # Create a pseudo-dict for the internal methods if we want to reuse them
-                # OR better: update internal methods to handle objects.
-                # For now, converting to dict roughly to reuse existing logic is safest/fastest given constraints
-                # But we must be careful with attributes matching keys.
                 res_dict = {
                     "spike_count": len(result.spike_times) if result.spike_times is not None else 0,
                     "average_firing_rate_hz": result.mean_frequency,
@@ -36,12 +32,10 @@ class AnalysisResultFormatter:
                         if result.parameters.get("refractory_period") else None
                     )
                 }
-                # Pass through
                 return AnalysisResultFormatter._format_spike_detection(
                     res_dict), AnalysisResultFormatter._details_spike_detection(res_dict)
 
             elif isinstance(result, RinResult):
-                # Reuse logic
                 res_dict = {
                     "Input Resistance (kOhm)": result.value if result.unit == "kOhm" else None,
                     "Rin (MΩ)": result.value if result.unit == "MOhm" else None,
@@ -51,61 +45,65 @@ class AnalysisResultFormatter:
                 return AnalysisResultFormatter._format_input_resistance(
                     res_dict), AnalysisResultFormatter._details_input_resistance(res_dict)
 
-            # ... Add other mappings as needed or default to:
             analysis_type = "Unknown object"
 
         else:
+            # It's a dictionary. Check if it has a nested "result" object and flatten its attributes
+            nested_result = result.get("result")
+            if hasattr(nested_result, "__dict__"):
+                # Merge the nested object's attributes into the dictionary for easier formatting
+                result = {**nested_result.__dict__, **result}
+
             analysis_type = result.get("analysis_type", "Unknown")
 
         value_str = "N/A"
         details = []
 
         try:
-            if analysis_type in ["Input Resistance", "Input Resistance/Conductance"]:
+            target_type = analysis_type.lower()
+            if "resistance" in target_type or "rin" in target_type:
                 value_str = AnalysisResultFormatter._format_input_resistance(result)
                 details = AnalysisResultFormatter._details_input_resistance(result)
-                # Fallback check
                 if value_str == "N/A":
                     value_str, details_fallback = AnalysisResultFormatter._format_rin_fallback(result)
                     if details_fallback:
                         details.extend(details_fallback)
 
-            elif analysis_type == "Baseline Analysis":
+            elif "baseline" in target_type or "rmp" in target_type:
                 value_str = AnalysisResultFormatter._format_baseline(result)
                 details = AnalysisResultFormatter._details_baseline(result)
-                # Fallback check
                 if value_str == "N/A":
                     value_str, details_fallback = AnalysisResultFormatter._format_rmp_fallback(result)
                     if details_fallback:
                         details.extend(details_fallback)
 
-            elif analysis_type == "Spike Detection (Threshold)":
+            elif "spike" in target_type or "action potential" in target_type:
                 value_str = AnalysisResultFormatter._format_spike_detection(result)
                 details = AnalysisResultFormatter._details_spike_detection(result)
 
-            elif analysis_type == "Event Detection":
+            elif "event" in target_type or "template" in target_type or "epsc" in target_type or "ipsc" in target_type:
                 value_str = AnalysisResultFormatter._format_event_detection(result)
                 details = AnalysisResultFormatter._details_event_detection(result)
 
-            elif analysis_type in ["Phase Plane Analysis", "phase_plane_analysis"]:
+            elif "phase" in target_type:
                 value_str = AnalysisResultFormatter._format_phase_plane(result)
                 details = AnalysisResultFormatter._details_phase_plane(result)
 
-            elif analysis_type in ["Excitability Analysis", "excitability_analysis"]:
+            elif "excitability" in target_type or "f-i" in target_type or "f/i" in target_type:
                 value_str = AnalysisResultFormatter._format_excitability(result)
                 details = AnalysisResultFormatter._details_excitability(result)
 
-            elif analysis_type in ["Membrane Time Constant (Tau)", "tau_analysis"]:
+            elif "tau" in target_type or "time constant" in target_type:
                 value_str = AnalysisResultFormatter._format_tau(result)
-
-            # Check explicit fallbacks for older keys if analysis_type implies them
-            elif analysis_type in ["rmp_analysis"]:
-                value_str, details_fallback = AnalysisResultFormatter._format_rmp_fallback(result)
-                details.extend(details_fallback)
-
-            elif analysis_type in ["rin_analysis"]:
-                value_str, details_fallback = AnalysisResultFormatter._format_rin_fallback(result)
-                details.extend(details_fallback)
+                
+            else:
+                # Provide a generic fallback for other analysis types
+                # Just show the first few numeric values found
+                numeric_vals = [f"{k}: {AnalysisResultFormatter._to_float(v):.2f}" for k, v in result.items() if isinstance(v, (int, float)) and not isinstance(v, bool)]
+                if numeric_vals:
+                    value_str = numeric_vals[0]
+                    if len(numeric_vals) > 1:
+                        details.extend(numeric_vals[1:])
 
         except Exception as e:
             log.warning(f"Error formatting value for {analysis_type}: {e}")
@@ -192,6 +190,14 @@ class AnalysisResultFormatter:
         units = result.get("baseline_units", "")
         method = result.get("calculation_method", "")
 
+        # Fallback to rmp_mv if baseline_mean is not found
+        if mean is None:
+            mean = result.get("rmp_mv")
+        if sd is None:
+            sd = result.get("rmp_std")
+        if not units:
+            units = "mV"
+
         method_display = ""
         if method:
             if method.startswith("auto_"):
@@ -229,6 +235,12 @@ class AnalysisResultFormatter:
                 details.append("Method: Interactive Region")
             else:
                 details.append(f"Method: {method}")
+                
+        # Also check drift
+        drift = result.get("rmp_drift")
+        if drift is not None:
+            details.append(f"Drift: {drift} mV/s")
+            
         return details
 
     @staticmethod
@@ -298,17 +310,23 @@ class AnalysisResultFormatter:
     # --- Event Detection ---
     @staticmethod
     def _format_event_detection(result: Dict[str, Any]) -> str:
-        summary_stats = result.get("summary_stats", {})
-        if not isinstance(summary_stats, dict):
-            summary_stats = {}
+        event_count = result.get("event_count")
+        
+        # Fallback to older nested stat structure
+        if event_count is None:
+            summary_stats = result.get("summary_stats", {})
+            if isinstance(summary_stats, dict):
+                event_count = summary_stats.get("count")
 
-        event_count = summary_stats.get("count")
         if event_count is not None:
             try:
                 count = int(AnalysisResultFormatter._to_float(event_count))
                 value_str = f"{count} events"
 
-                freq = summary_stats.get("frequency_hz")
+                freq = result.get("frequency_hz")
+                if freq is None and "summary_stats" in result and isinstance(result["summary_stats"], dict):
+                    freq = result["summary_stats"].get("frequency_hz")
+                    
                 if freq is not None:
                     try:
                         freq_float = AnalysisResultFormatter._to_float(freq)
@@ -323,16 +341,16 @@ class AnalysisResultFormatter:
     @staticmethod
     def _details_event_detection(result: Dict[str, Any]) -> List[str]:  # noqa: C901
         details = []
-        method = result.get("method", "")
+        method = result.get("method", result.get("detection_method", ""))
         if method:
             details.append(f"Method: {method}")
 
+        direction = result.get("direction")
+        if direction:
+            details.append(f"Direction: {direction}")
+            
         params = result.get("parameters", {})
         if isinstance(params, dict):
-            direction = params.get("direction")
-            if direction:
-                details.append(f"Direction: {direction}")
-
             filter_val = params.get("filter")
             if filter_val is not None:
                 try:
@@ -341,16 +359,18 @@ class AnalysisResultFormatter:
                 except (ValueError, TypeError, AttributeError):
                     details.append(f"Filter: {filter_val} Hz")
 
-        summary_stats = result.get("summary_stats", {})
-        if isinstance(summary_stats, dict):
-            mean_amp = summary_stats.get("mean_amplitude")
-            amp_units = result.get("units", "")
-            if mean_amp is not None:
-                try:
-                    amp_float = AnalysisResultFormatter._to_float(mean_amp)
-                    details.append(f"Mean Amplitude: {amp_float:.2f} {amp_units}")
-                except (ValueError, TypeError, AttributeError):
-                    details.append(f"Mean Amplitude: {mean_amp} {amp_units}")
+        mean_amp = result.get("mean_amplitude")
+        if mean_amp is None and "summary_stats" in result and isinstance(result["summary_stats"], dict):
+            mean_amp = result["summary_stats"].get("mean_amplitude")
+            
+        amp_units = result.get("units", "pA")
+        if mean_amp is not None:
+            try:
+                amp_float = AnalysisResultFormatter._to_float(mean_amp)
+                details.append(f"Mean Amplitude: {amp_float:.2f} {amp_units}")
+            except (ValueError, TypeError, AttributeError):
+                details.append(f"Mean Amplitude: {mean_amp} {amp_units}")
+                
         return details
 
     # --- Phase Plane ---
