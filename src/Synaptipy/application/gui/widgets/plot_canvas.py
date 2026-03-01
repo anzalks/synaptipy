@@ -127,6 +127,10 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         if plot_item.getViewBox():
             plot_item.getViewBox().setBackgroundColor("white")
             plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
+            # Remove the default ~2% padding so data fills the view edge-to-edge.
+            # autoRange() and any setXRange/setYRange call that omits padding=
+            # will then default to 0 instead of adding blank space around data.
+            plot_item.getViewBox().setDefaultPadding(0.0)
 
             # Connect range signals.
             # Use default-arg capture (pid=plot_id) so each lambda closes over
