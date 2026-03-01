@@ -93,26 +93,18 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
 
-        # Windows fix: pyqtgraph bug #3195 — after widget.clear() + re-addPlot(),
-        # the internal QGraphicsGridLayout (widget.ci.layout) leaves each row at its
-        # near-zero sizeHint height on Windows (DWM skips the implicit re-layout pass
-        # that macOS/Linux Qt compositors perform).  Setting explicit stretch factors
-        # on the internal graphics layout — completely separate from the outer Qt
-        # widget SizePolicy — forces equal space distribution across all rows/cols.
+        # Windows fix: pyqtgraph bug #3195 — set stretch factors immediately so
+        # the QGraphicsGridLayout allocates equal space to each row/column on
+        # Windows.  A single synchronous invalidate is issued by the canvas
+        # subclass (e.g. ExplorerPlotCanvas) after all plots are added, which is
+        # more reliable than N per-plot deferred QTimer callbacks that can race
+        # with rapid file cycling.
         try:
             internal_layout = self.widget.ci.layout
             actual_row = row if row is not None else (internal_layout.rowCount() - 1)
             actual_col = col if col is not None else 0
             internal_layout.setRowStretchFactor(actual_row, 1)
             internal_layout.setColumnStretchFactor(actual_col, 1)
-            
-            def _deferred_invalidate():
-                try:
-                    internal_layout.invalidate()
-                    internal_layout.activate()
-                except Exception:
-                    pass
-            QtCore.QTimer.singleShot(0, _deferred_invalidate)
         except Exception:
             pass  # Non-fatal; fall back to default layout behaviour
 
@@ -343,6 +335,24 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self._close_all_plots()
         # Step 3: Discard stale deferred events before teardown (Win/Linux).
         self._cancel_pending_qt_events()
+        # Step 3.5: Reset layout stretch factors before teardown (Windows only).
+        # QGraphicsGridLayout retains per-row/column stretch factors even after
+        # clear().  When the next rebuild has fewer channels than the previous
+        # one, stale "ghost" rows keep equal stretch weights and the layout
+        # divides space among N_old rows while only N_new have content, making
+        # plots appear shrunk in the top rows on Windows.  Explicitly resetting
+        # all stretch factors to 0 before widget.clear() eliminates this.
+        # macOS and Linux compositors recalculate geometry implicitly so the
+        # reset is restricted to Windows to avoid disturbing their behaviour.
+        if sys.platform == 'win32':
+            try:
+                _layout = self.widget.ci.layout
+                for _i in range(_layout.rowCount()):
+                    _layout.setRowStretchFactor(_i, 0)
+                for _j in range(_layout.columnCount()):
+                    _layout.setColumnStretchFactor(_j, 0)
+            except Exception:
+                pass
         # Step 4: Destroy C++ layout children FIRST via Qt's scene graph.
         # Python wrappers in self.plot_items remain valid throughout so
         # PySide6 can cleanly resolve any C++ → Python back-references.
