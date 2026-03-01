@@ -1,4 +1,5 @@
 
+import sys
 import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -33,6 +34,11 @@ def reset_processing_state(explorer_tab):
     # processEvents: the former cancels queued events (safe, no code executed)
     # while the latter executes them and can cause re-entrant crashes on Windows
     # in offscreen mode with PySide6 >= 6.7.
+    #
+    # macOS guard: mirrors all other per-test drain fixtures in this repo.
+    # removePostedEvents corrupts pyqtgraph AllViews on macOS.
+    if sys.platform == 'darwin':
+        return
     try:
         from PySide6.QtCore import QCoreApplication
         QCoreApplication.removePostedEvents(None, 0)

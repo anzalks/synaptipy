@@ -166,6 +166,12 @@ def test_background_file_loading(main_window, qtbot, mock_recording):
         with qtbot.waitSignal(main_window.data_loader.data_ready, timeout=1000):
             main_window.data_loader.data_ready.emit(mock_recording)
 
+    # Let any deferred slot invocations complete before checking state.
+    # In offscreen mode with many prior test modules, queued-connection
+    # delivery can lag behind the waitSignal unblock.
+    from PySide6.QtCore import QCoreApplication
+    QCoreApplication.processEvents()
+
     # Assert: Check that SessionManager was updated with the recording
     assert main_window.session_manager.current_recording == mock_recording
 
