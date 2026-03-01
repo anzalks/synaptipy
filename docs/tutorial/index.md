@@ -220,9 +220,19 @@ cp src/Synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.p
 Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
 ```
 
-> If the `~/.synaptipy/plugins/` folder does not exist yet, create it
-> (`mkdir -p ~/.synaptipy/plugins`) or simply start Synaptipy once — it creates
-> the folder automatically.
+> **Plugin folder location by platform:**
+>
+> | Platform | Path |
+> |----------|------|
+> | macOS / Linux | `~/.synaptipy/plugins/` |
+> | Windows | `C:\Users\<YourUsername>\.synaptipy\plugins\` |
+>
+> If the folder does not exist yet, either create it manually or simply start
+> Synaptipy once — it creates the folder automatically.
+>
+> **Windows tip:** You can open the folder in Explorer by typing
+> `%USERPROFILE%\.synaptipy\plugins` in the address bar, or in PowerShell:
+> `explorer "$HOME\.synaptipy\plugins"`
 
 #### Step 2 — Write your analysis function
 
@@ -372,7 +382,7 @@ and batch processing all work immediately.
 - **No rebuild needed** — just save the `.py` file and restart Synaptipy.
 - **Errors are safe** — if your plugin has a syntax error or crashes, Synaptipy
   logs the error and keeps running (your tab simply won't appear).  Check the log
-  at `~/.synaptipy/synaptipy.log`.
+  at `~/.synaptipy/logs/` (Windows: `C:\Users\<YourUsername>\.synaptipy\logs\`).
 - **Multiple plugins** — put as many `.py` files in the plugins folder as you
   like; each one with an `@AnalysisRegistry.register` decorator creates a
   separate tab.
