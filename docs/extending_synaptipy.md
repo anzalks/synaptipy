@@ -106,13 +106,28 @@ metadata.
 
 1. Copy the template:
    ```bash
+   # macOS / Linux
    cp src/Synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
-   ```
-   (The `~/.synaptipy/plugins/` directory is created automatically the first
-   time Synaptipy runs.  If it does not exist yet, create it:
-   `mkdir -p ~/.synaptipy/plugins`.)
 
-2. Open `~/.synaptipy/plugins/my_analysis.py` in any editor.
+   # Windows (PowerShell)
+   Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
+   ```
+   The plugin directory is created automatically the first time Synaptipy runs.
+   If it does not exist yet, create it manually:
+   - macOS / Linux: `mkdir -p ~/.synaptipy/plugins`
+   - Windows (PowerShell): `New-Item -ItemType Directory -Force "$HOME\.synaptipy\plugins"`
+
+   > **Where is the plugins folder?**
+   >
+   > | Platform | Path |
+   > |----------|------|
+   > | macOS / Linux | `~/.synaptipy/plugins/` |
+   > | Windows | `C:\Users\<YourUsername>\.synaptipy\plugins\` |
+   >
+   > On Windows you can open it by typing `%USERPROFILE%\.synaptipy\plugins`
+   > in the File Explorer address bar.
+
+2. Open the copied file in any editor.
 
 3. Rename the function, change the `name=` and `label=`, adjust the `ui_params`
    and `plots` lists, and write your analysis logic.
@@ -452,14 +467,16 @@ Plot the trace with optional spike/event markers.
 
 ### Option A: User Plugin Directory (recommended for end users)
 
-```
-~/.synaptipy/plugins/my_analysis.py
-```
+| Platform | Full path |
+|----------|----------|
+| macOS / Linux | `~/.synaptipy/plugins/my_analysis.py` |
+| Windows | `C:\Users\<YourUsername>\.synaptipy\plugins\my_analysis.py` |
 
 - No Synaptipy source changes needed.
 - File is auto-discovered at startup.
 - Works for any number of `.py` files.
 - Will not be overwritten by upgrades.
+- On Windows, open the folder with `%USERPROFILE%\.synaptipy\plugins` in Explorer.
 
 ### Option B: Built-in Module (for core contributors)
 
@@ -706,7 +723,7 @@ def run_snr_wrapper(
 | Symptom | Cause | Fix |
 |---|---|---|
 | Tab does not appear | Plugin file has a syntax error | Check the Synaptipy log (`~/.synaptipy/synaptipy.log`) for `SyntaxError` messages. |
-| Tab does not appear | File not in `~/.synaptipy/plugins/` | Verify the path: `ls ~/.synaptipy/plugins/` |
+| Tab does not appear | File not in the plugins folder | Verify the path: macOS/Linux: `ls ~/.synaptipy/plugins/` — Windows: `dir %USERPROFILE%\.synaptipy\plugins` |
 | Tab does not appear | Missing `@AnalysisRegistry.register` decorator | The file must contain a decorated function. |
 | `ImportError` in log | Plugin imports a package not installed in your environment | Install the dependency: `pip install <package>` |
 | `name "X" is already registered` warning | Two plugins use the same `name=` string | Change one plugin's `name=` to something unique. |
