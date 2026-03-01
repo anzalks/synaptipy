@@ -16,6 +16,7 @@ including the mathematical methods used in each analysis module.
 1. [The Explorer Tab](#1-the-explorer-tab)
 2. [Signal Preprocessing](#2-signal-preprocessing)
 3. [The Analyser Tab](#3-the-analyser-tab)
+   - [3.6 Adding Your Own Analysis Tab](#36-adding-your-own-analysis-tab)
 4. [Analysis Modules — Detailed Reference](#4-analysis-modules--detailed-reference)
    - [4.1 Baseline / RMP](#41-baseline--rmp-analysis)
    - [4.2 Spike Detection](#42-spike-detection)
@@ -199,6 +200,189 @@ Each sub-tab provides:
 ### 3.5 Session Summary
 
 Shows all accumulated results with **Mean ± SD** for numeric columns across cells.
+
+### 3.6 Adding Your Own Analysis Tab
+
+You can add a completely new analysis tab to the Analyser **without touching any
+Synaptipy source code**.  All you need is a single Python file — Synaptipy
+generates the parameter panel, Run button, results table, and plot overlays
+automatically from the metadata you provide.
+
+#### Step 1 — Create the plugin file
+
+Copy the starter template that ships with Synaptipy:
+
+```bash
+# macOS / Linux
+cp src/Synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
+
+# Windows (PowerShell)
+Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
+```
+
+> If the `~/.synaptipy/plugins/` folder does not exist yet, create it
+> (`mkdir -p ~/.synaptipy/plugins`) or simply start Synaptipy once — it creates
+> the folder automatically.
+
+#### Step 2 — Write your analysis function
+
+Open `~/.synaptipy/plugins/my_analysis.py` in any text editor.  The file has two
+parts:
+
+**Part A — Your analysis logic** (plain Python + NumPy, no GUI code):
+
+```python
+import numpy as np
+
+def calculate_snr(data, time, sampling_rate, noise_start, noise_end,
+                  signal_start, signal_end):
+    """Calculate signal-to-noise ratio in dB."""
+    # Convert seconds → sample indices
+    ni0 = int(np.searchsorted(time, noise_start, side="left"))
+    ni1 = int(np.searchsorted(time, noise_end,   side="right"))
+    si0 = int(np.searchsorted(time, signal_start, side="left"))
+    si1 = int(np.searchsorted(time, signal_end,   side="right"))
+
+    noise_rms  = float(np.sqrt(np.mean(data[ni0:ni1] ** 2)))
+    signal_rms = float(np.sqrt(np.mean(data[si0:si1] ** 2)))
+    snr_db     = float(20.0 * np.log10(signal_rms / noise_rms))
+
+    return {
+        "snr_db":     round(snr_db, 2),
+        "noise_rms":  round(noise_rms, 4),
+        "signal_rms": round(signal_rms, 4),
+    }
+```
+
+**Part B — Register it with the decorator:**
+
+```python
+from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+@AnalysisRegistry.register(
+    name="snr_analysis",               # unique internal ID
+    label="Signal-to-Noise Ratio",     # name shown on the tab
+    ui_params=[...],                   # parameter widgets  (see below)
+    plots=[...],                       # plot overlays      (see below)
+)
+def run_snr(data, time, sampling_rate, **kwargs):
+    """Wrapper — pulls GUI values from kwargs and calls the logic."""
+    return calculate_snr(
+        data, time, sampling_rate,
+        noise_start  = kwargs.get("noise_start",  0.0),
+        noise_end    = kwargs.get("noise_end",    0.1),
+        signal_start = kwargs.get("signal_start", 0.1),
+        signal_end   = kwargs.get("signal_end",   0.5),
+    )
+```
+
+> **The wrapper signature is fixed:** `def f(data, time, sampling_rate, **kwargs)`
+> — Synaptipy passes in the trace array, time array, and sampling rate, plus
+> every parameter widget value as a keyword argument.
+
+#### Step 3 — Define parameter widgets (`ui_params`)
+
+Each dict in the `ui_params` list creates one widget in the parameter panel.
+Four widget types are available:
+
+| Type | Widget | Example |
+|------|--------|---------|
+| `"float"` | Decimal spin box | `{"name": "threshold", "label": "Threshold (mV):", "type": "float", "default": -20.0, "min": -200, "max": 200, "decimals": 2}` |
+| `"int"` | Integer spin box | `{"name": "min_events", "label": "Min Events:", "type": "int", "default": 3, "min": 1, "max": 10000}` |
+| `"bool"` | Check box | `{"name": "auto_detect", "label": "Auto-Detect Baseline", "type": "bool", "default": False}` |
+| `"choice"` | Drop-down | `{"name": "direction", "label": "Direction:", "type": "choice", "choices": ["negative", "positive"], "default": "negative"}` |
+
+Full example for the SNR analysis:
+
+```python
+ui_params=[
+    {"name": "noise_start",  "label": "Noise Start (s):",  "type": "float",
+     "default": 0.0, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "noise_end",    "label": "Noise End (s):",    "type": "float",
+     "default": 0.1, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "signal_start", "label": "Signal Start (s):", "type": "float",
+     "default": 0.1, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "signal_end",   "label": "Signal End (s):",   "type": "float",
+     "default": 0.5, "min": 0.0, "max": 1e9, "decimals": 4},
+],
+```
+
+**Optional extras on any parameter:**
+
+- `"tooltip": "Hover text"` — shows on mouse-over.
+- `"visible_when": {"param": "mode", "value": "advanced"}` — shows this widget
+  only when another widget named `"mode"` has the value `"advanced"`.
+
+#### Step 4 — Define plot overlays (`plots`)
+
+Each dict in the `plots` list draws something on the trace after the analysis
+runs.  Common overlay types:
+
+| Type | What it draws | Example |
+|------|---------------|---------|
+| `"interactive_region"` | Draggable shaded region synced to two float parameters | `{"type": "interactive_region", "data": ["noise_start", "noise_end"], "color": "b"}` |
+| `"hlines"` | Horizontal lines at result values | `{"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]}` |
+| `"vlines"` | Vertical lines at result values | `{"type": "vlines", "data": "stim_times", "color": "c"}` |
+| `"markers"` | Scatter dots at (x, y) arrays from result | `{"type": "markers", "x": "peak_times", "y": "peak_voltages", "color": "r"}` |
+| `"threshold_line"` | Draggable h-line synced to a parameter | `{"type": "threshold_line", "param": "threshold"}` |
+| `"overlay_fit"` | Curve overlay (e.g. exponential fit) | `{"type": "overlay_fit", "x": "_fit_t", "y": "_fit_v", "color": "r"}` |
+| `"popup_xy"` | Opens a separate plot window | `{"type": "popup_xy", "title": "F-I Curve", "x": "currents", "y": "rates", "x_label": "I (pA)", "y_label": "f (Hz)"}` |
+
+Full example — two draggable windows and a dashed line at the noise level:
+
+```python
+plots=[
+    {"type": "interactive_region", "data": ["noise_start", "noise_end"],   "color": "b"},
+    {"type": "interactive_region", "data": ["signal_start", "signal_end"], "color": "g"},
+    {"type": "hlines", "data": ["noise_rms"], "color": "b", "styles": ["dash"]},
+],
+```
+
+#### Step 5 — Control what shows in the results table
+
+Every key in the dict your function returns becomes a row in the results table.
+To keep helper data out of the table (e.g. arrays used only by plot overlays),
+prefix the key with an underscore:
+
+```python
+return {
+    "snr_db":       42.3,        # ← shown in results table
+    "noise_rms":    0.15,        # ← shown in results table
+    "_fit_curve":   some_array,  # ← hidden (used by overlay_fit)
+}
+```
+
+If your function encounters an error, return `{"error": "message"}` and the GUI
+will display the message instead of a results table.
+
+#### Step 6 — Restart and use
+
+Save your file, restart Synaptipy, and your new tab appears in the Analyser:
+
+```
+Analyser → ... | Baseline | Spikes | Signal-to-Noise Ratio
+```
+
+Load a file, select a channel, and click **Run Analysis** (or just change a
+parameter — analysis re-runs automatically).  The results table, plot overlays,
+and batch processing all work immediately.
+
+#### Tips
+
+- **No rebuild needed** — just save the `.py` file and restart Synaptipy.
+- **Errors are safe** — if your plugin has a syntax error or crashes, Synaptipy
+  logs the error and keeps running (your tab simply won't appear).  Check the log
+  at `~/.synaptipy/synaptipy.log`.
+- **Multiple plugins** — put as many `.py` files in the plugins folder as you
+  like; each one with an `@AnalysisRegistry.register` decorator creates a
+  separate tab.
+- **Use any installed package** — your plugin can import SciPy, scikit-learn,
+  or anything installed in the same Python environment.
+- **Template location** — the ready-to-copy template is at
+  `src/Synaptipy/templates/plugin_template.py`.
+- **Full reference** — for the complete list of all parameter types, all 12
+  plot overlay types, and advanced features like conditional visibility, see
+  [Writing Custom Analysis Plugins](../extending_synaptipy.md).
 
 ---
 
