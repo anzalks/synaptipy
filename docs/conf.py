@@ -73,6 +73,7 @@ extensions = [
     "sphinx.ext.intersphinx",       # Cross-references to external docs
     "sphinx.ext.todo",              # .. todo:: directives
     "sphinx.ext.coverage",          # Coverage checks
+    "sphinx.ext.mathjax",           # Render LaTeX math in HTML output
     # Third-party
     "myst_parser",                   # Parse .md files with MyST
     "sphinx_autodoc_typehints",     # Render type hints in autodoc
@@ -107,6 +108,7 @@ autoclass_content = "both"
 myst_enable_extensions = [
     "colon_fence",
     "deflist",
+    "dollarmath",
     "fieldlist",
     "html_image",
     "tasklist",

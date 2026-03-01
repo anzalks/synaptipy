@@ -23,7 +23,7 @@ basic_features`, etc.).  **Never** rely on
 `from Synaptipy.core.analysis.registry import AnalysisRegistry` alone — that
 only imports the class and does NOT execute the analysis sub-modules' decorators.
 This was the root cause of the Windows bug where the Analyser tab showed 0 tabs
-while macOS showed 14 (on macOS the batch engine happened to be imported earlier
+while macOS showed 15 (on macOS the batch engine happened to be imported earlier
 via a different path, masking the issue).
 
 ### Editable install must point to the active workspace

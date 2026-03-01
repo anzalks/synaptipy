@@ -5,7 +5,7 @@ The primary focus is whole-cell patch-clamp and intracellular recordings; howeve
 any electrophysiology signal whose file format is supported by the
 [Neo](https://neo.readthedocs.io) I/O library can be loaded, visualised, and processed.
 Built on Python and Qt6, it provides OpenGL-accelerated signal visualisation,
-14 built-in analysis modules, a composable batch processing engine, and an extensible
+15 built-in analysis modules, a composable batch processing engine, and an extensible
 plugin interface. This tutorial covers every feature of the application in detail,
 including the mathematical methods used in each analysis module.
 
@@ -32,6 +32,7 @@ including the mathematical methods used in each analysis module.
    - [4.12 Optogenetic Synchronization](#412-optogenetic-synchronization)
    - [4.13 Phase Plane Analysis](#413-phase-plane-analysis)
    - [4.14 Spike Train Dynamics](#414-spike-train-dynamics)
+   - [4.15 Sag Ratio (I_h)](#415-sag-ratio-i_h)
 5. [Batch Processing](#5-batch-processing)
 6. [The Exporter Tab](#6-the-exporter-tab)
 7. [Preferences and Customization](#7-preferences-and-customization)
@@ -130,7 +131,32 @@ All filters use zero-phase Butterworth IIR via `scipy.signal.sosfiltfilt`
 | **Linear Detrend** | Fit and remove a linear trend via `scipy.signal.detrend` |
 | **Time Window** | Subtract mean of a user-specified region [t_start, t_end] |
 
-### 2.3 Trace Quality Assessment
+### 2.3 Artifact Blanking
+
+The preprocessing pipeline includes a general-purpose artifact blanking step
+that can be applied before any analysis:
+
+| Method | Description |
+|--------|-------------|
+| **Hold** | Replace the artifact window with the last pre-artifact sample value (sample-and-hold) |
+| **Zero** | Set all samples in the artifact window to zero |
+| **Linear** | Linearly interpolate between the last pre-artifact and first post-artifact sample |
+
+Configure via the pipeline API:
+
+```python
+from Synaptipy.core.processing_pipeline import ProcessingPipeline
+
+pipeline = ProcessingPipeline()
+pipeline.add_step({
+    "type": "artifact",
+    "onset_time": 0.1,       # seconds
+    "duration_ms": 5.0,      # milliseconds
+    "method": "linear",      # "hold", "zero", or "linear"
+})
+```
+
+### 2.4 Trace Quality Assessment
 
 Computed on file load; shown as a traffic-light badge with tooltip:
 - **SNR** — signal power / noise power.
@@ -144,7 +170,7 @@ Computed on file load; shown as a traffic-light badge with tooltip:
 
 ![Analyser Tab](screenshots/analyser_tab.png)
 
-The central analysis engine. All 14 analysis sub-tabs are auto-built from registry
+The central analysis engine. All 15 analysis sub-tabs are auto-built from registry
 metadata — parameter widgets, interactive plots, and result tables are generated
 automatically.
 
@@ -398,6 +424,9 @@ and batch processing all work immediately.
 
 ## 4. Analysis Modules — Detailed Reference
 
+> **Formal mathematics:** For publication-ready LaTeX definitions of every metric
+> computed below, see the [Algorithmic Definitions](../algorithmic_definitions.md) page.
+
 ### 4.1 Baseline / RMP Analysis
 
 **Registry name**: `rmp_analysis` | **Tab label**: *Baseline (RMP)*
@@ -616,7 +645,13 @@ Computes passive membrane input resistance from step protocols.
 #### Results
 
 `rin_mohm`, `conductance_us`, `voltage_deflection_mv`, `current_injection_pa`,
-`baseline_voltage_mv`, `steady_state_voltage_mv`
+`baseline_voltage_mv`, `steady_state_voltage_mv`, `sag_ratio`, `sag_percentage`
+
+The sag ratio is computed with configurable `peak_smoothing_ms` (default 5 ms)
+and `rebound_window_ms` (default 100 ms) parameters.  For standalone sag ratio
+analysis with dedicated parameter controls, see
+[§4.15 Sag Ratio (I_h)](#415-sag-ratio-i_h).  See also
+[Algorithmic Definitions §4](../algorithmic_definitions.md) for the full formula.
 
 #### Visualization
 
@@ -913,6 +948,53 @@ Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
 
 ---
 
+### 4.15 Sag Ratio (I_h)
+
+**Registry name**: `sag_ratio_analysis` | **Tab label**: *Sag Ratio (Ih)*
+
+Quantifies hyperpolarisation-activated sag (I_h current) from a hyperpolarising
+current-step protocol. This is a standalone analysis module — while the Rin
+analysis (§4.6) includes sag ratio in its output, this dedicated tab provides
+finer control over the measurement windows and smoothing.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Baseline Start | float (s) | Start of baseline window |
+| Baseline End | float (s) | End of baseline window |
+| Peak Window Start | float (s) | Start of the peak search window (initial sag) |
+| Peak Window End | float (s) | End of the peak search window |
+| Steady-State Start | float (s) | Start of the steady-state measurement window |
+| Steady-State End | float (s) | End of the steady-state measurement window |
+| Peak Smoothing | float (ms) | Savitzky–Golay smoothing window for peak detection (default 5 ms) |
+| Rebound Window | float (ms) | Window after stimulus offset for rebound measurement (default 100 ms) |
+
+#### Methods
+
+1. **V_baseline** = mean voltage in baseline window.
+2. **V_peak** = minimum of Savitzky–Golay-smoothed voltage in the peak window
+   (polynomial order 3, window = `peak_smoothing_ms`).
+3. **V_ss** = mean voltage in steady-state window.
+4. **Sag Ratio** = (V_peak − V_baseline) / (V_ss − V_baseline). A value > 1
+   indicates I_h sag; a value of 1 indicates no sag.
+5. **Sag Percentage** = 100 × (V_peak − V_ss) / (V_peak − V_baseline).
+6. **Rebound Depolarisation** = max(V in rebound window) − V_baseline.
+
+See [Algorithmic Definitions §4](../algorithmic_definitions.md) for the full
+LaTeX-formatted formulae.
+
+#### Results
+
+`sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`, `v_baseline`,
+`rebound_depolarization`
+
+#### Visualization
+
+Blue h-line at V_baseline; magenta h-line at V_peak; red h-line at V_ss.
+
+---
+
 ## 5. Batch Processing
 
 ### 5.1 Overview
@@ -929,7 +1011,7 @@ Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
 
 ### 5.3 Building a Pipeline
 
-1. **Add Step** — select from all 14 registered analyses.
+1. **Add Step** — select from all 15 registered analyses.
 2. **Scope** — Average, All Trials, First Trial, Specific Trial, or Channel Set.
 3. Configure **Parameters** with auto-generated widgets.
 4. Optionally prepend **Preprocessing Steps** (filter / baseline-subtract).
@@ -959,8 +1041,23 @@ Click **"Export to NWB"** to open the NWB Metadata Dialog (four tabs):
 - **Device** — name, description, manufacturer.
 - **Electrodes** — description, location, filtering.
 
+The exporter automatically selects the appropriate NWB series class based on
+channel units:
+
+| Channel Units | NWB Series Class | SI Conversion |
+|---------------|-----------------|---------------|
+| mV, millivolt | `CurrentClampSeries` | ×10⁻³ → volts |
+| pA, picoampere | `VoltageClampSeries` | ×10⁻¹² → amperes |
+| nA, nanoampere | `VoltageClampSeries` | ×10⁻⁹ → amperes |
+| Other / unknown | `PatchClampSeries` | stored as-is |
+
+All data is stored in SI base units (volts, amperes) with the appropriate
+`conversion` factor recorded in the NWB metadata.  For full details on the
+mapping between Synaptipy data structures and NWB containers, see the
+[NWB Export Mapping](../nwb_mapping.md) reference page.
+
 Produces a `.nwb` file with raw traces, metadata, and extracted features —
-fully NWB-compliant.
+fully NWB 2.x compliant.
 
 ### 6.2 Analysis Results Export
 

@@ -21,6 +21,7 @@ This guide provides detailed instructions for installing, configuring, and using
   - [Input Resistance/Conductance Analysis](#input-resistanceconductance-analysis)
   - [Baseline/RMP Analysis](#baselinermp-analysis)
   - [Optogenetic Synchronization](#optogenetic-synchronization)
+  - [Sag Ratio (Ih) Analysis](#sag-ratio-ih-analysis)
 - [Using the Exporter Tab](#using-the-exporter-tab)
   - [Exporting to NWB](#exporting-to-nwb)
   - [Exporting Analysis Results](#exporting-analysis-results)
@@ -211,6 +212,26 @@ All analysis sub-tabs share the following interface behaviours:
 6. Results include optical latency, response probability, jitter, stimulus
    count, and event count
 7. Click "Save Result" to store for later export
+
+### Sag Ratio (Ih) Analysis
+
+1. Load a recording containing a hyperpolarising current-step protocol
+2. Switch to the *Sag Ratio (Ih)* sub-tab in the Analyser
+3. Configure the measurement windows:
+   - **Baseline Start / End** — resting membrane potential window (before the step)
+   - **Peak Window Start / End** — early part of the step where the sag minimum occurs
+   - **Steady-State Start / End** — late part of the step where voltage has plateaued
+4. Adjust **Peak Smoothing (ms)** to control Savitzky–Golay smoothing of the
+   peak detection (default 5 ms). Increase for noisy traces
+5. Set **Rebound Window (ms)** to control how far after stimulus offset the
+   rebound depolarisation is measured (default 100 ms)
+6. Results include:
+   - **sag_ratio** — ratio form (>1 indicates I_h sag, 1 = no sag)
+   - **sag_percentage** — percentage of sag deflection
+   - **v_peak**, **v_ss**, **v_baseline** — the three voltage levels
+   - **rebound_depolarization** — post-stimulus rebound amplitude
+7. The plot shows horizontal lines at V_baseline (blue), V_peak (magenta),
+   and V_ss (red)
 
 ## Using the Exporter Tab
 

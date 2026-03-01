@@ -19,7 +19,12 @@ import numpy as np
 # Ensure pynwb is installed: pip install pynwb
 try:
     from pynwb import NWBHDF5IO, NWBFile
-    from pynwb.icephys import PatchClampSeries, IntracellularElectrode
+    from pynwb.icephys import (
+        PatchClampSeries,
+        CurrentClampSeries,
+        VoltageClampSeries,
+        IntracellularElectrode,
+    )
 
     PYNWB_AVAILABLE = True
 except ImportError:
@@ -44,6 +49,16 @@ except ImportError:
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class PatchClampSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
+
+    class CurrentClampSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
+
+    class VoltageClampSeries:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
@@ -260,38 +275,64 @@ class NWBExporter:
 
                     units = getattr(channel, "units", "unknown").lower()
 
-                    # Convert common units to SI for NWB (V, A) ?
-                    # PyNWB expects SI units generally (Volts, Amps).
-                    # !!! CRITICAL: Neo/Synaptipy usually keeps data in mV/pA.
-                    # We should ideally convert or set the unit string correctly.
-                    # If we set 'unit="mV"', PyNWB handles it? Yes, it accepts string units.
+                    # --- SI unit conversion and series class selection ---
+                    # NWB best practice: store data in SI (volts, amperes).
+                    # Synaptipy/Neo typically keeps data in mV or pA.
+                    # We convert to SI and record the conversion factor.
+                    export_data = trial_data.copy().astype(np.float64)
+                    conversion = 1.0
 
-                    final_units = getattr(channel, "units", "unknown")
+                    # Select the appropriate NWB series class based on
+                    # channel units, which indicate the clamp mode:
+                    #   voltage units (mV, V) → CurrentClampSeries
+                    #   current units (pA, nA, A) → VoltageClampSeries
+                    SeriesClass = PatchClampSeries  # fallback
 
-                    # Decide Class based on units if possible
-                    _SeriesClass = PatchClampSeries  # noqa: F841
-                    if "v" in units:  # likely Voltage -> CurrentClampSeries (records V)
-                        pass  # PyNWB structure is complex: CurrentClampSeries stores MEASURED VOLTAGE in 'data'
-                        # For simplicity/safety, sticking to parent PatchClampSeries is often better unless we are SURE
-                        # of clamp mode.
-                        # However, NWB guidelines prefer specific classes.
-                        # Let's stick to PatchClampSeries to avoid validation errors if we misuse the specific ones
-                        # without full clamp params (Series resistance etc)
+                    if units in ("mv", "millivolt", "millivolts"):
+                        export_data = export_data * 1e-3  # mV → V
+                        conversion = 1e-3
+                        final_units = "volts"
+                        SeriesClass = CurrentClampSeries
+                    elif units in ("v", "volt", "volts"):
+                        final_units = "volts"
+                        SeriesClass = CurrentClampSeries
+                    elif units in ("pa", "picoampere", "picoamperes"):
+                        export_data = export_data * 1e-12  # pA → A
+                        conversion = 1e-12
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    elif units in ("na", "nanoampere", "nanoamperes"):
+                        export_data = export_data * 1e-9  # nA → A
+                        conversion = 1e-9
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    elif units in ("a", "ampere", "amperes"):
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    else:
+                        final_units = getattr(channel, "units", "unknown")
+                        log.warning(
+                            "Unrecognised channel units '%s' for '%s'. "
+                            "Using generic PatchClampSeries.",
+                            units, channel.name,
+                        )
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
 
                     try:
-                        time_series = PatchClampSeries(
+                        series_kwargs = dict(
                             name=ts_name,
                             description=ts_desc,
-                            data=trial_data,
+                            data=export_data,
                             unit=final_units,
                             electrode=ic_electrode,
                             rate=float(channel_rate) if channel_rate else 1000.0,
                             starting_time=float(getattr(channel, "t_start", 0.0)),
-                            gain=1.0,  # Assumed data is already scaled
+                            gain=1.0,
                             sweep_number=np.uint64(trial_idx),
+                            conversion=conversion,
                         )
+                        time_series = SeriesClass(**series_kwargs)
                         nwbfile.add_acquisition(time_series)
                     except Exception as e_ts:
                         log.error(f"Failed to add series '{ts_name}': {e_ts}")

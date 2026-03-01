@@ -121,6 +121,20 @@ class SignalProcessingPipeline:
                             result, float(step.get('freq')), float(step.get('q_factor')), fs
                         )
 
+                elif op_type == 'artifact':
+                    if time_vector is not None:
+                        onset = float(step.get('onset_time', 0.0))
+                        duration = float(step.get('duration_ms', 0.5))
+                        method = step.get('method', 'hold')
+                        result = signal_processor.blank_artifact(
+                            result, time_vector, onset, duration, method=method
+                        )
+                    else:
+                        log.warning(
+                            "Artifact blanking requested but no time "
+                            "vector provided. Skipping."
+                        )
+
                 # Check for bad data after each step
                 if result is not None:
                     if np.any(np.isnan(result)) or np.any(np.isinf(result)):

@@ -18,13 +18,14 @@ Synaptipy is a cross-platform, open-source application for the visualization and
 
 ## Analysis Capabilities
 
-Synaptipy provides 14 built-in analysis modules, each available interactively in the GUI and as a composable unit in the batch processing pipeline.
+Synaptipy provides 15 built-in analysis modules, each available interactively in the GUI and as a composable unit in the batch processing pipeline.
 
 **Intrinsic Membrane Properties**
 - Resting Membrane Potential (RMP) — statistical baseline extraction from a user-defined window
 - Input Resistance (Rin) — delta-V / delta-I from voltage response to a hyperpolarizing current step
 - Membrane Time Constant (Tau) — single-exponential fit to the voltage decay after a current step
 - I-V Curve — current–voltage relationship and aggregate Rin from multi-trial step protocols
+- Sag Ratio (I_h) — quantifies hyperpolarisation-activated sag from the ratio of peak-to-steady-state deflection, with rebound depolarisation measurement
 - Cell Capacitance (Cm) — derived from Tau/Rin in current-clamp, or capacitive-transient integration in voltage-clamp
 
 **Action Potential Analysis**

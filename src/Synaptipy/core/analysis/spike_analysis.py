@@ -563,21 +563,16 @@ def calculate_spike_features(  # noqa: C901
     valid_ahp_dur = has_recovery & has_ap_end & (rec_rel_indices > ap_end_rel_indices)
     ahp_durations[valid_ahp_dur] = (rec_rel_indices[valid_ahp_dur] - ap_end_rel_indices[valid_ahp_dur]) * dt * 1000.0
 
-    # --- ADP Analysis (Simplified) ---
-    # Previous logic: Look for peaks in a window after AP end.
-    # We'll skip complex ADP peak finding in vectorized mode for now or simpler logic:
-    # Max value between AP End and AHP Min?
-    # If there is a "hump", the max will be higher than the line connecting them.
-    # Let's just calculate "ADP Amplitude" as Max value in (AP_End + 2ms, AHP_Min) relative to AP_End val?
-    # For exact parity with find_peaks, it's hard. We will provide a placeholder or simple max.
+    # --- Afterdepolarisation (ADP) Analysis ---
+    # ADP amplitude is defined relative to the fast AHP (fAHP) trough:
+    #   ADP_amp = V_ADP_peak - V_fAHP_trough
+    # A local maximum must exist (convexity test) to avoid false detection
+    # from monotonic recovery.  Returns NaN when no ADP is present.
 
     adp_amplitudes = np.full(n_spikes, np.nan)
 
-    # Vectorized ADP: Largest Local Maximum between AP End and End of AHP Window
-    # We look for a local peak (convexity) to avoid detecting monotonic recovery as ADP.
-
-    # helper for local max: val[i] > val[i-1] and val[i] > val[i+1]
-    # ahp_waveforms shape: (n_spikes, ahp_max_samples)
+    # Vectorized ADP: find the largest local maximum after AP end
+    # Local max criterion: V[i] > V[i-1] AND V[i] > V[i+1]
     if ahp_max_samples > 2:
         val_mid = ahp_waveforms[:, 1:-1]
         val_left = ahp_waveforms[:, :-2]
@@ -590,28 +585,18 @@ def calculate_spike_features(  # noqa: C901
 
         col_idxs = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
 
-        # Mask: must be local max AND after AP end
-        # We also usually want it before the AHP Min? Or can it be after?
-        # Test case: Trough (-80) -> ADP (-75) -> Rest.
-        # Here ADP is *after* the fast trough.
-        # But if we just look for *any* local max after AP end, we might catch the ADP.
-        # If there is no ADP (monotonic recovery), there is no local max.
-        # If there is oscillation, we take the largest.
-
+        # Valid ADP: local max after AP end, within the AHP window
         valid_adp_mask = is_local_max & (col_idxs > ap_end_rel_indices[:, None])
 
         has_adp = np.any(valid_adp_mask, axis=1)
 
-        # Calculate amplitudes where valid
-        # We use a temp array filled with -inf
+        # Extract peak voltage at the largest local max
         temp_vals = ahp_waveforms.copy()
         temp_vals[~valid_adp_mask] = -np.inf
 
         adp_peaks = np.max(temp_vals, axis=1)
 
-        # Amplitude defined as Peak - ahp_min_vals?
-        # In test case: -75 - (-80) = 5. Correct.
-        # In scenario 1 (hump on falling phase): Peak is high, AHP min is low. Amp is large.
+        # ADP amplitude = ADP peak voltage - AHP trough voltage
         calced_adps = adp_peaks - ahp_min_vals
 
         adp_amplitudes = np.where(has_adp, calced_adps, np.nan)
