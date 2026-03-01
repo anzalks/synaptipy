@@ -115,8 +115,24 @@ class ExplorerTab(QtWidgets.QWidget):
         self._pending_view_state: Optional[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = None
         self._pending_trial_params: Optional[Tuple[int, int]] = None
 
+        # Debounce timer for rapid file navigation (Prev/Next buttons).
+        # When the user clicks rapidly, each click just updates the target and
+        # restarts this 50 ms single-shot timer.  Only the last click triggers
+        # an actual load, preventing a queue of teardown/rebuild cycles that
+        # would pile up in the Qt event loop and can cause SIGBUS on macOS or
+        # access-violations on Windows.
+        self._file_nav_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._file_nav_timer.setSingleShot(True)
+        self._file_nav_timer.setInterval(50)  # 50 ms — imperceptible to user
+        self._file_nav_timer.timeout.connect(self._execute_pending_file_nav)
+        # Pending navigation target: (filepath, file_list, index)
+        self._pending_nav_target: Optional[tuple] = None
+
     def closeEvent(self, event):
         """Cleanup resources."""
+        # Stop the debounce timer so it cannot fire after the widget dies.
+        if hasattr(self, "_file_nav_timer"):
+            self._file_nav_timer.stop()
         if hasattr(self, "live_controller"):
             self.live_controller.cleanup()
         super().closeEvent(event)
@@ -1147,22 +1163,39 @@ class ExplorerTab(QtWidgets.QWidget):
             self.analysis_set_label.setToolTip("Analysis set is empty.")
 
     def _prev_file_folder(self):
+        """Navigate to the previous file, debounced to avoid rapid teardown loops."""
         if self.current_file_index > 0:
-            self.load_recording_data(
-                self.file_list[self.current_file_index - 1],
+            new_index = self.current_file_index - 1
+            self._pending_nav_target = (
+                self.file_list[new_index],
                 self.file_list,
-                self.current_file_index - 1,
-                preserve_state=True,  # Preserve Zoom/Selection
+                new_index,
             )
+            self._file_nav_timer.start()  # restart coalesces rapid clicks
 
     def _next_file_folder(self):
+        """Navigate to the next file, debounced to avoid rapid teardown loops."""
         if self.current_file_index < len(self.file_list) - 1:
-            self.load_recording_data(
-                self.file_list[self.current_file_index + 1],
+            new_index = self.current_file_index + 1
+            self._pending_nav_target = (
+                self.file_list[new_index],
                 self.file_list,
-                self.current_file_index + 1,
-                preserve_state=True,  # Preserve Zoom/Selection
+                new_index,
             )
+            self._file_nav_timer.start()  # restart coalesces rapid clicks
+
+    def _execute_pending_file_nav(self):
+        """Slot called by the debounce timer: load the last-requested file."""
+        if self._pending_nav_target is None:
+            return
+        filepath, file_list, index = self._pending_nav_target
+        self._pending_nav_target = None
+        self.load_recording_data(
+            filepath,
+            file_list,
+            index,
+            preserve_state=True,
+        )
 
     def _prev_trial(self):
         if self.current_trial_index > 0:

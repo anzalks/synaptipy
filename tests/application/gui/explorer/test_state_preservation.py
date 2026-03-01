@@ -1,4 +1,5 @@
 
+import sys
 import pytest
 from unittest.mock import MagicMock
 from pathlib import Path
@@ -36,6 +37,10 @@ def reset_explorer_tab_state(explorer_tab):
     explorer_tab._current_trial_selection_params = None
     explorer_tab.selected_trial_indices = set()
     explorer_tab._is_loading = False
+    # Reset file-nav debounce state introduced in the debounce PR.
+    explorer_tab._pending_nav_target = None
+    if hasattr(explorer_tab, '_file_nav_timer'):
+        explorer_tab._file_nav_timer.stop()
     try:
         explorer_tab.toolbar.lock_zoom_cb.setChecked(False)
     except Exception:
@@ -46,6 +51,14 @@ def reset_explorer_tab_state(explorer_tab):
     # rather than processEvents: the former cancels queued events (safe, no code
     # executed) while the latter executes them and can cause re-entrant crashes
     # on Windows in offscreen mode with PySide6 >= 6.7.
+    #
+    # macOS guard: pyqtgraph keeps live state in its AllViews registry and
+    # geometry caches via posted events between tests.  Discarding them on macOS
+    # corrupts that state and causes the next rebuild_plots() to segfault or
+    # mis-render.  This mirrors the documented rule from copilot-instructions.md
+    # and the behaviour of all other per-test drain fixtures in this repo.
+    if sys.platform == 'darwin':
+        return
     try:
         from PySide6.QtCore import QCoreApplication
         QCoreApplication.removePostedEvents(None, 0)
