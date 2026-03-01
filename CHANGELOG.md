@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0b3] - 2026-03-01
+
+> **Beta nightly release.** Explorer tab improvements, custom analysis plugin documentation and template, flaky test fixes.
+
+### Added
+
+- **Custom Analysis Plugin Documentation**: Comprehensive guide (`extending_synaptipy.md`) for writing analysis plugins without modifying source code
+- **Plugin Template**: Ready-to-copy template at `src/Synaptipy/templates/plugin_template.py` with inline comments for all parameter types and plot overlays
+- **Plugin Tests**: 16 tests validating plugin template logic, PluginManager loading, and wrapper conventions
+- **Tutorial Section 3.6**: Step-by-step "Adding Your Own Analysis Tab" section in the user tutorial under the Analyser Tab
+- **Stress Tests**: File cycling stress tests for plot canvas rebuild stability (100 iterations)
+- **Explorer Debounce**: Debounce timer for file navigation to prevent rapid teardown cycles
+
+### Fixed
+
+- **Flaky Qt Tests**: Added `processEvents()` calls in 3 test files to resolve non-deterministic offscreen failures caused by stale deferred ViewBox geometry callbacks
+- **Explorer Plot Layout**: Fixed Windows Explorer plot view state preservation during file cycling
+- **Lint Errors**: Resolved all flake8 CI failures in `analysis_formatter` and `exporter_tab`
+- **CSV Export**: Updated tidy per-type CSV export for batch results
+
+### Changed
+
+- Updated `docs/index.rst` toctree, `developer_guide.md`, and tutorial `Appendix B` with plugin cross-references
+
 ## [0.1.0b2] - 2026-02-26
 
 > **Beta nightly release.** Fixes Windows-specific analysis loading bug and preprocessing reset propagation across all analysis tabs.
