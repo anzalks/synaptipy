@@ -64,7 +64,14 @@ def stress_canvas(qapp):
 @pytest.fixture(autouse=True)
 def _drain_after_stress_test(stress_canvas):
     """Per-test drain (Win/Linux only) — mirrors the global conftest pattern."""
-    # Pre-test: clean slate.
+    # Pre-test: execute any pending deferred geometry events from prior
+    # modules while the session-scoped canvas is still alive, then clear.
+    # This mirrors the _cancel_pending_qt_events() pattern in production
+    # code and prevents stale callbacks from interfering mid-rebuild.
+    try:
+        QtCore.QCoreApplication.processEvents()
+    except Exception:
+        pass
     stress_canvas.clear()
     yield
     if sys.platform == 'darwin':
