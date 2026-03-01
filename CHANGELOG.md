@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sag Ratio Standalone Analysis**: Promoted `sag_ratio_analysis` from an inline
+  computation within `rin_analysis` to its own registered analysis plugin (15th
+  built-in module).  Provides dedicated UI controls for baseline, peak, and
+  steady-state windows, Savitzky–Golay smoothing, and rebound depolarisation
+  measurement.  Results: `sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`,
+  `v_baseline`, `rebound_depolarization`.
+- **Documentation**: Updated tutorial (§4.15), algorithmic definitions (§4),
+  API reference, user guide, developer guide, README, and extending guide to
+  reflect the new standalone sag ratio analysis and 15 built-in modules.
+
 ## [0.1.0b3] - 2026-03-01
 
 > **Beta nightly release.** Explorer tab improvements, custom analysis plugin documentation and template, flaky test fixes.
@@ -55,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0b1] - 2026-02-25
 
-> **Beta nightly release.** Core GUI, all 14 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
+> **Beta nightly release.** Core GUI, all 15 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
 
 ### Fixed
 

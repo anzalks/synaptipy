@@ -52,7 +52,7 @@ electrophysiology signal whose file format is supported by the
 — including extracellular and multi-channel recordings.
 
 Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
-14 built-in analysis modules spanning intrinsic membrane properties, action potential
+15 built-in analysis modules spanning intrinsic membrane properties, action potential
 characterisation, synaptic event detection, and optogenetics, a composable batch processing
 engine, and an extensible plugin interface that allows custom analysis routines to be
 integrated without modifying the core package. File I/O is handled through
@@ -95,6 +95,22 @@ Collaborations, bug reports, and pull requests are welcome.
 
 .. grid:: 2
 
+   .. grid-item-card:: Algorithmic Definitions
+      :link: algorithmic_definitions
+      :link-type: doc
+
+      Formal mathematical definitions for every analysis metric — suitable
+      for citation in manuscripts and peer review.
+
+   .. grid-item-card:: NWB Export Mapping
+      :link: nwb_mapping
+      :link-type: doc
+
+      How Synaptipy maps electrophysiology data to NWB 2.x containers,
+      including electrode metadata and unit conventions.
+
+.. grid:: 2
+
    .. grid-item-card:: Source on GitHub
       :link: https://github.com/anzalks/synaptipy
       :link-type: url
@@ -116,6 +132,8 @@ Collaborations, bug reports, and pull requests are welcome.
 
    tutorial/index
    user_guide
+   algorithmic_definitions
+   nwb_mapping
    extending_synaptipy
    api_reference
 

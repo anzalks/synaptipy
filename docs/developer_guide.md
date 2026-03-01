@@ -57,7 +57,7 @@ src/Synaptipy/                  # Main package
 │   ├── data_model.py           # Recording and Channel classes
 │   ├── results.py              # Typed result dataclasses
 │   └── analysis/               # Analysis algorithms
-│       ├── intrinsic_properties.py  # Rin, tau, conductance, sag
+│       ├── intrinsic_properties.py  # Rin, tau, conductance, sag ratio, I-V curve
 │       ├── spike_analysis.py        # Spike detection and features
 │       ├── basic_features.py        # RMP, baseline statistics
 │       ├── excitability.py          # F-I curve
@@ -177,7 +177,7 @@ alone — that only imports the registry *class* and does NOT execute the analys
 sub-modules' `@AnalysisRegistry.register` decorators.
 
 This was the root cause of a Windows-only bug where the Analyser tab showed 0
-tabs while macOS showed 14: on macOS the batch engine happened to import the
+tabs while macOS showed 15: on macOS the batch engine happened to import the
 full package earlier via a different path (masking the issue), but on Windows no
 other code path triggered the import and the registry remained empty.
 

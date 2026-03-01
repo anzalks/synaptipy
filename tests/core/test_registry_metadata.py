@@ -91,6 +91,7 @@ EXPECTED_BUILTIN_ANALYSES = {
     "rin_analysis",
     "tau_analysis",
     "iv_curve_analysis",
+    "sag_ratio_analysis",
     "event_detection_threshold",
     "event_detection_deconvolution",
     "event_detection_baseline_peak",
@@ -111,7 +112,7 @@ def test_full_package_import_populates_registry():
     The autouse clear_registry fixture has already cleared the registry before
     this test runs.  We reload every built-in analysis submodule explicitly to
     re-execute their decorators (the modules are already in sys.modules so a
-    plain import is a no-op), then verify all 14 expected analyses are present.
+    plain import is a no-op), then verify all 15 expected analyses are present.
     This matches the mechanism in startup_manager._begin_loading() and in
     analyser_tab._load_analysis_tabs() added to fix the Windows bug.
     """

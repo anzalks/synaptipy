@@ -439,18 +439,50 @@ def calculate_tau(
         return None
 
 
-# Placeholder for Sag potential calculation
 def calculate_sag_ratio(  # noqa: C901
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
     baseline_window: Tuple[float, float],
-    response_peak_window: Tuple[float, float],  # Window to find the peak hyperpolarization
-    response_steady_state_window: Tuple[float, float],  # Window for steady-state hyperpolarization
+    response_peak_window: Tuple[float, float],
+    response_steady_state_window: Tuple[float, float],
+    peak_smoothing_ms: float = 5.0,
+    rebound_window_ms: float = 100.0,
 ) -> Optional[Dict[str, float]]:
     """
-    Placeholder for Sag Potential Ratio calculation.
-    Sag = (V_peak - V_baseline) / (V_steady_state - V_baseline) or similar definitions.
-    Requires a hyperpolarizing current step.
+    Calculate Sag Potential Ratio from a hyperpolarising current step.
+
+    The sag ratio quantifies the contribution of hyperpolarisation-activated
+    cation current (I_h) to the voltage response.  Two conventions are
+    reported:
+
+    * **Ratio form** (``sag_ratio``):
+      ``(V_peak - V_baseline) / (V_ss - V_baseline)``.
+      Values > 1 indicate sag; 1 means no sag.
+
+    * **Percentage form** (``sag_percentage``):
+      ``100 * (V_peak - V_ss) / (V_peak - V_baseline)``.
+
+    V_peak is extracted as the minimum of a Savitzky-Golay smoothed trace
+    within *response_peak_window*.  V_ss is the arithmetic mean over
+    *response_steady_state_window*.
+
+    Args:
+        voltage_trace: 1-D voltage array (mV).
+        time_vector: 1-D time array (s).
+        baseline_window: (start, end) seconds for baseline voltage.
+        response_peak_window: (start, end) seconds to search for peak
+            hyperpolarisation (typically the first 50-100 ms of the step).
+        response_steady_state_window: (start, end) seconds for steady-state
+            measurement (typically the last 50-100 ms of the step).
+        peak_smoothing_ms: Savitzky-Golay smoothing window for V_peak
+            extraction, in milliseconds.  Default 5.0 ms.
+        rebound_window_ms: Duration (ms) after stimulus offset in which to
+            measure rebound depolarisation.  Default 100.0 ms.
+
+    Returns:
+        Dictionary with keys ``sag_ratio``, ``sag_percentage``, ``v_peak``,
+        ``v_ss``, ``v_baseline``, ``rebound_depolarization``; or *None* if
+        the calculation cannot be performed.
     """
     try:
         dt = time_vector[1] - time_vector[0] if len(time_vector) > 1 else 1.0
@@ -461,19 +493,16 @@ def calculate_sag_ratio(  # noqa: C901
             return None
         v_baseline = float(np.mean(voltage_trace[baseline_mask]))
 
-        # Peak hyperpolarization
-        # Use a smoothed version of the early stimulus phase to robustly find the peak
+        # Peak hyperpolarization — Savitzky-Golay smoothing for robustness
         peak_mask = (time_vector >= response_peak_window[0]) & (time_vector < response_peak_window[1])
         if not np.any(peak_mask):
             return None
         peak_data = voltage_trace[peak_mask]
 
         from scipy.signal import savgol_filter
-        window_length = int(0.005 / dt)  # 5ms smoothing window
+        window_length = max(5, int((peak_smoothing_ms / 1000.0) / dt))
         if window_length % 2 == 0:
             window_length += 1
-        if window_length < 5:
-            window_length = 5
 
         if len(peak_data) >= window_length:
             smoothed_peak = savgol_filter(peak_data, window_length, 3)
@@ -495,9 +524,15 @@ def calculate_sag_ratio(  # noqa: C901
 
         sag_ratio = float(delta_v_peak / delta_v_ss)
 
-        # Rebound depolarization (100ms window following stimulus offset)
+        # Sag percentage: 100 * (V_peak - V_ss) / (V_peak - V_baseline)
+        if delta_v_peak == 0:
+            sag_percentage = 0.0
+        else:
+            sag_percentage = float(100.0 * (v_peak - v_ss) / delta_v_peak)
+
+        # Rebound depolarization
         rebound_start = response_steady_state_window[1]
-        rebound_end = rebound_start + 0.100  # +100ms
+        rebound_end = rebound_start + (rebound_window_ms / 1000.0)
         rebound_mask = (time_vector >= rebound_start) & (time_vector < rebound_end)
 
         if np.any(rebound_mask):
@@ -511,19 +546,173 @@ def calculate_sag_ratio(  # noqa: C901
         else:
             rebound_depolarization = 0.0
 
-        log.debug(f"Calculated Sag Ratio: {sag_ratio:.3f}, Rebound: {rebound_depolarization:.3f}")
+        log.debug(
+            "Sag Ratio=%.3f, Sag%%=%.1f%%, Rebound=%.3f mV",
+            sag_ratio, sag_percentage, rebound_depolarization,
+        )
         return {
             "sag_ratio": sag_ratio,
+            "sag_percentage": sag_percentage,
             "v_peak": v_peak,
             "v_ss": v_ss,
-            "rebound_depolarization": rebound_depolarization
+            "v_baseline": v_baseline,
+            "rebound_depolarization": rebound_depolarization,
         }
     except (ValueError, TypeError, KeyError, IndexError) as e:
-        log.exception(f"Unexpected error during Sag calculation: {e}")
+        log.exception("Error during Sag calculation: %s", e)
         return None
 
 
 # --- Registry Wrappers for Batch Processing ---
+@AnalysisRegistry.register(
+    "sag_ratio_analysis",
+    label="Sag Ratio (Ih)",
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {
+            "type": "result_hlines",
+            "keys": ["v_baseline", "v_peak", "v_ss"],
+            "colors": {
+                "v_baseline": "b",
+                "v_peak": "m",
+                "v_ss": "r",
+            },
+        },
+    ],
+    ui_params=[
+        {
+            "name": "baseline_start",
+            "label": "Baseline Start (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "baseline_end",
+            "label": "Baseline End (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "peak_window_start",
+            "label": "Peak Window Start (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "peak_window_end",
+            "label": "Peak Window End (s):",
+            "type": "float",
+            "default": 0.3,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "ss_window_start",
+            "label": "Steady-State Start (s):",
+            "type": "float",
+            "default": 0.8,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "ss_window_end",
+            "label": "Steady-State End (s):",
+            "type": "float",
+            "default": 1.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "peak_smoothing_ms",
+            "label": "Peak Smoothing (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 50.0,
+            "decimals": 1,
+        },
+        {
+            "name": "rebound_window_ms",
+            "label": "Rebound Window (ms):",
+            "type": "float",
+            "default": 100.0,
+            "min": 0.0,
+            "max": 1000.0,
+            "decimals": 1,
+        },
+    ],
+)
+def run_sag_ratio_wrapper(
+    data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
+) -> Dict[str, Any]:
+    """Wrapper function for Sag Ratio analysis that conforms to the registry interface.
+
+    Args:
+        data: 1D NumPy array of voltage data (mV).
+        time: 1D NumPy array of corresponding time points (s).
+        sampling_rate: Sampling rate in Hz.
+        **kwargs: Additional parameters:
+            - baseline_start / baseline_end: Baseline window (s).
+            - peak_window_start / peak_window_end: Peak search window (s).
+            - ss_window_start / ss_window_end: Steady-state window (s).
+            - peak_smoothing_ms: Savitzky-Golay smoothing (ms, default 5.0).
+            - rebound_window_ms: Rebound measurement window (ms, default 100.0).
+
+    Returns:
+        Dictionary containing sag ratio results suitable for DataFrame rows.
+    """
+    try:
+        baseline_start = kwargs.get("baseline_start", 0.0)
+        baseline_end = kwargs.get("baseline_end", 0.1)
+        peak_start = kwargs.get("peak_window_start", 0.1)
+        peak_end = kwargs.get("peak_window_end", 0.3)
+        ss_start = kwargs.get("ss_window_start", 0.8)
+        ss_end = kwargs.get("ss_window_end", 1.0)
+        peak_smoothing = kwargs.get("peak_smoothing_ms", 5.0)
+        rebound_window = kwargs.get("rebound_window_ms", 100.0)
+
+        result = calculate_sag_ratio(
+            voltage_trace=data,
+            time_vector=time,
+            baseline_window=(baseline_start, baseline_end),
+            response_peak_window=(peak_start, peak_end),
+            response_steady_state_window=(ss_start, ss_end),
+            peak_smoothing_ms=peak_smoothing,
+            rebound_window_ms=rebound_window,
+        )
+
+        if result is not None:
+            return {
+                "sag_ratio": result["sag_ratio"],
+                "sag_percentage": result["sag_percentage"],
+                "v_peak": result["v_peak"],
+                "v_ss": result["v_ss"],
+                "v_baseline": result["v_baseline"],
+                "rebound_depolarization": result["rebound_depolarization"],
+            }
+        else:
+            return {
+                "sag_ratio": None,
+                "sag_error": "Sag ratio calculation failed (check windows)",
+            }
+
+    except (ValueError, TypeError, KeyError, IndexError) as e:
+        log.error(f"Error in run_sag_ratio_wrapper: {e}", exc_info=True)
+        return {"sag_ratio": None, "sag_error": str(e)}
+
+
 @AnalysisRegistry.register(
     "rin_analysis",
     label="Input Resistance",

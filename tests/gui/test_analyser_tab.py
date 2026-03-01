@@ -26,7 +26,7 @@ def _ensure_registry_populated():
     files in the same session, the clear runs *after* module-level imports have
     already executed the @register decorators, leaving the registry empty for
     subsequent tests.  Reloading every analysis sub-module here re-executes the
-    decorators and repopulates the registry so the GUI tests see all 14 analyses.
+    decorators and repopulates the registry so the GUI tests see all 15 analyses.
     """
     import Synaptipy.core.analysis.basic_features as m0
     import Synaptipy.core.analysis.spike_analysis as m1

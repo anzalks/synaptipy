@@ -581,6 +581,84 @@ def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, en
     return data - baseline_offset
 
 
+def blank_artifact(
+    data: np.ndarray,
+    time_vector: np.ndarray,
+    onset_time: float,
+    duration_ms: float,
+    method: str = "hold",
+) -> np.ndarray:
+    """
+    Suppress a stimulus artifact by replacing a time window.
+
+    Three interpolation modes are available:
+
+    * ``"hold"`` — replace the artifact window with the last pre-artifact
+      sample value (sample-and-hold).
+    * ``"zero"`` — set the artifact window to zero.
+    * ``"linear"`` — linearly interpolate between the pre- and
+      post-artifact boundary values.
+
+    Args:
+        data: 1-D signal array.
+        time_vector: 1-D time array (same length as *data*), in seconds.
+        onset_time: Start of the artifact window, in seconds.
+        duration_ms: Duration of the artifact window, in milliseconds.
+        method: Interpolation mode — ``"hold"``, ``"zero"``, or
+            ``"linear"``.  Default ``"hold"``.
+
+    Returns:
+        Copy of *data* with the artifact window replaced.
+
+    Raises:
+        ValueError: If *method* is not one of the recognised modes.
+    """
+    valid_methods = ("hold", "zero", "linear")
+    if method not in valid_methods:
+        raise ValueError(
+            f"Unknown artifact blanking method '{method}'. "
+            f"Choose from {valid_methods}."
+        )
+
+    if data is None or len(data) == 0:
+        return data
+
+    result = data.copy()
+    duration_s = duration_ms / 1000.0
+    end_time = onset_time + duration_s
+
+    # Find sample indices for the artifact window
+    mask = (time_vector >= onset_time) & (time_vector < end_time)
+    if not np.any(mask):
+        return result
+
+    idx_start = int(np.argmax(mask))
+    idx_end = idx_start + int(np.sum(mask))
+
+    if method == "zero":
+        result[idx_start:idx_end] = 0.0
+
+    elif method == "hold":
+        hold_value = result[max(0, idx_start - 1)]
+        result[idx_start:idx_end] = hold_value
+
+    elif method == "linear":
+        pre_value = result[max(0, idx_start - 1)]
+        post_value = result[min(len(result) - 1, idx_end)]
+        n_samples = idx_end - idx_start
+        if n_samples > 0:
+            result[idx_start:idx_end] = np.linspace(
+                pre_value, post_value, n_samples
+            )
+
+    log.debug(
+        "Artifact blanked: onset=%.4fs, duration=%.2fms, method=%s, "
+        "samples=%d",
+        onset_time, duration_ms, method, idx_end - idx_start,
+    )
+    return result
+
+
 def find_artifact_windows(
     data: np.ndarray, fs: float, slope_threshold: float, padding_ms: float = 2.0
 ) -> np.ndarray:
