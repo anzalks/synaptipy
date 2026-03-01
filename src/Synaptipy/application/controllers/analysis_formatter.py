@@ -95,11 +95,15 @@ class AnalysisResultFormatter:
 
             elif "tau" in target_type or "time constant" in target_type:
                 value_str = AnalysisResultFormatter._format_tau(result)
-                
+
             else:
                 # Provide a generic fallback for other analysis types
                 # Just show the first few numeric values found
-                numeric_vals = [f"{k}: {AnalysisResultFormatter._to_float(v):.2f}" for k, v in result.items() if isinstance(v, (int, float)) and not isinstance(v, bool)]
+                numeric_vals = [
+                    f"{k}: {AnalysisResultFormatter._to_float(v):.2f}"
+                    for k, v in result.items()
+                    if isinstance(v, (int, float)) and not isinstance(v, bool)
+                ]
                 if numeric_vals:
                     value_str = numeric_vals[0]
                     if len(numeric_vals) > 1:
@@ -182,6 +186,17 @@ class AnalysisResultFormatter:
                 log.debug(f"Skipped conductance formatting: {e}")
         return value_str, details
 
+    @staticmethod
+    def _method_display_suffix(method: str) -> str:
+        """Return a short display suffix for a calculation method string."""
+        if method.startswith("auto_"):
+            return " (Auto)"
+        if method.startswith("manual_"):
+            return " (Manual)"
+        if method.startswith("interactive_"):
+            return " (Interactive)"
+        return ""
+
     # --- Baseline / RMP ---
     @staticmethod
     def _format_baseline(result: Dict[str, Any]) -> str:
@@ -198,23 +213,16 @@ class AnalysisResultFormatter:
         if not units:
             units = "mV"
 
-        method_display = ""
-        if method:
-            if method.startswith("auto_"):
-                method_display = " (Auto)"
-            elif method.startswith("manual_"):
-                method_display = " (Manual)"
-            elif method.startswith("interactive_"):
-                method_display = " (Interactive)"
+        method_display = AnalysisResultFormatter._method_display_suffix(method)
 
-        if mean is not None and sd is not None:
-            try:
-                mean_float = AnalysisResultFormatter._to_float(mean)
-                sd_float = AnalysisResultFormatter._to_float(sd)
-                return f"{mean_float:.3f} ± {sd_float:.3f} {units}{method_display}"
-            except (ValueError, TypeError, AttributeError):
-                return f"Mean: {mean}, SD: {sd} {units}{method_display}"
-        return "N/A"
+        if mean is None or sd is None:
+            return "N/A"
+        try:
+            mean_float = AnalysisResultFormatter._to_float(mean)
+            sd_float = AnalysisResultFormatter._to_float(sd)
+            return f"{mean_float:.3f} ± {sd_float:.3f} {units}{method_display}"
+        except (ValueError, TypeError, AttributeError):
+            return f"Mean: {mean}, SD: {sd} {units}{method_display}"
 
     @staticmethod
     def _details_baseline(result: Dict[str, Any]) -> List[str]:
@@ -235,12 +243,12 @@ class AnalysisResultFormatter:
                 details.append("Method: Interactive Region")
             else:
                 details.append(f"Method: {method}")
-                
+
         # Also check drift
         drift = result.get("rmp_drift")
         if drift is not None:
             details.append(f"Drift: {drift} mV/s")
-            
+
         return details
 
     @staticmethod
@@ -311,7 +319,7 @@ class AnalysisResultFormatter:
     @staticmethod
     def _format_event_detection(result: Dict[str, Any]) -> str:
         event_count = result.get("event_count")
-        
+
         # Fallback to older nested stat structure
         if event_count is None:
             summary_stats = result.get("summary_stats", {})
@@ -326,7 +334,7 @@ class AnalysisResultFormatter:
                 freq = result.get("frequency_hz")
                 if freq is None and "summary_stats" in result and isinstance(result["summary_stats"], dict):
                     freq = result["summary_stats"].get("frequency_hz")
-                    
+
                 if freq is not None:
                     try:
                         freq_float = AnalysisResultFormatter._to_float(freq)
@@ -348,7 +356,7 @@ class AnalysisResultFormatter:
         direction = result.get("direction")
         if direction:
             details.append(f"Direction: {direction}")
-            
+
         params = result.get("parameters", {})
         if isinstance(params, dict):
             filter_val = params.get("filter")
@@ -362,7 +370,7 @@ class AnalysisResultFormatter:
         mean_amp = result.get("mean_amplitude")
         if mean_amp is None and "summary_stats" in result and isinstance(result["summary_stats"], dict):
             mean_amp = result["summary_stats"].get("mean_amplitude")
-            
+
         amp_units = result.get("units", "pA")
         if mean_amp is not None:
             try:
@@ -370,7 +378,7 @@ class AnalysisResultFormatter:
                 details.append(f"Mean Amplitude: {amp_float:.2f} {amp_units}")
             except (ValueError, TypeError, AttributeError):
                 details.append(f"Mean Amplitude: {mean_amp} {amp_units}")
-                
+
         return details
 
     # --- Phase Plane ---
