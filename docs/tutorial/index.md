@@ -830,3 +830,16 @@ Changes persist across sessions.
 The **Registry Pattern** (`AnalysisRegistry`) provides plugin-style extensibility:
 any script decorated with `@AnalysisRegistry.register` automatically becomes a new
 analysis sub-tab in the GUI.
+
+### Adding Your Own Analysis (Plugin Interface)
+
+You can add custom analysis functions **without modifying any Synaptipy source
+code**.  Place a Python script in `~/.synaptipy/plugins/` with a function
+decorated by `@AnalysisRegistry.register(...)` and restart the application.
+Your analysis will appear as a new tab in the Analyser, complete with
+auto-generated parameter widgets, a results table, and plot overlays — all
+driven by metadata in the decorator.
+
+A ready-to-copy template is included at `src/Synaptipy/templates/plugin_template.py`.
+For the full step-by-step guide, parameter reference, and annotated examples,
+see **[Writing Custom Analysis Plugins](../extending_synaptipy.md)**.
