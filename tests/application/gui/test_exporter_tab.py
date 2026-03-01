@@ -2,11 +2,11 @@
 Unit tests for the Exporter Tab functionality
 """
 
+import pathlib
 import pytest
-import os
+import tempfile
 from unittest.mock import MagicMock, patch
 from PySide6 import QtWidgets, QtCore
-import tempfile
 
 from Synaptipy.application.gui.exporter_tab import ExporterTab
 
@@ -96,19 +96,30 @@ def test_refresh_analysis_results(exporter_tab, mock_main_window):
 
 
 def test_export_to_csv(exporter_tab, qtbot, mock_main_window):
-    """Test exporting analysis results to CSV"""
-    # Create a temporary directory for test output
-    with tempfile.TemporaryDirectory() as temp_dir:
-        csv_path = os.path.join(temp_dir, "test_results.csv")
+    """Test exporting analysis results to CSV.
 
-        # Set the export path BEFORE refreshing to ensure path is non-empty
-        exporter_tab.analysis_results_path_edit.setText(csv_path)
+    The new exporter writes one tidy CSV per analysis_type into a directory
+    (or a zip when the output path ends with .csv).  This test uses a real
+    temp-directory path so the zip branch is skipped and we can verify the
+    per-type to_csv calls directly.
+    """
+    # Create a temporary directory for test output; pass the directory path so
+    # the exporter writes individual CSVs directly into it (no zip created).
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Set the export path to a directory — exporter uses the directory branch
+        exporter_tab.analysis_results_path_edit.setText(temp_dir)
 
         # Refresh the analysis results
         exporter_tab._refresh_analysis_results()
 
         # Select all rows
         exporter_tab.analysis_results_table.selectAll()
+
+        # Expect one to_csv call per unique analysis_type in the fixture (3 types):
+        # "Input Resistance", "Resting Membrane Potential", "Event Detection"
+        expected_call_count = len(
+            {r["analysis_type"] for r in mock_main_window.saved_analysis_results}
+        )
 
         # Mock the pandas DataFrame.to_csv to avoid actual file writes
         # and mock QMessageBox to avoid GUI blocking
@@ -117,13 +128,21 @@ def test_export_to_csv(exporter_tab, qtbot, mock_main_window):
             # Export the selected results
             exporter_tab._do_export_analysis_results()
 
-            # Verify to_csv was called with the correct path
-            mock_to_csv.assert_called_once()
-            call_args = mock_to_csv.call_args
-            # First positional arg should be the path
-            assert call_args[0][0] == csv_path
-            # Should have index=False
-            assert call_args[1].get("index") is False
+            # Verify to_csv was called once per analysis type
+            assert mock_to_csv.call_count == expected_call_count, (
+                f"Expected {expected_call_count} to_csv calls "
+                f"(one per analysis type), got {mock_to_csv.call_count}"
+            )
+
+            # Every call should use index=False and na_rep=''
+            for call in mock_to_csv.call_args_list:
+                assert call[1].get("index") is False
+                assert call[1].get("na_rep") == ""
+
+            # Each call's first positional argument should be a path inside temp_dir
+            for call in mock_to_csv.call_args_list:
+                csv_filepath = call[0][0]
+                assert pathlib.Path(temp_dir) == pathlib.Path(csv_filepath).parent
 
 
 def test_get_selected_results_indices(exporter_tab):

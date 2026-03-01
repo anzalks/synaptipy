@@ -6,6 +6,7 @@ This guide is intended for developers who want to understand, modify, or contrib
 
 - [Development Environment Setup](#development-environment-setup)
 - [Project Structure](#project-structure)
+- [Writing Custom Analysis Plugins](#writing-custom-analysis-plugins)
 - [Development Workflow](#development-workflow)
 - [Testing](#testing)
 - [CI Behaviour and Platform-Specific Test Rules](#ci-behaviour-and-platform-specific-test-rules)
@@ -82,6 +83,23 @@ scripts/                        # Utility scripts
 docs/                           # Documentation
 examples/                       # Example scripts
 ```
+
+## Writing Custom Analysis Plugins
+
+Synaptipy supports two ways to add new analysis functions:
+
+1. **User plugins (no source edits):** Drop a `.py` file in `~/.synaptipy/plugins/`.
+   The file is auto-discovered at startup and your analysis appears as a new
+   Analyser tab.  This is the recommended approach for end users.
+
+2. **Built-in modules (core contributors):** Add a module to
+   `src/Synaptipy/core/analysis/`, register the import in `__init__.py`,
+   and add tests.
+
+A ready-to-copy template is at `src/Synaptipy/templates/plugin_template.py`.
+For the complete reference — including all `ui_params` types, `plots` types,
+return-dict conventions, `visible_when` rules, and a fully annotated example —
+see the dedicated guide: **[Writing Custom Analysis Plugins](extending_synaptipy.md)**.
 
 ## Development Workflow
 

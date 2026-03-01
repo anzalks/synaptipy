@@ -57,10 +57,24 @@ jobs:
         QT_QPA_PLATFORM: offscreen
       run: |
         if [ "$RUNNER_OS" == "Linux" ]; then
-          xvfb-run python -m pytest --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+          xvfb-run python -m pytest -p faulthandler --cov=Synaptipy --cov-report=term-missing --cov-report=xml
         else
-          python -m pytest --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+          python -m pytest -p faulthandler --cov=Synaptipy --cov-report=term-missing --cov-report=xml
         fi
+
+    # High-DPI scaling check — runs a focused subset of plot tests with
+    # QT_SCALE_FACTOR=2 to catch layout/shrinkage regressions under HiDPI.
+    # Scoped to one matrix slot (ubuntu/3.11) to keep CI time cheap.
+    - name: Run plot tests under high-DPI scaling
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      env:
+        QT_QPA_PLATFORM: offscreen
+        QT_SCALE_FACTOR: "2"
+      run: |
+        xvfb-run python -m pytest -p faulthandler \
+          tests/application/gui/widgets/ \
+          tests/gui/ \
+          -v --tb=short -q 2>&1 | tail -30
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

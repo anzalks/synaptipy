@@ -116,6 +116,7 @@ Collaborations, bug reports, and pull requests are welcome.
 
    tutorial/index
    user_guide
+   extending_synaptipy
    api_reference
 
 .. toctree::

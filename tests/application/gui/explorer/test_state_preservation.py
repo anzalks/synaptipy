@@ -1,8 +1,10 @@
 
+import sys
 import pytest
 from unittest.mock import MagicMock
 from pathlib import Path
 from PySide6 import QtWidgets
+from PySide6.QtCore import QCoreApplication
 import numpy as np
 
 from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
@@ -36,6 +38,10 @@ def reset_explorer_tab_state(explorer_tab):
     explorer_tab._current_trial_selection_params = None
     explorer_tab.selected_trial_indices = set()
     explorer_tab._is_loading = False
+    # Reset file-nav debounce state introduced in the debounce PR.
+    explorer_tab._pending_nav_target = None
+    if hasattr(explorer_tab, '_file_nav_timer'):
+        explorer_tab._file_nav_timer.stop()
     try:
         explorer_tab.toolbar.lock_zoom_cb.setChecked(False)
     except Exception:
@@ -46,6 +52,14 @@ def reset_explorer_tab_state(explorer_tab):
     # rather than processEvents: the former cancels queued events (safe, no code
     # executed) while the latter executes them and can cause re-entrant crashes
     # on Windows in offscreen mode with PySide6 >= 6.7.
+    #
+    # macOS guard: pyqtgraph keeps live state in its AllViews registry and
+    # geometry caches via posted events between tests.  Discarding them on macOS
+    # corrupts that state and causes the next rebuild_plots() to segfault or
+    # mis-render.  This mirrors the documented rule from copilot-instructions.md
+    # and the behaviour of all other per-test drain fixtures in this repo.
+    if sys.platform == 'darwin':
+        return
     try:
         from PySide6.QtCore import QCoreApplication
         QCoreApplication.removePostedEvents(None, 0)
@@ -111,6 +125,9 @@ def test_preserve_state_on_cycle(explorer_tab):
     target_y_range = (-5.0, 5.0)
     plot_a.setXRange(*target_x_range, padding=0)
     plot_a.setYRange(*target_y_range, padding=0)
+    # Let Qt process deferred geometry callbacks so the ViewBox
+    # actually commits the requested range before we capture it.
+    QCoreApplication.processEvents()
     explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
 
     # Set Trial Selection (Every 2nd trial)
@@ -142,6 +159,12 @@ def test_preserve_state_on_cycle(explorer_tab):
 
     # 5. Verify State Restored
     plot_b = explorer_tab.plot_canvas.channel_plots["ch1"]  # Might be new object
+
+    # Let Qt settle deferred geometry callbacks from rebuild_plots()
+    # before checking viewRange().  This is an inline processEvents (not
+    # a drain fixture) so it only runs events while the session-scoped
+    # widget is alive — safe on all platforms.
+    QCoreApplication.processEvents()
 
     # Verify View Range
     view_range_x = plot_b.viewRange()[0]
@@ -182,6 +205,8 @@ def test_no_preserve_state_default(explorer_tab):
 
     # 4. Verify Reset
     plot_b = explorer_tab.plot_canvas.channel_plots["ch1"]
+    # Let deferred geometry callbacks settle before checking viewRange().
+    QCoreApplication.processEvents()
     view_range_x = plot_b.viewRange()[0]
 
     # Should be default range (0 to duration=1.0)
@@ -203,6 +228,7 @@ def test_preserve_state_on_sidebar_selection(explorer_tab):
     plot_a = explorer_tab.plot_canvas.channel_plots["ch1"]
     plot_a.isVisible = MagicMock(return_value=True)
     plot_a.setXRange(0.2, 0.4, padding=0)
+    QCoreApplication.processEvents()
     explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
     explorer_tab._on_trial_selection_requested(1, 0)  # Gap 1
 

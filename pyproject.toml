@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Synaptipy"
-version = "0.1.0b2"
+version = "0.1.0b1"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
@@ -28,7 +28,7 @@ dependencies = [
     "scipy>=1.13.0",
     "pandas>=2.3.0",
     "pyqtgraph>=0.13.0",
-    "pyside6==6.7.3",
+    "pyside6>=6.7.0",
     "neo>=0.14.0",
     "pynwb>=3.1.0",
     "h5py>=3.14.0",
