@@ -3,6 +3,7 @@
 """
 Helper module to generate UI widgets from metadata parameters.
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 

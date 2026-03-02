@@ -3,6 +3,7 @@
 """
 Analysis functions for detecting and characterizing bursts of action potentials.
 """
+
 import logging
 from typing import Any, Dict
 

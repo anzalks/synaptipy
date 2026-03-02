@@ -5,6 +5,7 @@ Targeted tests for scientific accuracy fixes (Phase 9).
 These tests verify the correctness of unit conversions and calculations
 that were identified and fixed during the publication readiness audit.
 """
+
 import numpy as np
 
 from Synaptipy.core.analysis.intrinsic_properties import (

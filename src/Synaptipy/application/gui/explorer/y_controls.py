@@ -4,6 +4,7 @@
 Explorer Y-Axis Controls widget.
 Handles global and individual Y-axis zoom/scroll controls.
 """
+
 import logging
 from typing import Dict, Optional
 

@@ -3,6 +3,7 @@
 """
 Analysis functions related to action potential detection and characterization.
 """
+
 import logging
 from typing import Any, Dict, List
 

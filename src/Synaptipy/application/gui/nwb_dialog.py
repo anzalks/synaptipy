@@ -4,6 +4,7 @@
 Dialog for collecting NWB session metadata before export.
 Supports comprehensive metadata including Subject, Device, and Electrode details.
 """
+
 import logging
 import uuid
 from datetime import datetime, timezone

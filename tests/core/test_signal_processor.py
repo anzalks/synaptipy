@@ -2,6 +2,7 @@
 """
 Tests for signal processing utilities.
 """
+
 import numpy as np
 
 from Synaptipy.core import signal_processor

@@ -4,6 +4,7 @@
 Explorer Config Panel.
 Contains the Left Panel widgets: Display Options, Manual Limits, Channel List, File Info.
 """
+
 import logging
 from typing import Dict, Optional
 

@@ -4,6 +4,7 @@ Unit tests for the styling module.
 
 Tests the styling constants, theme values, and functions for consistency.
 """
+
 import os
 import unittest
 from unittest.mock import MagicMock

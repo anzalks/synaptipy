@@ -4,6 +4,7 @@
 Unified Plot Canvas Base Class.
 Wraps PyQtGraph's GraphicsLayoutWidget with standard Synaptipy configuration.
 """
+
 import logging
 import os
 import sys

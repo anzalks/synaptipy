@@ -4,6 +4,7 @@
 Exporter Tab widget for the Synaptipy GUI. Provides UI for exporting data,
 using sub-tabs for different formats (e.g., NWB, CSV).
 """
+
 import logging
 import os
 from datetime import datetime

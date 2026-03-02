@@ -4,6 +4,7 @@ GOLDEN SAMPLE: Unit Test Architecture.
 Use pytest. Do NOT use unittest.TestCase.
 Do NOT import PySide6 or GUI classes here.
 """
+
 import numpy as np
 import pytest
 

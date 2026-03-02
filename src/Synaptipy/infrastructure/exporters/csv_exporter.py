@@ -4,6 +4,7 @@
 CSV Exporter for Synaptipy.
 Handles exporting recording data and analysis results to CSV format.
 """
+
 import csv
 import logging
 from pathlib import Path

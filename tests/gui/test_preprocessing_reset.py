@@ -8,6 +8,7 @@ Verifies that the 'Reset Preprocessing' button in analysis tabs:
 3. Notifies the parent AnalyserTab to propagate reset globally
 4. Re-plots with raw data
 """
+
 from unittest.mock import MagicMock
 
 import pytest

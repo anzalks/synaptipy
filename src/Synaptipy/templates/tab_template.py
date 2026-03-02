@@ -4,6 +4,7 @@ GOLDEN SAMPLE: GUI Tab Architecture.
 Refers to: src/Synaptipy/application/gui/analysis_tabs/base.py
 Use this structure for ALL new analysis tabs.
 """
+
 from typing import Any, Dict, Optional
 
 import pyqtgraph as pg

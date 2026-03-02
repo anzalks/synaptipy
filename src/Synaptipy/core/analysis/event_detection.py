@@ -4,6 +4,7 @@
 Analysis functions for detecting synaptic events (miniature, evoked).
 Refactored to use Adaptive Peak Finding and Parametric Matched Filtering.
 """
+
 import logging
 from typing import Any, Dict, Optional, Tuple
 

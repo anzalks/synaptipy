@@ -3,6 +3,7 @@
 """
 Dialog to display accumulated session results and statistics.
 """
+
 import logging
 from typing import Any, Dict, List
 

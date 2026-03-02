@@ -6,6 +6,7 @@ Analysis Registry for dynamic function registration and lookup.
 This module provides a registry pattern that allows analysis functions
 to register themselves via decorators, enabling flexible pipeline configuration.
 """
+
 import logging
 from typing import Any, Callable, Dict, Optional
 

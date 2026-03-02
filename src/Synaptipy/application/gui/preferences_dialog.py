@@ -5,6 +5,7 @@ Preferences Dialog for Synaptipy.
 
 Provides a unified preferences interface for scroll direction and theme settings.
 """
+
 import logging
 from typing import Optional
 

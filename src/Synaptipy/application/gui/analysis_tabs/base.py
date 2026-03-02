@@ -7,6 +7,7 @@ and provides common functionality like selecting the analysis target item.
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
 """
+
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path

@@ -54,8 +54,8 @@ dev = [
     "pytest-mock",
     "pytest-cov",
     "flake8",
-    "black",
-    "isort",
+    "black~=26.1",
+    "isort~=8.0",
 ]
 docs = [
     "sphinx>=7.2.0",

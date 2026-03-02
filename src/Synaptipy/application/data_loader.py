@@ -7,6 +7,7 @@ This module provides a Qt-based worker thread implementation for loading
 electrophysiology files in the background, preventing UI freezing during
 file I/O operations.
 """
+
 import logging
 from pathlib import Path
 

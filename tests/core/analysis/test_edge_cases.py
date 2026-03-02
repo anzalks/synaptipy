@@ -7,6 +7,7 @@ pathological input: flat traces, zero-amplitude stimuli, NaN/Inf data,
 single-sample arrays, and other boundary conditions that arise in
 real-world batch processing.
 """
+
 import numpy as np
 import pytest
 

@@ -8,6 +8,7 @@ by the core data models.
 This module also imports all analysis modules to trigger registration
 of analysis functions with the AnalysisRegistry for batch processing.
 """
+
 # Import analysis modules to trigger registration
 # Each module registers its functions via @AnalysisRegistry.register decorator
 from . import basic_features  # noqa: F401 - registers: rmp_analysis

@@ -3,6 +3,7 @@
 """
 Analysis functions for basic electrophysiological features from single traces.
 """
+
 import logging
 from typing import Any, Dict, Optional, Tuple
 
