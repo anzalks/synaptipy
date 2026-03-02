@@ -4,9 +4,12 @@
 - Python 3.10–3.12, PySide6 (Qt6), pyqtgraph, NumPy, SciPy
 - Tests use pytest + pytest-qt; CI runs on ubuntu/windows/macos × Python 3.10/3.11/3.12
 - Linting: `flake8 src/ tests/` with `.flake8` config (max-line-length=120, max-complexity=10)
+- Formatting: `black` (line-length=120, target-version=py310) and `isort` (profile=black)
+- CI enforces `black --check`, `isort --check`, and `flake8` — PRs that fail any of these are rejected
 
 ## Code style
 - Follow PEP 8; max line length 120 characters
+- All code must be formatted with `black` and imports sorted with `isort`
 - All public functions and classes must have docstrings
 - Use type hints throughout
 - Keep function complexity ≤ 10 (flake8 C901)
