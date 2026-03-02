@@ -1,8 +1,9 @@
 # src/Synaptipy/application/controllers/analysis_plot_manager.py
-from typing import Optional, List, Dict, Any, Tuple, Union
 import logging
-import numpy as np
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 
 from Synaptipy.core.data_model import Channel, Recording
 
@@ -45,7 +46,7 @@ class AnalysisPlotManager:
         data_source: Union[int, str],  # trial index or "average"
         preprocessing_settings: Optional[Dict] = None,
         filtered_indices: Optional[List[int]] = None,
-        process_callback: Optional[Any] = None  # Callback to self._process_signal_data
+        process_callback: Optional[Any] = None,  # Callback to self._process_signal_data
     ) -> Optional[PlotDataPackage]:
         """
         Prepares all necessary data for plotting.
@@ -84,7 +85,7 @@ class AnalysisPlotManager:
             channel_name=channel.name or f"Ch {channel_id}",
             context_traces=context_traces,
             channel_id=channel_id,
-            data_source=data_source
+            data_source=data_source,
         )
 
     @staticmethod
@@ -93,7 +94,7 @@ class AnalysisPlotManager:
         filtered_indices: Optional[List[int]],
         data_source: Union[int, str],
         settings: Optional[Dict],
-        callback: Optional[Any]
+        callback: Optional[Any],
     ) -> List[PlotContextTrace]:
         traces = []
         if not filtered_indices:
@@ -109,12 +110,7 @@ class AnalysisPlotManager:
             if ctx_d is not None and ctx_t is not None:
                 if settings and callback:
                     try:
-                        ctx_d = callback(
-                            ctx_d,
-                            channel.sampling_rate,
-                            settings,
-                            time_vector=ctx_t
-                        )
+                        ctx_d = callback(ctx_d, channel.sampling_rate, settings, time_vector=ctx_t)
                     except Exception as e:
                         log.debug(f"Could not apply filter to context trace: {e}")
                 traces.append(PlotContextTrace(ctx_t, ctx_d))
@@ -122,9 +118,7 @@ class AnalysisPlotManager:
 
     @staticmethod
     def _get_main_trace_raw(
-        channel: Channel,
-        data_source: Union[int, str],
-        filtered_indices: Optional[List[int]]
+        channel: Channel, data_source: Union[int, str], filtered_indices: Optional[List[int]]
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], str]:
         if data_source == "average":
             if filtered_indices:
@@ -133,16 +127,12 @@ class AnalysisPlotManager:
                     log.warning(msg)
                 return d, t, msg if d is not None else ""
             else:
-                return (
-                    channel.get_averaged_data(),
-                    channel.get_relative_averaged_time_vector(),
-                    "Average (All)"
-                )
+                return (channel.get_averaged_data(), channel.get_relative_averaged_time_vector(), "Average (All)")
         elif isinstance(data_source, int):
             return (
                 channel.get_data(data_source),
                 channel.get_relative_time_vector(data_source),
-                f"Trial {data_source + 1}"
+                f"Trial {data_source + 1}",
             )
         else:
             log.error(f"Invalid data source: {data_source}")
@@ -150,11 +140,7 @@ class AnalysisPlotManager:
 
     @staticmethod
     def _apply_preprocessing(
-        data: np.ndarray,
-        time: np.ndarray,
-        rate: float,
-        settings: Dict,
-        callback: Any
+        data: np.ndarray, time: np.ndarray, rate: float, settings: Dict, callback: Any
     ) -> np.ndarray:
         try:
             return callback(data, rate, settings, time_vector=time)

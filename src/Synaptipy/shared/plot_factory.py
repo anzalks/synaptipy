@@ -10,9 +10,10 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-from typing import Optional, Any
-from PySide6 import QtCore, QtWidgets
+from typing import Any, Optional
+
 import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 
 from .plot_customization import get_plot_customization_manager
 
@@ -64,8 +65,7 @@ class SynaptipyPlotFactory:
 
             # Windows Fix: Explicitly set SizePolicy and Minimum Size
             size_policy = QtWidgets.QSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Expanding,
-                QtWidgets.QSizePolicy.Policy.Expanding
+                QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
             )
             plot_widget.setSizePolicy(size_policy)
             plot_widget.setMinimumHeight(50)
@@ -105,8 +105,7 @@ class SynaptipyPlotFactory:
 
             # Windows Fix: Explicitly set SizePolicy and Minimum Size
             size_policy = QtWidgets.QSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Expanding,
-                QtWidgets.QSizePolicy.Policy.Expanding
+                QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
             )
             widget.setSizePolicy(size_policy)
             widget.setMinimumHeight(50)
@@ -163,7 +162,7 @@ class SynaptipyPlotFactory:
 
                 # Enable grid safely with error handling
                 try:
-                    from .plot_customization import is_grid_enabled, get_grid_pen
+                    from .plot_customization import get_grid_pen, is_grid_enabled
 
                     if is_grid_enabled():
                         grid_pen = get_grid_pen()

@@ -1,7 +1,7 @@
-
+import neo
 import pytest
 import quantities as pq
-import neo
+
 from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter, UnitError
 
 
@@ -12,7 +12,7 @@ class TestUnitCorrection:
         adapter = NeoAdapter()
         mock_segment = neo.Segment()
         # 10Hz sampling rate (dangerous)
-        mock_anasig = neo.AnalogSignal([1, 2, 3], units='mV', sampling_rate=10.0 * pq.Hz, t_start=0.0 * pq.s)
+        mock_anasig = neo.AnalogSignal([1, 2, 3], units="mV", sampling_rate=10.0 * pq.Hz, t_start=0.0 * pq.s)
         mock_anasig.channel_index = 0
         mock_segment.analogsignals.append(mock_anasig)
 
@@ -26,7 +26,7 @@ class TestUnitCorrection:
         adapter = NeoAdapter()
         mock_segment = neo.Segment()
         # 10Hz sampling rate (e.g. 10kHz read as 10Hz)
-        mock_anasig = neo.AnalogSignal([1, 2, 3], units='mV', sampling_rate=10.0 * pq.Hz, t_start=0.0 * pq.s)
+        mock_anasig = neo.AnalogSignal([1, 2, 3], units="mV", sampling_rate=10.0 * pq.Hz, t_start=0.0 * pq.s)
         mock_anasig.channel_index = 0
         mock_segment.analogsignals.append(mock_anasig)
 

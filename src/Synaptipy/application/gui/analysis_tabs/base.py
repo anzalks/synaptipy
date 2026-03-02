@@ -8,35 +8,32 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 import logging
-from typing import Optional, List, Dict, Any, Tuple
-from pathlib import Path
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from PySide6 import QtWidgets, QtCore, QtGui
-import pyqtgraph as pg
 import numpy as np
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
 
-# Use absolute path to import NeoAdapter and Recording
-from Synaptipy.core.data_model import Recording
-from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.application.controllers.analysis_plot_manager import AnalysisPlotManager
-from Synaptipy.shared.styling import (
-    style_button,
-)
-from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
-from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
 
 # NEW: Unified Plotting & Pipeline
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
+from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+
+# Use absolute path to import NeoAdapter and Recording
+from Synaptipy.core.data_model import Recording
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
-from Synaptipy.application.gui.analysis_worker import AnalysisWorker
-from Synaptipy.shared.plot_customization import (
-    get_average_pen,
-    get_single_trial_pen,
-    get_plot_customization_signals
-)
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.plot_customization import get_average_pen, get_plot_customization_signals, get_single_trial_pen
 from Synaptipy.shared.plot_exporter import PlotExporter
-from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
+from Synaptipy.shared.styling import (
+    style_button,
+)
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +54,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self,
         neo_adapter: NeoAdapter,
         settings_ref: Optional[QtCore.QSettings] = None,
-        parent: Optional[QtWidgets.QWidget] = None
+        parent: Optional[QtWidgets.QWidget] = None,
     ):
         """
         Initialize the base analysis tab.
@@ -239,14 +236,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     "plot_mode": "Analysis",  # Custom mode string
                     "selected_trial_indices": self._filtered_indices or "All",
                     "channel": self.signal_channel_combobox.currentText() if self.signal_channel_combobox else "",
-                    "data_source": self.data_source_combobox.currentText() if self.data_source_combobox else ""
+                    "data_source": self.data_source_combobox.currentText() if self.data_source_combobox else "",
                 }
 
                 exporter = PlotExporter(
                     recording=self._selected_item_recording,
                     plot_canvas_widget=self.plot_widget,
                     plot_canvas_wrapper=None,  # Analysis tabs don't use PlotCanvas wrapper same way
-                    config=export_config
+                    config=export_config,
                 )
 
                 try:
@@ -330,18 +327,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._is_preprocessing = True
 
         # Store settings in slot format - merge with existing
-        step_type = settings.get('type')
+        step_type = settings.get("type")
         if self._active_preprocessing_settings is None:
             self._active_preprocessing_settings = {}
 
-        if step_type == 'baseline':
-            self._active_preprocessing_settings['baseline'] = settings
-        elif step_type == 'filter':
-            filter_method = settings.get('method', 'unknown')
-            if 'filters' not in self._active_preprocessing_settings:
-                self._active_preprocessing_settings['filters'] = {}
+        if step_type == "baseline":
+            self._active_preprocessing_settings["baseline"] = settings
+        elif step_type == "filter":
+            filter_method = settings.get("method", "unknown")
+            if "filters" not in self._active_preprocessing_settings:
+                self._active_preprocessing_settings["filters"] = {}
             # Same filter method replaces old one
-            self._active_preprocessing_settings['filters'][filter_method] = settings
+            self._active_preprocessing_settings["filters"][filter_method] = settings
 
         # Rebuild pipeline from all settings
         self._rebuild_pipeline_from_settings()
@@ -394,23 +391,23 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Reset the PreprocessingWidget UI so combos show "None"
             if self.preprocessing_widget:
                 self.preprocessing_widget.reset_ui()
-        elif 'baseline' in settings or 'filters' in settings:
+        elif "baseline" in settings or "filters" in settings:
             # Slot-based format - apply all steps
             self._active_preprocessing_settings = settings
             self._rebuild_pipeline_from_settings()
         else:
             # Single step format - accumulate by type
-            step_type = settings.get('type')
+            step_type = settings.get("type")
             if self._active_preprocessing_settings is None:
                 self._active_preprocessing_settings = {}
 
-            if step_type == 'baseline':
-                self._active_preprocessing_settings['baseline'] = settings
-            elif step_type == 'filter':
-                filter_method = settings.get('method', 'unknown')
-                if 'filters' not in self._active_preprocessing_settings:
-                    self._active_preprocessing_settings['filters'] = {}
-                self._active_preprocessing_settings['filters'][filter_method] = settings
+            if step_type == "baseline":
+                self._active_preprocessing_settings["baseline"] = settings
+            elif step_type == "filter":
+                filter_method = settings.get("method", "unknown")
+                if "filters" not in self._active_preprocessing_settings:
+                    self._active_preprocessing_settings["filters"] = {}
+                self._active_preprocessing_settings["filters"][filter_method] = settings
 
             self._rebuild_pipeline_from_settings()
 
@@ -456,6 +453,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # 4. Update SessionManager directly as well
         try:
             from Synaptipy.application.session_manager import SessionManager
+
             SessionManager().preprocessing_settings = None
         except Exception as e:
             log.warning(f"Could not clear SessionManager preprocessing: {e}")
@@ -472,12 +470,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.pipeline.clear()
         if self._active_preprocessing_settings:
             # Baseline first
-            if 'baseline' in self._active_preprocessing_settings:
-                self.pipeline.add_step(self._active_preprocessing_settings['baseline'])
+            if "baseline" in self._active_preprocessing_settings:
+                self.pipeline.add_step(self._active_preprocessing_settings["baseline"])
             # Then all filters in sorted order for consistency
-            if 'filters' in self._active_preprocessing_settings:
-                for method in sorted(self._active_preprocessing_settings['filters'].keys()):
-                    self.pipeline.add_step(self._active_preprocessing_settings['filters'][method])
+            if "filters" in self._active_preprocessing_settings:
+                for method in sorted(self._active_preprocessing_settings["filters"].keys()):
+                    self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
     def _on_preprocessing_complete(self, result_data):
         """
@@ -496,16 +494,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Legacy Handling for async if needed:
         if self._preprocessed_data is None:
             self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
-        self._preprocessed_data['data'] = result_data
+        self._preprocessed_data["data"] = result_data
 
         if self._current_plot_data:
-            self._current_plot_data['data'] = result_data
+            self._current_plot_data["data"] = result_data
 
         if self.plot_widget:
             self.plot_widget.clear()
-            time = self._current_plot_data.get('time')
+            time = self._current_plot_data.get("time")
             if time is not None:
-                self.plot_widget.plot(time, result_data, pen='k')
+                self.plot_widget.plot(time, result_data, pen="k")
                 self._update_plot_pens_only()
                 self._on_data_plotted()
 
@@ -581,8 +579,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Restore labels
         self.plot_widget.setLabel("bottom", "Time", units="s")
-        self.plot_widget.setLabel("left", self._current_plot_data.get("channel_name", ""),
-                                  units=self._current_plot_data.get("units", ""))
+        self.plot_widget.setLabel(
+            "left", self._current_plot_data.get("channel_name", ""), units=self._current_plot_data.get("units", "")
+        )
 
         # Auto-range to fit new data
         self.auto_range_plot()
@@ -626,7 +625,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         try:
             # Get current pens from customization manager
-            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen
+            from Synaptipy.shared.plot_customization import get_average_pen, get_grid_pen, get_single_trial_pen
 
             single_trial_pen = get_single_trial_pen()
             average_pen = get_average_pen()
@@ -634,7 +633,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
             # Update pens for existing plot data items
             # Accessing items on PlotItem directly
-            items = self.plot_widget.items if hasattr(self.plot_widget, 'items') else []
+            items = self.plot_widget.items if hasattr(self.plot_widget, "items") else []
             for item in items:
                 if isinstance(item, pg.PlotDataItem):
                     # Determine which pen to apply based on item properties or name
@@ -686,8 +685,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # For now, rely on canvas.
 
         self.analysis_region = pg.LinearRegionItem(
-            values=[0, 0], orientation=pg.LinearRegionItem.Vertical,
-            brush=pg.mkBrush(0, 255, 0, 50), movable=True
+            values=[0, 0], orientation=pg.LinearRegionItem.Vertical, brush=pg.mkBrush(0, 255, 0, 50), movable=True
         )
         self.analysis_region.setVisible(False)
         self.analysis_region.setZValue(-10)  # Behind data traces
@@ -956,9 +954,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         try:
+            from PySide6.QtWidgets import QFileDialog
+
             from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
             from Synaptipy.shared.plot_exporter import PlotExporter
-            from PySide6.QtWidgets import QFileDialog
 
             # Generate default filename based on tab name
             default_filename = f"{self.__class__.__name__.lower().replace('tab', '')}_plot"
@@ -979,7 +978,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     # 3. Export
                     exporter = PlotExporter(
                         recording=self._selected_item_recording,  # Can be None as wrapper is None
-                        plot_canvas_widget=self.plot_widget
+                        plot_canvas_widget=self.plot_widget,
                     )
 
                     success = exporter.export(filename, fmt, dpi)
@@ -1223,6 +1222,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if not global_settings:
             try:
                 from Synaptipy.application.session_manager import SessionManager
+
                 session_settings = SessionManager.instance().preprocessing_settings
                 if session_settings:
                     global_settings = session_settings
@@ -1393,7 +1393,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _toggle_analysis_region(self, state):
         """Toggle visibility of the analysis region."""
-        visible = (state == QtCore.Qt.CheckState.Checked.value)
+        visible = state == QtCore.Qt.CheckState.Checked.value
         if self.analysis_region and self.plot_widget:
             if visible:
                 # Add if not already added (check items list or just try add)
@@ -1701,7 +1701,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.setTitle(f"{channel.name} - Selected Trials ({len(trial_indices)})")
 
         # Color cycle
-        colors = ['r', 'g', 'b', 'c', 'm', 'y']
+        colors = ["r", "g", "b", "c", "m", "y"]
 
         for i, trial_idx in enumerate(sorted(list(trial_indices))):
             data = channel.get_data(trial_idx)
@@ -1896,7 +1896,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 data_source=data_source,
                 preprocessing_settings=self._active_preprocessing_settings,
                 filtered_indices=self._filtered_indices if hasattr(self, "_filtered_indices") else None,
-                process_callback=self._pipeline_process_adapter
+                process_callback=self._pipeline_process_adapter,
             )
 
             if not plot_package:
@@ -1951,9 +1951,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                                     # Apply any preprocessing if active
                                     if self._active_preprocessing_settings:
                                         processed = self.pipeline.process(
-                                            trial_data,
-                                            plot_package.sampling_rate,
-                                            trial_time
+                                            trial_data, plot_package.sampling_rate, trial_time
                                         )
                                         if processed is not None:
                                             trial_data = processed
@@ -1967,14 +1965,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
                 # Plot the average on top
                 self.plot_widget.plot(
-                    plot_package.main_time, plot_package.main_data,
-                    pen=avg_pen, name=plot_package.label
+                    plot_package.main_time, plot_package.main_data, pen=avg_pen, name=plot_package.label
                 )
             else:
                 # Single trial selected - just plot it
                 self.plot_widget.plot(
-                    plot_package.main_time, plot_package.main_data,
-                    pen=trial_pen, name=plot_package.label
+                    plot_package.main_time, plot_package.main_data, pen=trial_pen, name=plot_package.label
                 )
 
             self.plot_widget.setLabel("bottom", "Time", units="s")
@@ -2095,9 +2091,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 return
 
             # --- INJECT GLOBAL ANALYSIS WINDOW ---
-            if getattr(self, "restrict_analysis_checkbox", None) and \
-               self.restrict_analysis_checkbox.isChecked() and \
-               getattr(self, "analysis_region", None):
+            if (
+                getattr(self, "restrict_analysis_checkbox", None)
+                and self.restrict_analysis_checkbox.isChecked()
+                and getattr(self, "analysis_region", None)
+            ):
                 min_t, max_t = self.analysis_region.getRegion()
                 params["t_start"] = min_t
                 params["t_end"] = max_t
@@ -2417,9 +2415,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Default pen for unselected (faded)
             unselected_pen = pg.mkPen((150, 150, 150, 50), width=1)
             # Selected pen
-            selected_pen = pg.mkPen('b', width=2)
+            selected_pen = pg.mkPen("b", width=2)
 
-            reset = (segment_index == -1)
+            reset = segment_index == -1
             base_trial_pen = get_single_trial_pen()
 
             # Access underlying PlotItem items if using Canvas

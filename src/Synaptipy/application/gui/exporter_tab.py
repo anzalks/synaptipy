@@ -6,21 +6,23 @@ using sub-tabs for different formats (e.g., NWB, CSV).
 """
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
-import pandas as pd  # Added missing import
 
+import pandas as pd  # Added missing import
 from PySide6 import QtCore, QtGui, QtWidgets
+
+from Synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
+from Synaptipy.application.session_manager import SessionManager
 
 # Assuming these are correctly structured now
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.exporters import NWBExporter
-from Synaptipy.shared.error_handling import SynaptipyError, ExportError
-from .nwb_dialog import NwbMetadataDialog  # Need the metadata dialog
 from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
-from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
+from Synaptipy.shared.error_handling import ExportError, SynaptipyError
+
+from .nwb_dialog import NwbMetadataDialog  # Need the metadata dialog
 
 try:
     import tzlocal
@@ -480,6 +482,7 @@ class ExporterTab(QtWidgets.QWidget):
     def _convert_result_val(val):
         """Convert a single DataFrame cell value to a CSV-safe scalar."""
         import numpy as np
+
         if val is None:
             return np.nan
         if hasattr(val, "tolist") and callable(getattr(val, "tolist")):
@@ -498,22 +501,19 @@ class ExporterTab(QtWidgets.QWidget):
 
     def _write_tidy_csvs(self, processed_results: list, output_path: str) -> Path:
         """Write per-analysis-type CSVs; return the final output path."""
+        import shutil
         import tempfile
         import zipfile
-        import shutil
+
         import numpy as np
 
-        df = pd.json_normalize(processed_results, sep='.')
+        df = pd.json_normalize(processed_results, sep=".")
         df = df.apply(lambda col: col.map(self._convert_result_val))
-        df = df.replace(r'^\s*$', np.nan, regex=True)
-        df = df.replace(['NaN', 'Na', 'None', 'NA', 'N/A', '<NA>'], np.nan)
+        df = df.replace(r"^\s*$", np.nan, regex=True)
+        df = df.replace(["NaN", "Na", "None", "NA", "N/A", "<NA>"], np.nan)
 
         out_p = Path(output_path)
-        grouped = (
-            df.groupby("analysis_type")
-            if "analysis_type" in df.columns
-            else [("Results", df)]
-        )
+        grouped = df.groupby("analysis_type") if "analysis_type" in df.columns else [("Results", df)]
         if out_p.is_dir():
             output_dir = out_p
             zip_path = None
@@ -530,7 +530,7 @@ class ExporterTab(QtWidgets.QWidget):
             csv_files.append(csv_filepath)
 
         if zip_path is not None:
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
                 for f in csv_files:
                     zf.write(f, f.name)
             shutil.rmtree(output_dir, ignore_errors=True)
@@ -548,9 +548,7 @@ class ExporterTab(QtWidgets.QWidget):
 
         selected_indices = set(self._get_selected_results_indices())
         if not selected_indices:
-            QtWidgets.QMessageBox.warning(
-                self, "Export Error", "Please select at least one result to export."
-            )
+            QtWidgets.QMessageBox.warning(self, "Export Error", "Please select at least one result to export.")
             return
 
         main_window = self.window()
@@ -559,9 +557,7 @@ class ExporterTab(QtWidgets.QWidget):
             return
 
         all_results = main_window.saved_analysis_results
-        results_to_export = [
-            all_results[i] for i in sorted(selected_indices) if i < len(all_results)
-        ]
+        results_to_export = [all_results[i] for i in sorted(selected_indices) if i < len(all_results)]
         if not results_to_export:
             QtWidgets.QMessageBox.warning(self, "Export Error", "No valid results selected for export.")
             return
@@ -573,15 +569,11 @@ class ExporterTab(QtWidgets.QWidget):
             if output_path.lower().endswith(".json"):
                 df.to_json(output_path, orient="records", indent=2, default_handler=str)
                 log.debug(f"Exported analysis results to JSON: {output_path}")
-                QtWidgets.QMessageBox.information(
-                    self, "Export Successful", f"Results exported to:\n{output_path}"
-                )
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
             else:
                 final_path = self._write_tidy_csvs(processed_results, output_path)
                 log.debug(f"Exported analysis results to: {final_path}")
-                QtWidgets.QMessageBox.information(
-                    self, "Export Successful", f"Results exported to:\n{final_path}"
-                )
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{final_path}")
 
         except Exception as e:
             log.error(f"Failed to export analysis results: {e}", exc_info=True)

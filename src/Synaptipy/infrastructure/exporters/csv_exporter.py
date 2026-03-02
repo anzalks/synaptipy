@@ -4,10 +4,11 @@
 CSV Exporter for Synaptipy.
 Handles exporting recording data and analysis results to CSV format.
 """
-import logging
 import csv
+import logging
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 
 from Synaptipy.core.data_model import Recording

@@ -1,10 +1,10 @@
 # src/Synaptipy/infrastructure/file_readers/neo_source_handle.py
 import logging
-from typing import Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-import numpy as np
 import neo
+import numpy as np
 
 from Synaptipy.core.source_interfaces import SourceHandle
 
@@ -17,12 +17,7 @@ class NeoSourceHandle(SourceHandle):
     Wraps a neo.Block or a neo.io reader to provide on-demand data access.
     """
 
-    def __init__(
-        self,
-        source_path: Path,
-        block: Optional[neo.Block] = None,
-        reader=None
-    ):
+    def __init__(self, source_path: Path, block: Optional[neo.Block] = None, reader=None):
         self._source_path = source_path
         self._block = block
         self._reader = reader
@@ -39,9 +34,7 @@ class NeoSourceHandle(SourceHandle):
         """
         self._channel_map = channel_map
 
-    def load_channel_data(
-        self, channel_id: str, trial_index: int
-    ) -> Optional[np.ndarray]:
+    def load_channel_data(self, channel_id: str, trial_index: int) -> Optional[np.ndarray]:
         """
         Loads data using the Neo Block structure and the pre-computed channel map.
         """
@@ -58,19 +51,14 @@ class NeoSourceHandle(SourceHandle):
         # Retrieve location info from map
         mapping = self._channel_map.get(channel_id)
         if not mapping:
-            log.warning(
-                f"NeoSourceHandle: No mapping found for channel '{channel_id}'."
-            )
+            log.warning(f"NeoSourceHandle: No mapping found for channel '{channel_id}'.")
             return None
 
         sig_idx = mapping.get("signal_index")
         ch_offset = mapping.get("channel_offset", 0)
 
         if sig_idx is None or sig_idx >= len(segment.analogsignals):
-            log.debug(
-                f"NeoSourceHandle: Signal index {sig_idx} invalid for "
-                f"segment {trial_index}."
-            )
+            log.debug(f"NeoSourceHandle: Signal index {sig_idx} invalid for " f"segment {trial_index}.")
             return None
 
         analog_signal = segment.analogsignals[sig_idx]

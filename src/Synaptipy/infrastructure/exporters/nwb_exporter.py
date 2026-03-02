@@ -10,9 +10,9 @@ __maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
 import logging
-from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 
@@ -20,10 +20,10 @@ import numpy as np
 try:
     from pynwb import NWBHDF5IO, NWBFile
     from pynwb.icephys import (
-        PatchClampSeries,
         CurrentClampSeries,
-        VoltageClampSeries,
         IntracellularElectrode,
+        PatchClampSeries,
+        VoltageClampSeries,
     )
 
     PYNWB_AVAILABLE = True
@@ -33,45 +33,50 @@ except ImportError:
     # any of these classes would be instantiated.
     log_fallback = logging.getLogger(__name__)
     log_fallback.warning(
-        "pynwb library not found. NWB Export functionality will be disabled. "
-        "Install it with: pip install pynwb"
+        "pynwb library not found. NWB Export functionality will be disabled. " "Install it with: pip install pynwb"
     )
     PYNWB_AVAILABLE = False
 
     class NWBHDF5IO:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class NWBFile:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class PatchClampSeries:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class CurrentClampSeries:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class VoltageClampSeries:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class IntracellularElectrode:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
 
 # Import from our package structure using relative paths
 try:
-    from ...core.data_model import Recording, Channel
+    from ...core.data_model import Channel, Recording
     from ...shared.error_handling import ExportError
 except ImportError:
     # Fallback for standalone execution or if package structure isn't fully resolved
@@ -80,14 +85,17 @@ except ImportError:
 
     class Recording:  # type: ignore[no-redef]
         """Sentinel: package imports not resolved."""
+
         pass
 
     class Channel:  # type: ignore[no-redef]
         """Sentinel: package imports not resolved."""
+
         pass
 
     class ExportError(IOError):  # type: ignore[no-redef]
         """Sentinel: package imports not resolved."""
+
         pass
 
 
@@ -312,9 +320,9 @@ class NWBExporter:
                     else:
                         final_units = getattr(channel, "units", "unknown")
                         log.warning(
-                            "Unrecognised channel units '%s' for '%s'. "
-                            "Using generic PatchClampSeries.",
-                            units, channel.name,
+                            "Unrecognised channel units '%s' for '%s'. " "Using generic PatchClampSeries.",
+                            units,
+                            channel.name,
                         )
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)

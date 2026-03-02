@@ -3,14 +3,14 @@
 """
 Dialog for configuring global analysis default parameters.
 """
-import logging
 import json
-from typing import Dict, Any, Optional
+import logging
+from typing import Any, Dict, Optional
 
-from PySide6 import QtWidgets, QtCore  # noqa: F401
+from PySide6 import QtCore, QtWidgets  # noqa: F401
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.application.gui.ui_generator import ParameterWidgetGenerator
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
             return
 
         try:
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 json.dump(config, f, indent=4)
             QtWidgets.QMessageBox.information(self, "Success", f"Configuration saved to:\n{file_path}")
         except Exception as e:
@@ -162,7 +162,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
             return
 
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 config = json.load(f)
 
             # Apply to UI
@@ -182,9 +182,10 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
     def _restore_factory_defaults(self):
         """Reset UI to factory defaults."""
         reply = QtWidgets.QMessageBox.question(
-            self, "Restore Defaults",
+            self,
+            "Restore Defaults",
             "Are you sure you want to restore all parameters to factory defaults?",
-            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
         )
         if reply == QtWidgets.QMessageBox.StandardButton.Yes:
             # 1. Reset Registry

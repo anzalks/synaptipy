@@ -22,13 +22,13 @@ import numpy as np
 import pytest
 from PySide6 import QtCore, QtWidgets  # noqa: F401
 
-from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.application.gui.explorer.plot_canvas import ExplorerPlotCanvas
-
+from Synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_recording(num_channels: int, num_trials: int = 3) -> Recording:
     """Build a lightweight synthetic Recording with *num_channels* channels."""
@@ -52,6 +52,7 @@ def _make_recording(num_channels: int, num_trials: int = 3) -> Recording:
 # iterations — matches the in-app usage pattern).
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="session")
 def stress_canvas(qapp):
     """Session-scoped ExplorerPlotCanvas for stress tests."""
@@ -74,7 +75,7 @@ def _drain_after_stress_test(stress_canvas):
         pass
     stress_canvas.clear()
     yield
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         return
     try:
         QtCore.QCoreApplication.removePostedEvents(None, 0)
@@ -85,6 +86,7 @@ def _drain_after_stress_test(stress_canvas):
 # ---------------------------------------------------------------------------
 # Test 1 — Rapid rebuild: same channel count
 # ---------------------------------------------------------------------------
+
 
 class TestRapidRebuildSameChannelCount:
     """Cycle rebuild_plots 100× on recordings with the same channel layout."""
@@ -97,9 +99,9 @@ class TestRapidRebuildSameChannelCount:
         rec = _make_recording(self.NUM_CHANNELS)
         for i in range(self.ITERATIONS):
             keys = stress_canvas.rebuild_plots(rec)
-            assert len(keys) == self.NUM_CHANNELS, (
-                f"Iteration {i}: expected {self.NUM_CHANNELS} channel keys, got {len(keys)}"
-            )
+            assert (
+                len(keys) == self.NUM_CHANNELS
+            ), f"Iteration {i}: expected {self.NUM_CHANNELS} channel keys, got {len(keys)}"
         # Post condition: canvas tracking state is consistent.
         assert len(stress_canvas.plot_items) == self.NUM_CHANNELS
         assert len(stress_canvas.plot_widgets) == self.NUM_CHANNELS
@@ -109,6 +111,7 @@ class TestRapidRebuildSameChannelCount:
 # Test 2 — Rapid rebuild: alternating channel counts (stress the stretch-
 # factor reset / ghost-row logic on Windows)
 # ---------------------------------------------------------------------------
+
 
 class TestRapidRebuildAlternatingChannelCount:
     """Alternate between a 2-channel and a 4-channel recording 50 times each."""
@@ -123,9 +126,7 @@ class TestRapidRebuildAlternatingChannelCount:
             rec = rec2 if (i % 2 == 0) else rec4
             expected_n = 2 if (i % 2 == 0) else 4
             keys = stress_canvas.rebuild_plots(rec)
-            assert len(keys) == expected_n, (
-                f"Iteration {i}: expected {expected_n} channel keys, got {len(keys)}"
-            )
+            assert len(keys) == expected_n, f"Iteration {i}: expected {expected_n} channel keys, got {len(keys)}"
         # Final state: last rec4 (even last index = 49, so rec2)
         # Just verify the count matches whatever was last.
         last_expected = 2 if ((self.ITERATIONS - 1) % 2 == 0) else 4
@@ -135,6 +136,7 @@ class TestRapidRebuildAlternatingChannelCount:
 # ---------------------------------------------------------------------------
 # Test 3 — Clear on empty recording must not crash
 # ---------------------------------------------------------------------------
+
 
 def test_rebuild_empty_recording(stress_canvas):
     """rebuild_plots(empty Recording) must return [] without crashing."""
@@ -154,6 +156,7 @@ def test_rebuild_none_recording(stress_canvas):
 # Test 4 — XLink stress: many channels all linked, then cleared
 # ---------------------------------------------------------------------------
 
+
 def test_xlink_stress(stress_canvas):
     """8-channel rebuild 50× to stress the X-axis link/unlink cycle."""
     rec = _make_recording(8)
@@ -166,6 +169,7 @@ def test_xlink_stress(stress_canvas):
 # ---------------------------------------------------------------------------
 # Test 5 — Debounce timer coalesces rapid nav calls
 # ---------------------------------------------------------------------------
+
 
 class TestFileNavDebounceTimer:
     """Verify the QTimer debounce pattern fires exactly once per burst.
@@ -190,9 +194,7 @@ class TestFileNavDebounceTimer:
         # Wait well past the interval.
         qtbot.wait(200)
 
-        assert call_count[0] == 1, (
-            f"Timer fired {call_count[0]} times; expected exactly 1 (debounce coalesces bursts)"
-        )
+        assert call_count[0] == 1, f"Timer fired {call_count[0]} times; expected exactly 1 (debounce coalesces bursts)"
 
     def test_separate_bursts_fire_separately(self, qapp, qtbot):
         """Two distinct bursts separated by more than the interval fire twice."""

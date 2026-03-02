@@ -7,7 +7,8 @@ Contains the Left Panel widgets: Display Options, Manual Limits, Channel List, F
 import logging
 from typing import Dict, Optional
 
-from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
+
 from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)

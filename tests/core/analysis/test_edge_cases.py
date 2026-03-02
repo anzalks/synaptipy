@@ -10,27 +10,27 @@ real-world batch processing.
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.intrinsic_properties import (
-    calculate_rin,
-    calculate_sag_ratio,
-    calculate_tau,
-    calculate_iv_curve,
-)
-from Synaptipy.core.analysis.spike_analysis import (
-    detect_spikes_threshold,
-    calculate_spike_features,
-)
 from Synaptipy.core.analysis.basic_features import (
     calculate_rmp,
     find_stable_baseline,
 )
 from Synaptipy.core.analysis.burst_analysis import (
-    calculate_bursts_logic,
     analyze_spikes_and_bursts,
+    calculate_bursts_logic,
 )
 from Synaptipy.core.analysis.capacitance import (
     calculate_capacitance_cc,
     calculate_capacitance_vc,
+)
+from Synaptipy.core.analysis.intrinsic_properties import (
+    calculate_iv_curve,
+    calculate_rin,
+    calculate_sag_ratio,
+    calculate_tau,
+)
+from Synaptipy.core.analysis.spike_analysis import (
+    calculate_spike_features,
+    detect_spikes_threshold,
 )
 from Synaptipy.core.analysis.train_dynamics import (
     calculate_train_dynamics,
@@ -59,7 +59,8 @@ class TestSagRatioEdgeCases:
         """A completely flat trace has delta_v_ss == 0 → None."""
         v, t, _ = _make_trace()
         result = calculate_sag_ratio(
-            v, t,
+            v,
+            t,
             baseline_window=(0.0, 0.05),
             response_peak_window=(0.1, 0.2),
             response_steady_state_window=(0.3, 0.45),
@@ -73,7 +74,8 @@ class TestSagRatioEdgeCases:
         step_mask = (t >= 0.1) & (t < 0.4)
         v[step_mask] = -50.0
         result = calculate_sag_ratio(
-            v, t,
+            v,
+            t,
             baseline_window=(0.0, 0.05),
             response_peak_window=(0.1, 0.2),
             response_steady_state_window=(0.3, 0.4),
@@ -85,7 +87,8 @@ class TestSagRatioEdgeCases:
         """Windows outside the trace range → None."""
         v, t, _ = _make_trace()
         result = calculate_sag_ratio(
-            v, t,
+            v,
+            t,
             baseline_window=(10.0, 11.0),
             response_peak_window=(12.0, 13.0),
             response_steady_state_window=(14.0, 15.0),
@@ -101,7 +104,8 @@ class TestSagRatioEdgeCases:
         peak_mask = (t >= 0.1) & (t < 0.15)
         v[peak_mask] = -100.0
         result = calculate_sag_ratio(
-            v, t,
+            v,
+            t,
             baseline_window=(0.0, 0.05),
             response_peak_window=(0.1, 0.2),
             response_steady_state_window=(0.3, 0.4),
@@ -119,7 +123,8 @@ class TestSagRatioEdgeCases:
         peak_mask = (t >= 0.1) & (t < 0.15)
         v[peak_mask] = -100.0
         result = calculate_sag_ratio(
-            v, t,
+            v,
+            t,
             baseline_window=(0.0, 0.05),
             response_peak_window=(0.1, 0.2),
             response_steady_state_window=(0.3, 0.4),
@@ -178,8 +183,11 @@ class TestTauEdgeCases:
         v = np.array([-70.0, -72.0, -74.0, -75.0])
         t = np.array([0.0, 0.001, 0.002, 0.003])
         result = calculate_tau(
-            v, t, stim_start_time=0.0, fit_duration=0.003,
-            model='bi',
+            v,
+            t,
+            stim_start_time=0.0,
+            fit_duration=0.003,
+            model="bi",
         )
         assert result is None
 
@@ -198,17 +206,13 @@ class TestIVCurveEdgeCases:
     def test_single_sweep_no_regression(self):
         """A single sweep cannot compute linear regression → Rin is None."""
         v, t, _ = _make_trace(n=5000)
-        result = calculate_iv_curve(
-            [v], [t], [0.0], (0.0, 0.05), (0.1, 0.2)
-        )
+        result = calculate_iv_curve([v], [t], [0.0], (0.0, 0.05), (0.1, 0.2))
         assert result["rin_aggregate_mohm"] is None
 
     def test_all_zero_currents(self):
         """All-zero current steps → regression on flat data."""
         v, t, _ = _make_trace(n=5000)
-        result = calculate_iv_curve(
-            [v, v], [t, t], [0.0, 0.0], (0.0, 0.05), (0.1, 0.2)
-        )
+        result = calculate_iv_curve([v, v], [t, t], [0.0, 0.0], (0.0, 0.05), (0.1, 0.2))
         # Should not crash; Rin may be None or NaN
         assert result is not None
 
@@ -223,7 +227,10 @@ class TestSpikeDetectionEdgeCases:
         """A flat sub-threshold trace should detect zero spikes."""
         v, t, fs = _make_trace()
         result = detect_spikes_threshold(
-            v, t, threshold=-20.0, refractory_samples=int(0.002 * fs),
+            v,
+            t,
+            threshold=-20.0,
+            refractory_samples=int(0.002 * fs),
         )
         n_spikes = len(result.spike_times) if result.spike_times is not None else 0
         assert n_spikes == 0
@@ -233,7 +240,10 @@ class TestSpikeDetectionEdgeCases:
         v = np.array([-70.0])
         t = np.array([0.0])
         result = detect_spikes_threshold(
-            v, t, threshold=-20.0, refractory_samples=1,
+            v,
+            t,
+            threshold=-20.0,
+            refractory_samples=1,
         )
         n_spikes = len(result.spike_times) if result.spike_times is not None else 0
         assert n_spikes == 0
@@ -264,7 +274,9 @@ class TestADPEdgeCases:
 
         spike_indices = np.array([spike_center])
         features = calculate_spike_features(
-            v, t, spike_indices,
+            v,
+            t,
+            spike_indices,
             dvdt_threshold=20.0,
         )
         assert features is not None
@@ -294,8 +306,12 @@ class TestBurstEdgeCases:
         """Flat trace → no spikes → no bursts."""
         v, t, fs = _make_trace()
         result = analyze_spikes_and_bursts(
-            v, t, fs, threshold=-20.0,
-            max_isi_start=0.01, max_isi_end=0.2,
+            v,
+            t,
+            fs,
+            threshold=-20.0,
+            max_isi_start=0.01,
+            max_isi_end=0.2,
         )
         assert result.burst_count == 0
 
@@ -321,7 +337,11 @@ class TestCapacitanceEdgeCases:
         """Zero voltage step → None."""
         v, t, _ = _make_trace()
         result = calculate_capacitance_vc(
-            v, t, (0.0, 0.1), (0.1, 0.2), voltage_step_amplitude_mv=0.0,
+            v,
+            t,
+            (0.0, 0.1),
+            (0.1, 0.2),
+            voltage_step_amplitude_mv=0.0,
         )
         assert result is None
 
@@ -418,7 +438,10 @@ class TestArtifactBlanking:
     def test_empty_data(self):
         """Empty array → returned unchanged."""
         result = blank_artifact(
-            np.array([]), np.array([]), 0.0, 1.0,
+            np.array([]),
+            np.array([]),
+            0.0,
+            1.0,
         )
         assert len(result) == 0
 
@@ -445,11 +468,13 @@ class TestPipelineArtifactStep:
         v[art_mask] = 500.0
 
         pipeline = SignalProcessingPipeline()
-        pipeline.add_step({
-            'type': 'artifact',
-            'onset_time': 0.1,
-            'duration_ms': 1.0,
-            'method': 'hold',
-        })
+        pipeline.add_step(
+            {
+                "type": "artifact",
+                "onset_time": 0.1,
+                "duration_ms": 1.0,
+                "method": "hold",
+            }
+        )
         result = pipeline.process(v, fs, time_vector=t)
         assert np.all(result[art_mask] != 500.0)

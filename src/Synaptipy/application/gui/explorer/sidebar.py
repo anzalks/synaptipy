@@ -6,10 +6,12 @@ Handles file system navigation (tree view) and file list management.
 """
 import logging
 from pathlib import Path
-from PySide6 import QtCore, QtWidgets, QtGui
 from typing import Dict, Optional  # Added Dict
-from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+
+from PySide6 import QtCore, QtGui, QtWidgets
+
 from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 
 log = logging.getLogger(__name__)
 
@@ -132,7 +134,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
                 item.setData(0, QtCore.Qt.ItemDataRole.UserRole, str(full_path))
                 if val:  # is directory
                     dict_to_tree(val, item, full_path)
-                else:    # is file
+                else:  # is file
                     pass
 
         dict_to_tree(tree_dict, self.project_tree.invisibleRootItem(), root_path)
@@ -325,9 +327,9 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__(parent)
         self.quality_cache: Dict[Path, Dict] = {}
         # Colors
-        self.color_good = QtGui.QColor("#2ecc71")   # Green
-        self.color_warn = QtGui.QColor("#f1c40f")   # Yellow
-        self.color_bad = QtGui.QColor("#e74c3c")    # Red
+        self.color_good = QtGui.QColor("#2ecc71")  # Green
+        self.color_warn = QtGui.QColor("#f1c40f")  # Yellow
+        self.color_bad = QtGui.QColor("#e74c3c")  # Red
         self.color_unknown = QtGui.QColor("transparent")  # Default
 
     def update_status(self, path: Path, metrics: dict):
@@ -393,16 +395,16 @@ class QualityDelegate(QtWidgets.QStyledItemDelegate):
 
                     if info.get("warnings"):
                         tooltip += "<b>Warnings:</b><ul>"
-                        for w in info['warnings']:
+                        for w in info["warnings"]:
                             tooltip += f"<li>{w}</li>"
                         tooltip += "</ul>"
 
                     # Add drift info if available
-                    if 'metrics' in info:
-                        m = info['metrics']
-                        if 'total_drift' in m:
+                    if "metrics" in info:
+                        m = info["metrics"]
+                        if "total_drift" in m:
                             tooltip += f"<br>Drift: {m['total_drift']:.2f}"
-                        if 'rms_noise' in m:
+                        if "rms_noise" in m:
                             tooltip += f"<br>RMS Noise: {m['rms_noise']:.2f}"
 
                     QtWidgets.QToolTip.showText(event.globalPos(), tooltip, view)

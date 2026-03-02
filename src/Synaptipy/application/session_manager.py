@@ -1,9 +1,10 @@
 # src/Synaptipy/application/session_manager.py
 
-from PySide6.QtCore import QObject, Signal
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from PySide6.QtCore import QObject, Signal
 
 # We import Recording only for type hinting if possible.
 from Synaptipy.core.data_model import Recording
@@ -122,31 +123,31 @@ class SessionManager(QObject):
             return
 
         # Check if this is a slot-based settings dict or a single step
-        if 'baseline' in settings or 'filters' in settings:
+        if "baseline" in settings or "filters" in settings:
             # Already in slot format
             self._preprocessing_settings = settings
         else:
             # Single step format - merge into slots
-            step_type = settings.get('type')
+            step_type = settings.get("type")
             if self._preprocessing_settings is None:
                 self._preprocessing_settings = {}
 
-            if step_type == 'baseline':
-                self._preprocessing_settings['baseline'] = settings
-            elif step_type == 'filter':
+            if step_type == "baseline":
+                self._preprocessing_settings["baseline"] = settings
+            elif step_type == "filter":
                 # Multiple filters supported - keyed by method (lowpass, highpass, etc.)
-                filter_method = settings.get('method', 'unknown')
-                if 'filters' not in self._preprocessing_settings:
-                    self._preprocessing_settings['filters'] = {}
+                filter_method = settings.get("method", "unknown")
+                if "filters" not in self._preprocessing_settings:
+                    self._preprocessing_settings["filters"] = {}
                 # Same filter type replaces old one
-                self._preprocessing_settings['filters'][filter_method] = settings
+                self._preprocessing_settings["filters"][filter_method] = settings
             else:
                 log.warning(f"Unknown preprocessing step type: {step_type}")
                 return
 
         # Log current state
-        has_baseline = self._preprocessing_settings.get('baseline') is not None
-        filter_count = len(self._preprocessing_settings.get('filters', {}))
+        has_baseline = self._preprocessing_settings.get("baseline") is not None
+        filter_count = len(self._preprocessing_settings.get("filters", {}))
         log.debug(f"Preprocessing settings updated: baseline={has_baseline}, filters={filter_count}")
         self.preprocessing_settings_changed.emit(self._preprocessing_settings)
 
@@ -155,13 +156,13 @@ class SessionManager(QObject):
         if not self._preprocessing_settings:
             return
 
-        if slot_type == 'baseline' and 'baseline' in self._preprocessing_settings:
-            del self._preprocessing_settings['baseline']
-        elif slot_type == 'filter' and filter_method and 'filters' in self._preprocessing_settings:
-            if filter_method in self._preprocessing_settings['filters']:
-                del self._preprocessing_settings['filters'][filter_method]
-                if not self._preprocessing_settings['filters']:
-                    del self._preprocessing_settings['filters']
+        if slot_type == "baseline" and "baseline" in self._preprocessing_settings:
+            del self._preprocessing_settings["baseline"]
+        elif slot_type == "filter" and filter_method and "filters" in self._preprocessing_settings:
+            if filter_method in self._preprocessing_settings["filters"]:
+                del self._preprocessing_settings["filters"][filter_method]
+                if not self._preprocessing_settings["filters"]:
+                    del self._preprocessing_settings["filters"]
 
         if not self._preprocessing_settings:
             self._preprocessing_settings = None
@@ -178,10 +179,10 @@ class SessionManager(QObject):
         steps = []
         if self._preprocessing_settings:
             # Always apply baseline before filters
-            if 'baseline' in self._preprocessing_settings:
-                steps.append(self._preprocessing_settings['baseline'])
+            if "baseline" in self._preprocessing_settings:
+                steps.append(self._preprocessing_settings["baseline"])
             # Add all filters in sorted order for consistency
-            if 'filters' in self._preprocessing_settings:
-                for method in sorted(self._preprocessing_settings['filters'].keys()):
-                    steps.append(self._preprocessing_settings['filters'][method])
+            if "filters" in self._preprocessing_settings:
+                for method in sorted(self._preprocessing_settings["filters"].keys()):
+                    steps.append(self._preprocessing_settings["filters"][method])
         return steps

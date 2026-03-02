@@ -1,6 +1,8 @@
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
+
 from PySide6 import QtCore
+
 from Synaptipy.application.gui.explorer.sidebar import ExplorerSidebar
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -54,6 +56,7 @@ def test_sidebar_async_sync(qtbot):
     # Let's use a real object for signal emission
     class SignalHolder(QtCore.QObject):
         directoryLoaded = QtCore.Signal(str)
+
     signal_holder = SignalHolder()
 
     mock_model.directoryLoaded = signal_holder.directoryLoaded

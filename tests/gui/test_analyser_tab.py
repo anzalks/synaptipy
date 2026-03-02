@@ -1,7 +1,9 @@
 import importlib
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from PySide6 import QtWidgets
+
 from Synaptipy.application.gui.analyser_tab import AnalyserTab
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -29,14 +31,14 @@ def _ensure_registry_populated():
     decorators and repopulates the registry so the GUI tests see all 15 analyses.
     """
     import Synaptipy.core.analysis.basic_features as m0
-    import Synaptipy.core.analysis.spike_analysis as m1
-    import Synaptipy.core.analysis.intrinsic_properties as m2
-    import Synaptipy.core.analysis.event_detection as m3
-    import Synaptipy.core.analysis.phase_plane as m4
     import Synaptipy.core.analysis.burst_analysis as m5
-    import Synaptipy.core.analysis.excitability as m6
     import Synaptipy.core.analysis.capacitance as m7
+    import Synaptipy.core.analysis.event_detection as m3
+    import Synaptipy.core.analysis.excitability as m6
+    import Synaptipy.core.analysis.intrinsic_properties as m2
     import Synaptipy.core.analysis.optogenetics as m8
+    import Synaptipy.core.analysis.phase_plane as m4
+    import Synaptipy.core.analysis.spike_analysis as m1
     import Synaptipy.core.analysis.train_dynamics as m9
 
     for module in (m0, m1, m2, m3, m4, m5, m6, m7, m8, m9):
@@ -69,10 +71,7 @@ def test_analyser_tab_loads_analysis_tabs(qtbot, mock_neo_adapter, monkeypatch):
     ``Synaptipy.core.analysis`` package before calling list_registered().
     """
     # Suppress heavy pyqtgraph plot-area creation to stay safe in offscreen mode
-    monkeypatch.setattr(
-        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
-        MagicMock()
-    )
+    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
     tab = AnalyserTab(neo_adapter=mock_neo_adapter)
     qtbot.addWidget(tab)
     n_tabs = len(tab._loaded_analysis_tabs)

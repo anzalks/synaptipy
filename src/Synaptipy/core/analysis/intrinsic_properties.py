@@ -4,12 +4,14 @@
 Analysis functions for intrinsic membrane properties.
 """
 import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
-from typing import Optional, Tuple, Dict, Any, Union, List
 from scipy.optimize import curve_fit
 from scipy.stats import linregress
-from Synaptipy.core.results import RinResult
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.results import RinResult
 
 log = logging.getLogger(__name__)
 
@@ -41,8 +43,11 @@ def calculate_rin(
     if current_amplitude == 0:
         log.warning("Cannot calculate Rin: Current amplitude is zero.")
         return RinResult(
-            value=None, unit="MOhm", is_valid=False, error_message="Current amplitude is zero",
-            parameters=parameters or {}
+            value=None,
+            unit="MOhm",
+            is_valid=False,
+            error_message="Current amplitude is zero",
+            parameters=parameters or {},
         )
 
     try:
@@ -72,9 +77,11 @@ def calculate_rin(
         if delta_i_nA == 0:
             log.warning("Current amplitude effectively zero after conversion.")
             return RinResult(
-                value=None, unit="MOhm", is_valid=False,
+                value=None,
+                unit="MOhm",
+                is_valid=False,
                 error_message="Current amplitude effectively zero",
-                parameters=parameters or {}
+                parameters=parameters or {},
             )
         rin = abs(delta_v) / delta_i_nA
 
@@ -100,14 +107,15 @@ def calculate_rin(
     except IndexError:
         log.exception("IndexError during Rin calculation. Check trace/time vector alignment and window validity.")
         return RinResult(
-            value=None, unit="MOhm", is_valid=False, error_message="IndexError during calculation",
-            parameters=parameters or {}
+            value=None,
+            unit="MOhm",
+            is_valid=False,
+            error_message="IndexError during calculation",
+            parameters=parameters or {},
         )
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Rin calculation: {e}")
-        return RinResult(
-            value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {}
-        )
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {})
 
 
 def calculate_conductance(
@@ -187,9 +195,7 @@ def calculate_conductance(
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception(f"Unexpected error during Conductance calculation: {e}")
-        return RinResult(
-            value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {}
-        )
+        return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {})
 
 
 def calculate_iv_curve(
@@ -308,7 +314,7 @@ def calculate_tau(
     time_vector: np.ndarray,
     stim_start_time: float,
     fit_duration: float,
-    model: str = 'mono',
+    model: str = "mono",
     tau_bounds: Optional[Tuple[float, float]] = None,
     artifact_blanking_ms: float = 0.5,
 ) -> Optional[Union[float, Dict[str, float]]]:
@@ -352,16 +358,13 @@ def calculate_tau(
         V_0 = V_fit[0]
         V_ss_guess = np.mean(V_fit[-5:])  # Guess steady state from last few points
 
-        if model == 'mono':
+        if model == "mono":
             # --- Single-exponential fit ---
             lower_bounds = [-np.inf, -np.inf, tau_min]
             upper_bounds = [np.inf, np.inf, tau_max]
             p0 = [V_ss_guess, V_0, 0.01]
 
-            popt, _ = curve_fit(
-                _exp_growth, t_fit, V_fit, p0=p0,
-                bounds=(lower_bounds, upper_bounds), maxfev=5000
-            )
+            popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
 
             tau_ms = popt[2] * 1000  # convert tau to ms
 
@@ -372,12 +375,12 @@ def calculate_tau(
 
             log.debug("Calculated Tau (mono): %.3f ms", tau_ms)
             return {
-                'tau_ms': tau_ms,
-                'fit_time': fit_time,
-                'fit_values': fit_values_list,
+                "tau_ms": tau_ms,
+                "fit_time": fit_time,
+                "fit_values": fit_values_list,
             }
 
-        elif model == 'bi':
+        elif model == "bi":
             # --- Bi-exponential fit ---
             if len(t_fit) < 6:
                 log.warning("Not enough data for bi-exponential fit (need >= 6).")
@@ -389,15 +392,13 @@ def calculate_tau(
             tau_fast_guess = min(0.005, tau_max * 0.1)
             tau_slow_guess = min(0.05, tau_max * 0.5)
 
-            p0 = [V_ss_guess, A_fast_guess, tau_fast_guess,
-                  A_slow_guess, tau_slow_guess]
+            p0 = [V_ss_guess, A_fast_guess, tau_fast_guess, A_slow_guess, tau_slow_guess]
 
             lower_bounds = [-np.inf, -np.inf, tau_min, -np.inf, tau_min]
             upper_bounds = [np.inf, np.inf, tau_max, np.inf, tau_max]
 
             popt, pcov = curve_fit(
-                _bi_exp_growth, t_fit, V_fit, p0=p0,
-                bounds=(lower_bounds, upper_bounds), maxfev=10000
+                _bi_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=10000
             )
 
             V_ss_fit, A_fast, tau_fast, A_slow, tau_slow = popt
@@ -413,18 +414,15 @@ def calculate_tau(
             fit_values_list = fit_values.tolist()
 
             result = {
-                'tau_fast_ms': tau_fast * 1000,
-                'tau_slow_ms': tau_slow * 1000,
-                'amplitude_fast': A_fast,
-                'amplitude_slow': A_slow,
-                'V_ss': V_ss_fit,
-                'fit_time': fit_time,
-                'fit_values': fit_values_list,
+                "tau_fast_ms": tau_fast * 1000,
+                "tau_slow_ms": tau_slow * 1000,
+                "amplitude_fast": A_fast,
+                "amplitude_slow": A_slow,
+                "V_ss": V_ss_fit,
+                "fit_time": fit_time,
+                "fit_values": fit_values_list,
             }
-            log.debug(
-                "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms",
-                result['tau_fast_ms'], result['tau_slow_ms']
-            )
+            log.debug("Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms", result["tau_fast_ms"], result["tau_slow_ms"])
             return result
 
         else:
@@ -500,6 +498,7 @@ def calculate_sag_ratio(  # noqa: C901
         peak_data = voltage_trace[peak_mask]
 
         from scipy.signal import savgol_filter
+
         window_length = max(5, int((peak_smoothing_ms / 1000.0) / dt))
         if window_length % 2 == 0:
             window_length += 1
@@ -548,7 +547,9 @@ def calculate_sag_ratio(  # noqa: C901
 
         log.debug(
             "Sag Ratio=%.3f, Sag%%=%.1f%%, Rebound=%.3f mV",
-            sag_ratio, sag_percentage, rebound_depolarization,
+            sag_ratio,
+            sag_percentage,
+            rebound_depolarization,
         )
         return {
             "sag_ratio": sag_ratio,
@@ -654,9 +655,7 @@ def calculate_sag_ratio(  # noqa: C901
         },
     ],
 )
-def run_sag_ratio_wrapper(
-    data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
-) -> Dict[str, Any]:
+def run_sag_ratio_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """Wrapper function for Sag Ratio analysis that conforms to the registry interface.
 
     Args:
@@ -896,13 +895,21 @@ def run_rin_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
 
         if is_voltage_clamp:
             result = calculate_conductance(
-                data, time, voltage_step, (baseline_start, baseline_end), (response_start, response_end),
-                parameters=params
+                data,
+                time,
+                voltage_step,
+                (baseline_start, baseline_end),
+                (response_start, response_end),
+                parameters=params,
             )
         else:
             result = calculate_rin(
-                data, time, current_amplitude, (baseline_start, baseline_end), (response_start, response_end),
-                parameters=params
+                data,
+                time,
+                current_amplitude,
+                (baseline_start, baseline_end),
+                (response_start, response_end),
+                parameters=params,
             )
 
         if result.is_valid and result.value is not None:
@@ -1029,37 +1036,41 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         artifact_blanking_ms = kwargs.get("artifact_blanking_ms", 0.5)
 
         result = calculate_tau(
-            data, time, stim_start_time, fit_duration,
-            model=model, tau_bounds=tau_bounds,
-            artifact_blanking_ms=artifact_blanking_ms
+            data,
+            time,
+            stim_start_time,
+            fit_duration,
+            model=model,
+            tau_bounds=tau_bounds,
+            artifact_blanking_ms=artifact_blanking_ms,
         )
 
         params = {
-            'stim_start_time': stim_start_time,
-            'fit_duration': fit_duration,
-            'model': model,
-            'tau_bounds': tau_bounds,
+            "stim_start_time": stim_start_time,
+            "fit_duration": fit_duration,
+            "model": model,
+            "tau_bounds": tau_bounds,
         }
 
         if result is not None:
-            if model == 'bi' and isinstance(result, dict) and 'tau_fast_ms' in result:
+            if model == "bi" and isinstance(result, dict) and "tau_fast_ms" in result:
                 return {
-                    "tau_fast_ms": result['tau_fast_ms'],
-                    "tau_slow_ms": result['tau_slow_ms'],
-                    "amplitude_fast": result['amplitude_fast'],
-                    "amplitude_slow": result['amplitude_slow'],
+                    "tau_fast_ms": result["tau_fast_ms"],
+                    "tau_slow_ms": result["tau_slow_ms"],
+                    "amplitude_fast": result["amplitude_fast"],
+                    "amplitude_slow": result["amplitude_slow"],
                     "tau_model": model,
                     "parameters": params,
-                    "fit_time": result.get('fit_time', []),
-                    "fit_values": result.get('fit_values', []),
+                    "fit_time": result.get("fit_time", []),
+                    "fit_values": result.get("fit_values", []),
                 }
-            elif isinstance(result, dict) and 'tau_ms' in result:
+            elif isinstance(result, dict) and "tau_ms" in result:
                 return {
-                    "tau_ms": result['tau_ms'],
+                    "tau_ms": result["tau_ms"],
                     "tau_model": model,
                     "parameters": params,
-                    "fit_time": result.get('fit_time', []),
-                    "fit_values": result.get('fit_values', []),
+                    "fit_time": result.get("fit_time", []),
+                    "fit_values": result.get("fit_values", []),
                 }
             else:
                 # Legacy fallback (shouldn't happen with updated calculate_tau)
@@ -1192,7 +1203,7 @@ def run_iv_curve_wrapper(
             time_vectors=time_list,
             current_steps=current_steps,
             baseline_window=baseline_window,
-            response_window=response_window
+            response_window=response_window,
         )
 
         if "error" in results:

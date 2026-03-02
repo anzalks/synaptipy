@@ -1,5 +1,6 @@
 # tests/core/test_phase_plane.py
 import numpy as np
+
 from Synaptipy.core.analysis.phase_plane import calculate_dvdt, detect_threshold_kink
 
 

@@ -1,9 +1,9 @@
 # src/Synaptipy/application/controllers/file_io_controller.py
-from pathlib import Path
-from typing import Optional, List, Tuple
 import logging
+from pathlib import Path
+from typing import List, Optional, Tuple
 
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -105,7 +105,7 @@ class FileIOController:
             QtWidgets.QMessageBox.warning(
                 self.parent,
                 "Folder Scan Error",
-                f"Could not scan folder for similar files:\n{e}\nLoading selected file only."
+                f"Could not scan folder for similar files:\n{e}\nLoading selected file only.",
             )
             # Fallback
             return selected_filepath, [selected_filepath], 0, lazy_load_enabled
@@ -144,10 +144,7 @@ class FileIOController:
 
         # 1. Filter supported files
         supported_extensions = self.neo_adapter.get_supported_extensions()
-        valid_files = [
-            p for p in file_paths
-            if p.is_file() and p.suffix.lstrip(".").lower() in supported_extensions
-        ]
+        valid_files = [p for p in file_paths if p.is_file() and p.suffix.lstrip(".").lower() in supported_extensions]
 
         if not valid_files:
             log.warning("No supported files found in dropped list.")

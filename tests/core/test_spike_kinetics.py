@@ -1,5 +1,6 @@
 # tests/core/test_spike_kinetics.py
 import numpy as np
+
 from Synaptipy.core.analysis.spike_analysis import calculate_spike_features
 
 

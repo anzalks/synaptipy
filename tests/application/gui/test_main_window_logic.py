@@ -1,6 +1,6 @@
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 from PySide6 import QtWidgets
 
 

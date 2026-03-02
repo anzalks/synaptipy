@@ -4,8 +4,8 @@ GOLDEN SAMPLE: Unit Test Architecture.
 Use pytest. Do NOT use unittest.TestCase.
 Do NOT import PySide6 or GUI classes here.
 """
-import pytest
 import numpy as np
+import pytest
 
 # Rule: Import the PURE LOGIC function, not the GUI wrapper
 from Synaptipy.core.analysis.template_analysis import calculate_metric_logic

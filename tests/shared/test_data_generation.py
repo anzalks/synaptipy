@@ -6,10 +6,11 @@ for testing purposes, avoiding the need to include large real recordings
 in the repository.
 """
 
-import numpy as np
+import logging
 import os
 from pathlib import Path
-import logging
+
+import numpy as np
 
 # Try to import Neo for file writing, but provide alternative if not available
 try:

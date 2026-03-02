@@ -5,13 +5,14 @@ These fixtures help with testing GUI components by providing
 mock objects and setup for headless UI testing.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 # Try to import PySide6, but provide mocks if it's not available
 # This allows tests to run in environments without a display
 try:
-    from PySide6 import QtWidgets, QtGui, QtCore
+    from PySide6 import QtCore, QtGui, QtWidgets
 
     PYSIDE_AVAILABLE = True
 except ImportError:

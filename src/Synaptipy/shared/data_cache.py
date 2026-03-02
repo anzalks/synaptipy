@@ -8,10 +8,11 @@ manages the 'Active Trace' state, serving as the Single Source of Truth
 for the current analysis context.
 """
 import logging
-from pathlib import Path
-from typing import Dict, Optional, Any, Tuple
-from collections import OrderedDict
 import threading
+from collections import OrderedDict
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
 
 from Synaptipy.core.data_model import Recording
@@ -62,7 +63,7 @@ class DataCache:
             log.debug(f"Initialized DataCache Singleton with max_size={max_size}")
 
     @classmethod
-    def get_instance(cls) -> 'DataCache':
+    def get_instance(cls) -> "DataCache":
         """Get the singleton instance."""
         if cls._instance is None:
             return cls()

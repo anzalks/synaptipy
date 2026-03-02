@@ -4,10 +4,12 @@
 Analysis functions for basic electrophysiological features from single traces.
 """
 import logging
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
-from Synaptipy.core.results import RmpResult
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.results import RmpResult
 
 log = logging.getLogger(__name__)
 
@@ -218,8 +220,8 @@ def find_stable_baseline(
     plots=[
         {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "g"},
         {"type": "hlines", "data": ["rmp_mv"], "color": "r", "styles": ["solid"]},
-        {"type": "hlines", "data": ["rmp_mv_plus_sd", "rmp_mv_minus_sd"], "color": "r", "styles": ["dash", "dash"]}
-    ]
+        {"type": "hlines", "data": ["rmp_mv_plus_sd", "rmp_mv_minus_sd"], "color": "r", "styles": ["dash", "dash"]},
+    ],
 )
 def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
@@ -236,7 +238,8 @@ def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             step_duration = kwargs.get("step_duration", 0.1)
             # Use shared helper
             mean, sd, window = find_stable_baseline(
-                data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration)
+                data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration
+            )
 
             if window:
                 baseline_start, baseline_end = window

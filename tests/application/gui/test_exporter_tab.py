@@ -3,10 +3,11 @@ Unit tests for the Exporter Tab functionality
 """
 
 import pathlib
-import pytest
 import tempfile
 from unittest.mock import MagicMock, patch
-from PySide6 import QtWidgets, QtCore
+
+import pytest
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.application.gui.exporter_tab import ExporterTab
 
@@ -58,11 +59,7 @@ def exporter_tab(qtbot, mock_main_window):
     status_bar_ref = MagicMock(spec=QtWidgets.QStatusBar)
 
     # Create the tab
-    tab = ExporterTab(
-        nwb_exporter_ref=nwb_exporter_ref,
-        settings_ref=settings_ref,
-        status_bar_ref=status_bar_ref
-    )
+    tab = ExporterTab(nwb_exporter_ref=nwb_exporter_ref, settings_ref=settings_ref, status_bar_ref=status_bar_ref)
     qtbot.addWidget(tab)
 
     # Attach to mock main window and set up parent relationship
@@ -88,8 +85,7 @@ def test_refresh_analysis_results(exporter_tab, mock_main_window):
     exporter_tab._refresh_analysis_results()
 
     # Verify table has correct number of rows (one per result)
-    assert exporter_tab.analysis_results_table.rowCount() == \
-        len(mock_main_window.saved_analysis_results)
+    assert exporter_tab.analysis_results_table.rowCount() == len(mock_main_window.saved_analysis_results)
 
     # Check first row contains analysis type
     assert "Input Resistance" in exporter_tab.analysis_results_table.item(0, 0).text()
@@ -117,21 +113,17 @@ def test_export_to_csv(exporter_tab, qtbot, mock_main_window):
 
         # Expect one to_csv call per unique analysis_type in the fixture (3 types):
         # "Input Resistance", "Resting Membrane Potential", "Event Detection"
-        expected_call_count = len(
-            {r["analysis_type"] for r in mock_main_window.saved_analysis_results}
-        )
+        expected_call_count = len({r["analysis_type"] for r in mock_main_window.saved_analysis_results})
 
         # Mock the pandas DataFrame.to_csv to avoid actual file writes
         # and mock QMessageBox to avoid GUI blocking
-        with patch("pandas.DataFrame.to_csv") as mock_to_csv, \
-                patch.object(QtWidgets.QMessageBox, 'information'):
+        with patch("pandas.DataFrame.to_csv") as mock_to_csv, patch.object(QtWidgets.QMessageBox, "information"):
             # Export the selected results
             exporter_tab._do_export_analysis_results()
 
             # Verify to_csv was called once per analysis type
             assert mock_to_csv.call_count == expected_call_count, (
-                f"Expected {expected_call_count} to_csv calls "
-                f"(one per analysis type), got {mock_to_csv.call_count}"
+                f"Expected {expected_call_count} to_csv calls " f"(one per analysis type), got {mock_to_csv.call_count}"
             )
 
             # Every call should use index=False and na_rep=''
@@ -156,10 +148,7 @@ def test_get_selected_results_indices(exporter_tab):
     # Select row 0 and 2
     for row in [0, 2]:
         index = exporter_tab.analysis_results_table.model().index(row, 0)
-        selection_model.select(
-            index,
-            QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows
-        )
+        selection_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
 
     # Get selected indices
     indices = exporter_tab._get_selected_results_indices()

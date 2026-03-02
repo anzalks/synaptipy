@@ -1,7 +1,8 @@
-import sys
-import os
-import pytest
 import gc
+import os
+import sys
+
+import pytest
 
 
 def pytest_configure(config):
@@ -40,9 +41,10 @@ def _drain_qt_events_after_test():
     widget.clear()-first order are the only mechanisms needed.
     """
     yield
-    if sys.platform != 'darwin':
+    if sys.platform != "darwin":
         try:
             from PySide6.QtCore import QCoreApplication
+
             QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass
@@ -72,12 +74,13 @@ def pytest_sessionfinish(session, exitstatus):
       GetCurrentProcess return-type issue entirely.
     """
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             import ctypes
+
             # kernel32.TerminateProcess bypasses DLL_PROCESS_DETACH per MSDN.
             # Must set argtypes so the 64-bit pseudo-handle (-1) is not
             # truncated to 32-bit 0xFFFFFFFF by ctypes' default c_int behaviour.
-            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
             kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
             kernel32.TerminateProcess.restype = ctypes.c_bool
             # -1 == pseudo-handle constant for current process (GetCurrentProcess)
@@ -89,14 +92,14 @@ def pytest_sessionfinish(session, exitstatus):
 # Remove .verify_venv from sys.path to prevent its Python 3.13 scipy
 # from shadowing the conda environment's scipy (Python 3.11)
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_verify_venv = os.path.join(_project_root, '.verify_venv')
+_verify_venv = os.path.join(_project_root, ".verify_venv")
 sys.path[:] = [p for p in sys.path if not p.startswith(_verify_venv)]
 
 # Also invalidate any cached scipy imports from the wrong path
 for mod_name in list(sys.modules.keys()):
-    if mod_name == 'scipy' or mod_name.startswith('scipy.'):
+    if mod_name == "scipy" or mod_name.startswith("scipy."):
         mod = sys.modules[mod_name]
-        if mod is not None and hasattr(mod, '__file__') and mod.__file__ and '.verify_venv' in mod.__file__:
+        if mod is not None and hasattr(mod, "__file__") and mod.__file__ and ".verify_venv" in mod.__file__:
             del sys.modules[mod_name]
 
 
@@ -117,6 +120,7 @@ def reset_datacache():
     """Ensure DataCache singleton is reset between tests."""
     try:
         from Synaptipy.shared.data_cache import DataCache
+
         DataCache.reset_instance()
         yield
         DataCache.reset_instance()
@@ -132,8 +136,7 @@ def main_window(qtbot):
     """Create a MainWindow instance for testing with proper cleanup."""
     from unittest.mock import patch
 
-    with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, \
-            patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
+    with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
 
         mock_dialog.return_value.exec.return_value = False
         mock_dialog.getSaveFileName.return_value = ("", "")
@@ -151,18 +154,20 @@ def main_window(qtbot):
         yield window
 
         # Cleanup: stop background threads before widget destruction
-        if hasattr(window, 'data_loader_thread') and window.data_loader_thread:
+        if hasattr(window, "data_loader_thread") and window.data_loader_thread:
             window.data_loader_thread.quit()
             window.data_loader_thread.wait(2000)
 
         window.close()
         from PySide6.QtWidgets import QApplication
+
         _app = QApplication.instance()
         if _app:
             _app.processEvents()
         window.deleteLater()
         try:
             from PySide6.QtTest import QTest
+
             QTest.qWait(50)
         except Exception:
             for _ in range(5):
@@ -172,10 +177,12 @@ def main_window(qtbot):
 
 # --- Fixtures for test_neo_adapter.py ---
 
+
 @pytest.fixture
 def neo_adapter_instance():
     """Create a NeoAdapter instance for testing."""
     from Synaptipy.infrastructure.file_readers import NeoAdapter
+
     return NeoAdapter()
 
 
@@ -183,6 +190,7 @@ def neo_adapter_instance():
 def sample_abf_path():
     """Path to a sample ABF file for testing."""
     from pathlib import Path
+
     # Look for sample files in the examples/data directory
     project_root = Path(__file__).parent.parent
     examples_dir = project_root / "examples" / "data"

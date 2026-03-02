@@ -1,10 +1,12 @@
 # tests/gui/test_metadata_driven_tab.py
+from unittest.mock import MagicMock
+
 import pytest
 from PySide6 import QtWidgets
+
 from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.application.gui.ui_generator import ParameterWidgetGenerator, FlexibleDoubleSpinBox
+from Synaptipy.application.gui.ui_generator import FlexibleDoubleSpinBox, ParameterWidgetGenerator
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from unittest.mock import MagicMock
 
 
 # Register a dummy analysis for testing - MOVED TO FIXTURE
@@ -88,6 +90,7 @@ def test_parameter_gathering(test_tab):
 # FlexibleDoubleSpinBox tests
 # ---------------------------------------------------------------------------
 
+
 def test_flexible_spinbox_is_subclass_of_double_spinbox(qtbot):
     """FlexibleDoubleSpinBox is-a QDoubleSpinBox (existing isinstance checks still pass)."""
     sb = FlexibleDoubleSpinBox()
@@ -138,6 +141,7 @@ def test_generated_float_widget_is_flexible(qtbot):
 # Param-based visibility tests
 # ---------------------------------------------------------------------------
 
+
 def test_param_based_visibility_in_generator(qtbot):
     """visible_when with 'param' key hides/shows dependent widgets correctly."""
     container = QtWidgets.QWidget()
@@ -178,12 +182,14 @@ def test_param_based_visibility_in_generator(qtbot):
 # Interactive mode spinbox disabling
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def rin_analysis_registered():
     """Ensure rin_analysis is registered (it is by default via imports)."""
     # The rin_analysis is registered in intrinsic_properties via the @register decorator.
     # Importing the module is enough.
     import Synaptipy.core.analysis.intrinsic_properties  # noqa: F401
+
     yield
 
 

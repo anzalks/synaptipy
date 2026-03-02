@@ -1,17 +1,18 @@
 # src/Synaptipy/application/gui/analyser_tab.py
 # (Keep imports: logging, pkgutil, importlib, Path, typing, PySide6, BaseAnalysisTab, ExplorerTab, Recording)
+import importlib
 import logging
 import pkgutil
-import importlib
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set
+from typing import Any, Dict, List, Optional, Set
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from Synaptipy.infrastructure.file_readers import NeoAdapter
-from .analysis_tabs.base import BaseAnalysisTab
 from Synaptipy.application.session_manager import SessionManager
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.shared.styling import style_button
+
+from .analysis_tabs.base import BaseAnalysisTab
 
 # from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog  # Imported locally to avoid circular imports?
 
@@ -127,23 +128,23 @@ class AnalyserTab(QtWidgets.QWidget):
             # Reset the confirmation flag so the popup can re-appear
             # if preprocessing is later re-applied from the Explorer tab
             self._global_preprocessing_confirmed = False
-        elif 'baseline' in settings or 'filters' in settings:
+        elif "baseline" in settings or "filters" in settings:
             # Already in slot format
             self._global_preprocessing_settings = settings
         else:
             # Single step - accumulate by type
-            step_type = settings.get('type')
+            step_type = settings.get("type")
             if self._global_preprocessing_settings is None:
                 self._global_preprocessing_settings = {}
 
-            if step_type == 'baseline':
-                self._global_preprocessing_settings['baseline'] = settings
-            elif step_type == 'filter':
-                filter_method = settings.get('method', 'unknown')
-                if 'filters' not in self._global_preprocessing_settings:
-                    self._global_preprocessing_settings['filters'] = {}
+            if step_type == "baseline":
+                self._global_preprocessing_settings["baseline"] = settings
+            elif step_type == "filter":
+                filter_method = settings.get("method", "unknown")
+                if "filters" not in self._global_preprocessing_settings:
+                    self._global_preprocessing_settings["filters"] = {}
                 # Same filter method replaces old one
-                self._global_preprocessing_settings['filters'][filter_method] = settings
+                self._global_preprocessing_settings["filters"][filter_method] = settings
 
         log.debug(f"Global preprocessing set: {self._global_preprocessing_settings is not None}")
 
@@ -417,8 +418,8 @@ class AnalyserTab(QtWidgets.QWidget):
         # On Windows the import order never causes this package to be loaded earlier,
         # so without this explicit import the registry is always empty at this point.
         import Synaptipy.core.analysis  # noqa: F401 — side-effect: registers all built-in analyses
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
         from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
 
         registered_analyses = AnalysisRegistry.list_registered()
 
@@ -532,19 +533,21 @@ class AnalyserTab(QtWidgets.QWidget):
                         start_steps = []
                         if global_prep:
                             # Convert settings to steps
-                            if 'baseline' in global_prep:
+                            if "baseline" in global_prep:
                                 # Baseline is a step
                                 # Need to map 'method' to a registered function name
 
                                 # Assuming the 'method' key holds the registry name or something usable.
-                                start_steps.append({
-                                    "analysis": global_prep['baseline'].get("method_id", "baseline_subtraction"),
-                                    "scope": "all_trials",  # Preprocessing works on raw data usually?
-                                    "params": global_prep['baseline']
-                                })
+                                start_steps.append(
+                                    {
+                                        "analysis": global_prep["baseline"].get("method_id", "baseline_subtraction"),
+                                        "scope": "all_trials",  # Preprocessing works on raw data usually?
+                                        "params": global_prep["baseline"],
+                                    }
+                                )
 
-                            if 'filters' in global_prep:
-                                for method, settings in global_prep['filters'].items():
+                            if "filters" in global_prep:
+                                for method, settings in global_prep["filters"].items():
                                     # settings['method'] might be 'Lowpass'.
                                     # We need registered name 'lowpass_filter'.
                                     # This mapping is crucial.
@@ -556,17 +559,14 @@ class AnalyserTab(QtWidgets.QWidget):
                                     # But let's try to infer or use 'method_id' if present, else lowercase+underscore.
 
                                     analysis_name = settings.get(
-                                        "method_id", settings.get(
-                                            "method", "").lower().replace(
-                                            " ", "_"))
+                                        "method_id", settings.get("method", "").lower().replace(" ", "_")
+                                    )
                                     if "filter" not in analysis_name:
                                         analysis_name += "_filter"  # basic heuristic
 
-                                    start_steps.append({
-                                        "analysis": analysis_name,
-                                        "scope": "all_trials",
-                                        "params": settings
-                                    })
+                                    start_steps.append(
+                                        {"analysis": analysis_name, "scope": "all_trials", "params": settings}
+                                    )
 
                         if start_steps:
                             log.debug(f"Prepending {len(start_steps)} preprocessing steps to batch pipeline.")
@@ -751,10 +751,12 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Sync Zoom from Previous Tab ---
         if hasattr(self, "_last_active_tab") and self._last_active_tab and current_tab:
             try:
-                if (hasattr(self._last_active_tab, "plot_widget")
+                if (
+                    hasattr(self._last_active_tab, "plot_widget")
                     and self._last_active_tab.plot_widget
                     and hasattr(current_tab, "plot_widget")
-                        and current_tab.plot_widget):
+                    and current_tab.plot_widget
+                ):
 
                     # Sync X-Range (Time axis) only
                     # We assume X-axis is compatible (e.g. Time vs Time)
@@ -880,5 +882,6 @@ class AnalyserTab(QtWidgets.QWidget):
                 # self.window().statusBar().showMessage("Parameters reset.", 3000)
             else:
                 log.warning(f"Tab '{current_tab.get_display_name()}' does not support parameter reset.")
-                QtWidgets.QMessageBox.information(self, "Not Supported",
-                                                  f"Reset is not supported for {current_tab.get_display_name()}.")
+                QtWidgets.QMessageBox.information(
+                    self, "Not Supported", f"Reset is not supported for {current_tab.get_display_name()}."
+                )

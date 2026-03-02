@@ -8,11 +8,13 @@ Recording sessions and individual data Channels.
 """
 
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any  # Added Any for metadata dict
-import numpy as np
 import uuid
 from datetime import datetime  # Required for Recording timestamp
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple  # Added Any for metadata dict
+
+import numpy as np
+
 from Synaptipy.core.source_interfaces import SourceHandle
 
 # Configure logger for this module
@@ -32,7 +34,7 @@ class Channel:
         units: str,
         sampling_rate: float,
         data_trials: List[np.ndarray],
-        loader: Optional[Any] = None  # Callable[[int], Optional[np.ndarray]]
+        loader: Optional[Any] = None,  # Callable[[int], Optional[np.ndarray]]
     ):
         """
         Initializes a Channel object.

@@ -12,10 +12,11 @@ See the LICENSE file in the root of the repository for full license details.
 import logging
 import time
 from typing import Optional
+
 from PySide6 import QtCore, QtWidgets
 
-from .gui.welcome_screen import WelcomeScreen
 from .gui.main_window import MainWindow
+from .gui.welcome_screen import WelcomeScreen
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class StartupManager(QtCore.QObject):
         # of the package does.  This is the root cause of analyses missing on Windows.
         try:
             import Synaptipy.core.analysis  # noqa: F401 — side-effect: registers all built-in analyses
+
             log.debug("Built-in analysis modules loaded and registered.")
         except Exception as e:
             log.error(f"Failed to import built-in analysis modules: {e}")
@@ -80,6 +82,7 @@ class StartupManager(QtCore.QObject):
         # Load external plugins safely before building the GUI
         try:
             from Synaptipy.application.plugin_manager import PluginManager
+
             PluginManager.load_plugins()
         except Exception as e:
             log.error(f"Critical error loading plugins during startup: {e}")

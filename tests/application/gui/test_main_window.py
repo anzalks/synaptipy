@@ -1,11 +1,12 @@
-import pytest
 from pathlib import Path
+from unittest.mock import MagicMock, patch  # Use unittest.mock or pytest-mock
+
 import numpy as np
-from unittest.mock import patch, MagicMock  # Use unittest.mock or pytest-mock
+import pytest
 
 # Assuming main_window fixture is in conftest.py providing a MainWindow instance
 # Assuming qtbot fixture is available from pytest-qt
-from Synaptipy.core.data_model import Recording, Channel  # For creating mock data
+from Synaptipy.core.data_model import Channel, Recording  # For creating mock data
 
 
 @pytest.fixture(autouse=True)
@@ -20,20 +21,21 @@ def reset_main_window_state(main_window):
     """
     yield
     # Clear data loader cache (test_data_loader_cache_integration adds entries)
-    if hasattr(main_window, 'data_loader') and hasattr(main_window.data_loader, 'cache'):
+    if hasattr(main_window, "data_loader") and hasattr(main_window.data_loader, "cache"):
         main_window.data_loader.cache.clear()
     # Clear pending file loading attributes (test_background_* sets these)
-    for attr in ('_pending_file_list', '_pending_current_index'):
+    for attr in ("_pending_file_list", "_pending_current_index"):
         if hasattr(main_window, attr):
             delattr(main_window, attr)
     # Clear current recording (test_background_file_loading sets this)
-    if hasattr(main_window, 'session_manager'):
+    if hasattr(main_window, "session_manager"):
         main_window.session_manager.current_recording = None
     # Clear status bar messages
-    if hasattr(main_window, 'status_bar'):
+    if hasattr(main_window, "status_bar"):
         main_window.status_bar.clearMessage()
     # Process events to flush any pending Qt callbacks
     from PySide6.QtWidgets import QApplication
+
     app = QApplication.instance()
     if app:
         app.processEvents()
@@ -161,7 +163,7 @@ def test_background_file_loading(main_window, qtbot, mock_recording):
     # The test verifies signal-handler state logic (pending attrs / current_recording),
     # not plot rendering.  Rebuilding plots in an offscreen session after many
     # earlier widget create/destroy cycles causes a PySide6 segfault.
-    with patch.object(main_window.explorer_tab, '_display_recording'):
+    with patch.object(main_window.explorer_tab, "_display_recording"):
         # Act: Trigger the data_ready signal
         with qtbot.waitSignal(main_window.data_loader.data_ready, timeout=1000):
             main_window.data_loader.data_ready.emit(mock_recording)
@@ -170,6 +172,7 @@ def test_background_file_loading(main_window, qtbot, mock_recording):
     # In offscreen mode with many prior test modules, queued-connection
     # delivery can lag behind the waitSignal unblock.
     from PySide6.QtCore import QCoreApplication
+
     QCoreApplication.processEvents()
 
     # Assert: Check that SessionManager was updated with the recording

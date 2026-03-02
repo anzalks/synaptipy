@@ -6,17 +6,18 @@ Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from Synaptipy.shared.plot_customization import (
     PlotCustomizationManager,
-    get_plot_customization_manager,
     get_average_pen,
-    get_single_trial_pen,
     get_grid_pen,
-    update_plot_preference,
+    get_plot_customization_manager,
+    get_single_trial_pen,
     save_plot_preferences,
+    update_plot_preference,
 )
 
 

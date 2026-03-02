@@ -18,12 +18,13 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import numpy as np
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.results import AnalysisResult
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.results import AnalysisResult
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class TrainDynamicsResult(AnalysisResult):
     """Result object for spike train dynamics analysis."""
+
     spike_count: int = 0
     mean_isi_s: Optional[float] = None
     cv: Optional[float] = None
@@ -68,7 +70,7 @@ def calculate_train_dynamics(
             unit="",
             is_valid=False,
             error_message="Requires at least 2 spikes for ISI calculations.",
-            spike_count=spike_count
+            spike_count=spike_count,
         )
 
     # Calculate Inter-Spike Intervals (ISI)
@@ -90,7 +92,7 @@ def calculate_train_dynamics(
             cv=cv,
             cv2=np.nan,
             lv=np.nan,
-            isis=isis
+            isis=isis,
         )
 
     # Guard against zero ISIs (duplicate spike times) which cause division by zero
@@ -105,7 +107,7 @@ def calculate_train_dynamics(
             cv=cv,
             cv2=np.nan,
             lv=np.nan,
-            isis=isis
+            isis=isis,
         )
 
     # Consecutive ISIs: ISI_i and ISI_{i+1}
@@ -131,11 +133,12 @@ def calculate_train_dynamics(
         cv=cv,
         cv2=cv2_val,
         lv=lv_val,
-        isis=isis
+        isis=isis,
     )
 
 
 # --- WRAPPER (Dynamic Plugin Format) ---
+
 
 @AnalysisRegistry.register(
     name="train_dynamics",
@@ -149,7 +152,7 @@ def calculate_train_dynamics(
             "min": -50.0,
             "max": 50.0,
             "step": 1.0,
-            "tooltip": "Threshold to detect action potentials if extracting from trace."
+            "tooltip": "Threshold to detect action potentials if extracting from trace.",
         }
     ],
     plots=[
@@ -162,7 +165,7 @@ def calculate_train_dynamics(
             "x_label": "ISI Number",
             "y_label": "ISI (ms)",
         },
-    ]
+    ],
 )
 def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
@@ -177,13 +180,9 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
         # Detect spikes using proper threshold + refractory period method
         refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms refractory
         spike_result = detect_spikes_threshold(
-            data, time, threshold=ap_threshold,
-            refractory_samples=refractory_samples
+            data, time, threshold=ap_threshold, refractory_samples=refractory_samples
         )
-        has_spikes = (
-            spike_result.spike_indices is not None
-            and len(spike_result.spike_indices) > 0
-        )
+        has_spikes = spike_result.spike_indices is not None and len(spike_result.spike_indices) > 0
         if has_spikes:
             spike_indices = spike_result.spike_indices
             ap_times = time[spike_indices]

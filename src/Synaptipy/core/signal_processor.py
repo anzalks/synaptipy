@@ -4,8 +4,9 @@ Includes filtering and trace quality checks.
 """
 
 import logging
+from typing import Any, Dict, Optional
+
 import numpy as np
-from typing import Dict, Any, Optional
 
 
 def _get_scipy():
@@ -16,6 +17,7 @@ def _get_scipy():
     try:
         import scipy.signal as sig
         import scipy.stats as st
+
         return sig, st, True
     except ImportError:
         return None, None, False
@@ -38,9 +40,7 @@ def validate_sampling_rate(fs: float) -> bool:
         log.error("Sampling rate must be positive, got %s", fs)
         return False
     if fs < 100:
-        log.warning(
-            "Sampling rate is suspiciously low (<100 Hz). Are you using kHz instead of Hz?"
-        )
+        log.warning("Sampling rate is suspiciously low (<100 Hz). Are you using kHz instead of Hz?")
     return True
 
 
@@ -141,7 +141,7 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         lf_cutoff = 1.0 / nyq
         if 0 < lf_cutoff < 1 and len(detrended) > 30:
             try:
-                sos_lf = signal.butter(2, lf_cutoff, btype='low', output='sos')
+                sos_lf = signal.butter(2, lf_cutoff, btype="low", output="sos")
                 # Use sosfilt (forward-pass) instead of sosfiltfilt.
                 # sosfiltfilt calls sosfilt_zi → lfilter_zi → numpy.linalg.solve,
                 # which triggers a SIGBUS on macOS ARM with numpy 1.26.x +
@@ -282,7 +282,7 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
 
     try:
         # Use SOS format for numerical stability
-        sos = signal.butter(order, [low, high], btype="band", output='sos')
+        sos = signal.butter(order, [low, high], btype="band", output="sos")
         y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
@@ -327,7 +327,7 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
 
     try:
         # Use SOS format for numerical stability
-        sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
+        sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output="sos")
         y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
@@ -372,7 +372,7 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
 
     try:
         # Use SOS format for numerical stability
-        sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
+        sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output="sos")
         y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
@@ -467,7 +467,7 @@ def comb_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarra
 
     try:
         # scipy.signal.iircomb removes harmonics of the base frequency
-        b, a = signal.iircomb(freq, Q, ftype='notch', fs=fs)
+        b, a = signal.iircomb(freq, Q, ftype="notch", fs=fs)
         # Convert to SOS for stability
         z, p, k = signal.tf2zpk(b, a)
         sos = signal.zpk2sos(z, p, k)
@@ -555,7 +555,7 @@ def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
         log.warning("Scipy not available. Cannot detrend.")
         return data
 
-    return signal.detrend(data, type='linear')
+    return signal.detrend(data, type="linear")
 
 
 def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, end_t: float) -> np.ndarray:
@@ -615,10 +615,7 @@ def blank_artifact(
     """
     valid_methods = ("hold", "zero", "linear")
     if method not in valid_methods:
-        raise ValueError(
-            f"Unknown artifact blanking method '{method}'. "
-            f"Choose from {valid_methods}."
-        )
+        raise ValueError(f"Unknown artifact blanking method '{method}'. " f"Choose from {valid_methods}.")
 
     if data is None or len(data) == 0:
         return data
@@ -647,21 +644,19 @@ def blank_artifact(
         post_value = result[min(len(result) - 1, idx_end)]
         n_samples = idx_end - idx_start
         if n_samples > 0:
-            result[idx_start:idx_end] = np.linspace(
-                pre_value, post_value, n_samples
-            )
+            result[idx_start:idx_end] = np.linspace(pre_value, post_value, n_samples)
 
     log.debug(
-        "Artifact blanked: onset=%.4fs, duration=%.2fms, method=%s, "
-        "samples=%d",
-        onset_time, duration_ms, method, idx_end - idx_start,
+        "Artifact blanked: onset=%.4fs, duration=%.2fms, method=%s, " "samples=%d",
+        onset_time,
+        duration_ms,
+        method,
+        idx_end - idx_start,
     )
     return result
 
 
-def find_artifact_windows(
-    data: np.ndarray, fs: float, slope_threshold: float, padding_ms: float = 2.0
-) -> np.ndarray:
+def find_artifact_windows(data: np.ndarray, fs: float, slope_threshold: float, padding_ms: float = 2.0) -> np.ndarray:
     """
     Identify time windows containing high-slope artifacts.
 

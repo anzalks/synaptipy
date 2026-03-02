@@ -6,10 +6,10 @@ Supports comprehensive metadata including Subject, Device, and Electrode details
 """
 import logging
 import uuid
-from typing import Optional, Dict, Any
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtCore, QtWidgets
 
 try:
     import tzlocal

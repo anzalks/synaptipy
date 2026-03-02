@@ -10,6 +10,7 @@ Regression guard for:
     plot.autoRange() per channel (fires sigXRangeChanged without
     _updating_viewranges guard -> cascade -> SIGBUS on large files).
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -24,10 +25,10 @@ from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_recording(name: str, num_channels: int, num_trials: int, duration: float = 1.0):
     """Create a mock Recording with *num_channels* channels, each with *num_trials* trials."""
@@ -61,6 +62,7 @@ def _make_recording(name: str, num_channels: int, num_trials: int, duration: flo
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="session")
 def nav_explorer_tab(qapp):
     """Session-scoped ExplorerTab for navigation tests."""
@@ -86,6 +88,7 @@ def _reset_nav_tab(nav_explorer_tab):
 # Tests: basic multi-channel rebuild
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("num_channels", [1, 2, 4])
 def test_rebuild_plots_creates_correct_channel_count(nav_explorer_tab, num_channels):
     """rebuild_plots must create exactly one PlotItem per channel."""
@@ -110,6 +113,7 @@ def test_rebuild_plots_repeated_no_crash(nav_explorer_tab, num_channels):
 # ---------------------------------------------------------------------------
 # Tests: multi-channel → single-channel navigation and back
 # ---------------------------------------------------------------------------
+
 
 def test_navigate_multichannel_to_single_and_back(nav_explorer_tab):
     """
@@ -141,6 +145,7 @@ def test_navigate_many_files_no_crash(nav_explorer_tab):
 # ---------------------------------------------------------------------------
 # Tests: sigXRangeChanged lambda closure correctness
 # ---------------------------------------------------------------------------
+
 
 def test_xrange_signal_contains_correct_channel_id(qapp, qtbot):
     """
@@ -205,12 +210,13 @@ def test_xrange_signal_contains_correct_channel_id(qapp, qtbot):
 # Tests: platform-gated gc drain in clear_plots / rebuild_plots
 # ---------------------------------------------------------------------------
 
+
 def test_clear_plots_no_gc_on_darwin():
     """
     On macOS, clear_plots() must NOT call gc.collect() (SIGBUS regression).
     On other platforms it's allowed.  This test only enforces the darwin guard.
     """
-    if sys.platform != 'darwin':
+    if sys.platform != "darwin":
         pytest.skip("macOS-specific regression test")
 
     import unittest.mock as mock
@@ -220,12 +226,11 @@ def test_clear_plots_no_gc_on_darwin():
     # Populate the canvas first so clear_plots has something to clear.
     canvas.rebuild_plots(rec)
 
-    with mock.patch('gc.collect') as mock_gc:
+    with mock.patch("gc.collect") as mock_gc:
         canvas.clear_plots()
 
     mock_gc.assert_not_called(), (
-        "gc.collect() must not be called from clear_plots() on macOS — "
-        "races with PySide6 tp_dealloc -> SIGBUS."
+        "gc.collect() must not be called from clear_plots() on macOS — " "races with PySide6 tp_dealloc -> SIGBUS."
     )
     # Canvas is already cleared; explicit no-op for symmetry with other tests.
     canvas.clear_plots()
@@ -235,7 +240,7 @@ def test_rebuild_plots_no_gc_on_darwin():
     """
     On macOS, rebuild_plots() must NOT call gc.collect() (SIGBUS regression).
     """
-    if sys.platform != 'darwin':
+    if sys.platform != "darwin":
         pytest.skip("macOS-specific regression test")
 
     import unittest.mock as mock
@@ -243,12 +248,11 @@ def test_rebuild_plots_no_gc_on_darwin():
     canvas = ExplorerPlotCanvas()
     rec = _make_recording("gc_test2.wcp", num_channels=3, num_trials=5)
 
-    with mock.patch('gc.collect') as mock_gc:
+    with mock.patch("gc.collect") as mock_gc:
         canvas.rebuild_plots(rec)
 
     mock_gc.assert_not_called(), (
-        "gc.collect() must not be called from rebuild_plots() on macOS — "
-        "races with PySide6 tp_dealloc -> SIGBUS."
+        "gc.collect() must not be called from rebuild_plots() on macOS — " "races with PySide6 tp_dealloc -> SIGBUS."
     )
     # Clear so no stale callbacks remain for the global processEvents() drain.
     canvas.clear_plots()

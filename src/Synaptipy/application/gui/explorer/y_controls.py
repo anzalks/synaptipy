@@ -8,6 +8,7 @@ import logging
 from typing import Dict, Optional
 
 from PySide6 import QtCore, QtWidgets
+
 from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
@@ -136,9 +137,11 @@ class ExplorerYControls(QtWidgets.QWidget):
             slider_layout = QtWidgets.QHBoxLayout(slider_container)
             slider_layout.setContentsMargins(0, 0, 0, 0)
             slider_layout.setSpacing(5)
-            slider_layout.addWidget(QtWidgets.QLabel(
-                display_name, alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
-            ))
+            slider_layout.addWidget(
+                QtWidgets.QLabel(
+                    display_name, alignment=QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+                )
+            )
 
             y_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             y_slider.setRange(self.SLIDER_RANGE_MIN, self.SLIDER_RANGE_MAX)

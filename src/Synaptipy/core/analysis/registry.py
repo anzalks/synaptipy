@@ -7,7 +7,7 @@ This module provides a registry pattern that allows analysis functions
 to register themselves via decorators, enabling flexible pipeline configuration.
 """
 import logging
-from typing import Dict, Callable, Any, Optional
+from typing import Any, Callable, Dict, Optional
 
 log = logging.getLogger(__name__)
 
@@ -118,10 +118,7 @@ class AnalysisRegistry:
         Returns:
             List of function names matching the given type
         """
-        return [
-            name for name, meta in cls._metadata.items()
-            if meta.get("type") == type_str
-        ]
+        return [name for name, meta in cls._metadata.items() if meta.get("type") == type_str]
 
     @classmethod
     def list_preprocessing(cls) -> list:
@@ -131,10 +128,7 @@ class AnalysisRegistry:
     @classmethod
     def list_analysis(cls) -> list:
         """Get all registered analysis function names (excludes preprocessing)."""
-        return [
-            name for name, meta in cls._metadata.items()
-            if meta.get("type", "analysis") == "analysis"
-        ]
+        return [name for name, meta in cls._metadata.items() if meta.get("type", "analysis") == "analysis"]
 
     @classmethod
     def clear(cls):
@@ -178,6 +172,7 @@ class AnalysisRegistry:
         If analysis_name is None, resets ALL.
         """
         import copy
+
         if analysis_name:
             if analysis_name in cls._original_metadata:
                 cls._metadata[analysis_name] = copy.deepcopy(cls._original_metadata[analysis_name])

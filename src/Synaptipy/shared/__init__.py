@@ -15,54 +15,46 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 # Core shared modules
-from . import constants
-from . import error_handling
-from . import logging_config
-from . import styling
-from . import plot_factory
+from . import constants, error_handling, logging_config, plot_factory, styling
 
 # Import key classes and functions for easy access
 from .constants import (
+    AVERAGE_COLOR,
     DEFAULT_PLOT_PEN_WIDTH,
     PLOT_COLORS,
-    TRIAL_COLOR,
-    AVERAGE_COLOR,
     TRIAL_ALPHA,
+    TRIAL_COLOR,
     Z_ORDER,
 )
-
+from .error_handling import (
+    ExportError,
+    FileReadError,
+    SynaptipyError,
+    SynaptipyFileNotFoundError,
+    UnsupportedFormatError,
+)
+from .logging_config import setup_logging
+from .plot_factory import SynaptipyPlotFactory, configure_plot_safely, create_analysis_plot, create_explorer_plot
+from .styling import PLOT_COLORS as STYLING_PLOT_COLORS
 from .styling import (
     apply_stylesheet,
-    configure_pyqtgraph_globally,
     configure_plot_widget,
-    get_trial_pen,
+    configure_pyqtgraph_globally,
     get_average_pen,
     get_baseline_pen,
-    get_response_pen,
     get_grid_pen,
+    get_response_pen,
+    get_system_theme_mode,
+    get_trial_pen,
     style_button,
+    style_error_message,
+    style_info_label,
     style_label,
     style_result_display,
-    style_info_label,
-    style_error_message,
-    get_system_theme_mode,
-    PLOT_COLORS as STYLING_PLOT_COLORS,
 )
-
-from .plot_factory import SynaptipyPlotFactory, create_analysis_plot, create_explorer_plot, configure_plot_safely
-
-from .error_handling import (
-    SynaptipyError,
-    FileReadError,
-    UnsupportedFormatError,
-    ExportError,
-    SynaptipyFileNotFoundError,
-)
-
-from .logging_config import setup_logging
 
 # Make all important items available at package level
 __all__ = [

@@ -12,11 +12,12 @@ from pathlib import Path
 
 from PySide6 import QtCore
 
+from Synaptipy.core.data_model import Recording
+
 # Import from our package structure
 from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
-from Synaptipy.core.data_model import Recording
-from Synaptipy.shared.error_handling import SynaptipyError
 from Synaptipy.shared.data_cache import DataCache
+from Synaptipy.shared.error_handling import SynaptipyError
 
 log = logging.getLogger(__name__)
 

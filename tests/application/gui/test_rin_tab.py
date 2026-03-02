@@ -2,17 +2,17 @@
 Unit tests for the Input Resistance Analysis Tab (via MetadataDrivenAnalysisTab).
 """
 
-import pytest
-import numpy as np
 from unittest.mock import MagicMock
-from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.core.data_model import Channel, Recording
+import numpy as np
+import pytest
+from PySide6 import QtWidgets
 
 # Ensure the analysis modules are imported so registrations are active
 import Synaptipy.core.analysis  # noqa: F401
+from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+from Synaptipy.core.data_model import Channel, Recording
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 # Fixtures for reuse in multiple tests
@@ -66,14 +66,12 @@ def rin_tab(qapp):  # noqa: C901
     time_vec = np.linspace(0, 1, 10000)
     voltage_data = np.zeros_like(time_vec)
     voltage_data[2000:5000] = -10.0
-    v_channel = Channel(id="1", name="Vm", units="mV", sampling_rate=10000.0,
-                        data_trials=[voltage_data])
+    v_channel = Channel(id="1", name="Vm", units="mV", sampling_rate=10000.0, data_trials=[voltage_data])
     v_channel.t_start = 0.0
 
     current_data = np.zeros_like(time_vec)
     current_data[2000:5000] = -0.050
-    i_channel = Channel(id="2", name="Im", units="pA", sampling_rate=10000.0,
-                        data_trials=[current_data])
+    i_channel = Channel(id="2", name="Im", units="pA", sampling_rate=10000.0, data_trials=[current_data])
     i_channel.t_start = 0.0
 
     recording.channels = {"1": v_channel, "2": i_channel}

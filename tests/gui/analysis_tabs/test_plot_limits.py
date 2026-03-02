@@ -1,12 +1,12 @@
+from unittest.mock import MagicMock, PropertyMock, patch  # noqa: F401
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock  # noqa: F401
 import numpy as np
-from PySide6 import QtWidgets, QtCore  # noqa: F401
+import pytest
+from PySide6 import QtCore, QtWidgets  # noqa: F401
 
 from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
+from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.core.data_model import Recording, Channel
 
 # Concrete implementation for testing abstract base class
 
@@ -86,9 +86,7 @@ def test_plot_limits_auto_range_on_switch(tab, mock_recording):
 
     # 1. Plot Initial Data
     # Mock AnalysisPlotManager to return our data
-    mock_path = ("Synaptipy.application.controllers"
-                 ".analysis_plot_manager.AnalysisPlotManager"
-                 ".prepare_plot_data")
+    mock_path = "Synaptipy.application.controllers" ".analysis_plot_manager.AnalysisPlotManager" ".prepare_plot_data"
     with patch(mock_path) as mock_prep:
         mock_prep.return_value.main_data = np.sin(np.linspace(0, 1, 100))
         mock_prep.return_value.main_time = np.linspace(0, 1, 100)
@@ -147,9 +145,7 @@ def test_plot_limits_sticky_zoom(tab, mock_recording):
     tab.data_source_combobox.setEnabled(True)
 
     # 1. Plot Initial Data (0-1s)
-    mock_path = ("Synaptipy.application.controllers"
-                 ".analysis_plot_manager.AnalysisPlotManager"
-                 ".prepare_plot_data")
+    mock_path = "Synaptipy.application.controllers" ".analysis_plot_manager.AnalysisPlotManager" ".prepare_plot_data"
     with patch(mock_path) as mock_prep:
         mock_prep.return_value.main_data = np.sin(np.linspace(0, 1, 100))
         mock_prep.return_value.main_time = np.linspace(0, 1, 100)
@@ -206,9 +202,7 @@ def test_plot_limits_preprocessing_preserves(tab, mock_recording):
     tab._active_preprocessing_settings = {"filter": "highpass"}
 
     # 1. Plot Initial Data (0-1s)
-    mock_path = ("Synaptipy.application.controllers"
-                 ".analysis_plot_manager.AnalysisPlotManager"
-                 ".prepare_plot_data")
+    mock_path = "Synaptipy.application.controllers" ".analysis_plot_manager.AnalysisPlotManager" ".prepare_plot_data"
     with patch(mock_path) as mock_prep:
         mock_prep.return_value.main_data = np.sin(np.linspace(0, 1, 100))
         mock_prep.return_value.main_time = np.linspace(0, 1, 100)

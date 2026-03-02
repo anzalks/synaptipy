@@ -4,7 +4,8 @@
 Dialog for selecting multiple trials.
 """
 from typing import Optional, Set, Tuple
-from PySide6 import QtWidgets, QtCore
+
+from PySide6 import QtCore, QtWidgets
 
 
 class TrialSelectionDialog(QtWidgets.QDialog):

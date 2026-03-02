@@ -1,16 +1,16 @@
-
 import sys
-import pytest
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import numpy as np
+import pytest
 from PySide6 import QtWidgets
 from PySide6.QtCore import QCoreApplication
-import numpy as np
 
 from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +40,7 @@ def reset_explorer_tab_state(explorer_tab):
     explorer_tab._is_loading = False
     # Reset file-nav debounce state introduced in the debounce PR.
     explorer_tab._pending_nav_target = None
-    if hasattr(explorer_tab, '_file_nav_timer'):
+    if hasattr(explorer_tab, "_file_nav_timer"):
         explorer_tab._file_nav_timer.stop()
     try:
         explorer_tab.toolbar.lock_zoom_cb.setChecked(False)
@@ -58,10 +58,11 @@ def reset_explorer_tab_state(explorer_tab):
     # corrupts that state and causes the next rebuild_plots() to segfault or
     # mis-render.  This mirrors the documented rule from copilot-instructions.md
     # and the behaviour of all other per-test drain fixtures in this repo.
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         return
     try:
         from PySide6.QtCore import QCoreApplication
+
         QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass

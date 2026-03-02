@@ -5,7 +5,8 @@ Analysis functions for detecting synaptic events (miniature, evoked).
 Refactored to use Adaptive Peak Finding and Parametric Matched Filtering.
 """
 import logging
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
 from scipy import signal
 from scipy.stats import median_abs_deviation
@@ -59,6 +60,7 @@ def detect_events_threshold(  # noqa: C901
 
         if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
             from scipy.ndimage import median_filter
+
             window_samples = int((rolling_baseline_window_ms / 1000.0) * fs)
             if window_samples % 2 == 0:
                 window_samples += 1
@@ -107,7 +109,7 @@ def detect_events_threshold(  # noqa: C901
             prominence=min_prominence,
             height=abs_threshold,
             distance=distance_samples,
-            width=min_width_samples
+            width=min_width_samples,
         )
 
         n_artifacts_rejected = 0
@@ -157,7 +159,7 @@ def detect_events_threshold(  # noqa: C901
             direction=polarity,
             n_artifacts_rejected=n_artifacts_rejected,
             artifact_mask=artifact_mask,
-            summary_stats={"noise_sd": float(noise_sd), "min_prominence_used": float(min_prominence)}
+            summary_stats={"noise_sd": float(noise_sd), "min_prominence_used": float(min_prominence)},
         )
 
     except Exception as e:
@@ -219,13 +221,19 @@ detect_minis_threshold = detect_events_threshold
             "decimals": 1,
         },
         {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
-        {"name": "artifact_slope_threshold", "label": "Artifact Slope Thresh:",
-         "type": "float", "default": 20.0, "min": 0.0},
+        {
+            "name": "artifact_slope_threshold",
+            "label": "Artifact Slope Thresh:",
+            "type": "float",
+            "default": 20.0,
+            "min": 0.0,
+        },
         {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
     ],
 )
-def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
-                                          sampling_rate: float, **kwargs) -> Dict[str, Any]:
+def run_event_detection_threshold_wrapper(
+    data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
+) -> Dict[str, Any]:
     threshold = kwargs.get("threshold", 5.0)
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
@@ -240,9 +248,13 @@ def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
         artifact_mask = find_artifact_windows(data, sampling_rate, slope_thresh, padding_ms)
 
     result = detect_events_threshold(
-        data, time, threshold, direction, refractory_period,
+        data,
+        time,
+        threshold,
+        direction,
+        refractory_period,
         rolling_baseline_window_ms=rolling_baseline_window_ms,
-        artifact_mask=artifact_mask
+        artifact_mask=artifact_mask,
     )
 
     if not result.is_valid:
@@ -258,6 +270,7 @@ def run_event_detection_threshold_wrapper(data: np.ndarray, time: np.ndarray,
 
 
 # --- 2. Parametric Template Matching (Deconvolution Replacement) ---
+
 
 def detect_events_template(  # noqa: C901
     data: np.ndarray,
@@ -322,6 +335,7 @@ def detect_events_template(  # noqa: C901
         # Rolling Baseline
         if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
             from scipy.ndimage import median_filter
+
             window_samples = int((rolling_baseline_window_ms / 1000.0) * sampling_rate)
             if window_samples % 2 == 0:
                 window_samples += 1
@@ -352,7 +366,7 @@ def detect_events_template(  # noqa: C901
         matched_filter_kernel = template[::-1]
 
         # Use fftconvolve for speed
-        filtered_trace = signal.fftconvolve(work_data, matched_filter_kernel, mode='same')
+        filtered_trace = signal.fftconvolve(work_data, matched_filter_kernel, mode="same")
 
         # 3. Z-Scoring
         # Robust noise estimation using MAD
@@ -446,7 +460,7 @@ def detect_events_template(  # noqa: C901
             threshold_sd=threshold_std,
             summary_stats={"noise_mad": mad},
             direction=polarity,
-            artifact_mask=artifact_mask
+            artifact_mask=artifact_mask,
         )
 
     except Exception as e:
@@ -508,9 +522,13 @@ def detect_events_template(  # noqa: C901
             "decimals": 1,
         },
         {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
-        {"name": "artifact_slope_threshold",
-         "label": "Artifact Slope Thresh:",
-         "type": "float", "default": 20.0, "min": 0.0},
+        {
+            "name": "artifact_slope_threshold",
+            "label": "Artifact Slope Thresh:",
+            "type": "float",
+            "default": 20.0,
+            "min": 0.0,
+        },
         {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
         {
             "name": "min_event_distance_ms",
@@ -531,7 +549,7 @@ def detect_events_template(  # noqa: C901
             "max": 100000.0,
             "decimals": 1,
             # Template matching handles filtering; lowpass may be redundant
-            "hidden": True
+            "hidden": True,
         },
     ],
 )
@@ -600,6 +618,7 @@ def run_event_detection_template_wrapper(
 # 4. Baseline Peak -> Keep for safety?
 
 # I will append the Baseline Peak code from the original file to ensure no regression for that specific analysis type.
+
 
 def _find_stable_baseline_segment(
     data: np.ndarray, sample_rate: float, window_duration_s: float = 0.5, step_duration_s: float = 0.1
@@ -672,6 +691,7 @@ def detect_events_baseline_peak_kinetics(
     # Optional rolling baseline subtraction to handle slow drift
     if rolling_baseline_window_ms > 0:
         from scipy.ndimage import median_filter
+
         window_samples = int((rolling_baseline_window_ms / 1000.0) * sample_rate)
         if window_samples % 2 == 0:
             window_samples += 1

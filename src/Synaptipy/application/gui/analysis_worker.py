@@ -4,8 +4,8 @@
 Worker class for running analysis tasks in a background thread.
 """
 import logging
-import traceback
 import sys
+import traceback
 from typing import Callable
 
 from PySide6 import QtCore

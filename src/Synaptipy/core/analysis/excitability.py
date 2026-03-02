@@ -4,9 +4,11 @@
 Analysis functions for excitability properties (F-I Curve, Rheobase).
 """
 import logging
+from typing import Any, Dict, List, Optional
+
 import numpy as np
-from typing import List, Dict, Any, Optional
 from scipy.stats import linregress
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 
@@ -242,7 +244,7 @@ def run_excitability_analysis_wrapper(
             time_vectors=time_list,
             current_steps=current_steps,
             threshold=threshold,
-            refractory_ms=refractory_ms
+            refractory_ms=refractory_ms,
         )
 
         if "error" in results:

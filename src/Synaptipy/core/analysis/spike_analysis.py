@@ -4,11 +4,13 @@
 Analysis functions related to action potential detection and characterization.
 """
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import numpy as np
 from scipy.signal import savgol_filter
-from Synaptipy.core.results import SpikeTrainResult
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.results import SpikeTrainResult
 
 log = logging.getLogger(__name__)
 
@@ -38,20 +40,32 @@ def detect_spikes_threshold(  # noqa: C901
     """
     if not isinstance(data, np.ndarray) or data.ndim != 1 or data.size < 2:
         log.warning("detect_spikes_threshold: Invalid data array provided.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
-                                error_message="Invalid data array", parameters=parameters or {})
+        return SpikeTrainResult(
+            value=0, unit="spikes", is_valid=False, error_message="Invalid data array", parameters=parameters or {}
+        )
     if not isinstance(time, np.ndarray) or time.shape != data.shape:
         log.warning("detect_spikes_threshold: Time and data array shapes mismatch.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
-                                error_message="Time and data mismatch", parameters=parameters or {})
+        return SpikeTrainResult(
+            value=0, unit="spikes", is_valid=False, error_message="Time and data mismatch", parameters=parameters or {}
+        )
     if not isinstance(threshold, (int, float)):
         log.warning("detect_spikes_threshold: Threshold must be numeric.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
-                                error_message="Threshold must be numeric", parameters=parameters or {})
+        return SpikeTrainResult(
+            value=0,
+            unit="spikes",
+            is_valid=False,
+            error_message="Threshold must be numeric",
+            parameters=parameters or {},
+        )
     if not isinstance(refractory_samples, int) or refractory_samples < 0:
         log.warning("detect_spikes_threshold: refractory_samples must be a non-negative integer.")
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
-                                error_message="Invalid refractory period", parameters=parameters or {})
+        return SpikeTrainResult(
+            value=0,
+            unit="spikes",
+            is_valid=False,
+            error_message="Invalid refractory period",
+            parameters=parameters or {},
+        )
 
     try:
         # 1. Find indices where the data crosses the dv/dt threshold upwards
@@ -62,8 +76,13 @@ def detect_spikes_threshold(  # noqa: C901
         crossings = np.where((dvdt[:-1] < dvdt_thresh_mvs) & (dvdt[1:] >= dvdt_thresh_mvs))[0] + 1
         if crossings.size == 0:
             log.debug("No dv/dt threshold crossings found.")
-            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array(
-                []), spike_indices=np.array([]), parameters=parameters or {})
+            return SpikeTrainResult(
+                value=0,
+                unit="spikes",
+                spike_times=np.array([]),
+                spike_indices=np.array([]),
+                parameters=parameters or {},
+            )
 
         # 2. Apply refractory period based on crossings
         if refractory_samples <= 0:
@@ -78,8 +97,13 @@ def detect_spikes_threshold(  # noqa: C901
             valid_crossing_indices = np.array(valid_crossings_list)
 
         if valid_crossing_indices.size == 0:
-            return SpikeTrainResult(value=0, unit="spikes", spike_times=np.array(
-                []), spike_indices=np.array([]), parameters=parameters or {})
+            return SpikeTrainResult(
+                value=0,
+                unit="spikes",
+                spike_times=np.array([]),
+                spike_indices=np.array([]),
+                parameters=parameters or {},
+            )
 
         # 3. Find peak index after each valid crossing
         peak_indices_list = []
@@ -139,12 +163,14 @@ def detect_spikes_threshold(  # noqa: C901
             f"Indices={peak_indices_arr if 'peak_indices_arr' in locals() else 'N/A'}",
             exc_info=True,
         )
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
-                                error_message=str(e), parameters=parameters or {})
+        return SpikeTrainResult(
+            value=0, unit="spikes", is_valid=False, error_message=str(e), parameters=parameters or {}
+        )
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.error(f"Error during spike detection: {e}", exc_info=True)
-        return SpikeTrainResult(value=0, unit="spikes", is_valid=False,
-                                error_message=str(e), parameters=parameters or {})
+        return SpikeTrainResult(
+            value=0, unit="spikes", is_valid=False, error_message=str(e), parameters=parameters or {}
+        )
 
 
 # --- Add other spike analysis functions here later ---
@@ -397,9 +423,13 @@ def calculate_spike_features(  # noqa: C901
             fall_frac[k] = (lev_50_flat[k] - y_lo2) / denom2 if abs(denom2) > 1e-12 else 0.5
 
     half_widths[valid_width] = (
-        (idx_fall_50_rel[valid_width] - fall_frac[valid_width])
-        - (idx_rise_50_rel[valid_width] + rise_frac[valid_width])
-    ) * dt * 1000.0
+        (
+            (idx_fall_50_rel[valid_width] - fall_frac[valid_width])
+            - (idx_rise_50_rel[valid_width] + rise_frac[valid_width])
+        )
+        * dt
+        * 1000.0
+    )
 
     # --- Rise Time (10-90) ---
     lev_10 = amp_10[:, None]
@@ -440,9 +470,10 @@ def calculate_spike_features(  # noqa: C901
             rise_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
 
     rise_times[valid_rise] = (
-        (idx_90_rel[valid_rise] + rise_frac_90[valid_rise])
-        - (idx_10_rel[valid_rise] + rise_frac_10[valid_rise])
-    ) * dt * 1000.0
+        ((idx_90_rel[valid_rise] + rise_frac_90[valid_rise]) - (idx_10_rel[valid_rise] + rise_frac_10[valid_rise]))
+        * dt
+        * 1000.0
+    )
 
     # --- Decay Time (90-10) ---
     # Post peak
@@ -474,9 +505,13 @@ def calculate_spike_features(  # noqa: C901
             decay_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
 
     decay_times[valid_decay] = (
-        (idx_dec_10_rel[valid_decay] - decay_frac_10[valid_decay])
-        - (idx_dec_90_rel[valid_decay] - decay_frac_90[valid_decay])
-    ) * dt * 1000.0
+        (
+            (idx_dec_10_rel[valid_decay] - decay_frac_10[valid_decay])
+            - (idx_dec_90_rel[valid_decay] - decay_frac_90[valid_decay])
+        )
+        * dt
+        * 1000.0
+    )
 
     # --- AHP Depth & Duration ---
     # Window: From peak to max ahp_max_samples, but capped by next spike for high-freq firing
@@ -581,7 +616,7 @@ def calculate_spike_features(  # noqa: C901
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
 
         # Pad to match shape (False at edges)
-        is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode='constant', constant_values=False)
+        is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
 
         col_idxs = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
 
@@ -629,18 +664,20 @@ def calculate_spike_features(  # noqa: C901
     # --- Assemble Results ---
     features_list = []
     for i in range(n_spikes):
-        features_list.append({
-            "ap_threshold": float(ap_thresholds[i]),
-            "amplitude": float(amplitudes[i]),
-            "half_width": float(half_widths[i]),
-            "rise_time_10_90": float(rise_times[i]),
-            "decay_time_90_10": float(decay_times[i]),
-            "ahp_depth": float(ahp_depths[i]),
-            "ahp_duration_half": float(ahp_durations[i]),
-            "adp_amplitude": float(adp_amplitudes[i]),
-            "max_dvdt": float(max_dvdts[i]),
-            "min_dvdt": float(min_dvdts[i]),
-        })
+        features_list.append(
+            {
+                "ap_threshold": float(ap_thresholds[i]),
+                "amplitude": float(amplitudes[i]),
+                "half_width": float(half_widths[i]),
+                "rise_time_10_90": float(rise_times[i]),
+                "decay_time_90_10": float(decay_times[i]),
+                "ahp_depth": float(ahp_depths[i]),
+                "ahp_duration_half": float(ahp_durations[i]),
+                "adp_amplitude": float(adp_amplitudes[i]),
+                "max_dvdt": float(max_dvdts[i]),
+                "min_dvdt": float(min_dvdts[i]),
+            }
+        )
 
     return features_list
 
@@ -653,8 +690,11 @@ def calculate_isi(spike_times):
 
 
 def analyze_multi_sweep_spikes(
-    data_trials: List[np.ndarray], time_vector: np.ndarray, threshold: float, refractory_samples: int,
-    dvdt_threshold: float = 20.0
+    data_trials: List[np.ndarray],
+    time_vector: np.ndarray,
+    threshold: float,
+    refractory_samples: int,
+    dvdt_threshold: float = 20.0,
 ) -> List[SpikeTrainResult]:
     """
     Analyzes spikes across multiple sweeps (trials).
@@ -751,8 +791,8 @@ def analyze_multi_sweep_spikes(
     ],
     plots=[
         {"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]},
-        {"type": "markers", "x": "spike_times", "y": "spike_voltages", "color": "r"}
-    ]
+        {"type": "markers", "x": "spike_times", "y": "spike_voltages", "color": "r"},
+    ],
 )
 def run_spike_detection_wrapper(
     data: np.ndarray,
@@ -784,19 +824,23 @@ def run_spike_detection_wrapper(
         peak_window_samples = int(peak_search_window * sampling_rate)
 
         params = {
-            'threshold': threshold,
-            'refractory_period': refractory_period,
-            'peak_search_window': peak_search_window,
-            'dvdt_threshold': dvdt_threshold,
-            'ahp_window': ahp_window,
-            'onset_lookback': onset_lookback,
+            "threshold": threshold,
+            "refractory_period": refractory_period,
+            "peak_search_window": peak_search_window,
+            "dvdt_threshold": dvdt_threshold,
+            "ahp_window": ahp_window,
+            "onset_lookback": onset_lookback,
         }
 
         # Run detection
         result = detect_spikes_threshold(
-            data, time, threshold, refractory_samples,
+            data,
+            time,
+            threshold,
+            refractory_samples,
             peak_search_window_samples=peak_window_samples,
-            parameters=params, dvdt_threshold=dvdt_threshold
+            parameters=params,
+            dvdt_threshold=dvdt_threshold,
         )
 
         if result.is_valid:
@@ -840,7 +884,8 @@ def run_spike_detection_wrapper(
             return output
         else:
             return {
-                "spike_count": 0, "mean_freq_hz": 0.0,
+                "spike_count": 0,
+                "mean_freq_hz": 0.0,
                 "spike_error": result.error_message or "Unknown error",
                 "parameters": params,
             }

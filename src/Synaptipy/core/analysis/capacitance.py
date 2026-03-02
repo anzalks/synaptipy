@@ -1,9 +1,11 @@
 import logging
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
-from typing import Dict, Any, Tuple, Optional
-from Synaptipy.core.analysis.registry import AnalysisRegistry
 from scipy import integrate
+
 from Synaptipy.core.analysis.intrinsic_properties import calculate_rin, calculate_tau
+from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ def calculate_capacitance_vc(
     time_vector: np.ndarray,
     baseline_window: Tuple[float, float],
     transient_window: Tuple[float, float],
-    voltage_step_amplitude_mv: float
+    voltage_step_amplitude_mv: float,
 ) -> Optional[float]:
     """
     Calculate Cell Capacitance (Cm) from Voltage-Clamp using the
@@ -186,9 +188,7 @@ def run_capacitance_analysis_wrapper(
 
         if isinstance(tau_result, dict):
             # Mono model returns {tau_ms: ...}, bi returns {tau_slow_ms: ...}
-            tau_ms = tau_result.get(
-                "tau_ms", tau_result.get("tau_slow_ms", 0)
-            )
+            tau_ms = tau_result.get("tau_ms", tau_result.get("tau_slow_ms", 0))
         else:
             tau_ms = tau_result
 
@@ -196,21 +196,13 @@ def run_capacitance_analysis_wrapper(
         if cm_pf is None:
             return {"error": "Failed to calculate Cm from Tau/Rin"}
 
-        return {
-            "capacitance_pf": cm_pf,
-            "tau_ms": tau_ms,
-            "rin_mohm": rin_result.value,
-            "mode": mode
-        }
+        return {"capacitance_pf": cm_pf, "tau_ms": tau_ms, "rin_mohm": rin_result.value, "mode": mode}
 
     elif mode == "Voltage-Clamp":
         voltage_step = kwargs.get("voltage_step_mv", -5.0)
         cm_pf = calculate_capacitance_vc(data, time, base_window, resp_window, voltage_step)
         if cm_pf is None:
             return {"error": "Failed to calculate Cm from Voltage-Clamp transient"}
-        return {
-            "capacitance_pf": cm_pf,
-            "mode": mode
-        }
+        return {"capacitance_pf": cm_pf, "mode": mode}
     else:
         return {"error": "Unknown mode"}
