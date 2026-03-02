@@ -157,6 +157,67 @@ The mandatory sequence is:
      callbacks can fire; executing ensures AllViews/geometry caches stay consistent)
    - Win/Linux: `removePostedEvents()` (post-clear events already executed in step 3)
 
+## Explorer tab — GraphicsLayoutWidget rebuild rules
+
+### Fresh widget on every rebuild — DO NOT reuse via widget.clear()
+`ExplorerPlotCanvas.rebuild_plots()` creates a **new `GraphicsLayoutWidget`**
+and swaps it into the parent layout, then deletes the old widget via
+`deleteLater()`.  **Do not revert to calling `widget.clear()` + `addPlot()`
+on the same widget.**
+
+`widget.clear()` leaves Qt's internal scene graph in a broken state on Windows
+(PySide6 6.7.x + pyqtgraph 0.13.x).  Specifically:
+- `GraphicsLayout.removeItem()` calls `scene().removeItem()` for each PlotItem
+  and its border, then disconnects `geometryChanged`.
+- After clear, the viewport repaints once (showing nothing).
+- When new PlotItems are added, the scene tracks them but the viewport's
+  dirty-region heuristic (MinimalViewportUpdate) considers all regions clean
+  because the previous repaint covered the entire viewport.
+- Result: data items exist in the scene but are never painted — plots appear
+  blank despite `listDataItems()` confirming items are present.
+
+Switching to `FullViewportUpdate` mode partially helps but does not fix all
+cases (stale `PlotItem.autoBtn = None` callbacks from `PlotItem.close()`
+fire during `processEvents()` and crash).
+
+The only reliable fix is a fresh widget per rebuild cycle.  The performance
+cost is negligible (widget creation is < 5 ms).
+
+**Implementation checklist for rebuild_plots():**
+1. Find old widget's position in parent `QGridLayout`
+2. Clear Python refs (`plot_items`, `plot_widgets`, etc.) BEFORE deleting
+3. Create new widget via `SynaptipyPlotFactory.create_graphics_layout()`
+4. `removeWidget(old)` → `old.hide()` → `old.setParent(None)` → `old.deleteLater()`
+5. `addWidget(new, row, col, rspan, cspan)` at the same grid position
+6. Assign `self.widget = new`
+
+### Disable ViewBox auto-range in Explorer plots
+After creating each PlotItem in `rebuild_plots()`, call
+`plot_item.getViewBox().disableAutoRange()` **immediately**.  The Explorer
+manages view ranges explicitly via `_reset_view()`.
+
+If auto-range is left enabled (the pyqtgraph default), ViewBox queues a
+**deferred** `updateAutoRange()` callback (`QTimer.singleShot(0, ...)`) every
+time `plot_item.plot()` adds data.  These deferred callbacks fire *after*
+`_reset_view()` has already set the correct X/Y ranges, overriding them with
+a full-data auto-range.  Symptoms: data appears "shrunk" or the X-axis shows
+a much wider range than expected (e.g. −25 to +17 instead of 0 to 17).
+
+### Compute base_x_range from actual time vectors
+`_calculate_base_ranges()` must derive `base_x_range` from
+`channel.get_relative_time_vector(0)` (which always starts at 0), **not** from
+`recording.duration` alone.  Some ABF protocols set a negative `t_start` at the
+Neo level; `recording.duration` may reflect the full sweep length while the
+plotted time axis starts at 0.
+
+### Downsampling defaults — preserve signal fidelity
+- Always use `method="peak"` (never `"subsample"` which drops every Nth point
+  and loses spikes/transients).
+- `autoDownsampleThreshold` should be ≥ 5000 (pyqtgraph default).  Values
+  below 5000 visibly degrade electrophysiology traces at typical zoom levels.
+- `clipToView` should only be `True` when downsampling is enabled; otherwise
+  it clamps data outside the current viewport and defeats zoom-out.
+
 ## numpy / scipy rules
 - `np.searchsorted` only accepts `side="left"` or `side="right"` — not `"nearest"`.
   To find the nearest index use: insert with `"left"`, then compare `idx-1` vs `idx`.
