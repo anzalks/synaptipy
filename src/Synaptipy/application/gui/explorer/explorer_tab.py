@@ -97,6 +97,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None
         self._cache_dirty: bool = False
         self._is_loading: bool = False
+        self._is_rebuilding: bool = False  # Guard: prevents _update_plot during rebuild
 
         # Limits State
         self.base_x_range: Optional[Tuple[float, float]] = None
@@ -596,16 +597,25 @@ class ExplorerTab(QtWidgets.QWidget):
         # If it is populated, we use only those.
         self.selected_trial_indices = set()
 
-        # Rebuild Components
-        self.plot_canvas.rebuild_plots(recording)
-        self.config_panel.rebuild(recording)
-        self.y_controls.rebuild(recording)
+        # Rebuild Components — block intermediate _update_plot() calls.
+        # config_panel.rebuild() creates channel checkboxes with setChecked(True)
+        # which emits toggled → _on_channel_visibility_changed → _update_plot().
+        # These premature calls capture degenerate view state from empty plots
+        # and restore it, overriding the freshly plotted data's auto-range.
+        self._is_rebuilding = True
+        try:
+            self.plot_canvas.rebuild_plots(recording)
+            self.config_panel.rebuild(recording)
+            self.y_controls.rebuild(recording)
+        finally:
+            self._is_rebuilding = False
 
         # Calculate Base Ranges
         self._calculate_base_ranges()
 
-        # Initial Plot
-        self._update_plot()
+        # Initial Plot — use fresh=True to skip view-state restoration
+        # so auto-range can do its job on the newly plotted data.
+        self._update_plot(fresh=True)
         self._reset_view()
 
         # --- Restore State if Pending ---
@@ -653,6 +663,12 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_all_ui_state()
         self.sidebar.sync_to_file(recording.source_file)
         self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'", 5000)
+
+        # Final scene update: FullViewportUpdate mode (set in rebuild_plots)
+        # ensures the viewport repaints on scene changes.  A single deferred
+        # update() catches any late geometry recalculations from Qt's layout.
+        if self.plot_canvas.widget:
+            QtCore.QTimer.singleShot(0, self.plot_canvas.widget.update)
 
     def _calculate_base_ranges(self):
         self.base_y_ranges = {}
@@ -710,21 +726,36 @@ class ExplorerTab(QtWidgets.QWidget):
         """Updates all plot items based on current selection/data state."""
         if not self.current_recording:
             return
-        # Handle styling updates if needed (omitted for brevity)
         self._update_plot()
         if self.plot_canvas.widget:
-            self.plot_canvas.widget.update()
+            try:
+                self.plot_canvas.widget.viewport().update()
+            except Exception:
+                self.plot_canvas.widget.update()
 
-    def _update_plot(self):  # noqa: C901
-        """Standard plot update."""
+    def _update_plot(self, fresh: bool = False):  # noqa: C901
+        """Standard plot update.
+
+        Args:
+            fresh: If True, skip view-state save/restore (used on initial
+                   display so auto-range fills the viewport correctly).
+        """
+        # Guard: skip intermediate calls triggered by checkbox toggled
+        # signals during config_panel.rebuild() inside _display_recording.
+        if getattr(self, "_is_rebuilding", False):
+            return
+
         if not self.current_recording or not self.plot_canvas.channel_plots:
             return
 
-        # Disable updates
-        if self.plot_canvas.widget:
-            self.plot_canvas.widget.setUpdatesEnabled(False)
+        # 0. Preserve View State BEFORE clearing items (skip on fresh display)
+        view_state = {}
+        if not fresh:
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                if plot.isVisible():
+                    view_state[cid] = plot.viewRange()
+
         try:
-            # Clear existing items
             # Clear existing items robustly
             for cid in self.plot_canvas.channel_plots.keys():
                 self.plot_canvas.clear_plot_items(cid)
@@ -766,18 +797,13 @@ class ExplorerTab(QtWidgets.QWidget):
             else:
                 DataCache.get_instance().clear_active_trace()
 
-            # 0. Preserve View State if possible
-            view_state = {}
-            for cid, plot in self.plot_canvas.channel_plots.items():
-                if plot.isVisible():
-                    view_state[cid] = plot.viewRange()
-
             # --- PLOT SETTINGS ---
             ds_enabled = self.config_panel.downsample_cb.isChecked()
-            # Force aggressive threshold if enabled (e.g. 3000 points) to prevent freezes
-            ds_avg_threshold = 3000
+            # pyqtgraph default autoDownsampleThreshold is 5000; keep it
+            # reasonable so zoomed-out views stay fast without crushing detail.
+            ds_threshold = 5000
             ds_method = "peak"
-            clip_view = True
+            clip_view = ds_enabled  # only clip when downsampling is active
 
             # Function to apply common item settings
             def _apply_item_opts(item, is_ds):
@@ -786,7 +812,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 if hasattr(item, "opts"):
                     item.opts["autoDownsample"] = is_ds
                     if is_ds:
-                        item.opts["autoDownsampleThreshold"] = ds_avg_threshold
+                        item.opts["autoDownsampleThreshold"] = ds_threshold
                 if hasattr(item, "setClipToView"):
                     item.setClipToView(clip_view)
 
@@ -840,9 +866,8 @@ class ExplorerTab(QtWidgets.QWidget):
 
                     for trial_idx in trials_to_plot:
                         try:
-                            # Skip extensive background plotting if too many trials?
-                            # For now, plot all but use subsample for speed if DS enabled
-                            bg_ds_method = "subsample" if ds_enabled else "peak"
+                            # Always use 'peak' to preserve signal features
+                            bg_ds_method = "peak"
 
                             data = channel.get_data(trial_idx)
                             t = channel.get_relative_time_vector(trial_idx)
@@ -863,7 +888,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                 item.setDownsampling(auto=ds_enabled, method=bg_ds_method)
                                 item.opts["autoDownsample"] = ds_enabled
                                 if ds_enabled:
-                                    item.opts["autoDownsampleThreshold"] = ds_avg_threshold
+                                    item.opts["autoDownsampleThreshold"] = ds_threshold
                                 item.setClipToView(clip_view)
 
                                 self.plot_canvas.channel_plot_data_items[cid].append(item)
@@ -894,8 +919,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     except Exception as e:
                         log.error(f"Error plotting avg for {cid}: {e}")
 
-            # Restore View State — guard against XLink cascade on multi-channel
-            if view_state:
+            # Restore View State — guard against XLink cascade on multi-channel.
+            # Skip when 'fresh' to let auto-range show all data.
+            if view_state and not fresh:
                 self._updating_viewranges = True
                 try:
                     for cid, state in view_state.items():
@@ -905,9 +931,23 @@ class ExplorerTab(QtWidgets.QWidget):
                             plot.setYRange(state[1][0], state[1][1], padding=0)
                 finally:
                     self._updating_viewranges = False
+
+            # Log diagnostic summary (visible at WARNING level in terminal)
+            total_items = sum(
+                len(v) for v in self.plot_canvas.channel_plot_data_items.values()
+            )
+            log.info(
+                "[PLOT-DIAG] _update_plot done: channels=%d, total_items=%d, "
+                "mode=%s, fresh=%s",
+                len(self.plot_canvas.channel_plots),
+                total_items,
+                "cycle" if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else "overlay",
+                fresh,
+            )
         finally:
+            # Nudge the viewport to repaint after items have been added.
             if self.plot_canvas.widget:
-                self.plot_canvas.widget.setUpdatesEnabled(True)
+                self.plot_canvas.widget.update()
 
     def _clear_data_cache(self):
         self._data_cache.clear()
@@ -943,36 +983,29 @@ class ExplorerTab(QtWidgets.QWidget):
             avg_pen = get_average_pen()
             trial_pen = get_single_trial_pen()
 
-            # Disable updates during batch operation
+            # Update existing plot item pens
+            for cid, items in self.plot_canvas.channel_plot_data_items.items():
+                if not items:
+                    continue
+
+                # Optimization: Skip hidden plots
+                plot_widget = self.plot_canvas.channel_plots.get(cid)
+                if not plot_widget or not plot_widget.isVisible():
+                    continue
+
+                for item in items:
+                    try:
+                        # Check if this is an average plot
+                        if hasattr(item, "name") and item.name() == "Average":
+                            item.setPen(avg_pen)
+                        else:
+                            item.setPen(trial_pen)
+                    except Exception as e:
+                        log.debug(f"Could not update pen for plot item: {e}")
+
+            # Single repaint after all pens updated
             if self.plot_canvas.widget:
-                self.plot_canvas.widget.setUpdatesEnabled(False)
-
-            try:
-                # Update existing plot item pens
-                for cid, items in self.plot_canvas.channel_plot_data_items.items():
-                    if not items:
-                        continue
-
-                    # Optimization: Skip hidden plots
-                    # The expensive setPen operation is avoided for all items in hidden plots
-                    plot_widget = self.plot_canvas.channel_plots.get(cid)
-                    if not plot_widget or not plot_widget.isVisible():
-                        continue
-
-                    for item in items:
-                        try:
-                            # Check if this is an average plot
-                            if hasattr(item, "name") and item.name() == "Average":
-                                item.setPen(avg_pen)
-                            else:
-                                item.setPen(trial_pen)
-                        except Exception as e:
-                            log.debug(f"Could not update pen for plot item: {e}")
-            finally:
-                # Re-enable updates and force single repaint
-                if self.plot_canvas.widget:
-                    self.plot_canvas.widget.setUpdatesEnabled(True)
-                    self.plot_canvas.widget.update()
+                self.plot_canvas.widget.update()
 
         except Exception as e:
             log.warning(f"Failed to update plot pens: {e}")
