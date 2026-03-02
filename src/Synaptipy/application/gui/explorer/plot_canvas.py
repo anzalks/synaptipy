@@ -101,6 +101,32 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                                 layout_pos = (row, col, rspan, cspan)
                         break
 
+        # Disconnect old ViewBox signals BEFORE deleting old widget.
+        # Without this, old ViewBoxes scheduled for deleteLater() can still
+        # emit sigXRangeChanged / sigYRangeChanged / sigResized during the
+        # event loop iteration that destroys them.  Those signals propagate
+        # through the canvas's x_range_changed → _on_vb_x_range_changed and
+        # corrupt the slider/scrollbar values for the NEW recording.  This is
+        # the root cause of the "X-axis shifted right" bug when cycling files.
+        for plot_item in self.plot_items.values():
+            try:
+                vb = plot_item.getViewBox()
+                if vb:
+                    try:
+                        vb.sigXRangeChanged.disconnect()
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
+                        vb.sigYRangeChanged.disconnect()
+                    except (TypeError, RuntimeError):
+                        pass
+                    try:
+                        vb.sigResized.disconnect()
+                    except (TypeError, RuntimeError):
+                        pass
+            except Exception:
+                pass
+
         # Drop Python refs to old plot items BEFORE deleting old widget
         self.plot_items.clear()
         self._main_plot_id = None
@@ -162,11 +188,12 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             try:
                 vb = plot_item.getViewBox()
                 if vb:
-                    # Tag viewbox with ID for signal handling (legacy need?)
-                    # Base class already connects signals using chan_key,
-                    # but ExplorerTab might check this attribute manually?
-                    # Let's keep it to be safe.
                     vb._synaptipy_chan_id = chan_key
+                    # Disable auto-range immediately so pyqtgraph does not
+                    # queue deferred updateAutoRange callbacks when data items
+                    # are added later.  The Explorer manages view ranges
+                    # explicitly via _reset_view().
+                    vb.disableAutoRange()
             except Exception as e:
                 log.warning(f"Error styling ViewBox: {e}")
 

@@ -98,6 +98,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._cache_dirty: bool = False
         self._is_loading: bool = False
         self._is_rebuilding: bool = False  # Guard: prevents _update_plot during rebuild
+        self._display_generation: int = 0  # Monotonically increasing counter for _deferred_initial_reset
 
         # Limits State
         self.base_x_range: Optional[Tuple[float, float]] = None
@@ -572,6 +573,9 @@ class ExplorerTab(QtWidgets.QWidget):
     def _display_recording(self, recording: Recording):  # noqa: C901
         if not recording:
             return
+        # Bump generation counter so any pending _deferred_initial_reset from a
+        # previous display pass is recognised as stale and skipped.
+        self._display_generation += 1
         self.current_recording = recording
         self.max_trials_current_recording = getattr(recording, "max_trials", 0)
 
@@ -667,28 +671,111 @@ class ExplorerTab(QtWidgets.QWidget):
         # Final scene update: FullViewportUpdate mode (set in rebuild_plots)
         # ensures the viewport repaints on scene changes.  A single deferred
         # update() catches any late geometry recalculations from Qt's layout.
-        if self.plot_canvas.widget:
+        #
+        # Multi-channel X-axis fix: after the first layout pass, pyqtgraph's
+        # sigResized → linkedViewChanged can shift X ranges because it
+        # recalculates them from screen-geometry pixel positions (the "line
+        # them up" branch).  A deferred _reset_view() re-applies the base
+        # ranges once the layout has fully stabilised.
+        #
+        # Only needed for multi-channel (X-linked) recordings.  For single-
+        # channel recordings there is no X-link, so no linkedViewChanged
+        # interference.  Also skip when a deliberate view state is being
+        # restored (lock-zoom cycling) to avoid overwriting the user's zoom.
+        n_channels = len(recording.channels) if recording and recording.channels else 0
+        if self.plot_canvas.widget and n_channels > 1 and not restored_view:
+            gen = self._display_generation
+            QtCore.QTimer.singleShot(0, lambda g=gen: self._deferred_initial_reset(g))
+        elif self.plot_canvas.widget:
             QtCore.QTimer.singleShot(0, self.plot_canvas.widget.update)
+
+    def _deferred_initial_reset(self, generation: int):
+        """Re-apply base ranges after the first Qt layout pass.
+
+        *generation* is the display-generation counter captured at schedule
+        time.  If a new _display_recording call has incremented the counter
+        since then (or the user has zoomed/panned), this callback is stale
+        and must be skipped to avoid overwriting deliberate changes.
+
+        When a new GraphicsLayoutWidget is created for multi-channel data,
+        pyqtgraph's ``sigResized`` fires on each ViewBox once the layout
+        geometry is established.  For X-linked ViewBoxes this triggers
+        ``linkedViewChanged`` which recalculates the X range from
+        screen-geometry pixel offsets (the *line them up* branch).  Even a
+        1-pixel difference in ViewBox width between stacked rows shifts the
+        X origin away from 0.  Re-applying the base ranges here — after all
+        deferred layout events have been processed — guarantees the X axis
+        starts at 0 for every channel.
+        """
+        if generation != self._display_generation:
+            return  # stale callback from a previous display pass
+        if not self.current_recording or not self.plot_canvas.channel_plots:
+            return
+        self._reset_view()
+        if self.plot_canvas.widget:
+            self.plot_canvas.widget.update()
 
     def _calculate_base_ranges(self):
         self.base_y_ranges = {}
-        self.base_x_range = (0, self.current_recording.duration) if self.current_recording.duration else (0, 1)
+        self.base_x_range = self._compute_base_x_range()
 
         for cid, channel in self.current_recording.channels.items():
-            # Estimate Y range from random trial or global min/max
-            # Simple approach: get data from trial 0
+            self.base_y_ranges[cid] = self._compute_channel_y_range(channel)
+
+    def _compute_base_x_range(self):
+        """Compute X range from actual time vectors (always start at 0)."""
+        x_max = None
+        for channel in self.current_recording.channels.values():
             try:
-                d = channel.get_data(0)
-                if d is not None:
-                    mn, mx = np.min(d), np.max(d)
-                    diff = mx - mn
-                    if diff == 0:
-                        diff = 1.0
-                    self.base_y_ranges[cid] = (mn - diff * 0.1, mx + diff * 0.1)
-                else:
-                    self.base_y_ranges[cid] = (-1, 1)
+                t = channel.get_relative_time_vector(0)
+                if t is not None and len(t) > 0:
+                    t_end = float(t[-1])
+                    if x_max is None or t_end > x_max:
+                        x_max = t_end
             except Exception:
-                self.base_y_ranges[cid] = (-1, 1)
+                pass
+        if x_max is None:
+            x_max = self.current_recording.duration if self.current_recording.duration else 1.0
+        return (0.0, x_max)
+
+    def _compute_channel_y_range(self, channel):
+        """Compute Y range from ALL trials with 10% margin.
+
+        Using only trial 0 gave a deceptively narrow range when the first
+        trial held only resting-potential values while later trials contained
+        action potentials.  In Overlay All + Avg mode the full Y extent is
+        visible, so the base range must cover every trial.
+
+        To keep the cost bounded on files with thousands of trials, we sample
+        at most 50 evenly-spaced trials.
+        """
+        try:
+            n_trials = channel.num_trials or 1
+            # Sample at most 50 trials, evenly spaced
+            if n_trials <= 50:
+                indices = range(n_trials)
+            else:
+                step = max(1, n_trials // 50)
+                indices = range(0, n_trials, step)
+
+            global_mn = None
+            global_mx = None
+            for idx in indices:
+                d = channel.get_data(idx)
+                if d is not None and len(d) > 0:
+                    trial_mn = float(np.min(d))
+                    trial_mx = float(np.max(d))
+                    if global_mn is None or trial_mn < global_mn:
+                        global_mn = trial_mn
+                    if global_mx is None or trial_mx > global_mx:
+                        global_mx = trial_mx
+
+            if global_mn is not None and global_mx is not None:
+                diff = global_mx - global_mn if (global_mx - global_mn) != 0 else 1.0
+                return (global_mn - diff * 0.1, global_mx + diff * 0.1)
+        except Exception:
+            pass
+        return (-1, 1)
 
     def get_current_recording(self) -> Optional[Recording]:
         return self.current_recording
@@ -1238,22 +1325,48 @@ class ExplorerTab(QtWidgets.QWidget):
             self._update_all_ui_state()
 
     def _reset_view(self):
+        """Reset plot ranges to base ranges and reset UI controls."""
         # Block x/y range signal cascade while setting ranges on XLinked plots.
-        # Without this, setXRange on one plot propagates via XLink to all others
-        # and each fires sigXRangeChanged -> _on_vb_x_range_changed.  With 4
-        # linked channels that's 16+ re-entrant signal emissions -> SIGBUS.
         prev = self._updating_viewranges
         self._updating_viewranges = True
         try:
+            base_x = self.base_x_range
+
+            # Collect ViewBoxes and block X-link propagation *before* setting
+            # any ranges.  pyqtgraph's linkedViewChanged recalculates the
+            # linked view's X range from screen-geometry pixel offsets (see
+            # ViewBox.linkedViewChanged → "line them up" branch).  For
+            # vertically stacked multi-channel plots this can shift the X
+            # origin away from 0 when the ViewBoxes have even a 1-pixel
+            # difference in position or width during the initial layout pass.
+            viewboxes = []
             for cid, plot in self.plot_canvas.channel_plots.items():
-                base_x = self.base_x_range
+                vb = plot.getViewBox()
+                if vb:
+                    vb.blockLink(True)
+                    viewboxes.append(vb)
+
+            for cid, plot in self.plot_canvas.channel_plots.items():
                 base_y = self.base_y_ranges.get(cid)
-                if base_x and base_y and plot.isVisible():
-                    plot.setXRange(*base_x, padding=0)
-                    plot.setYRange(*base_y, padding=0)
+                if not (base_x and base_y and plot.isVisible()):
+                    continue
+                vb = plot.getViewBox()
+                # Disable auto-range so the explicit ranges stick.
+                if vb:
+                    vb.disableAutoRange()
+                plot.setXRange(*base_x, padding=0)
+                plot.setYRange(*base_y, padding=0)
+
+            # Unblock links now that all ranges are consistent.
+            for vb in viewboxes:
+                vb.blockLink(False)
         finally:
             self._updating_viewranges = prev
 
+        self._reset_zoom_scroll_controls()
+
+    def _reset_zoom_scroll_controls(self):
+        """Reset all zoom sliders and scrollbars to their default positions."""
         # Reset X Controls
         if hasattr(self, "toolbar") and hasattr(self.toolbar, "x_zoom_slider"):
             self.toolbar.x_zoom_slider.blockSignals(True)
