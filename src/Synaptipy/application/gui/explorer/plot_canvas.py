@@ -10,9 +10,11 @@ import sys
 from typing import Dict, List
 
 import pyqtgraph as pg
+from PySide6 import QtWidgets
 
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.core.data_model import Recording
+from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 
 log = logging.getLogger(__name__)
 
@@ -68,14 +70,71 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
     def rebuild_plots(self, recording: Recording) -> List[str]:  # noqa: C901
         """
         Rebuilds the plot layout based on the recording channels.
+
+        Instead of calling widget.clear() and reusing the same
+        GraphicsLayoutWidget (which leaves the Qt scene in a broken state on
+        Windows after the clear→addPlot cycle), we create a brand-new widget
+        and swap it into the parent layout. This guarantees a pristine scene
+        graph with no stale ViewBox callbacks or orphaned C++ pointers.
+
         Returns the list of channel keys in order.
         """
-        # Drain stale Qt events before and after clear() (Win/Linux only).
-        # clear_plots() calls widget.clear() first so Qt's destructor chain
-        # auto-disconnects signals while C++ objects are still valid.
-        self._cancel_pending_qt_events()
-        self.clear()
-        self._flush_qt_registry()
+        # --- Replace the widget entirely ---
+        old_widget = self.widget
+        parent_layout = None
+        layout_pos = None
+
+        # Find the old widget's position in its parent layout
+        if old_widget and old_widget.parentWidget():
+            parent = old_widget.parentWidget()
+            parent_layout = parent.layout()
+            if parent_layout is not None:
+                # Find position of old widget in the grid layout
+                for i in range(parent_layout.count()):
+                    item = parent_layout.itemAt(i)
+                    if item and item.widget() is old_widget:
+                        # For QGridLayout, get row/col/rowSpan/colSpan
+                        if isinstance(parent_layout, QtWidgets.QGridLayout):
+                            idx = parent_layout.indexOf(old_widget)
+                            if idx >= 0:
+                                row, col, rspan, cspan = parent_layout.getItemPosition(idx)
+                                layout_pos = (row, col, rspan, cspan)
+                        break
+
+        # Drop Python refs to old plot items BEFORE deleting old widget
+        self.plot_items.clear()
+        self._main_plot_id = None
+        self.plot_widgets.clear()
+        self.channel_plot_data_items.clear()
+        self.selected_average_plot_items.clear()
+
+        # Create a fresh GraphicsLayoutWidget
+        new_widget = SynaptipyPlotFactory.create_graphics_layout(
+            parent=old_widget.parentWidget() if old_widget else None
+        )
+
+        # Swap into the layout
+        if parent_layout is not None and layout_pos is not None:
+            parent_layout.removeWidget(old_widget)
+            old_widget.hide()
+            old_widget.setParent(None)
+            old_widget.deleteLater()
+            row, col, rspan, cspan = layout_pos
+            parent_layout.addWidget(new_widget, row, col, rspan, cspan)
+        elif parent_layout is not None:
+            # Fallback: simple replace
+            parent_layout.removeWidget(old_widget)
+            old_widget.hide()
+            old_widget.setParent(None)
+            old_widget.deleteLater()
+            parent_layout.addWidget(new_widget)
+        else:
+            # No parent layout — just swap the reference
+            if old_widget:
+                old_widget.hide()
+                old_widget.deleteLater()
+
+        self.widget = new_widget
 
         if not recording or not recording.channels:
             return []
