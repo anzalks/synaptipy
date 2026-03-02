@@ -276,10 +276,37 @@ Python side.
 
 ## Coding Standards
 
-- **PEP 8**: Follow Python style guidelines
+- **PEP 8**: Follow Python style guidelines (max line length 120)
+- **Formatting**: All code is auto-formatted with [**black**](https://github.com/psf/black) (line-length 120, target Python 3.10)
+- **Import sorting**: Imports are sorted by [**isort**](https://pycqa.github.io/isort/) with the `black` profile
+- **Linting**: [**flake8**](https://flake8.pycqa.org/) enforces style rules (max-complexity 10)
 - **Docstrings**: All public functions, classes, and methods should have docstrings
 - **Type Hints**: Use type hints for function parameters and return values
 - **Error Handling**: Use custom error classes and handle exceptions appropriately
+
+### Formatting your code
+
+Before committing, run the formatters and linter:
+
+```bash
+# Sort imports
+isort src/ tests/
+
+# Format code
+black src/ tests/
+
+# Check for lint errors
+flake8 src/ tests/
+```
+
+You can also verify without modifying files (as CI does):
+
+```bash
+black --check --diff src/ tests/
+isort --check --diff src/ tests/
+```
+
+CI will reject any pull request that does not pass `black --check`, `isort --check`, and `flake8`.
 
 ## License Compliance
 
