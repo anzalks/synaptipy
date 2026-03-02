@@ -6,15 +6,13 @@ Handles export of plots to various formats (SVG, PDF, PNG, JPG) using
 Matplotlib (for vector quality) or PyQtGraph (for raster WYSIWYG).
 """
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 import pyqtgraph as pg
 import pyqtgraph.exporters
 
 from Synaptipy.core.data_model import Recording
-from Synaptipy.shared.plot_customization import (
-    get_average_pen, get_single_trial_pen, get_force_opaque_trials
-)
+from Synaptipy.shared.plot_customization import get_average_pen, get_force_opaque_trials, get_single_trial_pen
 
 log = logging.getLogger(__name__)
 
@@ -24,11 +22,13 @@ class PlotExporter:
     Handles logic for exporting plots from the ExplorerTab (or similar).
     """
 
-    def __init__(self,
-                 recording: Recording,
-                 plot_canvas_widget: Any,
-                 plot_canvas_wrapper: Any = None,
-                 config: Dict[str, Any] = None):
+    def __init__(
+        self,
+        recording: Recording,
+        plot_canvas_widget: Any,
+        plot_canvas_wrapper: Any = None,
+        config: Dict[str, Any] = None,
+    ):
         """
         Args:
             recording: Current Recording object.
@@ -59,7 +59,7 @@ class PlotExporter:
         """Save raster images using pyqtgraph (WYSIWYG)."""
         # Use the central layout item (.ci) if avail, else the widget itself
         # Wrapper might not be present, so rely on widget
-        target_item = getattr(self.widget, 'ci', self.widget)
+        target_item = getattr(self.widget, "ci", self.widget)
 
         # If it's a PlotWidget, target the PlotItem
         if hasattr(self.widget, "getPlotItem"):
@@ -69,7 +69,7 @@ class PlotExporter:
 
         # Scale for DPI (Screen DPI is usually ~96)
         scale_factor = dpi / 96.0
-        exporter.parameters()['width'] = int(target_item.width() * scale_factor)
+        exporter.parameters()["width"] = int(target_item.width() * scale_factor)
 
         exporter.export(filename)
         log.info(f"Exported raster plot to {filename}")
@@ -118,9 +118,7 @@ class PlotExporter:
             fig_width = 10
             fig_height = 3 * n_plots
 
-        fig, axes = plt.subplots(
-            n_plots, 1, sharex=True, figsize=(fig_width, fig_height), dpi=dpi
-        )
+        fig, axes = plt.subplots(n_plots, 1, sharex=True, figsize=(fig_width, fig_height), dpi=dpi)
         if n_plots == 1:
             axes = [axes]
 
@@ -150,7 +148,7 @@ class PlotExporter:
 
             # Extract all PlotDataItems from this plot
             plotted_items = []
-            if hasattr(plot_item, 'listDataItems'):
+            if hasattr(plot_item, "listDataItems"):
                 plotted_items = plot_item.listDataItems()
             else:
                 for item in plot_item.items:
@@ -189,10 +187,11 @@ class PlotExporter:
                     # But for Analysis tabs, the pen might be custom (e.g. orange for fits).
                     # We should probably respect the item's pen if we can extract it.
 
-                    item_pen = item.opts.get('pen')
+                    item_pen = item.opts.get("pen")
                     if item_pen:
                         # Convert QPen to MPL
                         import PySide6.QtGui
+
                         if isinstance(item_pen, PySide6.QtGui.QPen):
                             c, a = pen_to_mpl(item_pen)
                             mp_color, mp_alpha = c, a
@@ -203,8 +202,14 @@ class PlotExporter:
                         mp_color, mp_alpha = trial_color, trial_alpha
 
                     if is_average:
-                        ax.plot(x_data, y_data, color=mp_color if self.wrapper else avg_color,
-                                alpha=mp_alpha if self.wrapper else avg_alpha, linewidth=1.5, zorder=10)
+                        ax.plot(
+                            x_data,
+                            y_data,
+                            color=mp_color if self.wrapper else avg_color,
+                            alpha=mp_alpha if self.wrapper else avg_alpha,
+                            linewidth=1.5,
+                            zorder=10,
+                        )
                     else:
                         ax.plot(x_data, y_data, color=mp_color, alpha=mp_alpha, linewidth=0.8)
 
@@ -217,7 +222,7 @@ class PlotExporter:
             ax.set_ylim(y_range)
 
             # Label
-            if self.wrapper and hasattr(self.recording, 'channels') and label in self.recording.channels:
+            if self.wrapper and hasattr(self.recording, "channels") and label in self.recording.channels:
                 chan = self.recording.channels[label]
                 ax.set_ylabel(f"{chan.get_primary_data_label()} ({chan.units})")
             else:
@@ -225,8 +230,8 @@ class PlotExporter:
                 ax.set_ylabel(label)
 
             # Remove top/right spines
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.spines["top"].set_visible(False)
             ax.grid(True, alpha=0.3)
 
         # Bottom Label

@@ -1,11 +1,13 @@
 # tests/core/test_analysis_upgrade.py
-import numpy as np
 from unittest.mock import MagicMock
+
+import numpy as np
+
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.excitability import calculate_fi_curve
-from Synaptipy.core.analysis.spike_analysis import run_spike_detection_wrapper
 from Synaptipy.core.analysis.burst_analysis import calculate_bursts_logic
+from Synaptipy.core.analysis.excitability import calculate_fi_curve
 from Synaptipy.core.analysis.intrinsic_properties import run_rin_analysis_wrapper
+from Synaptipy.core.analysis.spike_analysis import run_spike_detection_wrapper
 
 
 # --- 1. Batch Engine Update Tests ---
@@ -66,9 +68,9 @@ def test_calculate_fi_curve():
     def add_spike(s, idx):
         # 2 samples rise from 0 to 100
         # 2 samples fall from 100 to 0
-        s[idx - 2:idx] = np.linspace(0, 50, 2)
+        s[idx - 2 : idx] = np.linspace(0, 50, 2)
         s[idx] = 100
-        s[idx + 1:idx + 3] = np.linspace(50, 0, 2)
+        s[idx + 1 : idx + 3] = np.linspace(50, 0, 2)
 
     # Sweep 2: 2 spikes
     s2 = np.zeros_like(t)
@@ -172,7 +174,9 @@ def test_auto_windowing_rin_fallback_to_spinbox_values():
 
     # Provide explicit valid windows via kwargs (simulating the spinbox values)
     result = run_rin_analysis_wrapper(
-        data, t, 1000.0,
+        data,
+        t,
+        1000.0,
         current_amplitude=-50.0,
         auto_detect_pulse=True,
         baseline_start=0.0,
@@ -182,9 +186,9 @@ def test_auto_windowing_rin_fallback_to_spinbox_values():
     )
 
     # All-zero trace → delta_v = 0, but no "No data in windows" error
-    assert result.get("rin_error") != "No data in windows", (
-        "Fallback windows should avoid the 'No data in windows' error"
-    )
+    assert (
+        result.get("rin_error") != "No data in windows"
+    ), "Fallback windows should avoid the 'No data in windows' error"
     # Rin = 0 / 0.05 = 0, which is technically valid (zero deflection)
     # The wrapper may return rin_mohm = 0 or None; what matters is no window error.
 

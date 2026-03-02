@@ -6,7 +6,10 @@
 [![CI](https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
 [![Docs](https://github.com/anzalks/synaptipy/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/anzalks/synaptipy/actions/workflows/docs.yml)
 [![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
-[![Code style: flake8](https://img.shields.io/badge/code%20style-flake8-black)](https://flake8.pycqa.org/)
+[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports: isort](https://img.shields.io/badge/imports-isort-%231674b1?labelColor=ef8336)](https://pycqa.github.io/isort/)
+[![Lint: flake8](https://img.shields.io/badge/lint-flake8-blue)](https://flake8.pycqa.org/)
 [![Collaborators Welcome](https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white)](https://github.com/anzalks/synaptipy)
 [![Release](https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange)](https://github.com/anzalks/synaptipy/releases)
 

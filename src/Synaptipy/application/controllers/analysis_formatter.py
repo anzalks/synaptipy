@@ -1,6 +1,7 @@
-from typing import Dict, Any, Tuple, List, Union
 import logging
-from Synaptipy.core.results import SpikeTrainResult, AnalysisResult, RinResult
+from typing import Any, Dict, List, Tuple, Union
+
+from Synaptipy.core.results import AnalysisResult, RinResult, SpikeTrainResult
 
 log = logging.getLogger(__name__)
 
@@ -29,21 +30,24 @@ class AnalysisResultFormatter:
                     "threshold_units": "mV",  # Assumed
                     "refractory_period_ms": (
                         result.parameters.get("refractory_period", 0) * 1000
-                        if result.parameters.get("refractory_period") else None
-                    )
+                        if result.parameters.get("refractory_period")
+                        else None
+                    ),
                 }
                 return AnalysisResultFormatter._format_spike_detection(
-                    res_dict), AnalysisResultFormatter._details_spike_detection(res_dict)
+                    res_dict
+                ), AnalysisResultFormatter._details_spike_detection(res_dict)
 
             elif isinstance(result, RinResult):
                 res_dict = {
                     "Input Resistance (kOhm)": result.value if result.unit == "kOhm" else None,
                     "Rin (MΩ)": result.value if result.unit == "MOhm" else None,
                     "delta_mV": result.voltage_deflection,
-                    "delta_pA": result.current_injection
+                    "delta_pA": result.current_injection,
                 }
                 return AnalysisResultFormatter._format_input_resistance(
-                    res_dict), AnalysisResultFormatter._details_input_resistance(res_dict)
+                    res_dict
+                ), AnalysisResultFormatter._details_input_resistance(res_dict)
 
             analysis_type = "Unknown object"
 

@@ -64,7 +64,4 @@ class PlotExportDialog(QtWidgets.QDialog):
             self.info_label.setText("Raster format selected.")
 
     def get_settings(self):
-        return {
-            "format": self.format_combo.currentText().lower(),
-            "dpi": self.dpi_spin.value()
-        }
+        return {"format": self.format_combo.currentText().lower(), "dpi": self.dpi_spin.value()}

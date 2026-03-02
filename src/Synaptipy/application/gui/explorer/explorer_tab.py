@@ -6,36 +6,38 @@ Refactored modular version.
 """
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
-from PySide6 import QtCore, QtWidgets, QtGui
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
 
-# --- Synaptipy Imports ---
-from Synaptipy.core.data_model import Recording
-from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.application.gui.analysis_worker import AnalysisWorker
-from Synaptipy.shared.data_cache import DataCache
-
-# --- Components ---
-from .sidebar import ExplorerSidebar
-from .config_panel import ExplorerConfigPanel
-from .plot_canvas import ExplorerPlotCanvas
-from .y_controls import ExplorerYControls
-from .toolbar import ExplorerToolbar
-from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
-from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
+from Synaptipy.application.controllers.file_io_controller import FileIOController
 
 # --- Live Analysis ---
 from Synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
-from Synaptipy.application.controllers.file_io_controller import FileIOController
 from Synaptipy.application.controllers.shortcut_manager import ShortcutManager
-from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
-from Synaptipy.core.signal_processor import check_trace_quality
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.application.session_manager import SessionManager
+
+# --- Synaptipy Imports ---
+from Synaptipy.core.data_model import Recording
+from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 from Synaptipy.core.results import SpikeTrainResult
-import pyqtgraph as pg
+from Synaptipy.core.signal_processor import check_trace_quality
+from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+from Synaptipy.shared.data_cache import DataCache
+
+from .config_panel import ExplorerConfigPanel
+from .plot_canvas import ExplorerPlotCanvas
+
+# --- Components ---
+from .sidebar import ExplorerSidebar
+from .toolbar import ExplorerToolbar
+from .y_controls import ExplorerYControls
 
 # Configure Logger
 log = logging.getLogger(__name__)
@@ -143,11 +145,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.toolbar = ExplorerToolbar()
 
         # Instantiate FileIOController
-        self.file_io = FileIOController(
-            self,
-            QtCore.QSettings(APP_NAME, SETTINGS_SECTION),
-            self.neo_adapter
-        )
+        self.file_io = FileIOController(self, QtCore.QSettings(APP_NAME, SETTINGS_SECTION), self.neo_adapter)
 
         self.sidebar = ExplorerSidebar(self.neo_adapter, self.file_io)
         self.y_controls = ExplorerYControls()
@@ -252,8 +250,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Row 0: Labels
         zoom_controls_layout.addWidget(self.toolbar.x_zoom_lbl, 0, 0, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        zoom_controls_layout.addWidget(self.y_controls.global_y_lbl, 0, 1,
-                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(
+            self.y_controls.global_y_lbl, 0, 1, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         # Row 1: Sliders
         zoom_controls_layout.addWidget(self.toolbar.x_zoom_slider, 1, 0)
@@ -261,15 +260,17 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Row 2: Checkboxes
         zoom_controls_layout.addWidget(self.toolbar.lock_zoom_cb, 2, 0, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        zoom_controls_layout.addWidget(self.y_controls.y_lock_checkbox, 2, 1,
-                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(
+            self.y_controls.y_lock_checkbox, 2, 1, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         # Row 3: Individual Y Sliders (if any)
         zoom_controls_layout.addWidget(self.y_controls.individual_y_sliders_container, 3, 1)
 
         # Row 0-3 (Spanning) Col 2: Reset View Button
-        zoom_controls_layout.addWidget(self.toolbar.reset_btn, 0, 2, 4, 1,
-                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(
+            self.toolbar.reset_btn, 0, 2, 4, 1, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         zoom_controls_layout.setColumnStretch(0, 1)
         zoom_controls_layout.setColumnStretch(1, 1)
@@ -382,7 +383,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 # Convert ms -> s carefully to avoid ZeroDivision if 0 (though spinbox usually has min)
                 "refractory_period": self.config_panel.refractory_spin.value() / 1000.0,
                 "channel_id": target_cid,
-                "trial_index": self.current_trial_index
+                "trial_index": self.current_trial_index,
             }
 
             self.live_controller.request_analysis(params)
@@ -432,12 +433,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 y_vals = np.full(len(result.spike_times), threshold)
 
                 scatter = pg.ScatterPlotItem(
-                    x=result.spike_times,
-                    y=y_vals,
-                    pen=pg.mkPen(None),
-                    brush=pg.mkBrush('r'),
-                    size=10,
-                    pxMode=True
+                    x=result.spike_times, y=y_vals, pen=pg.mkPen(None), brush=pg.mkBrush("r"), size=10, pxMode=True
                 )
                 plot_item.addItem(scatter)
                 self.active_scatter_items[item_key] = scatter
@@ -485,7 +481,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if preserve_state:
             # Check manual Lock Zoom checkbox
             is_zoom_locked = False
-            if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'lock_zoom_cb'):
+            if hasattr(self, "toolbar") and hasattr(self.toolbar, "lock_zoom_cb"):
                 is_zoom_locked = self.toolbar.lock_zoom_cb.isChecked()
 
             if is_zoom_locked:
@@ -545,6 +541,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     # memory-mapped files (ABF etc.) cause SIGBUS in
                     # scipy LAPACK on macOS if memory is not aligned.
                     import numpy as _np
+
                     data = _np.ascontiguousarray(data, dtype=_np.float64)
                     metrics = check_trace_quality(data, first_ch.sampling_rate)
             except Exception as e:
@@ -761,9 +758,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
                         # Push to Cache
                         DataCache.get_instance().set_active_trace(
-                            proc_data,
-                            fs,
-                            metadata={"channel_id": primary_cid, "trial_index": self.current_trial_index}
+                            proc_data, fs, metadata={"channel_id": primary_cid, "trial_index": self.current_trial_index}
                         )
                     except Exception as e:
                         log.warning(f"Failed to push active trace to DataCache: {e}")
@@ -1029,7 +1024,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 "This often means the file was recorded in kHz but read as Hz.\n"
                 "Do you want to auto-convert it to Hz (multiply by 1000)?",
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.Cancel,
-                QtWidgets.QMessageBox.StandardButton.Yes
+                QtWidgets.QMessageBox.StandardButton.Yes,
             )
 
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
@@ -1040,9 +1035,8 @@ class ExplorerTab(QtWidgets.QWidget):
                 return
 
         QtWidgets.QMessageBox.critical(
-            self,
-            "Load Error",
-            f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}")
+            self, "Load Error", f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}"
+        )
 
     def _finalize_loading_state(self):
         self._is_loading = False
@@ -1227,19 +1221,19 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges = prev
 
         # Reset X Controls
-        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'x_zoom_slider'):
+        if hasattr(self, "toolbar") and hasattr(self.toolbar, "x_zoom_slider"):
             self.toolbar.x_zoom_slider.blockSignals(True)
             self.toolbar.x_zoom_slider.setValue(self.toolbar.SLIDER_DEFAULT_VALUE)
             self.toolbar.x_zoom_slider.blockSignals(False)
 
-        if hasattr(self, 'x_scrollbar'):
+        if hasattr(self, "x_scrollbar"):
             self.x_scrollbar.blockSignals(True)
             self.x_scrollbar.setValue(5000)
             self.x_scrollbar.blockSignals(False)
 
         # Reset Y Controls
-        if hasattr(self, 'y_controls'):
-            if hasattr(self.y_controls, 'global_y_slider'):
+        if hasattr(self, "y_controls"):
+            if hasattr(self.y_controls, "global_y_slider"):
                 self.y_controls.global_y_slider.blockSignals(True)
                 self.y_controls.global_y_slider.setValue(self.y_controls.SLIDER_DEFAULT_VALUE)
                 self.y_controls.global_y_slider.blockSignals(False)
@@ -1307,6 +1301,7 @@ class ExplorerTab(QtWidgets.QWidget):
             # Apply scroll direction inversion based on user preference
             try:
                 from Synaptipy.shared.scroll_settings import is_scroll_inverted
+
                 if is_scroll_inverted():
                     scroll_ratio = 1.0 - scroll_ratio
             except ImportError:
@@ -1389,22 +1384,22 @@ class ExplorerTab(QtWidgets.QWidget):
             return
 
         # Store settings for UI state tracking - merge with existing
-        step_type = settings.get('type')
+        step_type = settings.get("type")
         if self._active_preprocessing_settings is None:
             self._active_preprocessing_settings = {}
 
         # Store in slot format (baseline slot + filters dict keyed by method)
-        if step_type == 'baseline':
-            self._active_preprocessing_settings['baseline'] = settings
+        if step_type == "baseline":
+            self._active_preprocessing_settings["baseline"] = settings
             # Pipeline: remove old baseline, add new
-            self.pipeline.remove_step_by_type('baseline')
+            self.pipeline.remove_step_by_type("baseline")
             self.pipeline.add_step(settings)
-        elif step_type == 'filter':
-            filter_method = settings.get('method', 'unknown')
-            if 'filters' not in self._active_preprocessing_settings:
-                self._active_preprocessing_settings['filters'] = {}
+        elif step_type == "filter":
+            filter_method = settings.get("method", "unknown")
+            if "filters" not in self._active_preprocessing_settings:
+                self._active_preprocessing_settings["filters"] = {}
             # Same filter method replaces old one
-            self._active_preprocessing_settings['filters'][filter_method] = settings
+            self._active_preprocessing_settings["filters"][filter_method] = settings
             # Pipeline: rebuild from all filters to ensure correct order
             self._rebuild_pipeline_from_settings()
 
@@ -1426,12 +1421,12 @@ class ExplorerTab(QtWidgets.QWidget):
         self.pipeline.clear()
         if self._active_preprocessing_settings:
             # Baseline first
-            if 'baseline' in self._active_preprocessing_settings:
-                self.pipeline.add_step(self._active_preprocessing_settings['baseline'])
+            if "baseline" in self._active_preprocessing_settings:
+                self.pipeline.add_step(self._active_preprocessing_settings["baseline"])
             # Then all filters in sorted order
-            if 'filters' in self._active_preprocessing_settings:
-                for method in sorted(self._active_preprocessing_settings['filters'].keys()):
-                    self.pipeline.add_step(self._active_preprocessing_settings['filters'][method])
+            if "filters" in self._active_preprocessing_settings:
+                for method in sorted(self._active_preprocessing_settings["filters"].keys()):
+                    self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
     def _on_preprocessing_complete_legacy(self, result_data):
         pass  # Removed legacy worker method
@@ -1565,7 +1560,7 @@ class ExplorerTab(QtWidgets.QWidget):
         try:
             zoom_val = self.y_controls.global_y_slider.value()
             # Silence excessive logging or only log if changed significantly
-        # log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
+            # log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
 
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
@@ -1758,14 +1753,14 @@ class ExplorerTab(QtWidgets.QWidget):
                     "plot_mode": self.current_plot_mode,
                     "current_trial_index": self.current_trial_index,
                     "selected_trial_indices": self.selected_trial_indices,
-                    "show_average": self.config_panel.show_avg_btn.isChecked()
+                    "show_average": self.config_panel.show_avg_btn.isChecked(),
                 }
 
                 exporter = PlotExporter(
                     recording=self.current_recording,
                     plot_canvas_widget=self.plot_canvas.widget,
                     plot_canvas_wrapper=self.plot_canvas,
-                    config=export_config
+                    config=export_config,
                 )
 
                 try:

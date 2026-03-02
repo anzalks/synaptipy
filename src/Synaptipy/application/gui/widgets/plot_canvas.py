@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 from typing import Dict, Optional
+
 import pyqtgraph as pg
 from PySide6 import QtCore
 
@@ -84,7 +85,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             # callbacks are queued by the time add_plot() is called.
             # Calling processEvents() on macOS can execute post-widget.clear()
             # callbacks that reference freed C++ ViewBox objects → SIGSEGV.
-            if sys.platform != 'darwin':
+            if sys.platform != "darwin":
                 try:
                     QtCore.QCoreApplication.processEvents()
                 except Exception:
@@ -136,16 +137,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             # Use default-arg capture (pid=plot_id) so each lambda closes over
             # the correct plot_id value, not a shared late-binding reference.
             # Use 'r' not 'range' to avoid shadowing the Python builtin.
-            plot_item.getViewBox().sigXRangeChanged.connect(
-                lambda _, r, pid=plot_id: self.x_range_changed.emit(pid, r)
-            )
-            plot_item.getViewBox().sigYRangeChanged.connect(
-                lambda _, r, pid=plot_id: self.y_range_changed.emit(pid, r)
-            )
+            plot_item.getViewBox().sigXRangeChanged.connect(lambda _, r, pid=plot_id: self.x_range_changed.emit(pid, r))
+            plot_item.getViewBox().sigYRangeChanged.connect(lambda _, r, pid=plot_id: self.y_range_changed.emit(pid, r))
 
         # Apply consistent theme to axis colors, labels, etc.
         try:
             from Synaptipy.shared.plot_customization import apply_plot_theme
+
             apply_plot_theme(plot_item, background_color="white", axis_color="black")
         except ImportError:
             log.debug("plot_customization module not available for theming")
@@ -164,10 +162,11 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         to segfault.  On macOS, _unlink_all_plots() is the sole pre-clear
         safety measure needed.
         """
-        if sys.platform == 'darwin':
+        if sys.platform == "darwin":
             return
         try:
             from PySide6.QtCore import QCoreApplication
+
             QCoreApplication.removePostedEvents(None, 0)
         except Exception:
             pass
@@ -202,28 +201,28 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     # Used by _disconnect_ctrl_signals() to break the C++ signal-table ->
     # Python bound-method -> PlotItem reference cycles without warnings.
     _CTRL_CONNECTIONS = (
-        ('alphaGroup', 'toggled', 'updateAlpha'),
-        ('alphaSlider', 'valueChanged', 'updateAlpha'),
-        ('autoAlphaCheck', 'toggled', 'updateAlpha'),
-        ('xGridCheck', 'toggled', 'updateGrid'),
-        ('yGridCheck', 'toggled', 'updateGrid'),
-        ('gridAlphaSlider', 'valueChanged', 'updateGrid'),
-        ('fftCheck', 'toggled', 'updateSpectrumMode'),
-        ('logXCheck', 'toggled', 'updateLogMode'),
-        ('logYCheck', 'toggled', 'updateLogMode'),
-        ('derivativeCheck', 'toggled', 'updateDerivativeMode'),
-        ('phasemapCheck', 'toggled', 'updatePhasemapMode'),
-        ('downsampleSpin', 'valueChanged', 'updateDownsampling'),
-        ('downsampleCheck', 'toggled', 'updateDownsampling'),
-        ('autoDownsampleCheck', 'toggled', 'updateDownsampling'),
-        ('subsampleRadio', 'toggled', 'updateDownsampling'),
-        ('meanRadio', 'toggled', 'updateDownsampling'),
-        ('clipToViewCheck', 'toggled', 'updateDownsampling'),
-        ('avgParamList', 'itemClicked', 'avgParamListClicked'),
-        ('averageGroup', 'toggled', 'avgToggled'),
-        ('maxTracesCheck', 'toggled', '_handle_max_traces_toggle'),
-        ('forgetTracesCheck', 'toggled', 'updateDecimation'),
-        ('maxTracesSpin', 'valueChanged', 'updateDecimation'),
+        ("alphaGroup", "toggled", "updateAlpha"),
+        ("alphaSlider", "valueChanged", "updateAlpha"),
+        ("autoAlphaCheck", "toggled", "updateAlpha"),
+        ("xGridCheck", "toggled", "updateGrid"),
+        ("yGridCheck", "toggled", "updateGrid"),
+        ("gridAlphaSlider", "valueChanged", "updateGrid"),
+        ("fftCheck", "toggled", "updateSpectrumMode"),
+        ("logXCheck", "toggled", "updateLogMode"),
+        ("logYCheck", "toggled", "updateLogMode"),
+        ("derivativeCheck", "toggled", "updateDerivativeMode"),
+        ("phasemapCheck", "toggled", "updatePhasemapMode"),
+        ("downsampleSpin", "valueChanged", "updateDownsampling"),
+        ("downsampleCheck", "toggled", "updateDownsampling"),
+        ("autoDownsampleCheck", "toggled", "updateDownsampling"),
+        ("subsampleRadio", "toggled", "updateDownsampling"),
+        ("meanRadio", "toggled", "updateDownsampling"),
+        ("clipToViewCheck", "toggled", "updateDownsampling"),
+        ("avgParamList", "itemClicked", "avgParamListClicked"),
+        ("averageGroup", "toggled", "avgToggled"),
+        ("maxTracesCheck", "toggled", "_handle_max_traces_toggle"),
+        ("forgetTracesCheck", "toggled", "updateDecimation"),
+        ("maxTracesSpin", "valueChanged", "updateDecimation"),
     )
 
     @staticmethod
@@ -236,11 +235,10 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         does NOT emit a qWarning when the connection does not exist — the
         specific-slot form raises RuntimeError silently instead.
         """
-        ctrl = getattr(plot_item, 'ctrl', None)
+        ctrl = getattr(plot_item, "ctrl", None)
         if ctrl is None:
             return
-        for widget_attr, sig_name, method_name in \
-                SynaptipyPlotCanvas._CTRL_CONNECTIONS:
+        for widget_attr, sig_name, method_name in SynaptipyPlotCanvas._CTRL_CONNECTIONS:
             widget = getattr(ctrl, widget_attr, None)
             if widget is None:
                 continue
@@ -253,7 +251,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                     pass
         # autoBtn.clicked → autoBtnClicked (line 119 of PlotItem.__init__)
         try:
-            btn = getattr(plot_item, 'autoBtn', None)
+            btn = getattr(plot_item, "autoBtn", None)
             if btn is not None:
                 btn.clicked.disconnect(plot_item.autoBtnClicked)
         except (RuntimeError, TypeError, AttributeError):
@@ -293,7 +291,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         _unlink_all_plots() on macOS prevents new callbacks from queuing during
         widget.clear(), so no pre-clear drain is needed.
         """
-        if sys.platform == 'darwin':
+        if sys.platform == "darwin":
             return
         try:
             QtCore.QCoreApplication.processEvents()
@@ -316,7 +314,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         removePostedEvents is a no-op per _remove_posted_events() guard --
         this is the only safe drain path there.)
         """
-        if sys.platform == 'darwin':
+        if sys.platform == "darwin":
             try:
                 QtCore.QCoreApplication.processEvents()
             except Exception:
@@ -348,7 +346,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # all stretch factors to 0 before widget.clear() eliminates this.
         # macOS and Linux compositors recalculate geometry implicitly so the
         # reset is restricted to Windows to avoid disturbing their behaviour.
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             try:
                 _layout = self.widget.ci.layout
                 for _i in range(_layout.rowCount()):

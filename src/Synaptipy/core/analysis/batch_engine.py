@@ -10,19 +10,18 @@ Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 
 import logging
-import pandas as pd
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable, Union, Tuple
-
 import traceback  # Added for stack trace logging
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.data_model import Recording
+import pandas as pd
 
 # Import analysis package to trigger all registrations
 import Synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
+from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.data_model import Recording
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 log = logging.getLogger(__name__)
 
@@ -204,9 +203,9 @@ class BatchAnalysisEngine:
                     # As per plan, later steps consume data from previous steps if available.
                     # Currently, we'll support a 'channel_data' context.
                     pipeline_context = {
-                        "scope": None,   # Current scope of data in context
-                        "data": None,    # The data (array or list)
-                        "time": None,    # The time (array or list)
+                        "scope": None,  # Current scope of data in context
+                        "data": None,  # The data (array or list)
+                        "time": None,  # The time (array or list)
                     }
 
                     # Process each task in the pipeline
@@ -221,7 +220,7 @@ class BatchAnalysisEngine:
                                 channel=channel,
                                 channel_name=channel_name,
                                 file_path=file_path,
-                                context=pipeline_context
+                                context=pipeline_context,
                             )
 
                             # Update context if the task modified it (e.g. preprocessing)
@@ -275,12 +274,7 @@ class BatchAnalysisEngine:
         return df
 
     def _process_task(  # noqa: C901
-        self,
-        task: Dict[str, Any],
-        channel,
-        channel_name: str,
-        file_path: Path,
-        context: Dict[str, Any]
+        self, task: Dict[str, Any], channel, channel_name: str, file_path: Path, context: Dict[str, Any]
     ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """
         Process a single analysis task on a channel, supporting preprocessing.
@@ -342,6 +336,7 @@ class BatchAnalysisEngine:
                 # context['data'] is list of arrays
                 try:
                     import numpy as np
+
                     # Assume equal length for averaging - simplified for now
                     # In production, check lengths or align
                     if len(context["data"]) > 0:
@@ -391,13 +386,15 @@ class BatchAnalysisEngine:
 
         # Validation
         if data is None or (isinstance(data, list) and len(data) == 0):
-            return [{
-                "file_name": file_path.name,
-                "file_path": str(file_path),
-                "channel": channel_name,
-                "analysis": analysis_name,
-                "error": "No data available",
-            }], None
+            return [
+                {
+                    "file_name": file_path.name,
+                    "file_path": str(file_path),
+                    "channel": channel_name,
+                    "analysis": analysis_name,
+                    "error": "No data available",
+                }
+            ], None
 
         # --- Execution ---
 
@@ -430,20 +427,14 @@ class BatchAnalysisEngine:
                     modified_time = time
 
                 # Return empty results, but updated context
-                new_context = {
-                    "scope": scope,
-                    "data": modified_data,
-                    "time": modified_time
-                }
+                new_context = {"scope": scope, "data": modified_data, "time": modified_time}
                 return [], new_context
 
             except Exception as e:
                 log.error(f"Preprocessing failed: {e}", exc_info=True)
-                return [{
-                    "file_name": file_path.name,
-                    "analysis": analysis_name,
-                    "error": f"Preprocessing failed: {e}"
-                }], None
+                return [
+                    {"file_name": file_path.name, "analysis": analysis_name, "error": f"Preprocessing failed: {e}"}
+                ], None
 
         else:
             # Standard Analysis
@@ -456,14 +447,16 @@ class BatchAnalysisEngine:
 
                     res = analysis_func(d, t, sampling_rate, **p)
                     # Add metadata
-                    res.update({
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "sampling_rate": sampling_rate
-                    })
+                    res.update(
+                        {
+                            "file_name": file_path.name,
+                            "file_path": str(file_path),
+                            "channel": channel_name,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "sampling_rate": sampling_rate,
+                        }
+                    )
                     if trial_idx is not None:
                         res["trial_index"] = trial_idx
                     return res
@@ -478,14 +471,16 @@ class BatchAnalysisEngine:
                     if scope == "channel_set":
                         # Pass full list
                         res = analysis_func(data, time, sampling_rate, **params)
-                        res.update({
-                            "file_name": file_path.name,
-                            "file_path": str(file_path),
-                            "channel": channel_name,
-                            "analysis": analysis_name,
-                            "scope": scope,
-                            "trial_count": len(data) if isinstance(data, list) else 1,
-                        })
+                        res.update(
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "trial_count": len(data) if isinstance(data, list) else 1,
+                            }
+                        )
                         results.append(res)
                     else:
                         # Iterate 'all_trials'
@@ -503,8 +498,6 @@ class BatchAnalysisEngine:
 
             except Exception as e:
                 log.error(f"Analysis failed: {e}", exc_info=True)
-                return [{
-                    "file_name": file_path.name,
-                    "analysis": analysis_name,
-                    "error": f"Analysis failed: {e}"
-                }], None
+                return [
+                    {"file_name": file_path.name, "analysis": analysis_name, "error": f"Analysis failed: {e}"}
+                ], None

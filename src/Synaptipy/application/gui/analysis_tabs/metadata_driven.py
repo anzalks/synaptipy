@@ -16,10 +16,11 @@ from the AnalysisRegistry.  It also provides built-in support for:
 * **Result-aware h-lines**: horizontal lines positioned by result dict keys.
 """
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
 import numpy as np
-from PySide6 import QtWidgets, QtCore
 import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -277,9 +278,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._secondary_channel_combobox = QtWidgets.QComboBox()
             self._secondary_channel_combobox.setToolTip(tooltip)
             self._secondary_channel_combobox.setEnabled(False)
-            self._secondary_channel_combobox.currentIndexChanged.connect(
-                self._on_param_changed
-            )
+            self._secondary_channel_combobox.currentIndexChanged.connect(self._on_param_changed)
             layout.addRow(label, self._secondary_channel_combobox)
 
         # --- Region selection mode (Interactive / Manual) ---
@@ -294,10 +293,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             ("response_steady_start_s", "response_steady_end_s"),
         ]
         ui_param_names = {p.get("name") for p in self.metadata.get("ui_params", [])}
-        has_regions = any(
-            s in ui_param_names and e in ui_param_names
-            for s, e in region_param_names
-        )
+        has_regions = any(s in ui_param_names and e in ui_param_names for s, e in region_param_names)
         if has_regions:
             self._region_mode_combo = QtWidgets.QComboBox()
             self._region_mode_combo.addItems(["Interactive", "Manual"])
@@ -305,9 +301,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 "Interactive: drag regions on the plot to set windows.\n"
                 "Manual: type start/end values in the spinboxes directly."
             )
-            self._region_mode_combo.currentIndexChanged.connect(
-                self._on_region_mode_changed
-            )
+            self._region_mode_combo.currentIndexChanged.connect(self._on_region_mode_changed)
             layout.addRow("Region Mode:", self._region_mode_combo)
 
     def _on_method_selector_changed(self):
@@ -361,8 +355,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             if ptype == "event_markers":
                 self._event_markers_item = pg.ScatterPlotItem(
-                    size=10, pen=pg.mkPen(None),
-                    brush=pg.mkBrush(255, 0, 0, 150))
+                    size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)
+                )
                 self.plot_widget.addItem(self._event_markers_item)
                 self._event_markers_item.setVisible(False)
                 self._event_markers_item.setZValue(100)
@@ -372,8 +366,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif ptype == "threshold_line":
                 param_key = pcfg.get("param", "threshold")
                 self._threshold_line = pg.InfiniteLine(
-                    angle=0, movable=True,
-                    pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine))
+                    angle=0, movable=True, pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine)
+                )
                 self.plot_widget.addItem(self._threshold_line)
                 self._threshold_line.setZValue(90)
 
@@ -390,8 +384,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self._threshold_line.sigPositionChangeFinished.connect(_on_threshold_dragged)
 
             elif ptype == "artifact_overlay":
-                self._artifact_curve_item = pg.PlotCurveItem(
-                    pen=pg.mkPen(color=(60, 179, 113, 200), width=3))
+                self._artifact_curve_item = pg.PlotCurveItem(pen=pg.mkPen(color=(60, 179, 113, 200), width=3))
                 self.plot_widget.addItem(self._artifact_curve_item)
                 self._artifact_curve_item.setVisible(False)
                 self._artifact_curve_item.setZValue(80)
@@ -422,7 +415,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 region = pg.LinearRegionItem(
                     values=[start_w.value(), end_w.value()],
                     brush=pg.mkBrush(*color_tuple, 50),
-                    pen=pg.mkPen(*color_tuple, 200)
+                    pen=pg.mkPen(*color_tuple, 200),
                 )
                 self.plot_widget.addItem(region)
                 self._interactive_regions[start_key] = region
@@ -692,7 +685,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         else:
             log.warning(
                 "Could not load data from secondary channel '%s' trial %d.",
-                sec_chan_id, trial_index,
+                sec_chan_id,
+                trial_index,
             )
 
     def _on_channel_changed(self, index=None):
@@ -724,8 +718,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             # Fetch channel object
             channel = None
-            if (channel_name and self._selected_item_recording
-                    and channel_name in self._selected_item_recording.channels):
+            if (
+                channel_name
+                and self._selected_item_recording
+                and channel_name in self._selected_item_recording.channels
+            ):
                 channel = self._selected_item_recording.channels[channel_name]
 
             if channel:
@@ -760,8 +757,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             is_voltage_clamp = False
             if self.signal_channel_combobox:
                 channel_name = self.signal_channel_combobox.currentData()
-                if (channel_name and self._selected_item_recording
-                        and channel_name in self._selected_item_recording.channels):
+                if (
+                    channel_name
+                    and self._selected_item_recording
+                    and channel_name in self._selected_item_recording.channels
+                ):
                     ch = self._selected_item_recording.channels[channel_name]
                     units = ch.units or "V"
                     if "A" in units or "amp" in units.lower():
@@ -1080,8 +1080,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         valid = valid[(valid >= 0) & (valid < len(data_arr))]
                         if len(valid) > 0:
                             scatter = pg.ScatterPlotItem(
-                                x=time_arr[valid], y=data_arr[valid],
-                                size=8, pen=pg.mkPen(None),
+                                x=time_arr[valid],
+                                y=data_arr[valid],
+                                size=8,
+                                pen=pg.mkPen(None),
                                 brush=pg.mkBrush(255, 0, 0, 180),
                             )
                             scatter.setZValue(50)
@@ -1102,11 +1104,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         prev = np.clip(idx - 1, 0, len(time_arr) - 1)
                         idx = np.where(
                             np.abs(time_arr[prev] - ev_arr) < np.abs(time_arr[idx] - ev_arr),
-                            prev, idx,
+                            prev,
+                            idx,
                         )
                         scatter = pg.ScatterPlotItem(
-                            x=time_arr[idx], y=data_arr[idx],
-                            size=10, pen=pg.mkPen(None),
+                            x=time_arr[idx],
+                            y=data_arr[idx],
+                            size=10,
+                            pen=pg.mkPen(None),
                             brush=pg.mkBrush(255, 165, 0, 200),
                             symbol="t",
                         )
@@ -1133,10 +1138,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         y_key = cfg.get("y")
         x_data = self._val(result, x_key, [])
         y_data = self._val(result, y_key, [])
-        if hasattr(x_data, '__len__') and hasattr(y_data, '__len__') and len(x_data) > 0 and len(y_data) > 0:
+        if hasattr(x_data, "__len__") and hasattr(y_data, "__len__") and len(x_data) > 0 and len(y_data) > 0:
             color = cfg.get("color", "r")
-            scatter = pg.ScatterPlotItem(x=x_data, y=y_data, size=10,
-                                         pen=pg.mkPen(None), brush=pg.mkBrush(color))
+            scatter = pg.ScatterPlotItem(x=x_data, y=y_data, size=10, pen=pg.mkPen(None), brush=pg.mkBrush(color))
             self.plot_widget.addItem(scatter)
             self._dynamic_plot_items.append(scatter)
 
@@ -1154,16 +1158,18 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         color = cfg.get("color", "r")
         for burst_spikes in bursts:
             if len(burst_spikes) >= 2:
-                item = pg.PlotCurveItem([burst_spikes[0], burst_spikes[-1]], [y_offset, y_offset],
-                                        pen=pg.mkPen(color, width=3))
+                item = pg.PlotCurveItem(
+                    [burst_spikes[0], burst_spikes[-1]], [y_offset, y_offset], pen=pg.mkPen(color, width=3)
+                )
                 self.plot_widget.addItem(item)
                 self._dynamic_plot_items.append(item)
                 if self._current_plot_data:
                     tv = self._current_plot_data["time"]
                     vv = self._current_plot_data["data"]
                     si = np.clip(np.searchsorted(tv, burst_spikes), 0, len(vv) - 1)
-                    scatter = pg.ScatterPlotItem(x=burst_spikes, y=vv[si], size=8,
-                                                 pen=pg.mkPen(None), brush=pg.mkBrush(color))
+                    scatter = pg.ScatterPlotItem(
+                        x=burst_spikes, y=vv[si], size=8, pen=pg.mkPen(None), brush=pg.mkBrush(color)
+                    )
                     self.plot_widget.addItem(scatter)
                     self._dynamic_plot_items.append(scatter)
 
@@ -1210,14 +1216,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             if hasattr(self, "param_generator"):
                 self.param_generator.set_params({param_keys[0]: mn, param_keys[1]: mx})
                 self._on_param_changed()
+
         region.sigRegionChanged.connect(on_region_changed)
 
     def _viz_event_markers(self, cfg, result):
         """Update interactive event markers from result."""
         is_obj = hasattr(result, "event_indices")
         event_indices = (
-            result.event_indices if is_obj
-            else (result.get("event_indices") if isinstance(result, dict) else None)
+            result.event_indices if is_obj else (result.get("event_indices") if isinstance(result, dict) else None)
         )
 
         if event_indices is not None:
@@ -1280,7 +1286,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         y_data = self._val(result, y_key)
         if x_data is None or y_data is None:
             return
-        if not hasattr(x_data, '__len__') or len(x_data) == 0:
+        if not hasattr(x_data, "__len__") or len(x_data) == 0:
             return
         color = cfg.get("color", "r")
         width = cfg.get("width", 2)
@@ -1312,7 +1318,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._popup_plot = self.create_popup_plot(title, x_label, y_label)
             self._popup_curves["scatter"] = self._popup_plot.plot(pen=None, symbol="o", symbolBrush="b")
             self._popup_curves["fit"] = self._popup_plot.plot(
-                pen=pg.mkPen("r", width=2, style=QtCore.Qt.PenStyle.DashLine))
+                pen=pg.mkPen("r", width=2, style=QtCore.Qt.PenStyle.DashLine)
+            )
 
         self._popup_curves["scatter"].setData(px, py)
 
@@ -1343,9 +1350,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._popup_plot = self.create_popup_plot(title, "Voltage (mV)", "dV/dt (V/s)")
             self._popup_curves["phase"] = self._popup_plot.plot(pen="b", name="Phase Loop")
             self._popup_curves["thresh_marker"] = self._popup_plot.plot(
-                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold")
+                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"
+            )
             self._popup_curves["max_marker"] = self._popup_plot.plot(
-                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt")
+                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt"
+            )
 
         min_len = min(len(voltage), len(dvdt))
         self._popup_curves["phase"].setData(np.array(voltage)[:min_len], np.array(dvdt)[:min_len])

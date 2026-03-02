@@ -11,6 +11,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 from pathlib import Path
+
 from PySide6 import QtCore, QtGui, QtWidgets
 
 log = logging.getLogger(__name__)

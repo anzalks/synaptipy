@@ -7,6 +7,7 @@ Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 import logging
 import sys
 from typing import Dict, List
+
 import pyqtgraph as pg
 
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
@@ -125,7 +126,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         # One call here replaces N per-plot deferred timers whose unpredictable
         # firing times caused races with rapid file cycling on Windows.
         # macOS and Linux compositors handle the re-layout pass implicitly.
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             try:
                 internal_layout = self.widget.ci.layout
                 for row_idx in range(len(channel_keys)):

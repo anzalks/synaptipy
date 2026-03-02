@@ -1,4 +1,5 @@
 import pytest
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 
@@ -53,7 +54,9 @@ def test_spike_detection_metadata():
     """Test that spike_detection has the correct metadata (integration test)."""
     # Re-import to ensure registration runs after clear()
     import importlib
+
     import Synaptipy.core.analysis.spike_analysis as sa
+
     importlib.reload(sa)
 
     metadata = AnalysisRegistry.get_metadata("spike_detection")
@@ -117,15 +120,16 @@ def test_full_package_import_populates_registry():
     analyser_tab._load_analysis_tabs() added to fix the Windows bug.
     """
     import importlib
+
     import Synaptipy.core.analysis.basic_features as m0
-    import Synaptipy.core.analysis.spike_analysis as m1
-    import Synaptipy.core.analysis.intrinsic_properties as m2
-    import Synaptipy.core.analysis.event_detection as m3
-    import Synaptipy.core.analysis.phase_plane as m4
     import Synaptipy.core.analysis.burst_analysis as m5
-    import Synaptipy.core.analysis.excitability as m6
     import Synaptipy.core.analysis.capacitance as m7
+    import Synaptipy.core.analysis.event_detection as m3
+    import Synaptipy.core.analysis.excitability as m6
+    import Synaptipy.core.analysis.intrinsic_properties as m2
     import Synaptipy.core.analysis.optogenetics as m8
+    import Synaptipy.core.analysis.phase_plane as m4
+    import Synaptipy.core.analysis.spike_analysis as m1
     import Synaptipy.core.analysis.train_dynamics as m9
 
     for module in (m0, m1, m2, m3, m4, m5, m6, m7, m8, m9):
@@ -146,7 +150,9 @@ def test_registry_only_import_does_not_populate():
     does NOT register any built-in analyses.  The autouse fixture already cleared the
     registry, so we just check it is still empty after a registry-only re-import."""
     import importlib
+
     import Synaptipy.core.analysis.registry as reg_mod
+
     importlib.reload(reg_mod)
 
     registered = AnalysisRegistry.list_registered()

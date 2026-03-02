@@ -13,10 +13,10 @@ from Synaptipy.core.analysis.optogenetics import (
     run_opto_sync_wrapper,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ttl(sampling_rate: float, duration: float, onsets: list, pulse_duration: float = 0.01):
     """Create a synthetic TTL square-wave signal (0 / 5 V)."""
@@ -43,6 +43,7 @@ def _make_spikes_at(sampling_rate: float, duration: float, spike_times: list, am
 # ---------------------------------------------------------------------------
 # extract_ttl_epochs
 # ---------------------------------------------------------------------------
+
 
 class TestExtractTTLEpochs:
     def test_basic_onsets_offsets(self):
@@ -75,14 +76,14 @@ class TestExtractTTLEpochs:
 # run_opto_sync_wrapper – Spikes mode (default)
 # ---------------------------------------------------------------------------
 
+
 class TestOptoSyncWrapperSpikes:
     def test_returns_keys(self):
         sr = 10_000.0
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.2, 0.5, 0.8], pulse_duration=0.02)
         _, data = _make_spikes_at(sr, 1.0, spike_times=[0.205, 0.505, 0.805])
 
-        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes",
-                                       spike_threshold=-10.0)
+        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=-10.0)
 
         assert "optical_latency_ms" in result
         assert "response_probability" in result
@@ -98,8 +99,9 @@ class TestOptoSyncWrapperSpikes:
         # Spike 5 ms after each onset (within default 20 ms window)
         _, data = _make_spikes_at(sr, 1.0, spike_times=[0.205, 0.505, 0.805])
 
-        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes",
-                                       spike_threshold=-10.0, response_window_ms=20.0)
+        result = run_opto_sync_wrapper(
+            data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=-10.0, response_window_ms=20.0
+        )
 
         assert result.get("response_probability") == pytest.approx(1.0, abs=0.01)
 
@@ -109,8 +111,7 @@ class TestOptoSyncWrapperSpikes:
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.2, 0.5], pulse_duration=0.02)
         data = np.full_like(t, -65.0)  # flat – no spikes
 
-        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes",
-                                       spike_threshold=0.0)
+        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=0.0)
 
         # Response probability should be 0
         assert result.get("response_probability") == pytest.approx(0.0)
@@ -120,6 +121,7 @@ class TestOptoSyncWrapperSpikes:
 # run_opto_sync_wrapper – Events (Threshold) mode
 # ---------------------------------------------------------------------------
 
+
 class TestOptoSyncWrapperEventsThreshold:
     def test_returns_keys(self):
         sr = 10_000.0
@@ -128,11 +130,13 @@ class TestOptoSyncWrapperEventsThreshold:
         data = np.zeros_like(t)
         for onset in [0.205, 0.505, 0.805]:
             idx = int(onset * sr)
-            width = int(0.010 * sr)   # 10 ms event
-            data[idx: idx + width] = np.linspace(0, -10, width)
+            width = int(0.010 * sr)  # 10 ms event
+            data[idx : idx + width] = np.linspace(0, -10, width)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Events (Threshold)",
             event_threshold=5.0,
@@ -151,7 +155,9 @@ class TestOptoSyncWrapperEventsThreshold:
         data = np.zeros_like(t)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Events (Threshold)",
             event_threshold=5.0,
@@ -166,6 +172,7 @@ class TestOptoSyncWrapperEventsThreshold:
 # run_opto_sync_wrapper – Events (Template) mode
 # ---------------------------------------------------------------------------
 
+
 class TestOptoSyncWrapperEventsTemplate:
     def test_returns_keys(self):
         sr = 10_000.0
@@ -173,7 +180,9 @@ class TestOptoSyncWrapperEventsTemplate:
         data = np.zeros_like(t)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Events (Template)",
             template_tau_rise_ms=0.5,
@@ -192,7 +201,9 @@ class TestOptoSyncWrapperEventsTemplate:
         data = np.zeros_like(t)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Nonexistent Type",
         )

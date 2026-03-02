@@ -10,9 +10,10 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-from typing import Dict, Any, Optional
-from PySide6 import QtCore
+from typing import Any, Dict, Optional
+
 import pyqtgraph as pg
+from PySide6 import QtCore
 
 from Synaptipy.shared.constants import APP_NAME
 
@@ -101,7 +102,7 @@ class PlotCustomizationManager:
         """Set default plotting preferences."""
         # Import original constants to maintain backward compatibility
         try:
-            from .constants import TRIAL_COLOR, AVERAGE_COLOR, TRIAL_ALPHA
+            from .constants import AVERAGE_COLOR, TRIAL_ALPHA, TRIAL_COLOR
 
             # Convert RGB tuple to hex string
             if isinstance(TRIAL_COLOR, (tuple, list)) and len(TRIAL_COLOR) >= 3:
@@ -384,8 +385,7 @@ class PlotCustomizationManager:
             return True  # Assume changed if we can't check
 
     def update_preferences_batch(  # noqa: C901
-        self, new_preferences: Dict[str, Dict[str, Any]],
-        emit_signal: bool = True
+        self, new_preferences: Dict[str, Dict[str, Any]], emit_signal: bool = True
     ):
         """Update multiple preferences at once and optionally emit signal."""
         try:
@@ -704,12 +704,12 @@ def apply_plot_theme(plot_widget, background_color: str = "white", axis_color: s
 
     try:
         # Set background color on ViewBox
-        vb = plot_widget.getViewBox() if hasattr(plot_widget, 'getViewBox') else None
+        vb = plot_widget.getViewBox() if hasattr(plot_widget, "getViewBox") else None
         if vb:
             vb.setBackgroundColor(background_color)
 
         # Get axes
-        axes = ['bottom', 'left', 'top', 'right']
+        axes = ["bottom", "left", "top", "right"]
         for axis_name in axes:
             try:
                 axis = plot_widget.getAxis(axis_name)
@@ -728,7 +728,7 @@ def apply_plot_theme(plot_widget, background_color: str = "white", axis_color: s
 
         # Set title color if exists
         title_item = plot_widget.titleLabel
-        if hasattr(title_item, 'setDefaultTextColor'):
+        if hasattr(title_item, "setDefaultTextColor"):
             title_item.setDefaultTextColor(QColor(axis_color))
 
         log.debug(f"Applied plot theme to {type(plot_widget).__name__}")

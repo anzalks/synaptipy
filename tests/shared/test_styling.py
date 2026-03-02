@@ -4,9 +4,9 @@ Unit tests for the styling module.
 
 Tests the styling constants, theme values, and functions for consistency.
 """
+import os
 import unittest
 from unittest.mock import MagicMock
-import os
 
 # Check if running in CI/headless environment
 IS_HEADLESS = os.environ.get("CI") or not os.environ.get("DISPLAY")
@@ -14,7 +14,7 @@ IS_HEADLESS = os.environ.get("CI") or not os.environ.get("DISPLAY")
 # Import Qt components only if not in a headless environment
 QT_AVAILABLE = False
 try:
-    from PySide6 import QtWidgets, QtGui, QtCore
+    from PySide6 import QtCore, QtGui, QtWidgets
 
     QT_AVAILABLE = True
 except ImportError:
@@ -35,13 +35,13 @@ except ImportError:
 # Import styling module - this should always succeed
 from Synaptipy.shared.styling import (  # noqa: E402
     PLOT_COLORS,
-    get_trial_pen,
+    configure_plot_widget,
     get_average_pen,
     get_grid_pen,
-    configure_plot_widget,
+    get_system_theme_mode,
+    get_trial_pen,
     style_button,
     style_label,
-    get_system_theme_mode,
 )
 
 

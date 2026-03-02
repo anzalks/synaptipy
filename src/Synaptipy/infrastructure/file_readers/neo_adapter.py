@@ -22,25 +22,26 @@ __copyright__ = "Copyright 2024-, Anzal K Shahul"
 __maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
-import sys
 import logging
+import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Tuple
+from typing import Dict, List, Optional, Tuple, Type
 
 import neo  # Added missing import
 import neo.io as nIO  # Keep original import style
 import numpy as np
 
+from Synaptipy.core.data_model import Channel, Recording
+from Synaptipy.core.signal_processor import validate_sampling_rate
+
 # Import from our package structure
 from Synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
-from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.shared.error_handling import (
     FileReadError,
-    UnsupportedFormatError,
     SynaptipyFileNotFoundError,
     UnitError,
+    UnsupportedFormatError,
 )
-from Synaptipy.core.signal_processor import validate_sampling_rate
 
 # Apply Patches
 try:
@@ -135,22 +136,14 @@ class NeoAdapter:
         extension = filepath.suffix.lower().lstrip(".")
         log.debug(f"Attempting to find IO for extension: '{extension}'")
 
-        available_io_names = [
-            io_name for io_name, exts in IODict.items() if extension in exts
-        ]
+        available_io_names = [io_name for io_name, exts in IODict.items() if extension in exts]
 
         if not available_io_names:
-            raise UnsupportedFormatError(
-                f"Unsupported file extension '.{extension}'. No suitable IO found in IODict."
-            )
+            raise UnsupportedFormatError(f"Unsupported file extension '.{extension}'. No suitable IO found in IODict.")
 
         selected_io_name = available_io_names[0]
         if len(available_io_names) > 1:
-            if (
-                extension == "abf"
-                and "AxonIO" in available_io_names
-                and "StimfitIO" in available_io_names
-            ):
+            if extension == "abf" and "AxonIO" in available_io_names and "StimfitIO" in available_io_names:
                 selected_io_name = "AxonIO"
                 log.warning(
                     f"Multiple IOs support '.{extension}' ({available_io_names}). Prioritizing '{selected_io_name}'."
@@ -161,27 +154,17 @@ class NeoAdapter:
                     f"Using first match: '{selected_io_name}'."
                 )
         else:
-            log.debug(
-                f"Selected Neo IO: '{selected_io_name}' for file extension '.{extension}'."
-            )
+            log.debug(f"Selected Neo IO: '{selected_io_name}' for file extension '.{extension}'.")
 
         try:
             io_class = getattr(nIO, selected_io_name)
             return io_class
         except AttributeError:
-            log.error(
-                f"Internal IODict Error: IO class name '{selected_io_name}' not found in neo.io module."
-            )
-            raise ValueError(
-                f"Invalid IO class name '{selected_io_name}' defined in IODict."
-            )
+            log.error(f"Internal IODict Error: IO class name '{selected_io_name}' not found in neo.io module.")
+            raise ValueError(f"Invalid IO class name '{selected_io_name}' defined in IODict.")
         except Exception as e:
-            log.error(
-                f"Unexpected error retrieving Neo IO class '{selected_io_name}': {e}"
-            )
-            raise FileReadError(
-                f"Error accessing Neo IO class '{selected_io_name}': {e}"
-            )
+            log.error(f"Unexpected error retrieving Neo IO class '{selected_io_name}': {e}")
+            raise FileReadError(f"Error accessing Neo IO class '{selected_io_name}': {e}")
 
     def get_supported_file_filter(self) -> str:
         """Generates a file filter string for QFileDialog based on the IODict."""
@@ -195,9 +178,7 @@ class NeoAdapter:
                 continue
 
             wildcard_exts = [
-                f"*.{ext.lower()}"
-                for ext in extensions
-                if ext and isinstance(ext, str) and "." not in ext
+                f"*.{ext.lower()}" for ext in extensions if ext and isinstance(ext, str) and "." not in ext
             ]
             if not wildcard_exts:
                 continue
@@ -208,9 +189,7 @@ class NeoAdapter:
             all_exts_wildcard.update(wildcard_exts)
 
         if all_exts_wildcard:
-            all_supported_entry = (
-                f"All Supported Files ({' '.join(sorted(list(all_exts_wildcard)))})"
-            )
+            all_supported_entry = f"All Supported Files ({' '.join(sorted(list(all_exts_wildcard)))})"
             filters.insert(0, all_supported_entry)
 
         filters.append("All Files (*)")
@@ -229,9 +208,7 @@ class NeoAdapter:
                     all_exts.add(ext.lower())
         return sorted(list(all_exts))
 
-    def _extract_axon_metadata(  # noqa: C901
-        self, reader: nIO.AxonIO
-    ) -> Tuple[Optional[str], Optional[float]]:
+    def _extract_axon_metadata(self, reader: nIO.AxonIO) -> Tuple[Optional[str], Optional[float]]:  # noqa: C901
         """Extracts protocol name and estimated injected current range specifically for AxonIO."""
         protocol_name: Optional[str] = None
         injected_current: Optional[float] = None
@@ -242,11 +219,7 @@ class NeoAdapter:
 
         # --- Protocol Name ---
         try:
-            if (
-                hasattr(reader, "_axon_info")
-                and reader._axon_info
-                and "sProtocolPath" in reader._axon_info
-            ):
+            if hasattr(reader, "_axon_info") and reader._axon_info and "sProtocolPath" in reader._axon_info:
                 protocol_path_raw = reader._axon_info["sProtocolPath"]
                 protocol_path = (
                     protocol_path_raw.decode("utf-8", "ignore")
@@ -255,9 +228,7 @@ class NeoAdapter:
                 )
                 if protocol_path and protocol_path.strip():
                     filename = protocol_path.split("\\")[-1].split("/")[-1]
-                    protocol_name = (
-                        filename.rsplit(".", 1)[0] if "." in filename else filename
-                    )
+                    protocol_name = filename.rsplit(".", 1)[0] if "." in filename else filename
                     log.debug(f"Extracted protocol name: {protocol_name}")
                 else:
                     log.debug("Axon header 'sProtocolPath' is present but empty.")
@@ -274,15 +245,10 @@ class NeoAdapter:
                 if isinstance(protocol_raw_list, list) and protocol_raw_list:
                     all_command_signals = []
                     for seg_protocol in protocol_raw_list:
-                        if (
-                            isinstance(seg_protocol, (list, tuple))
-                            and len(seg_protocol) > 0
-                        ):
+                        if isinstance(seg_protocol, (list, tuple)) and len(seg_protocol) > 0:
                             command_signal_data = seg_protocol[0]
                             if isinstance(command_signal_data, (np.ndarray, list)):
-                                command_signal_array = np.asarray(
-                                    command_signal_data
-                                ).ravel()
+                                command_signal_array = np.asarray(command_signal_data).ravel()
                                 if command_signal_array.size > 0:
                                     all_command_signals.append(command_signal_array)
                     # --- Corrected Indentation for Current Calculation --- START ---
@@ -291,13 +257,9 @@ class NeoAdapter:
                         if all_command_points.size > 0:
                             current_range = np.ptp(all_command_points)
                             injected_current = np.around(current_range, decimals=3)
-                            log.debug(
-                                f"Estimated injected current range (PTP): {injected_current}"
-                            )
+                            log.debug(f"Estimated injected current range (PTP): {injected_current}")
                         else:
-                            log.debug(
-                                "Concatenated command signals were empty."
-                            )  # Aligned with inner if
+                            log.debug("Concatenated command signals were empty.")  # Aligned with inner if
                     else:
                         log.debug(
                             "No suitable command signals found in protocol structure."
@@ -308,9 +270,7 @@ class NeoAdapter:
                         "'read_raw_protocol()' returned empty list or non-list structure."
                     )  # Aligned with outer if
             else:
-                log.debug(
-                    "AxonIO reader instance does not have 'read_raw_protocol()' method."
-                )  # Aligned with hasattr
+                log.debug("AxonIO reader instance does not have 'read_raw_protocol()' method.")  # Aligned with hasattr
         except (KeyError, TypeError, ValueError, IndexError) as e:
             log.warning(f"Failed during injected current estimation: {e}")
             injected_current = None
@@ -328,9 +288,7 @@ class NeoAdapter:
         Reads any neo-supported electrophysiology file and translates it into a
         robust Recording object. This is the definitive, file-format-agnostic implementation.
         """
-        log.debug(
-            f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})"
-        )
+        log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
         filepath = Path(filepath)
         io_class = self._get_neo_io_class(filepath)
         try:
@@ -360,9 +318,7 @@ class NeoAdapter:
         recording = Recording(source_file=filepath)
         if hasattr(block, "rec_datetime") and block.rec_datetime:
             recording.session_start_time_dt = block.rec_datetime
-            log.debug(
-                f"Extracted session start time: {recording.session_start_time_dt}"
-            )
+            log.debug(f"Extracted session start time: {recording.session_start_time_dt}")
 
         # --- Definitive Universal Header-First Data Loading Strategy ---
 
@@ -380,9 +336,7 @@ class NeoAdapter:
 
         # Stage 2: Aggregate data into the discovered channels.
         for seg_idx, segment in enumerate(block.segments):
-            log.debug(
-                f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals"
-            )
+            log.debug(f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals")
             # Pass handle_map to extract logic
             self._process_segment_signals(
                 segment, seg_idx, channel_metadata_map, lazy, channel_whitelist, handle_map, force_kHz_to_Hz
@@ -414,9 +368,7 @@ class NeoAdapter:
                     # Approximation using Neo Block structure
                     if len(block.segments) > 0 and len(block.segments[0].analogsignals) > 0:
                         sig = block.segments[0].analogsignals[0]
-                        recording.duration = (
-                            float(sig.duration) if hasattr(sig, 'duration') else 0.0
-                        )
+                        recording.duration = float(sig.duration) if hasattr(sig, "duration") else 0.0
                 except Exception as e:
                     log.debug(f"Could not extract recording duration: {e}")
 
@@ -424,9 +376,7 @@ class NeoAdapter:
         # recording.neo_block = block # REMOVED: Replaced by source_handle
         recording.channels = {ch.id: ch for ch in created_channels}
 
-        log.debug(
-            f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}"
-        )
+        log.debug(f"Translation complete. Loaded {len(recording.channels)} channel(s). Lazy: {lazy}")
         return recording
 
     # --- Refactored Helper Methods ---
@@ -434,14 +384,10 @@ class NeoAdapter:
     def _discover_channels_from_header(self, reader, num_segments: int, lazy: bool) -> Dict[str, Dict]:
         """Stage 1: Discover ALL potential channels from the header first."""
         channel_metadata_map: Dict[str, Dict] = {}
-        header_channels = (
-            reader.header.get("signal_channels") if hasattr(reader, "header") else None
-        )
+        header_channels = reader.header.get("signal_channels") if hasattr(reader, "header") else None
 
         if header_channels is not None and len(header_channels) > 0:
-            log.debug(
-                f"Header found. Discovering channels from {type(header_channels)}."
-            )
+            log.debug(f"Header found. Discovering channels from {type(header_channels)}.")
             for i, ch_info in enumerate(header_channels):
                 ch_id = (
                     str(ch_info.get("id", i))
@@ -454,9 +400,7 @@ class NeoAdapter:
                     if "name" in ch_info.dtype.names and ch_info["name"]:
                         ch_name_raw = ch_info["name"]
                         ch_name = (
-                            ch_name_raw.decode().strip()
-                            if isinstance(ch_name_raw, bytes)
-                            else str(ch_name_raw).strip()
+                            ch_name_raw.decode().strip() if isinstance(ch_name_raw, bytes) else str(ch_name_raw).strip()
                         )
                     else:
                         ch_name = f"Channel {ch_id}"
@@ -486,9 +430,7 @@ class NeoAdapter:
     ):
         """Stage 2: Process signals in a segment and update the metadata map."""
         for anasig_idx, anasig in enumerate(segment.analogsignals):
-            if not isinstance(
-                anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)
-            ):
+            if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
                 continue
 
             # Extract channel ID with fallbacks
@@ -497,10 +439,7 @@ class NeoAdapter:
                 anasig_id = str(anasig.annotations["channel_id"])
             elif hasattr(anasig, "channel_index") and anasig.channel_index is not None:
                 anasig_id = str(anasig.channel_index)
-            elif (
-                hasattr(anasig, "array_annotations")
-                and "channel_id" in anasig.array_annotations
-            ):
+            elif hasattr(anasig, "array_annotations") and "channel_id" in anasig.array_annotations:
                 anasig_id = str(anasig.array_annotations["channel_id"][0])
             else:
                 anasig_id = str(anasig_idx)
@@ -540,10 +479,7 @@ class NeoAdapter:
                 # Note: Currently Synaptipy treats each AnalogSignal as a channel usually,
                 # unless we are splitting columns.
                 # Assuming 1 AnalogSignal = 1 Channel for now as per previous logic.
-                handle_map[anasig_id] = {
-                    "signal_index": anasig_idx,
-                    "channel_offset": 0  # Default to 0
-                }
+                handle_map[anasig_id] = {"signal_index": anasig_idx, "channel_offset": 0}  # Default to 0
 
             # Extract Data/Ref
             if lazy:
@@ -645,8 +581,10 @@ class NeoAdapter:
                     if not force_kHz_to_Hz and fs < 100.0:
                         # Strict Scientific Safety Rule:
                         # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
-                        raise UnitError(f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
-                                        f"Check if units are in kHz.")
+                        raise UnitError(
+                            f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
+                            f"Check if units are in kHz."
+                        )
                 except UnitError:
                     raise
                 except Exception as e:
@@ -655,9 +593,7 @@ class NeoAdapter:
                         raise
                     log.debug(f"Skipped non-critical error during data loading: {e}")
 
-    def _build_channels(
-        self, channel_metadata_map: Dict[str, Dict], lazy: bool, recording: Recording
-    ) -> List[Channel]:
+    def _build_channels(self, channel_metadata_map: Dict[str, Dict], lazy: bool, recording: Recording) -> List[Channel]:
         """Stage 3: Create Channel objects from the populated metadata map."""
         created_channels: List[Channel] = []
 

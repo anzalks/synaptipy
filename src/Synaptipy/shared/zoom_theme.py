@@ -10,6 +10,7 @@ See the LICENSE file in the root of the repository for full license details.
 """
 
 import logging
+
 # from typing import Optional
 import shiboken6
 
@@ -23,8 +24,8 @@ _PATCHED_CLASSES = set()
 
 def _build_cached_pen_brush():
     """Create and cache the pen/brush from current system accent color."""
-    from PySide6.QtGui import QPen, QBrush, QColor
     from PySide6.QtCore import Qt
+    from PySide6.QtGui import QBrush, QColor, QPen
 
     accent_color = get_system_accent_color()
     color = QColor(accent_color)
@@ -62,8 +63,8 @@ def refresh_cached_pen_brush():
 def get_system_accent_color() -> str:
     """Get the system accent color or fallback to a neutral color."""
     try:
-        from PySide6.QtWidgets import QApplication
         from PySide6.QtGui import QPalette
+        from PySide6.QtWidgets import QApplication
 
         app = QApplication.instance()
         if app:

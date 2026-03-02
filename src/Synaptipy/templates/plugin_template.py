@@ -28,9 +28,11 @@ REFERENCE:
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
 """
-import numpy as np
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
+import numpy as np
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ log = logging.getLogger(__name__)
 # ║  PART 1 — PURE ANALYSIS LOGIC                                    ║
 # ║  Write your algorithm here. No GUI code. Just NumPy / SciPy.     ║
 # ╚═══════════════════════════════════════════════════════════════════╝
+
 
 def calculate_my_metric(
     data: np.ndarray,
@@ -99,14 +102,12 @@ def calculate_my_metric(
 # ║  and plot overlays.  The function body just calls Part 1.          ║
 # ╚═══════════════════════════════════════════════════════════════════╝
 
-@AnalysisRegistry.register(
 
+@AnalysisRegistry.register(
     # ── CHANGE: unique internal name (no spaces, used as identifier) ──
     name="my_custom_metric",
-
     # ── CHANGE: display name shown on the tab ──
     label="My Custom Metric",
-
     # ── CHANGE: parameter widgets ──
     # Each dict creates one widget.  Supported types:
     #   "float"  → spin box (decimals)       "int"    → spin box (integer)
@@ -168,7 +169,6 @@ def calculate_my_metric(
         #     "max": 10000,
         # },
     ],
-
     # ── CHANGE: plot overlays ──
     # Each dict adds a visual element on top of the data trace.
     # Supported types:

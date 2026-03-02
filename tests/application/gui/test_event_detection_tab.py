@@ -5,15 +5,16 @@ Validates that the generic metadata-driven tab correctly handles
 interactive event markers, threshold lines, and curated result display
 for event detection analyses.
 """
-import pytest
-from unittest.mock import MagicMock
-import numpy as np
 
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.core.results import EventDetectionResult
+from unittest.mock import MagicMock
+
+import numpy as np
+import pytest
 
 # Ensure the analysis modules are imported so registrations are active
 import Synaptipy.core.analysis  # noqa: F401
+from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+from Synaptipy.core.results import EventDetectionResult
 
 
 @pytest.fixture(scope="session")

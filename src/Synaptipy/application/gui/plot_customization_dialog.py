@@ -9,11 +9,11 @@ Author: Anzal K Shahul
 Email: anzal.ks@gmail.com
 """
 
-import logging
 import copy
+import logging
 from typing import Any, Optional
-from PySide6 import QtCore, QtWidgets, QtGui
 
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from Synaptipy.shared.plot_customization import get_plot_customization_manager
 

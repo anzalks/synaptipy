@@ -24,10 +24,10 @@ import pytest
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def isolate_registry():
@@ -64,10 +64,7 @@ def plugin_dir(tmp_path):
     Copy the plugin template to a temporary directory and return the path.
     Cleans up the module from sys.modules after the test.
     """
-    template_src = (
-        Path(__file__).resolve().parents[2]
-        / "src" / "Synaptipy" / "templates" / "plugin_template.py"
-    )
+    template_src = Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"
     assert template_src.exists(), f"Plugin template not found at {template_src}"
 
     dest = tmp_path / "plugins"
@@ -86,6 +83,7 @@ def plugin_dir(tmp_path):
 # Tests — plugin template logic function
 # ---------------------------------------------------------------------------
 
+
 class TestPluginTemplateLogic:
     """Tests for the pure logic function in the plugin template."""
 
@@ -93,8 +91,7 @@ class TestPluginTemplateLogic:
         """The plugin template module can be imported directly."""
         spec = importlib.util.spec_from_file_location(
             "plugin_template",
-            str(Path(__file__).resolve().parents[2]
-                / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -107,15 +104,18 @@ class TestPluginTemplateLogic:
         # Import the logic function
         spec = importlib.util.spec_from_file_location(
             "plugin_template_logic",
-            str(Path(__file__).resolve().parents[2]
-                / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         result = mod.calculate_my_metric(
-            data=data, time=time, sampling_rate=fs,
-            window_start=0.0, window_end=0.5, threshold=0.0,
+            data=data,
+            time=time,
+            sampling_rate=fs,
+            window_start=0.0,
+            window_end=0.5,
+            threshold=0.0,
         )
 
         assert isinstance(result, dict)
@@ -130,8 +130,7 @@ class TestPluginTemplateLogic:
         """Logic function returns error dict for empty data."""
         spec = importlib.util.spec_from_file_location(
             "plugin_template_empty",
-            str(Path(__file__).resolve().parents[2]
-                / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -151,16 +150,19 @@ class TestPluginTemplateLogic:
         data, time, fs = synthetic_trace
         spec = importlib.util.spec_from_file_location(
             "plugin_template_narrow",
-            str(Path(__file__).resolve().parents[2]
-                / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         # Window from 0.0 to 0.0 — zero width
         result = mod.calculate_my_metric(
-            data=data, time=time, sampling_rate=fs,
-            window_start=0.5, window_end=0.5, threshold=0.0,
+            data=data,
+            time=time,
+            sampling_rate=fs,
+            window_start=0.5,
+            window_end=0.5,
+            threshold=0.0,
         )
         assert "error" in result
 
@@ -168,8 +170,7 @@ class TestPluginTemplateLogic:
         """Verify threshold counting is correct."""
         spec = importlib.util.spec_from_file_location(
             "plugin_template_count",
-            str(Path(__file__).resolve().parents[2]
-                / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -178,8 +179,12 @@ class TestPluginTemplateLogic:
         time = np.array([0.0, 0.1, 0.2, 0.3, 0.4])
 
         result = mod.calculate_my_metric(
-            data=data, time=time, sampling_rate=10.0,
-            window_start=0.0, window_end=0.5, threshold=3.0,
+            data=data,
+            time=time,
+            sampling_rate=10.0,
+            window_start=0.0,
+            window_end=0.5,
+            threshold=3.0,
         )
         # Values > 3.0 are 4.0 and 5.0 → 2 points
         assert result["points_above_threshold"] == 2
@@ -189,15 +194,18 @@ class TestPluginTemplateLogic:
         data, time, fs = synthetic_trace
         spec = importlib.util.spec_from_file_location(
             "plugin_template_private",
-            str(Path(__file__).resolve().parents[2]
-                / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         result = mod.calculate_my_metric(
-            data=data, time=time, sampling_rate=fs,
-            window_start=0.0, window_end=0.5, threshold=0.0,
+            data=data,
+            time=time,
+            sampling_rate=fs,
+            window_start=0.0,
+            window_end=0.5,
+            threshold=0.0,
         )
         private_keys = [k for k in result if k.startswith("_")]
         public_keys = [k for k in result if not k.startswith("_")]
@@ -208,6 +216,7 @@ class TestPluginTemplateLogic:
 # ---------------------------------------------------------------------------
 # Tests — PluginManager loading
 # ---------------------------------------------------------------------------
+
 
 class TestPluginManagerLoading:
     """Tests for PluginManager discovering and loading the template."""
@@ -226,8 +235,7 @@ class TestPluginManagerLoading:
         # The template registers "my_custom_metric"
         func = AnalysisRegistry.get_function("my_custom_metric")
         assert func is not None, (
-            "Plugin was not registered. "
-            f"Currently registered: {AnalysisRegistry.list_registered()}"
+            "Plugin was not registered. " f"Currently registered: {AnalysisRegistry.list_registered()}"
         )
 
     def test_loaded_plugin_metadata(self, plugin_dir):
@@ -256,9 +264,7 @@ class TestPluginManagerLoading:
         for param in meta["ui_params"]:
             assert "name" in param, f"ui_param missing 'name': {param}"
             assert "type" in param, f"ui_param missing 'type': {param}"
-            assert param["type"] in valid_types, (
-                f"ui_param '{param['name']}' has invalid type '{param['type']}'"
-            )
+            assert param["type"] in valid_types, f"ui_param '{param['name']}' has invalid type '{param['type']}'"
 
     def test_loaded_plugin_callable(self, plugin_dir, synthetic_trace):
         """The registered wrapper function is callable and returns results."""
@@ -304,16 +310,14 @@ class TestPluginManagerLoading:
                 if isinstance(data_ref, list):
                     for key in data_ref:
                         assert key in param_names, (
-                            f"interactive_region references param '{key}' "
-                            f"not in ui_params: {param_names}"
+                            f"interactive_region references param '{key}' " f"not in ui_params: {param_names}"
                         )
             else:
                 # Data keys must be result-dict keys
                 refs = data_ref if isinstance(data_ref, list) else [data_ref]
                 for key in refs:
                     assert key in result_keys, (
-                        f"Plot type '{plot_type}' references result key '{key}' "
-                        f"not in result dict: {result_keys}"
+                        f"Plot type '{plot_type}' references result key '{key}' " f"not in result dict: {result_keys}"
                     )
 
     def test_no_plugins_does_not_crash(self, tmp_path):
@@ -353,6 +357,7 @@ class TestPluginManagerLoading:
 # ---------------------------------------------------------------------------
 # Tests — wrapper signature and return-dict conventions
 # ---------------------------------------------------------------------------
+
 
 class TestWrapperConventions:
     """Verify the wrapper function follows the registry interface conventions."""

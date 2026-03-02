@@ -7,14 +7,15 @@ of the Synaptipy batch analysis system.
 Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 
-import pytest
-import numpy as np
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+import numpy as np
+import pytest
+
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.data_model import Channel, Recording
 
 
 class TestAnalysisRegistry:
@@ -389,10 +390,11 @@ class TestRegisteredAnalyses:
         # Re-import to trigger registration after any previous clear
         # We need to reload the modules to re-register the functions
         import importlib
-        import Synaptipy.core.analysis.spike_analysis as spike_mod
+
         import Synaptipy.core.analysis.basic_features as basic_mod
-        import Synaptipy.core.analysis.intrinsic_properties as intrinsic_mod
         import Synaptipy.core.analysis.event_detection as event_mod
+        import Synaptipy.core.analysis.intrinsic_properties as intrinsic_mod
+        import Synaptipy.core.analysis.spike_analysis as spike_mod
 
         # Reload to trigger decorator registration
         importlib.reload(spike_mod)

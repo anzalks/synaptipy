@@ -4,8 +4,9 @@
 Helper module to generate UI widgets from metadata parameters.
 """
 import logging
-from typing import Dict, Any, List, Optional
-from PySide6 import QtWidgets, QtGui
+from typing import Any, Dict, List, Optional
+
+from PySide6 import QtGui, QtWidgets
 
 log = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class ParameterWidgetGenerator:
                 "widget": widget,
                 # We might need to track the label widget too if we want to hide it
                 "label": label if isinstance(label, QtWidgets.QWidget) else None,
-                "rule": param["visible_when"]
+                "rule": param["visible_when"],
             }
 
     def update_visibility(self, context: Dict[str, Any]):

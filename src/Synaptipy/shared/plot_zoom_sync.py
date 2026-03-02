@@ -7,9 +7,10 @@ and manual limit inputs across all plot widgets in the application.
 """
 
 import logging
-from typing import Optional, Tuple, Dict, Callable
-from PySide6 import QtCore, QtWidgets
+from typing import Callable, Dict, Optional, Tuple
+
 import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 
 log = logging.getLogger(__name__)
 

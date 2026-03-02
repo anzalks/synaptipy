@@ -6,13 +6,13 @@ Coordinates real-time analysis (spikes, events) during navigation.
 Enforces 'Single Source of Truth' by fetching data from DataCache.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 from PySide6 import QtCore
 
-from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.shared.data_cache import DataCache
 
 log = logging.getLogger(__name__)
@@ -54,11 +54,7 @@ class AnalysisRunnable(QtCore.QRunnable):
             # Run Vectorized Detection
             # Note: We pass the params dict as 'parameters' to be stored in result
             result = detect_spikes_threshold(
-                self.data,
-                time_vector,
-                threshold,
-                refractory_samples,
-                parameters={**self.params, **self.metadata}
+                self.data, time_vector, threshold, refractory_samples, parameters={**self.params, **self.metadata}
             )
 
             self.signals.result.emit(result)
@@ -126,12 +122,7 @@ class LiveAnalysisController(QtCore.QObject):
             return
 
         # Prepare Runnable
-        runnable = AnalysisRunnable(
-            data,
-            fs,
-            self._pending_params.copy(),
-            metadata
-        )
+        runnable = AnalysisRunnable(data, fs, self._pending_params.copy(), metadata)
 
         runnable.signals.result.connect(self._on_result)
         runnable.signals.error.connect(self.sig_analysis_error.emit)

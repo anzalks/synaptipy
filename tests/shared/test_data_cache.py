@@ -3,12 +3,13 @@
 """
 Tests for the DataCache class.
 """
-import pytest
 from pathlib import Path
-import numpy as np
 
+import numpy as np
+import pytest
+
+from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.shared.data_cache import DataCache
-from Synaptipy.core.data_model import Recording, Channel
 
 
 @pytest.fixture

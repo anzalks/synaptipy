@@ -10,7 +10,7 @@ import logging
 from enum import Enum
 from typing import Optional
 
-from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 
@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 class ThemeMode(Enum):
     """Application theme modes."""
+
     LIGHT = "light"
     DARK = "dark"
     SYSTEM = "system"
@@ -26,6 +27,7 @@ class ThemeMode(Enum):
 
 class ThemeSignals(QtCore.QObject):
     """Signals for theme changes."""
+
     theme_changed = QtCore.Signal(str)
 
 
@@ -101,9 +103,9 @@ def _detect_system_dark_mode() -> bool:
         # Read Windows dark mode setting from registry
         try:
             import winreg
+
             key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
             )
             value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
             winreg.CloseKey(key)
@@ -626,18 +628,16 @@ def _apply_light_palette(app: QtWidgets.QApplication) -> None:
 
     # Disabled state colors - ensure they're visible but dimmed
     disabled_text = QtGui.QColor(120, 120, 120)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.WindowText, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.Text, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.ButtonText, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(200, 200, 200))
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor(120, 120, 120))
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.Base, QtGui.QColor(240, 240, 240))
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, disabled_text)
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, disabled_text)
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, disabled_text)
+    palette.setColor(
+        QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(200, 200, 200)
+    )
+    palette.setColor(
+        QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor(120, 120, 120)
+    )
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, QtGui.QColor(240, 240, 240))
 
     app.setPalette(palette)
 
@@ -687,18 +687,12 @@ def _apply_dark_palette(app: QtWidgets.QApplication) -> None:
 
     # Disabled state colors
     disabled_text = QtGui.QColor(127, 127, 127)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.WindowText, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.Text, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.ButtonText, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(80, 80, 80))
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.HighlightedText, disabled_text)
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled,
-                     QtGui.QPalette.ColorRole.Base, QtGui.QColor(45, 45, 45))
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, disabled_text)
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, disabled_text)
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, disabled_text)
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(80, 80, 80))
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, disabled_text)
+    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, QtGui.QColor(45, 45, 45))
 
     app.setPalette(palette)
 

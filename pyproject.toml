@@ -89,6 +89,15 @@ filterwarnings = [
     "ignore::DeprecationWarning",
 ]
 
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["Synaptipy"]
+
 [tool.coverage.run]
 source = ["src/Synaptipy/core"]
 omit = [

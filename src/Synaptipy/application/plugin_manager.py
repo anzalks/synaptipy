@@ -11,8 +11,8 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
-import logging
 import importlib.util
+import logging
 import sys
 from pathlib import Path
 from typing import List

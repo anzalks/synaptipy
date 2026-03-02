@@ -16,19 +16,21 @@ defined in pyproject.toml.
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
 """
-import sys
-import logging
 import argparse
-import os
 import faulthandler
-from PySide6 import QtWidgets, QtCore
+import logging
+import os
+import sys
+
+# Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
+import warnings
+
+from PySide6 import QtCore, QtWidgets
 
 # --- Import Core Components ---
 from Synaptipy.application.startup_manager import StartupManager
 from Synaptipy.shared.logging_config import setup_logging
 
-# Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
-import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyqtgraph")
 
 # Enable low-level C traceback on SIGBUS/SIGSEGV so fatal crashes include a

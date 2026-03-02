@@ -12,13 +12,14 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
+from Synaptipy.core.analysis.event_detection import detect_events_template, detect_events_threshold
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.results import AnalysisResult
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
-from Synaptipy.core.analysis.event_detection import detect_events_threshold, detect_events_template
+from Synaptipy.core.results import AnalysisResult
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class OptoSyncResult(AnalysisResult):
     """Result object for optogenetic synchronization analysis."""
+
     optical_latency_ms: Optional[float] = None
     response_probability: Optional[float] = None
     spike_jitter_ms: Optional[float] = None
@@ -41,8 +43,7 @@ class OptoSyncResult(AnalysisResult):
             lat = f"{self.optical_latency_ms:.2f}" if self.optical_latency_ms is not None else "N/A"
             prob = f"{self.response_probability:.2f}" if self.response_probability is not None else "N/A"
             jit = f"{self.spike_jitter_ms:.2f}" if self.spike_jitter_ms is not None else "N/A"
-            return (f"OptoSyncResult(Latency={lat} ms, Prob={prob}, Jitter={jit} ms, "
-                    f"Stims={self.stimulus_count})")
+            return f"OptoSyncResult(Latency={lat} ms, Prob={prob}, Jitter={jit} ms, " f"Stims={self.stimulus_count})"
         return f"OptoSyncResult(Error: {self.error_message})"
 
 
@@ -87,7 +88,10 @@ def extract_ttl_epochs(
                 log.info(
                     "TTL threshold %.3f produced no edges; auto-adjusting "
                     "to midpoint %.3f (data range %.3f – %.3f).",
-                    threshold, auto_thr, data_min, data_max,
+                    threshold,
+                    auto_thr,
+                    data_min,
+                    data_max,
                 )
                 is_high = ttl_data > auto_thr
 
@@ -130,7 +134,7 @@ def calculate_optogenetic_sync(
     action_potential_times: np.ndarray,
     time: np.ndarray,
     ttl_threshold: float = 2.5,
-    response_window_ms: float = 20.0
+    response_window_ms: float = 20.0,
 ) -> OptoSyncResult:
     """
     Core logic: Correlate TTL stimuli with Action Potential times.
@@ -150,8 +154,7 @@ def calculate_optogenetic_sync(
 
     if stimulus_count == 0:
         return OptoSyncResult(
-            value=None, unit="", is_valid=False,
-            error_message="No TTL stimuli detected above threshold"
+            value=None, unit="", is_valid=False, error_message="No TTL stimuli detected above threshold"
         )
 
     window_s = response_window_ms / 1000.0
@@ -186,10 +189,7 @@ def calculate_optogenetic_sync(
         spike_jitter_ms = np.nan
         response_probability = 0.0
 
-    params = {
-        "ttl_threshold": ttl_threshold,
-        "response_window_ms": response_window_ms
-    }
+    params = {"ttl_threshold": ttl_threshold, "response_window_ms": response_window_ms}
 
     return OptoSyncResult(
         value=optical_latency_ms,
@@ -202,11 +202,12 @@ def calculate_optogenetic_sync(
         stimulus_onsets=onsets,
         stimulus_offsets=offsets,
         responding_spikes=responding_spikes,
-        parameters=params
+        parameters=params,
     )
 
 
 # --- WRAPPER (Dynamic Plugin Format) ---
+
 
 @AnalysisRegistry.register(
     name="optogenetic_sync",
@@ -225,7 +226,7 @@ def calculate_optogenetic_sync(
             "min": -1e9,
             "max": 1e9,
             "decimals": 4,
-            "tooltip": "Voltage threshold to define stimulus ON state."
+            "tooltip": "Voltage threshold to define stimulus ON state.",
         },
         {
             "name": "response_window_ms",
@@ -235,7 +236,7 @@ def calculate_optogenetic_sync(
             "min": 0.0,
             "max": 1e9,
             "decimals": 2,
-            "tooltip": "Time window after stimulus onset to search for events."
+            "tooltip": "Time window after stimulus onset to search for events.",
         },
         # ── Event type selector ──────────────────────────────────────────
         {
@@ -340,7 +341,7 @@ def calculate_optogenetic_sync(
             "data": "stimulus_onsets",
             "color": "c",
         },
-    ]
+    ],
 )
 def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
@@ -377,13 +378,9 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
             ap_threshold = kwargs.get("spike_threshold", 0.0)
             refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms
             spike_result = detect_spikes_threshold(
-                data, time, threshold=ap_threshold,
-                refractory_samples=refractory_samples
+                data, time, threshold=ap_threshold, refractory_samples=refractory_samples
             )
-            has_spikes = (
-                spike_result.spike_indices is not None
-                and len(spike_result.spike_indices) > 0
-            )
+            has_spikes = spike_result.spike_indices is not None and len(spike_result.spike_indices) > 0
             ap_times = time[spike_result.spike_indices] if has_spikes else np.array([])
 
         elif event_detection_type == "Events (Threshold)":
@@ -391,7 +388,8 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
             direction = kwargs.get("event_direction", "negative")
             refractory = kwargs.get("event_refractory_s", 0.002)
             ev_result = detect_events_threshold(
-                data, time,
+                data,
+                time,
                 threshold=ev_threshold,
                 polarity=direction,
                 refractory_period=refractory,
@@ -402,7 +400,7 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
                 ap_times = np.array([])
 
         elif event_detection_type == "Events (Template)":
-            tau_rise = kwargs.get("template_tau_rise_ms", 0.5) / 1000.0   # ms → s
+            tau_rise = kwargs.get("template_tau_rise_ms", 0.5) / 1000.0  # ms → s
             tau_decay = kwargs.get("template_tau_decay_ms", 5.0) / 1000.0  # ms → s
             threshold_sd = kwargs.get("template_threshold_sd", 4.0)
             direction = kwargs.get("template_direction", "negative")
@@ -445,7 +443,7 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         action_potential_times=ap_times,
         time=time,
         ttl_threshold=ttl_threshold,
-        response_window_ms=response_window_ms
+        response_window_ms=response_window_ms,
     )
 
     if not result.is_valid:
@@ -457,10 +455,6 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         "spike_jitter_ms": result.spike_jitter_ms,
         "stimulus_count": result.stimulus_count,
         "event_count": len(ap_times),
-        "event_times": ap_times.tolist() if hasattr(ap_times, 'tolist') else list(ap_times),
-        "stimulus_onsets": (
-            result.stimulus_onsets.tolist()
-            if result.stimulus_onsets is not None
-            else []
-        ),
+        "event_times": ap_times.tolist() if hasattr(ap_times, "tolist") else list(ap_times),
+        "stimulus_onsets": (result.stimulus_onsets.tolist() if result.stimulus_onsets is not None else []),
     }

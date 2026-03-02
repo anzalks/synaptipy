@@ -17,9 +17,9 @@ from Synaptipy.shared.scroll_settings import (
 )
 from Synaptipy.shared.theme_manager import (
     ThemeMode,
+    apply_theme,
     get_theme_mode,
     set_theme_mode,
-    apply_theme,
 )
 
 log = logging.getLogger(__name__)
@@ -70,9 +70,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         button_box.rejected.connect(self._on_rejected)
         apply_btn = button_box.button(QtWidgets.QDialogButtonBox.StandardButton.Apply)
         apply_btn.clicked.connect(self._apply_settings)
-        reset_btn = button_box.button(
-            QtWidgets.QDialogButtonBox.StandardButton.RestoreDefaults
-        )
+        reset_btn = button_box.button(QtWidgets.QDialogButtonBox.StandardButton.RestoreDefaults)
         reset_btn.clicked.connect(self._reset_to_defaults)
         main_layout.addWidget(button_box)
 
@@ -86,25 +84,19 @@ class PreferencesDialog(QtWidgets.QDialog):
         scroll_group = QtWidgets.QGroupBox("Scroll Behavior")
         scroll_layout = QtWidgets.QVBoxLayout(scroll_group)
 
-        scroll_description = QtWidgets.QLabel(
-            "Controls how mouse wheel and trackpad scrolling affects the view."
-        )
+        scroll_description = QtWidgets.QLabel("Controls how mouse wheel and trackpad scrolling affects the view.")
         scroll_description.setWordWrap(True)
         scroll_description.setStyleSheet("color: gray; font-size: 11px;")
         scroll_layout.addWidget(scroll_description)
 
         # Radio buttons for scroll direction
         self.scroll_natural_radio = QtWidgets.QRadioButton("Natural")
-        self.scroll_natural_radio.setToolTip(
-            "Content moves in the same direction as your fingers (macOS-style)"
-        )
+        self.scroll_natural_radio.setToolTip("Content moves in the same direction as your fingers (macOS-style)")
         natural_desc = QtWidgets.QLabel("Content moves in the same direction as your fingers")
         natural_desc.setStyleSheet("color: gray; font-size: 10px; margin-left: 20px;")
 
         self.scroll_inverted_radio = QtWidgets.QRadioButton("Inverted")
-        self.scroll_inverted_radio.setToolTip(
-            "Traditional mouse wheel behavior (scroll up = content goes down)"
-        )
+        self.scroll_inverted_radio.setToolTip("Traditional mouse wheel behavior (scroll up = content goes down)")
         inverted_desc = QtWidgets.QLabel("Traditional scrolling (scroll up = content goes down)")
         inverted_desc.setStyleSheet("color: gray; font-size: 10px; margin-left: 20px;")
 

@@ -4,8 +4,10 @@
 Analysis functions for Phase Plane (dV/dt vs V) analysis.
 """
 import logging
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
-from typing import Tuple, Optional, Dict, Any
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
@@ -29,6 +31,7 @@ def calculate_dvdt(voltage: np.ndarray, sampling_rate: float, sigma_ms: float = 
     # Optional smoothing
     if sigma_ms > 0:
         from scipy.ndimage import gaussian_filter1d
+
         sigma_samples = (sigma_ms / 1000.0) * sampling_rate
         if sigma_samples > 0.5:
             voltage_smooth = gaussian_filter1d(voltage, sigma_samples)
@@ -226,7 +229,7 @@ def phase_plane_analysis(
         dvdt_threshold=dvdt_threshold,
         kink_slope=kink_slope,
         search_window_ms=search_window_ms,
-        peak_indices=spike_res.spike_indices
+        peak_indices=spike_res.spike_indices,
     )
 
     threshold_vals = voltage[thresh_indices] if thresh_indices.size > 0 else []

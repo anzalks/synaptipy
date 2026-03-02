@@ -116,11 +116,13 @@ class TestBaselineSubtraction:
     def test_subtract_baseline_mode(self):
         """Test mode baseline subtraction."""
         # Create data with clear mode value
-        data = np.concatenate([
-            np.full(100, 5.0),  # Mode value
-            np.random.randn(20) * 0.5 + 5,  # Noise around mode
-            np.array([10, 12, 8])  # Some outliers
-        ])
+        data = np.concatenate(
+            [
+                np.full(100, 5.0),  # Mode value
+                np.random.randn(20) * 0.5 + 5,  # Noise around mode
+                np.array([10, 12, 8]),  # Some outliers
+            ]
+        )
         result = signal_processor.subtract_baseline_mode(data, decimals=0)
         # Mode should be near 5, so most values should be near 0 after subtraction
         assert abs(np.median(result)) < 1
@@ -133,9 +135,7 @@ class TestBaselineSubtraction:
         data[20:] = np.sin(np.linspace(0, 4 * np.pi, 80)) * 10 + 5
 
         t = np.linspace(0, 1, 100)
-        result = signal_processor.subtract_baseline_region(
-            data, t, start_t=0, end_t=0.19
-        )
+        result = signal_processor.subtract_baseline_region(data, t, start_t=0, end_t=0.19)
         # Data in baseline region should now be near 0
         assert abs(np.mean(result[:20])) < 0.1
 

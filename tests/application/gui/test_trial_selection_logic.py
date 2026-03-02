@@ -1,12 +1,14 @@
 import sys
 import unittest
-import numpy as np
 from unittest.mock import MagicMock
+
+import numpy as np
 from PySide6 import QtWidgets
+
+from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 
 # Mock imports if needed, but we can import directly
 from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 
 
 class TestTrialSelection(unittest.TestCase):
@@ -31,9 +33,7 @@ class TestTrialSelection(unittest.TestCase):
         cls.neo_adapter = MagicMock()
         cls.nwb_exporter = MagicMock()
         cls.status_bar = QtWidgets.QStatusBar()
-        cls.explorer = ExplorerTab(
-            cls.neo_adapter, cls.nwb_exporter, cls.status_bar
-        )
+        cls.explorer = ExplorerTab(cls.neo_adapter, cls.nwb_exporter, cls.status_bar)
 
     def setUp(self):
         # Rebuild recording data (pure Python, no Qt objects)
@@ -90,5 +90,5 @@ class TestTrialSelection(unittest.TestCase):
         self.assertEqual(len(self.explorer.selected_trial_indices), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -9,13 +9,13 @@ across multiple files using a pipeline-based approach.
 Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from PySide6 import QtCore, QtWidgets
-import pandas as pd
 import numpy as np
+import pandas as pd
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -906,7 +906,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         # Resize columns to content
         self.results_table.resizeColumnsToContents()
-        if not getattr(self, '_result_click_connected', False):
+        if not getattr(self, "_result_click_connected", False):
             self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
             self._result_click_connected = True
 
@@ -933,8 +933,16 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 if analysis_name:
                     params["analysis_name"] = analysis_name
                 # Include any numeric result columns as context
-                skip_keys = {"file_path", "file", "source_file", "channel",
-                             "trial_index", "analysis", "status", "error"}
+                skip_keys = {
+                    "file_path",
+                    "file",
+                    "source_file",
+                    "channel",
+                    "trial_index",
+                    "analysis",
+                    "status",
+                    "error",
+                }
                 for key, val in record.items():
                     if key not in skip_keys and val is not None:
                         try:

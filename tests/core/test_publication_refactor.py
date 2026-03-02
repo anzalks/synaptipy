@@ -8,19 +8,18 @@ import time as time_mod
 
 import numpy as np
 
+from Synaptipy.core import signal_processor
 from Synaptipy.core.analysis.intrinsic_properties import (
-    calculate_tau,
-    _exp_growth,
     _bi_exp_growth,
+    _exp_growth,
+    calculate_tau,
     run_tau_analysis_wrapper,
 )
 from Synaptipy.core.analysis.spike_analysis import (
     calculate_spike_features,
     run_spike_detection_wrapper,
 )
-from Synaptipy.core import signal_processor
-from Synaptipy.core.results import SpikeTrainResult, RinResult, BurstResult
-
+from Synaptipy.core.results import BurstResult, RinResult, SpikeTrainResult
 
 # ============================================================
 # Phase 1: Tau Fitting Tests
@@ -45,15 +44,15 @@ class TestTauMonoModel:
         t_full = np.concatenate([t_base, t + 0.05])  # shift stim to t=0.05
         v_full = np.concatenate([v_base, voltage])
 
-        result = calculate_tau(v_full, t_full, stim_start_time=0.05, fit_duration=0.15, model='mono')
+        result = calculate_tau(v_full, t_full, stim_start_time=0.05, fit_duration=0.15, model="mono")
 
         assert result is not None
         assert isinstance(result, dict)
-        assert 'tau_ms' in result
-        assert 'fit_time' in result
-        assert 'fit_values' in result
+        assert "tau_ms" in result
+        assert "fit_time" in result
+        assert "fit_values" in result
         # Should recover ~20ms within 5ms tolerance
-        assert abs(result['tau_ms'] - 20.0) < 5.0
+        assert abs(result["tau_ms"] - 20.0) < 5.0
 
     def test_mono_model_custom_bounds(self):
         """Custom tau_bounds should be respected."""
@@ -63,19 +62,17 @@ class TestTauMonoModel:
 
         # Set tight bounds that include the true tau
         result = calculate_tau(
-            voltage, t, stim_start_time=0.0, fit_duration=0.08,
-            model='mono', tau_bounds=(0.001, 0.05)
+            voltage, t, stim_start_time=0.0, fit_duration=0.08, model="mono", tau_bounds=(0.001, 0.05)
         )
         assert result is not None
 
         # Set bounds that EXCLUDE the true tau (tau=10ms but max=5ms)
         # Fit should still converge to the boundary
         result_tight = calculate_tau(
-            voltage, t, stim_start_time=0.0, fit_duration=0.08,
-            model='mono', tau_bounds=(0.001, 0.005)
+            voltage, t, stim_start_time=0.0, fit_duration=0.08, model="mono", tau_bounds=(0.001, 0.005)
         )
         if result_tight is not None:
-            assert result_tight['tau_ms'] <= 5.0 + 0.1  # Should respect upper bound
+            assert result_tight["tau_ms"] <= 5.0 + 0.1  # Should respect upper bound
 
 
 class TestTauBiModel:
@@ -94,19 +91,17 @@ class TestTauBiModel:
         voltage = _bi_exp_growth(t, V_ss, A_fast, tau_fast, A_slow, tau_slow)
         voltage += np.random.normal(0, 0.02, len(t))
 
-        result = calculate_tau(
-            voltage, t, stim_start_time=0.0, fit_duration=0.25, model='bi'
-        )
+        result = calculate_tau(voltage, t, stim_start_time=0.0, fit_duration=0.25, model="bi")
 
         assert result is not None
         assert isinstance(result, dict)
-        assert 'tau_fast_ms' in result
-        assert 'tau_slow_ms' in result
-        assert 'amplitude_fast' in result
-        assert 'amplitude_slow' in result
-        assert 'V_ss' in result
+        assert "tau_fast_ms" in result
+        assert "tau_slow_ms" in result
+        assert "amplitude_fast" in result
+        assert "amplitude_slow" in result
+        assert "V_ss" in result
         # tau_fast should be < tau_slow
-        assert result['tau_fast_ms'] < result['tau_slow_ms']
+        assert result["tau_fast_ms"] < result["tau_slow_ms"]
 
     def test_bi_model_recovers_known_taus(self):
         """Bi-exp should approximately recover known fast/slow taus."""
@@ -114,26 +109,24 @@ class TestTauBiModel:
         t = np.arange(0, 0.5, 1 / fs)
         V_ss = -70.0
         tau_fast_true = 0.005  # 5ms
-        tau_slow_true = 0.05   # 50ms
+        tau_slow_true = 0.05  # 50ms
         A_fast = 8.0
         A_slow = 4.0
         voltage = _bi_exp_growth(t, V_ss, A_fast, tau_fast_true, A_slow, tau_slow_true)
         voltage += np.random.normal(0, 0.01, len(t))
 
-        result = calculate_tau(
-            voltage, t, stim_start_time=0.0, fit_duration=0.4, model='bi'
-        )
+        result = calculate_tau(voltage, t, stim_start_time=0.0, fit_duration=0.4, model="bi")
 
         assert result is not None
         # Rough recovery: within 50% of true values
-        assert abs(result['tau_fast_ms'] - 5.0) < 5.0
-        assert abs(result['tau_slow_ms'] - 50.0) < 30.0
+        assert abs(result["tau_fast_ms"] - 5.0) < 5.0
+        assert abs(result["tau_slow_ms"] - 50.0) < 30.0
 
     def test_bi_model_invalid_model_string(self):
         """Invalid model string should return None."""
         t = np.arange(0, 0.1, 0.001)
         v = np.zeros_like(t)
-        result = calculate_tau(v, t, 0.0, 0.05, model='triple')
+        result = calculate_tau(v, t, 0.0, 0.05, model="triple")
         assert result is None
 
 
@@ -148,9 +141,9 @@ class TestTauWrapper:
 
         result = run_tau_analysis_wrapper(voltage, t, fs, stim_start_time=0.0, fit_duration=0.15)
 
-        assert 'tau_ms' in result
-        assert 'tau_model' in result
-        assert result['tau_model'] == 'mono'
+        assert "tau_ms" in result
+        assert "tau_model" in result
+        assert result["tau_model"] == "mono"
 
     def test_wrapper_bi_output(self):
         """Wrapper with bi model should produce fast/slow keys."""
@@ -159,13 +152,10 @@ class TestTauWrapper:
         voltage = _bi_exp_growth(t, -70, 5, 0.005, 5, 0.05)
         voltage += np.random.normal(0, 0.02, len(t))
 
-        result = run_tau_analysis_wrapper(
-            voltage, t, fs,
-            stim_start_time=0.0, fit_duration=0.25, tau_model='bi'
-        )
+        result = run_tau_analysis_wrapper(voltage, t, fs, stim_start_time=0.0, fit_duration=0.25, tau_model="bi")
 
-        assert 'tau_fast_ms' in result or 'tau_ms' in result
-        assert 'parameters' in result
+        assert "tau_fast_ms" in result or "tau_ms" in result
+        assert "parameters" in result
 
     def test_wrapper_parameters_populated(self):
         """Parameters dict should contain all analysis arguments."""
@@ -174,16 +164,21 @@ class TestTauWrapper:
         voltage = _exp_growth(t, -70, -60, 0.015)
 
         result = run_tau_analysis_wrapper(
-            voltage, t, fs,
-            stim_start_time=0.05, fit_duration=0.1,
-            tau_model='mono', tau_bound_min=0.001, tau_bound_max=0.5
+            voltage,
+            t,
+            fs,
+            stim_start_time=0.05,
+            fit_duration=0.1,
+            tau_model="mono",
+            tau_bound_min=0.001,
+            tau_bound_max=0.5,
         )
 
-        assert 'parameters' in result
-        params = result['parameters']
-        assert params['model'] == 'mono'
-        assert params['stim_start_time'] == 0.05
-        assert params['fit_duration'] == 0.1
+        assert "parameters" in result
+        params = result["parameters"]
+        assert params["model"] == "mono"
+        assert params["stim_start_time"] == 0.05
+        assert params["fit_duration"] == 0.1
 
 
 # ============================================================
@@ -230,8 +225,8 @@ class TestAHPReturnToBaseline:
         data, t, spikes = self._make_spike_with_ahp(ahp_depth=10.0)
         features = calculate_spike_features(data, t, spikes)
         assert len(features) == 1
-        assert not np.isnan(features[0]['ahp_depth'])
-        assert features[0]['ahp_depth'] > 0
+        assert not np.isnan(features[0]["ahp_depth"])
+        assert features[0]["ahp_depth"] > 0
 
     def test_ahp_duration_adaptive(self):
         """AHP duration should reflect actual recovery time, not fixed window."""
@@ -244,8 +239,8 @@ class TestAHPReturnToBaseline:
         feat_long = calculate_spike_features(data_long, t, spikes)
 
         # Long recovery should have longer AHP duration
-        if not np.isnan(feat_short[0]['ahp_duration_half']) and not np.isnan(feat_long[0]['ahp_duration_half']):
-            assert feat_long[0]['ahp_duration_half'] > feat_short[0]['ahp_duration_half']
+        if not np.isnan(feat_short[0]["ahp_duration_half"]) and not np.isnan(feat_long[0]["ahp_duration_half"]):
+            assert feat_long[0]["ahp_duration_half"] > feat_short[0]["ahp_duration_half"]
 
 
 # ============================================================
@@ -263,7 +258,7 @@ class TestLFVarianceCheck:
         data = np.sin(2 * np.pi * 50 * t) + np.random.normal(0, 0.1, len(t))
 
         result = signal_processor.check_trace_quality(data, fs)
-        lf_warnings = [w for w in result['warnings'] if 'Low-frequency' in w]
+        lf_warnings = [w for w in result["warnings"] if "Low-frequency" in w]
         assert len(lf_warnings) == 0
 
     def test_wobbly_signal_triggers_warning(self):
@@ -274,15 +269,15 @@ class TestLFVarianceCheck:
         data = 10 * np.sin(2 * np.pi * 0.3 * t) + np.random.normal(0, 0.1, len(t))
 
         result = signal_processor.check_trace_quality(data, fs)
-        assert 'lf_variance' in result['metrics']
-        assert result['metrics']['lf_variance'] is not None
+        assert "lf_variance" in result["metrics"]
+        assert result["metrics"]["lf_variance"] is not None
 
     def test_lf_variance_metric_present(self):
         """The lf_variance metric should always be present in results."""
         fs = 10000
         data = np.random.normal(0, 1, fs)
         result = signal_processor.check_trace_quality(data, fs)
-        assert 'lf_variance' in result['metrics']
+        assert "lf_variance" in result["metrics"]
 
 
 class TestValidateSamplingRate:
@@ -293,14 +288,14 @@ class TestValidateSamplingRate:
         with caplog.at_level(logging.WARNING):
             result = signal_processor.validate_sampling_rate(10000)
         assert result is True
-        assert 'suspiciously low' not in caplog.text
+        assert "suspiciously low" not in caplog.text
 
     def test_low_rate_warns(self, caplog):
         """Rate < 100 Hz should log a warning."""
         with caplog.at_level(logging.WARNING):
             result = signal_processor.validate_sampling_rate(50)
         assert result is True
-        assert 'suspiciously low' in caplog.text
+        assert "suspiciously low" in caplog.text
 
     def test_zero_rate_fails(self):
         """Zero sampling rate should return False."""
@@ -362,7 +357,7 @@ class TestVectorizedFeatures:
             # AHP recovery
             ahp_end = min(n_samples, fall_end + int(0.01 / dt))
             data[fall_end:ahp_end] = np.linspace(-65, -60, ahp_end - fall_end)
-            data[ahp_end:min(n_samples, ahp_end + int(0.02 / dt))] = -60.0
+            data[ahp_end : min(n_samples, ahp_end + int(0.02 / dt))] = -60.0
 
             spike_indices.append(peak_idx)
 
@@ -379,10 +374,16 @@ class TestVectorizedFeatures:
         data, t, spikes = self._make_multi_spike_data(3)
         features = calculate_spike_features(data, t, spikes)
         expected_keys = {
-            'ap_threshold', 'amplitude', 'half_width',
-            'rise_time_10_90', 'decay_time_90_10',
-            'ahp_depth', 'ahp_duration_half', 'adp_amplitude',
-            'max_dvdt', 'min_dvdt',
+            "ap_threshold",
+            "amplitude",
+            "half_width",
+            "rise_time_10_90",
+            "decay_time_90_10",
+            "ahp_depth",
+            "ahp_duration_half",
+            "adp_amplitude",
+            "max_dvdt",
+            "min_dvdt",
         }
         assert set(features[0].keys()) == expected_keys
 
@@ -391,7 +392,7 @@ class TestVectorizedFeatures:
         data, t, spikes = self._make_multi_spike_data(3)
         features = calculate_spike_features(data, t, spikes)
         for f in features:
-            assert f['amplitude'] > 0
+            assert f["amplitude"] > 0
 
     def test_empty_spikes_returns_empty(self):
         """Empty spike indices should return empty list."""
@@ -417,10 +418,10 @@ class TestVectorizedFeatures:
             if idx >= n_samples - 20:
                 break
             # Minimal spike shape
-            data[idx - 2:idx] = np.linspace(-60, 20, 2)
+            data[idx - 2 : idx] = np.linspace(-60, 20, 2)
             data[idx] = 20.0
-            data[idx + 1:idx + 3] = np.linspace(20, -65, 2)
-            data[idx + 3:idx + 6] = np.linspace(-65, -60, 3)
+            data[idx + 1 : idx + 3] = np.linspace(20, -65, 2)
+            data[idx + 3 : idx + 6] = np.linspace(-65, -60, 3)
             spike_indices.append(idx)
 
         spike_arr = np.array(spike_indices[:n_spikes])
@@ -447,20 +448,20 @@ class TestParametersField:
 
     def test_spike_train_result_has_parameters(self):
         """SpikeTrainResult should have parameters field."""
-        r = SpikeTrainResult(value=0, unit='spikes')
-        assert hasattr(r, 'parameters')
+        r = SpikeTrainResult(value=0, unit="spikes")
+        assert hasattr(r, "parameters")
         assert isinstance(r.parameters, dict)
 
     def test_rin_result_has_parameters(self):
         """RinResult should have parameters field."""
-        r = RinResult(value=100.0, unit='MOhm')
-        assert hasattr(r, 'parameters')
+        r = RinResult(value=100.0, unit="MOhm")
+        assert hasattr(r, "parameters")
         assert isinstance(r.parameters, dict)
 
     def test_burst_result_has_parameters(self):
         """BurstResult should have parameters field."""
-        r = BurstResult(value=0, unit='bursts')
-        assert hasattr(r, 'parameters')
+        r = BurstResult(value=0, unit="bursts")
+        assert hasattr(r, "parameters")
         assert isinstance(r.parameters, dict)
 
     def test_spike_wrapper_populates_parameters(self):
@@ -473,5 +474,5 @@ class TestParametersField:
         data[5001] = -20.0
 
         result = run_spike_detection_wrapper(data, t, 10000.0, threshold=-30.0)
-        assert 'parameters' in result
-        assert result['parameters']['threshold'] == -30.0
+        assert "parameters" in result
+        assert result["parameters"]["threshold"] == -30.0

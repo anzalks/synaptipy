@@ -4,8 +4,10 @@
 Analysis functions for detecting and characterizing bursts of action potentials.
 """
 import logging
+from typing import Any, Dict
+
 import numpy as np
-from typing import Dict, Any
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 from Synaptipy.core.results import BurstResult
@@ -165,7 +167,7 @@ def analyze_spikes_and_bursts(
     ],
     plots=[
         {"type": "brackets", "data": "bursts", "color": "r"},
-    ]
+    ],
 )
 def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """

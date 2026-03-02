@@ -7,8 +7,10 @@ Formalizes the order of operations for signal processing (e.g., Baseline -> Filt
 Ensures that both visualization and analysis use the exact same processing sequence.
 """
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import numpy as np
+
 from Synaptipy.core import signal_processor
 
 log = logging.getLogger(__name__)
@@ -39,7 +41,7 @@ class SignalProcessingPipeline:
     def remove_step_by_type(self, step_type: str):
         """Remove all steps of a specific type (e.g. 'baseline')."""
         original_count = len(self._steps)
-        self._steps = [s for s in self._steps if s.get('type') != step_type]
+        self._steps = [s for s in self._steps if s.get("type") != step_type]
         if len(self._steps) < original_count:
             log.debug(f"Removed steps of type '{step_type}'")
 
@@ -58,8 +60,7 @@ class SignalProcessingPipeline:
         log.debug(f"Pipeline steps set to: {self._steps}")
 
     def process(  # noqa: C901
-        self, data: np.ndarray, fs: float,
-        time_vector: Optional[np.ndarray] = None
+        self, data: np.ndarray, fs: float, time_vector: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Apply all steps in order to the data.
@@ -79,61 +80,52 @@ class SignalProcessingPipeline:
 
         for step in self._steps:
             try:
-                op_type = step.get('type')
+                op_type = step.get("type")
 
-                if op_type == 'baseline':
-                    method = step.get('method', 'mode')
-                    if method == 'mode':
-                        decimals = int(step.get('decimals', 1))
+                if op_type == "baseline":
+                    method = step.get("method", "mode")
+                    if method == "mode":
+                        decimals = int(step.get("decimals", 1))
                         result = signal_processor.subtract_baseline_mode(result, decimals=decimals)
-                    elif method == 'mean':
+                    elif method == "mean":
                         result = signal_processor.subtract_baseline_mean(result)
-                    elif method == 'median':
+                    elif method == "median":
                         result = signal_processor.subtract_baseline_median(result)
-                    elif method == 'linear':
+                    elif method == "linear":
                         result = signal_processor.subtract_baseline_linear(result)
-                    elif method == 'region':
+                    elif method == "region":
                         if time_vector is not None:
-                            start_t = float(step.get('start_t', 0.0))
-                            end_t = float(step.get('end_t', 0.0))
+                            start_t = float(step.get("start_t", 0.0))
+                            end_t = float(step.get("end_t", 0.0))
                             result = signal_processor.subtract_baseline_region(result, time_vector, start_t, end_t)
                         else:
                             log.warning("Region baseline requested but no time vector provided. Skipping.")
 
-                elif op_type == 'filter':
-                    method = step.get('method')
-                    order = int(step.get('order', 5))
+                elif op_type == "filter":
+                    method = step.get("method")
+                    order = int(step.get("order", 5))
 
-                    if method == 'lowpass':
-                        result = signal_processor.lowpass_filter(
-                            result, float(step.get('cutoff')), fs, order=order
-                        )
-                    elif method == 'highpass':
-                        result = signal_processor.highpass_filter(
-                            result, float(step.get('cutoff')), fs, order=order
-                        )
-                    elif method == 'bandpass':
+                    if method == "lowpass":
+                        result = signal_processor.lowpass_filter(result, float(step.get("cutoff")), fs, order=order)
+                    elif method == "highpass":
+                        result = signal_processor.highpass_filter(result, float(step.get("cutoff")), fs, order=order)
+                    elif method == "bandpass":
                         result = signal_processor.bandpass_filter(
-                            result, float(step.get('low_cut')), float(step.get('high_cut')), fs, order=order
+                            result, float(step.get("low_cut")), float(step.get("high_cut")), fs, order=order
                         )
-                    elif method == 'notch':
+                    elif method == "notch":
                         result = signal_processor.notch_filter(
-                            result, float(step.get('freq')), float(step.get('q_factor')), fs
+                            result, float(step.get("freq")), float(step.get("q_factor")), fs
                         )
 
-                elif op_type == 'artifact':
+                elif op_type == "artifact":
                     if time_vector is not None:
-                        onset = float(step.get('onset_time', 0.0))
-                        duration = float(step.get('duration_ms', 0.5))
-                        method = step.get('method', 'hold')
-                        result = signal_processor.blank_artifact(
-                            result, time_vector, onset, duration, method=method
-                        )
+                        onset = float(step.get("onset_time", 0.0))
+                        duration = float(step.get("duration_ms", 0.5))
+                        method = step.get("method", "hold")
+                        result = signal_processor.blank_artifact(result, time_vector, onset, duration, method=method)
                     else:
-                        log.warning(
-                            "Artifact blanking requested but no time "
-                            "vector provided. Skipping."
-                        )
+                        log.warning("Artifact blanking requested but no time " "vector provided. Skipping.")
 
                 # Check for bad data after each step
                 if result is not None:

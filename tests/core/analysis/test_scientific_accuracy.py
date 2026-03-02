@@ -50,9 +50,7 @@ class TestRinUnitConversion:
         assert result.is_valid
         assert result.unit == "MOhm"
         # Rin should be 100 MOhm
-        assert abs(result.value - 100.0) < 0.01, (
-            f"Expected Rin=100.0 MOhm, got {result.value}"
-        )
+        assert abs(result.value - 100.0) < 0.01, f"Expected Rin=100.0 MOhm, got {result.value}"
 
     def test_rin_small_current(self):
         """
@@ -133,35 +131,25 @@ class TestDvdtUnitConsistency:
         # Rise: from -70 to +30 mV in 1ms (~100 V/s rise rate in mV/ms)
         rise_samples = 10  # 1 ms
         for i in range(rise_samples):
-            data[spike_peak_idx - rise_samples + i] = (
-                -70.0 + (100.0 * i / rise_samples)
-            )
+            data[spike_peak_idx - rise_samples + i] = -70.0 + (100.0 * i / rise_samples)
         data[spike_peak_idx] = 30.0  # Peak
         # Decay back to -70 mV in 2ms
         decay_samples = 20
         for i in range(decay_samples):
-            data[spike_peak_idx + 1 + i] = (
-                30.0 - (100.0 * i / decay_samples)
-            )
+            data[spike_peak_idx + 1 + i] = 30.0 - (100.0 * i / decay_samples)
 
         spike_indices = np.array([spike_peak_idx])
 
-        features = calculate_spike_features(
-            data, time, spike_indices, dvdt_threshold=20.0  # V/s
-        )
+        features = calculate_spike_features(data, time, spike_indices, dvdt_threshold=20.0)  # V/s
 
         # Should detect exactly 1 spike with features
         assert len(features) == 1
         feat = features[0]
 
         # max_dvdt should be in V/s (positive value, consistent with phase_plane.py)
-        assert feat["max_dvdt"] > 0, (
-            f"max_dvdt should be positive, got {feat['max_dvdt']}"
-        )
+        assert feat["max_dvdt"] > 0, f"max_dvdt should be positive, got {feat['max_dvdt']}"
         # The rise is ~100 mV / 1ms = 100,000 mV/s = 100 V/s
-        assert feat["max_dvdt"] > 10, (
-            f"max_dvdt too small: {feat['max_dvdt']} V/s"
-        )
+        assert feat["max_dvdt"] > 10, f"max_dvdt too small: {feat['max_dvdt']} V/s"
 
     def test_dvdt_threshold_too_high_no_onset(self):
         """
@@ -177,9 +165,7 @@ class TestDvdtUnitConsistency:
 
         spike_indices = np.array([505])
 
-        features = calculate_spike_features(
-            data, time, spike_indices, dvdt_threshold=1e6  # Very high
-        )
+        features = calculate_spike_features(data, time, spike_indices, dvdt_threshold=1e6)  # Very high
 
         assert len(features) == 1
         feat = features[0]

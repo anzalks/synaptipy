@@ -2,9 +2,11 @@
 Preprocessing widget for signal analysis.
 Includes controls for Baseline Subtraction and Filtering (Notch, Bandpass, Lowpass, Highpass).
 """
+
 import logging
 
-from PySide6 import QtWidgets, QtCore, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
+
 from Synaptipy.shared.styling import style_button
 
 log = logging.getLogger(__name__)
@@ -56,9 +58,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.bl_param_stack.addWidget(QtWidgets.QWidget())
 
         # Page 1: Mode (Decimals)
-        self.page_bl_mode = self._create_param_page([
-            ("Decimals:", "1", "decimals")
-        ])
+        self.page_bl_mode = self._create_param_page([("Decimals:", "1", "decimals")])
         # Force integer validator for decimals
         if "decimals" in self.page_bl_mode.inputs:
             self.page_bl_mode.inputs["decimals"].setValidator(QtGui.QIntValidator())
@@ -74,10 +74,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.bl_param_stack.addWidget(QtWidgets.QWidget())
 
         # Page 5: Region (Start, End)
-        self.page_bl_region = self._create_param_page([
-            ("Start (s):", "0.0", "start_t"),
-            ("End (s):", "0.05", "end_t")
-        ])
+        self.page_bl_region = self._create_param_page([("Start (s):", "0.0", "start_t"), ("End (s):", "0.05", "end_t")])
         self.bl_param_stack.addWidget(self.page_bl_region)
 
         baseline_layout.addWidget(self.bl_param_stack)
@@ -113,32 +110,21 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.param_stack.addWidget(QtWidgets.QWidget())
 
         # Page 1: Lowpass (Cutoff, Order)
-        self.page_lowpass = self._create_param_page([
-            ("Cutoff (Hz):", "1000", "cutoff"),
-            ("Order:", "5", "order")
-        ])
+        self.page_lowpass = self._create_param_page([("Cutoff (Hz):", "1000", "cutoff"), ("Order:", "5", "order")])
         self.param_stack.addWidget(self.page_lowpass)
 
         # Page 2: Highpass (Cutoff, Order)
-        self.page_highpass = self._create_param_page([
-            ("Cutoff (Hz):", "1", "cutoff"),
-            ("Order:", "5", "order")
-        ])
+        self.page_highpass = self._create_param_page([("Cutoff (Hz):", "1", "cutoff"), ("Order:", "5", "order")])
         self.param_stack.addWidget(self.page_highpass)
 
         # Page 3: Bandpass
-        self.page_bandpass = self._create_param_page([
-            ("Low Cut (Hz):", "1", "low_cut"),
-            ("High Cut (Hz):", "300", "high_cut"),
-            ("Order:", "5", "order")
-        ])
+        self.page_bandpass = self._create_param_page(
+            [("Low Cut (Hz):", "1", "low_cut"), ("High Cut (Hz):", "300", "high_cut"), ("Order:", "5", "order")]
+        )
         self.param_stack.addWidget(self.page_bandpass)
 
         # Page 4: Notch
-        self.page_notch = self._create_param_page([
-            ("Freq (Hz):", "50", "freq"),
-            ("Q-Factor:", "30", "q_factor")
-        ])
+        self.page_notch = self._create_param_page([("Freq (Hz):", "50", "freq"), ("Q-Factor:", "30", "q_factor")])
         self.param_stack.addWidget(self.page_notch)
 
         filter_layout.addWidget(self.param_stack)
@@ -212,9 +198,9 @@ class PreprocessingWidget(QtWidgets.QWidget):
                 except ValueError:
                     log.warning(f"Invalid input for {name}: {line_edit.text()}")
                     from PySide6.QtWidgets import QMessageBox
+
                     QMessageBox.warning(
-                        self, "Invalid Input",
-                        f"'{line_edit.text()}' is not a valid number for {name}."
+                        self, "Invalid Input", f"'{line_edit.text()}' is not a valid number for {name}."
                     )
                     return
 
@@ -232,16 +218,14 @@ class PreprocessingWidget(QtWidgets.QWidget):
         that no preprocessing is active.
         """
         self.baseline_type_combo.setCurrentIndex(0)  # "None"
-        self.filter_type_combo.setCurrentIndex(0)    # "None"
+        self.filter_type_combo.setCurrentIndex(0)  # "None"
 
     def _on_baseline_type_changed(self, index):
         self.bl_param_stack.setCurrentIndex(index)
         self.apply_baseline_btn.setEnabled(index != 0)
 
     def _on_baseline_apply_clicked(self):
-        method_map = {
-            1: "mode", 2: "mean", 3: "median", 4: "linear", 5: "region"
-        }
+        method_map = {1: "mode", 2: "mean", 3: "median", 4: "linear", 5: "region"}
         idx = self.baseline_type_combo.currentIndex()
         if idx == 0:
             return
@@ -261,10 +245,8 @@ class PreprocessingWidget(QtWidgets.QWidget):
                 except ValueError:
                     log.warning(f"Invalid input: {line_edit.text()}")
                     from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        self, "Invalid Input",
-                        f"'{line_edit.text()}' is not a valid number."
-                    )
+
+                    QMessageBox.warning(self, "Invalid Input", f"'{line_edit.text()}' is not a valid number.")
                     return
 
         log.debug(f"Baseline requested: {settings}")

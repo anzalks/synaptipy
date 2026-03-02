@@ -4,8 +4,9 @@
 Dialog to display accumulated session results and statistics.
 """
 import logging
+from typing import Any, Dict, List
+
 import numpy as np
-from typing import List, Dict, Any
 from PySide6 import QtWidgets
 
 log = logging.getLogger(__name__)

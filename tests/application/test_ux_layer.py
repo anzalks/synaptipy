@@ -1,13 +1,14 @@
 # tests/application/test_ux_layer.py
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 from PySide6 import QtCore, QtGui
 
-from Synaptipy.shared.data_cache import DataCache
-from Synaptipy.application.controllers.shortcut_manager import ShortcutManager
 from Synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
-from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
+from Synaptipy.application.controllers.shortcut_manager import ShortcutManager
+from Synaptipy.core.results import SpikeTrainResult
+from Synaptipy.shared.data_cache import DataCache
 
 # --- DataCache Tests ---
 
@@ -38,6 +39,7 @@ def test_datacache_active_trace():
     cache.clear_active_trace()
     assert cache.get_active_trace() is None
 
+
 # --- ShortcutManager Tests ---
 
 
@@ -62,6 +64,7 @@ def test_shortcut_manager_ignore_loops():
     assert handled is False
     mock_nav.next_file.assert_not_called()
 
+
 # --- AnalysisFormatter Tests ---
 
 
@@ -72,7 +75,7 @@ def test_analysis_formatter_spike_result():
         "spike_count": 10,
         "average_firing_rate_hz": 5.5,
         "threshold": -20,
-        "threshold_units": "mV"
+        "threshold_units": "mV",
     }
     val, details = AnalysisResultFormatter.format_result(res_dict)
     assert "10 spikes" in val
@@ -86,13 +89,14 @@ def test_analysis_formatter_spike_result():
         spike_times=np.array([0.1, 0.2, 0.3]),
         spike_indices=np.array([100, 200, 300]),
         mean_frequency=10.0,
-        parameters={"threshold": -30, "refractory_period": 0.002}
+        parameters={"threshold": -30, "refractory_period": 0.002},
     )
     val2, details2 = AnalysisResultFormatter.format_result(res_obj)
     assert "3 spikes" in val2
     assert "10.00 Hz" in val2
     assert "Threshold: -30.0 mV" in details2[0]
     assert "Refractory: 2.0 ms" in details2[1]
+
 
 # --- LiveAnalysisController Tests ---
 
@@ -119,7 +123,7 @@ def test_live_analysis_controller_fetch(mock_datacache_cls, qtbot):
     # But wait, threading?
     # We patch thread_pool start to run synchronously or verify call
 
-    with patch.object(controller.thread_pool, 'start') as mock_start:
+    with patch.object(controller.thread_pool, "start") as mock_start:
         controller._execute_analysis()
 
         # Verify it called get_active_trace

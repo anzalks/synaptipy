@@ -4,10 +4,10 @@ GOLDEN SAMPLE: GUI Tab Architecture.
 Refers to: src/Synaptipy/application/gui/analysis_tabs/base.py
 Use this structure for ALL new analysis tabs.
 """
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import pyqtgraph as pg
 from PySide6 import QtCore
-
 
 # Rule: Must inherit from MetadataDrivenAnalysisTab (preferred) or BaseAnalysisTab
 from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab

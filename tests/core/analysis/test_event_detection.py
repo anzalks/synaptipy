@@ -1,7 +1,7 @@
-
-from Synaptipy.core.signal_processor import find_artifact_windows
 import numpy as np
-from Synaptipy.core.analysis.event_detection import detect_events_threshold, detect_events_template
+
+from Synaptipy.core.analysis.event_detection import detect_events_template, detect_events_threshold
+from Synaptipy.core.signal_processor import find_artifact_windows
 
 
 class TestEventDetectionThreshold:
@@ -23,7 +23,7 @@ class TestEventDetectionThreshold:
         threshold = 5.0
         refractory = 0.05  # 50ms
 
-        result = detect_events_threshold(data, time, threshold, polarity='positive', refractory_period=refractory)
+        result = detect_events_threshold(data, time, threshold, polarity="positive", refractory_period=refractory)
 
         assert result.is_valid
         assert result.event_count == 2
@@ -47,7 +47,7 @@ class TestEventDetectionThreshold:
 
         threshold = 5.0  # Positive threshold convention for magnitude
 
-        result = detect_events_threshold(data, time, threshold, polarity='negative', refractory_period=0.01)
+        result = detect_events_threshold(data, time, threshold, polarity="negative", refractory_period=0.01)
 
         assert result.event_count == 1
         assert np.abs(result.event_indices[0] - 210) <= 1
@@ -70,7 +70,7 @@ class TestEventDetectionThreshold:
         data[200:210] = np.linspace(0, 20, 10)
         data[210:220] = np.linspace(20, 0, 10)
 
-        result = detect_events_threshold(data, time, threshold=5.0, polarity='positive', refractory_period=0.05)
+        result = detect_events_threshold(data, time, threshold=5.0, polarity="positive", refractory_period=0.05)
 
         # Expecting 2 events: the one at 100ms and 200ms. The 130ms should be skipped if logic works "greedy" or max.
         # Implementation constraint says: "If two peaks are closer than refractory_period, discard the smaller one."
@@ -97,7 +97,7 @@ class TestEventDetectionThreshold:
         # Threshold 2.0. The span will be very wide.
         # Peak should be exactly at idx_start + rise_len
 
-        result = detect_events_threshold(data, time, threshold=2.0, polarity='positive', refractory_period=0.1)
+        result = detect_events_threshold(data, time, threshold=2.0, polarity="positive", refractory_period=0.1)
 
         assert result.event_count == 1
         assert result.event_indices[0] == idx_start + rise_len - 1 or result.event_indices[0] == idx_start + rise_len
@@ -133,12 +133,7 @@ class TestEventDetectionTemplate:
         # Detect
         # polarity='positive' because I added positive kernel
         result = detect_events_template(
-            data,
-            sampling_rate,
-            threshold_std=5.0,
-            tau_rise=tau_rise,
-            tau_decay=tau_decay,
-            polarity='positive'
+            data, sampling_rate, threshold_std=5.0, tau_rise=tau_rise, tau_decay=tau_decay, polarity="positive"
         )
 
         assert result.event_count == 1
@@ -176,12 +171,7 @@ class TestEventDetectionTemplate:
         data[210:250] = np.linspace(-10, 0, 40)
 
         result = detect_events_template(
-            data,
-            sampling_rate,
-            threshold_std=4.0,
-            tau_rise=0.005,
-            tau_decay=0.020,
-            polarity='negative'
+            data, sampling_rate, threshold_std=4.0, tau_rise=0.005, tau_decay=0.020, polarity="negative"
         )
 
         assert result.event_count >= 1
@@ -196,24 +186,14 @@ class TestEventDetectionTemplate:
 
         # Pure noise, threshold 10 SD -> Should detect nothing
         result = detect_events_template(
-            data,
-            sampling_rate,
-            threshold_std=10.0,
-            tau_rise=0.002,
-            tau_decay=0.005,
-            polarity='positive'
+            data, sampling_rate, threshold_std=10.0, tau_rise=0.002, tau_decay=0.005, polarity="positive"
         )
         assert result.event_count == 0
 
         # Add big event
         data[500:520] = 50.0  # Huge spike relative to noise 1.0
         result = detect_events_template(
-            data,
-            sampling_rate,
-            threshold_std=5.0,
-            tau_rise=0.002,
-            tau_decay=0.005,
-            polarity='positive'
+            data, sampling_rate, threshold_std=5.0, tau_rise=0.002, tau_decay=0.005, polarity="positive"
         )
         assert result.event_count >= 1
 
@@ -259,11 +239,11 @@ class TestArtifactRejection:
 
         # Without mask -> 2 events
         # MUST specify polarity='positive' because data is positive
-        res_nomask = detect_events_threshold(data, t, threshold=5.0, polarity='positive')
+        res_nomask = detect_events_threshold(data, t, threshold=5.0, polarity="positive")
         assert res_nomask.event_count == 2
 
         # With mask -> 1 event (at around 104ms)
-        res_mask = detect_events_threshold(data, t, threshold=5.0, polarity='positive', artifact_mask=mask)
+        res_mask = detect_events_threshold(data, t, threshold=5.0, polarity="positive", artifact_mask=mask)
         assert res_mask.event_count == 1
         assert np.abs(res_mask.event_indices[0] - 104) <= 1
 
@@ -284,22 +264,17 @@ class TestArtifactRejection:
         data = np.zeros_like(t)
 
         # Bump 1 at idx 1000
-        data[1000:1000 + len(kernel)] = 10.0 * kernel
+        data[1000 : 1000 + len(kernel)] = 10.0 * kernel
         # Bump 2 at idx 3000
-        data[3000:3000 + len(kernel)] = 10.0 * kernel
+        data[3000 : 3000 + len(kernel)] = 10.0 * kernel
 
         # Mask bump 2
         # Mask the region where the event is
         mask = np.zeros_like(data, dtype=bool)
-        mask[3000:3000 + len(kernel)] = True
+        mask[3000 : 3000 + len(kernel)] = True
 
         res_mask = detect_events_template(
-            data, fs,
-            threshold_std=5.0,
-            tau_rise=tau_rise,
-            tau_decay=tau_decay,
-            polarity='positive',
-            artifact_mask=mask
+            data, fs, threshold_std=5.0, tau_rise=tau_rise, tau_decay=tau_decay, polarity="positive", artifact_mask=mask
         )
 
         # Should detect only 1 event
