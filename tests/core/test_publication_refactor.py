@@ -3,6 +3,7 @@
 Tests for Phase 1 (Mathematical Accuracy) and Phase 2 (Performance)
 refactoring of the Synaptipy publication-quality upgrade.
 """
+
 import logging
 import time as time_mod
 

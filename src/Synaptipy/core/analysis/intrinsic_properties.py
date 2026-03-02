@@ -3,6 +3,7 @@
 """
 Analysis functions for intrinsic membrane properties.
 """
+
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 

@@ -15,6 +15,7 @@ from the AnalysisRegistry.  It also provides built-in support for:
 * **Popup plots**: secondary plot windows for I-V curves, phase-plane loops, etc.
 * **Result-aware h-lines**: horizontal lines positioned by result dict keys.
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 

@@ -3,6 +3,7 @@
 """
 Dialog for configuring global analysis default parameters.
 """
+
 import json
 import logging
 from typing import Any, Dict, Optional

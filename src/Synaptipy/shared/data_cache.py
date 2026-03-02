@@ -7,6 +7,7 @@ This module provides a Singleton in-memory cache for Recording objects and
 manages the 'Active Trace' state, serving as the Single Source of Truth
 for the current analysis context.
 """
+
 import logging
 import threading
 from collections import OrderedDict

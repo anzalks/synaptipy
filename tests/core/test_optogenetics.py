@@ -5,6 +5,7 @@ Tests for optogenetic synchronisation analysis, including the new
 multi-mode event-detection support (Spikes / Events (Threshold) /
 Events (Template)).
 """
+
 import numpy as np
 import pytest
 

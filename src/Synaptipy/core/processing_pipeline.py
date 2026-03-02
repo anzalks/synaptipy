@@ -6,6 +6,7 @@ Signal Processing Pipeline.
 Formalizes the order of operations for signal processing (e.g., Baseline -> Filter).
 Ensures that both visualization and analysis use the exact same processing sequence.
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 

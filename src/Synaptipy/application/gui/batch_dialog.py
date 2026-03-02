@@ -8,6 +8,7 @@ across multiple files using a pipeline-based approach.
 
 Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
+
 import logging
 from datetime import datetime
 from pathlib import Path

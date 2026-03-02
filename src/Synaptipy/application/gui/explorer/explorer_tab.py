@@ -4,6 +4,7 @@
 Explorer Tab widget for the Synaptipy GUI.
 Refactored modular version.
 """
+
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple

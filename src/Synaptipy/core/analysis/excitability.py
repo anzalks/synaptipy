@@ -3,6 +3,7 @@
 """
 Analysis functions for excitability properties (F-I Curve, Rheobase).
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 

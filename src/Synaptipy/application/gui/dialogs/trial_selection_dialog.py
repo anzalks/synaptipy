@@ -3,6 +3,7 @@
 """
 Dialog for selecting multiple trials.
 """
+
 from typing import Optional, Set, Tuple
 
 from PySide6 import QtCore, QtWidgets

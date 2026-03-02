@@ -3,6 +3,7 @@
 """
 Worker class for running analysis tasks in a background thread.
 """
+
 import logging
 import sys
 import traceback

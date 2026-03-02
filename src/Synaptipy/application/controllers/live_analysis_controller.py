@@ -5,6 +5,7 @@ Live Analysis Controller.
 Coordinates real-time analysis (spikes, events) during navigation.
 Enforces 'Single Source of Truth' by fetching data from DataCache.
 """
+
 import logging
 from typing import Any, Dict, Optional
 

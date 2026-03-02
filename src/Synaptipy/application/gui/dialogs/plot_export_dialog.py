@@ -3,6 +3,7 @@
 """
 Dialog for exporting plots with custom settings (Format, DPI).
 """
+
 from PySide6 import QtWidgets
 
 

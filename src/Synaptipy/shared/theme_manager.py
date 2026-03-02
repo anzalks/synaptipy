@@ -6,6 +6,7 @@ Theme Manager Module for Synaptipy.
 Manages application theme preferences with persistence via QSettings.
 Supports Light, Dark, and System theme modes.
 """
+
 import logging
 from enum import Enum
 from typing import Optional

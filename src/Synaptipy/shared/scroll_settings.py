@@ -6,6 +6,7 @@ Scroll Settings Module for Synaptipy.
 Manages scroll direction preferences with persistence via QSettings.
 Provides unified scroll behavior across the application.
 """
+
 import logging
 from enum import Enum
 from typing import Optional

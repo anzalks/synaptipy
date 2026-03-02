@@ -5,6 +5,7 @@ Plot Exporter Utility.
 Handles export of plots to various formats (SVG, PDF, PNG, JPG) using
 Matplotlib (for vector quality) or PyQtGraph (for raster WYSIWYG).
 """
+
 import logging
 from typing import Any, Dict
 

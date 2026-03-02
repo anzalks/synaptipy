@@ -4,6 +4,7 @@
 Explorer Plot Canvas widget.
 Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 """
+
 import logging
 import sys
 from typing import Dict, List

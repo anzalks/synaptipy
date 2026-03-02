@@ -4,6 +4,7 @@
 Explorer Toolbar.
 Handles file navigation, trial cycling, and X-axis controls.
 """
+
 import logging
 
 from PySide6 import QtCore, QtWidgets

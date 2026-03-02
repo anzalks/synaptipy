@@ -4,6 +4,7 @@
 Main Window for the Synaptipy GUI application using a tabbed interface.
 Manages overall window structure, menu, status bar, tabs, and core adapters.
 """
+
 import logging
 import os
 import sys

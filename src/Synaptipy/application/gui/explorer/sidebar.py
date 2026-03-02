@@ -4,6 +4,7 @@
 Explorer Sidebar widget.
 Handles file system navigation (tree view) and file list management.
 """
+
 import logging
 from pathlib import Path
 from typing import Dict, Optional  # Added Dict

@@ -12,6 +12,7 @@ Validates that:
 6. Private keys (starting with '_') are present in results but excluded
    from the public-facing subset.
 """
+
 import copy
 import importlib
 import shutil
