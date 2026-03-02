@@ -333,6 +333,65 @@ collected 74 items
 
 ---
 
+## Part 4: ViewBox Signal Management for File Cycling (March 2026)
+
+### Problem
+When cycling through files, the X-axis shifted right (not starting at 0) and Y-axis
+ranges were incorrect.  This was particularly visible with multichannel recordings.
+
+### Root Causes
+1. **Stale ViewBox signals from `deleteLater()`'d widgets**: After
+   `rebuild_plots()` replaces the `GraphicsLayoutWidget`, old ViewBoxes survive
+   until the next event-loop iteration and emit `sigXRangeChanged` /
+   `sigYRangeChanged` / `sigResized` signals that corrupt new recording's ranges.
+2. **X-link range recalculation**: `linkedViewChanged()` recalculates X ranges
+   from screen-geometry pixel offsets between stacked ViewBoxes, producing
+   shifted ranges when Y-axis label widths differ.
+3. **Y range from trial 0 only**: `_compute_channel_y_range()` used only trial 0,
+   which may be at resting potential while other trials contain action potentials.
+
+### Solutions
+
+**ViewBox Signal Disconnection (`plot_canvas.py`):**
+```python
+# In rebuild_plots(), before clearing plot_items:
+for plot_item in self.plot_items.values():
+    vb = plot_item.getViewBox()
+    if vb:
+        vb.sigXRangeChanged.disconnect()
+        vb.sigYRangeChanged.disconnect()
+        vb.sigResized.disconnect()
+```
+
+**X-Link Blocking (`explorer_tab.py::_reset_view()`):**
+```python
+# Block link propagation while setting ranges
+for plot_item in self.plot_canvas.plot_items.values():
+    vb = plot_item.getViewBox()
+    vb.blockLink(True)
+
+# ... set X/Y ranges ...
+
+for plot_item in self.plot_canvas.plot_items.values():
+    vb = plot_item.getViewBox()
+    vb.blockLink(False)
+```
+
+**All-Trial Y Range (`explorer_tab.py::_compute_channel_y_range()`):**
+Samples up to 50 evenly-spaced trials to compute global min/max.
+
+**Deferred Initial Reset:**
+Generation-counter-protected `_deferred_initial_reset()` catches post-layout
+`sigResized` shifts for multichannel recordings.
+
+### Impact
+- ✅ X-axis always starts at 0 on first load and when cycling files
+- ✅ Y-range correctly spans all trial amplitudes in overlay mode
+- ✅ View state preservation (zoom/pan) unaffected — deferred reset only fires
+  for multichannel recordings without pending view restoration
+
+---
+
 ## Debugging
 
 If performance doesn't improve:
@@ -347,11 +406,13 @@ If performance doesn't improve:
 
 ## Conclusion
 
-These three optimizations work together to provide dramatic rendering performance improvements:
+These optimizations work together to provide dramatic rendering performance improvements:
 
 1. **Downsampling + Clipping** → Reduces data pipeline load
 2. **Force Opaque** → Eliminates alpha blending overhead
 3. **Debouncing** → Batches rapid UI interactions
+4. **ViewBox Signal Management** → Prevents stale signal corruption during file cycling
 
-Combined effect: **3-6x faster** rendering in typical use cases! 🚀
+Combined effect: **3-6x faster** rendering in typical use cases with correct
+axis ranges across all file-cycling scenarios.
 

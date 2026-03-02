@@ -210,6 +210,38 @@ a much wider range than expected (e.g. −25 to +17 instead of 0 to 17).
 Neo level; `recording.duration` may reflect the full sweep length while the
 plotted time axis starts at 0.
 
+### Disconnect old ViewBox signals before widget replacement — DO NOT REMOVE
+`ExplorerPlotCanvas.rebuild_plots()` disconnects `sigXRangeChanged`,
+`sigYRangeChanged`, and `sigResized` on every old ViewBox **before** clearing
+`plot_items` and calling `deleteLater()` on the old widget.
+
+Without this, old ViewBoxes survive until the next event-loop iteration (Qt's
+`deleteLater()` semantics) and can still emit signals.  Those signals propagate
+through the canvas's `x_range_changed` → `_on_vb_x_range_changed` chain and
+corrupt the slider/scrollbar values for the NEW recording.  This was the root
+cause of the "X-axis shifted right" bug when cycling files.
+
+### _reset_view() must block X-link propagation — DO NOT REMOVE
+`_reset_view()` calls `vb.blockLink(True)` on **all** ViewBoxes before setting
+X/Y ranges, then `vb.blockLink(False)` after.  Without this,
+`linkedViewChanged()` recalculates X ranges from screen-geometry pixel offsets
+between stacked ViewBoxes (which differ due to Y-axis label widths), producing
+shifted X ranges.
+
+### Y range must span all trials, not just trial 0
+`_compute_channel_y_range()` samples up to 50 evenly-spaced trials (not only
+trial 0) to compute the global min/max.  Trial 0 may be at resting potential
+(−65 mV) while other trials contain action potentials (+40 mV); using only
+trial 0 produces a Y range too narrow for overlay mode.
+
+### Deferred initial reset uses generation counter
+`_deferred_initial_reset(generation)` is scheduled via `QTimer.singleShot(0, ...)`
+**only** for multichannel recordings and only when no view state restoration is
+pending.  It checks `generation == self._display_generation` to discard stale
+callbacks from previous file loads.  Without this guard, a deferred reset from
+file A can fire after file B has already been loaded, overwriting B's correct
+ranges.
+
 ### Downsampling defaults — preserve signal fidelity
 - Always use `method="peak"` (never `"subsample"` which drops every Nth point
   and loses spikes/transients).

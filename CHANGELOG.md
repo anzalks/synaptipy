@@ -19,6 +19,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   API reference, user guide, developer guide, README, and extending guide to
   reflect the new standalone sag ratio analysis and 15 built-in modules.
 
+### Fixed
+
+- **Explorer X-Axis Shift on File Cycling**: Fixed bug where the X-axis would
+  shift right (not starting at 0) when cycling through files, especially with
+  multichannel recordings.  Root cause: old ViewBoxes scheduled for
+  `deleteLater()` continued to emit `sigXRangeChanged` / `sigYRangeChanged` /
+  `sigResized` signals after the widget was replaced, corrupting slider and
+  scrollbar values for the new recording.  Fix: explicitly disconnect all
+  ViewBox signals in `ExplorerPlotCanvas.rebuild_plots()` before clearing plot
+  items.
+- **Explorer X-Link Range Corruption**: Fixed multichannel X-range corruption
+  caused by `linkedViewChanged()` recalculating ranges from screen-geometry
+  pixel offsets between stacked ViewBoxes.  `_reset_view()` now blocks link
+  propagation via `ViewBox.blockLink(True)` while setting ranges, then unblocks.
+- **Overlay Mode Y-Range Too Narrow**: Fixed `_compute_channel_y_range()` to
+  compute Y range from all trials (sampling up to 50 evenly spaced) instead of
+  only trial 0.  Previously, if trial 0 was at resting potential but other
+  trials contained action potentials, the Y range was too narrow to display
+  the full signal.
+- **Deferred Initial Reset for Multichannel**: Added generation-counter-protected
+  `_deferred_initial_reset()` that fires after Qt layout geometry events settle,
+  ensuring multichannel plots start with correct ranges even when post-layout
+  `sigResized` callbacks shift the view.
+
+## [0.1.0b4] - 2026-03-02
+
+> **Beta nightly release.** Explorer tab X-axis autoscaling fix for file cycling and multichannel recordings.
+
+### Fixed
+
+- **Explorer X-Axis Shift on File Cycling**: Fixed bug where the X-axis would
+  shift right (not starting at 0) when cycling through files, especially with
+  multichannel recordings.  Root cause: old ViewBoxes scheduled for
+  `deleteLater()` continued to emit `sigXRangeChanged` / `sigYRangeChanged` /
+  `sigResized` signals after the widget was replaced, corrupting slider and
+  scrollbar values for the new recording.  Fix: explicitly disconnect all
+  ViewBox signals in `ExplorerPlotCanvas.rebuild_plots()` before clearing plot
+  items.
+- **Explorer X-Link Range Corruption**: Fixed multichannel X-range corruption
+  caused by `linkedViewChanged()` recalculating ranges from screen-geometry
+  pixel offsets between stacked ViewBoxes.  `_reset_view()` now blocks link
+  propagation via `ViewBox.blockLink(True)` while setting ranges, then unblocks.
+- **Overlay Mode Y-Range Too Narrow**: Fixed `_compute_channel_y_range()` to
+  compute Y range from all trials (sampling up to 50 evenly spaced) instead of
+  only trial 0.  Previously, if trial 0 was at resting potential but other
+  trials contained action potentials, the Y range was too narrow to display
+  the full signal.
+
+### Added
+
+- **Deferred Initial Reset for Multichannel**: Generation-counter-protected
+  `_deferred_initial_reset()` catches post-layout `sigResized` shifts for
+  multichannel recordings without interfering with view state restoration.
+
 ## [0.1.0b3] - 2026-03-01
 
 > **Beta nightly release.** Explorer tab improvements, custom analysis plugin documentation and template, flaky test fixes.
