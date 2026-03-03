@@ -1020,12 +1020,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     self._updating_viewranges = False
 
             # Log diagnostic summary (visible at WARNING level in terminal)
-            total_items = sum(
-                len(v) for v in self.plot_canvas.channel_plot_data_items.values()
-            )
+            total_items = sum(len(v) for v in self.plot_canvas.channel_plot_data_items.values())
             log.info(
-                "[PLOT-DIAG] _update_plot done: channels=%d, total_items=%d, "
-                "mode=%s, fresh=%s",
+                "[PLOT-DIAG] _update_plot done: channels=%d, total_items=%d, " "mode=%s, fresh=%s",
                 len(self.plot_canvas.channel_plots),
                 total_items,
                 "cycle" if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else "overlay",
