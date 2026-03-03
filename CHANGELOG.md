@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0b1] - 2026-03-03
+
+> **First beta release.** Core GUI, all 15 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
+
 ### Added
 
 - **Sag Ratio Standalone Analysis**: Promoted `sag_ratio_analysis` from an inline
@@ -18,91 +22,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation**: Updated tutorial (§4.15), algorithmic definitions (§4),
   API reference, user guide, developer guide, README, and extending guide to
   reflect the new standalone sag ratio analysis and 15 built-in modules.
-
-### Fixed
-
-- **Explorer X-Axis Shift on File Cycling**: Fixed bug where the X-axis would
-  shift right (not starting at 0) when cycling through files, especially with
-  multichannel recordings.  Root cause: old ViewBoxes scheduled for
-  `deleteLater()` continued to emit `sigXRangeChanged` / `sigYRangeChanged` /
-  `sigResized` signals after the widget was replaced, corrupting slider and
-  scrollbar values for the new recording.  Fix: explicitly disconnect all
-  ViewBox signals in `ExplorerPlotCanvas.rebuild_plots()` before clearing plot
-  items.
-- **Explorer X-Link Range Corruption**: Fixed multichannel X-range corruption
-  caused by `linkedViewChanged()` recalculating ranges from screen-geometry
-  pixel offsets between stacked ViewBoxes.  `_reset_view()` now blocks link
-  propagation via `ViewBox.blockLink(True)` while setting ranges, then unblocks.
-- **Overlay Mode Y-Range Too Narrow**: Fixed `_compute_channel_y_range()` to
-  compute Y range from all trials (sampling up to 50 evenly spaced) instead of
-  only trial 0.  Previously, if trial 0 was at resting potential but other
-  trials contained action potentials, the Y range was too narrow to display
-  the full signal.
-- **Deferred Initial Reset for Multichannel**: Added generation-counter-protected
-  `_deferred_initial_reset()` that fires after Qt layout geometry events settle,
-  ensuring multichannel plots start with correct ranges even when post-layout
-  `sigResized` callbacks shift the view.
-
-## [0.1.0b4] - 2026-03-02
-
-> **Beta nightly release.** Explorer tab X-axis autoscaling fix for file cycling and multichannel recordings.
-
-### Fixed
-
-- **Explorer X-Axis Shift on File Cycling**: Fixed bug where the X-axis would
-  shift right (not starting at 0) when cycling through files, especially with
-  multichannel recordings.  Root cause: old ViewBoxes scheduled for
-  `deleteLater()` continued to emit `sigXRangeChanged` / `sigYRangeChanged` /
-  `sigResized` signals after the widget was replaced, corrupting slider and
-  scrollbar values for the new recording.  Fix: explicitly disconnect all
-  ViewBox signals in `ExplorerPlotCanvas.rebuild_plots()` before clearing plot
-  items.
-- **Explorer X-Link Range Corruption**: Fixed multichannel X-range corruption
-  caused by `linkedViewChanged()` recalculating ranges from screen-geometry
-  pixel offsets between stacked ViewBoxes.  `_reset_view()` now blocks link
-  propagation via `ViewBox.blockLink(True)` while setting ranges, then unblocks.
-- **Overlay Mode Y-Range Too Narrow**: Fixed `_compute_channel_y_range()` to
-  compute Y range from all trials (sampling up to 50 evenly spaced) instead of
-  only trial 0.  Previously, if trial 0 was at resting potential but other
-  trials contained action potentials, the Y range was too narrow to display
-  the full signal.
-
-### Added
-
 - **Deferred Initial Reset for Multichannel**: Generation-counter-protected
   `_deferred_initial_reset()` catches post-layout `sigResized` shifts for
   multichannel recordings without interfering with view state restoration.
-
-## [0.1.0b3] - 2026-03-01
-
-> **Beta nightly release.** Explorer tab improvements, custom analysis plugin documentation and template, flaky test fixes.
-
-### Added
-
 - **Custom Analysis Plugin Documentation**: Comprehensive guide (`extending_synaptipy.md`) for writing analysis plugins without modifying source code
 - **Plugin Template**: Ready-to-copy template at `src/Synaptipy/templates/plugin_template.py` with inline comments for all parameter types and plot overlays
 - **Plugin Tests**: 16 tests validating plugin template logic, PluginManager loading, and wrapper conventions
 - **Tutorial Section 3.6**: Step-by-step "Adding Your Own Analysis Tab" section in the user tutorial under the Analyser Tab
 - **Stress Tests**: File cycling stress tests for plot canvas rebuild stability (100 iterations)
 - **Explorer Debounce**: Debounce timer for file navigation to prevent rapid teardown cycles
+- Regression tests for registry population (`test_registry_metadata.py`)
+- Regression tests for preprocessing reset propagation (`test_preprocessing_reset.py`)
+- Developer documentation for registry import rule, editable install, and
+  preprocessing reset propagation (copilot-instructions.md, developer_guide.md)
 
 ### Fixed
 
+- **Explorer X-Axis Shift on File Cycling**: Fixed bug where the X-axis would
+  shift right (not starting at 0) when cycling through files, especially with
+  multichannel recordings.  Root cause: old ViewBoxes scheduled for
+  `deleteLater()` continued to emit `sigXRangeChanged` / `sigYRangeChanged` /
+  `sigResized` signals after the widget was replaced, corrupting slider and
+  scrollbar values for the new recording.  Fix: explicitly disconnect all
+  ViewBox signals in `ExplorerPlotCanvas.rebuild_plots()` before clearing plot
+  items.
+- **Explorer X-Link Range Corruption**: Fixed multichannel X-range corruption
+  caused by `linkedViewChanged()` recalculating ranges from screen-geometry
+  pixel offsets between stacked ViewBoxes.  `_reset_view()` now blocks link
+  propagation via `ViewBox.blockLink(True)` while setting ranges, then unblocks.
+- **Overlay Mode Y-Range Too Narrow**: Fixed `_compute_channel_y_range()` to
+  compute Y range from all trials (sampling up to 50 evenly spaced) instead of
+  only trial 0.  Previously, if trial 0 was at resting potential but other
+  trials contained action potentials, the Y range was too narrow to display
+  the full signal.
 - **Flaky Qt Tests**: Added `processEvents()` calls in 3 test files to resolve non-deterministic offscreen failures caused by stale deferred ViewBox geometry callbacks
 - **Explorer Plot Layout**: Fixed Windows Explorer plot view state preservation during file cycling
 - **Lint Errors**: Resolved all flake8 CI failures in `analysis_formatter` and `exporter_tab`
 - **CSV Export**: Updated tidy per-type CSV export for batch results
-
-### Changed
-
-- Updated `docs/index.rst` toctree, `developer_guide.md`, and tutorial `Appendix B` with plugin cross-references
-
-## [0.1.0b2] - 2026-02-26
-
-> **Beta nightly release.** Fixes Windows-specific analysis loading bug and preprocessing reset propagation across all analysis tabs.
-
-### Fixed
-
 - **Windows Analysis Loading**: Fixed registry import bug where `AnalysisRegistry` remained
   empty on Windows because only `registry.py` was imported (not the full
   `Synaptipy.core.analysis` package that triggers `@register` decorators). Added
@@ -111,19 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BaseAnalysisTab` and added `_handle_preprocessing_reset()` handler. Added
   `reset_ui()` method to `PreprocessingWidget`. Reset now propagates globally to
   all sibling analysis tabs via `AnalyserTab.set_global_preprocessing(None)`.
-
-### Added
-
-- Regression tests for registry population (`test_registry_metadata.py`)
-- Regression tests for preprocessing reset propagation (`test_preprocessing_reset.py`)
-- Developer documentation for registry import rule, editable install, and
-  preprocessing reset propagation (copilot-instructions.md, developer_guide.md)
-
-## [0.1.0b1] - 2026-02-25
-
-> **Beta nightly release.** Core GUI, all 15 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
-
-### Fixed
 
 **Analysis Module Bug Fixes**
 - **Tau (Time Constant)**: Added exponential fit overlay plot — `calculate_tau` now returns
