@@ -632,7 +632,8 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         # ==== Action Buttons ====
         button_layout = QtWidgets.QHBoxLayout()
 
-        self.export_btn = QtWidgets.QPushButton("Export to CSV...")
+        self.export_btn = QtWidgets.QPushButton("Export Results...")
+        self.export_btn.setToolTip("Export results to CSV, Excel, or JSON")
         self.export_btn.setEnabled(False)
         self.export_btn.clicked.connect(self._on_export)
         button_layout.addWidget(self.export_btn)
@@ -873,15 +874,19 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             self.results_info_label.setText("No results to display")
             return
 
+        # Filter out private/internal columns for display
+        display_cols = [c for c in df.columns if not c.startswith("_")]
+        display_df = df[display_cols]
+
         # Setup table
-        self.results_table.setRowCount(min(100, len(df)))  # Limit display rows
-        self.results_table.setColumnCount(len(df.columns))
-        self.results_table.setHorizontalHeaderLabels(df.columns.tolist())
+        self.results_table.setRowCount(min(100, len(display_df)))
+        self.results_table.setColumnCount(len(display_df.columns))
+        self.results_table.setHorizontalHeaderLabels(display_df.columns.tolist())
 
         # Populate table
-        for row_idx in range(min(100, len(df))):
-            for col_idx, col_name in enumerate(df.columns):
-                value = df.iloc[row_idx, col_idx]
+        for row_idx in range(min(100, len(display_df))):
+            for col_idx, col_name in enumerate(display_df.columns):
+                value = display_df.iloc[row_idx, col_idx]
                 # Handle arrays/lists safely
                 if isinstance(value, (list, np.ndarray)):
                     # For arrays, show summary or short representation
@@ -958,7 +963,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             log.error(f"Error handling row click: {e}")
 
     def _on_export(self):
-        """Export results to CSV."""
+        """Export results to CSV, Excel (.xlsx), or JSON with full metadata."""
         if self.result_df is None or self.result_df.empty:
             QtWidgets.QMessageBox.warning(self, "No Results", "No results available to export.")
             return
@@ -968,27 +973,72 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         default_name = f"batch_analysis_{timestamp}.csv"
 
         file_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Results", default_name, "CSV Files (*.csv);;JSON Files (*.json);;All Files (*)"
+            self,
+            "Export Results",
+            default_name,
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;JSON Files (*.json);;All Files (*)",
         )
 
         if file_path:
             try:
+                # Prepare export DataFrame — strip private/raw columns for tabular formats
+                export_df = self.result_df.copy()
+                private_cols = [c for c in export_df.columns if c.startswith("_")]
+                export_df_clean = export_df.drop(columns=private_cols, errors="ignore")
+
                 if file_path.lower().endswith(".json"):
-                    # JSON Export
-                    # Use orient='records' for a list of dicts, which is standard
-                    # Use default_handler=str to handle non-serializable types (like some numpy objects)
-                    # although pandas handles most numpy types well.
-                    self.result_df.to_json(file_path, orient="records", indent=2, default_handler=str)
+                    # JSON Export — keep arrays as lists for programmatic consumption
+                    # Convert numpy types to native Python for JSON serialisation
+                    json_df = export_df.copy()
+                    for col in json_df.columns:
+                        json_df[col] = json_df[col].apply(lambda v: v.tolist() if isinstance(v, np.ndarray) else v)
+                    json_df.to_json(file_path, orient="records", indent=2, default_handler=str)
                     log.debug(f"Exported batch results to JSON: {file_path}")
+
+                elif file_path.lower().endswith(".xlsx"):
+                    # Excel Export — requires openpyxl
+                    try:
+                        export_df_clean.to_excel(file_path, index=False, sheet_name="Batch Results")
+                        log.debug(f"Exported batch results to Excel: {file_path}")
+                    except ImportError:
+                        # openpyxl not installed — fall back to CSV
+                        csv_path = file_path.replace(".xlsx", ".csv")
+                        self._write_csv_with_header(export_df_clean, csv_path)
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Excel Not Available",
+                            f"openpyxl is not installed. Results saved as CSV instead:\n{csv_path}",
+                        )
+                        return
+
                 else:
-                    # CSV Export (Default)
-                    self.result_df.to_csv(file_path, index=False)
-                    log.debug(f"Exported batch results to CSV: {file_path}")
+                    # CSV Export with metadata header
+                    self._write_csv_with_header(export_df_clean, file_path)
 
                 QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{file_path}")
             except Exception as e:
                 log.error(f"Failed to export results: {e}", exc_info=True)
                 QtWidgets.QMessageBox.critical(self, "Export Failed", f"Failed to export results:\n{str(e)}")
+
+    def _write_csv_with_header(self, df: pd.DataFrame, file_path: str):
+        """Write CSV with a comment header block for reproducibility."""
+        # Build metadata header lines
+        header_lines = [
+            "# Synaptipy Batch Analysis Export",
+            f"# Exported: {datetime.now().isoformat()}",
+            f"# Files processed: {len(self.files)}",
+        ]
+        if self.pipeline_steps:
+            analyses = [s.get("analysis", "?") for s in self.pipeline_steps]
+            header_lines.append(f"# Pipeline: {' -> '.join(analyses)}")
+        header_lines.append(f"# Rows: {len(df)}")
+        header_lines.append("#")
+
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            for line in header_lines:
+                f.write(line + "\n")
+            df.to_csv(f, index=False)
+        log.debug(f"Exported batch results to CSV: {file_path}")
 
     def closeEvent(self, event):
         """Handle dialog close."""

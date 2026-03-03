@@ -1000,31 +1000,170 @@ Blue h-line at V_baseline; magenta h-line at V_peak; red h-line at V_ss.
 ### 5.1 Overview
 
 The batch engine applies an analysis pipeline across many files automatically,
-producing a consolidated Pandas DataFrame result.
+producing a consolidated Pandas DataFrame result.  Every row is fully traceable
+to its source file, channel, trial, and analysis step.  The output is designed
+for direct import into Excel, Origin, R, MATLAB, or Python scripts without
+post-processing.
 
 ### 5.2 Opening the Batch Dialog
 
 Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
-- The file list from the analysis set.
+- The file list from the analysis set (paths *or* in-memory Recording objects).
 - A visual pipeline builder.
-- A progress bar and status label.
+- A channel filter (comma-separated names/IDs; leave empty for all channels).
+- A progress bar, status label, and cancel button.
 
 ### 5.3 Building a Pipeline
 
-1. **Add Step** — select from all 15 registered analyses.
-2. **Scope** — Average, All Trials, First Trial, Specific Trial, or Channel Set.
-3. Configure **Parameters** with auto-generated widgets.
-4. Optionally prepend **Preprocessing Steps** (filter / baseline-subtract).
+1. **Add Step** — select from all 15 registered analyses (or registered
+   preprocessing functions).
+2. **Scope** — determines how data is fed to the analysis function:
+   - *Average* — single averaged trace across all trials.
+   - *All Trials* — analysis runs once per trial, producing one row per trial.
+   - *First Trial* — analysis runs on trial 0 only.
+   - *Specific Trial* — pick a 0-based trial index.
+   - *Channel Set* — pass the full list of trials to the function (e.g. for
+     F-I curves or I-V curves that need all sweeps at once).
+3. Configure **Parameters** with auto-generated widgets driven by
+   `ui_params` in the registry metadata.
+4. Optionally prepend **Preprocessing Steps** (filter, baseline-subtract).
+   Preprocessing modifies the data context for all subsequent analysis steps
+   in the same channel.
 
 ### 5.4 Running and Cancellation
 
-A background worker thread processes each file sequentially with per-file progress
-updates. Click **Cancel** at any time via a thread-safe flag.
+A background `QThread` worker processes each file sequentially with per-file
+progress updates.  Click **Stop** at any time — cancellation is thread-safe
+and produces a partial-result DataFrame.
 
-### 5.5 Output
+### 5.5 Output Columns
 
-DataFrame columns: `file_name`, `file_path`, `channel`, `analysis`, `scope` + all
-analysis-specific result keys. Displayed in-dialog and exportable to CSV.
+The result DataFrame uses a standardised column layout designed for
+traceability and software compatibility:
+
+#### Metadata columns (always present, appear first)
+
+| Column | Description |
+|--------|-------------|
+| `file_name` | Source filename (e.g. `cell_01.abf`) |
+| `file_path` | Full path to the source file |
+| `protocol` | Acquisition protocol name (from file metadata, if available) |
+| `recording_duration_s` | Total recording duration in seconds |
+| `channel` | Channel name or ID processed |
+| `channel_units` | Physical units of the channel (`mV`, `pA`, etc.) |
+| `analysis` | Registry key of the analysis function |
+| `scope` | Data scope used (`average`, `all_trials`, etc.) |
+| `trial_index` | 0-based trial index (present for per-trial scopes) |
+| `trial_count` | Total number of trials available in the channel |
+| `sampling_rate` | Sampling frequency in Hz |
+
+#### Analysis result columns (middle, alphabetically sorted)
+
+These vary by analysis function.  Examples:
+
+| Analysis | Key columns |
+|----------|-------------|
+| `rmp_analysis` | `rmp_mv`, `rmp_std`, `rmp_drift` |
+| `spike_detection` | `spike_count`, `mean_freq_hz`, `ap_threshold_mean`, `half_width_mean`, `ahp_depth_mean` |
+| `rin_analysis` | `rin_mohm`, `conductance_us`, `voltage_deflection_mv`, `current_injection_pa` |
+| `event_detection_*` | `event_count`, `frequency_hz`, `mean_amplitude` |
+| `excitability_analysis` | `rheobase_pa`, `fi_slope`, `max_freq_hz` |
+| `capacitance_analysis` | `capacitance_pf`, `tau_ms`, `rin_mohm` |
+| `optogenetic_sync` | `optical_latency_ms`, `response_probability`, `spike_jitter_ms` |
+
+Most keys include a **unit suffix** (`_mv`, `_ms`, `_hz`, `_pa`, `_pf`, `_mohm`)
+to eliminate ambiguity.  Dimensionless metrics (e.g. `cv`, `cv2`, `lv`) have
+human-readable alias columns added automatically (e.g. `coeff_of_variation`).
+
+#### Array-valued results
+
+Large arrays (spike times, I-V curves, etc.) are summarised as compact strings
+in the tabular output (e.g. `n=42, mean=15.3, min=2.1, max=87.6`) and can be
+recovered from the full DataFrame in Python via the `_<key>_raw` private column.
+Small arrays (≤ 5 elements) are kept inline as lists.
+
+#### Trailing / debug columns
+
+| Column | Description |
+|--------|-------------|
+| `batch_timestamp` | ISO 8601 timestamp of batch start |
+| `error` | Error message if the analysis failed for this row |
+| `debug_trace` | Python traceback (only present on error rows) |
+
+Error rows preserve all metadata columns (file, channel, analysis, scope) so
+they can be filtered and diagnosed in Excel without losing context.
+
+### 5.6 Export Formats
+
+Click **"Export Results..."** to save:
+
+| Format | Extension | Notes |
+|--------|-----------|-------|
+| **CSV** | `.csv` | Comment header with batch metadata (`#`-prefixed lines). Private/raw-array columns are stripped. Opens directly in Excel, Origin, R. |
+| **Excel** | `.xlsx` | Requires `openpyxl` (falls back to CSV if not installed). Private columns stripped. |
+| **JSON** | `.json` | Array of records with `indent=2`. **Arrays are preserved as lists** for programmatic consumption. |
+
+CSV files include a reproducibility header:
+```
+# Synaptipy Batch Analysis Export
+# Exported: 2026-03-03T14:22:01
+# Files processed: 12
+# Pipeline: rmp_analysis -> spike_detection
+# Rows: 48
+#
+file_name,file_path,channel,...
+```
+
+### 5.7 Programmatic / Headless Batch Usage
+
+The engine can be used from Python scripts without the GUI:
+
+```python
+from pathlib import Path
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+
+# IMPORTANT: import the full package to register all analysis functions
+import Synaptipy.core.analysis  # noqa: F401
+
+engine = BatchAnalysisEngine()
+
+files = list(Path("data/").glob("*.abf"))
+
+pipeline = [
+    {"analysis": "rmp_analysis", "scope": "average",
+     "params": {"baseline_start": 0.0, "baseline_end": 0.1}},
+    {"analysis": "spike_detection", "scope": "all_trials",
+     "params": {"threshold": -20.0}},
+]
+
+df = engine.run_batch(files, pipeline, channel_filter=["Vm_prime"])
+
+# Export — private columns are internal; drop for clean CSV
+clean = df.drop(columns=[c for c in df.columns if c.startswith("_")])
+clean.to_csv("results.csv", index=False)
+```
+
+### 5.8 Pipeline Context and Preprocessing
+
+When a **preprocessing** step (e.g. bandpass filter, baseline subtraction) is
+in the pipeline, it modifies the data context passed to all subsequent analysis
+steps for the *same channel*.  This means you can build pipelines like:
+
+1. Bandpass Filter (preprocessing) — modifies data in-place in the context
+2. Spike Detection — runs on filtered data
+3. Burst Analysis — also runs on filtered data
+
+The context is not shared across channels or files.
+
+### 5.9 Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| 0 analyses in Add Step dialog | Registry not populated | Ensure `import Synaptipy.core.analysis` runs before opening dialog (automatic in GUI) |
+| Channel filter matches nothing | Name mismatch | Check exact channel names in Explorer tab; filter is case-sensitive |
+| Empty results DataFrame | No data in requested scope | Verify the file has trials and the scope matches (e.g. `all_trials` on a file with 1 trial still works) |
+| `error` column filled | Analysis function raised exception | Check the `debug_trace` column or export to JSON for the full traceback |
+| Array columns show "n=..." | Large arrays are summarised | Use JSON export or access `_<key>_raw` columns in Python for raw data |
 
 ---
 
