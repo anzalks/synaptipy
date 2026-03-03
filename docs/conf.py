@@ -59,7 +59,7 @@ try:
     version = ".".join(_version.split(".")[:2])
 except Exception:
     version = "0.1"
-    release = "0.1.0"
+    release = "0.1.0b1"
 
 # ---------------------------------------------------------------------------
 # General configuration
