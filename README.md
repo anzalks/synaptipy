@@ -52,6 +52,8 @@ Synaptipy is built around a central `AnalysisRegistry` that maps named analysis 
 
 A fully documented template (`src/Synaptipy/templates/analysis_template.py`) defines the required function signature and return types, enabling researchers to integrate custom algorithms without any knowledge of the GUI internals.
 
+**Plug & Play Data Export**: The batch engine processes custom analysis outputs dynamically. Any new dictionaries returned by custom plugins will automatically generate their own isolated CSV files during export, perfectly mapping your custom variables to dynamically created spreadsheet columns.
+
 ## Supported File Formats
 
 File I/O is handled through the [Neo](https://neo.readthedocs.io) library, giving Synaptipy broad compatibility across acquisition systems:
@@ -82,6 +84,7 @@ Any format supported by Neo but not listed above can be made available by adding
 - Tree-based multi-file explorer with synchronised analysis view
 - Interactive zooming, panning, and per-channel scaling
 - Batch result overlays and popup plots (I-V curves, F-I curves, phase planes) generated directly within the GUI
+- **Global Trace Caching**: Cherry-pick and manually average specific trials across multiple independent files to generate cross-recording comparisons natively.
 
 ## Batch Processing
 

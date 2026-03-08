@@ -577,14 +577,15 @@ class ExporterTab(QtWidgets.QWidget):
                 QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{final_path}")
 
         except Exception as e:
-            log.error(f"Failed to export analysis results: {e}", exc_info=True)
-            QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to export results:\n{e}")
+            log.error(f"Modern tidy export failed, attempting legacy fallback: {e}", exc_info=True)
+            
+            # Fallback to legacy exporter
             success = self._csv_exporter.export_analysis_results(results_to_export, Path(output_path))
             if success:
                 QtWidgets.QMessageBox.information(
                     self,
                     "Export Successful",
-                    f"Successfully exported {len(results_to_export)} analysis results to:\n{output_path}",
+                    f"Successfully exported {len(results_to_export)} analysis results using legacy format to:\n{output_path}",
                 )
                 self._status_bar.showMessage(
                     f"Exported {len(results_to_export)} analysis results to {Path(output_path).name}",
@@ -592,5 +593,5 @@ class ExporterTab(QtWidgets.QWidget):
                 )
             else:
                 QtWidgets.QMessageBox.critical(
-                    self, "Export Error", "Failed to export analysis results to CSV. Check logs for details."
+                    self, "Export Error", f"Failed to export results. Both modern and legacy exporters failed.\n\nFirst Error: {e}"
                 )

@@ -145,6 +145,10 @@ For the full list of Neo-supported formats, see the
 - **Plot Mode**:
   - "Overlay All + Avg": Shows all trials with the average highlighted
   - "Cycle Single Trial": Shows one trial at a time with navigation controls
+- **Manual Trial Averaging (Across Files)**:
+  - While in "Cycle Single Trial", use the **"Add Current Trial to Avg Set"** button.
+  - Navigate to completely different files and continue adding trials to your global selection.
+  - Check **"Plot Selected Avg"** to instantly overlay the average of all your manually cherry-picked trials from across the entire dataset.
 - **Channel Selection**: Choose which channel to view from the dropdown
 - **Downsampling**: Enable/disable automatic downsampling for large datasets
 
@@ -251,8 +255,9 @@ All analysis sub-tabs share the following interface behaviours:
 1. Navigate to the "Analysis Results" sub-tab in the Exporter tab
 2. Click "Refresh Results" to see all saved analysis results
 3. Select which results to export
-4. Specify the CSV output file location
-5. Click "Export Selected" to create the CSV file
+4. Specify the CSV output file location.
+5. Click "Export Selected" to create the output.
+   - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
 
 ## Advanced Options
 
