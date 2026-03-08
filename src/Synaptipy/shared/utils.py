@@ -1,7 +1,8 @@
 import logging
-from typing import List, Set
+from typing import Set
 
 log = logging.getLogger(__name__)
+
 
 def parse_trial_selection_string(selection_str: str, max_trials: int = 9999) -> Set[int]:
     """
@@ -19,14 +20,14 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999) -> 
     if not selection_str or not selection_str.strip():
         return indices
 
-    parts = selection_str.split(',')
+    parts = selection_str.split(",")
     for part in parts:
         part = part.strip()
         if not part:
             continue
         try:
-            if '-' in part:
-                start_str, end_str = part.split('-', 1)
+            if "-" in part:
+                start_str, end_str = part.split("-", 1)
                 start = int(start_str.strip())
                 end = int(end_str.strip())
                 # Handle descending ranges or ranges that hit max_trials
@@ -41,5 +42,5 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999) -> 
         except ValueError:
             log.warning(f"Failed to parse trial selection part: '{part}'")
             continue
-            
+
     return indices

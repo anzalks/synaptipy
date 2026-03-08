@@ -1556,56 +1556,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         Parse inputs and plot filtered trials.
         Replica of ExplorerTab logic.
         """
-        text_gap = self.nth_trial_input.text().strip()
-        text_start = self.start_trial_input.text().strip()
-
-        if not self._selected_item_recording:
-            return
-
-        # Get number of trials from first channel
-        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
-        num_trials = getattr(first_channel, "num_trials", 0) if first_channel else 0
-
-        if num_trials == 0:
-            return
-
-        start_idx = 0
-
-        try:
-            if text_gap:
-                gap = int(text_gap)
-            else:
-                gap = 0  # Default to All (Gap 0)
-            start_idx = int(text_start) if text_start else 0
-        except ValueError:
-            log.warning("Invalid input for trial selection.")
-            return
-
-        selected_indices = []
-        # Gap Logic: Step = Gap + 1
-        # Gap 0 -> Step 1 (All)
-        # Gap 1 -> Step 2 (Every 2nd)
-        step = gap + 1
-
-        # Guard against zero step (shouldn't happen with gap >= 0)
-        if step < 1:
-            step = 1
-
-        for i in range(start_idx, num_trials, step):
-            selected_indices.append(i)
-
-        log.info(
-            f"Trial Selection: Gap={gap} (Step={step}), Start={start_idx} -> Found {len(selected_indices)} trials."
-        )
-
-        if selected_indices:
-            # Store state and redraw using main loop
-            self._filtered_indices = set(selected_indices)
-    def _on_plot_filtered_trials(self):
-        """
-        Parse inputs and plot filtered trials.
-        Replica of ExplorerTab logic.
-        """
         selection_text = self.trial_selection_input.text().strip()
 
         if not self._selected_item_recording:
@@ -1621,12 +1571,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         selected_indices = []
         if selection_text:
             from Synaptipy.shared.utils import parse_trial_selection_string
+
             parsed = parse_trial_selection_string(selection_text, num_trials)
             selected_indices = sorted(list(parsed))
-            
+
             if not selected_indices:
                 log.warning("Invalid input for trial selection or no matches.")
-                QtWidgets.QMessageBox.information(self, "Trial Selection", "No trials matched your criteria or invalid format.")
+                QtWidgets.QMessageBox.information(
+                    self, "Trial Selection", "No trials matched your criteria or invalid format."
+                )
                 self._filtered_indices = None
                 self._plot_selected_data()
                 return
@@ -1635,7 +1588,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._filtered_indices = None
             self._plot_selected_data()
             return
-            
+
         log.info(f"Trial Selection: '{selection_text}' -> Found {len(selected_indices)} trials.")
 
         # Store state and redraw using main loop

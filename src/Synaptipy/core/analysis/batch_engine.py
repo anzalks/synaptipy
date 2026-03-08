@@ -527,11 +527,12 @@ class BatchAnalysisEngine:
             elif context["scope"] == "all_trials" and scope == "selected_trials_average":
                 try:
                     import numpy as np
-                    
+
                     # Extract list of indices from task params, or default to all
                     trial_indices_str = params.get("trial_indices", "")
                     if trial_indices_str:
                         from Synaptipy.shared.utils import parse_trial_selection_string
+
                         # context['data'] length should be num_trials if it was 'all_trials'
                         parsed_indices = parse_trial_selection_string(trial_indices_str, len(context["data"]))
                         selected_indices = sorted(list(parsed_indices))
@@ -570,11 +571,12 @@ class BatchAnalysisEngine:
                 trial_indices_str = params.get("trial_indices", "")
                 if trial_indices_str:
                     from Synaptipy.shared.utils import parse_trial_selection_string
+
                     parsed_indices = parse_trial_selection_string(trial_indices_str, channel.num_trials)
                     selected_indices = sorted(list(parsed_indices))
                 else:
                     selected_indices = list(range(channel.num_trials))
-                
+
                 for i in selected_indices:
                     d = channel.get_data(i)
                     t = channel.get_relative_time_vector(i)
@@ -586,11 +588,12 @@ class BatchAnalysisEngine:
                 trial_indices_str = params.get("trial_indices", "")
                 if trial_indices_str:
                     from Synaptipy.shared.utils import parse_trial_selection_string
+
                     parsed_indices = parse_trial_selection_string(trial_indices_str, channel.num_trials)
                     selected_indices = sorted(list(parsed_indices))
                 else:
                     selected_indices = None
-                    
+
                 data = channel.get_averaged_data(trial_indices=selected_indices)
                 time = channel.get_relative_averaged_time_vector()
 
@@ -732,13 +735,14 @@ class BatchAnalysisEngine:
                             trial_indices_str = task.get("params", {}).get("trial_indices", "")
                             if trial_indices_str:
                                 from Synaptipy.shared.utils import parse_trial_selection_string
+
                                 parsed_indices = parse_trial_selection_string(trial_indices_str, total_trials)
                                 indices_list = sorted(list(parsed_indices))
                             else:
                                 indices_list = list(range(total_trials))
                         else:
                             indices_list = list(range(total_trials))
-                            
+
                         for i, (d, t) in enumerate(zip(data, time)):
                             # Ensure we output correct trial index
                             real_idx = indices_list[i] if i < len(indices_list) else i
