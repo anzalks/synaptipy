@@ -294,7 +294,14 @@ class NeoAdapter:
         io_class = self._get_neo_io_class(filepath)
         try:
             reader = io_class(filename=str(filepath))
-            block = reader.read_block(lazy=lazy, signal_group_mode="split-all")
+            try:
+                block = reader.read_block(lazy=lazy, signal_group_mode="split-all")
+            except TypeError as te:
+                if "signal_group_mode" in str(te):
+                    log.debug("Reader does not support signal_group_mode, retrying without it.")
+                    block = reader.read_block(lazy=lazy)
+                else:
+                    raise
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
             log.error(
@@ -306,7 +313,13 @@ class NeoAdapter:
                 log.debug("Attempting lazy load fallback due to failure...")
                 try:
                     reader = io_class(filename=str(filepath))  # Re-instantiate
-                    block = reader.read_block(lazy=True, signal_group_mode="split-all")
+                    try:
+                        block = reader.read_block(lazy=True, signal_group_mode="split-all")
+                    except TypeError as te_lazy:
+                        if "signal_group_mode" in str(te_lazy):
+                            block = reader.read_block(lazy=True)
+                        else:
+                            raise
                     log.debug("Lazy load fallback succeeded.")
                     # If we fallback, we must treat this as lazy=True for the rest of function
                     lazy = True
