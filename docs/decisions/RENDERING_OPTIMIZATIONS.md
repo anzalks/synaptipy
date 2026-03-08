@@ -387,7 +387,7 @@ Generation-counter-protected `_deferred_initial_reset()` catches post-layout
 ### Impact
 - ✅ X-axis always starts at 0 on first load and when cycling files
 - ✅ Y-range correctly spans all trial amplitudes in overlay mode
-- ✅ View state preservation (zoom/pan) unaffected — deferred reset only fires
+- ✅ View state preservation (zoom/pan) unaffected - deferred reset only fires
   for multichannel recordings without pending view restoration
 
 ---

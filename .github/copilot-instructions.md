@@ -13,6 +13,7 @@
 - All public functions and classes must have docstrings
 - Use type hints throughout
 - Keep function complexity ≤ 10 (flake8 C901)
+- **Typography**: Strictly use standard hyphens (`-`). Never use em dashes (`—`) or en dashes (`–`) in code, documentation, or changelogs.
 
 ## Analysis registry pattern
 - New analysis functions are registered with `@AnalysisRegistry.register(name=..., ui_params=[...], plots=[...])`

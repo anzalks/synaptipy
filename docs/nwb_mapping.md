@@ -66,7 +66,7 @@ channel attributes:
 | `description` | Dialog or `channel.electrode_description` | `"Intracellular Electrode"` |
 | `location` | Dialog or `channel.electrode_location` | `"Unknown"` |
 | `filtering` | Dialog or `channel.electrode_filtering` | `"unknown"` |
-| `device` | Linked `Device` object | — |
+| `device` | Linked `Device` object | - |
 
 ---
 
@@ -121,13 +121,13 @@ For example, `Vm_trial_000`, `Vm_trial_001`, etc.
 
 ## Limitations and Future Work
 
-1. **Stimulus data** — Stimulus waveforms are not currently exported to
+1. **Stimulus data** - Stimulus waveforms are not currently exported to
    `nwbfile.stimulus`.  This is planned for a future release.
-2. **IntracellularRecordingsTable** — NWB 2.x icephys best practices
+2. **IntracellularRecordingsTable** - NWB 2.x icephys best practices
    recommend using the `IntracellularRecordingsTable` for organising
    sweeps.  Synaptipy currently uses per-series `sweep_number` attributes
    instead.
-3. **Analysis results** — Computed features (Rin, spike metrics, etc.) are
+3. **Analysis results** - Computed features (Rin, spike metrics, etc.) are
    exported to CSV/JSON but not embedded in the NWB file.  Future versions
    may write these to NWB `ProcessingModule` containers.
 

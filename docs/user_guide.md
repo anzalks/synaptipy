@@ -37,11 +37,11 @@ This guide provides detailed instructions for installing, configuring, and using
 
 - Python 3.10 or higher
 - Dependencies are automatically installed during package installation:
-  - [PySide6](https://doc.qt.io/qtforpython/) — Qt6 bindings for Python (GUI framework)
-  - [PyQtGraph](https://www.pyqtgraph.org) — OpenGL-accelerated plotting library
-  - [Neo](https://neo.readthedocs.io) — electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
-  - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) — numerical computation and signal processing
-  - [PyNWB](https://pynwb.readthedocs.io) — NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
+  - [PySide6](https://doc.qt.io/qtforpython/) - Qt6 bindings for Python (GUI framework)
+  - [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
+  - [Neo](https://neo.readthedocs.io) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
+  - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) - numerical computation and signal processing
+  - [PyNWB](https://pynwb.readthedocs.io) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
 
 ### Standard Installation
 
@@ -97,7 +97,7 @@ The Synaptipy interface consists of three main tabs:
 
 File I/O is handled through the [Neo](https://neo.readthedocs.io) library
 (Garcia et al., 2014, *Front. Neuroinformatics*, [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010)).
-Synaptipy can load any recording format for which Neo provides a reader — this includes
+Synaptipy can load any recording format for which Neo provides a reader - this includes
 whole-cell patch-clamp and intracellular recordings as well as extracellular, sharp-electrode,
 and multi-channel data, provided the file format is supported. Confirmed formats include:
 
@@ -116,8 +116,8 @@ and multi-channel data, provided the file format is supported. Confirmed formats
 | Tucker Davis Technologies | `.tev`, `.tbk` | TDT |
 | Neuralynx | `.ncs`, `.nse`, `.nev` | Neuralynx |
 | NeuroExplorer | `.nex` | NeuroExplorer |
-| MATLAB | `.mat` | — |
-| ASCII / CSV | `.txt`, `.csv`, `.tsv` | — |
+| MATLAB | `.mat` | - |
+| ASCII / CSV | `.txt`, `.csv`, `.tsv` | - |
 
 For the full list of Neo-supported formats, see the
 [Neo I/O documentation](https://neo.readthedocs.io/en/latest/iolist.html).
@@ -156,14 +156,14 @@ For the full list of Neo-supported formats, see the
 
 All analysis sub-tabs share the following interface behaviours:
 
-- **Free-form numeric input** — Number fields accept freely typed values;
+- **Free-form numeric input** - Number fields accept freely typed values;
   intermediate states (empty field, a lone minus sign, etc.) are tolerated while
   typing. Stepping uses adaptive decimal increments.
-- **Interactive vs Manual mode** — Sub-tabs that have draggable plot regions
+- **Interactive vs Manual mode** - Sub-tabs that have draggable plot regions
   (e.g. Rin, Tau, Capacitance) expose a mode selector. In **Interactive** mode
   the time-window spinboxes are read-only and driven by the plot regions.
   Switching to **Manual** mode unlocks all spinboxes for direct entry.
-- **Conditional parameter visibility** — Parameters irrelevant to the current
+- **Conditional parameter visibility** - Parameters irrelevant to the current
   clamp mode or analysis type are hidden automatically.
 
 ### Input Resistance/Conductance Analysis
@@ -172,7 +172,7 @@ All analysis sub-tabs share the following interface behaviours:
 2. Switch to the Analyser tab and select the *Input Resistance* sub-tab
 3. Choose analysis mode:
    - **Interactive Mode**: Drag the blue (baseline) and red (response) regions
-     on the plot — the time-window spinboxes update in real time and become
+     on the plot - the time-window spinboxes update in real time and become
      read-only
    - **Manual Mode**: Unlock the spinboxes and type time windows directly
 4. Enable **Auto Detect Pulse** to let the analysis locate step edges
@@ -204,10 +204,10 @@ All analysis sub-tabs share the following interface behaviours:
 3. Select the TTL channel from the channel selector and set the **TTL Threshold**
    voltage used to binarise the stimulus signal
 4. Choose the **Event Detection Type**:
-   - **Spikes** — threshold-crossing AP detection; set the **Spike Threshold** (mV)
-   - **Events (Threshold)** — prominence-based threshold event detection; set
+   - **Spikes** - threshold-crossing AP detection; set the **Spike Threshold** (mV)
+   - **Events (Threshold)** - prominence-based threshold event detection; set
      **Event Threshold**, **Event Direction**, and **Refractory Period**
-   - **Events (Template)** — double-exponential template matching; set
+   - **Events (Template)** - double-exponential template matching; set
      **Rise Tau**, **Decay Tau**, **Template Threshold** (SD), and
      **Template Direction**
    Only the parameters relevant to the selected detection mode are shown.
@@ -222,18 +222,18 @@ All analysis sub-tabs share the following interface behaviours:
 1. Load a recording containing a hyperpolarising current-step protocol
 2. Switch to the *Sag Ratio (Ih)* sub-tab in the Analyser
 3. Configure the measurement windows:
-   - **Baseline Start / End** — resting membrane potential window (before the step)
-   - **Peak Window Start / End** — early part of the step where the sag minimum occurs
-   - **Steady-State Start / End** — late part of the step where voltage has plateaued
-4. Adjust **Peak Smoothing (ms)** to control Savitzky–Golay smoothing of the
+   - **Baseline Start / End** - resting membrane potential window (before the step)
+   - **Peak Window Start / End** - early part of the step where the sag minimum occurs
+   - **Steady-State Start / End** - late part of the step where voltage has plateaued
+4. Adjust **Peak Smoothing (ms)** to control Savitzky-Golay smoothing of the
    peak detection (default 5 ms). Increase for noisy traces
 5. Set **Rebound Window (ms)** to control how far after stimulus offset the
    rebound depolarisation is measured (default 100 ms)
 6. Results include:
-   - **sag_ratio** — ratio form (>1 indicates I_h sag, 1 = no sag)
-   - **sag_percentage** — percentage of sag deflection
-   - **v_peak**, **v_ss**, **v_baseline** — the three voltage levels
-   - **rebound_depolarization** — post-stimulus rebound amplitude
+   - **sag_ratio** - ratio form (>1 indicates I_h sag, 1 = no sag)
+   - **sag_percentage** - percentage of sag deflection
+   - **v_peak**, **v_ss**, **v_baseline** - the three voltage levels
+   - **rebound_depolarization** - post-stimulus rebound amplitude
 7. The plot shows horizontal lines at V_baseline (blue), V_peak (magenta),
    and V_ss (red)
 
