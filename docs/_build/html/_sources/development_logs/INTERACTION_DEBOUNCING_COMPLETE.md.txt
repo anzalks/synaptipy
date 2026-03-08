@@ -1,6 +1,6 @@
 # Interaction Debouncing Implementation - Complete
 
-**Author:** Anzal  
+**Author:** Anzal K Shahul  
 **Email:** anzal.ks@gmail.com  
 **Repository:** https://github.com/anzalks/Synaptipy  
 **Date:** October 21, 2025
@@ -311,7 +311,7 @@ Testing:
 - No linter errors
 - Backwards compatible (no API changes)
 
-Author: Anzal <anzal.ks@gmail.com>
+Author: Anzal K Shahul <anzal.ks@gmail.com>
 ```
 
 ## Conclusion
