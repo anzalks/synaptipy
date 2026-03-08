@@ -114,7 +114,7 @@ $$
 \text{Sag} \;(\%) = 100 \times \frac{V_{\text{peak}} - V_{\text{ss}}}{V_{\text{peak}} - V_{\text{baseline}}}
 $$
 
-**$V_{\text{peak}}$** is the minimum of the Savitzky–Golay smoothed voltage in the
+**$V_{\text{peak}}$** is the minimum of the Savitzky-Golay smoothed voltage in the
 peak window (configurable `peak_smoothing_ms`, default 5 ms, polynomial order 3).
 
 **$V_{\text{ss}}$** is the arithmetic mean of the last portion of the
@@ -194,7 +194,7 @@ Half-width is the time interval between the two crossings of $V_{50}$ on the
 rising and falling phases, computed with linear interpolation for sub-sample
 precision.
 
-### 6.5 Rise time (10–90%)
+### 6.5 Rise time (10-90%)
 
 $$
 t_{\text{rise}} = t_{V_{90}} - t_{V_{10}}
@@ -203,7 +203,7 @@ $$
 where $V_{x} = V_{\text{threshold}} + (x/100) \times A_{\text{spike}}$.
 Crossings are linearly interpolated.
 
-### 6.6 Decay time (90–10%)
+### 6.6 Decay time (90-10%)
 
 $$
 t_{\text{decay}} = t_{V_{10,\text{fall}}} - t_{V_{90,\text{fall}}}
@@ -218,7 +218,7 @@ $$
 $$
 
 where $V_{\text{AHP,min}}$ is the minimum voltage in the `ahp_window` following
-the spike peak, smoothed with a Savitzky–Golay filter (window 5 ms, order 3).
+the spike peak, smoothed with a Savitzky-Golay filter (window 5 ms, order 3).
 
 **AHP duration** is the time from the repolarisation crossing of
 $V_{\text{threshold}}$ to recovery back to $V_{\text{threshold}}$.
@@ -479,6 +479,6 @@ For stimulus artefact suppression, three interpolation modes are available:
 
 - Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996). Comparison
   of discharge variability in vitro and in vivo in cat visual cortex neurons.
-  *Journal of Neurophysiology*, 75(5), 1806–1814.
+  *Journal of Neurophysiology*, 75(5), 1806-1814.
 - Shinomoto, S., Shima, K., & Tanji, J. (2003). Differences in spiking
-  patterns among cortical neurons. *Neural Computation*, 15(12), 2823–2842.
+  patterns among cortical neurons. *Neural Computation*, 15(12), 2823-2842.

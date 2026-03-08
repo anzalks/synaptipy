@@ -97,8 +97,8 @@ Synaptipy supports two ways to add new analysis functions:
    and add tests.
 
 A ready-to-copy template is at `src/Synaptipy/templates/plugin_template.py`.
-For the complete reference — including all `ui_params` types, `plots` types,
-return-dict conventions, `visible_when` rules, and a fully annotated example —
+For the complete reference - including all `ui_params` types, `plots` types,
+return-dict conventions, `visible_when` rules, and a fully annotated example -
 see the dedicated guide: **[Writing Custom Analysis Plugins](extending_synaptipy.md)**.
 
 ## Development Workflow
@@ -165,7 +165,7 @@ The test suite involves PySide6 and pyqtgraph widgets running under
 `QT_QPA_PLATFORM=offscreen`.  Several platform-specific crash patterns have been
 resolved; the rules below **must not be reverted** or the CI will break again.
 
-### Analysis Registry import rule — DO NOT import only registry.py
+### Analysis Registry import rule - DO NOT import only registry.py
 
 To populate the `AnalysisRegistry`, **always import the full package**:
 ```python
@@ -173,7 +173,7 @@ import Synaptipy.core.analysis  # triggers __init__.py → from . import basic_f
 ```
 
 **Never** rely on `from Synaptipy.core.analysis.registry import AnalysisRegistry`
-alone — that only imports the registry *class* and does NOT execute the analysis
+alone - that only imports the registry *class* and does NOT execute the analysis
 sub-modules' `@AnalysisRegistry.register` decorators.
 
 This was the root cause of a Windows-only bug where the Analyser tab showed 0
@@ -182,9 +182,9 @@ full package earlier via a different path (masking the issue), but on Windows no
 other code path triggered the import and the registry remained empty.
 
 The fix is in two places:
-- `startup_manager._begin_loading()` — imports the full package before building
+- `startup_manager._begin_loading()` - imports the full package before building
   the GUI so the registry is pre-populated.
-- `analyser_tab._load_analysis_tabs()` — imports the full package immediately
+- `analyser_tab._load_analysis_tabs()` - imports the full package immediately
   before calling `AnalysisRegistry.list_registered()` as a safety net.
 
 ### Editable install must point to the active workspace
@@ -205,7 +205,7 @@ pip show Synaptipy | grep "Editable project location"
 `pytest_sessionfinish` in `tests/conftest.py` calls `os._exit(exitstatus)` when
 `QT_QPA_PLATFORM=offscreen` is set.  This causes the macOS process to terminate
 with a `QThread: Destroyed while thread is still running` message and an
-`Abort trap: 6` printed by the shell — **even when every test passed**.  The
+`Abort trap: 6` printed by the shell - **even when every test passed**.  The
 exit code written to the OS is the real pytest exit code (0 = all passed).  The
 shell may still report exit code 1 because conda intercepts the abnormal
 termination.
@@ -262,13 +262,13 @@ is no real display available.
 ### Plot teardown order
 
 `SynaptipyPlotCanvas.clear_plots()` must follow this exact sequence:
-1. `_unlink_all_plots()` — break `setXLink` / `setYLink` connections before teardown.
-2. `_close_all_plots()` — disconnect ctrl signals and call `PlotItem.close()`
+1. `_unlink_all_plots()` - break `setXLink` / `setYLink` connections before teardown.
+2. `_close_all_plots()` - disconnect ctrl signals and call `PlotItem.close()`
    while the scene is still valid.
-3. `_cancel_pending_qt_events()` — discard stale events (Win/Linux only).
-4. `widget.clear()` — destroy C++ layout children via Qt's scene graph.
-5. `plot_items.clear()` — drop Python references *after* C++ teardown.
-6. `_flush_qt_registry()` — discard any events posted *by* `widget.clear()`.
+3. `_cancel_pending_qt_events()` - discard stale events (Win/Linux only).
+4. `widget.clear()` - destroy C++ layout children via Qt's scene graph.
+5. `plot_items.clear()` - drop Python references *after* C++ teardown.
+6. `_flush_qt_registry()` - discard any events posted *by* `widget.clear()`.
 
 Dropping Python references (step 5) **before** `widget.clear()` (step 4) causes
 PySide6 ≥ 6.7 to segfault on macOS when the C++ destructor tries to reach the

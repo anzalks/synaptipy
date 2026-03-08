@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sag Ratio Standalone Analysis**: Promoted `sag_ratio_analysis` from an inline
   computation within `rin_analysis` to its own registered analysis plugin (15th
   built-in module).  Provides dedicated UI controls for baseline, peak, and
-  steady-state windows, Savitzky–Golay smoothing, and rebound depolarisation
+  steady-state windows, Savitzky-Golay smoothing, and rebound depolarisation
   measurement.  Results: `sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`,
   `v_baseline`, `rebound_depolarization`.
 - **Documentation**: Updated tutorial (§4.15), algorithmic definitions (§4),
@@ -69,12 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all sibling analysis tabs via `AnalyserTab.set_global_preprocessing(None)`.
 
 **Analysis Module Bug Fixes**
-- **Tau (Time Constant)**: Added exponential fit overlay plot — `calculate_tau` now returns
+- **Tau (Time Constant)**: Added exponential fit overlay plot - `calculate_tau` now returns
   fit curve data (`fit_time`, `fit_values`) alongside `tau_ms`, and the registration
   includes `overlay_fit` plot metadata so the fit curve is drawn on the main trace
 - **Excitability (F-I Curve)**: Added `popup_xy` plot metadata to show F-I Curve popup
   (Frequency vs Current) after multi-trial analysis
-- **Spike Train Dynamics**: Added ISI popup plot — wrapper now returns `isi_numbers` and
+- **Spike Train Dynamics**: Added ISI popup plot - wrapper now returns `isi_numbers` and
   `isi_ms` arrays, and registration includes `popup_xy` plot metadata
 - **Optogenetic Synchronization**: Added secondary channel selector (`requires_secondary_channel`
   metadata) so users can pick a dedicated TTL/trigger channel instead of falling back to
@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for better sensitivity; added `direction` parameter to UI so users can switch polarity;
   fixed time-axis reconstruction to use actual `time` array instead of synthesising from
   sampling rate (fixes event time accuracy when data doesn't start at t=0)
-- **Event Detection (Threshold)**: Fixed noise-floor guard that could override user threshold —
+- **Event Detection (Threshold)**: Fixed noise-floor guard that could override user threshold -
   the 2-SD noise guard now only activates when the user's threshold is below 1 SD, otherwise
   the user's explicit threshold is honoured
 - Added `overlay_fit` visualisation type to `MetadataDrivenAnalysisTab` for drawing
@@ -91,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `_inject_secondary_channel_data` to `MetadataDrivenAnalysisTab` for loading
   data from a user-selected secondary channel and passing it to analysis functions
 
-**Publication Readiness Audit — Error Handling & Robustness**
+**Publication Readiness Audit - Error Handling & Robustness**
 - Replaced ~25 silent `except: pass` blocks with diagnostic `log.debug()` calls across 15 files
 - Added logging to error-swallowing blocks in neo_adapter, analysis_formatter, explorer_tab,
   plot_canvas (widgets & explorer), analysis_plot_manager, main_window, startup_manager,
@@ -102,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleaned up duplicate comment in base analysis tab error handler
 - Removed unnecessary `pass` after `log.debug` in theme_manager
 
-**Publication Readiness Audit — Code Quality**
+**Publication Readiness Audit - Code Quality**
 - Fixed unused variable `param_key` in metadata_driven analysis tab
 - Fixed unused variable `dt` in optogenetics wrapper
 - Replaced long conditional expressions with readable intermediate variables in
@@ -112,17 +112,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleaned up CLI placeholder module with proper docstrings (removed 50 lines of dead scaffolding)
 - Removed stale `CSVExporter` comments from exporters `__init__.py`
 
-**Publication Readiness Audit — Package Structure**
+**Publication Readiness Audit - Package Structure**
 - Populated `__all__` exports in `application/controllers/__init__.py` (9 symbols)
 - Populated `__all__` exports in `application/gui/analysis_tabs/__init__.py` (3 symbols)
 - Added `__all__` and module docstring to `application/gui/explorer/__init__.py`
 
-**Publication Readiness Audit — CI/CD**
+**Publication Readiness Audit - CI/CD**
 - Added Python 3.12 to CI test matrix (now tests 3.10, 3.11, 3.12)
 - Added `pytest-cov` coverage reporting to CI (`--cov=Synaptipy --cov-report=term-missing`)
 - Added coverage XML artifact upload for ubuntu/3.11 builds
 
-**Publication Readiness Audit — Scientific Accuracy**
+**Publication Readiness Audit - Scientific Accuracy**
 - Fixed line-noise detection baseline overlap in `signal_processor.py`
 - Fixed max/min dV/dt zeroing bias in `spike_analysis.py` (sentinel values)
 - Fixed AHP depth sign convention in `spike_analysis.py`
@@ -133,14 +133,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dV/dt unit conversion documentation in `phase_plane.py`
 - Removed duplicate dictionary keys in spike detection registry
 
-**Publication Readiness Audit — Code Quality**
+**Publication Readiness Audit - Code Quality**
 - Removed redundant imports, unused variables, and duplicate function definitions
 - Added edge-case handling for empty spike indices
 - Added docstring for `_find_stable_baseline_segment`
 - Converted unresolvable TODO to NOTE (async limitation in batch load)
 - Standardized all flake8 compliance to max-line-length 120
 
-**Publication Readiness Audit — CI/CD & Infrastructure**
+**Publication Readiness Audit - CI/CD & Infrastructure**
 - Made flake8 lint failures blocking in CI (removed `--exit-zero`)
 - Added `pytest-cov` to CI dependencies
 - Aligned Python version floor to 3.10 in pyproject.toml, environment.yml, README

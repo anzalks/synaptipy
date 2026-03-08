@@ -21,7 +21,7 @@ potential but other trials contained action potentials.
    after viewing a single-channel file caused the X-axis to not start at 0.
    The same file displayed correctly after pressing "Reset View" manually.
 2. **Y-range too narrow in overlay mode**: When all trials were overlaid,
-   only trial 0's amplitude range was used — if trial 0 was at resting
+   only trial 0's amplitude range was used - if trial 0 was at resting
    potential the Y range missed action potentials in other trials.
 3. **Inconsistent view on file cycling**: Rapidly cycling through files
    produced different view ranges than opening the same file fresh.
@@ -108,5 +108,5 @@ recordings and only when no view state restoration is pending.
 
 - All 330 tests pass (zero failures)
 - flake8 clean on both modified files
-- State preservation tests (3/3) pass — deferred reset does not overwrite
+- State preservation tests (3/3) pass - deferred reset does not overwrite
   deliberate zoom/pan or restored view state

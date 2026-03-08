@@ -160,6 +160,7 @@ All analysis features must be split into two distinct parts:
 *   **Lists**: Use `-` for unordered lists. Use `1.` only for genuinely ordered/sequential steps.
 *   **Inline code**: Wrap all command names, file paths, function names, class names, and identifiers in backticks.
 *   **No raw HTML** in Markdown files unless absolutely required (e.g., image sizing in .rst).
+*   **Typography Restriction**: NEVER use em dashes (`—`) or en dashes (`–`) in any prose, documentation, code, or changelogs. ALWAYS use standard ASCII hyphens (`-`). AI agents often default to em dashes when summarizing; you must actively avoid generating them.
 
 **5. Sphinx Build Compliance**
 *   **Zero Warnings Policy**: The Sphinx build (`make html` from `docs/`) MUST produce zero warnings. Any new documentation change must be validated by running the build.
