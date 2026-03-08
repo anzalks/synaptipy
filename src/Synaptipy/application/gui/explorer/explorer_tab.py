@@ -518,7 +518,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # We wrap the loading function to also include quality check
         worker = AnalysisWorker(self._load_and_check_quality, self.neo_adapter, filepath)
         worker.signals.result.connect(self._on_file_load_success)
-        worker.signals.error.connect(self._on_file_load_error)
+        worker.signals.error.connect(lambda err: self._on_file_load_error(err, filepath))
         worker.signals.finished.connect(self._finalize_loading_state)
 
         self.status_bar.showMessage(f"Loading '{filepath.name}'...")
@@ -1042,7 +1042,9 @@ class ExplorerTab(QtWidgets.QWidget):
                         avg_data = sum_data / count
                         try:
                             # Use standard avg_pen for manual global average overlay
-                            item = plot_item.plot(ref_t[: len(avg_data)], avg_data, pen=avg_pen, name="Global Average")  # noqa: E501
+                            item = plot_item.plot(
+                                ref_t[: len(avg_data)], avg_data, pen=avg_pen, name="Global Average"
+                            )  # noqa: E501
                             _apply_item_opts(item, ds_enabled)
                             item.setZValue(20)  # Always sit on top of everything
                             self.plot_canvas.channel_plot_data_items[cid].append(item)
@@ -1173,8 +1175,12 @@ class ExplorerTab(QtWidgets.QWidget):
                 pass
         self.status_bar.showMessage(f"Error loading {filepath.name}", 5000)
 
-        error_msg = str(error)
-        log.error(f"File load error: {error_msg}", exc_info=True)
+        if isinstance(error, tuple) and len(error) == 3:
+            error_msg = str(error[1])
+        else:
+            error_msg = str(error)
+
+        log.error(f"File load error: {error_msg}")
 
         # Special Handling for Unit Error (Safety Check)
         if "Critical Safety: Sampling Rate" in error_msg and "dangerously low" in error_msg:
