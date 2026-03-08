@@ -576,12 +576,12 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.pipeline_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.pipeline_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
         self.pipeline_list.model().rowsMoved.connect(self._on_pipeline_reordered)
-        
+
         # Placeholder behavior via empty state
         self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
-        self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags) # Make non-selectable/draggable
+        self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)  # Make non-selectable/draggable
         self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
-        
+
         pipeline_layout.addWidget(self.pipeline_list)
 
         # Pipeline buttons
@@ -589,12 +589,12 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         add_step_btn = QtWidgets.QPushButton("+ Add Step")
         add_step_btn.setToolTip("Add an analysis step to the pipeline")
-        
+
         available_count = len(AnalysisRegistry.list_registered())
         if available_count == 0:
             add_step_btn.setEnabled(False)
             add_step_btn.setText("No Analyses Registered")
-            
+
         add_step_btn.clicked.connect(self._on_add_step)
         pipeline_btn_layout.addWidget(add_step_btn)
 
@@ -686,20 +686,20 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         # Create step widget
         step_index = len(self.pipeline_steps)
         step_widget = PipelineStepWidget(step_config, step_index, self)
-        
+
         # Connect remove requested signal
         step_widget.remove_requested.connect(lambda w=step_widget: self._on_remove_step(w))
 
         # Add to ListWidget
         item = QtWidgets.QListWidgetItem()
         item.setSizeHint(step_widget.sizeHint())
-        
+
         # Store dict reference in user data to track reordering
         item.setData(QtCore.Qt.ItemDataRole.UserRole, step_config)
-        
+
         self.pipeline_list.addItem(item)
         self.pipeline_list.setItemWidget(item, step_widget)
-        
+
         self.pipeline_steps.append(step_config)
 
         log.debug(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
@@ -707,19 +707,19 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
     def _on_pipeline_reordered(self, sourceParent, sourceStart, sourceEnd, destinationParent, destinationRow):
         """Handle user drag-and-drop reordering."""
         self.pipeline_steps.clear()
-        
+
         # Re-build internal steps array from accurate visual list order
         for i in range(self.pipeline_list.count()):
             item = self.pipeline_list.item(i)
             step_config = item.data(QtCore.Qt.ItemDataRole.UserRole)
             if step_config:
                 self.pipeline_steps.append(step_config)
-                
+
             # Optionally update step index label on the widget
             widget = self.pipeline_list.itemWidget(item)
-            if widget and hasattr(widget, 'update_index'):
+            if widget and hasattr(widget, "update_index"):
                 widget.update_index(i)
-                
+
         log.debug(f"Pipeline reordered. New count: {len(self.pipeline_steps)}")
 
     def _on_add_files(self):
@@ -765,14 +765,14 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
     def _on_remove_step(self, step_widget: PipelineStepWidget):
         """Remove a step from the pipeline list."""
         step_config = step_widget.get_config()
-        
+
         # Find item in list widget and remove
         for i in range(self.pipeline_list.count()):
             item = self.pipeline_list.item(i)
             if item.data(QtCore.Qt.ItemDataRole.UserRole) == step_config:
                 self.pipeline_list.takeItem(i)
                 break
-                
+
         if step_config in self.pipeline_steps:
             self.pipeline_steps.remove(step_config)
 
@@ -786,7 +786,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             for i in range(self.pipeline_list.count()):
                 item = self.pipeline_list.item(i)
                 widget = self.pipeline_list.itemWidget(item)
-                if widget and hasattr(widget, 'update_index'):
+                if widget and hasattr(widget, "update_index"):
                     widget.update_index(i)
 
     def _on_clear_pipeline(self):
@@ -805,7 +805,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         if reply == QtWidgets.QMessageBox.StandardButton.Yes:
             self.pipeline_list.clear()
             self.pipeline_steps.clear()
-            
+
             self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
             self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
             self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
@@ -1138,7 +1138,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 try:
                     metadata = AnalysisRegistry.get_metadata(registry_key)
                     label = metadata.get("label")
-                    
+
                     if label:
                         result_data["analysis_type"] = label
                     else:

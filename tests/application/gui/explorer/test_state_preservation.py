@@ -132,10 +132,9 @@ def test_preserve_state_on_cycle(explorer_tab):
     explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
 
     # Set Trial Selection (Every 2nd trial)
-    gap_n = 1  # Every 2nd
-    start_idx = 0
-    explorer_tab._on_trial_selection_requested(gap_n, start_idx)
-    assert explorer_tab._current_trial_selection_params == (gap_n, start_idx)
+    selection_str = "0, 2, 4, 6, 8"
+    explorer_tab._on_trial_selection_requested(selection_str)
+    assert explorer_tab._current_trial_selection_params == selection_str
 
     # 3. Simulate Cycling to File B (preserve_state=True)
     rec_b = create_mock_recording("FileB.wcp")
@@ -152,7 +151,7 @@ def test_preserve_state_on_cycle(explorer_tab):
     assert abs(captured_x[0] - target_x_range[0]) < 0.01
     assert abs(captured_x[1] - target_x_range[1]) < 0.01
 
-    assert explorer_tab._pending_trial_params == (gap_n, start_idx)
+    assert explorer_tab._pending_trial_params == selection_str
 
     # 4. Simulate Load Completion (RESTORE)
     # This calls _display_recording -> _update_plot
@@ -177,7 +176,7 @@ def test_preserve_state_on_cycle(explorer_tab):
     assert abs(view_range_y[0] - target_y_range[0]) < 0.01
 
     # Verify Trial Params restored
-    assert explorer_tab._current_trial_selection_params == (gap_n, start_idx)
+    assert explorer_tab._current_trial_selection_params == selection_str
     # Check selection indices were recalculated (max trials 10, skip 1 -> 5 selected)
     assert len(explorer_tab.selected_trial_indices) == 5
 
@@ -191,7 +190,7 @@ def test_no_preserve_state_default(explorer_tab):
 
     plot_a = explorer_tab.plot_canvas.channel_plots["ch1"]
     plot_a.setXRange(0.2, 0.4, padding=0)
-    explorer_tab._on_trial_selection_requested(1, 0)
+    explorer_tab._on_trial_selection_requested("0, 2, 4, 6, 8")
 
     # 2. Load File B WITHOUT preserve_state
     rec_b = create_mock_recording("FileB.wcp")
@@ -231,7 +230,7 @@ def test_preserve_state_on_sidebar_selection(explorer_tab):
     plot_a.setXRange(0.2, 0.4, padding=0)
     QCoreApplication.processEvents()
     explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
-    explorer_tab._on_trial_selection_requested(1, 0)  # Gap 1
+    explorer_tab._on_trial_selection_requested("0, 2, 4, 6, 8")  # Gap 1
 
     # 2. Emit Signal from Sidebar (simulate user double-click)
     rec_b = create_mock_recording("FileB.wcp")
@@ -244,10 +243,10 @@ def test_preserve_state_on_sidebar_selection(explorer_tab):
     # Since we mocked the thread pool, load_recording_data runs but worker start is instant/mocked.
     # But checking _pending_view_state confirms preserve_state=True was passed.
     assert explorer_tab._pending_view_state is not None
-    assert explorer_tab._pending_trial_params == (1, 0)
+    assert explorer_tab._pending_trial_params == "0, 2, 4, 6, 8"
 
     # 4. Finish Load
     explorer_tab._display_recording(rec_b)
 
     # 5. Verify Restored
-    assert explorer_tab._current_trial_selection_params == (1, 0)
+    assert explorer_tab._current_trial_selection_params == "0, 2, 4, 6, 8"

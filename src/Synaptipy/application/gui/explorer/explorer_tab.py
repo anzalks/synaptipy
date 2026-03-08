@@ -886,20 +886,22 @@ class ExplorerTab(QtWidgets.QWidget):
 
             # --- PLOT SETTINGS ---
             ds_enabled = self.config_panel.downsample_cb.isChecked()
-            # pyqtgraph default autoDownsampleThreshold is 5000; keep it
-            # reasonable so zoomed-out views stay fast without crushing detail.
-            ds_threshold = 5000
+            ds_factor = (
+                self.config_panel.downsample_factor_spin.value()
+                if hasattr(self.config_panel, "downsample_factor_spin")
+                else 10
+            )
             ds_method = "peak"
             clip_view = ds_enabled  # only clip when downsampling is active
 
             # Function to apply common item settings
             def _apply_item_opts(item, is_ds):
                 if hasattr(item, "setDownsampling"):
-                    item.setDownsampling(auto=is_ds, method=ds_method)
+                    item.setDownsampling(ds=ds_factor if is_ds else 1, auto=False, method=ds_method)
                 if hasattr(item, "opts"):
-                    item.opts["autoDownsample"] = is_ds
-                    if is_ds:
-                        item.opts["autoDownsampleThreshold"] = ds_threshold
+                    item.opts["autoDownsample"] = False
+                    item.opts["downsample"] = ds_factor if is_ds else 1
+                    item.opts["downsampleMethod"] = ds_method
                 if hasattr(item, "setClipToView"):
                     item.setClipToView(clip_view)
 
@@ -972,10 +974,10 @@ class ExplorerTab(QtWidgets.QWidget):
                                 item = plot_item.plot(t, data, pen=current_trial_pen)
 
                                 # Apply background optimizations
-                                item.setDownsampling(auto=ds_enabled, method=bg_ds_method)
-                                item.opts["autoDownsample"] = ds_enabled
-                                if ds_enabled:
-                                    item.opts["autoDownsampleThreshold"] = ds_threshold
+                                item.setDownsampling(ds=ds_factor if ds_enabled else 1, auto=False, method=bg_ds_method)
+                                item.opts["autoDownsample"] = False
+                                item.opts["downsample"] = ds_factor if ds_enabled else 1
+                                item.opts["downsampleMethod"] = bg_ds_method
                                 item.setClipToView(clip_view)
 
                                 self.plot_canvas.channel_plot_data_items[cid].append(item)
@@ -1014,16 +1016,16 @@ class ExplorerTab(QtWidgets.QWidget):
                     plot_item = self.plot_canvas.channel_plots.get(cid)
                     if not plot_item or not plot_item.isVisible():
                         continue
-                        
+
                     sum_data = None
                     count = 0
                     ref_t = None
                     fs = channel.sampling_rate
-                    
+
                     for item in self.global_manual_trials:
                         raw_data = item["raw_traces"].get(cid)
                         time_vec = item["time_vectors"].get(cid)
-                        
+
                         if raw_data is not None and time_vec is not None:
                             try:
                                 proc_data = self.pipeline.process(raw_data, fs, time_vector=time_vec)
@@ -1035,12 +1037,12 @@ class ExplorerTab(QtWidgets.QWidget):
                                 count += 1
                             except Exception as e:
                                 log.error(f"Error processing cached trace for average: {e}")
-                                
+
                     if count > 0 and sum_data is not None and ref_t is not None:
                         avg_data = sum_data / count
                         try:
-                            # Use distinct pen or same avg_pen but thicker so users know which is which? Using standard avg_pen.
-                            item = plot_item.plot(ref_t[:len(avg_data)], avg_data, pen=avg_pen, name="Global Average")
+                            # Use standard avg_pen for manual global average overlay
+                            item = plot_item.plot(ref_t[: len(avg_data)], avg_data, pen=avg_pen, name="Global Average")  # noqa: E501
                             _apply_item_opts(item, ds_enabled)
                             item.setZValue(20)  # Always sit on top of everything
                             self.plot_canvas.channel_plot_data_items[cid].append(item)
@@ -1966,16 +1968,17 @@ class ExplorerTab(QtWidgets.QWidget):
 
         if num_trials > 0 and selection_text:
             from Synaptipy.shared.utils import parse_trial_selection_string
+
             parsed = parse_trial_selection_string(selection_text, num_trials)
             self.selected_trial_indices = parsed
-            
+
             if not self.selected_trial_indices:
                 log.warning("Invalid trial selection string or no matching trials.")
                 self.status_bar.showMessage("Invalid trial selection string.", 3000)
-                
+
         # Always store string for restoration
         self._current_trial_selection_params = selection_text
-        
+
         # Propagate text back to UI if we restored this programmatically
         if self.config_panel.trial_selection_input.text() != selection_text:
             self.config_panel.trial_selection_input.blockSignals(True)
@@ -2003,17 +2006,17 @@ class ExplorerTab(QtWidgets.QWidget):
     def _toggle_select_current_trial(self):
         if not self.current_recording:
             return
-            
+
         current_path = self.current_recording.source_file
         idx = self.current_trial_index
-        
+
         # Check if already in global set
         existing_idx = None
         for i, item in enumerate(self.global_manual_trials):
             if item["path"] == current_path and item["trial_index"] == idx:
                 existing_idx = i
                 break
-                
+
         if existing_idx is not None:
             # Remove it
             self.global_manual_trials.pop(existing_idx)
@@ -2027,17 +2030,14 @@ class ExplorerTab(QtWidgets.QWidget):
                 if d is not None and t is not None:
                     raw_traces[cid] = d
                     time_vectors[cid] = t
-                    
-            if raw_traces:     
-                self.global_manual_trials.append({
-                    "path": current_path,
-                    "trial_index": idx,
-                    "raw_traces": raw_traces,
-                    "time_vectors": time_vectors
-                })
-                
+
+            if raw_traces:
+                self.global_manual_trials.append(
+                    {"path": current_path, "trial_index": idx, "raw_traces": raw_traces, "time_vectors": time_vectors}
+                )
+
         self._update_global_avg_label()
-        
+
         # Update plot if the global average is currently being shown
         if self.config_panel.show_avg_btn.isChecked():
             self._update_plot()
@@ -2045,27 +2045,28 @@ class ExplorerTab(QtWidgets.QWidget):
     def _clear_avg_selection(self):
         self.global_manual_trials.clear()
         self._update_global_avg_label()
-        
+
         if self.config_panel.show_avg_btn.isChecked():
-            self.config_panel.show_avg_btn.setChecked(False) # Triggers update_plot
+            self.config_panel.show_avg_btn.setChecked(False)  # Triggers update_plot
         else:
             self._update_plot()
-            
+
     def _update_global_avg_label(self):
         if not self.global_manual_trials:
             self.config_panel.selected_label.setText("Selected: None")
             return
-            
+
         from collections import defaultdict
+
         file_map = defaultdict(list)
         for item in self.global_manual_trials:
             file_map[item["path"].stem].append(item["trial_index"])
-            
+
         parts = []
         for fname, indices in file_map.items():
             idx_str = ", ".join(map(str, sorted(indices)))
             parts.append(f"{fname} ({idx_str})")
-            
+
         self.config_panel.selected_label.setText("Selected: " + "; ".join(parts))
 
     def _toggle_plot_selected_average(self, show):

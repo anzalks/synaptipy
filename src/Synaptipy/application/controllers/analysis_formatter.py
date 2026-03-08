@@ -1,6 +1,8 @@
 import logging
 from typing import Any, Dict, List, Tuple, Union
 
+import numpy as np
+
 from Synaptipy.core.results import AnalysisResult, RinResult, SpikeTrainResult
 
 log = logging.getLogger(__name__)
@@ -112,7 +114,7 @@ class AnalysisResultFormatter:
                     for k, v in result.items()
                     if isinstance(v, (int, float, np.number)) and not isinstance(v, bool) and "time" not in k.lower()
                 ]
-                
+
                 if numeric_vals:
                     value_str = numeric_vals[0]
                     if len(numeric_vals) > 1:
@@ -122,7 +124,8 @@ class AnalysisResultFormatter:
                     other_vals = [
                         f"{k}: {v}"
                         for k, v in result.items()
-                        if not isinstance(v, (dict, list, tuple)) and k not in ["analysis_type", "channel_id", "channel_name"]
+                        if not isinstance(v, (dict, list, tuple))
+                        and k not in ["analysis_type", "channel_id", "channel_name"]
                     ]
                     if other_vals:
                         value_str = other_vals[0]
@@ -139,7 +142,7 @@ class AnalysisResultFormatter:
     def _to_float(val: Any) -> float:
         """Safe float conversion handling numpy items."""
         import numpy as np
-        
+
         if isinstance(val, (int, float, np.number)):
             return float(val)
         if hasattr(val, "item"):

@@ -8,7 +8,7 @@ Contains the Left Panel widgets: Display Options, Manual Limits, Channel List, F
 import logging
 from typing import Dict, Optional
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.core.data_model import Recording
 
@@ -86,10 +86,27 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         layout.addLayout(pm_layout)
 
         # Downsample
-        self.downsample_cb = QtWidgets.QCheckBox("Auto Downsample Plot")
+        ds_layout = QtWidgets.QHBoxLayout()
+        self.downsample_cb = QtWidgets.QCheckBox("Downsample Plot")
         self.downsample_cb.setChecked(True)
         self.downsample_cb.toggled.connect(self.downsample_toggled.emit)
-        layout.addWidget(self.downsample_cb)
+        ds_layout.addWidget(self.downsample_cb)
+
+        ds_layout.addWidget(QtWidgets.QLabel("Factor:"))
+        self.downsample_factor_spin = QtWidgets.QSpinBox()
+        self.downsample_factor_spin.setRange(1, 1000)
+        self.downsample_factor_spin.setValue(10)
+        self.downsample_factor_spin.setToolTip("Downsampling factor (e.g., 10 means 1 in 10 samples are plotted)")
+        self.downsample_factor_spin.valueChanged.connect(
+            lambda _: self.downsample_toggled.emit(self.downsample_cb.isChecked())
+        )
+        self.downsample_factor_spin.setEnabled(True)
+        ds_layout.addWidget(self.downsample_factor_spin)
+
+        # Connect checkbox to enable/disable spinbox
+        self.downsample_cb.toggled.connect(self.downsample_factor_spin.setEnabled)
+
+        layout.addLayout(ds_layout)
 
         # Separator
         sep = QtWidgets.QFrame()

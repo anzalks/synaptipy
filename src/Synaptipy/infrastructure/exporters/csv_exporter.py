@@ -5,13 +5,11 @@ CSV Exporter for Synaptipy.
 Handles exporting recording data and analysis results to CSV format.
 """
 
-import csv
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
-import pandas as pd
 
 from Synaptipy.core.data_model import Recording
 
@@ -229,10 +227,10 @@ class CSVExporter:
 
             # Replace empty strings with NaN for proper dropna
             df.replace("", pd.NA, inplace=True)
-            
+
             # Key fix: Drop columns that are completely NA across all rows
-            df.dropna(axis=1, how='all', inplace=True)
-            
+            df.dropna(axis=1, how="all", inplace=True)
+
             # Replace NaN back to empty string for clean CSV
             df.fillna("", inplace=True)
 
