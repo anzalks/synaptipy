@@ -112,6 +112,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self._setup_layout()
         self._connect_signals()
 
+        # Global Manual Trial Cache (Cross-File)
+        self.global_manual_trials: List[dict] = []
+
         # Initial State
         self._update_all_ui_state()
 
@@ -651,15 +654,12 @@ class ExplorerTab(QtWidgets.QWidget):
         if self._pending_trial_params:
             log.debug(f"Restoring trial selection params: {self._pending_trial_params}")
             try:
-                n_gap, start_idx = self._pending_trial_params
                 # Re-apply selection logic (this will update selected_trial_indices and trigger plot update)
-                self._on_trial_selection_requested(n_gap, start_index=start_idx)
+                self._on_trial_selection_requested(self._pending_trial_params)
                 # Note: _on_trial_selection_requested calls _update_plot, so we might redraw twice, but safe.
             except Exception as e:
                 log.warning(f"Failed to restore trial selection: {e}")
                 self._auto_select_trials()  # Fallback
-            finally:
-                self._pending_trial_params = None
         else:
             self._auto_select_trials()
 
@@ -1005,6 +1005,47 @@ class ExplorerTab(QtWidgets.QWidget):
                             self.plot_canvas.channel_plot_data_items[cid].append(item)
                     except Exception as e:
                         log.error(f"Error plotting avg for {cid}: {e}")
+
+            # -------------------------------------------------------------
+            # Plot Global Manual Average (If Checked)
+            # -------------------------------------------------------------
+            if self.config_panel.show_avg_btn.isChecked() and self.global_manual_trials:
+                for cid, channel in self.current_recording.channels.items():
+                    plot_item = self.plot_canvas.channel_plots.get(cid)
+                    if not plot_item or not plot_item.isVisible():
+                        continue
+                        
+                    sum_data = None
+                    count = 0
+                    ref_t = None
+                    fs = channel.sampling_rate
+                    
+                    for item in self.global_manual_trials:
+                        raw_data = item["raw_traces"].get(cid)
+                        time_vec = item["time_vectors"].get(cid)
+                        
+                        if raw_data is not None and time_vec is not None:
+                            try:
+                                proc_data = self.pipeline.process(raw_data, fs, time_vector=time_vec)
+                                if sum_data is None:
+                                    sum_data = np.zeros_like(proc_data)
+                                    ref_t = time_vec
+                                min_len = min(len(sum_data), len(proc_data))
+                                sum_data[:min_len] += proc_data[:min_len]
+                                count += 1
+                            except Exception as e:
+                                log.error(f"Error processing cached trace for average: {e}")
+                                
+                    if count > 0 and sum_data is not None and ref_t is not None:
+                        avg_data = sum_data / count
+                        try:
+                            # Use distinct pen or same avg_pen but thicker so users know which is which? Using standard avg_pen.
+                            item = plot_item.plot(ref_t[:len(avg_data)], avg_data, pen=avg_pen, name="Global Average")
+                            _apply_item_opts(item, ds_enabled)
+                            item.setZValue(20)  # Always sit on top of everything
+                            self.plot_canvas.channel_plot_data_items[cid].append(item)
+                        except Exception as e:
+                            log.error(f"Error plotting manual avg for {cid}: {e}")
 
             # Restore View State — guard against XLink cascade on multi-channel.
             # Skip when 'fresh' to let auto-range show all data.
@@ -1913,36 +1954,40 @@ class ExplorerTab(QtWidgets.QWidget):
                 except Exception as e:
                     self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
 
-    def _on_trial_selection_requested(self, n, start_index=0):
-        """Filter trials to every Nth trial, starting from start_index."""
+    def _on_trial_selection_requested(self, selection_text: str):
         if not self.current_recording:
             return
 
-        self.max_trials_current_recording = getattr(self.current_recording, "max_trials", 0)
-        all_indices = range(self.max_trials_current_recording)
+        # Use first channel as reference for trial count
+        ch0 = next(iter(self.current_recording.channels.values()), None)
+        num_trials = getattr(ch0, "num_trials", 0) if ch0 else 0
 
-        # Select every Nth (Gap Logic: Step = N + 1)
-        # 0 -> Step 1 (All)
-        # 1 -> Step 2 (Every 2nd)
-        step = n + 1
+        self.selected_trial_indices.clear()
 
-        # Validate Start Index
-        if start_index < 0:
-            start_index = 0
+        if num_trials > 0 and selection_text:
+            from Synaptipy.shared.utils import parse_trial_selection_string
+            parsed = parse_trial_selection_string(selection_text, num_trials)
+            self.selected_trial_indices = parsed
+            
+            if not self.selected_trial_indices:
+                log.warning("Invalid trial selection string or no matching trials.")
+                self.status_bar.showMessage("Invalid trial selection string.", 3000)
+                
+        # Always store string for restoration
+        self._current_trial_selection_params = selection_text
+        
+        # Propagate text back to UI if we restored this programmatically
+        if self.config_panel.trial_selection_input.text() != selection_text:
+            self.config_panel.trial_selection_input.blockSignals(True)
+            self.config_panel.trial_selection_input.setText(selection_text if selection_text else "")
+            self.config_panel.trial_selection_input.blockSignals(False)
 
-        # Slicing: [start:stop:step]
-        self.selected_trial_indices = set(all_indices[start_index::step])
-
-        log.info(
-            f"Filtering trials: Start={start_index}, Gap={n} (Step={step}) -> "
-            f"{len(self.selected_trial_indices)} trials selected."
-        )
-
-        # Store params for preservation
-        self._current_trial_selection_params = (n, start_index)
-
+        # Remove forced mode swap - user prefers to cycle while building an average.
+        # Ensure the selected label is updated to remove the "None" state visually on load.
         self.config_panel.update_selection_label(self.selected_trial_indices)
+
         self._update_plot()
+        self._update_all_ui_state()
 
     def _on_trial_selection_reset_requested(self):
         """Reset trial selection to show all (raw data)."""
@@ -1956,16 +2001,72 @@ class ExplorerTab(QtWidgets.QWidget):
         pass  # Deprecated
 
     def _toggle_select_current_trial(self):
-        if self.current_trial_index in self.selected_trial_indices:
-            self.selected_trial_indices.discard(self.current_trial_index)
+        if not self.current_recording:
+            return
+            
+        current_path = self.current_recording.source_file
+        idx = self.current_trial_index
+        
+        # Check if already in global set
+        existing_idx = None
+        for i, item in enumerate(self.global_manual_trials):
+            if item["path"] == current_path and item["trial_index"] == idx:
+                existing_idx = i
+                break
+                
+        if existing_idx is not None:
+            # Remove it
+            self.global_manual_trials.pop(existing_idx)
         else:
-            self.selected_trial_indices.add(self.current_trial_index)
-        self._update_all_ui_state()
+            # Add it: extract raw data for all plotted channels
+            raw_traces = {}
+            time_vectors = {}
+            for cid, channel in self.current_recording.channels.items():
+                d = channel.get_data(idx)
+                t = channel.get_relative_time_vector(idx)
+                if d is not None and t is not None:
+                    raw_traces[cid] = d
+                    time_vectors[cid] = t
+                    
+            if raw_traces:     
+                self.global_manual_trials.append({
+                    "path": current_path,
+                    "trial_index": idx,
+                    "raw_traces": raw_traces,
+                    "time_vectors": time_vectors
+                })
+                
+        self._update_global_avg_label()
+        
+        # Update plot if the global average is currently being shown
+        if self.config_panel.show_avg_btn.isChecked():
+            self._update_plot()
 
     def _clear_avg_selection(self):
-        self.selected_trial_indices.clear()
-        self._update_all_ui_state()
-        self._toggle_plot_selected_average(False)
+        self.global_manual_trials.clear()
+        self._update_global_avg_label()
+        
+        if self.config_panel.show_avg_btn.isChecked():
+            self.config_panel.show_avg_btn.setChecked(False) # Triggers update_plot
+        else:
+            self._update_plot()
+            
+    def _update_global_avg_label(self):
+        if not self.global_manual_trials:
+            self.config_panel.selected_label.setText("Selected: None")
+            return
+            
+        from collections import defaultdict
+        file_map = defaultdict(list)
+        for item in self.global_manual_trials:
+            file_map[item["path"].stem].append(item["trial_index"])
+            
+        parts = []
+        for fname, indices in file_map.items():
+            idx_str = ", ".join(map(str, sorted(indices)))
+            parts.append(f"{fname} ({idx_str})")
+            
+        self.config_panel.selected_label.setText("Selected: " + "; ".join(parts))
 
     def _toggle_plot_selected_average(self, show):
         # Logic to show/hide overlay
