@@ -1,0 +1,123 @@
+name: Installer CI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }} Installer
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: synaptipy-linux.deb
+            artifact_path: dist/*.deb
+          - os: windows-latest
+            artifact_name: Synaptipy_Setup.exe
+            artifact_path: Synaptipy_Setup_*.exe
+          - os: macos-latest
+            artifact_name: Synaptipy.dmg
+            artifact_path: dist/*.dmg
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" -r requirements.txt
+
+      - name: Build ICNS and ICO
+        run: python scripts/build_icons.py
+
+      - name: Build with PyInstaller
+        run: pyinstaller synaptipy.spec
+
+      - name: Package for Windows
+        if: runner.os == 'Windows'
+        run: |
+          $VERSION = (Select-String -Path pyproject.toml -Pattern '^version = "(.*)"$').Matches.Groups[1].Value
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/dMyAppVersion=$VERSION" installer\windows_setup.iss
+        shell: powershell
+
+      - name: Package for macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install create-dmg
+          VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          create-dmg \
+            --volname "Synaptipy Installer" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "Synaptipy.app" 200 190 \
+            --hide-extension "Synaptipy.app" \
+            --app-drop-link 600 185 \
+            "dist/Synaptipy_${VERSION}.dmg" \
+            "dist/Synaptipy.app"
+
+      - name: Package for Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rubygems build-essential
+          sudo gem install --no-document fpm
+          
+          mkdir -p packaging/opt/synaptipy
+          mkdir -p packaging/usr/share/applications
+          
+          cp -r dist/Synaptipy/* packaging/opt/synaptipy/
+          chmod +x packaging/opt/synaptipy/Synaptipy
+          cp src/Synaptipy/resources/icons/logo.png packaging/opt/synaptipy/logo.png
+          cp installer/linux/synaptipy.desktop packaging/usr/share/applications/
+          
+          VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          fpm -s dir -t deb \
+            -n synaptipy \
+            -v $VERSION \
+            --description "Electrophysiology Visualization Suite" \
+            -C packaging \
+            -p dist/synaptipy_${VERSION}_amd64.deb \
+            opt usr
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+
+  release:
+    name: Upload to Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+
+      - name: Upload binaries to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          files: |
+            dist-artifacts/*/*.deb
+            dist-artifacts/*/*.exe
+            dist-artifacts/*/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
