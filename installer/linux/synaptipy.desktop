@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Synaptipy
+Comment=Electrophysiology Visualization Suite
+Exec=/opt/synaptipy/Synaptipy
+Icon=/opt/synaptipy/logo.png
+Terminal=false
+Categories=Science;Education;DataVisualization;

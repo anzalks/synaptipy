@@ -113,9 +113,18 @@ Synaptipy follows a strict separation-of-concerns design:
 
 ## Installation
 
-Synaptipy is compatible with Windows, macOS, and Linux. The implementation relies on `conda` for environment management to handle system-level dependencies efficiently.
+Synaptipy is available both as a standalone application and as a Python package.
 
-### Prerequisites
+### Standalone Application (Recommended)
+You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.deb`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases). 
+- **macOS**: Download the `.dmg`, open it, and drag Synaptipy to your Applications folder.
+- **Windows**: Download and run the `_Setup.exe` installer.
+- **Linux**: Download the `.deb` package and install it via `sudo dpkg -i <filename.deb>`.
+
+### Python Package Installation
+For researchers who wish to use Synaptipy programmatically or develop custom plugins, you can install it via `conda` / `pip`:
+
+#### Prerequisites
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
 
 ### Setup Instructions

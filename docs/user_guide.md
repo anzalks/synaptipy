@@ -45,6 +45,16 @@ This guide provides detailed instructions for installing, configuring, and using
 
 ### Standard Installation
 
+Synaptipy is available both as a standalone application and as a Python package.
+
+#### Standalone Application (Recommended)
+You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.deb`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases). 
+- **macOS**: Download the `.dmg`, open it, and drag Synaptipy to your Applications folder.
+- **Windows**: Download and run the `_Setup.exe` installer.
+- **Linux**: Download the `.deb` package and install it via `sudo dpkg -i <filename.deb>`.
+
+#### Python Package Installation
+
 Synaptipy is not yet published on PyPI. Install from source using the conda environment:
 
 ```bash

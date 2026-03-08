@@ -235,7 +235,11 @@
 <li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#requirements">Requirements</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#standard-installation">Standard Installation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#standard-installation">Standard Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#standalone-application-recommended">Standalone Application (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#python-package-installation">Python Package Installation</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#developer-installation">Developer Installation</a></li>
 </ul>
 </li>
@@ -1805,6 +1809,18 @@
 </section>
 <section id="standard-installation">
 <h3>Standard Installation<a class="headerlink" href="#standard-installation" title="Link to this heading"></a></h3>
+<p>Synaptipy is available both as a standalone application and as a Python package.</p>
+<section id="standalone-application-recommended">
+<h4>Standalone Application (Recommended)<a class="headerlink" href="#standalone-application-recommended" title="Link to this heading"></a></h4>
+<p>You can download pre-built installers for macOS (<code class="docutils literal notranslate"><span class="pre">.dmg</span></code>), Windows (<code class="docutils literal notranslate"><span class="pre">.exe</span></code>), and Linux (<code class="docutils literal notranslate"><span class="pre">.deb</span></code>) directly from the <a class="reference external" href="https://github.com/anzalks/synaptipy/releases">GitHub Releases page</a>.</p>
+<ul class="simple">
+<li><p><strong>macOS</strong>: Download the <code class="docutils literal notranslate"><span class="pre">.dmg</span></code>, open it, and drag Synaptipy to your Applications folder.</p></li>
+<li><p><strong>Windows</strong>: Download and run the <code class="docutils literal notranslate"><span class="pre">_Setup.exe</span></code> installer.</p></li>
+<li><p><strong>Linux</strong>: Download the <code class="docutils literal notranslate"><span class="pre">.deb</span></code> package and install it via <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">dpkg</span> <span class="pre">-i</span> <span class="pre">&lt;filename.deb&gt;</span></code>.</p></li>
+</ul>
+</section>
+<section id="python-package-installation">
+<h4>Python Package Installation<a class="headerlink" href="#python-package-installation" title="Link to this heading"></a></h4>
 <p>Synaptipy is not yet published on PyPI. Install from source using the conda environment:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/anzalks/synaptipy.git
 <span class="nb">cd</span><span class="w"> </span>synaptipy
@@ -1813,6 +1829,7 @@ conda<span class="w"> </span>activate<span class="w"> </span>synaptipy
 pip<span class="w"> </span>install<span class="w"> </span>.
 </pre></div>
 </div>
+</section>
 </section>
 <section id="developer-installation">
 <h3>Developer Installation<a class="headerlink" href="#developer-installation" title="Link to this heading"></a></h3>
