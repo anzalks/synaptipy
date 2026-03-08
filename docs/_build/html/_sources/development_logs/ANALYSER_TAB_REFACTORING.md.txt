@@ -1,7 +1,7 @@
 # AnalyserTab Layout Refactoring
 
 **Date:** November 21, 2025  
-**Author:** Anzal  
+**Author:** Anzal K Shahul  
 **Status:** Completed
 
 ## Overview
