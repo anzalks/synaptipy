@@ -227,7 +227,17 @@ row in the results table.
 | `np.ndarray` values | Displayed as shape summary (e.g. `"array(150,)"`). |
 | `None` values | Displayed as `"N/A"`. |
 
----
+### 3.4 Batch Export and Dynamic CSVs
+
+The dict you return from your custom analysis wrapper is directly hooked into Synaptipy's Batch Analysis engine. You do not need to register your output fields anywhere. 
+
+When a user runs a batch analysis queue that includes your custom plugin, the exporter collects every single flat dictionary your plugin returns. Upon executing "Export to CSV":
+1. Synaptipy isolates your analysis results from all other built-in analysis results.
+2. It loops through all the keys you returned in your dict.
+3. It dynamically generates a standalone CSV file specifically for your plugin (e.g. `my_custom_analysis.csv`) inside a ZIP archive.
+4. **Every dict key becomes its own dynamically constructed CSV column header.**
+
+This means you can invent any metrics you want (`"peak_velocity"`, `"spike_integral"`) and they will seamlessly and natively export out to formatted spreadsheets.
 
 ## 4. Defining GUI Parameters (`ui_params`)
 
