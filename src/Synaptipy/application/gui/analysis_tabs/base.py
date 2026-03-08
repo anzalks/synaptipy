@@ -1501,27 +1501,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             layout.addWidget(data_group)
 
         # --- Group 2: Plot Selected Trials ---
-        # User requested consistency with Explorer Tab filtering
+        # User requested consistency with Explorer Tab filtering and specific subsets
         pst_group = QtWidgets.QGroupBox("Plot Selected Trials")
         pst_layout = QtWidgets.QVBoxLayout(pst_group)
         pst_layout.setSpacing(10)
 
         # Input Row
         in_layout = QtWidgets.QHBoxLayout()
-        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
-        self.nth_trial_input = QtWidgets.QLineEdit()
-        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
-        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        self.nth_trial_input.returnPressed.connect(self._on_plot_filtered_trials)
-        in_layout.addWidget(self.nth_trial_input)
-
-        in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
-        self.start_trial_input = QtWidgets.QLineEdit()
-        self.start_trial_input.setPlaceholderText("0")
-        self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        self.start_trial_input.setText("0")
-        self.start_trial_input.returnPressed.connect(self._on_plot_filtered_trials)
-        in_layout.addWidget(self.start_trial_input)
+        in_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.trial_selection_input = QtWidgets.QLineEdit()
+        self.trial_selection_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        self.trial_selection_input.returnPressed.connect(self._on_plot_filtered_trials)
+        in_layout.addWidget(self.trial_selection_input)
 
         pst_layout.addLayout(in_layout)
 
@@ -1552,9 +1543,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug(f"{self.__class__.__name__}: Data selection UI setup complete")
 
     def _reset_trial_filtering(self):
-        """Reset trial filter inputs and plot filtered trials default (all?). No, maybe just clears overlay."""
-        self.nth_trial_input.clear()
-        self.start_trial_input.setText("0")
+        """Reset trial filter inputs and plot filtered trials default."""
+        self.trial_selection_input.clear()
 
         # Clear filter state
         self._filtered_indices = None
@@ -1611,17 +1601,46 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if selected_indices:
             # Store state and redraw using main loop
             self._filtered_indices = set(selected_indices)
-            self._plot_selected_data()
-        else:
-            log.warning("No trials matched selection criteria (Indices empty).")
-            # FIX: Clear previous filter so we don't show old data
-            self._filtered_indices = None
-            QtWidgets.QMessageBox.information(self, "Trial Selection", "No trials matched your criteria.")
-            # Refresh plot (revert to default/all?)
-            self._plot_selected_data()
+    def _on_plot_filtered_trials(self):
+        """
+        Parse inputs and plot filtered trials.
+        Replica of ExplorerTab logic.
+        """
+        selection_text = self.trial_selection_input.text().strip()
 
-            # Refresh plot (revert to default/all?)
+        if not self._selected_item_recording:
+            return
+
+        # Get number of trials from first channel
+        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+        num_trials = getattr(first_channel, "num_trials", 0) if first_channel else 0
+
+        if num_trials == 0:
+            return
+
+        selected_indices = []
+        if selection_text:
+            from Synaptipy.shared.utils import parse_trial_selection_string
+            parsed = parse_trial_selection_string(selection_text, num_trials)
+            selected_indices = sorted(list(parsed))
+            
+            if not selected_indices:
+                log.warning("Invalid input for trial selection or no matches.")
+                QtWidgets.QMessageBox.information(self, "Trial Selection", "No trials matched your criteria or invalid format.")
+                self._filtered_indices = None
+                self._plot_selected_data()
+                return
+        else:
+            # Empty String means un-filter
+            self._filtered_indices = None
             self._plot_selected_data()
+            return
+            
+        log.info(f"Trial Selection: '{selection_text}' -> Found {len(selected_indices)} trials.")
+
+        # Store state and redraw using main loop
+        self._filtered_indices = set(selected_indices)
+        self._plot_selected_data()
 
     # --- Plot Navigation Controls (Below Plot) ---
     def _setup_plot_navigation_controls(self, layout: QtWidgets.QVBoxLayout):

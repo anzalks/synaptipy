@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
+import pandas as pd
 
 from Synaptipy.core.data_model import Recording
 
@@ -175,10 +176,12 @@ class CSVExporter:
                 if field not in ordered_fields:
                     ordered_fields.append(field)
 
+            import pandas as pd
+
             # Helper function to convert numpy values to Python native types
             def convert_value(val):
                 """Convert numpy types to Python native types for CSV compatibility."""
-                if val is None:
+                if pd.isna(val):
                     return ""
 
                 # Convert numpy arrays to lists
@@ -201,35 +204,40 @@ class CSVExporter:
 
                 return val
 
+            # Process each result to handle nested dictionaries
+            flat_results = []
+            for result in results:
+                # Create a flattened copy of the result
+                flat_result = {}
+
+                # Process each key-value pair in the result dictionary
+                for key, value in result.items():
+                    if isinstance(value, dict):
+                        # For nested dictionaries (like summary_stats or parameters)
+                        for nested_key, nested_value in value.items():
+                            flat_key = f"{key}.{nested_key}"
+                            if flat_key in ordered_fields:
+                                flat_result[flat_key] = convert_value(nested_value)
+                    else:
+                        if key in ordered_fields:
+                            flat_result[key] = convert_value(value)
+
+                flat_results.append(flat_result)
+
+            # Convert to DataFrame
+            df = pd.DataFrame(flat_results, columns=ordered_fields)
+
+            # Replace empty strings with NaN for proper dropna
+            df.replace("", pd.NA, inplace=True)
+            
+            # Key fix: Drop columns that are completely NA across all rows
+            df.dropna(axis=1, how='all', inplace=True)
+            
+            # Replace NaN back to empty string for clean CSV
+            df.fillna("", inplace=True)
+
             # Create the CSV file
-            with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=ordered_fields)
-                writer.writeheader()
-
-                # Process each result to handle nested dictionaries
-                for result in results:
-                    # Create a flattened copy of the result
-                    flat_result = {}
-
-                    # Process each key-value pair in the result dictionary
-                    for key, value in result.items():
-                        if isinstance(value, dict):
-                            # For nested dictionaries (like summary_stats or parameters)
-                            for nested_key, nested_value in value.items():
-                                flat_key = f"{key}.{nested_key}"
-                                if flat_key in ordered_fields:
-                                    flat_result[flat_key] = convert_value(nested_value)
-                        else:
-                            if key in ordered_fields:
-                                flat_result[key] = convert_value(value)
-
-                    # Fill in missing fields with empty strings
-                    for field in ordered_fields:
-                        if field not in flat_result:
-                            flat_result[field] = ""
-
-                    # Write the flattened result
-                    writer.writerow(flat_result)
+            df.to_csv(output_path, index=False, encoding="utf-8")
 
             log.info(f"Successfully exported {len(results)} analysis results to {output_path}")
             return True

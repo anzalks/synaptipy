@@ -211,7 +211,9 @@ class AddStepDialog(QtWidgets.QDialog):
 
         scope_options = [
             ("average", "Average Trace", "Analyze the averaged trace across all trials"),
+            ("selected_trials_average", "Average Selected", "Analyze the average of explicit trials (e.g. 0, 2, 4)"),
             ("all_trials", "All Trials", "Analyze each trial separately"),
+            ("selected_trials", "Selected Trials", "Analyze specific trials separately"),
             ("first_trial", "First Trial Only", "Analyze only the first trial"),
             ("specific_trial", "Specific Trial", "Analyze a specific trial index"),
             ("channel_set", "Channel Set", "Analyze all trials together (e.g. F-I Curve)"),
@@ -241,6 +243,18 @@ class AddStepDialog(QtWidgets.QDialog):
         self.trial_index_layout.addStretch()
         self.trial_index_group.setVisible(False)
         layout.addWidget(self.trial_index_group)
+
+        # Selected Trials Input (Hidden by default)
+        self.selected_trials_group = QtWidgets.QWidget()
+        self.selected_trials_layout = QtWidgets.QHBoxLayout(self.selected_trials_group)
+        self.selected_trials_layout.setContentsMargins(0, 0, 0, 0)
+        self.selected_trials_input = QtWidgets.QLineEdit()
+        self.selected_trials_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        self.selected_trials_input.setToolTip("Subset of trials to analyze")
+        self.selected_trials_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.selected_trials_layout.addWidget(self.selected_trials_input)
+        self.selected_trials_group.setVisible(False)
+        layout.addWidget(self.selected_trials_group)
 
         # Parameters Section
         params_group = QtWidgets.QGroupBox("Parameters")
@@ -338,6 +352,7 @@ class AddStepDialog(QtWidgets.QDialog):
         """Show/hide trial index input based on scope selection."""
         scope_id = button.property("scope_id")
         self.trial_index_group.setVisible(scope_id == "specific_trial")
+        self.selected_trials_group.setVisible(scope_id in ("selected_trials", "selected_trials_average"))
 
     def _add_legacy_parameter_widgets(self, analysis_name: str):
         """Fallback for analysis types not yet migrated to metadata system."""
@@ -409,6 +424,8 @@ class AddStepDialog(QtWidgets.QDialog):
         # Add trial index if specific trial scope
         if selected_scope == "specific_trial":
             params["trial_index"] = self.trial_index_spin.value()
+        elif selected_scope in ("selected_trials", "selected_trials_average"):
+            params["trial_indices"] = self.selected_trials_input.text().strip()
 
         for name, widget in self.param_widgets.items():
             if name.startswith("_"):
@@ -552,31 +569,32 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         pipeline_group = QtWidgets.QGroupBox("Analysis Pipeline")
         pipeline_layout = QtWidgets.QVBoxLayout(pipeline_group)
 
-        # Pipeline steps container with scroll
-        self.pipeline_scroll = QtWidgets.QScrollArea()
-        self.pipeline_scroll.setWidgetResizable(True)
-        self.pipeline_scroll.setMinimumHeight(150)
-        self.pipeline_scroll.setMaximumHeight(200)
-
-        self.pipeline_container = QtWidgets.QWidget()
-        self.pipeline_container_layout = QtWidgets.QVBoxLayout(self.pipeline_container)
-        self.pipeline_container_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.pipeline_container_layout.setSpacing(4)
-
-        # Placeholder label
-        self.empty_pipeline_label = QtWidgets.QLabel("No analysis steps added. Click 'Add Step' to begin.")
-        self.empty_pipeline_label.setStyleSheet("color: gray; font-style: italic;")
-        self.empty_pipeline_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.pipeline_container_layout.addWidget(self.empty_pipeline_label)
-
-        self.pipeline_scroll.setWidget(self.pipeline_container)
-        pipeline_layout.addWidget(self.pipeline_scroll)
+        # Pipeline steps container with list widget to support drag and drop
+        self.pipeline_list = QtWidgets.QListWidget()
+        self.pipeline_list.setMinimumHeight(150)
+        self.pipeline_list.setMaximumHeight(200)
+        self.pipeline_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.pipeline_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+        self.pipeline_list.model().rowsMoved.connect(self._on_pipeline_reordered)
+        
+        # Placeholder behavior via empty state
+        self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+        self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags) # Make non-selectable/draggable
+        self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
+        
+        pipeline_layout.addWidget(self.pipeline_list)
 
         # Pipeline buttons
         pipeline_btn_layout = QtWidgets.QHBoxLayout()
 
         add_step_btn = QtWidgets.QPushButton("+ Add Step")
         add_step_btn.setToolTip("Add an analysis step to the pipeline")
+        
+        available_count = len(AnalysisRegistry.list_registered())
+        if available_count == 0:
+            add_step_btn.setEnabled(False)
+            add_step_btn.setText("No Analyses Registered")
+            
         add_step_btn.clicked.connect(self._on_add_step)
         pipeline_btn_layout.addWidget(add_step_btn)
 
@@ -660,19 +678,49 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 self._add_pipeline_step(step_config)
 
     def _add_pipeline_step(self, step_config: Dict[str, Any]):
-        """Add a step to the pipeline."""
-        # Hide empty label
-        self.empty_pipeline_label.setVisible(False)
+        """Add a step to the pipeline list."""
+        # Remove empty state placeholder if it exists
+        if self.pipeline_list.count() == 1 and self.pipeline_list.item(0).flags() == QtCore.Qt.ItemFlag.NoItemFlags:
+            self.pipeline_list.takeItem(0)
 
         # Create step widget
         step_index = len(self.pipeline_steps)
-        step_widget = PipelineStepWidget(step_config, step_index, self.pipeline_container)
-        step_widget.remove_requested.connect(self._on_remove_step)
+        step_widget = PipelineStepWidget(step_config, step_index, self)
+        
+        # Connect remove requested signal
+        step_widget.remove_requested.connect(lambda w=step_widget: self._on_remove_step(w))
 
-        self.pipeline_container_layout.addWidget(step_widget)
+        # Add to ListWidget
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(step_widget.sizeHint())
+        
+        # Store dict reference in user data to track reordering
+        item.setData(QtCore.Qt.ItemDataRole.UserRole, step_config)
+        
+        self.pipeline_list.addItem(item)
+        self.pipeline_list.setItemWidget(item, step_widget)
+        
         self.pipeline_steps.append(step_config)
 
         log.debug(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
+
+    def _on_pipeline_reordered(self, sourceParent, sourceStart, sourceEnd, destinationParent, destinationRow):
+        """Handle user drag-and-drop reordering."""
+        self.pipeline_steps.clear()
+        
+        # Re-build internal steps array from accurate visual list order
+        for i in range(self.pipeline_list.count()):
+            item = self.pipeline_list.item(i)
+            step_config = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if step_config:
+                self.pipeline_steps.append(step_config)
+                
+            # Optionally update step index label on the widget
+            widget = self.pipeline_list.itemWidget(item)
+            if widget and hasattr(widget, 'update_index'):
+                widget.update_index(i)
+                
+        log.debug(f"Pipeline reordered. New count: {len(self.pipeline_steps)}")
 
     def _on_add_files(self):
         """Open file dialog to add files to the list."""
@@ -692,7 +740,10 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
             if added_count > 0:
                 # Update group box title
-                self.findChild(QtWidgets.QGroupBox).setTitle(f"Files to Process ({len(self.files)} files)")
+                for gb in self.findChildren(QtWidgets.QGroupBox):
+                    if gb.title().startswith("Files to Process"):
+                        gb.setTitle(f"Files to Process ({len(self.files)} files)")
+                        break
 
     def _on_remove_files(self):
         """Remove selected files from list."""
@@ -706,42 +757,37 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 self.files.remove(path)
             self.files_list.takeItem(self.files_list.row(item))
 
-        # Update group box title
-        # Use findChild approach or better, store reference to groupbox in init
-        # For now, simplistic approach since we know the structure, but finding by title is risky if title changes.
-        # But we just want to update the displayed count.
-        # Let's just find all GroupBoxes and update the one starting with "Files"
         for gb in self.findChildren(QtWidgets.QGroupBox):
             if gb.title().startswith("Files to Process"):
                 gb.setTitle(f"Files to Process ({len(self.files)} files)")
                 break
 
     def _on_remove_step(self, step_widget: PipelineStepWidget):
-        """Remove a step from the pipeline."""
-        # Find and remove the step
+        """Remove a step from the pipeline list."""
         step_config = step_widget.get_config()
+        
+        # Find item in list widget and remove
+        for i in range(self.pipeline_list.count()):
+            item = self.pipeline_list.item(i)
+            if item.data(QtCore.Qt.ItemDataRole.UserRole) == step_config:
+                self.pipeline_list.takeItem(i)
+                break
+                
         if step_config in self.pipeline_steps:
             self.pipeline_steps.remove(step_config)
 
-        # Remove widget
-        self.pipeline_container_layout.removeWidget(step_widget)
-        step_widget.deleteLater()
-
-        # Re-index remaining steps
-        self._reindex_steps()
-
         # Show empty label if no steps
-        if not self.pipeline_steps:
-            self.empty_pipeline_label.setVisible(True)
-
-    def _reindex_steps(self):
-        """Re-index all step widgets after removal."""
-        for i in range(self.pipeline_container_layout.count()):
-            item = self.pipeline_container_layout.itemAt(i)
-            if item and item.widget() and isinstance(item.widget(), PipelineStepWidget):
-                # We'd need to update the step index display
-                # For simplicity, we'll recreate the widgets
-                pass
+        if self.pipeline_list.count() == 0:
+            self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+            self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
+        else:
+            # Reindex remaining updates visuals
+            for i in range(self.pipeline_list.count()):
+                item = self.pipeline_list.item(i)
+                widget = self.pipeline_list.itemWidget(item)
+                if widget and hasattr(widget, 'update_index'):
+                    widget.update_index(i)
 
     def _on_clear_pipeline(self):
         """Clear all pipeline steps."""
@@ -757,14 +803,12 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         )
 
         if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-            # Remove all step widgets
-            while self.pipeline_container_layout.count() > 1:  # Keep the empty label
-                item = self.pipeline_container_layout.takeAt(1)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
+            self.pipeline_list.clear()
             self.pipeline_steps.clear()
-            self.empty_pipeline_label.setVisible(True)
+            
+            self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+            self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
 
     def _on_run(self):
         """Start the batch analysis."""
@@ -1094,18 +1138,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 try:
                     metadata = AnalysisRegistry.get_metadata(registry_key)
                     label = metadata.get("label")
-
-                    # If label is generic or not helpful for ExporterTab matching, use specific overrides
-                    # ExporterTab expects specific strings to format values correctly
-                    if registry_key == "spike_detection":
-                        label = "Spike Detection (Threshold)"
-                    elif registry_key == "rmp_analysis":
-                        label = "Baseline Analysis"
-                    elif registry_key == "rin_analysis":
-                        label = "Input Resistance/Conductance"
-                    elif registry_key.startswith("event_detection"):
-                        label = "Event Detection"
-
+                    
                     if label:
                         result_data["analysis_type"] = label
                     else:
@@ -1126,7 +1159,9 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 scope = result_data["scope"]
                 if scope == "average":
                     result_data["data_source_used"] = "Average"
-                elif scope in ["specific_trial", "all_trials", "first_trial"]:
+                elif scope == "selected_trials_average":
+                    result_data["data_source_used"] = "Selected Average"
+                elif scope in ["specific_trial", "all_trials", "first_trial", "selected_trials"]:
                     result_data["data_source_used"] = "Trial"
                 elif scope == "channel_set":
                     result_data["data_source_used"] = "Channel Set"

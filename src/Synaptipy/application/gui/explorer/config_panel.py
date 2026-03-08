@@ -29,7 +29,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     show_selected_avg_toggled = QtCore.Signal(bool)
 
     # Trial Selection signals
-    trial_selection_requested = QtCore.Signal(int, int)  # gap, start_index
+    trial_selection_requested = QtCore.Signal(str)  # gap, start_index
     trial_selection_reset_requested = QtCore.Signal()
 
     # Channel signals
@@ -127,18 +127,10 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
 
         # Input Row
         in_layout = QtWidgets.QHBoxLayout()
-        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
-        self.nth_trial_input = QtWidgets.QLineEdit()
-        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
-        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        in_layout.addWidget(self.nth_trial_input)
-
-        in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
-        self.start_trial_input = QtWidgets.QLineEdit()
-        self.start_trial_input.setPlaceholderText("0")
-        self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        self.start_trial_input.setText("0")
-        in_layout.addWidget(self.start_trial_input)
+        in_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.trial_selection_input = QtWidgets.QLineEdit()
+        self.trial_selection_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        in_layout.addWidget(self.trial_selection_input)
 
         layout.addLayout(in_layout)
 
@@ -248,20 +240,13 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
             self.channel_checkboxes[cid] = cb
 
     def _on_plot_selected_clicked(self):
-        text = self.nth_trial_input.text().strip()
+        text = self.trial_selection_input.text().strip()
         if not text:
+            # Emit reset if empty
+            self.trial_selection_reset_requested.emit()
             return
 
-        text_start = self.start_trial_input.text().strip()
-
-        try:
-            n = int(text)
-            start_idx = int(text_start) if text_start else 0
-
-            if n >= 0 and start_idx >= 0:
-                self.trial_selection_requested.emit(n, start_idx)
-        except ValueError:
-            pass
+        self.trial_selection_requested.emit(text)
 
     def _update_visibility(self):
         # Toggle buttons based on mode if needed

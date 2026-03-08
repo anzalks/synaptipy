@@ -523,6 +523,30 @@ class BatchAnalysisEngine:
                 except Exception as e:
                     log.warning(f"Could not compute average from context: {e}. Reloading from source.")
 
+            # Adaptation: If we have 'all_trials' data but need 'selected_trials_average'
+            elif context["scope"] == "all_trials" and scope == "selected_trials_average":
+                try:
+                    import numpy as np
+                    
+                    # Extract list of indices from task params, or default to all
+                    trial_indices_str = params.get("trial_indices", "")
+                    if trial_indices_str:
+                        from Synaptipy.shared.utils import parse_trial_selection_string
+                        # context['data'] length should be num_trials if it was 'all_trials'
+                        parsed_indices = parse_trial_selection_string(trial_indices_str, len(context["data"]))
+                        selected_indices = sorted(list(parsed_indices))
+                    else:
+                        selected_indices = list(range(len(context["data"])))
+
+                    if selected_indices:
+                        selected_data = [context["data"][i] for i in selected_indices if i < len(context["data"])]
+                        data = np.mean(selected_data, axis=0)  # Average only selected
+                        time = context["time"][0]  # Use first time vector
+                    else:
+                        log.warning("No valid trials selected for averaging from context.")
+                except Exception as e:
+                    log.warning(f"Could not compute selected average from context: {e}. Reloading from source.")
+
         # If data is still None, load from channel
         if data is None:
             if scope == "average":
@@ -539,6 +563,36 @@ class BatchAnalysisEngine:
                         time.append(t)
                 # If loading raw, we might want to update context if this was a heavy load?
                 # For now, only update context if preprocessing occurs.
+
+            elif scope == "selected_trials":
+                data = []
+                time = []
+                trial_indices_str = params.get("trial_indices", "")
+                if trial_indices_str:
+                    from Synaptipy.shared.utils import parse_trial_selection_string
+                    parsed_indices = parse_trial_selection_string(trial_indices_str, channel.num_trials)
+                    selected_indices = sorted(list(parsed_indices))
+                else:
+                    selected_indices = list(range(channel.num_trials))
+                
+                for i in selected_indices:
+                    d = channel.get_data(i)
+                    t = channel.get_relative_time_vector(i)
+                    if d is not None:
+                        data.append(d)
+                        time.append(t)
+
+            elif scope == "selected_trials_average":
+                trial_indices_str = params.get("trial_indices", "")
+                if trial_indices_str:
+                    from Synaptipy.shared.utils import parse_trial_selection_string
+                    parsed_indices = parse_trial_selection_string(trial_indices_str, channel.num_trials)
+                    selected_indices = sorted(list(parsed_indices))
+                else:
+                    selected_indices = None
+                    
+                data = channel.get_averaged_data(trial_indices=selected_indices)
+                time = channel.get_relative_averaged_time_vector()
 
             elif scope == "first_trial":
                 data = channel.get_data(0)
@@ -672,9 +726,23 @@ class BatchAnalysisEngine:
                         )
                         results.append(res)
                     else:
-                        # Iterate 'all_trials'
-                        for idx, (d, t) in enumerate(zip(data, time)):
-                            results.append(run_single(d, t, idx))
+                        # Iterate 'all_trials' or 'selected_trials'
+                        # For 'selected_trials', extract the specific indices used
+                        if scope == "selected_trials":
+                            trial_indices_str = task.get("params", {}).get("trial_indices", "")
+                            if trial_indices_str:
+                                from Synaptipy.shared.utils import parse_trial_selection_string
+                                parsed_indices = parse_trial_selection_string(trial_indices_str, total_trials)
+                                indices_list = sorted(list(parsed_indices))
+                            else:
+                                indices_list = list(range(total_trials))
+                        else:
+                            indices_list = list(range(total_trials))
+                            
+                        for i, (d, t) in enumerate(zip(data, time)):
+                            # Ensure we output correct trial index
+                            real_idx = indices_list[i] if i < len(indices_list) else i
+                            results.append(run_single(d, t, real_idx))
 
                 elif scope == "specific_trial":
                     idx = int(params.get("trial_index", 0))

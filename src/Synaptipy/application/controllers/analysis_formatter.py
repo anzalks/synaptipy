@@ -100,18 +100,34 @@ class AnalysisResultFormatter:
             elif "tau" in target_type or "time constant" in target_type:
                 value_str = AnalysisResultFormatter._format_tau(result)
 
+            elif "sag" in target_type:
+                value_str = AnalysisResultFormatter._format_sag(result)
+                details = AnalysisResultFormatter._details_sag(result)
+
             else:
                 # Provide a generic fallback for other analysis types
-                # Just show the first few numeric values found
+                # First try to find a numeric primary value
                 numeric_vals = [
                     f"{k}: {AnalysisResultFormatter._to_float(v):.2f}"
                     for k, v in result.items()
-                    if isinstance(v, (int, float)) and not isinstance(v, bool)
+                    if isinstance(v, (int, float, np.number)) and not isinstance(v, bool) and "time" not in k.lower()
                 ]
+                
                 if numeric_vals:
                     value_str = numeric_vals[0]
                     if len(numeric_vals) > 1:
                         details.extend(numeric_vals[1:])
+                else:
+                    # If no obvious numerics, gather strings/others
+                    other_vals = [
+                        f"{k}: {v}"
+                        for k, v in result.items()
+                        if not isinstance(v, (dict, list, tuple)) and k not in ["analysis_type", "channel_id", "channel_name"]
+                    ]
+                    if other_vals:
+                        value_str = other_vals[0]
+                        if len(other_vals) > 1:
+                            details.extend(other_vals[1:])
 
         except Exception as e:
             log.warning(f"Error formatting value for {analysis_type}: {e}")
@@ -122,11 +138,37 @@ class AnalysisResultFormatter:
     @staticmethod
     def _to_float(val: Any) -> float:
         """Safe float conversion handling numpy items."""
-        if isinstance(val, (int, float)):
+        import numpy as np
+        
+        if isinstance(val, (int, float, np.number)):
             return float(val)
         if hasattr(val, "item"):
             return float(val.item())
         return float(val)
+
+    # --- Sag Ratio ---
+    @staticmethod
+    def _format_sag(result: Dict[str, Any]) -> str:
+        for key in ["sag_ratio", "Sag Ratio", "Ratio"]:
+            value = result.get(key)
+            if value is not None:
+                try:
+                    vf = AnalysisResultFormatter._to_float(value)
+                    return f"{vf:.3f}"
+                except (ValueError, TypeError, AttributeError):
+                    pass
+        return "N/A"
+
+    @staticmethod
+    def _details_sag(result: Dict[str, Any]) -> List[str]:
+        details = []
+        for dkey in ["peak_mV", "steady_state_mV", "baseline_mV"]:
+            if dkey in result:
+                try:
+                    details.append(f"{dkey}: {AnalysisResultFormatter._to_float(result[dkey]):.2f} mV")
+                except Exception:
+                    details.append(f"{dkey}: {result[dkey]}")
+        return details
 
     # --- Input Resistance ---
     @staticmethod
