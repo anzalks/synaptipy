@@ -90,7 +90,10 @@ class ExplorerTab(QtWidgets.QWidget):
         # Caching
         self._data_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}
         self._average_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
-        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}  # NEW: Cache for processed data
+        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}  # Cache: cid -> trial_idx -> (t, data)
+        # Reusable PlotDataItems for CYCLE_SINGLE mode (avoids alloc/scene-insert per trial)
+        self._reusable_single_items: Dict[str, Any] = {}  # cid -> PlotDataItem
+        self._reusable_avg_items: Dict[str, Any] = {}     # cid -> PlotDataItem (average line)
         # Pipeline for processing
         self.pipeline = SignalProcessingPipeline()
         # Active settings for on-the-fly processing
@@ -587,6 +590,8 @@ class ExplorerTab(QtWidgets.QWidget):
         self._data_cache.clear()
         self._average_cache.clear()
         self._processed_cache.clear()
+        self._reusable_single_items.clear()
+        self._reusable_avg_items.clear()
         self._cache_dirty: bool = False
         self.current_trial_index = 0
         self.selected_trial_indices.clear()
@@ -836,7 +841,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if not self.current_recording or not self.plot_canvas.channel_plots:
             return
 
-        # 0. Preserve View State BEFORE clearing items (skip on fresh display)
+        # 0. Preserve View State before updating plot items (skip on fresh display)
         view_state = {}
         if not fresh:
             for cid, plot in self.plot_canvas.channel_plots.items():
@@ -844,17 +849,16 @@ class ExplorerTab(QtWidgets.QWidget):
                     view_state[cid] = plot.viewRange()
 
         try:
-            # Clear existing items robustly
-            for cid in self.plot_canvas.channel_plots.keys():
-                self.plot_canvas.clear_plot_items(cid)
+            # Hidden channels: clear plot items (same end state as full clear + redraw).
+            # Visible channels keep pooled PlotDataItems for setData reuse.
+            for _cid, _plot in self.plot_canvas.channel_plots.items():
+                if not _plot or not _plot.isVisible():
+                    self.plot_canvas.clear_plot_items(_cid)
 
-            # Reset tracking lists
-            self.plot_canvas.channel_plot_data_items.clear()
             self.plot_canvas.selected_average_plot_items.clear()
 
-            # Re-init dict keys
-            for cid in self.plot_canvas.channel_plots.keys():
-                self.plot_canvas.channel_plot_data_items[cid] = []
+            # Per-channel count of PlotDataItems used after each pass (for pooling + hide).
+            channel_items_used: Dict[str, int] = {}
 
             # --- Update Single Source of Truth for Live Analysis ---
             # We push the PROCESSED data of the 'primary' (first visible) channel to DataCache.
@@ -893,7 +897,6 @@ class ExplorerTab(QtWidgets.QWidget):
                 else 10
             )
             ds_method = "peak"
-            clip_view = ds_enabled  # only clip when downsampling is active
 
             # Function to apply common item settings
             def _apply_item_opts(item, is_ds):
@@ -904,7 +907,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     item.opts["downsample"] = ds_factor if is_ds else 1
                     item.opts["downsampleMethod"] = ds_method
                 if hasattr(item, "setClipToView"):
-                    item.setClipToView(clip_view)
+                    item.setClipToView(True)
 
             # Get Pens
             from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
@@ -918,7 +921,30 @@ class ExplorerTab(QtWidgets.QWidget):
                 if not plot_item or not plot_item.isVisible():
                     continue
 
-                self.plot_canvas.channel_plot_data_items[cid] = []
+                if cid not in self.plot_canvas.channel_plot_data_items:
+                    self.plot_canvas.channel_plot_data_items[cid] = []
+                existing_items = self.plot_canvas.channel_plot_data_items[cid]
+                item_index = 0
+
+                def _emit_line(t, data, pen, name=None, z_value=None):
+                    nonlocal item_index
+                    if item_index < len(existing_items):
+                        line = existing_items[item_index]
+                        line.setData(x=t, y=data)
+                        line.setPen(pen)
+                        if name is not None and hasattr(line, "opts"):
+                            line.opts["name"] = name
+                        line.show()
+                    else:
+                        if name is not None:
+                            line = plot_item.plot(t, data, pen=pen, name=name)
+                        else:
+                            line = plot_item.plot(t, data, pen=pen)
+                        existing_items.append(line)
+                    if z_value is not None:
+                        line.setZValue(z_value)
+                    _apply_item_opts(line, ds_enabled)
+                    item_index += 1
 
                 if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
                     # Plot Single Trial
@@ -937,11 +963,12 @@ class ExplorerTab(QtWidgets.QWidget):
                                     log.error(f"Error processing trial {self.current_trial_index}: {e}")
 
                             if data is not None and t is not None:
-                                item = plot_item.plot(
-                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1}"
+                                _emit_line(
+                                    t,
+                                    data,
+                                    current_trial_pen,
+                                    name=f"Trial {self.current_trial_index + 1}",
                                 )
-                                _apply_item_opts(item, ds_enabled)
-                                self.plot_canvas.channel_plot_data_items[cid].append(item)
                         except Exception as e:
                             log.error(f"Error plotting trial {self.current_trial_index} for {cid}: {e}")
 
@@ -956,9 +983,6 @@ class ExplorerTab(QtWidgets.QWidget):
 
                     for trial_idx in trials_to_plot:
                         try:
-                            # Always use 'peak' to preserve signal features
-                            bg_ds_method = "peak"
-
                             data = channel.get_data(trial_idx)
                             t = channel.get_relative_time_vector(trial_idx)
 
@@ -972,16 +996,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                     log.error(f"Error processing trial {trial_idx}: {e}")
 
                             if data is not None and t is not None:
-                                item = plot_item.plot(t, data, pen=current_trial_pen)
-
-                                # Apply background optimizations
-                                item.setDownsampling(ds=ds_factor if ds_enabled else 1, auto=False, method=bg_ds_method)
-                                item.opts["autoDownsample"] = False
-                                item.opts["downsample"] = ds_factor if ds_enabled else 1
-                                item.opts["downsampleMethod"] = bg_ds_method
-                                item.setClipToView(clip_view)
-
-                                self.plot_canvas.channel_plot_data_items[cid].append(item)
+                                _emit_line(t, data, current_trial_pen)
                         except Exception as e:
                             log.debug(f"Skipped trial plot for channel {cid}: {e}")
 
@@ -1002,12 +1017,11 @@ class ExplorerTab(QtWidgets.QWidget):
                                 log.error(f"Error processing average for {cid}: {e}")
 
                         if avg_data is not None and avg_t is not None:
-                            item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average")
-                            _apply_item_opts(item, ds_enabled)
-                            item.setZValue(10)
-                            self.plot_canvas.channel_plot_data_items[cid].append(item)
+                            _emit_line(avg_t, avg_data, avg_pen, name="Average", z_value=10)
                     except Exception as e:
                         log.error(f"Error plotting avg for {cid}: {e}")
+
+                channel_items_used[cid] = item_index
 
             # -------------------------------------------------------------
             # Plot Global Manual Average (If Checked)
@@ -1017,6 +1031,11 @@ class ExplorerTab(QtWidgets.QWidget):
                     plot_item = self.plot_canvas.channel_plots.get(cid)
                     if not plot_item or not plot_item.isVisible():
                         continue
+
+                    if cid not in self.plot_canvas.channel_plot_data_items:
+                        self.plot_canvas.channel_plot_data_items[cid] = []
+                    existing_items = self.plot_canvas.channel_plot_data_items[cid]
+                    item_index = channel_items_used.get(cid, 0)
 
                     sum_data = None
                     count = 0
@@ -1042,15 +1061,47 @@ class ExplorerTab(QtWidgets.QWidget):
                     if count > 0 and sum_data is not None and ref_t is not None:
                         avg_data = sum_data / count
                         try:
+
+                            def _emit_global_line(t, data, pen, name=None, z_value=None):
+                                nonlocal item_index
+                                if item_index < len(existing_items):
+                                    line = existing_items[item_index]
+                                    line.setData(x=t, y=data)
+                                    line.setPen(pen)
+                                    if name is not None and hasattr(line, "opts"):
+                                        line.opts["name"] = name
+                                    line.show()
+                                else:
+                                    if name is not None:
+                                        line = plot_item.plot(t, data, pen=pen, name=name)
+                                    else:
+                                        line = plot_item.plot(t, data, pen=pen)
+                                    existing_items.append(line)
+                                if z_value is not None:
+                                    line.setZValue(z_value)
+                                _apply_item_opts(line, ds_enabled)
+                                item_index += 1
+
                             # Use standard avg_pen for manual global average overlay
-                            item = plot_item.plot(
-                                ref_t[: len(avg_data)], avg_data, pen=avg_pen, name="Global Average"
-                            )  # noqa: E501
-                            _apply_item_opts(item, ds_enabled)
-                            item.setZValue(20)  # Always sit on top of everything
-                            self.plot_canvas.channel_plot_data_items[cid].append(item)
+                            _emit_global_line(
+                                ref_t[: len(avg_data)],
+                                avg_data,
+                                avg_pen,
+                                name="Global Average",
+                                z_value=20,
+                            )
                         except Exception as e:
                             log.error(f"Error plotting manual avg for {cid}: {e}")
+
+                    channel_items_used[cid] = item_index
+
+            # Hide pooled PlotDataItems not used this frame (per visible channel).
+            for _cid, _n in channel_items_used.items():
+                _items = self.plot_canvas.channel_plot_data_items.get(_cid, [])
+                _j = _n
+                while _j < len(_items):
+                    _items[_j].hide()
+                    _j += 1
 
             # Restore View State — guard against XLink cascade on multi-channel.
             # Skip when 'fresh' to let auto-range show all data.

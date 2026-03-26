@@ -87,9 +87,17 @@ def test_explorer_plotting(explorer_tab, qtbot):
     assert "ch1" in explorer_tab.plot_canvas.channel_plots
     assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) > 0
 
+    # Pooling: overlay mode should not allocate new PlotDataItems on redraw
+    overlay_pool = len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"])
+    explorer_tab._update_plot()
+    assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) == overlay_pool
+
     # Test Trial Cycling
     explorer_tab.current_plot_mode = explorer_tab.PlotMode.CYCLE_SINGLE
     explorer_tab._update_plot()
+    cycle_pool = len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"])
+    explorer_tab._update_plot()
+    assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) == cycle_pool
 
     assert explorer_tab.current_trial_index == 0
     explorer_tab._next_trial()

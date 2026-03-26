@@ -18,8 +18,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: synaptipy-linux.deb
-            artifact_path: dist/*.deb
+            artifact_name: Synaptipy-Linux.AppImage
+            artifact_path: dist/*.AppImage
           - os: windows-latest
             artifact_name: Synaptipy_Setup.exe
             artifact_path: Synaptipy_Setup_*.exe
@@ -69,29 +69,32 @@ jobs:
             "dist/Synaptipy_${VERSION}.dmg" \
             "dist/Synaptipy.app"
 
-      - name: Package for Linux
+      - name: Package for Linux (AppImage)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev rubygems build-essential
-          sudo gem install --no-document fpm
-          
-          mkdir -p packaging/opt/synaptipy
-          mkdir -p packaging/usr/share/applications
-          
-          cp -r dist/Synaptipy/* packaging/opt/synaptipy/
-          chmod +x packaging/opt/synaptipy/Synaptipy
-          cp src/Synaptipy/resources/icons/logo.png packaging/opt/synaptipy/logo.png
-          cp installer/linux/synaptipy.desktop packaging/usr/share/applications/
-          
           VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
-          fpm -s dir -t deb \
-            -n synaptipy \
-            -v $VERSION \
-            --description "Electrophysiology Visualization Suite" \
-            -C packaging \
-            -p dist/synaptipy_${VERSION}_amd64.deb \
-            opt usr
+          
+          # 1. Create the AppDir structure required by AppImage
+          mkdir -p AppDir/usr/bin
+          
+          # 2. Copy the PyInstaller output into the AppDir
+          cp -r dist/Synaptipy/* AppDir/usr/bin/
+          
+          # 3. Copy the desktop file and icon to the root of AppDir
+          cp installer/linux/synaptipy.desktop AppDir/
+          cp src/Synaptipy/resources/icons/logo.png AppDir/synaptipy.png
+          
+          # 4. Create the standard AppRun symlink pointing to our binary
+          cd AppDir
+          ln -s usr/bin/Synaptipy AppRun
+          cd ..
+          
+          # 5. Download the official AppImage packaging tool
+          wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+          
+          # 6. Build the AppImage (using --appimage-extract-and-run to run it in CI environments seamlessly)
+          ./appimagetool --appimage-extract-and-run AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -116,7 +119,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         with:
           files: |
-            dist-artifacts/*/*.deb
+            dist-artifacts/*/*.AppImage
             dist-artifacts/*/*.exe
             dist-artifacts/*/*.dmg
         env:
