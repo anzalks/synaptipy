@@ -29,7 +29,8 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     show_selected_avg_toggled = QtCore.Signal(bool)
 
     # Trial Selection signals
-    trial_selection_requested = QtCore.Signal(str)  # gap, start_index
+    trial_selection_requested = QtCore.Signal(str)  # free-text range string
+    interleaved_selection_requested = QtCore.Signal(int, int)  # gap, start_index
     trial_selection_reset_requested = QtCore.Signal()
 
     # Channel signals
@@ -142,21 +143,60 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(group)
         layout.setSpacing(10)
 
-        # Input Row
+        # --- Free-text range selection ---
         in_layout = QtWidgets.QHBoxLayout()
         in_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
         self.trial_selection_input = QtWidgets.QLineEdit()
         self.trial_selection_input.setPlaceholderText("e.g. 0, 2-4, 6")
         in_layout.addWidget(self.trial_selection_input)
-
         layout.addLayout(in_layout)
 
-        # Buttons
         self.plot_selected_btn = QtWidgets.QPushButton("Plot Selected")
         self.plot_selected_btn.clicked.connect(self._on_plot_selected_clicked)
-        self.plot_selected_btn.setToolTip("Filter trials to show only every Nth trial.")
+        self.plot_selected_btn.setToolTip("Plot only the trials listed above.")
         layout.addWidget(self.plot_selected_btn)
 
+        # Separator
+        sep = QtWidgets.QFrame()
+        sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        sep.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        layout.addWidget(sep)
+
+        # --- Interleaved / Every-Nth selection ---
+        layout.addWidget(QtWidgets.QLabel("Interleaved Trials (Every Nth):"))
+
+        nth_layout = QtWidgets.QHBoxLayout()
+
+        nth_layout.addWidget(QtWidgets.QLabel("Gap:"))
+        self.nth_gap_spin = QtWidgets.QSpinBox()
+        self.nth_gap_spin.setRange(0, 9999)
+        self.nth_gap_spin.setValue(0)
+        self.nth_gap_spin.setToolTip(
+            "Trials to skip between each selected trial.\n"
+            "0 = all trials, 1 = every 2nd, 4 = every 5th (for 5 interleaved stim locations)"
+        )
+        nth_layout.addWidget(self.nth_gap_spin)
+
+        nth_layout.addWidget(QtWidgets.QLabel("Start:"))
+        self.nth_start_spin = QtWidgets.QSpinBox()
+        self.nth_start_spin.setRange(0, 9999)
+        self.nth_start_spin.setValue(0)
+        self.nth_start_spin.setToolTip(
+            "Index of the first trial to select (0-based).\n"
+            "e.g. with Gap=4 Start=0 gives trials 0,5,10… Start=1 gives 1,6,11…"
+        )
+        nth_layout.addWidget(self.nth_start_spin)
+        layout.addLayout(nth_layout)
+
+        self.apply_interleaved_btn = QtWidgets.QPushButton("Apply Interleaved")
+        self.apply_interleaved_btn.clicked.connect(self._on_apply_interleaved_clicked)
+        self.apply_interleaved_btn.setToolTip(
+            "Select every Nth trial starting at the given index.\n"
+            "Use to isolate one stimulation-location group from interleaved recordings."
+        )
+        layout.addWidget(self.apply_interleaved_btn)
+
+        # --- Shared reset ---
         self.reset_selection_btn = QtWidgets.QPushButton("Reset Trial Selection")
         self.reset_selection_btn.clicked.connect(self.trial_selection_reset_requested.emit)
         self.reset_selection_btn.setToolTip("Reset to show all trials (raw data).")
@@ -255,6 +295,11 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
             cb.toggled.connect(lambda checked, c=cid: self.channel_visibility_changed.emit(c, checked))
             self.channel_list_layout.addWidget(cb)
             self.channel_checkboxes[cid] = cb
+
+    def _on_apply_interleaved_clicked(self):
+        gap = self.nth_gap_spin.value()
+        start = self.nth_start_spin.value()
+        self.interleaved_selection_requested.emit(gap, start)
 
     def _on_plot_selected_clicked(self):
         text = self.trial_selection_input.text().strip()

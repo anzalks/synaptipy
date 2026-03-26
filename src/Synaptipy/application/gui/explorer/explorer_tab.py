@@ -329,6 +329,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.config_panel.show_selected_avg_toggled.connect(self._toggle_plot_selected_average)
 
         self.config_panel.trial_selection_requested.connect(self._on_trial_selection_requested)
+        self.config_panel.interleaved_selection_requested.connect(self._on_interleaved_selection_requested)
         self.config_panel.trial_selection_reset_requested.connect(self._on_trial_selection_reset_requested)
         self.config_panel.channel_visibility_changed.connect(self._on_channel_visibility_changed)
 
@@ -2005,6 +2006,40 @@ class ExplorerTab(QtWidgets.QWidget):
         log.info("Reset trial filtering: All trials selected.")
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
+
+    def _on_interleaved_selection_requested(self, gap: int, start_index: int):
+        """Select every Nth trial (step = gap + 1) starting at start_index.
+
+        gap=0  -> step=1 (all trials)
+        gap=1  -> step=2 (every 2nd trial)
+        gap=4  -> step=5 (every 5th trial, e.g. 5 interleaved stim locations)
+        """
+        if not self.current_recording:
+            return
+
+        ch0 = next(iter(self.current_recording.channels.values()), None)
+        num_trials = getattr(ch0, "num_trials", 0) if ch0 else 0
+
+        step = max(1, gap + 1)
+        if start_index < 0:
+            start_index = 0
+
+        self.selected_trial_indices = set(range(num_trials)[start_index::step])
+        log.info(
+            "Interleaved trial selection: start=%d, gap=%d, step=%d -> %d trials selected.",
+            start_index,
+            gap,
+            step,
+            len(self.selected_trial_indices),
+        )
+
+        # Store as free-text string so state-preservation round-trips correctly
+        sorted_indices = sorted(self.selected_trial_indices)
+        self._current_trial_selection_params = ",".join(str(i) for i in sorted_indices)
+
+        self.config_panel.update_selection_label(self.selected_trial_indices)
+        self._update_plot()
+        self._update_all_ui_state()
 
     def _apply_manual_limits_from_dict(self, limits):
         pass  # Deprecated
