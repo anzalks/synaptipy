@@ -17,6 +17,19 @@ from Synaptipy.core.results import RinResult
 log = logging.getLogger(__name__)
 
 
+def _sag_nan_payload() -> Dict[str, float]:
+    """Return sag fields as NaN when windows yield no samples (invalid user times)."""
+    nan = float(np.nan)
+    return {
+        "sag_ratio": nan,
+        "sag_percentage": nan,
+        "v_peak": nan,
+        "v_ss": nan,
+        "v_baseline": nan,
+        "rebound_depolarization": nan,
+    }
+
+
 def calculate_rin(
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
@@ -41,14 +54,25 @@ def calculate_rin(
     Returns:
         RinResult object.
     """
-    if current_amplitude == 0:
+    try:
+        delta_i_pa = float(current_amplitude)
+    except (TypeError, ValueError):
+        log.warning("Cannot calculate Rin: Invalid current amplitude.")
+        return RinResult(
+            value=float(np.nan),
+            unit="MOhm",
+            is_valid=False,
+            error_message="Invalid current amplitude",
+            parameters=parameters or {},
+        )
+
+    if delta_i_pa == 0.0 or delta_i_pa == 0:
         log.warning("Cannot calculate Rin: Current amplitude is zero.")
         return RinResult(
-            value=None,
+            value=float(np.nan),
             unit="MOhm",
             is_valid=False,
             error_message="Current amplitude is zero",
-            parameters=parameters or {},
         )
 
     try:
@@ -56,15 +80,20 @@ def calculate_rin(
         baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
         response_mask = (time_vector >= response_window[0]) & (time_vector < response_window[1])
 
-        if not np.any(baseline_mask) or not np.any(response_mask):
+        baseline_slice = voltage_trace[baseline_mask]
+        response_slice = voltage_trace[response_mask]
+        if baseline_slice.size == 0 or response_slice.size == 0:
             log.warning("Cannot calculate Rin: Time windows yielded no data points.")
             return RinResult(
-                value=None, unit="MOhm", is_valid=False, error_message="No data in windows", parameters=parameters or {}
+                value=float(np.nan),
+                unit="MOhm",
+                is_valid=False,
+                error_message="No data in windows",
+                parameters=parameters or {},
             )
 
-        # Calculate mean baseline and response voltages
-        baseline_voltage = np.mean(voltage_trace[baseline_mask])
-        response_voltage = np.mean(voltage_trace[response_mask])
+        baseline_voltage = np.mean(baseline_slice)
+        response_voltage = np.mean(response_slice)
 
         if np.isclose(response_voltage, baseline_voltage):
             # Handle case where response equals baseline
@@ -74,11 +103,11 @@ def calculate_rin(
         # Calculate Rin = |delta_V| / |delta_I|
         # Units: voltage in mV, current in pA
         # mV / (pA / 1000) = mV / nA = MOhm
-        delta_i_nA = abs(current_amplitude) / 1000.0
-        if delta_i_nA == 0:
+        delta_i_nA = abs(delta_i_pa) / 1000.0
+        if delta_i_nA == 0.0 or delta_i_nA == 0:
             log.warning("Current amplitude effectively zero after conversion.")
             return RinResult(
-                value=None,
+                value=float(np.nan),
                 unit="MOhm",
                 is_valid=False,
                 error_message="Current amplitude effectively zero",
@@ -90,16 +119,14 @@ def calculate_rin(
         # 1 MOhm = 10^6 Ohm, so 1/(MOhm) = 10^-6 S = 1 μS
         conductance_us = 1.0 / rin if rin != 0 else 0.0
 
-        log.debug(
-            f"Calculated Rin: dV={delta_v:.3f}, dI={current_amplitude:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}"
-        )
+        log.debug(f"Calculated Rin: dV={delta_v:.3f}, dI={delta_i_pa:.3f}, Rin={rin:.3f}, G={conductance_us:.3f}")
 
         return RinResult(
             value=rin,
             unit="MOhm",
             conductance=conductance_us,
             voltage_deflection=delta_v,
-            current_injection=current_amplitude,
+            current_injection=delta_i_pa,
             baseline_voltage=baseline_voltage,
             steady_state_voltage=response_voltage,
             parameters=parameters or {},
@@ -153,15 +180,20 @@ def calculate_conductance(
         baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
         response_mask = (time_vector >= response_window[0]) & (time_vector < response_window[1])
 
-        if not np.any(baseline_mask) or not np.any(response_mask):
+        baseline_slice = current_trace[baseline_mask]
+        response_slice = current_trace[response_mask]
+        if baseline_slice.size == 0 or response_slice.size == 0:
             log.warning("Cannot calculate Conductance: Time windows yielded no data points.")
             return RinResult(
-                value=None, unit="MOhm", is_valid=False, error_message="No data in windows", parameters=parameters or {}
+                value=float(np.nan),
+                unit="MOhm",
+                is_valid=False,
+                error_message="No data in windows",
+                parameters=parameters or {},
             )
 
-        # Calculate mean baseline and response currents
-        baseline_current = np.mean(current_trace[baseline_mask])
-        response_current = np.mean(current_trace[response_mask])
+        baseline_current = np.mean(baseline_slice)
+        response_current = np.mean(response_slice)
 
         delta_i = response_current - baseline_current  # pA
 
@@ -365,7 +397,11 @@ def calculate_tau(
             upper_bounds = [np.inf, np.inf, tau_max]
             p0 = [V_ss_guess, V_0, 0.01]
 
-            popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
+            try:
+                popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
+            except RuntimeError:
+                log.warning("Optimal parameters not found for Tau calculation (mono exponential fit).")
+                return {"tau_ms": float(np.nan), "fit_time": [], "fit_values": []}
 
             tau_ms = popt[2] * 1000  # convert tau to ms
 
@@ -398,9 +434,22 @@ def calculate_tau(
             lower_bounds = [-np.inf, -np.inf, tau_min, -np.inf, tau_min]
             upper_bounds = [np.inf, np.inf, tau_max, np.inf, tau_max]
 
-            popt, pcov = curve_fit(
-                _bi_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=10000
-            )
+            try:
+                popt, _ = curve_fit(
+                    _bi_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=10000
+                )
+            except RuntimeError:
+                log.warning("Optimal parameters not found for Tau calculation (bi-exponential fit).")
+                nan = float(np.nan)
+                return {
+                    "tau_fast_ms": nan,
+                    "tau_slow_ms": nan,
+                    "amplitude_fast": nan,
+                    "amplitude_slow": nan,
+                    "V_ss": nan,
+                    "fit_time": [],
+                    "fit_values": [],
+                }
 
             V_ss_fit, A_fast, tau_fast, A_slow, tau_slow = popt
 
@@ -488,15 +537,17 @@ def calculate_sag_ratio(  # noqa: C901
 
         # Baseline
         baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
-        if not np.any(baseline_mask):
-            return None
-        v_baseline = float(np.mean(voltage_trace[baseline_mask]))
+        baseline_slice = voltage_trace[baseline_mask]
+        if baseline_slice.size == 0:
+            return _sag_nan_payload()
+
+        v_baseline = float(np.mean(baseline_slice))
 
         # Peak hyperpolarization — Savitzky-Golay smoothing for robustness
         peak_mask = (time_vector >= response_peak_window[0]) & (time_vector < response_peak_window[1])
-        if not np.any(peak_mask):
-            return None
         peak_data = voltage_trace[peak_mask]
+        if peak_data.size == 0:
+            return _sag_nan_payload()
 
         from scipy.signal import savgol_filter
 
@@ -512,15 +563,17 @@ def calculate_sag_ratio(  # noqa: C901
 
         # Steady-state hyperpolarization
         ss_mask = (time_vector >= response_steady_state_window[0]) & (time_vector < response_steady_state_window[1])
-        if not np.any(ss_mask):
-            return None
-        v_ss = float(np.mean(voltage_trace[ss_mask]))
+        ss_slice = voltage_trace[ss_mask]
+        if ss_slice.size == 0:
+            return _sag_nan_payload()
+
+        v_ss = float(np.mean(ss_slice))
 
         delta_v_peak = v_peak - v_baseline
         delta_v_ss = v_ss - v_baseline
 
         if delta_v_ss == 0:
-            return None  # Avoid division by zero
+            return _sag_nan_payload()
 
         sag_ratio = float(delta_v_peak / delta_v_ss)
 
@@ -562,7 +615,7 @@ def calculate_sag_ratio(  # noqa: C901
         }
     except (ValueError, TypeError, KeyError, IndexError) as e:
         log.exception("Error during Sag calculation: %s", e)
-        return None
+        return _sag_nan_payload()
 
 
 # --- Registry Wrappers for Batch Processing ---
@@ -694,7 +747,7 @@ def run_sag_ratio_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         )
 
         if result is not None:
-            return {
+            out = {
                 "sag_ratio": result["sag_ratio"],
                 "sag_percentage": result["sag_percentage"],
                 "v_peak": result["v_peak"],
@@ -702,6 +755,10 @@ def run_sag_ratio_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
                 "v_baseline": result["v_baseline"],
                 "rebound_depolarization": result["rebound_depolarization"],
             }
+            sr = out.get("sag_ratio")
+            if isinstance(sr, (float, np.floating)) and np.isnan(sr):
+                out.setdefault("sag_error", "Invalid windows or insufficient data")
+            return out
         else:
             return {
                 "sag_ratio": None,
@@ -1053,26 +1110,41 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             "tau_bounds": tau_bounds,
         }
 
+        def _with_tau_fit_error(out: Dict[str, Any]) -> Dict[str, Any]:
+            if model == "bi":
+                tf = out.get("tau_fast_ms")
+                if isinstance(tf, (float, np.floating)) and np.isnan(tf):
+                    out["tau_error"] = "Fit failed"
+            else:
+                tm = out.get("tau_ms")
+                if isinstance(tm, (float, np.floating)) and np.isnan(tm):
+                    out["tau_error"] = "Fit failed"
+            return out
+
         if result is not None:
             if model == "bi" and isinstance(result, dict) and "tau_fast_ms" in result:
-                return {
-                    "tau_fast_ms": result["tau_fast_ms"],
-                    "tau_slow_ms": result["tau_slow_ms"],
-                    "amplitude_fast": result["amplitude_fast"],
-                    "amplitude_slow": result["amplitude_slow"],
-                    "tau_model": model,
-                    "parameters": params,
-                    "fit_time": result.get("fit_time", []),
-                    "fit_values": result.get("fit_values", []),
-                }
+                return _with_tau_fit_error(
+                    {
+                        "tau_fast_ms": result["tau_fast_ms"],
+                        "tau_slow_ms": result["tau_slow_ms"],
+                        "amplitude_fast": result["amplitude_fast"],
+                        "amplitude_slow": result["amplitude_slow"],
+                        "tau_model": model,
+                        "parameters": params,
+                        "fit_time": result.get("fit_time", []),
+                        "fit_values": result.get("fit_values", []),
+                    }
+                )
             elif isinstance(result, dict) and "tau_ms" in result:
-                return {
-                    "tau_ms": result["tau_ms"],
-                    "tau_model": model,
-                    "parameters": params,
-                    "fit_time": result.get("fit_time", []),
-                    "fit_values": result.get("fit_values", []),
-                }
+                return _with_tau_fit_error(
+                    {
+                        "tau_ms": result["tau_ms"],
+                        "tau_model": model,
+                        "parameters": params,
+                        "fit_time": result.get("fit_time", []),
+                        "fit_values": result.get("fit_values", []),
+                    }
+                )
             else:
                 # Legacy fallback (shouldn't happen with updated calculate_tau)
                 return {

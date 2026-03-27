@@ -149,11 +149,11 @@ No manual intervention is required.
 
 ```
 synaptipy/
-├── environment.yml          # Single cross-platform environment
-├── setup.py                 # Simple setup script
-├── pyproject.toml           # Clean package configuration
-├── install.py               # Simple installation script
-└── README.md                # Updated documentation
+    environment.yml          # Single cross-platform environment
+    setup.py                 # Simple setup script
+    pyproject.toml           # Clean package configuration
+    install.py               # Simple installation script
+    README.md                # Updated documentation
 ```
 
 The following files are no longer present in the repository:

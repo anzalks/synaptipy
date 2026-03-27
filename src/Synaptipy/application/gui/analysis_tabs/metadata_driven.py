@@ -28,6 +28,9 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
+# Returned from intrinsic pre-check helpers when the trace dict passed to analysis is valid.
+_INTRINSIC_PLOT_READY = object()
+
 
 class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     """
@@ -82,6 +85,52 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         super().__init__(neo_adapter, settings_ref, parent)
         self._setup_ui()
         self._setup_interactive_regions()
+
+    @property
+    def response_region(self):
+        """
+        Plot region used for response/baseline window analyses (interactive
+        LinearRegionItems or the green restrict-analysis region from the base tab).
+        """
+        interactive = getattr(self, "_interactive_regions", None) or {}
+        for key in ("response_start", "response_start_s", "baseline_start", "baseline_start_s"):
+            region = interactive.get(key)
+            if region is not None:
+                return region
+        if interactive:
+            return next(iter(interactive.values()))
+        return getattr(self, "analysis_region", None)
+
+    def _trace_package_ready(self, data: Any) -> bool:
+        """True if *data* is the plot trace dict (``data`` / ``time`` arrays) used by core analysis."""
+        if not isinstance(data, dict):
+            return False
+        arr = data.get("data")
+        tim = data.get("time")
+        if arr is None or tim is None:
+            return False
+        try:
+            if len(arr) == 0 or len(tim) == 0:
+                return False
+        except TypeError:
+            return False
+        return True
+
+    def _calculate_tau(self, data: Dict[str, Any]):
+        """Require a non-empty trace dict (same object as ``self._current_plot_data`` in normal UI flow)."""
+        if not self._trace_package_ready(data):
+            return
+        return _INTRINSIC_PLOT_READY
+
+    def _calculate_sag_ratio(self, data: Dict[str, Any]):
+        if not self._trace_package_ready(data):
+            return
+        return _INTRINSIC_PLOT_READY
+
+    def _calculate_rin(self, data: Dict[str, Any]):
+        if not self._trace_package_ready(data):
+            return
+        return _INTRINSIC_PLOT_READY
 
     def get_registry_name(self) -> str:
         return self.analysis_name
@@ -830,6 +879,39 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # --- Inject secondary channel data if configured ---
         self._inject_secondary_channel_data(params, data)
+
+        if self.analysis_name == "tau_analysis":
+            gate = self._calculate_tau(data)
+            if gate is not _INTRINSIC_PLOT_READY:
+                return {
+                    "tau_ms": float(np.nan),
+                    "fit_time": [],
+                    "fit_values": [],
+                    "parameters": params,
+                }
+
+        if self.analysis_name == "sag_ratio_analysis":
+            gate = self._calculate_sag_ratio(data)
+            if gate is not _INTRINSIC_PLOT_READY:
+                nan = float(np.nan)
+                return {
+                    "sag_ratio": nan,
+                    "sag_percentage": nan,
+                    "v_peak": nan,
+                    "v_ss": nan,
+                    "v_baseline": nan,
+                    "rebound_depolarization": nan,
+                    "sag_error": "Plot region or data unavailable",
+                }
+
+        if self.analysis_name == "rin_analysis":
+            gate = self._calculate_rin(data)
+            if gate is not _INTRINSIC_PLOT_READY:
+                return {
+                    "rin_mohm": None,
+                    "conductance_us": None,
+                    "rin_error": "Plot region or data unavailable",
+                }
 
         try:
             if requires_multi_trial and self._selected_item_recording and self.signal_channel_combobox:

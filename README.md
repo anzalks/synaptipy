@@ -31,6 +31,8 @@ Synaptipy provides 15 built-in analysis modules, each available interactively in
 - Sag Ratio (I_h) - quantifies hyperpolarisation-activated sag from the ratio of peak-to-steady-state deflection, with rebound depolarisation measurement
 - Cell Capacitance (Cm) - derived from Tau/Rin in current-clamp, or capacitive-transient integration in voltage-clamp
 
+Interactive intrinsic analyses (Rin, Tau, Sag, RMP) include defensive checks: zero current steps yield NaN Rin instead of division errors, exponential fits that fail return NaN Tau with a clear error flag, empty time windows yield NaN means instead of crashing, and the metadata-driven analyser tab skips Tau/Sag when plot data or region items are missing.
+
 **Action Potential Analysis**
 - Spike Detection - threshold- and dV/dt-based AP detection with refractory period filtering; extracts amplitude, half-width, rise time, decay time, threshold voltage, and after-hyperpolarisation (AHP)
 - Burst Analysis - max-ISI burst detection; reports burst count, mean spikes per burst, burst duration, and intra-burst frequency

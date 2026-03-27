@@ -90,10 +90,12 @@ class ExplorerTab(QtWidgets.QWidget):
         # Caching
         self._data_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}
         self._average_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
-        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}  # Cache: cid -> trial_idx -> (t, data)
+        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = (
+            {}
+        )  # Cache: cid -> trial_idx -> (t, data)
         # Reusable PlotDataItems for CYCLE_SINGLE mode (avoids alloc/scene-insert per trial)
         self._reusable_single_items: Dict[str, Any] = {}  # cid -> PlotDataItem
-        self._reusable_avg_items: Dict[str, Any] = {}     # cid -> PlotDataItem (average line)
+        self._reusable_avg_items: Dict[str, Any] = {}  # cid -> PlotDataItem (average line)
         # Pipeline for processing
         self.pipeline = SignalProcessingPipeline()
         # Active settings for on-the-fly processing
@@ -626,9 +628,13 @@ class ExplorerTab(QtWidgets.QWidget):
         # Calculate Base Ranges
         self._calculate_base_ranges()
 
-        # Initial Plot — use fresh=True to skip view-state restoration
-        # so auto-range can do its job on the newly plotted data.
-        self._update_plot(fresh=True)
+        # Initial plot: skip view-state restoration for one update so auto-range
+        # can run on the newly plotted data.
+        self._plot_update_fresh = True
+        try:
+            self._update_plot()
+        finally:
+            self._plot_update_fresh = False
         self._reset_view()
 
         # --- Restore State if Pending ---
@@ -826,13 +832,14 @@ class ExplorerTab(QtWidgets.QWidget):
             except Exception:
                 self.plot_canvas.widget.update()
 
-    def _update_plot(self, fresh: bool = False):  # noqa: C901
+    def _update_plot(self):  # noqa: C901
         """Standard plot update.
 
-        Args:
-            fresh: If True, skip view-state save/restore (used on initial
-                   display so auto-range fills the viewport correctly).
+        For the first plot after loading a recording, callers set
+        ``_plot_update_fresh`` True around a single call so view-state
+        save/restore is skipped and auto-range can fill the viewport.
         """
+        fresh = getattr(self, "_plot_update_fresh", False)
         # Guard: skip intermediate calls triggered by checkbox toggled
         # signals during config_panel.rebuild() inside _display_recording.
         if getattr(self, "_is_rebuilding", False):
