@@ -56,10 +56,10 @@ author = "Anzal K Shahul"
 try:
     from Synaptipy import __version__ as _version  # noqa: E402
     release = _version
-    version = ".".join(_version.split(".")[:2])
+    version = _version
 except Exception:
-    version = "0.1"
-    release = "0.1.0b1"
+    version = "0.1.0b5"
+    release = "0.1.0b5"
 
 # ---------------------------------------------------------------------------
 # General configuration
