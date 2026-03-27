@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files, collect_hiddenimports
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import os
 import sys
 
@@ -7,12 +7,12 @@ block_cipher = None
 
 # Collect hidden imports for dynamic imports
 hiddenimports = []
-hiddenimports += collect_hiddenimports('pyqtgraph')
-hiddenimports += collect_hiddenimports('neo')
-hiddenimports += collect_hiddenimports('quantities')
-hiddenimports += collect_hiddenimports('scipy')
-hiddenimports += collect_hiddenimports('h5py')
-hiddenimports += collect_hiddenimports('pynwb')
+hiddenimports += collect_submodules('pyqtgraph')
+hiddenimports += collect_submodules('neo')
+hiddenimports += collect_submodules('quantities')
+hiddenimports += collect_submodules('scipy')
+hiddenimports += collect_submodules('h5py')
+hiddenimports += collect_submodules('pynwb')
 
 # Include our local resources
 datas = [('src/Synaptipy/resources', 'Synaptipy/resources')]
