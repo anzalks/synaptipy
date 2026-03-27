@@ -342,7 +342,7 @@ def _bi_exp_growth(t, V_ss, A_fast, tau_fast, A_slow, tau_slow):
     return V_ss + A_fast * np.exp(-t / tau_fast) + A_slow * np.exp(-t / tau_slow)
 
 
-def calculate_tau(
+def calculate_tau(  # noqa: C901
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
     stim_start_time: float,
