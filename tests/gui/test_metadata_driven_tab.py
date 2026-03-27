@@ -1,6 +1,7 @@
 # tests/gui/test_metadata_driven_tab.py
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 from PySide6 import QtWidgets
 
@@ -238,3 +239,42 @@ def test_manual_mode_enables_spinboxes(rin_tab):
             w = widgets.get(key)
             if w is not None and hasattr(w, "isReadOnly"):
                 assert not w.isReadOnly(), f"Widget '{key}' should be writable in Manual mode"
+
+
+# ---------------------------------------------------------------------------
+# Intrinsic analysis guards (no plot region / no trace data)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "analysis_name,assert_key,assert_val",
+    [
+        ("tau_analysis", "tau_ms", lambda x: np.isnan(x)),
+        ("sag_ratio_analysis", "sag_ratio", lambda x: np.isnan(x)),
+        ("rin_analysis", "rin_error", lambda x: x == "Plot region or data unavailable"),
+    ],
+)
+def test_intrinsic_analysis_skips_without_plot_prerequisites(qtbot, monkeypatch, analysis_name, assert_key, assert_val):
+    """Tau, Sag, and Rin must not call the registry if regions or plot data are missing."""
+    monkeypatch.setattr(
+        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
+        MagicMock(),
+    )
+    import Synaptipy.core.analysis.intrinsic_properties  # noqa: F401
+
+    neo_adapter = MagicMock()
+    tab = MetadataDrivenAnalysisTab(analysis_name, neo_adapter)
+    qtbot.addWidget(tab)
+    # Gate uses the *data* argument (same shape as BaseAnalysisTab._current_plot_data), not regions.
+    tab._current_plot_data = {"data": np.ones(10), "time": np.linspace(0, 1, 10), "sampling_rate": 10000.0}
+    fake_func = MagicMock(return_value={"should_not_run": True})
+    monkeypatch.setitem(
+        AnalysisRegistry._registry,
+        analysis_name,
+        fake_func,
+    )
+    params = {}
+    data = {}  # missing trace arrays → intrinsic gate skips before registry call
+    out = tab._execute_core_analysis(params, data)
+    fake_func.assert_not_called()
+    assert assert_val(out[assert_key])

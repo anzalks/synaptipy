@@ -52,13 +52,23 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
 
         if start_idx >= end_idx:
             log.warning(f"calculate_rmp: No data points found in baseline window {baseline_window}s.")
-            return RmpResult(value=None, unit="mV", is_valid=False, error_message="No data in window")
+            return RmpResult(
+                value=float(np.nan),
+                unit="mV",
+                is_valid=False,
+                error_message="No data in window",
+            )
 
         baseline_data = data[start_idx:end_idx]
 
         if baseline_data.size == 0:
             log.warning(f"calculate_rmp: Baseline data slice is empty for window {baseline_window}s.")
-            return RmpResult(value=None, unit="mV", is_valid=False, error_message="Empty data slice")
+            return RmpResult(
+                value=float(np.nan),
+                unit="mV",
+                is_valid=False,
+                error_message="Empty data slice",
+            )
 
         rmp = np.mean(baseline_data)
         std_dev = np.std(baseline_data)

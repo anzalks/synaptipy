@@ -56,8 +56,8 @@ def _make_trace(n=10000, fs=20000.0, baseline=-70.0):
 class TestSagRatioEdgeCases:
     """Edge-case tests for calculate_sag_ratio."""
 
-    def test_flat_trace_returns_none(self):
-        """A completely flat trace has delta_v_ss == 0 → None."""
+    def test_flat_trace_returns_nan_payload(self):
+        """A completely flat trace has delta_v_ss == 0 → NaN payload (no division)."""
         v, t, _ = _make_trace()
         result = calculate_sag_ratio(
             v,
@@ -66,7 +66,9 @@ class TestSagRatioEdgeCases:
             response_peak_window=(0.1, 0.2),
             response_steady_state_window=(0.3, 0.45),
         )
-        assert result is None
+        assert result is not None
+        assert np.isnan(result["sag_ratio"])
+        assert np.isnan(result["v_ss"])
 
     def test_depolarising_step(self):
         """A depolarising step should still compute a ratio (< 1)."""
@@ -84,8 +86,8 @@ class TestSagRatioEdgeCases:
         assert result is not None
         assert isinstance(result["sag_ratio"], float)
 
-    def test_empty_window_returns_none(self):
-        """Windows outside the trace range → None."""
+    def test_empty_window_returns_nan_payload(self):
+        """Windows outside the trace range → NaN payload (no mean on empty slices)."""
         v, t, _ = _make_trace()
         result = calculate_sag_ratio(
             v,
@@ -94,7 +96,9 @@ class TestSagRatioEdgeCases:
             response_peak_window=(12.0, 13.0),
             response_steady_state_window=(14.0, 15.0),
         )
-        assert result is None
+        assert result is not None
+        assert np.isnan(result["sag_ratio"])
+        assert np.isnan(result["v_baseline"])
 
     def test_sag_percentage_reported(self):
         """Verify sag_percentage key is present after formalization."""
@@ -140,6 +144,13 @@ class TestSagRatioEdgeCases:
 # ---------------------------------------------------------------------------
 class TestRinEdgeCases:
     """Edge-case tests for calculate_rin."""
+
+    def test_zero_current_step_returns_nan(self):
+        """Zero delta-I must not divide; value is NaN and result invalid."""
+        v, t, _ = _make_trace()
+        result = calculate_rin(v, t, 0.0, (0.0, 0.1), (0.2, 0.4))
+        assert not result.is_valid
+        assert np.isnan(result.value)
 
     def test_identical_baseline_and_response(self):
         """No voltage deflection → Rin should be ~0 or valid with dV=0."""
@@ -385,10 +396,11 @@ class TestRMPEdgeCases:
     """Edge-case tests for baseline/RMP calculation."""
 
     def test_empty_window(self):
-        """Window outside data range → should have error or None."""
+        """Window outside data range → invalid result; value may be NaN."""
         v, t, _ = _make_trace()
         result = calculate_rmp(v, t, baseline_window=(10.0, 11.0))
-        assert not result.is_valid or result.value is None
+        assert not result.is_valid
+        assert result.value is None or (isinstance(result.value, float) and np.isnan(result.value))
 
     def test_stable_baseline_short_trace(self):
         """Very short trace for find_stable_baseline."""
