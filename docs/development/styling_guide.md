@@ -65,8 +65,8 @@ button = QtWidgets.QPushButton("Save")
 info_label = QtWidgets.QLabel("Select a file to analyze")
 
 # Apply minimal styling (mostly relies on Qt's native theming)
-style_button(button, 'primary')  # Makes button slightly more prominent
-style_label(info_label, 'heading')  # Makes label bold and larger
+style_button(button, 'primary') # Makes button slightly more prominent
+style_label(info_label, 'heading') # Makes label bold and larger
 ```
 
 ### For PyQtGraph Elements
@@ -128,4 +128,4 @@ The previous complex custom styling system has been replaced with this simpler a
 
 - **Removed**: Complex custom stylesheets, qdarkstyle dependency, custom color palettes
 - **Replaced**: Qt native palettes with minimal custom styling for specific needs
-- **Maintained**: Plot styling helpers and basic widget styling functions 
+- **Maintained**: Plot styling helpers and basic widget styling functions

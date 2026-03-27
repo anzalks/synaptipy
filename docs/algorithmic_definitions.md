@@ -1,8 +1,8 @@
 # Algorithmic Definitions
 
 This page provides formal mathematical definitions for all metrics computed by
-Synaptipy's analysis modules.  Every formula below corresponds directly to the
-implementation in `src/Synaptipy/core/analysis/`.  Parameter names in the
+Synaptipy's analysis modules. Every formula below corresponds directly to the
+implementation in `src/Synaptipy/core/analysis/`. Parameter names in the
 equations match the variable names in the source code.
 
 ---
@@ -33,7 +33,7 @@ sliding-window variance:
 
 $$
 \mathcal{W}^* = \arg\min_{\mathcal{W}_k}
-  \operatorname{Var}\!\bigl(V_{i \in \mathcal{W}_k}\bigr)
+ \operatorname{Var}\!\bigl(V_{i \in \mathcal{W}_k}\bigr)
 $$
 
 where $\mathcal{W}_k$ slides in steps of `step_duration` with width
@@ -86,8 +86,8 @@ the fit window.
 
 $$
 V(t) = V_{\text{ss}}
-      + A_{\text{fast}} \, e^{-t/\tau_{\text{fast}}}
-      + A_{\text{slow}} \, e^{-t/\tau_{\text{slow}}}
+ + A_{\text{fast}} \, e^{-t/\tau_{\text{fast}}}
+ + A_{\text{slow}} \, e^{-t/\tau_{\text{slow}}}
 $$
 
 Constraint: $\tau_{\text{fast}} < \tau_{\text{slow}}$ (swapped post-fit if
@@ -162,7 +162,7 @@ transfer of the capacitive transient, computed via trapezoidal integration
 ### 6.1 Threshold crossing
 
 Spikes are detected where $V(t) > V_{\text{threshold}}$ with a minimum
-refractory period between crossings.  The peak is the local maximum within
+refractory period between crossings. The peak is the local maximum within
 `peak_search_window` samples after each crossing.
 
 ### 6.2 Onset detection (dV/dt-based)
@@ -173,7 +173,7 @@ $$
 \frac{dV}{dt} > \theta_{dV/dt}
 $$
 
-in the `onset_lookback` window preceding the spike peak.  The derivative is
+in the `onset_lookback` window preceding the spike peak. The derivative is
 computed via `numpy.gradient(V) / dt` and reported in V/s.
 
 ### 6.3 Amplitude
@@ -232,7 +232,7 @@ $$
 where $V_{\text{fAHP,trough}}$ is the fast AHP minimum within `fahp_window_ms`
 (default 5 ms) after the action potential peak, and $V_{\text{ADP,peak}}$ is
 the largest local maximum in the subsequent `adp_search_window_ms` (default
-20 ms).  A point $V_i$ is a local maximum if $V_i > V_{i-1}$ and
+20 ms). A point $V_i$ is a local maximum if $V_i > V_{i-1}$ and
 $V_i > V_{i+1}$.
 
 If no local maximum is found (monotonic recovery), $A_{\text{ADP}} = \text{NaN}$.
@@ -241,12 +241,12 @@ If no local maximum is found (monotonic recovery), $A_{\text{ADP}} = \text{NaN}$
 
 $$
 \left(\frac{dV}{dt}\right)_{\max} = \max_{t \in [\text{onset}, \text{peak}]}
-  \frac{dV}{dt}(t)
+ \frac{dV}{dt}(t)
 $$
 
 $$
 \left(\frac{dV}{dt}\right)_{\min} = \min_{t \in [\text{peak}, \text{AHP}]}
-  \frac{dV}{dt}(t)
+ \frac{dV}{dt}(t)
 $$
 
 ---
@@ -259,10 +259,10 @@ $$
 
 1. Rolling median subtraction (window = `rolling_baseline_window_ms`).
 2. Noise estimate via Median Absolute Deviation:
-   $\hat{\sigma} = 1.4826 \times \text{MAD}$.
+ $\hat{\sigma} = 1.4826 \times \text{MAD}$.
 3. Adaptive prominence: $p = \max(\text{threshold}, \, 2\hat{\sigma})$.
 4. Peak detection via `scipy.signal.find_peaks` with the computed prominence,
-   height, and refractory distance constraints.
+ height, and refractory distance constraints.
 5. Events with duration $< 0.2\,\text{ms}$ are rejected as non-physiological.
 
 ### 7.2 Template-match / deconvolution
@@ -275,7 +275,7 @@ $$
 K(t) = e^{-t/\tau_{\text{decay}}} - e^{-t/\tau_{\text{rise}}}
 $$
 
-normalised to unit area.  Events are detected where the z-scored
+normalised to unit area. Events are detected where the z-scored
 matched-filter output exceeds `threshold_sd`:
 
 $$
@@ -308,7 +308,7 @@ $\Delta V = R_{\text{in}} \cdot \Delta I_{\text{nA}} + b$:
 
 $$
 R_{\text{in}} = \frac{\sum (\Delta I - \overline{\Delta I})(\Delta V - \overline{\Delta V})}
-                      {\sum (\Delta I - \overline{\Delta I})^2}
+ {\sum (\Delta I - \overline{\Delta I})^2}
 $$
 
 reported with $R^2$ goodness-of-fit.
@@ -320,7 +320,7 @@ reported with $R^2$ goodness-of-fit.
 **Module:** `burst_analysis.py` · **Registry name:** `burst_analysis`
 
 A burst begins when $\text{ISI}_k \le \text{max\_isi\_start}$ and continues
-while $\text{ISI}_k \le \text{max\_isi\_end}$.  Groups with fewer than
+while $\text{ISI}_k \le \text{max\_isi\_end}$. Groups with fewer than
 `min_spikes` spikes are discarded.
 
 $$
@@ -357,7 +357,7 @@ $$
 
 $$
 \frac{dV}{dt}(t) = \text{gaussian\_filter1d}\!\left(
-  \frac{\Delta V}{\Delta t}, \; \sigma
+ \frac{\Delta V}{\Delta t}, \; \sigma
 \right)
 $$
 
@@ -386,7 +386,7 @@ $\text{CV} = 0$: perfectly regular; $\text{CV} = 1$: Poisson process.
 
 $$
 \text{CV}_2 = \frac{1}{N-1} \sum_{i=1}^{N-1}
-  \frac{2 \,|\text{ISI}_{i+1} - \text{ISI}_i|}{\text{ISI}_{i+1} + \text{ISI}_i}
+ \frac{2 \,|\text{ISI}_{i+1} - \text{ISI}_i|}{\text{ISI}_{i+1} + \text{ISI}_i}
 $$
 
 Measures local variability; insensitive to slow firing-rate changes.
@@ -395,7 +395,7 @@ Measures local variability; insensitive to slow firing-rate changes.
 
 $$
 \text{LV} = \frac{3}{N-1} \sum_{i=1}^{N-1}
-  \left( \frac{\text{ISI}_i - \text{ISI}_{i+1}}{\text{ISI}_i + \text{ISI}_{i+1}} \right)^{\!2}
+ \left( \frac{\text{ISI}_i - \text{ISI}_{i+1}}{\text{ISI}_i + \text{ISI}_{i+1}} \right)^{\!2}
 $$
 
 $\text{LV} < 1$: regular; $\text{LV} \approx 1$: Poisson; $\text{LV} > 1$: bursty.
@@ -413,7 +413,7 @@ find rising edges via `numpy.diff`.
 
 $$
 \bar{L} = \frac{1}{N_{\text{resp}}} \sum_{j=1}^{N_{\text{resp}}}
-  (t_{\text{event},j} - t_{\text{stim},j})
+ (t_{\text{event},j} - t_{\text{stim},j})
 $$
 
 **Response probability:**
@@ -478,7 +478,7 @@ For stimulus artefact suppression, three interpolation modes are available:
 ## References
 
 - Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996). Comparison
-  of discharge variability in vitro and in vivo in cat visual cortex neurons.
-  *Journal of Neurophysiology*, 75(5), 1806-1814.
+ of discharge variability in vitro and in vivo in cat visual cortex neurons.
+ *Journal of Neurophysiology*, 75(5), 1806-1814.
 - Shinomoto, S., Shima, K., & Tanji, J. (2003). Differences in spiking
-  patterns among cortical neurons. *Neural Computation*, 15(12), 2823-2842.
+ patterns among cortical neurons. *Neural Computation*, 15(12), 2823-2842.

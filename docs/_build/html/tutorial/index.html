@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy User Tutorial and Documentation &mdash; Synaptipy 0.1.0b1 documentation</title>
+  <title>Synaptipy User Tutorial and Documentation &mdash; Synaptipy 0.1.0b6 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="../_static/logo.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=e4e59774"></script>
+      <script src="../_static/documentation_options.js?v=2f6c07b9"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -235,7 +235,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#installation">Installation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#requirements">Requirements</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#standalone-application-recommended">Standalone Application (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#python-package-installation">Python Package Installation</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#developer-installation">Developer Installation</a></li>
 </ul>
 </li>
@@ -352,7 +356,6 @@
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-1-pure-analysis-logic">3.1 Part 1: Pure Analysis Logic</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-2-registry-wrapper">3.2 Part 2: Registry Wrapper</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#return-dict-conventions">3.3 Return Dict Conventions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#batch-export-and-dynamic-csvs">3.4 Batch Export and Dynamic CSVs</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#defining-gui-parameters-ui-params">4. Defining GUI Parameters (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a><ul>
@@ -710,6 +713,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#linux"><strong>Linux</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#standalone-installers-recommended">Standalone Installers (Recommended)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#installation-commands">Installation Commands</a><ul>
@@ -1021,8 +1025,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#testing-recommendations">7. Testing Recommendations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fixes-applied">Fixes Applied</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#conclusion">Conclusion</a></li>
@@ -1100,7 +1104,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ANALYSER_TAB_REFACTORING.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#issue-found-and-fixed">Issue Found and Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#problem">Problem</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#solution">Solution</a></li>
@@ -1113,8 +1117,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#complete-implementation-summary">Complete Implementation Summary</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#code-quality-verification">Code Quality Verification</a></li>
@@ -1139,9 +1143,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html">Synaptipy Analysis Module Refactoring - Implementation Summary</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phases-completed">Phases Completed</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">✅ Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">✅ Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">✅ Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#implementation-statistics">Implementation Statistics</a><ul>
@@ -1178,7 +1182,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html">✅ REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html">REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html#achievement-unlocked-100-test-pass-rate">Achievement Unlocked: 100% Test Pass Rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html#what-was-accomplished">What Was Accomplished</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html#files-modified-5">Files Modified: 5</a></li>
@@ -1255,9 +1259,9 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#refactoring-implementation-plan">Refactoring Implementation Plan</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation ⏳</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#success-criteria">Success Criteria</a><ul>
@@ -1267,12 +1271,12 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#post-refactoring-results">Post-Refactoring Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS.html">Analysis Functions, UI Elements, and Failure Points</a><ul>
@@ -1457,10 +1461,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html">Performance Optimizations - Implementation Summary</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">✅ All Implementations Complete</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">All Implementations Complete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#test-results">Test Results</a></li>
@@ -1495,23 +1499,23 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html">Final Performance Optimizations Implementation Report</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">✅ ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature ✅</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code> ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-src-synaptipy-application-gui-explorer-tab-py">File: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/explorer_tab.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-results">Test Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#manual-verification-checklist">Manual Verification Checklist</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#files-modified-summary">Files Modified Summary</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#implementation-files-4-files">Implementation Files (4 files)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-files-2-files">Test Files (2 files)</a></li>
@@ -1528,8 +1532,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html">Final Verification Guide - Performance Optimizations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#quick-verification-checklist">Quick Verification Checklist</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">✅ Automated Tests Passed</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">✅ Code Verification Complete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">Automated Tests Passed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">Code Verification Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#manual-testing-instructions">Manual Testing Instructions</a><ul>
@@ -1559,7 +1563,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html">🎉 Phase 1 Refactoring COMPLETE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html">Phase 1 Refactoring COMPLETE</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#files-refactored">Files Refactored</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#test-results">Test Results</a></li>
@@ -1578,10 +1582,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html">🎉 PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html">PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#executive-summary">Executive Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#final-test-results">Final Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#issues-fixed">Issues Fixed</a><ul>
@@ -1594,8 +1598,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#architecture-before-vs-after">Architecture Before vs After</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication ❌</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#quality-metrics">Quality Metrics</a></li>
@@ -1615,7 +1619,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#git-commit-message">Git Commit Message</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#phase-2-template-method-pattern-for-analysis-execution">Phase 2: Template Method Pattern for Analysis Execution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#baseanalysistab-changes">BaseAnalysisTab Changes</a></li>
@@ -1653,15 +1657,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#summary">Summary</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#objectives">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#implementation">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#benefits">Benefits</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#id1">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#id2">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#usage-pattern">Usage Pattern</a></li>
@@ -1683,15 +1687,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html">✅ ALL TESTS PASSING - ZERO ERRORS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html">ALL TESTS PASSING - ZERO ERRORS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#comprehensive-verification-report">Comprehensive Verification Report</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#error-that-was-fixed">Error That Was Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#the-pre-existing-error-rin-tab-display-name-mismatch">The “Pre-Existing Error”: Rin Tab Display Name Mismatch</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#complete-test-results">Complete Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12 ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#verification-checklist">Verification Checklist</a></li>
@@ -1747,18 +1751,20 @@ including the mathematical methods used in each analysis module.</p>
 <ol class="arabic simple">
 <li><p><a class="reference internal" href="#the-explorer-tab">The Explorer Tab</a></p></li>
 <li><p><a class="reference internal" href="#signal-preprocessing">Signal Preprocessing</a></p></li>
-<li><p><a class="reference internal" href="#the-analyser-tab">The Analyser Tab</a></p>
+<li><p><a class="reference internal" href="#the-analyser-tab">The Analyser Tab</a></p></li>
+</ol>
 <ul class="simple">
 <li><p><a class="reference internal" href="#adding-your-own-analysis-tab">3.6 Adding Your Own Analysis Tab</a></p></li>
 </ul>
-</li>
-<li><p><a class="reference internal" href="#analysis-modules-detailed-reference">Analysis Modules - Detailed Reference</a></p>
+<ol class="arabic simple" start="4">
+<li><p><a class="reference internal" href="#4-analysis-modules--detailed-reference"><span class="xref myst">Analysis Modules - Detailed Reference</span></a></p></li>
+</ol>
 <ul class="simple">
 <li><p><a class="reference internal" href="#baseline-rmp-analysis">4.1 Baseline / RMP</a></p></li>
 <li><p><a class="reference internal" href="#spike-detection">4.2 Spike Detection</a></p></li>
-<li><p><a class="reference internal" href="#event-detection-threshold-based">4.3 Event Detection - Threshold Based</a></p></li>
-<li><p><a class="reference internal" href="#event-detection-template-match-deconvolution">4.4 Event Detection - Template Match</a></p></li>
-<li><p><a class="reference internal" href="#event-detection-baseline-peak-kinetics">4.5 Event Detection - Baseline Peak</a></p></li>
+<li><p><a class="reference internal" href="#43-event-detection--threshold-based"><span class="xref myst">4.3 Event Detection - Threshold Based</span></a></p></li>
+<li><p><a class="reference internal" href="#44-event-detection--template-match--deconvolution"><span class="xref myst">4.4 Event Detection - Template Match</span></a></p></li>
+<li><p><a class="reference internal" href="#45-event-detection--baseline-peak--kinetics"><span class="xref myst">4.5 Event Detection - Baseline Peak</span></a></p></li>
 <li><p><a class="reference internal" href="#input-resistance-rin">4.6 Input Resistance</a></p></li>
 <li><p><a class="reference internal" href="#tau-membrane-time-constant">4.7 Tau (Time Constant)</a></p></li>
 <li><p><a class="reference internal" href="#i-v-curve">4.8 I-V Curve</a></p></li>
@@ -1770,7 +1776,7 @@ including the mathematical methods used in each analysis module.</p>
 <li><p><a class="reference internal" href="#spike-train-dynamics">4.14 Spike Train Dynamics</a></p></li>
 <li><p><a class="reference internal" href="#sag-ratio-i-h">4.15 Sag Ratio (I_h)</a></p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="5">
 <li><p><a class="reference internal" href="#batch-processing">Batch Processing</a></p></li>
 <li><p><a class="reference internal" href="#the-exporter-tab">The Exporter Tab</a></p></li>
 <li><p><a class="reference internal" href="#preferences-and-customization">Preferences and Customization</a></p></li>
@@ -1791,14 +1797,11 @@ Click any file to load it instantly.</p></li>
 <li><p><strong>Project Tree</strong> - Groups recordings hierarchically by <strong>Animal → Slice → Cell</strong>.
 Supports multi-selection for batch operations.</p></li>
 <li><p><strong>Drag &amp; Drop</strong> - Drag files from the OS file manager directly into the sidebar.</p></li>
-<li><p><strong>Quality Indicator</strong> - Traffic-light badge per file:</p>
-<ul>
+<li><p><strong>Quality Indicator</strong> - Traffic-light badge per file:</p></li>
 <li><p>Green <strong>Good</strong> - Clean signal, low drift, acceptable SNR.</p></li>
 <li><p>Yellow <strong>Warning</strong> - Moderate baseline drift or line noise detected.</p></li>
 <li><p>Red <strong>Bad</strong> - Excessive noise, drift, or signal quality issues.
 Hover to see detailed metrics: RMS noise, drift rate, and specific warnings.</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="plot-canvas">
@@ -1813,12 +1816,9 @@ X-axes for synchronized panning/zooming.</p></li>
 <section id="display-configuration-panel">
 <h3>1.3 Display Configuration Panel<a class="headerlink" href="#display-configuration-panel" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p><strong>Plot Mode</strong></p>
-<ul>
+<li><p><strong>Plot Mode</strong></p></li>
 <li><p><em>Overlay All + Average</em> - All trials with average highlighted in bold.</p></li>
 <li><p><em>Cycle Single Trial</em> - One trial at a time with Prev/Next buttons.</p></li>
-</ul>
-</li>
 <li><p><strong>Auto Downsample</strong> - Reduces data density automatically for very large files.</p></li>
 <li><p><strong>Manual Trial Averaging</strong> (Cycle mode) - Add Current Trial / Clear Average /
 Plot Selected Average.</p></li>
@@ -1948,10 +1948,10 @@ that can be applied before any analysis:</p>
 
 <span class="n">pipeline</span> <span class="o">=</span> <span class="n">ProcessingPipeline</span><span class="p">()</span>
 <span class="n">pipeline</span><span class="o">.</span><span class="n">add_step</span><span class="p">({</span>
-    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;artifact&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;onset_time&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span>       <span class="c1"># seconds</span>
-    <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="mf">5.0</span><span class="p">,</span>      <span class="c1"># milliseconds</span>
-    <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;linear&quot;</span><span class="p">,</span>      <span class="c1"># &quot;hold&quot;, &quot;zero&quot;, or &quot;linear&quot;</span>
+ <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;artifact&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;onset_time&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span> <span class="c1"># seconds</span>
+ <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="mf">5.0</span><span class="p">,</span> <span class="c1"># milliseconds</span>
+ <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;linear&quot;</span><span class="p">,</span> <span class="c1"># &quot;hold&quot;, &quot;zero&quot;, or &quot;linear&quot;</span>
 <span class="p">})</span>
 </pre></div>
 </div>
@@ -1989,8 +1989,7 @@ auto-detected from channel units and controls which parameters appear.</p></li>
 <p>Each sub-tab provides:</p>
 <ul class="simple">
 <li><p><strong>Parameter Panel</strong> - Auto-generated spin boxes, combo boxes, and checkboxes.
-All include tooltips, unit suffixes, valid min/max ranges.</p>
-<ul>
+All include tooltips, unit suffixes, valid min/max ranges.</p></li>
 <li><p><em>Free-form numeric entry</em> - Number fields accept typed values directly;
 intermediate states (a lone <code class="docutils literal notranslate"><span class="pre">−</span></code>, an empty field, etc.) are tolerated while
 typing and validated only on commit. Stepping uses adaptive decimal increments.</p></li>
@@ -2000,18 +1999,13 @@ mode selector. In <strong>Interactive</strong> mode the time-window spinboxes ar
 unlocks all spinboxes for direct entry.</p></li>
 <li><p><em>Conditional visibility</em> - Parameters that are irrelevant for the current
 clamp mode, analysis type, or detection method are hidden automatically.</p></li>
-</ul>
-</li>
-<li><p><strong>Interactive Plot</strong></p>
-<ul>
+<li><p><strong>Interactive Plot</strong></p></li>
 <li><p><em>Draggable Regions</em> - Color-coded overlays (blue = baseline, red = response,
 orange = peak, green = steady-state) bidirectionally linked to parameter boxes.</p></li>
 <li><p><em>Interactive Event Markers</em> - Click to remove; Ctrl+click on trace to add.</p></li>
 <li><p><em>Draggable Threshold Line</em> - Syncs with the threshold parameter.</p></li>
 <li><p><em>Artifact Overlay</em> - Semi-transparent green shading on detected artifact windows.</p></li>
 <li><p><em>Fit Overlays</em> - Exponential or regression curves overlaid on the trace.</p></li>
-</ul>
-</li>
 <li><p><strong>Results Table</strong> - Parameter / Value pairs for all computed metrics.</p></li>
 <li><p><strong>Clamp-Mode Awareness</strong> - Parameters show/hide automatically (CC vs. VC).</p></li>
 </ul>
@@ -2043,7 +2037,7 @@ on parameter change.</p></li>
 <section id="adding-your-own-analysis-tab">
 <h3>3.6 Adding Your Own Analysis Tab<a class="headerlink" href="#adding-your-own-analysis-tab" title="Link to this heading"></a></h3>
 <p>You can add a completely new analysis tab to the Analyser <strong>without touching any
-Synaptipy source code</strong>.  All you need is a single Python file - Synaptipy
+Synaptipy source code</strong>. All you need is a single Python file - Synaptipy
 generates the parameter panel, Run button, results table, and plot overlays
 automatically from the metadata you provide.</p>
 <section id="step-1-create-the-plugin-file">
@@ -2082,49 +2076,49 @@ Synaptipy once - it creates the folder automatically.</p>
 </section>
 <section id="step-2-write-your-analysis-function">
 <h4>Step 2 - Write your analysis function<a class="headerlink" href="#step-2-write-your-analysis-function" title="Link to this heading"></a></h4>
-<p>Open <code class="docutils literal notranslate"><span class="pre">~/.synaptipy/plugins/my_analysis.py</span></code> in any text editor.  The file has two
+<p>Open <code class="docutils literal notranslate"><span class="pre">~/.synaptipy/plugins/my_analysis.py</span></code> in any text editor. The file has two
 parts:</p>
 <p><strong>Part A - Your analysis logic</strong> (plain Python + NumPy, no GUI code):</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">calculate_snr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">sampling_rate</span><span class="p">,</span> <span class="n">noise_start</span><span class="p">,</span> <span class="n">noise_end</span><span class="p">,</span>
-                  <span class="n">signal_start</span><span class="p">,</span> <span class="n">signal_end</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate signal-to-noise ratio in dB.&quot;&quot;&quot;</span>
-    <span class="c1"># Convert seconds → sample indices</span>
-    <span class="n">ni0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">noise_start</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">))</span>
-    <span class="n">ni1</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">noise_end</span><span class="p">,</span>   <span class="n">side</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">))</span>
-    <span class="n">si0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">signal_start</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">))</span>
-    <span class="n">si1</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">signal_end</span><span class="p">,</span>   <span class="n">side</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">))</span>
+ <span class="n">signal_start</span><span class="p">,</span> <span class="n">signal_end</span><span class="p">):</span>
+<span class="w"> </span><span class="sd">&quot;&quot;&quot;Calculate signal-to-noise ratio in dB.&quot;&quot;&quot;</span>
+ <span class="c1"># Convert seconds → sample indices</span>
+ <span class="n">ni0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">noise_start</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">))</span>
+ <span class="n">ni1</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">noise_end</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">))</span>
+ <span class="n">si0</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">signal_start</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">))</span>
+ <span class="n">si1</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">signal_end</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">))</span>
 
-    <span class="n">noise_rms</span>  <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">ni0</span><span class="p">:</span><span class="n">ni1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)))</span>
-    <span class="n">signal_rms</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">si0</span><span class="p">:</span><span class="n">si1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)))</span>
-    <span class="n">snr_db</span>     <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="mf">20.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">signal_rms</span> <span class="o">/</span> <span class="n">noise_rms</span><span class="p">))</span>
+ <span class="n">noise_rms</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">ni0</span><span class="p">:</span><span class="n">ni1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)))</span>
+ <span class="n">signal_rms</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">si0</span><span class="p">:</span><span class="n">si1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)))</span>
+ <span class="n">snr_db</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="mf">20.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">signal_rms</span> <span class="o">/</span> <span class="n">noise_rms</span><span class="p">))</span>
 
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s2">&quot;snr_db&quot;</span><span class="p">:</span>     <span class="nb">round</span><span class="p">(</span><span class="n">snr_db</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
-        <span class="s2">&quot;noise_rms&quot;</span><span class="p">:</span>  <span class="nb">round</span><span class="p">(</span><span class="n">noise_rms</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
-        <span class="s2">&quot;signal_rms&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">signal_rms</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
-    <span class="p">}</span>
+ <span class="k">return</span> <span class="p">{</span>
+ <span class="s2">&quot;snr_db&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">snr_db</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+ <span class="s2">&quot;noise_rms&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">noise_rms</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+ <span class="s2">&quot;signal_rms&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">signal_rms</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+ <span class="p">}</span>
 </pre></div>
 </div>
 <p><strong>Part B - Register it with the decorator:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">Synaptipy.core.analysis.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnalysisRegistry</span>
 
 <span class="nd">@AnalysisRegistry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span>
-    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;snr_analysis&quot;</span><span class="p">,</span>               <span class="c1"># unique internal ID</span>
-    <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Signal-to-Noise Ratio&quot;</span><span class="p">,</span>     <span class="c1"># name shown on the tab</span>
-    <span class="n">ui_params</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>                   <span class="c1"># parameter widgets  (see below)</span>
-    <span class="n">plots</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>                       <span class="c1"># plot overlays      (see below)</span>
+ <span class="n">name</span><span class="o">=</span><span class="s2">&quot;snr_analysis&quot;</span><span class="p">,</span> <span class="c1"># unique internal ID</span>
+ <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Signal-to-Noise Ratio&quot;</span><span class="p">,</span> <span class="c1"># name shown on the tab</span>
+ <span class="n">ui_params</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span> <span class="c1"># parameter widgets (see below)</span>
+ <span class="n">plots</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span> <span class="c1"># plot overlays (see below)</span>
 <span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">run_snr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">sampling_rate</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrapper - pulls GUI values from kwargs and calls the logic.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">calculate_snr</span><span class="p">(</span>
-        <span class="n">data</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">sampling_rate</span><span class="p">,</span>
-        <span class="n">noise_start</span>  <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;noise_start&quot;</span><span class="p">,</span>  <span class="mf">0.0</span><span class="p">),</span>
-        <span class="n">noise_end</span>    <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;noise_end&quot;</span><span class="p">,</span>    <span class="mf">0.1</span><span class="p">),</span>
-        <span class="n">signal_start</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;signal_start&quot;</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">),</span>
-        <span class="n">signal_end</span>   <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;signal_end&quot;</span><span class="p">,</span>   <span class="mf">0.5</span><span class="p">),</span>
-    <span class="p">)</span>
+<span class="w"> </span><span class="sd">&quot;&quot;&quot;Wrapper - pulls GUI values from kwargs and calls the logic.&quot;&quot;&quot;</span>
+ <span class="k">return</span> <span class="n">calculate_snr</span><span class="p">(</span>
+ <span class="n">data</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">sampling_rate</span><span class="p">,</span>
+ <span class="n">noise_start</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;noise_start&quot;</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+ <span class="n">noise_end</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;noise_end&quot;</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">),</span>
+ <span class="n">signal_start</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;signal_start&quot;</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">),</span>
+ <span class="n">signal_end</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;signal_end&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span>
+ <span class="p">)</span>
 </pre></div>
 </div>
 <blockquote>
@@ -2167,14 +2161,14 @@ Four widget types are available:</p>
 </table>
 <p>Full example for the SNR analysis:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ui_params</span><span class="o">=</span><span class="p">[</span>
-    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;noise_start&quot;</span><span class="p">,</span>  <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Noise Start (s):&quot;</span><span class="p">,</span>  <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
-     <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
-    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;noise_end&quot;</span><span class="p">,</span>    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Noise End (s):&quot;</span><span class="p">,</span>    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
-     <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
-    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;signal_start&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Signal Start (s):&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
-     <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
-    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;signal_end&quot;</span><span class="p">,</span>   <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Signal End (s):&quot;</span><span class="p">,</span>   <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
-     <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;noise_start&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Noise Start (s):&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;noise_end&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Noise End (s):&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;signal_start&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Signal Start (s):&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;signal_end&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Signal End (s):&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s2">&quot;decimals&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">},</span>
 <span class="p">],</span>
 </pre></div>
 </div>
@@ -2188,7 +2182,7 @@ only when another widget named <code class="docutils literal notranslate"><span 
 <section id="step-4-define-plot-overlays-plots">
 <h4>Step 4 - Define plot overlays (<code class="docutils literal notranslate"><span class="pre">plots</span></code>)<a class="headerlink" href="#step-4-define-plot-overlays-plots" title="Link to this heading"></a></h4>
 <p>Each dict in the <code class="docutils literal notranslate"><span class="pre">plots</span></code> list draws something on the trace after the analysis
-runs.  Common overlay types:</p>
+runs. Common overlay types:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Type</p></th>
@@ -2229,9 +2223,9 @@ runs.  Common overlay types:</p>
 </table>
 <p>Full example - two draggable windows and a dashed line at the noise level:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">plots</span><span class="o">=</span><span class="p">[</span>
-    <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;interactive_region&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;noise_start&quot;</span><span class="p">,</span> <span class="s2">&quot;noise_end&quot;</span><span class="p">],</span>   <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;b&quot;</span><span class="p">},</span>
-    <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;interactive_region&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;signal_start&quot;</span><span class="p">,</span> <span class="s2">&quot;signal_end&quot;</span><span class="p">],</span> <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;g&quot;</span><span class="p">},</span>
-    <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;hlines&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;noise_rms&quot;</span><span class="p">],</span> <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="s2">&quot;styles&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;dash&quot;</span><span class="p">]},</span>
+ <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;interactive_region&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;noise_start&quot;</span><span class="p">,</span> <span class="s2">&quot;noise_end&quot;</span><span class="p">],</span> <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;b&quot;</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;interactive_region&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;signal_start&quot;</span><span class="p">,</span> <span class="s2">&quot;signal_end&quot;</span><span class="p">],</span> <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;g&quot;</span><span class="p">},</span>
+ <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;hlines&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;noise_rms&quot;</span><span class="p">],</span> <span class="s2">&quot;color&quot;</span><span class="p">:</span> <span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="s2">&quot;styles&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;dash&quot;</span><span class="p">]},</span>
 <span class="p">],</span>
 </pre></div>
 </div>
@@ -2242,9 +2236,9 @@ runs.  Common overlay types:</p>
 To keep helper data out of the table (e.g. arrays used only by plot overlays),
 prefix the key with an underscore:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">return</span> <span class="p">{</span>
-    <span class="s2">&quot;snr_db&quot;</span><span class="p">:</span>       <span class="mf">42.3</span><span class="p">,</span>        <span class="c1"># ← shown in results table</span>
-    <span class="s2">&quot;noise_rms&quot;</span><span class="p">:</span>    <span class="mf">0.15</span><span class="p">,</span>        <span class="c1"># ← shown in results table</span>
-    <span class="s2">&quot;_fit_curve&quot;</span><span class="p">:</span>   <span class="n">some_array</span><span class="p">,</span>  <span class="c1"># ← hidden (used by overlay_fit)</span>
+ <span class="s2">&quot;snr_db&quot;</span><span class="p">:</span> <span class="mf">42.3</span><span class="p">,</span> <span class="c1"># ← shown in results table</span>
+ <span class="s2">&quot;noise_rms&quot;</span><span class="p">:</span> <span class="mf">0.15</span><span class="p">,</span> <span class="c1"># ← shown in results table</span>
+ <span class="s2">&quot;_fit_curve&quot;</span><span class="p">:</span> <span class="n">some_array</span><span class="p">,</span> <span class="c1"># ← hidden (used by overlay_fit)</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -2258,7 +2252,7 @@ will display the message instead of a results table.</p>
 </pre></div>
 </div>
 <p>Load a file, select a channel, and click <strong>Run Analysis</strong> (or just change a
-parameter - analysis re-runs automatically).  The results table, plot overlays,
+parameter - analysis re-runs automatically). The results table, plot overlays,
 and batch processing all work immediately.</p>
 </section>
 <section id="tips">
@@ -2266,7 +2260,7 @@ and batch processing all work immediately.</p>
 <ul class="simple">
 <li><p><strong>No rebuild needed</strong> - just save the <code class="docutils literal notranslate"><span class="pre">.py</span></code> file and restart Synaptipy.</p></li>
 <li><p><strong>Errors are safe</strong> - if your plugin has a syntax error or crashes, Synaptipy
-logs the error and keeps running (your tab simply won’t appear).  Check the log
+logs the error and keeps running (your tab simply won’t appear). Check the log
 at <code class="docutils literal notranslate"><span class="pre">~/.synaptipy/logs/</span></code> (Windows: <code class="docutils literal notranslate"><span class="pre">C:\Users\&lt;YourUsername&gt;\.synaptipy\logs\</span></code>).</p></li>
 <li><p><strong>Multiple plugins</strong> - put as many <code class="docutils literal notranslate"><span class="pre">.py</span></code> files in the plugins folder as you
 like; each one with an <code class="docutils literal notranslate"><span class="pre">&#64;AnalysisRegistry.register</span></code> decorator creates a
@@ -2393,8 +2387,7 @@ minimization to locate the quietest trace segment.</p></li>
 <ul class="simple">
 <li><p><strong>Onset</strong> - <code class="docutils literal notranslate"><span class="pre">numpy.gradient</span></code> computes dV/dt; onset where dV/dt &gt; <code class="docutils literal notranslate"><span class="pre">dvdt_threshold</span></code>.
 More robust against baseline drift than amplitude thresholding.</p></li>
-<li><p><strong>Per-spike features</strong> (vectorized NumPy):</p>
-<ul>
+<li><p><strong>Per-spike features</strong> (vectorized NumPy):</p></li>
 <li><p>Amplitude = V_peak − V_threshold</p></li>
 <li><p>Half-width at 50% amplitude (linear interpolation)</p></li>
 <li><p>Rise time 10-90%, Decay time 90-10% (sub-sample precision)</p></li>
@@ -2402,8 +2395,6 @@ More robust against baseline drift than amplitude thresholding.</p></li>
 <li><p>AHP duration = repolarization to AHP recovery</p></li>
 <li><p>ADP amplitude = local max after AHP trough</p></li>
 <li><p>Max / Min dV/dt (V/s)</p></li>
-</ul>
-</li>
 <li><p><strong>ISI statistics</strong> via <code class="docutils literal notranslate"><span class="pre">numpy.diff(spike_times)</span></code>.</p></li>
 <li><p><strong>Multi-sweep</strong>: <code class="docutils literal notranslate"><span class="pre">analyze_multi_sweep_spikes()</span></code> aggregates across all trials.</p></li>
 </ul>
@@ -2671,9 +2662,9 @@ updated to reflect the windows actually used.</p></li>
 <p><code class="docutils literal notranslate"><span class="pre">rin_mohm</span></code>, <code class="docutils literal notranslate"><span class="pre">conductance_us</span></code>, <code class="docutils literal notranslate"><span class="pre">voltage_deflection_mv</span></code>, <code class="docutils literal notranslate"><span class="pre">current_injection_pa</span></code>,
 <code class="docutils literal notranslate"><span class="pre">baseline_voltage_mv</span></code>, <code class="docutils literal notranslate"><span class="pre">steady_state_voltage_mv</span></code>, <code class="docutils literal notranslate"><span class="pre">sag_ratio</span></code>, <code class="docutils literal notranslate"><span class="pre">sag_percentage</span></code></p>
 <p>The sag ratio is computed with configurable <code class="docutils literal notranslate"><span class="pre">peak_smoothing_ms</span></code> (default 5 ms)
-and <code class="docutils literal notranslate"><span class="pre">rebound_window_ms</span></code> (default 100 ms) parameters.  For standalone sag ratio
+and <code class="docutils literal notranslate"><span class="pre">rebound_window_ms</span></code> (default 100 ms) parameters. For standalone sag ratio
 analysis with dedicated parameter controls, see
-<a class="reference internal" href="#sag-ratio-i-h">§4.15 Sag Ratio (I_h)</a>.  See also
+<a class="reference internal" href="#sag-ratio-i-h">§4.15 Sag Ratio (I_h)</a>. See also
 <a class="reference internal" href="../algorithmic_definitions.html"><span class="std std-doc">Algorithmic Definitions §4</span></a> for the full formula.</p>
 </section>
 <section id="id19">
@@ -3049,7 +3040,8 @@ ISI ≤ max_isi_end; groups with &lt; min_spikes are discarded.</p></li>
 <ol class="arabic simple">
 <li><p>TTL edge detection: binarize → <code class="docutils literal notranslate"><span class="pre">numpy.diff</span></code> for rising edges.</p></li>
 <li><p>For each stimulus onset, the response window is searched for an event using
-the selected detection method:</p>
+the selected detection method:</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>Spikes</strong> - threshold-crossing AP detection with refractory filtering.</p></li>
 <li><p><strong>Events (Threshold)</strong> - prominence-based threshold crossing with direction
@@ -3057,7 +3049,7 @@ and refractory filtering (<code class="docutils literal notranslate"><span class
 <li><p><strong>Events (Template)</strong> - double-exponential template deconvolution
 (<code class="docutils literal notranslate"><span class="pre">detect_events_template</span></code>).</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="3">
 <li><p>Optical latency = mean(t_event − t_onset).</p></li>
 <li><p>Response probability = stimuli_with_events / total_stimuli.</p></li>
 <li><p>Jitter = std(latencies).</p></li>
@@ -3159,17 +3151,17 @@ H-line on main trace at threshold voltage.</p>
 <ol class="arabic simple">
 <li><p>ISI = numpy.diff(spike_times).</p></li>
 <li><p><strong>CV</strong> = σ_ISI / μ_ISI - global variability (0 = regular, 1 = Poisson).</p></li>
-<li><p><strong>CV₂</strong> (Holt et al. 1996) = mean(2|ISI_(i+1) − ISI_i| / (ISI_(i+1) + ISI_i))</p>
+<li><p><strong>CV₂</strong> (Holt et al. 1996) = mean(2|ISI_(i+1) − ISI_i| / (ISI_(i+1) + ISI_i))</p></li>
+</ol>
 <ul class="simple">
 <li><p>local variability, insensitive to slow rate changes.</p></li>
 </ul>
-</li>
-<li><p><strong>LV</strong> (Shinomoto et al. 2003) = mean(3(ISI_i − ISI_(i+1))² / (ISI_i + ISI_(i+1))²)</p>
+<ol class="arabic simple" start="4">
+<li><p><strong>LV</strong> (Shinomoto et al. 2003) = mean(3(ISI_i − ISI_(i+1))² / (ISI_i + ISI_(i+1))²)</p></li>
+</ol>
 <ul class="simple">
 <li><p>LV &lt; 1 regular, LV ≈ 1 Poisson, LV &gt; 1 bursty.</p></li>
 </ul>
-</li>
-</ol>
 </section>
 <section id="id49">
 <h4>Results<a class="headerlink" href="#id49" title="Link to this heading"></a></h4>
@@ -3265,8 +3257,8 @@ LaTeX-formatted formulae.</p>
 <section id="overview">
 <h3>5.1 Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h3>
 <p>The batch engine applies an analysis pipeline across many files automatically,
-producing a consolidated Pandas DataFrame result.  Every row is fully traceable
-to its source file, channel, trial, and analysis step.  The output is designed
+producing a consolidated Pandas DataFrame result. Every row is fully traceable
+to its source file, channel, trial, and analysis step. The output is designed
 for direct import into Excel, Origin, R, MATLAB, or Python scripts without
 post-processing.</p>
 </section>
@@ -3285,7 +3277,8 @@ post-processing.</p>
 <ol class="arabic simple">
 <li><p><strong>Add Step</strong> - select from all 15 registered analyses (or registered
 preprocessing functions).</p></li>
-<li><p><strong>Scope</strong> - determines how data is fed to the analysis function:</p>
+<li><p><strong>Scope</strong> - determines how data is fed to the analysis function:</p></li>
+</ol>
 <ul class="simple">
 <li><p><em>Average</em> - single averaged trace across all trials.</p></li>
 <li><p><em>All Trials</em> - analysis runs once per trial, producing one row per trial.</p></li>
@@ -3294,7 +3287,7 @@ preprocessing functions).</p></li>
 <li><p><em>Channel Set</em> - pass the full list of trials to the function (e.g. for
 F-I curves or I-V curves that need all sweeps at once).</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="3">
 <li><p>Configure <strong>Parameters</strong> with auto-generated widgets driven by
 <code class="docutils literal notranslate"><span class="pre">ui_params</span></code> in the registry metadata.</p></li>
 <li><p>Optionally prepend <strong>Preprocessing Steps</strong> (filter, baseline-subtract).
@@ -3305,7 +3298,7 @@ in the same channel.</p></li>
 <section id="running-and-cancellation">
 <h3>5.4 Running and Cancellation<a class="headerlink" href="#running-and-cancellation" title="Link to this heading"></a></h3>
 <p>A background <code class="docutils literal notranslate"><span class="pre">QThread</span></code> worker processes each file sequentially with per-file
-progress updates.  Click <strong>Stop</strong> at any time - cancellation is thread-safe
+progress updates. Click <strong>Stop</strong> at any time - cancellation is thread-safe
 and produces a partial-result DataFrame.</p>
 </section>
 <section id="output-columns">
@@ -3359,7 +3352,7 @@ traceability and software compatibility:</p>
 </section>
 <section id="analysis-result-columns-middle-alphabetically-sorted">
 <h4>Analysis result columns (middle, alphabetically sorted)<a class="headerlink" href="#analysis-result-columns-middle-alphabetically-sorted" title="Link to this heading"></a></h4>
-<p>These vary by analysis function.  Examples:</p>
+<p>These vary by analysis function. Examples:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Analysis</p></th>
@@ -3391,7 +3384,7 @@ traceability and software compatibility:</p>
 </tbody>
 </table>
 <p>Most keys include a <strong>unit suffix</strong> (<code class="docutils literal notranslate"><span class="pre">_mv</span></code>, <code class="docutils literal notranslate"><span class="pre">_ms</span></code>, <code class="docutils literal notranslate"><span class="pre">_hz</span></code>, <code class="docutils literal notranslate"><span class="pre">_pa</span></code>, <code class="docutils literal notranslate"><span class="pre">_pf</span></code>, <code class="docutils literal notranslate"><span class="pre">_mohm</span></code>)
-to eliminate ambiguity.  Dimensionless metrics (e.g. <code class="docutils literal notranslate"><span class="pre">cv</span></code>, <code class="docutils literal notranslate"><span class="pre">cv2</span></code>, <code class="docutils literal notranslate"><span class="pre">lv</span></code>) have
+to eliminate ambiguity. Dimensionless metrics (e.g. <code class="docutils literal notranslate"><span class="pre">cv</span></code>, <code class="docutils literal notranslate"><span class="pre">cv2</span></code>, <code class="docutils literal notranslate"><span class="pre">lv</span></code>) have
 human-readable alias columns added automatically (e.g. <code class="docutils literal notranslate"><span class="pre">coeff_of_variation</span></code>).</p>
 </section>
 <section id="array-valued-results">
@@ -3468,17 +3461,17 @@ file_name,file_path,channel,...
 <span class="kn">from</span><span class="w"> </span><span class="nn">Synaptipy.core.analysis.batch_engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">BatchAnalysisEngine</span>
 
 <span class="c1"># IMPORTANT: import the full package to register all analysis functions</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">Synaptipy.core.analysis</span>  <span class="c1"># noqa: F401</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">Synaptipy.core.analysis</span> <span class="c1"># noqa: F401</span>
 
 <span class="n">engine</span> <span class="o">=</span> <span class="n">BatchAnalysisEngine</span><span class="p">()</span>
 
 <span class="n">files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.abf&quot;</span><span class="p">))</span>
 
 <span class="n">pipeline</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="p">{</span><span class="s2">&quot;analysis&quot;</span><span class="p">:</span> <span class="s2">&quot;rmp_analysis&quot;</span><span class="p">,</span> <span class="s2">&quot;scope&quot;</span><span class="p">:</span> <span class="s2">&quot;average&quot;</span><span class="p">,</span>
-     <span class="s2">&quot;params&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;baseline_start&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;baseline_end&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">}},</span>
-    <span class="p">{</span><span class="s2">&quot;analysis&quot;</span><span class="p">:</span> <span class="s2">&quot;spike_detection&quot;</span><span class="p">,</span> <span class="s2">&quot;scope&quot;</span><span class="p">:</span> <span class="s2">&quot;all_trials&quot;</span><span class="p">,</span>
-     <span class="s2">&quot;params&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">20.0</span><span class="p">}},</span>
+ <span class="p">{</span><span class="s2">&quot;analysis&quot;</span><span class="p">:</span> <span class="s2">&quot;rmp_analysis&quot;</span><span class="p">,</span> <span class="s2">&quot;scope&quot;</span><span class="p">:</span> <span class="s2">&quot;average&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;params&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;baseline_start&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;baseline_end&quot;</span><span class="p">:</span> <span class="mf">0.1</span><span class="p">}},</span>
+ <span class="p">{</span><span class="s2">&quot;analysis&quot;</span><span class="p">:</span> <span class="s2">&quot;spike_detection&quot;</span><span class="p">,</span> <span class="s2">&quot;scope&quot;</span><span class="p">:</span> <span class="s2">&quot;all_trials&quot;</span><span class="p">,</span>
+ <span class="s2">&quot;params&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;threshold&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">20.0</span><span class="p">}},</span>
 <span class="p">]</span>
 
 <span class="n">df</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">run_batch</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">channel_filter</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Vm_prime&quot;</span><span class="p">])</span>
@@ -3493,7 +3486,7 @@ file_name,file_path,channel,...
 <h3>5.8 Pipeline Context and Preprocessing<a class="headerlink" href="#pipeline-context-and-preprocessing" title="Link to this heading"></a></h3>
 <p>When a <strong>preprocessing</strong> step (e.g. bandpass filter, baseline subtraction) is
 in the pipeline, it modifies the data context passed to all subsequent analysis
-steps for the <em>same channel</em>.  This means you can build pipelines like:</p>
+steps for the <em>same channel</em>. This means you can build pipelines like:</p>
 <ol class="arabic simple">
 <li><p>Bandpass Filter (preprocessing) - modifies data in-place in the context</p></li>
 <li><p>Spike Detection - runs on filtered data</p></li>
@@ -3578,7 +3571,7 @@ channel units:</p>
 </tbody>
 </table>
 <p>All data is stored in SI base units (volts, amperes) with the appropriate
-<code class="docutils literal notranslate"><span class="pre">conversion</span></code> factor recorded in the NWB metadata.  For full details on the
+<code class="docutils literal notranslate"><span class="pre">conversion</span></code> factor recorded in the NWB metadata. For full details on the
 mapping between Synaptipy data structures and NWB containers, see the
 <a class="reference internal" href="../nwb_mapping.html"><span class="std std-doc">NWB Export Mapping</span></a> reference page.</p>
 <p>Produces a <code class="docutils literal notranslate"><span class="pre">.nwb</span></code> file with raw traces, metadata, and extracted features -
@@ -3693,7 +3686,7 @@ analysis sub-tab in the GUI.</p>
 <section id="adding-your-own-analysis-plugin-interface">
 <h3>Adding Your Own Analysis (Plugin Interface)<a class="headerlink" href="#adding-your-own-analysis-plugin-interface" title="Link to this heading"></a></h3>
 <p>You can add custom analysis functions <strong>without modifying any Synaptipy source
-code</strong>.  Place a Python script in <code class="docutils literal notranslate"><span class="pre">~/.synaptipy/plugins/</span></code> with a function
+code</strong>. Place a Python script in <code class="docutils literal notranslate"><span class="pre">~/.synaptipy/plugins/</span></code> with a function
 decorated by <code class="docutils literal notranslate"><span class="pre">&#64;AnalysisRegistry.register(...)</span></code> and restart the application.
 Your analysis will appear as a new tab in the Analyser, complete with
 auto-generated parameter widgets, a results table, and plot overlays - all
@@ -3717,7 +3710,7 @@ see <strong><a class="reference internal" href="../extending_synaptipy.html"><sp
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Mar 08, 2026.
+      <span class="lastupdated">Last updated on Mar 27, 2026.
       </span></p>
   </div>
 

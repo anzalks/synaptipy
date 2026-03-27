@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy User Guide &mdash; Synaptipy 0.1.0b1 documentation</title>
+  <title>Synaptipy User Guide &mdash; Synaptipy 0.1.0b6 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="_static/logo.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=e4e59774"></script>
+      <script src="_static/documentation_options.js?v=2f6c07b9"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -356,7 +356,6 @@
 <li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#part-1-pure-analysis-logic">3.1 Part 1: Pure Analysis Logic</a></li>
 <li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#part-2-registry-wrapper">3.2 Part 2: Registry Wrapper</a></li>
 <li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#return-dict-conventions">3.3 Return Dict Conventions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#batch-export-and-dynamic-csvs">3.4 Batch Export and Dynamic CSVs</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#defining-gui-parameters-ui-params">4. Defining GUI Parameters (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a><ul>
@@ -714,6 +713,7 @@
 <li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#linux"><strong>Linux</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#standalone-installers-recommended">Standalone Installers (Recommended)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#installation-commands">Installation Commands</a><ul>
@@ -1025,8 +1025,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ERROR_REPORT.html#testing-recommendations">7. Testing Recommendations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fixes-applied">Fixes Applied</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ERROR_REPORT.html#conclusion">Conclusion</a></li>
@@ -1104,7 +1104,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ANALYSER_TAB_REFACTORING.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#issue-found-and-fixed">Issue Found and Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#problem">Problem</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#solution">Solution</a></li>
@@ -1117,8 +1117,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#complete-implementation-summary">Complete Implementation Summary</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#code-quality-verification">Code Quality Verification</a></li>
@@ -1143,9 +1143,9 @@
 <li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html">Synaptipy Analysis Module Refactoring - Implementation Summary</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phases-completed">Phases Completed</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">✅ Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">✅ Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">✅ Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#implementation-statistics">Implementation Statistics</a><ul>
@@ -1182,7 +1182,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html">✅ REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html">REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html#achievement-unlocked-100-test-pass-rate">Achievement Unlocked: 100% Test Pass Rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html#what-was-accomplished">What Was Accomplished</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html#files-modified-5">Files Modified: 5</a></li>
@@ -1259,9 +1259,9 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#refactoring-implementation-plan">Refactoring Implementation Plan</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation ⏳</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#success-criteria">Success Criteria</a><ul>
@@ -1271,12 +1271,12 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#post-refactoring-results">Post-Refactoring Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS.html">Analysis Functions, UI Elements, and Failure Points</a><ul>
@@ -1461,10 +1461,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html">Performance Optimizations - Implementation Summary</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">✅ All Implementations Complete</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">All Implementations Complete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#test-results">Test Results</a></li>
@@ -1499,23 +1499,23 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html">Final Performance Optimizations Implementation Report</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">✅ ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature ✅</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code> ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-src-synaptipy-application-gui-explorer-tab-py">File: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/explorer_tab.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-results">Test Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#manual-verification-checklist">Manual Verification Checklist</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#files-modified-summary">Files Modified Summary</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#implementation-files-4-files">Implementation Files (4 files)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-files-2-files">Test Files (2 files)</a></li>
@@ -1532,8 +1532,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html">Final Verification Guide - Performance Optimizations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#quick-verification-checklist">Quick Verification Checklist</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">✅ Automated Tests Passed</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">✅ Code Verification Complete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">Automated Tests Passed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">Code Verification Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#manual-testing-instructions">Manual Testing Instructions</a><ul>
@@ -1563,7 +1563,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html">🎉 Phase 1 Refactoring COMPLETE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html">Phase 1 Refactoring COMPLETE</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#files-refactored">Files Refactored</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#test-results">Test Results</a></li>
@@ -1582,10 +1582,10 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html">🎉 PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html">PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#executive-summary">Executive Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#final-test-results">Final Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#issues-fixed">Issues Fixed</a><ul>
@@ -1598,8 +1598,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#architecture-before-vs-after">Architecture Before vs After</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication ❌</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#quality-metrics">Quality Metrics</a></li>
@@ -1619,7 +1619,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#git-commit-message">Git Commit Message</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#phase-2-template-method-pattern-for-analysis-execution">Phase 2: Template Method Pattern for Analysis Execution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#baseanalysistab-changes">BaseAnalysisTab Changes</a></li>
@@ -1657,15 +1657,15 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#summary">Summary</a></li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#objectives">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#implementation">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#benefits">Benefits</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#id1">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#id2">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#usage-pattern">Usage Pattern</a></li>
@@ -1687,15 +1687,15 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html">✅ ALL TESTS PASSING - ZERO ERRORS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html">ALL TESTS PASSING - ZERO ERRORS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#comprehensive-verification-report">Comprehensive Verification Report</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#error-that-was-fixed">Error That Was Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#the-pre-existing-error-rin-tab-display-name-mismatch">The “Pre-Existing Error”: Rin Tab Display Name Mismatch</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#complete-test-results">Complete Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12 ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#verification-checklist">Verification Checklist</a></li>
@@ -1741,51 +1741,30 @@
 <section id="table-of-contents">
 <h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p><a class="reference internal" href="#installation">Installation</a></p>
-<ul>
+<li><p><a class="reference internal" href="#installation">Installation</a></p></li>
 <li><p><a class="reference internal" href="#requirements">Requirements</a></p></li>
 <li><p><a class="reference internal" href="#standard-installation">Standard Installation</a></p></li>
 <li><p><a class="reference internal" href="#developer-installation">Developer Installation</a></p></li>
-</ul>
-</li>
-<li><p><a class="reference internal" href="#getting-started">Getting Started</a></p>
-<ul>
+<li><p><a class="reference internal" href="#getting-started">Getting Started</a></p></li>
 <li><p><a class="reference internal" href="#running-the-application">Running the Application</a></p></li>
 <li><p><a class="reference internal" href="#user-interface-overview">User Interface Overview</a></p></li>
-</ul>
-</li>
-<li><p><a class="reference internal" href="#loading-data">Loading Data</a></p>
-<ul>
+<li><p><a class="reference internal" href="#loading-data">Loading Data</a></p></li>
 <li><p><a class="reference internal" href="#supported-file-formats">Supported File Formats</a></p></li>
 <li><p><a class="reference internal" href="#opening-files">Opening Files</a></p></li>
-</ul>
-</li>
-<li><p><a class="reference internal" href="#using-the-explorer-tab">Using the Explorer Tab</a></p>
-<ul>
+<li><p><a class="reference internal" href="#using-the-explorer-tab">Using the Explorer Tab</a></p></li>
 <li><p><a class="reference internal" href="#navigation-controls">Navigation Controls</a></p></li>
 <li><p><a class="reference internal" href="#plot-options">Plot Options</a></p></li>
-</ul>
-</li>
-<li><p><a class="reference internal" href="#using-the-analyser-tab">Using the Analyser Tab</a></p>
-<ul>
+<li><p><a class="reference internal" href="#using-the-analyser-tab">Using the Analyser Tab</a></p></li>
 <li><p><a class="reference internal" href="#input-resistance-conductance-analysis">Input Resistance/Conductance Analysis</a></p></li>
 <li><p><a class="reference internal" href="#baseline-rmp-analysis">Baseline/RMP Analysis</a></p></li>
 <li><p><a class="reference internal" href="#optogenetic-synchronization">Optogenetic Synchronization</a></p></li>
 <li><p><a class="reference internal" href="#sag-ratio-ih-analysis">Sag Ratio (Ih) Analysis</a></p></li>
-</ul>
-</li>
-<li><p><a class="reference internal" href="#using-the-exporter-tab">Using the Exporter Tab</a></p>
-<ul>
+<li><p><a class="reference internal" href="#using-the-exporter-tab">Using the Exporter Tab</a></p></li>
 <li><p><a class="reference internal" href="#exporting-to-nwb">Exporting to NWB</a></p></li>
 <li><p><a class="reference internal" href="#exporting-analysis-results">Exporting Analysis Results</a></p></li>
-</ul>
-</li>
-<li><p><a class="reference internal" href="#advanced-options">Advanced Options</a></p>
-<ul>
+<li><p><a class="reference internal" href="#advanced-options">Advanced Options</a></p></li>
 <li><p><a class="reference internal" href="#command-line-arguments">Command Line Arguments</a></p></li>
 <li><p><a class="reference internal" href="#logging-and-debugging">Logging and Debugging</a></p></li>
-</ul>
-</li>
 <li><p><a class="reference internal" href="#licensing">Licensing</a></p></li>
 <li><p><a class="reference internal" href="#troubleshooting">Troubleshooting</a></p></li>
 </ul>
@@ -1796,15 +1775,12 @@
 <h3>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>Python 3.10 or higher</p></li>
-<li><p>Dependencies are automatically installed during package installation:</p>
-<ul>
+<li><p>Dependencies are automatically installed during package installation:</p></li>
 <li><p><a class="reference external" href="https://doc.qt.io/qtforpython/">PySide6</a> - Qt6 bindings for Python (GUI framework)</p></li>
 <li><p><a class="reference external" href="https://www.pyqtgraph.org">PyQtGraph</a> - OpenGL-accelerated plotting library</p></li>
 <li><p><a class="reference external" href="https://neo.readthedocs.io">Neo</a> - electrophysiology file I/O (Garcia et al., 2014, <em>Front. Neuroinformatics</em> <a class="reference external" href="https://doi.org/10.3389/fninf.2014.00010">doi:10.3389/fninf.2014.00010</a>)</p></li>
 <li><p><a class="reference external" href="https://numpy.org">NumPy</a> / <a class="reference external" href="https://scipy.org">SciPy</a> - numerical computation and signal processing</p></li>
 <li><p><a class="reference external" href="https://pynwb.readthedocs.io">PyNWB</a> - NWB data export (Rubel et al., 2022, <em>eLife</em> <a class="reference external" href="https://doi.org/10.7554/eLife.78362">doi:10.7554/eLife.78362</a>)</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="standard-installation">
@@ -1848,18 +1824,18 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 <section id="running-the-application">
 <h3>Running the Application<a class="headerlink" href="#running-the-application" title="Link to this heading"></a></h3>
 <p>After installation, run the application using one of these methods:</p>
-<ol class="arabic">
-<li><p><strong>Using the installed entry point:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Using the installed entry point:</strong></p></li>
+</ol>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>synaptipy
 </pre></div>
 </div>
-</li>
-<li><p><strong>Using the Python module:</strong></p>
+<ol class="arabic simple" start="2">
+<li><p><strong>Using the Python module:</strong></p></li>
+</ol>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>Synaptipy
 </pre></div>
 </div>
-</li>
-</ol>
 </section>
 <section id="user-interface-overview">
 <h3>User Interface Overview<a class="headerlink" href="#user-interface-overview" title="Link to this heading"></a></h3>
@@ -1971,30 +1947,21 @@ and multi-channel data, provided the file format is supported. Confirmed formats
 <li><p><strong>Zoom</strong>: Use the mouse wheel, or zoom buttons</p></li>
 <li><p><strong>Pan</strong>: Click and drag in the plot area</p></li>
 <li><p><strong>Reset View</strong>: Click the “Reset View” button to return to the initial view</p></li>
-<li><p><strong>Navigate Between Files</strong>:</p>
-<ul>
+<li><p><strong>Navigate Between Files</strong>:</p></li>
 <li><p>Use the “Previous File” and “Next File” buttons (if multiple files were found)</p></li>
 <li><p>The current file index is shown between the navigation buttons</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="plot-options">
 <h3>Plot Options<a class="headerlink" href="#plot-options" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p><strong>Plot Mode</strong>:</p>
-<ul>
+<li><p><strong>Plot Mode</strong>:</p></li>
 <li><p>“Overlay All + Avg”: Shows all trials with the average highlighted</p></li>
 <li><p>“Cycle Single Trial”: Shows one trial at a time with navigation controls</p></li>
-</ul>
-</li>
-<li><p><strong>Manual Trial Averaging (Across Files)</strong>:</p>
-<ul>
+<li><p><strong>Manual Trial Averaging (Across Files)</strong>:</p></li>
 <li><p>While in “Cycle Single Trial”, use the <strong>“Add Current Trial to Avg Set”</strong> button.</p></li>
 <li><p>Navigate to completely different files and continue adding trials to your global selection.</p></li>
 <li><p>Check <strong>“Plot Selected Avg”</strong> to instantly overlay the average of all your manually cherry-picked trials from across the entire dataset.</p></li>
-</ul>
-</li>
 <li><p><strong>Channel Selection</strong>: Choose which channel to view from the dropdown</p></li>
 <li><p><strong>Downsampling</strong>: Enable/disable automatic downsampling for large datasets</p></li>
 </ul>
@@ -2019,26 +1986,28 @@ clamp mode or analysis type are hidden automatically.</p></li>
 <ol class="arabic simple">
 <li><p>Select data for analysis from the Explorer tab</p></li>
 <li><p>Switch to the Analyser tab and select the <em>Input Resistance</em> sub-tab</p></li>
-<li><p>Choose analysis mode:</p>
+<li><p>Choose analysis mode:</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>Interactive Mode</strong>: Drag the blue (baseline) and red (response) regions
 on the plot - the time-window spinboxes update in real time and become
 read-only</p></li>
 <li><p><strong>Manual Mode</strong>: Unlock the spinboxes and type time windows directly</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="4">
 <li><p>Enable <strong>Auto Detect Pulse</strong> to let the analysis locate step edges
 automatically from the stimulus derivative. If auto-detection produces
 invalid windows (e.g. due to action potentials in the trace), the analysis
 falls back to the current spinbox values and updates the spinboxes
 to reflect the windows actually used</p></li>
-<li><p>Results will be displayed showing:</p>
+<li><p>Results will be displayed showing:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Input resistance in MΩ</p></li>
 <li><p>Conductance in μS</p></li>
 <li><p>Voltage and current changes</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="6">
 <li><p>Click “Save Result” to store the analysis for later export</p></li>
 </ol>
 </section>
@@ -2047,12 +2016,13 @@ to reflect the windows actually used</p></li>
 <ol class="arabic simple">
 <li><p>Select a channel for analysis</p></li>
 <li><p>Specify the time window for baseline calculation</p></li>
-<li><p>Choose analysis method:</p>
+<li><p>Choose analysis method:</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>Mean</strong>: Calculates the average over the specified window</p></li>
 <li><p><strong>Median</strong>: Uses the median (more robust to outliers)</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="4">
 <li><p>Results will display the baseline value and variability metrics</p></li>
 <li><p>Save results as needed</p></li>
 </ol>
@@ -2065,7 +2035,8 @@ signal channel</p></li>
 <li><p>Switch to the <em>Optogenetic Synchronization</em> sub-tab in the Analyser</p></li>
 <li><p>Select the TTL channel from the channel selector and set the <strong>TTL Threshold</strong>
 voltage used to binarise the stimulus signal</p></li>
-<li><p>Choose the <strong>Event Detection Type</strong>:</p>
+<li><p>Choose the <strong>Event Detection Type</strong>:</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>Spikes</strong> - threshold-crossing AP detection; set the <strong>Spike Threshold</strong> (mV)</p></li>
 <li><p><strong>Events (Threshold)</strong> - prominence-based threshold event detection; set
@@ -2075,7 +2046,7 @@ voltage used to binarise the stimulus signal</p></li>
 <strong>Template Direction</strong>
 Only the parameters relevant to the selected detection mode are shown.</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="5">
 <li><p>Set the <strong>Response Window</strong> (ms) to define how far after each TTL onset
 to search for an event</p></li>
 <li><p>Results include optical latency, response probability, jitter, stimulus
@@ -2088,25 +2059,27 @@ count, and event count</p></li>
 <ol class="arabic simple">
 <li><p>Load a recording containing a hyperpolarising current-step protocol</p></li>
 <li><p>Switch to the <em>Sag Ratio (Ih)</em> sub-tab in the Analyser</p></li>
-<li><p>Configure the measurement windows:</p>
+<li><p>Configure the measurement windows:</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>Baseline Start / End</strong> - resting membrane potential window (before the step)</p></li>
 <li><p><strong>Peak Window Start / End</strong> - early part of the step where the sag minimum occurs</p></li>
 <li><p><strong>Steady-State Start / End</strong> - late part of the step where voltage has plateaued</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="4">
 <li><p>Adjust <strong>Peak Smoothing (ms)</strong> to control Savitzky-Golay smoothing of the
 peak detection (default 5 ms). Increase for noisy traces</p></li>
 <li><p>Set <strong>Rebound Window (ms)</strong> to control how far after stimulus offset the
 rebound depolarisation is measured (default 100 ms)</p></li>
-<li><p>Results include:</p>
+<li><p>Results include:</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>sag_ratio</strong> - ratio form (&gt;1 indicates I_h sag, 1 = no sag)</p></li>
 <li><p><strong>sag_percentage</strong> - percentage of sag deflection</p></li>
 <li><p><strong>v_peak</strong>, <strong>v_ss</strong>, <strong>v_baseline</strong> - the three voltage levels</p></li>
 <li><p><strong>rebound_depolarization</strong> - post-stimulus rebound amplitude</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="7">
 <li><p>The plot shows horizontal lines at V_baseline (blue), V_peak (magenta),
 and V_ss (red)</p></li>
 </ol>
@@ -2120,13 +2093,14 @@ and V_ss (red)</p></li>
 <li><p>Load a recording in the Explorer tab</p></li>
 <li><p>Navigate to the Exporter tab and select the “NWB Export” sub-tab</p></li>
 <li><p>Specify the output file location</p></li>
-<li><p>Fill in required metadata:</p>
+<li><p>Fill in required metadata:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Session description</p></li>
 <li><p>Experimenter information</p></li>
 <li><p>Lab/institution details</p></li>
 </ul>
-</li>
+<ol class="arabic simple" start="5">
 <li><p>Click “Export to NWB” and wait for the export to complete</p></li>
 </ol>
 </section>
@@ -2137,12 +2111,11 @@ and V_ss (red)</p></li>
 <li><p>Click “Refresh Results” to see all saved analysis results</p></li>
 <li><p>Select which results to export</p></li>
 <li><p>Specify the CSV output file location.</p></li>
-<li><p>Click “Export Selected” to create the output.</p>
+<li><p>Click “Export Selected” to create the output.</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>Note</strong>: If your exported results contain <em>multiple different types of analysis</em> (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a <strong>ZIP Archive</strong> containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!</p></li>
 </ul>
-</li>
-</ol>
 </section>
 </section>
 <section id="advanced-options">
@@ -2150,11 +2123,11 @@ and V_ss (red)</p></li>
 <section id="command-line-arguments">
 <h3>Command Line Arguments<a class="headerlink" href="#command-line-arguments" title="Link to this heading"></a></h3>
 <p>Synaptipy supports several command-line arguments:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>synaptipy<span class="w"> </span>--help<span class="w">                          </span><span class="c1"># Show help</span>
-synaptipy<span class="w"> </span>--dev<span class="w">                           </span><span class="c1"># Run in development mode with detailed logging</span>
-synaptipy<span class="w"> </span>--log-dir<span class="w"> </span>/path/to/logs<span class="w">         </span><span class="c1"># Specify custom log directory</span>
-synaptipy<span class="w"> </span>--verbose<span class="w">                       </span><span class="c1"># Enable verbose output</span>
-synaptipy<span class="w"> </span>--file<span class="w"> </span>/path/to/data.abf<span class="w">        </span><span class="c1"># Open a file directly on launch</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>synaptipy<span class="w"> </span>--help<span class="w"> </span><span class="c1"># Show help</span>
+synaptipy<span class="w"> </span>--dev<span class="w"> </span><span class="c1"># Run in development mode with detailed logging</span>
+synaptipy<span class="w"> </span>--log-dir<span class="w"> </span>/path/to/logs<span class="w"> </span><span class="c1"># Specify custom log directory</span>
+synaptipy<span class="w"> </span>--verbose<span class="w"> </span><span class="c1"># Enable verbose output</span>
+synaptipy<span class="w"> </span>--file<span class="w"> </span>/path/to/data.abf<span class="w"> </span><span class="c1"># Open a file directly on launch</span>
 </pre></div>
 </div>
 </section>
@@ -2188,35 +2161,37 @@ synaptipy<span class="w"> </span>--dev
 <section id="common-issues">
 <h3>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
-<li><p><strong>File Format Not Recognized</strong>:</p>
+<li><p><strong>File Format Not Recognized</strong>:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Ensure the file is one of the supported formats</p></li>
 <li><p>Check if you have the necessary dependencies for that format</p></li>
 <li><p>Some formats require additional libraries not included by default</p></li>
 </ul>
-</li>
-<li><p><strong>GUI Display Issues</strong>:</p>
+<ol class="arabic simple" start="2">
+<li><p><strong>GUI Display Issues</strong>:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Ensure PySide6 is properly installed</p></li>
 <li><p>Try updating your graphics drivers</p></li>
 <li><p>If running remotely, ensure X forwarding is enabled</p></li>
 </ul>
-</li>
-<li><p><strong>Performance Problems with Large Files</strong>:</p>
+<ol class="arabic simple" start="3">
+<li><p><strong>Performance Problems with Large Files</strong>:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Enable downsampling for visualization</p></li>
 <li><p>Increase system RAM if possible</p></li>
 <li><p>Consider splitting very large recordings into smaller files</p></li>
 </ul>
-</li>
-<li><p><strong>Export Failures</strong>:</p>
+<ol class="arabic simple" start="4">
+<li><p><strong>Export Failures</strong>:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Check available disk space</p></li>
 <li><p>Ensure write permissions for the target directory</p></li>
 <li><p>For NWB exports, verify all required metadata is provided</p></li>
 </ul>
-</li>
-</ol>
 </section>
 <section id="getting-help">
 <h3>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>
@@ -2242,7 +2217,7 @@ synaptipy<span class="w"> </span>--dev
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Mar 08, 2026.
+      <span class="lastupdated">Last updated on Mar 27, 2026.
       </span></p>
   </div>
 

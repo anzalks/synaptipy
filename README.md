@@ -124,9 +124,9 @@ You do not need to install Python or any dependencies to run Synaptipy. We provi
 [Download the Beta Release Here](https://github.com/anzalks/Synaptipy/releases)
 
 Choose the correct file for your operating system from the release assets:
-* **Windows:** Download `Synaptipy_Setup_v0.1.0b5.exe` and run the installer.
-* **macOS:** Download `Synaptipy_v0.1.0b5.dmg`, open the disk image, and drag Synaptipy to your Applications folder.
-* **Linux:** Download `Synaptipy-v0.1.0b5-x86_64.AppImage`, make the file executable (`chmod +x Synaptipy-v0.1.0b5-x86_64.AppImage`), and run it directly.
+* **Windows:** Download `Synaptipy_Setup_v0.1.0b6.exe` and run the installer.
+* **macOS:** Download `Synaptipy_v0.1.0b6.dmg`, open the disk image, and drag Synaptipy to your Applications folder.
+* **Linux:** Download `Synaptipy-v0.1.0b6-x86_64.AppImage`, make the file executable (`chmod +x Synaptipy-v0.1.0b6-x86_64.AppImage`), and run it directly.
 
 ### Python Package Installation
 For researchers who wish to use Synaptipy programmatically or develop custom plugins, you can install it via `conda` / `pip`:
@@ -137,27 +137,27 @@ For researchers who wish to use Synaptipy programmatically or develop custom plu
 ### Setup Instructions
 
 1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/anzalks/synaptipy.git
-   cd synaptipy
-   ```
+ ```bash
+ git clone https://github.com/anzalks/synaptipy.git
+ cd synaptipy
+ ```
 
 2. **Create the Environment**
-   This step installs Python and all required system dependencies defined in `environment.yml`.
-   ```bash
-   conda env create -f environment.yml
-   ```
+ This step installs Python and all required system dependencies defined in `environment.yml`.
+ ```bash
+ conda env create -f environment.yml
+ ```
 
 3. **Activate the Environment**
-   ```bash
-   conda activate synaptipy
-   ```
+ ```bash
+ conda activate synaptipy
+ ```
 
 4. **Install the Application**
-   Install the package in editable mode to allow for local development.
-   ```bash
-   pip install -e ".[dev]"
-   ```
+ Install the package in editable mode to allow for local development.
+ ```bash
+ pip install -e ".[dev]"
+ ```
 
 ### Verification
 To verify the installation, execute the comprehensive test suite:
@@ -189,11 +189,11 @@ engine = BatchAnalysisEngine()
 
 # Define an Analysis Pipeline
 pipeline = [
-    {
-        'analysis': 'spike_detection',
-        'scope': 'all_trials',
-        'params': {'threshold': -20.0, 'refractory_ms': 2.0}
-    }
+ {
+ 'analysis': 'spike_detection',
+ 'scope': 'all_trials',
+ 'params': {'threshold': -20.0, 'refractory_ms': 2.0}
+ }
 ]
 
 # Execute on Data Files

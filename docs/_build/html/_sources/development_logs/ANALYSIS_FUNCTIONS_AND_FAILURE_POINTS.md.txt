@@ -36,47 +36,47 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Input Validation Failures:**
-   - Invalid data array (not 1D numpy array, empty, wrong shape)
-   - Time/data shape mismatch
-   - Invalid baseline_window (not tuple, wrong length, non-numeric values)
-   - Start time >= end time
-   - No data points in baseline window (empty slice)
+ - Invalid data array (not 1D numpy array, empty, wrong shape)
+ - Time/data shape mismatch
+ - Invalid baseline_window (not tuple, wrong length, non-numeric values)
+ - Start time >= end time
+ - No data points in baseline window (empty slice)
 
 2. **Data Access Failures:**
-   - Recording not loaded (`_selected_item_recording` is None)
-   - Channel not found in recording
-   - Trial index out of range
-   - Average data not available when selected
-   - Missing time vector or data vector
+ - Recording not loaded (`_selected_item_recording` is None)
+ - Channel not found in recording
+ - Trial index out of range
+ - Average data not available when selected
+ - Missing time vector or data vector
 
 3. **Calculation Failures:**
-   - IndexError during window slicing
-   - Empty baseline data slice after filtering
-   - Division by zero (shouldn't occur but defensive)
-   - NaN/Inf values in data causing invalid mean
+ - IndexError during window slicing
+ - Empty baseline data slice after filtering
+ - Division by zero (shouldn't occur but defensive)
+ - NaN/Inf values in data causing invalid mean
 
 4. **UI State Failures:**
-   - Mode combobox not initialized when `_on_mode_changed()` called
-   - Plot widget cleared before regions added back
-   - Interactive region bounds not set before use
-   - Manual spinboxes not initialized before value access
+ - Mode combobox not initialized when `_on_mode_changed()` called
+ - Plot widget cleared before regions added back
+ - Interactive region bounds not set before use
+ - Manual spinboxes not initialized before value access
 
 5. **Auto-Calculation Specific Failures:**
-   - Insufficient data points for mode calculation (< 10 points)
-   - No unique voltage values after rounding
-   - Initial SD estimate fails (empty noise window)
-   - Tolerance band yields no matching points
+ - Insufficient data points for mode calculation (< 10 points)
+ - No unique voltage values after rounding
+ - Initial SD estimate fails (empty noise window)
+ - Tolerance band yields no matching points
 
 6. **Visualization Failures:**
-   - Plot items not added before setting visibility
-   - InfiniteLine items removed but references still used
-   - Grid pen alpha extraction fails (fallback to default)
-   - Windows-specific pen application bugs
+ - Plot items not added before setting visibility
+ - InfiniteLine items removed but references still used
+ - Grid pen alpha extraction fails (fallback to default)
+ - Windows-specific pen application bugs
 
 7. **Save Functionality Failures:**
-   - `_last_baseline_result` is None when save clicked
-   - Missing channel_id or data_source in result data
-   - MainWindow `add_saved_result` method not found
+ - `_last_baseline_result` is None when save clicked
+ - Missing channel_id or data_source in result data
+ - MainWindow `add_saved_result` method not found
 
 ---
 
@@ -113,46 +113,46 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Input Validation Failures:**
-   - Zero or near-zero delta_i_pa (division by zero)
-   - Invalid time/data arrays (None, wrong shape)
-   - Invalid window tuples (None, wrong length, start >= end)
-   - No data points in baseline or response windows
+ - Zero or near-zero delta_i_pa (division by zero)
+ - Invalid time/data arrays (None, wrong shape)
+ - Invalid window tuples (None, wrong length, start >= end)
+ - No data points in baseline or response windows
 
 2. **Data Access Failures:**
-   - Recording not loaded
-   - Channel not found
-   - Trial index out of range
-   - Average data unavailable
-   - Missing sampling rate
+ - Recording not loaded
+ - Channel not found
+ - Trial index out of range
+ - Average data unavailable
+ - Missing sampling rate
 
 3. **Mode-Specific Failures:**
-   - Interactive: Regions not available when accessed
-   - Interactive: Region bounds not set before use
-   - Manual: Spinboxes not initialized
-   - Manual: Invalid time window values (start >= end)
+ - Interactive: Regions not available when accessed
+ - Interactive: Region bounds not set before use
+ - Manual: Spinboxes not initialized
+ - Manual: Invalid time window values (start >= end)
 
 4. **Channel Type Detection Failures:**
-   - Units string parsing fails (can't determine voltage vs current)
-   - Wrong delta input field shown/hidden
-   - Delta input not provided when required
+ - Units string parsing fails (can't determine voltage vs current)
+ - Wrong delta input field shown/hidden
+ - Delta input not provided when required
 
 5. **Calculation Failures:**
-   - IndexError during window masking
-   - Empty arrays after filtering
-   - Mean calculation on empty arrays
-   - Division by zero (delta_i = 0)
+ - IndexError during window masking
+ - Empty arrays after filtering
+ - Mean calculation on empty arrays
+ - Division by zero (delta_i = 0)
 
 6. **Visualization Failures:**
-   - Regions removed from plot but still referenced
-   - Lines not added to plot before setting value
-   - Plot cleared but regions not re-added
-   - Windows-specific rendering issues
+ - Regions removed from plot but still referenced
+ - Lines not added to plot before setting value
+ - Plot cleared but regions not re-added
+ - Windows-specific rendering issues
 
 7. **UI State Management Failures:**
-   - Mode changed before plot data loaded
-   - Delta input visibility not updated on channel change
-   - Run button state not updated on input change
-   - Plot item reference lost after clear
+ - Mode changed before plot data loaded
+ - Delta input visibility not updated on channel change
+ - Run button state not updated on input change
+ - Plot item reference lost after clear
 
 ### 2.2 Membrane Time Constant (Tau)
 
@@ -167,20 +167,20 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Input Validation Failures:**
-   - Invalid time/data arrays
-   - Fit window outside data range
-   - Insufficient data points for fitting (< 3 points)
+ - Invalid time/data arrays
+ - Fit window outside data range
+ - Insufficient data points for fitting (< 3 points)
 
 2. **Fitting Failures:**
-   - `curve_fit` RuntimeError (optimal parameters not found)
-   - Initial guess values invalid
-   - Bounds too restrictive
-   - Data too noisy for reliable fit
+ - `curve_fit` RuntimeError (optimal parameters not found)
+ - Initial guess values invalid
+ - Bounds too restrictive
+ - Data too noisy for reliable fit
 
 3. **Data Access Failures:**
-   - Response region not set
-   - Stim start time invalid
-   - Fit duration too short
+ - Response region not set
+ - Stim start time invalid
+ - Fit duration too short
 
 ### 2.3 Sag Ratio
 
@@ -195,16 +195,16 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Input Validation Failures:**
-   - Invalid windows (no data points)
-   - Division by zero (delta_v_ss = 0)
+ - Invalid windows (no data points)
+ - Division by zero (delta_v_ss = 0)
 
 2. **Data Access Failures:**
-   - Baseline/peak/steady-state windows not set
-   - Windows outside data range
+ - Baseline/peak/steady-state windows not set
+ - Windows outside data range
 
 3. **Calculation Failures:**
-   - Peak not found (all values same)
-   - Steady-state calculation fails
+ - Peak not found (all values same)
+ - Steady-state calculation fails
 
 ---
 
@@ -240,48 +240,48 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Input Validation Failures:**
-   - Invalid data array (not 1D, empty, < 2 samples)
-   - Time/data shape mismatch
-   - Invalid threshold (not numeric)
-   - Invalid refractory_samples (not int, negative)
+ - Invalid data array (not 1D, empty, < 2 samples)
+ - Time/data shape mismatch
+ - Invalid threshold (not numeric)
+ - Invalid refractory_samples (not int, negative)
 
 2. **Data Access Failures:**
-   - Recording not loaded
-   - Channel not found
-   - Trial index out of range
-   - Missing sampling rate
-   - Missing time or voltage vectors
+ - Recording not loaded
+ - Channel not found
+ - Trial index out of range
+ - Missing sampling rate
+ - Missing time or voltage vectors
 
 3. **Detection Failures:**
-   - No threshold crossings found
-   - Peak search window exceeds data bounds
-   - IndexError during peak finding
-   - ValueError if slice empty during peak search
+ - No threshold crossings found
+ - Peak search window exceeds data bounds
+ - IndexError during peak finding
+ - ValueError if slice empty during peak search
 
 4. **Feature Calculation Failures:**
-   - Spike indices out of bounds
-   - AP threshold not found (dvdt too low)
-   - Half-width calculation fails (no crossings)
-   - AHP depth calculation fails (no minimum found)
-   - dV/dt calculation fails (gradient issues)
+ - Spike indices out of bounds
+ - AP threshold not found (dvdt too low)
+ - Half-width calculation fails (no crossings)
+ - AHP depth calculation fails (no minimum found)
+ - dV/dt calculation fails (gradient issues)
 
 5. **UI State Failures:**
-   - Parameters not validated before detection
-   - Plot cleared but markers not re-added
-   - Threshold line not visible
-   - Results text not cleared on new detection
+ - Parameters not validated before detection
+ - Plot cleared but markers not re-added
+ - Threshold line not visible
+ - Results text not cleared on new detection
 
 6. **Visualization Failures:**
-   - Spike markers not added to plot
-   - Marker brush not applied (Windows bug)
-   - Threshold line position incorrect
-   - Plot auto-range fails
+ - Spike markers not added to plot
+ - Marker brush not applied (Windows bug)
+ - Threshold line position incorrect
+ - Plot auto-range fails
 
 7. **Save Functionality Failures:**
-   - No spike data in `_current_plot_data`
-   - Invalid spike_times array
-   - Missing parameters for saving
-   - Channel/data_source not selected
+ - No spike data in `_current_plot_data`
+ - Invalid spike_times array
+ - Missing parameters for saving
+ - Channel/data_source not selected
 
 ---
 
@@ -313,21 +313,21 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Input Validation Failures:**
-   - Invalid data array (not 1D, empty, < 2 samples)
-   - Invalid threshold (not numeric)
-   - Invalid direction (not 'positive' or 'negative')
-   - Threshold sign contradicts direction
+ - Invalid data array (not 1D, empty, < 2 samples)
+ - Invalid threshold (not numeric)
+ - Invalid direction (not 'positive' or 'negative')
+ - Threshold sign contradicts direction
 
 2. **Data Access Failures:**
-   - Recording not loaded
-   - Channel not found
-   - Missing sampling rate
-   - Missing time or data vectors
+ - Recording not loaded
+ - Channel not found
+ - Missing sampling rate
+ - Missing time or data vectors
 
 3. **Detection Failures:**
-   - No threshold crossings found
-   - Event start indices calculation fails
-   - Empty crossings array handling
+ - No threshold crossings found
+ - Event start indices calculation fails
+ - Empty crossings array handling
 
 ### 4.2 Deconvolution-Based Event Detection
 
@@ -344,38 +344,38 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Parameter Validation Failures:**
-   - tau_decay <= tau_rise (raises ValueError)
-   - Filter frequency >= Nyquist frequency
-   - Invalid sample rate (<= 0)
-   - Negative time constants
+ - tau_decay <= tau_rise (raises ValueError)
+ - Filter frequency >= Nyquist frequency
+ - Invalid sample rate (<= 0)
+ - Negative time constants
 
 2. **Filtering Failures:**
-   - Butterworth filter design fails
-   - Filter application fails (sosfiltfilt error)
-   - Filter frequency too high for data
+ - Butterworth filter design fails
+ - Filter application fails (sosfiltfilt error)
+ - Filter frequency too high for data
 
 3. **Kernel Generation Failures:**
-   - Kernel length calculation fails
-   - Kernel peak near zero (division issues)
-   - Kernel too long for data length
+ - Kernel length calculation fails
+ - Kernel peak near zero (division issues)
+ - Kernel too long for data length
 
 4. **Deconvolution Failures:**
-   - FFT computation fails
-   - Regularization epsilon too small (numerical instability)
-   - Kernel power spectrum issues
-   - IFFT fails or produces invalid results
+ - FFT computation fails
+ - Regularization epsilon too small (numerical instability)
+ - Kernel power spectrum issues
+ - IFFT fails or produces invalid results
 
 5. **Noise Estimation Failures:**
-   - Deconvolved trace too short for MAD
-   - MAD calculation fails
-   - Fallback noise estimate fails
-   - Zero SD causes division issues
+ - Deconvolved trace too short for MAD
+ - MAD calculation fails
+ - Fallback noise estimate fails
+ - Zero SD causes division issues
 
 6. **Peak Finding Failures:**
-   - `scipy.signal.find_peaks` fails
-   - Detection level too high/low
-   - Min distance too large for data
-   - No peaks found
+ - `scipy.signal.find_peaks` fails
+ - Detection level too high/low
+ - Min distance too large for data
+ - No peaks found
 
 ### 4.3 Baseline + Peak + Kinetics Detection
 
@@ -394,33 +394,33 @@ This document provides a comprehensive list of all analysis functions in Synapti
 **Failure Points:**
 
 1. **Baseline Finding Failures:**
-   - Window duration too large for data
-   - Step duration invalid
-   - No stable segment found (all variance high)
-   - Baseline SD near zero (division issues)
+ - Window duration too large for data
+ - Step duration invalid
+ - No stable segment found (all variance high)
+ - Baseline SD near zero (division issues)
 
 2. **Filtering Failures:**
-   - Filter frequency >= Nyquist
-   - Filter application fails
-   - Filtered signal invalid
+ - Filter frequency >= Nyquist
+ - Filter application fails
+ - Filtered signal invalid
 
 3. **Peak Detection Failures:**
-   - `scipy.signal.find_peaks` fails
-   - Prominence calculation fails
-   - Height threshold too high/low
-   - Min distance issues
+ - `scipy.signal.find_peaks` fails
+ - Prominence calculation fails
+ - Height threshold too high/low
+ - Min distance issues
 
 4. **Kinetics Calculation Failures:**
-   - Peak index out of bounds
-   - Rise time calculation fails (no 10%/90% crossings)
-   - Decay time calculation fails (no 50% crossing)
-   - Relative amplitude near zero (division issues)
-   - Search windows exceed data bounds
+ - Peak index out of bounds
+ - Rise time calculation fails (no 10%/90% crossings)
+ - Decay time calculation fails (no 50% crossing)
+ - Relative amplitude near zero (division issues)
+ - Search windows exceed data bounds
 
 5. **Data Access Failures:**
-   - Baseline mean/SD calculation fails
-   - Peak indices invalid
-   - Time vector missing
+ - Baseline mean/SD calculation fails
+ - Peak indices invalid
+ - Time vector missing
 
 ---
 
@@ -477,38 +477,38 @@ This document provides a comprehensive list of all analysis functions in Synapti
 ## 6. Recommendations for Improvement
 
 1. **Input Validation:**
-   - Add comprehensive validation at function entry
-   - Provide clear error messages
-   - Validate UI inputs before passing to core functions
+ - Add comprehensive validation at function entry
+ - Provide clear error messages
+ - Validate UI inputs before passing to core functions
 
 2. **Error Handling:**
-   - Catch all exceptions in UI handlers
-   - Provide user-friendly error messages
-   - Log errors with full context
-   - Implement graceful degradation
+ - Catch all exceptions in UI handlers
+ - Provide user-friendly error messages
+ - Log errors with full context
+ - Implement graceful degradation
 
 3. **State Management:**
-   - Initialize all widgets before use
-   - Check widget existence before access
-   - Use guard clauses extensively
-   - Clear state on errors
+ - Initialize all widgets before use
+ - Check widget existence before access
+ - Use guard clauses extensively
+ - Clear state on errors
 
 4. **Testing:**
-   - Unit tests for all analysis functions
-   - Integration tests for UI workflows
-   - Edge case testing (empty data, invalid inputs)
-   - Performance testing for large datasets
+ - Unit tests for all analysis functions
+ - Integration tests for UI workflows
+ - Edge case testing (empty data, invalid inputs)
+ - Performance testing for large datasets
 
 5. **Documentation:**
-   - Document all failure modes
-   - Add examples of valid inputs
-   - Document expected behavior on errors
+ - Document all failure modes
+ - Add examples of valid inputs
+ - Document expected behavior on errors
 
 6. **Code Quality:**
-   - Reduce code duplication
-   - Extract common validation logic
-   - Improve type hints
-   - Add docstrings with failure conditions
+ - Reduce code duplication
+ - Extract common validation logic
+ - Improve type hints
+ - Add docstrings with failure conditions
 
 ---
 

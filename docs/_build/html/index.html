@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to Synaptipy’s Documentation &mdash; Synaptipy 0.1.0b1 documentation</title>
+  <title>Welcome to Synaptipy’s Documentation &mdash; Synaptipy 0.1.0b6 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="_static/logo.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=e4e59774"></script>
+      <script src="_static/documentation_options.js?v=2f6c07b9"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -355,7 +355,6 @@
 <li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#part-1-pure-analysis-logic">3.1 Part 1: Pure Analysis Logic</a></li>
 <li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#part-2-registry-wrapper">3.2 Part 2: Registry Wrapper</a></li>
 <li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#return-dict-conventions">3.3 Return Dict Conventions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#batch-export-and-dynamic-csvs">3.4 Batch Export and Dynamic CSVs</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#defining-gui-parameters-ui-params">4. Defining GUI Parameters (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a><ul>
@@ -713,6 +712,7 @@
 <li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#linux"><strong>Linux</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#standalone-installers-recommended">Standalone Installers (Recommended)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="manuals/CROSS_PLATFORM_SETUP.html#installation-commands">Installation Commands</a><ul>
@@ -1024,8 +1024,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ERROR_REPORT.html#testing-recommendations">7. Testing Recommendations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fixes-applied">Fixes Applied</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ERROR_REPORT.html#conclusion">Conclusion</a></li>
@@ -1103,7 +1103,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ANALYSER_TAB_REFACTORING.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#issue-found-and-fixed">Issue Found and Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#problem">Problem</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#solution">Solution</a></li>
@@ -1116,8 +1116,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#complete-implementation-summary">Complete Implementation Summary</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_FINAL_SUMMARY.html#code-quality-verification">Code Quality Verification</a></li>
@@ -1142,9 +1142,9 @@
 <li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html">Synaptipy Analysis Module Refactoring - Implementation Summary</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phases-completed">Phases Completed</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">✅ Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">✅ Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">✅ Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#implementation-statistics">Implementation Statistics</a><ul>
@@ -1181,7 +1181,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html">✅ REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html">REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html#achievement-unlocked-100-test-pass-rate">Achievement Unlocked: 100% Test Pass Rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html#what-was-accomplished">What Was Accomplished</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_SUCCESS.html#files-modified-5">Files Modified: 5</a></li>
@@ -1258,9 +1258,9 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#refactoring-implementation-plan">Refactoring Implementation Plan</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation ⏳</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#success-criteria">Success Criteria</a><ul>
@@ -1270,12 +1270,12 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#post-refactoring-results">Post-Refactoring Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS.html">Analysis Functions, UI Elements, and Failure Points</a><ul>
@@ -1460,10 +1460,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html">Performance Optimizations - Implementation Summary</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">✅ All Implementations Complete</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">All Implementations Complete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/IMPLEMENTATION_SUMMARY.html#test-results">Test Results</a></li>
@@ -1498,23 +1498,23 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html">Final Performance Optimizations Implementation Report</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">✅ ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature ✅</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code> ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-src-synaptipy-application-gui-explorer-tab-py">File: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/explorer_tab.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-results">Test Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#manual-verification-checklist">Manual Verification Checklist</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#files-modified-summary">Files Modified Summary</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#implementation-files-4-files">Implementation Files (4 files)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-files-2-files">Test Files (2 files)</a></li>
@@ -1531,8 +1531,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html">Final Verification Guide - Performance Optimizations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#quick-verification-checklist">Quick Verification Checklist</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">✅ Automated Tests Passed</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">✅ Code Verification Complete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">Automated Tests Passed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">Code Verification Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#manual-testing-instructions">Manual Testing Instructions</a><ul>
@@ -1562,7 +1562,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/FINAL_VERIFICATION_GUIDE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html">🎉 Phase 1 Refactoring COMPLETE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html">Phase 1 Refactoring COMPLETE</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#files-refactored">Files Refactored</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#test-results">Test Results</a></li>
@@ -1581,10 +1581,10 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_COMPLETE.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html">🎉 PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html">PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#executive-summary">Executive Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#final-test-results">Final Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#issues-fixed">Issues Fixed</a><ul>
@@ -1597,8 +1597,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#architecture-before-vs-after">Architecture Before vs After</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication ❌</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#quality-metrics">Quality Metrics</a></li>
@@ -1618,7 +1618,7 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE1_FINAL_SUMMARY.html#git-commit-message">Git Commit Message</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#phase-2-template-method-pattern-for-analysis-execution">Phase 2: Template Method Pattern for Analysis Execution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#baseanalysistab-changes">BaseAnalysisTab Changes</a></li>
@@ -1656,15 +1656,15 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASE2_AND_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#summary">Summary</a></li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#objectives">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#implementation">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#benefits">Benefits</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#id1">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#id2">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#usage-pattern">Usage Pattern</a></li>
@@ -1686,15 +1686,15 @@
 <li class="toctree-l3"><a class="reference internal" href="development_logs/PHASES_2_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html">✅ ALL TESTS PASSING - ZERO ERRORS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html">ALL TESTS PASSING - ZERO ERRORS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#comprehensive-verification-report">Comprehensive Verification Report</a></li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#error-that-was-fixed">Error That Was Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#the-pre-existing-error-rin-tab-display-name-mismatch">The “Pre-Existing Error”: Rin Tab Display Name Mismatch</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#complete-test-results">Complete Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12 ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12</a></li>
+<li class="toctree-l4"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="development_logs/ALL_TESTS_PASSING.html#verification-checklist">Verification Checklist</a></li>
@@ -1763,7 +1763,7 @@
 The primary focus is whole-cell patch-clamp and intracellular recordings; however, any
 electrophysiology signal whose file format is supported by the
 <a class="reference external" href="https://neo.readthedocs.io">Neo</a> I/O library can be loaded, visualised, and processed
-— including extracellular and multi-channel recordings.</p>
+- including extracellular and multi-channel recordings.</p>
 <p>Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
 15 built-in analysis modules spanning intrinsic membrane properties, action potential
 characterisation, synaptic event detection, and optogenetics, a composable batch processing
@@ -1777,93 +1777,157 @@ Collaborations, bug reports, and pull requests are welcome.</p>
 <div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
 <div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 docutils">
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 Quick-start Tutorial</div>
-<p class="sd-card-text">A full walkthrough of every feature — Explorer, Analyser, Batch
-Processing, and Exporter — with the maths behind each analysis module.</p>
 </div>
-<a class="sd-stretched-link sd-hide-link-text reference internal" href="tutorial/index.html"><span class="doc">Synaptipy User Tutorial and Documentation</span></a></div>
 </div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tutorial/index</p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>doc</p>
+</dd>
+</dl>
+<p>A full walkthrough of every feature - Explorer, Analyser, Batch
+Processing, and Exporter - with the maths behind each analysis module.</p>
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 User Guide</div>
-<p class="sd-card-text">Installation, supported file formats, and a detailed walkthrough of
+</div>
+</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p>user_guide</p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>doc</p>
+</dd>
+</dl>
+<p>Installation, supported file formats, and a detailed walkthrough of
 all three application tabs.</p>
-</div>
-<a class="sd-stretched-link sd-hide-link-text reference internal" href="user_guide.html"><span class="doc">Synaptipy User Guide</span></a></div>
-</div>
 </div>
 </div>
 <div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
 <div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 docutils">
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 API Reference</div>
-<p class="sd-card-text">Public Python API for using Synaptipy as a library in your own scripts.</p>
 </div>
-<a class="sd-stretched-link sd-hide-link-text reference internal" href="api_reference.html"><span class="doc">Synaptipy API Reference</span></a></div>
 </div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p>api_reference</p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>doc</p>
+</dd>
+</dl>
+<p>Public Python API for using Synaptipy as a library in your own scripts.</p>
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 Developer Guide</div>
-<p class="sd-card-text">Project structure, coding standards, testing, and contribution workflow.</p>
 </div>
-<a class="sd-stretched-link sd-hide-link-text reference internal" href="developer_guide.html"><span class="doc">Synaptipy Developer Guide</span></a></div>
 </div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p>developer_guide</p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>doc</p>
+</dd>
+</dl>
+<p>Project structure, coding standards, testing, and contribution workflow.</p>
 </div>
 </div>
 <div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
 <div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 docutils">
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 Algorithmic Definitions</div>
-<p class="sd-card-text">Formal mathematical definitions for every analysis metric — suitable
+</div>
+</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p>algorithmic_definitions</p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>doc</p>
+</dd>
+</dl>
+<p>Formal mathematical definitions for every analysis metric - suitable
 for citation in manuscripts and peer review.</p>
-</div>
-<a class="sd-stretched-link sd-hide-link-text reference internal" href="algorithmic_definitions.html"><span class="doc">Algorithmic Definitions</span></a></div>
-</div>
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 NWB Export Mapping</div>
-<p class="sd-card-text">How Synaptipy maps electrophysiology data to NWB 2.x containers,
+</div>
+</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p>nwb_mapping</p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>doc</p>
+</dd>
+</dl>
+<p>How Synaptipy maps electrophysiology data to NWB 2.x containers,
 including electrode metadata and unit conventions.</p>
-</div>
-<a class="sd-stretched-link sd-hide-link-text reference internal" href="nwb_mapping.html"><span class="doc">NWB Export Mapping</span></a></div>
-</div>
 </div>
 </div>
 <div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
 <div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 docutils">
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 Source on GitHub</div>
-<p class="sd-card-text">Browse the source code, open issues, or submit pull requests on GitHub.</p>
 </div>
-<a class="sd-stretched-link sd-hide-link-text reference external" href="https://github.com/anzalks/synaptipy"><span>https://github.com/anzalks/synaptipy</span></a></div>
 </div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://github.com/anzalks/synaptipy">https://github.com/anzalks/synaptipy</a></p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>url</p>
+</dd>
+</dl>
+<p>Browse the source code, open issues, or submit pull requests on GitHub.</p>
 <div class="sd-col sd-d-flex-row docutils">
-<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm sd-card-hover docutils">
+<div class="sd-card sd-sphinx-override sd-w-100 sd-shadow-sm docutils">
 <div class="sd-card-body docutils">
 <div class="sd-card-title sd-font-weight-bold docutils">
 Changelog</div>
-<p class="sd-card-text">Release history and notable changes between versions.</p>
 </div>
-<a class="sd-stretched-link sd-hide-link-text reference external" href="https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"><span>https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md</span></a></div>
 </div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">link<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md">https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md</a></p>
+</dd>
+<dt class="field-even">link-type<span class="colon">:</span></dt>
+<dd class="field-even"><p>url</p>
+</dd>
+</dl>
+<p>Release history and notable changes between versions.</p>
 </div>
 </div>
 <hr class="docutils" />
@@ -1894,7 +1958,7 @@ Changelog</div>
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Mar 08, 2026.
+      <span class="lastupdated">Last updated on Mar 27, 2026.
       </span></p>
   </div>
 

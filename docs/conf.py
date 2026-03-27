@@ -114,6 +114,10 @@ myst_enable_extensions = [
     "tasklist",
 ]
 myst_heading_anchors = 3
+# Suppress false-positive warnings for same-page #anchor links in ToC lists.
+# MyST validates '#anchor' hrefs as cross-document references during parse before
+# heading IDs are assigned; the links are correct in the rendered HTML.
+suppress_warnings = ["myst.xref_missing"]
 
 # Source suffixes
 source_suffix = {
@@ -142,7 +146,7 @@ pygments_style = "sphinx"
 highlight_language = "none"
 
 # ---------------------------------------------------------------------------
-# HTML output options – ReadTheDocs theme
+# HTML output options - ReadTheDocs theme
 # ---------------------------------------------------------------------------
 html_theme = "sphinx_rtd_theme"
 

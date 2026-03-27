@@ -28,15 +28,15 @@ This document outlines the comprehensive performance optimizations implemented t
 ### 1. **Pen-Only Updates**
 ```python
 def _update_plot_pens_only(self):
-    """Efficiently update only the pen properties of existing plot items without recreating data."""
-    # Check if pen update is actually needed
-    if not self._needs_pen_update():
-        return
-        
-    # Update existing PlotDataItem pens without recreating data
-    for item in self.plot_widget.plotItem.items:
-        if isinstance(item, pg.PlotDataItem):
-            item.setPen(appropriate_pen)
+ """Efficiently update only the pen properties of existing plot items without recreating data."""
+ # Check if pen update is actually needed
+ if not self._needs_pen_update():
+ return
+
+ # Update existing PlotDataItem pens without recreating data
+ for item in self.plot_widget.plotItem.items:
+ if isinstance(item, pg.PlotDataItem):
+ item.setPen(appropriate_pen)
 ```
 
 **Benefits**:
@@ -48,18 +48,18 @@ def _update_plot_pens_only(self):
 ### 2. **Smart Update Detection**
 ```python
 def _needs_full_plot_update(self) -> bool:
-    """Check if a full plot update is needed or if pen-only update is sufficient."""
-    # Check data hash changes
-    current_hash = self._get_data_hash()
-    if hasattr(self, '_last_data_hash') and self._last_data_hash != current_hash:
-        return True
-        
-    # Check plot mode changes
-    if hasattr(self, '_last_plot_mode') and self._last_plot_mode != self.current_plot_mode:
-        return True
-        
-    # Otherwise, pen-only update is sufficient
-    return False
+ """Check if a full plot update is needed or if pen-only update is sufficient."""
+ # Check data hash changes
+ current_hash = self._get_data_hash()
+ if hasattr(self, '_last_data_hash') and self._last_data_hash != current_hash:
+ return True
+
+ # Check plot mode changes
+ if hasattr(self, '_last_plot_mode') and self._last_plot_mode != self.current_plot_mode:
+ return True
+
+ # Otherwise, pen-only update is sufficient
+ return False
 ```
 
 **Benefits**:
@@ -70,10 +70,10 @@ def _needs_full_plot_update(self) -> bool:
 ### 3. **Data Caching System**
 ```python
 def _get_cached_data(self, chan_id: str, trial_idx: int) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-    """Get cached data for a channel and trial, or None if not cached."""
-    if not self._cache_dirty and chan_id in self._data_cache and trial_idx in self._data_cache[chan_id]:
-        return self._data_cache[chan_id][trial_idx]
-    return None
+ """Get cached data for a channel and trial, or None if not cached."""
+ if not self._cache_dirty and chan_id in self._data_cache and trial_idx in self._data_cache[chan_id]:
+ return self._data_cache[chan_id][trial_idx]
+ return None
 ```
 
 **Benefits**:
@@ -84,10 +84,10 @@ def _get_cached_data(self, chan_id: str, trial_idx: int) -> Optional[Tuple[np.nd
 ### 4. **Pen Caching in Customization Manager**
 ```python
 def _get_cached_pen(self, plot_type: str) -> Optional[pg.mkPen]:
-    """Get a cached pen if available and cache is not dirty."""
-    if not self._cache_dirty and plot_type in self._pen_cache:
-        return self._pen_cache[plot_type]
-    return None
+ """Get a cached pen if available and cache is not dirty."""
+ if not self._cache_dirty and plot_type in self._pen_cache:
+ return self._pen_cache[plot_type]
+ return None
 ```
 
 **Benefits**:
@@ -98,16 +98,16 @@ def _get_cached_pen(self, plot_type: str) -> Optional[pg.mkPen]:
 ### 5. **Debounced Signal Emissions**
 ```python
 def _debounced_emit_preferences_updated():
-    """Emit preferences updated signal with debouncing to prevent rapid successive emissions."""
-    global _update_timer
-    
-    if _update_timer is None:
-        _update_timer = QtCore.QTimer()
-        _update_timer.setSingleShot(True)
-        _update_timer.timeout.connect(_plot_signals.preferences_updated.emit)
-    
-    # Reset timer - will emit signal after 100ms of no updates
-    _update_timer.start(100)
+ """Emit preferences updated signal with debouncing to prevent rapid successive emissions."""
+ global _update_timer
+
+ if _update_timer is None:
+ _update_timer = QtCore.QTimer()
+ _update_timer.setSingleShot(True)
+ _update_timer.timeout.connect(_plot_signals.preferences_updated.emit)
+
+ # Reset timer - will emit signal after 100ms of no updates
+ _update_timer.start(100)
 ```
 
 **Benefits**:
@@ -118,13 +118,13 @@ def _debounced_emit_preferences_updated():
 ### 6. **Batch Preference Updates**
 ```python
 def update_preferences_batch(self, new_preferences: Dict[str, Dict[str, Any]], emit_signal: bool = True):
-    """Update multiple preferences at once and optionally emit signal."""
-    # Check if anything actually changed
-    if not self.has_preferences_changed(new_preferences):
-        return False
-        
-    # Update all preferences in one operation
-    # Emit signal only once
+ """Update multiple preferences at once and optionally emit signal."""
+ # Check if anything actually changed
+ if not self.has_preferences_changed(new_preferences):
+ return False
+
+ # Update all preferences in one operation
+ # Emit signal only once
 ```
 
 **Benefits**:
@@ -135,14 +135,14 @@ def update_preferences_batch(self, new_preferences: Dict[str, Dict[str, Any]], e
 ### 7. **Change Detection in UI Dialog**
 ```python
 def _preferences_changed(self):
-    """Check if preferences have actually changed from the original."""
-    # Compare current preferences with snapshot taken when dialog opened
-    for plot_type in self.current_preferences:
-        for property_name in self.current_preferences[plot_type]:
-            if (self.current_preferences[plot_type][property_name] != 
-                self._original_preferences[plot_type][property_name]):
-                return True
-    return False
+ """Check if preferences have actually changed from the original."""
+ # Compare current preferences with snapshot taken when dialog opened
+ for plot_type in self.current_preferences:
+ for property_name in self.current_preferences[plot_type]:
+ if (self.current_preferences[plot_type][property_name] !=
+ self._original_preferences[plot_type][property_name]):
+ return True
+ return False
 ```
 
 **Benefits**:

@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Log Error Analysis - All Errors from File Addition Onwards &mdash; Synaptipy 0.1.0b1 documentation</title>
+  <title>Log Error Analysis - All Errors from File Addition Onwards &mdash; Synaptipy 0.1.0b6 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="../_static/logo.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=e4e59774"></script>
+      <script src="../_static/documentation_options.js?v=2f6c07b9"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -235,7 +235,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#installation">Installation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#requirements">Requirements</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#standalone-application-recommended">Standalone Application (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#python-package-installation">Python Package Installation</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#developer-installation">Developer Installation</a></li>
 </ul>
 </li>
@@ -352,7 +356,6 @@
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-1-pure-analysis-logic">3.1 Part 1: Pure Analysis Logic</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-2-registry-wrapper">3.2 Part 2: Registry Wrapper</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#return-dict-conventions">3.3 Return Dict Conventions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#batch-export-and-dynamic-csvs">3.4 Batch Export and Dynamic CSVs</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#defining-gui-parameters-ui-params">4. Defining GUI Parameters (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a><ul>
@@ -710,6 +713,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#linux"><strong>Linux</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#standalone-installers-recommended">Standalone Installers (Recommended)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#installation-commands">Installation Commands</a><ul>
@@ -1021,8 +1025,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#testing-recommendations">7. Testing Recommendations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fixes-applied">Fixes Applied</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ERROR_REPORT.html#conclusion">Conclusion</a></li>
@@ -1100,7 +1104,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ANALYSER_TAB_REFACTORING.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#issue-found-and-fixed">Issue Found and Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#problem">Problem</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#solution">Solution</a></li>
@@ -1113,8 +1117,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#complete-implementation-summary">Complete Implementation Summary</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_FINAL_SUMMARY.html#code-quality-verification">Code Quality Verification</a></li>
@@ -1139,9 +1143,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html">Synaptipy Analysis Module Refactoring - Implementation Summary</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phases-completed">Phases Completed</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">✅ Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">✅ Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">✅ Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#implementation-statistics">Implementation Statistics</a><ul>
@@ -1178,7 +1182,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_IMPLEMENTATION_SUMMARY.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html">✅ REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html">REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html#achievement-unlocked-100-test-pass-rate">Achievement Unlocked: 100% Test Pass Rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html#what-was-accomplished">What Was Accomplished</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_SUCCESS.html#files-modified-5">Files Modified: 5</a></li>
@@ -1255,9 +1259,9 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#refactoring-implementation-plan">Refactoring Implementation Plan</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation ⏳</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#success-criteria">Success Criteria</a><ul>
@@ -1267,12 +1271,12 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#post-refactoring-results">Post-Refactoring Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS.html">Analysis Functions, UI Elements, and Failure Points</a><ul>
@@ -1457,10 +1461,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html">Performance Optimizations - Implementation Summary</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">✅ All Implementations Complete</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#all-implementations-complete">All Implementations Complete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/IMPLEMENTATION_SUMMARY.html#test-results">Test Results</a></li>
@@ -1495,23 +1499,23 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html">Final Performance Optimizations Implementation Report</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">✅ ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature ✅</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code> ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#file-src-synaptipy-application-gui-explorer-tab-py">File: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/explorer_tab.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-results">Test Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#manual-verification-checklist">Manual Verification Checklist</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#files-modified-summary">Files Modified Summary</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#implementation-files-4-files">Implementation Files (4 files)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_IMPLEMENTATION_REPORT.html#test-files-2-files">Test Files (2 files)</a></li>
@@ -1528,8 +1532,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html">Final Verification Guide - Performance Optimizations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#quick-verification-checklist">Quick Verification Checklist</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">✅ Automated Tests Passed</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">✅ Code Verification Complete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">Automated Tests Passed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#code-verification-complete">Code Verification Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#manual-testing-instructions">Manual Testing Instructions</a><ul>
@@ -1559,7 +1563,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/FINAL_VERIFICATION_GUIDE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html">🎉 Phase 1 Refactoring COMPLETE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html">Phase 1 Refactoring COMPLETE</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#files-refactored">Files Refactored</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#test-results">Test Results</a></li>
@@ -1578,10 +1582,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_COMPLETE.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html">🎉 PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html">PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#executive-summary">Executive Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#final-test-results">Final Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#issues-fixed">Issues Fixed</a><ul>
@@ -1594,8 +1598,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#architecture-before-vs-after">Architecture Before vs After</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication ❌</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#quality-metrics">Quality Metrics</a></li>
@@ -1615,7 +1619,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE1_FINAL_SUMMARY.html#git-commit-message">Git Commit Message</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#phase-2-template-method-pattern-for-analysis-execution">Phase 2: Template Method Pattern for Analysis Execution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#baseanalysistab-changes">BaseAnalysisTab Changes</a></li>
@@ -1653,15 +1657,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASE2_AND_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#summary">Summary</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#objectives">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#implementation">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#benefits">Benefits</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#id1">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#id2">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#usage-pattern">Usage Pattern</a></li>
@@ -1683,15 +1687,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/PHASES_2_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html">✅ ALL TESTS PASSING - ZERO ERRORS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html">ALL TESTS PASSING - ZERO ERRORS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#comprehensive-verification-report">Comprehensive Verification Report</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#error-that-was-fixed">Error That Was Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#the-pre-existing-error-rin-tab-display-name-mismatch">The “Pre-Existing Error”: Rin Tab Display Name Mismatch</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#complete-test-results">Complete Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12 ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../development_logs/ALL_TESTS_PASSING.html#verification-checklist">Verification Checklist</a></li>
@@ -1734,8 +1738,8 @@
              
   <section class="tex2jax_ignore mathjax_ignore" id="log-error-analysis-all-errors-from-file-addition-onwards">
 <h1>Log Error Analysis - All Errors from File Addition Onwards<a class="headerlink" href="#log-error-analysis-all-errors-from-file-addition-onwards" title="Link to this heading"></a></h1>
-<p><strong>Date</strong>: November 17, 2025<br />
-<strong>Author</strong>: Anzal K Shahul<br />
+<p><strong>Date</strong>: November 17, 2025
+<strong>Author</strong>: Anzal K Shahul
 <strong>Analysis Scope</strong>: All errors that occurred when adding files to analysis</p>
 <hr class="docutils" />
 <section id="summary">
@@ -1774,7 +1778,7 @@
 <span class="bp">self</span><span class="o">.</span><span class="n">mini_method_combobox</span><span class="o">.</span><span class="n">addItems</span><span class="p">([</span><span class="n">method_threshold</span><span class="p">,</span> <span class="n">method_deconv</span><span class="p">,</span> <span class="n">method_baseline</span><span class="p">])</span>
 
 <span class="c1"># Logic Check (line 767) - WRONG:</span>
-<span class="k">elif</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="s2">&quot;Baseline + Peak&quot;</span><span class="p">:</span>  <span class="c1"># Missing &quot;+ Kinetics&quot;</span>
+<span class="k">elif</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="s2">&quot;Baseline + Peak&quot;</span><span class="p">:</span> <span class="c1"># Missing &quot;+ Kinetics&quot;</span>
 </pre></div>
 </div>
 </section>
@@ -1791,21 +1795,21 @@
 <h3>Fix Applied<a class="headerlink" href="#fix-applied" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Line 767 - CORRECTED:</span>
 <span class="k">elif</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="s2">&quot;Baseline + Peak + Kinetics&quot;</span><span class="p">:</span>
-    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;bl_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
-    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
-    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;step_size_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_step_size_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
-    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;baseline_threshold&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
-    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_threshold_factor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+ <span class="n">params</span><span class="p">[</span><span class="s1">&#39;bl_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+ <span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+ <span class="n">params</span><span class="p">[</span><span class="s1">&#39;step_size_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_step_size_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+ <span class="n">params</span><span class="p">[</span><span class="s1">&#39;baseline_threshold&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
+ <span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_threshold_factor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>
 <section id="verification">
 <h3>Verification<a class="headerlink" href="#verification" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>✅ String now matches UI definition exactly</p></li>
-<li><p>✅ Parameters gathered correctly when method is selected</p></li>
-<li><p>✅ All files compile successfully</p></li>
-<li><p>✅ No linter errors</p></li>
+<li><p>String now matches UI definition exactly</p></li>
+<li><p>Parameters gathered correctly when method is selected</p></li>
+<li><p>All files compile successfully</p></li>
+<li><p>No linter errors</p></li>
 </ul>
 </section>
 </section>
@@ -1841,8 +1845,8 @@
 <span class="n">method_baseline</span> <span class="o">=</span> <span class="s2">&quot;Baseline + Peak + Kinetics&quot;</span>
 
 <span class="c1"># Logic Check (line 825) - WRONG:</span>
-<span class="k">elif</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="s2">&quot;Baseline + Peak&quot;</span><span class="p">:</span>  <span class="c1"># Missing &quot;+ Kinetics&quot;</span>
-    <span class="c1"># This block never executes for the intended method</span>
+<span class="k">elif</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="s2">&quot;Baseline + Peak&quot;</span><span class="p">:</span> <span class="c1"># Missing &quot;+ Kinetics&quot;</span>
+ <span class="c1"># This block never executes for the intended method</span>
 </pre></div>
 </div>
 </section>
@@ -1860,27 +1864,27 @@
 <h3>Fix Applied<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Line 825 - CORRECTED:</span>
 <span class="k">elif</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="s2">&quot;Baseline + Peak + Kinetics&quot;</span><span class="p">:</span>
-    <span class="n">bl_duration_ms</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bl_duration_ms&#39;</span><span class="p">)</span>
-    <span class="n">peak_duration_ms</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;peak_duration_ms&#39;</span><span class="p">)</span>
-    <span class="n">step_size_ms</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;step_size_ms&#39;</span><span class="p">)</span>
-    <span class="n">baseline_threshold</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;baseline_threshold&#39;</span><span class="p">)</span>
-    <span class="n">peak_threshold_factor</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;peak_threshold_factor&#39;</span><span class="p">)</span>
-    
-    <span class="n">peak_indices</span><span class="p">,</span> <span class="n">event_details</span><span class="p">,</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">ed</span><span class="o">.</span><span class="n">detect_events_baseline_peak</span><span class="p">(</span>
-        <span class="n">signal_data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span> <span class="n">bl_duration_ms</span><span class="p">,</span> <span class="n">peak_duration_ms</span><span class="p">,</span>
-        <span class="n">step_size_ms</span><span class="p">,</span> <span class="n">baseline_threshold</span><span class="p">,</span> <span class="n">peak_threshold_factor</span>
-    <span class="p">)</span>
+ <span class="n">bl_duration_ms</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bl_duration_ms&#39;</span><span class="p">)</span>
+ <span class="n">peak_duration_ms</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;peak_duration_ms&#39;</span><span class="p">)</span>
+ <span class="n">step_size_ms</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;step_size_ms&#39;</span><span class="p">)</span>
+ <span class="n">baseline_threshold</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;baseline_threshold&#39;</span><span class="p">)</span>
+ <span class="n">peak_threshold_factor</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;peak_threshold_factor&#39;</span><span class="p">)</span>
+
+ <span class="n">peak_indices</span><span class="p">,</span> <span class="n">event_details</span><span class="p">,</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">ed</span><span class="o">.</span><span class="n">detect_events_baseline_peak</span><span class="p">(</span>
+ <span class="n">signal_data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span> <span class="n">bl_duration_ms</span><span class="p">,</span> <span class="n">peak_duration_ms</span><span class="p">,</span>
+ <span class="n">step_size_ms</span><span class="p">,</span> <span class="n">baseline_threshold</span><span class="p">,</span> <span class="n">peak_threshold_factor</span>
+ <span class="p">)</span>
 </pre></div>
 </div>
 </section>
 <section id="id7">
 <h3>Verification<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>✅ String now matches UI definition exactly</p></li>
-<li><p>✅ Analysis executes correctly for the detection method</p></li>
-<li><p>✅ Users receive results instead of error messages</p></li>
-<li><p>✅ All files compile successfully</p></li>
-<li><p>✅ No linter errors</p></li>
+<li><p>String now matches UI definition exactly</p></li>
+<li><p>Analysis executes correctly for the detection method</p></li>
+<li><p>Users receive results instead of error messages</p></li>
+<li><p>All files compile successfully</p></li>
+<li><p>No linter errors</p></li>
 </ul>
 </section>
 </section>
@@ -1928,7 +1932,7 @@
 </section>
 <section id="stack-trace-expected">
 <h3>Stack Trace (Expected)<a class="headerlink" href="#stack-trace-expected" title="Link to this heading"></a></h3>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>ValueError: The truth value of an array with more than one element is ambiguous. 
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>ValueError: The truth value of an array with more than one element is ambiguous.
 Use a.any() or a.all()
 </pre></div>
 </div>
@@ -1944,11 +1948,11 @@ Use a.any() or a.all()
 <section id="id14">
 <h3>Verification<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>✅ No more ambiguous boolean errors</p></li>
-<li><p>✅ Correctly falls back to alternate key names</p></li>
-<li><p>✅ Backward compatibility maintained</p></li>
-<li><p>✅ Analysis executes without runtime errors</p></li>
-<li><p>✅ All tests pass (12/12)</p></li>
+<li><p>No more ambiguous boolean errors</p></li>
+<li><p>Correctly falls back to alternate key names</p></li>
+<li><p>Backward compatibility maintained</p></li>
+<li><p>Analysis executes without runtime errors</p></li>
+<li><p>All tests pass (12/12)</p></li>
 </ul>
 </section>
 </section>
@@ -1980,16 +1984,16 @@ Use a.any() or a.all()
 <h3>Root Cause<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <p>When adding cleanup code for signal disconnection (to fix a “Failed to disconnect” warning), code was added to iterate over and clear <code class="docutils literal notranslate"><span class="pre">self.plot_widgets</span></code>, but the attribute initialization was forgotten in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># In _reset_ui_and_state_for_new_file() (lines 709-723):</span>
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plot_widgets</span><span class="p">)):</span>  <span class="c1"># ❌ Crashes here - attribute doesn&#39;t exist</span>
-    <span class="n">checkbox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findChild</span><span class="p">(</span><span class="n">QtWidgets</span><span class="o">.</span><span class="n">QCheckBox</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;channel_checkbox_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">checkbox</span><span class="p">:</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">checkbox</span><span class="o">.</span><span class="n">stateChanged</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_trigger_plot_update</span><span class="p">)</span>
-        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Signal for checkbox </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> was not connected or already disconnected: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="k">pass</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plot_widgets</span><span class="p">)):</span> <span class="c1"># Crashes here - attribute doesn&#39;t exist</span>
+ <span class="n">checkbox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findChild</span><span class="p">(</span><span class="n">QtWidgets</span><span class="o">.</span><span class="n">QCheckBox</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;channel_checkbox_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+ <span class="k">if</span> <span class="n">checkbox</span><span class="p">:</span>
+ <span class="k">try</span><span class="p">:</span>
+ <span class="n">checkbox</span><span class="o">.</span><span class="n">stateChanged</span><span class="o">.</span><span class="n">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_trigger_plot_update</span><span class="p">)</span>
+ <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+ <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Signal for checkbox </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> was not connected or already disconnected: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+ <span class="k">pass</span>
 
-<span class="bp">self</span><span class="o">.</span><span class="n">plot_widgets</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>  <span class="c1"># ❌ Would crash here too</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">plot_widgets</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span> <span class="c1"># Would crash here too</span>
 </pre></div>
 </div>
 </section>
@@ -2006,23 +2010,23 @@ Use a.any() or a.all()
 <section id="id20">
 <h3>Fix Applied<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># In __init__ method (line 107):</span>
-<span class="c1"># --- Display State Collections --- </span>
+<span class="c1"># --- Display State Collections ---</span>
 <span class="bp">self</span><span class="o">.</span><span class="n">channel_plots</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pg</span><span class="o">.</span><span class="n">PlotItem</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 <span class="bp">self</span><span class="o">.</span><span class="n">channel_checkboxes</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QCheckBox</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 <span class="bp">self</span><span class="o">.</span><span class="n">channel_plot_data_items</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">pg</span><span class="o">.</span><span class="n">PlotDataItem</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 <span class="bp">self</span><span class="o">.</span><span class="n">selected_average_plot_items</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pg</span><span class="o">.</span><span class="n">PlotDataItem</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<span class="bp">self</span><span class="o">.</span><span class="n">plot_widgets</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">pg</span><span class="o">.</span><span class="n">PlotWidget</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># ✅ Initialize list for dynamic plot widgets</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">plot_widgets</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">pg</span><span class="o">.</span><span class="n">PlotWidget</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span> <span class="c1"># Initialize list for dynamic plot widgets</span>
 </pre></div>
 </div>
 </section>
 <section id="id21">
 <h3>Verification<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>✅ File compiles without errors</p></li>
-<li><p>✅ No linting errors</p></li>
-<li><p>✅ All tests pass (12/12)</p></li>
-<li><p>✅ Application now loads files without crashing</p></li>
-<li><p>✅ No AttributeError when accessing plot_widgets</p></li>
+<li><p>File compiles without errors</p></li>
+<li><p>No linting errors</p></li>
+<li><p>All tests pass (12/12)</p></li>
+<li><p>Application now loads files without crashing</p></li>
+<li><p>No AttributeError when accessing plot_widgets</p></li>
 </ul>
 </section>
 </section>
@@ -2033,26 +2037,27 @@ Use a.any() or a.all()
 <h3>Common Themes<a class="headerlink" href="#common-themes" title="Link to this heading"></a></h3>
 <p>All six errors fall into several categories:</p>
 <ol class="arabic simple">
-<li><p><strong>Errors 1 &amp; 2</strong>: UI-to-logic string mismatch</p>
+<li><p><strong>Errors 1 &amp; 2</strong>: UI-to-logic string mismatch</p></li>
+</ol>
 <ul class="simple">
 <li><p>UI defines one string, logic checks for a different string</p></li>
 <li><p>Classic copy-paste or incomplete refactoring issue</p></li>
 <li><p>Easy to miss in code review without comprehensive testing</p></li>
 </ul>
-</li>
-<li><p><strong>Error 3</strong>: NumPy boolean evaluation anti-pattern</p>
+<ol class="arabic simple" start="2">
+<li><p><strong>Error 3</strong>: NumPy boolean evaluation anti-pattern</p></li>
+</ol>
 <ul class="simple">
 <li><p>Common mistake when working with NumPy arrays</p></li>
 <li><p>Python’s <code class="docutils literal notranslate"><span class="pre">or</span></code> operator doesn’t work as expected with arrays</p></li>
 <li><p>Requires explicit <code class="docutils literal notranslate"><span class="pre">None</span></code> checking</p></li>
 </ul>
-</li>
-</ol>
 </section>
 <section id="prevention-strategies">
 <h3>Prevention Strategies<a class="headerlink" href="#prevention-strategies" title="Link to this heading"></a></h3>
-<ol class="arabic">
-<li><p><strong>Use constants for string literals</strong>:</p>
+<ol class="arabic simple">
+<li><p><strong>Use constants for string literals</strong>:</p></li>
+</ol>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define once at module level</span>
 <span class="n">METHOD_BASELINE_PEAK_KINETICS</span> <span class="o">=</span> <span class="s2">&quot;Baseline + Peak + Kinetics&quot;</span>
 
@@ -2061,23 +2066,23 @@ Use a.any() or a.all()
 <span class="k">if</span> <span class="n">selected_method</span> <span class="o">==</span> <span class="n">METHOD_BASELINE_PEAK_KINETICS</span><span class="p">:</span>
 </pre></div>
 </div>
-</li>
-<li><p><strong>Use helper functions for NumPy fallbacks</strong>:</p>
+<ol class="arabic simple" start="2">
+<li><p><strong>Use helper functions for NumPy fallbacks</strong>:</p></li>
+</ol>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_with_fallback</span><span class="p">(</span><span class="n">data_dict</span><span class="p">,</span> <span class="n">primary_key</span><span class="p">,</span> <span class="n">fallback_key</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get value from dict with fallback, safe for numpy arrays.&quot;&quot;&quot;</span>
-    <span class="n">value</span> <span class="o">=</span> <span class="n">data_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">primary_key</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">value</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">data_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fallback_key</span><span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;Get value from dict with fallback, safe for numpy arrays.&quot;&quot;&quot;</span>
+<span class="n">value</span> <span class="o">=</span> <span class="n">data_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">primary_key</span><span class="p">)</span>
+<span class="k">return</span> <span class="n">value</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">data_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fallback_key</span><span class="p">)</span>
 </pre></div>
 </div>
-</li>
-<li><p><strong>Add unit tests for all UI option paths</strong>:</p>
+<ol class="arabic simple" start="3">
+<li><p><strong>Add unit tests for all UI option paths</strong>:</p></li>
+</ol>
 <ul class="simple">
 <li><p>Test each combobox option explicitly</p></li>
 <li><p>Verify parameters are gathered correctly</p></li>
 <li><p>Verify analysis executes successfully</p></li>
 </ul>
-</li>
-</ol>
 </section>
 </section>
 <hr class="docutils" />
@@ -2085,24 +2090,24 @@ Use a.any() or a.all()
 <h2>Testing Results<a class="headerlink" href="#testing-results" title="Link to this heading"></a></h2>
 <p>All fixes verified through:</p>
 <ul class="simple">
-<li><p>✅ Syntax checking (py_compile)</p></li>
-<li><p>✅ Linter checking (no errors)</p></li>
-<li><p>✅ Unit tests (12/12 passing)</p></li>
-<li><p>✅ File compilation verification</p></li>
+<li><p>Syntax checking (py_compile)</p></li>
+<li><p>Linter checking (no errors)</p></li>
+<li><p>Unit tests (12/12 passing)</p></li>
+<li><p>File compilation verification</p></li>
 </ul>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Test Results:</span>
 <span class="o">=============================</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span>session<span class="w"> </span><span class="nv">starts</span><span class="w"> </span><span class="o">==============================</span>
-tests/application/gui/test_rmp_tab.py::test_rmp_tab_init<span class="w"> </span>PASSED<span class="w">          </span><span class="o">[</span><span class="w">  </span><span class="m">8</span>%<span class="o">]</span>
+tests/application/gui/test_rmp_tab.py::test_rmp_tab_init<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">8</span>%<span class="o">]</span>
 tests/application/gui/test_rmp_tab.py::test_has_data_selection_widgets<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">16</span>%<span class="o">]</span>
-tests/application/gui/test_rmp_tab.py::test_mode_selection<span class="w"> </span>PASSED<span class="w">        </span><span class="o">[</span><span class="w"> </span><span class="m">25</span>%<span class="o">]</span>
+tests/application/gui/test_rmp_tab.py::test_mode_selection<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">25</span>%<span class="o">]</span>
 tests/application/gui/test_rmp_tab.py::test_interactive_region_exists<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">33</span>%<span class="o">]</span>
-tests/application/gui/test_rmp_tab.py::test_save_button_exists<span class="w"> </span>PASSED<span class="w">    </span><span class="o">[</span><span class="w"> </span><span class="m">41</span>%<span class="o">]</span>
+tests/application/gui/test_rmp_tab.py::test_save_button_exists<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">41</span>%<span class="o">]</span>
 tests/application/gui/test_rmp_tab.py::test_update_state_with_items<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">50</span>%<span class="o">]</span>
 tests/application/gui/test_rmp_tab.py::test_baseline_result_storage<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">58</span>%<span class="o">]</span>
-tests/application/gui/test_rin_tab.py::test_rin_tab_init<span class="w"> </span>PASSED<span class="w">          </span><span class="o">[</span><span class="w"> </span><span class="m">66</span>%<span class="o">]</span>
-tests/application/gui/test_rin_tab.py::test_mode_selection<span class="w"> </span>PASSED<span class="w">        </span><span class="o">[</span><span class="w"> </span><span class="m">75</span>%<span class="o">]</span>
+tests/application/gui/test_rin_tab.py::test_rin_tab_init<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">66</span>%<span class="o">]</span>
+tests/application/gui/test_rin_tab.py::test_mode_selection<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">75</span>%<span class="o">]</span>
 tests/application/gui/test_rin_tab.py::test_interactive_calculation<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">83</span>%<span class="o">]</span>
-tests/application/gui/test_rin_tab.py::test_manual_calculation<span class="w"> </span>PASSED<span class="w">    </span><span class="o">[</span><span class="w"> </span><span class="m">91</span>%<span class="o">]</span>
+tests/application/gui/test_rin_tab.py::test_manual_calculation<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="m">91</span>%<span class="o">]</span>
 tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class="w"> </span>PASSED<span class="w"> </span><span class="o">[</span><span class="m">100</span>%<span class="o">]</span>
 
 <span class="o">==============================</span><span class="w"> </span><span class="m">12</span><span class="w"> </span>passed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.63s<span class="w"> </span><span class="o">==============================</span>
@@ -2156,11 +2161,11 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 <section id="id27">
 <h3>Fix Applied<a class="headerlink" href="#id27" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Before (WRONG):</span>
-<span class="n">params</span><span class="p">[</span><span class="s1">&#39;bl_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>  <span class="c1"># Doesn&#39;t exist!</span>
-<span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>  <span class="c1"># Doesn&#39;t exist!</span>
-<span class="n">params</span><span class="p">[</span><span class="s1">&#39;step_size_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_step_size_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>  <span class="c1"># Doesn&#39;t exist!</span>
-<span class="n">params</span><span class="p">[</span><span class="s1">&#39;baseline_threshold&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>  <span class="c1"># Doesn&#39;t exist!</span>
-<span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_threshold_factor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span>  <span class="c1"># Doesn&#39;t exist!</span>
+<span class="n">params</span><span class="p">[</span><span class="s1">&#39;bl_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="c1"># Doesn&#39;t exist!</span>
+<span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_duration_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_dur_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="c1"># Doesn&#39;t exist!</span>
+<span class="n">params</span><span class="p">[</span><span class="s1">&#39;step_size_ms&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_step_size_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="c1"># Doesn&#39;t exist!</span>
+<span class="n">params</span><span class="p">[</span><span class="s1">&#39;baseline_threshold&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_baseline_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="c1"># Doesn&#39;t exist!</span>
+<span class="n">params</span><span class="p">[</span><span class="s1">&#39;peak_threshold_factor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_peak_threshold_spinbox</span><span class="o">.</span><span class="n">value</span><span class="p">()</span> <span class="c1"># Doesn&#39;t exist!</span>
 
 <span class="c1"># After (CORRECT):</span>
 <span class="n">params</span><span class="p">[</span><span class="s1">&#39;direction&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mini_direction_combo</span><span class="o">.</span><span class="n">currentText</span><span class="p">()</span>
@@ -2173,10 +2178,10 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 <section id="id28">
 <h3>Verification<a class="headerlink" href="#id28" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>✅ All referenced attributes now exist</p></li>
-<li><p>✅ Parameters match UI widgets</p></li>
-<li><p>✅ Parameters match function signature</p></li>
-<li><p>✅ No AttributeError</p></li>
+<li><p>All referenced attributes now exist</p></li>
+<li><p>Parameters match UI widgets</p></li>
+<li><p>Parameters match function signature</p></li>
+<li><p>No AttributeError</p></li>
 </ul>
 </section>
 </section>
@@ -2213,14 +2218,14 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 
 <span class="c1"># What actually exists:</span>
 <span class="n">ed</span><span class="o">.</span><span class="n">detect_events_baseline_peak_kinetics</span><span class="p">(</span>
-    <span class="n">data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span>
-    <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;negative&#39;</span><span class="p">,</span>
-    <span class="n">baseline_window_s</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
-    <span class="n">baseline_step_s</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
-    <span class="n">threshold_sd_factor</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
-    <span class="n">filter_freq_hz</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">min_event_separation_ms</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
-    <span class="n">peak_prominence_factor</span><span class="o">=</span><span class="kc">None</span>
+ <span class="n">data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span>
+ <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;negative&#39;</span><span class="p">,</span>
+ <span class="n">baseline_window_s</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+ <span class="n">baseline_step_s</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+ <span class="n">threshold_sd_factor</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+ <span class="n">filter_freq_hz</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+ <span class="n">min_event_separation_ms</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
+ <span class="n">peak_prominence_factor</span><span class="o">=</span><span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]]</span>
 </pre></div>
 </div>
@@ -2239,8 +2244,8 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 <h3>Fix Applied<a class="headerlink" href="#id34" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Before (WRONG):</span>
 <span class="n">peak_indices</span><span class="p">,</span> <span class="n">event_details</span><span class="p">,</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">ed</span><span class="o">.</span><span class="n">detect_events_baseline_peak</span><span class="p">(</span>
-    <span class="n">signal_data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span> <span class="n">bl_duration_ms</span><span class="p">,</span> <span class="n">peak_duration_ms</span><span class="p">,</span>
-    <span class="n">step_size_ms</span><span class="p">,</span> <span class="n">baseline_threshold</span><span class="p">,</span> <span class="n">peak_threshold_factor</span>
+ <span class="n">signal_data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span> <span class="n">bl_duration_ms</span><span class="p">,</span> <span class="n">peak_duration_ms</span><span class="p">,</span>
+ <span class="n">step_size_ms</span><span class="p">,</span> <span class="n">baseline_threshold</span><span class="p">,</span> <span class="n">peak_threshold_factor</span>
 <span class="p">)</span>
 
 <span class="c1"># After (CORRECT):</span>
@@ -2254,10 +2259,10 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 
 <span class="c1"># Correct function name and parameter order</span>
 <span class="n">peak_indices</span><span class="p">,</span> <span class="n">stats</span><span class="p">,</span> <span class="n">event_details</span> <span class="o">=</span> <span class="n">ed</span><span class="o">.</span><span class="n">detect_events_baseline_peak_kinetics</span><span class="p">(</span>
-    <span class="n">signal_data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span>
-    <span class="n">direction</span><span class="o">=</span><span class="n">direction</span><span class="p">,</span>
-    <span class="n">filter_freq_hz</span><span class="o">=</span><span class="n">filter_freq_param</span><span class="p">,</span>
-    <span class="n">peak_prominence_factor</span><span class="o">=</span><span class="n">prominence_param</span>
+ <span class="n">signal_data</span><span class="p">,</span> <span class="n">sample_rate</span><span class="p">,</span>
+ <span class="n">direction</span><span class="o">=</span><span class="n">direction</span><span class="p">,</span>
+ <span class="n">filter_freq_hz</span><span class="o">=</span><span class="n">filter_freq_param</span><span class="p">,</span>
+ <span class="n">peak_prominence_factor</span><span class="o">=</span><span class="n">prominence_param</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -2265,12 +2270,12 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 <section id="id35">
 <h3>Verification<a class="headerlink" href="#id35" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>✅ Function name matches actual implementation</p></li>
-<li><p>✅ Parameters match function signature</p></li>
-<li><p>✅ Return values in correct order</p></li>
-<li><p>✅ Optional parameters handled correctly (0 → None)</p></li>
-<li><p>✅ Uses default values for baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms</p></li>
-<li><p>✅ No AttributeError</p></li>
+<li><p>Function name matches actual implementation</p></li>
+<li><p>Parameters match function signature</p></li>
+<li><p>Return values in correct order</p></li>
+<li><p>Optional parameters handled correctly (0 → None)</p></li>
+<li><p>Uses default values for baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms</p></li>
+<li><p>No AttributeError</p></li>
 </ul>
 </section>
 </section>
@@ -2291,31 +2296,31 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 <td><p>event_detection_tab.py:767</p></td>
 <td><p>String mismatch</p></td>
 <td><p>HIGH</p></td>
-<td><p>✅ FIXED</p></td>
+<td><p>FIXED</p></td>
 </tr>
 <tr class="row-odd"><td><p>8</p></td>
 <td><p>event_detection_tab.py:825</p></td>
 <td><p>String mismatch</p></td>
 <td><p>CRITICAL</p></td>
-<td><p>✅ FIXED</p></td>
+<td><p>FIXED</p></td>
 </tr>
 <tr class="row-even"><td><p>9</p></td>
 <td><p>rmp_tab.py:915</p></td>
 <td><p>NumPy boolean ambiguity</p></td>
 <td><p>HIGH</p></td>
-<td><p>✅ FIXED</p></td>
+<td><p>FIXED</p></td>
 </tr>
 <tr class="row-odd"><td><p>10</p></td>
 <td><p>event_detection_tab.py:768-772</p></td>
 <td><p>Non-existent attributes</p></td>
 <td><p>CRITICAL</p></td>
-<td><p>✅ FIXED</p></td>
+<td><p>FIXED</p></td>
 </tr>
 <tr class="row-even"><td><p>11</p></td>
 <td><p>event_detection_tab.py:832</p></td>
 <td><p>Non-existent function</p></td>
 <td><p>CRITICAL</p></td>
-<td><p>✅ FIXED</p></td>
+<td><p>FIXED</p></td>
 </tr>
 </tbody>
 </table>
@@ -2336,23 +2341,23 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 <h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading"></a></h2>
 <p>All errors identified in the log from file addition onwards have been successfully fixed. The Event Detection tab’s “Baseline + Peak + Kinetics” method will now:</p>
 <ul class="simple">
-<li><p>✅ Access only existing UI widget attributes</p></li>
-<li><p>✅ Call the correct analysis function with proper parameters</p></li>
-<li><p>✅ Execute without AttributeError crashes</p></li>
+<li><p>Access only existing UI widget attributes</p></li>
+<li><p>Call the correct analysis function with proper parameters</p></li>
+<li><p>Execute without AttributeError crashes</p></li>
 </ul>
 <p>The Baseline Analysis tab will:</p>
 <ul class="simple">
-<li><p>✅ Handle data format fallbacks without NumPy boolean errors</p></li>
-<li><p>✅ Work with both ‘data’ and ‘voltage’ dictionary keys</p></li>
+<li><p>Handle data format fallbacks without NumPy boolean errors</p></li>
+<li><p>Work with both ‘data’ and ‘voltage’ dictionary keys</p></li>
 </ul>
 <p>The Explorer tab will:</p>
 <ul class="simple">
-<li><p>✅ Load files without crashing on missing attributes</p></li>
-<li><p>✅ Properly initialize all required UI state collections</p></li>
+<li><p>Load files without crashing on missing attributes</p></li>
+<li><p>Properly initialize all required UI state collections</p></li>
 </ul>
-<p><strong>Total Bugs Fixed</strong>: 6 (Bugs 7-12)<br />
-<strong>Severity</strong>: 4 CRITICAL, 2 HIGH<br />
-<strong>Status</strong>: ✅ <strong>ALL ERRORS RESOLVED</strong></p>
+<p><strong>Total Bugs Fixed</strong>: 6 (Bugs 7-12)
+<strong>Severity</strong>: 4 CRITICAL, 2 HIGH
+<strong>Status</strong>: <strong>ALL ERRORS RESOLVED</strong></p>
 </section>
 </section>
 
@@ -2368,7 +2373,7 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data<span class=
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Mar 08, 2026.
+      <span class="lastupdated">Last updated on Mar 27, 2026.
       </span></p>
   </div>
 

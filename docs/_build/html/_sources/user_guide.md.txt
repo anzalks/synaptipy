@@ -5,29 +5,29 @@ This guide provides detailed instructions for installing, configuring, and using
 ## Table of Contents
 
 - [Installation](#installation)
-  - [Requirements](#requirements)
-  - [Standard Installation](#standard-installation)
-  - [Developer Installation](#developer-installation)
+ - [Requirements](#requirements)
+ - [Standard Installation](#standard-installation)
+ - [Developer Installation](#developer-installation)
 - [Getting Started](#getting-started)
-  - [Running the Application](#running-the-application)
-  - [User Interface Overview](#user-interface-overview)
+ - [Running the Application](#running-the-application)
+ - [User Interface Overview](#user-interface-overview)
 - [Loading Data](#loading-data)
-  - [Supported File Formats](#supported-file-formats)
-  - [Opening Files](#opening-files)
+ - [Supported File Formats](#supported-file-formats)
+ - [Opening Files](#opening-files)
 - [Using the Explorer Tab](#using-the-explorer-tab)
-  - [Navigation Controls](#navigation-controls)
-  - [Plot Options](#plot-options)
+ - [Navigation Controls](#navigation-controls)
+ - [Plot Options](#plot-options)
 - [Using the Analyser Tab](#using-the-analyser-tab)
-  - [Input Resistance/Conductance Analysis](#input-resistanceconductance-analysis)
-  - [Baseline/RMP Analysis](#baselinermp-analysis)
-  - [Optogenetic Synchronization](#optogenetic-synchronization)
-  - [Sag Ratio (Ih) Analysis](#sag-ratio-ih-analysis)
+ - [Input Resistance/Conductance Analysis](#input-resistanceconductance-analysis)
+ - [Baseline/RMP Analysis](#baselinermp-analysis)
+ - [Optogenetic Synchronization](#optogenetic-synchronization)
+ - [Sag Ratio (Ih) Analysis](#sag-ratio-ih-analysis)
 - [Using the Exporter Tab](#using-the-exporter-tab)
-  - [Exporting to NWB](#exporting-to-nwb)
-  - [Exporting Analysis Results](#exporting-analysis-results)
+ - [Exporting to NWB](#exporting-to-nwb)
+ - [Exporting Analysis Results](#exporting-analysis-results)
 - [Advanced Options](#advanced-options)
-  - [Command Line Arguments](#command-line-arguments)
-  - [Logging and Debugging](#logging-and-debugging)
+ - [Command Line Arguments](#command-line-arguments)
+ - [Logging and Debugging](#logging-and-debugging)
 - [Licensing](#licensing)
 - [Troubleshooting](#troubleshooting)
 
@@ -37,18 +37,18 @@ This guide provides detailed instructions for installing, configuring, and using
 
 - Python 3.10 or higher
 - Dependencies are automatically installed during package installation:
-  - [PySide6](https://doc.qt.io/qtforpython/) - Qt6 bindings for Python (GUI framework)
-  - [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
-  - [Neo](https://neo.readthedocs.io) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
-  - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) - numerical computation and signal processing
-  - [PyNWB](https://pynwb.readthedocs.io) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
+ - [PySide6](https://doc.qt.io/qtforpython/) - Qt6 bindings for Python (GUI framework)
+ - [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
+ - [Neo](https://neo.readthedocs.io) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
+ - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) - numerical computation and signal processing
+ - [PyNWB](https://pynwb.readthedocs.io) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
 
 ### Standard Installation
 
 Synaptipy is available both as a standalone application and as a Python package.
 
 #### Standalone Application (Recommended)
-You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.deb`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases). 
+You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.deb`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
 - **macOS**: Download the `.dmg`, open it, and drag Synaptipy to your Applications folder.
 - **Windows**: Download and run the `_Setup.exe` installer.
 - **Linux**: Download the `.deb` package and install it via `sudo dpkg -i <filename.deb>`.
@@ -84,14 +84,14 @@ pip install -e ".[dev]"
 After installation, run the application using one of these methods:
 
 1. **Using the installed entry point:**
-   ```bash
-   synaptipy
-   ```
+ ```bash
+ synaptipy
+ ```
 
 2. **Using the Python module:**
-   ```bash
-   python -m Synaptipy
-   ```
+ ```bash
+ python -m Synaptipy
+ ```
 
 ### User Interface Overview
 
@@ -147,18 +147,18 @@ For the full list of Neo-supported formats, see the
 - **Pan**: Click and drag in the plot area
 - **Reset View**: Click the "Reset View" button to return to the initial view
 - **Navigate Between Files**:
-  - Use the "Previous File" and "Next File" buttons (if multiple files were found)
-  - The current file index is shown between the navigation buttons
+ - Use the "Previous File" and "Next File" buttons (if multiple files were found)
+ - The current file index is shown between the navigation buttons
 
 ### Plot Options
 
 - **Plot Mode**:
-  - "Overlay All + Avg": Shows all trials with the average highlighted
-  - "Cycle Single Trial": Shows one trial at a time with navigation controls
+ - "Overlay All + Avg": Shows all trials with the average highlighted
+ - "Cycle Single Trial": Shows one trial at a time with navigation controls
 - **Manual Trial Averaging (Across Files)**:
-  - While in "Cycle Single Trial", use the **"Add Current Trial to Avg Set"** button.
-  - Navigate to completely different files and continue adding trials to your global selection.
-  - Check **"Plot Selected Avg"** to instantly overlay the average of all your manually cherry-picked trials from across the entire dataset.
+ - While in "Cycle Single Trial", use the **"Add Current Trial to Avg Set"** button.
+ - Navigate to completely different files and continue adding trials to your global selection.
+ - Check **"Plot Selected Avg"** to instantly overlay the average of all your manually cherry-picked trials from across the entire dataset.
 - **Channel Selection**: Choose which channel to view from the dropdown
 - **Downsampling**: Enable/disable automatic downsampling for large datasets
 
@@ -167,33 +167,33 @@ For the full list of Neo-supported formats, see the
 All analysis sub-tabs share the following interface behaviours:
 
 - **Free-form numeric input** - Number fields accept freely typed values;
-  intermediate states (empty field, a lone minus sign, etc.) are tolerated while
-  typing. Stepping uses adaptive decimal increments.
+ intermediate states (empty field, a lone minus sign, etc.) are tolerated while
+ typing. Stepping uses adaptive decimal increments.
 - **Interactive vs Manual mode** - Sub-tabs that have draggable plot regions
-  (e.g. Rin, Tau, Capacitance) expose a mode selector. In **Interactive** mode
-  the time-window spinboxes are read-only and driven by the plot regions.
-  Switching to **Manual** mode unlocks all spinboxes for direct entry.
+ (e.g. Rin, Tau, Capacitance) expose a mode selector. In **Interactive** mode
+ the time-window spinboxes are read-only and driven by the plot regions.
+ Switching to **Manual** mode unlocks all spinboxes for direct entry.
 - **Conditional parameter visibility** - Parameters irrelevant to the current
-  clamp mode or analysis type are hidden automatically.
+ clamp mode or analysis type are hidden automatically.
 
 ### Input Resistance/Conductance Analysis
 
 1. Select data for analysis from the Explorer tab
 2. Switch to the Analyser tab and select the *Input Resistance* sub-tab
 3. Choose analysis mode:
-   - **Interactive Mode**: Drag the blue (baseline) and red (response) regions
-     on the plot - the time-window spinboxes update in real time and become
-     read-only
-   - **Manual Mode**: Unlock the spinboxes and type time windows directly
+ - **Interactive Mode**: Drag the blue (baseline) and red (response) regions
+ on the plot - the time-window spinboxes update in real time and become
+ read-only
+ - **Manual Mode**: Unlock the spinboxes and type time windows directly
 4. Enable **Auto Detect Pulse** to let the analysis locate step edges
-   automatically from the stimulus derivative. If auto-detection produces
-   invalid windows (e.g. due to action potentials in the trace), the analysis
-   falls back to the current spinbox values and updates the spinboxes
-   to reflect the windows actually used
+ automatically from the stimulus derivative. If auto-detection produces
+ invalid windows (e.g. due to action potentials in the trace), the analysis
+ falls back to the current spinbox values and updates the spinboxes
+ to reflect the windows actually used
 5. Results will be displayed showing:
-   - Input resistance in MΩ
-   - Conductance in μS
-   - Voltage and current changes
+ - Input resistance in MΩ
+ - Conductance in μS
+ - Voltage and current changes
 6. Click "Save Result" to store the analysis for later export
 
 ### Baseline/RMP Analysis
@@ -201,30 +201,30 @@ All analysis sub-tabs share the following interface behaviours:
 1. Select a channel for analysis
 2. Specify the time window for baseline calculation
 3. Choose analysis method:
-   - **Mean**: Calculates the average over the specified window
-   - **Median**: Uses the median (more robust to outliers)
+ - **Mean**: Calculates the average over the specified window
+ - **Median**: Uses the median (more robust to outliers)
 4. Results will display the baseline value and variability metrics
 5. Save results as needed
 
 ### Optogenetic Synchronization
 
 1. Load a recording that contains a TTL/digital stimulus channel alongside the
-   signal channel
+ signal channel
 2. Switch to the *Optogenetic Synchronization* sub-tab in the Analyser
 3. Select the TTL channel from the channel selector and set the **TTL Threshold**
-   voltage used to binarise the stimulus signal
+ voltage used to binarise the stimulus signal
 4. Choose the **Event Detection Type**:
-   - **Spikes** - threshold-crossing AP detection; set the **Spike Threshold** (mV)
-   - **Events (Threshold)** - prominence-based threshold event detection; set
-     **Event Threshold**, **Event Direction**, and **Refractory Period**
-   - **Events (Template)** - double-exponential template matching; set
-     **Rise Tau**, **Decay Tau**, **Template Threshold** (SD), and
-     **Template Direction**
-   Only the parameters relevant to the selected detection mode are shown.
+ - **Spikes** - threshold-crossing AP detection; set the **Spike Threshold** (mV)
+ - **Events (Threshold)** - prominence-based threshold event detection; set
+ **Event Threshold**, **Event Direction**, and **Refractory Period**
+ - **Events (Template)** - double-exponential template matching; set
+ **Rise Tau**, **Decay Tau**, **Template Threshold** (SD), and
+ **Template Direction**
+ Only the parameters relevant to the selected detection mode are shown.
 5. Set the **Response Window** (ms) to define how far after each TTL onset
-   to search for an event
+ to search for an event
 6. Results include optical latency, response probability, jitter, stimulus
-   count, and event count
+ count, and event count
 7. Click "Save Result" to store for later export
 
 ### Sag Ratio (Ih) Analysis
@@ -232,20 +232,20 @@ All analysis sub-tabs share the following interface behaviours:
 1. Load a recording containing a hyperpolarising current-step protocol
 2. Switch to the *Sag Ratio (Ih)* sub-tab in the Analyser
 3. Configure the measurement windows:
-   - **Baseline Start / End** - resting membrane potential window (before the step)
-   - **Peak Window Start / End** - early part of the step where the sag minimum occurs
-   - **Steady-State Start / End** - late part of the step where voltage has plateaued
+ - **Baseline Start / End** - resting membrane potential window (before the step)
+ - **Peak Window Start / End** - early part of the step where the sag minimum occurs
+ - **Steady-State Start / End** - late part of the step where voltage has plateaued
 4. Adjust **Peak Smoothing (ms)** to control Savitzky-Golay smoothing of the
-   peak detection (default 5 ms). Increase for noisy traces
+ peak detection (default 5 ms). Increase for noisy traces
 5. Set **Rebound Window (ms)** to control how far after stimulus offset the
-   rebound depolarisation is measured (default 100 ms)
+ rebound depolarisation is measured (default 100 ms)
 6. Results include:
-   - **sag_ratio** - ratio form (>1 indicates I_h sag, 1 = no sag)
-   - **sag_percentage** - percentage of sag deflection
-   - **v_peak**, **v_ss**, **v_baseline** - the three voltage levels
-   - **rebound_depolarization** - post-stimulus rebound amplitude
+ - **sag_ratio** - ratio form (>1 indicates I_h sag, 1 = no sag)
+ - **sag_percentage** - percentage of sag deflection
+ - **v_peak**, **v_ss**, **v_baseline** - the three voltage levels
+ - **rebound_depolarization** - post-stimulus rebound amplitude
 7. The plot shows horizontal lines at V_baseline (blue), V_peak (magenta),
-   and V_ss (red)
+ and V_ss (red)
 
 ## Using the Exporter Tab
 
@@ -255,9 +255,9 @@ All analysis sub-tabs share the following interface behaviours:
 2. Navigate to the Exporter tab and select the "NWB Export" sub-tab
 3. Specify the output file location
 4. Fill in required metadata:
-   - Session description
-   - Experimenter information
-   - Lab/institution details
+ - Session description
+ - Experimenter information
+ - Lab/institution details
 5. Click "Export to NWB" and wait for the export to complete
 
 ### Exporting Analysis Results
@@ -267,7 +267,7 @@ All analysis sub-tabs share the following interface behaviours:
 3. Select which results to export
 4. Specify the CSV output file location.
 5. Click "Export Selected" to create the output.
-   - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
+ - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
 
 ## Advanced Options
 
@@ -276,11 +276,11 @@ All analysis sub-tabs share the following interface behaviours:
 Synaptipy supports several command-line arguments:
 
 ```bash
-synaptipy --help                          # Show help
-synaptipy --dev                           # Run in development mode with detailed logging
-synaptipy --log-dir /path/to/logs         # Specify custom log directory
-synaptipy --verbose                       # Enable verbose output
-synaptipy --file /path/to/data.abf        # Open a file directly on launch
+synaptipy --help # Show help
+synaptipy --dev # Run in development mode with detailed logging
+synaptipy --log-dir /path/to/logs # Specify custom log directory
+synaptipy --verbose # Enable verbose output
+synaptipy --file /path/to/data.abf # Open a file directly on launch
 ```
 
 ### Logging and Debugging
@@ -315,24 +315,24 @@ For the full license text, see the LICENSE file in the root of the Synaptipy rep
 ### Common Issues
 
 1. **File Format Not Recognized**:
-   - Ensure the file is one of the supported formats
-   - Check if you have the necessary dependencies for that format
-   - Some formats require additional libraries not included by default
+ - Ensure the file is one of the supported formats
+ - Check if you have the necessary dependencies for that format
+ - Some formats require additional libraries not included by default
 
 2. **GUI Display Issues**:
-   - Ensure PySide6 is properly installed
-   - Try updating your graphics drivers
-   - If running remotely, ensure X forwarding is enabled
+ - Ensure PySide6 is properly installed
+ - Try updating your graphics drivers
+ - If running remotely, ensure X forwarding is enabled
 
 3. **Performance Problems with Large Files**:
-   - Enable downsampling for visualization
-   - Increase system RAM if possible
-   - Consider splitting very large recordings into smaller files
+ - Enable downsampling for visualization
+ - Increase system RAM if possible
+ - Consider splitting very large recordings into smaller files
 
 4. **Export Failures**:
-   - Check available disk space
-   - Ensure write permissions for the target directory
-   - For NWB exports, verify all required metadata is provided
+ - Check available disk space
+ - Ensure write permissions for the target directory
+ - For NWB exports, verify all required metadata is provided
 
 ### Getting Help
 
