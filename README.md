@@ -121,12 +121,12 @@ Synaptipy is available both as a standalone application and as a Python package.
 
 You do not need to install Python or any dependencies to run Synaptipy. We provide pre-compiled, standalone applications for all major operating systems.
 
-[Download the Latest Release Here](https://github.com/OWNER/Synaptipy/releases/latest)
+[Download the Beta Release Here](https://github.com/anzalks/Synaptipy/releases)
 
 Choose the correct file for your operating system from the release assets:
-* **Windows:** Download `Synaptipy_Setup_vX.X.X.exe` and run the installer.
-* **macOS:** Download `Synaptipy_vX.X.X.dmg`, open the disk image, and drag Synaptipy to your Applications folder.
-* **Linux:** Download `Synaptipy-vX.X.X-x86_64.AppImage`, make the file executable (`chmod +x Synaptipy-vX.X.X-x86_64.AppImage`), and run it directly.
+* **Windows:** Download `Synaptipy_Setup_v0.1.0b5.exe` and run the installer.
+* **macOS:** Download `Synaptipy_v0.1.0b5.dmg`, open the disk image, and drag Synaptipy to your Applications folder.
+* **Linux:** Download `Synaptipy-v0.1.0b5-x86_64.AppImage`, make the file executable (`chmod +x Synaptipy-v0.1.0b5-x86_64.AppImage`), and run it directly.
 
 ### Python Package Installation
 For researchers who wish to use Synaptipy programmatically or develop custom plugins, you can install it via `conda` / `pip`:
