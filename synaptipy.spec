@@ -16,6 +16,8 @@ hiddenimports += collect_submodules('pynwb')
 
 # Include our local resources
 datas = [('src/Synaptipy/resources', 'Synaptipy/resources')]
+datas += collect_data_files('pynwb')
+datas += collect_data_files('hdmf')
 
 # Determine appropriate icon based on OS
 icon_ext = '.icns' if sys.platform == 'darwin' else '.ico'
