@@ -1,7 +1,7 @@
 # Manual Testing Guide for Performance Fixes
 
-**Date:** October 20, 2025  
-**Author:** Anzal K Shahul  
+**Date:** October 20, 2025
+**Author:** Anzal K Shahul
 **Purpose:** Verify all 6 critical performance fixes are working correctly
 
 ---
@@ -9,16 +9,16 @@
 ## Prerequisites
 
 1. Ensure you have test data files:
-   - Multi-channel ABF file (2+ channels)
-   - Large WCP file with many trials (20+ trials recommended)
-   - Any supported electrophysiology file format
+ - Multi-channel ABF file (2+ channels)
+ - Large WCP file with many trials (20+ trials recommended)
+ - Any supported electrophysiology file format
 
 2. Start the application:
-   ```bash
-   cd /Users/anzalks/PycharmProjects/Synaptipy
-   conda activate synaptipy
-   python -m Synaptipy
-   ```
+ ```bash
+ cd /Users/anzalks/PycharmProjects/Synaptipy
+ conda activate synaptipy
+ python -m Synaptipy
+ ```
 
 ---
 
@@ -32,10 +32,10 @@
 3. Observe the loading time
 
 **Expected Result:**
-- ✅ File loads quickly (1-2 seconds for typical files)
-- ✅ No UI freeze during loading
-- ✅ Status bar shows progress
-- ✅ Both channels display data (not empty)
+- File loads quickly (1-2 seconds for typical files)
+- No UI freeze during loading
+- Status bar shows progress
+- Both channels display data (not empty)
 
 **How to confirm the fix:**
 - Check console logs for: `[load_recording_data] Received a pre-loaded Recording object. Using fast display path.`
@@ -52,9 +52,9 @@
 2. Observe all channel plots in the Explorer tab
 
 **Expected Result:**
-- ✅ All channels show waveforms (not empty plots)
-- ✅ Each channel shows different data
-- ✅ Channel names match file metadata
+- All channels show waveforms (not empty plots)
+- Each channel shows different data
+- Channel names match file metadata
 
 **How to confirm the fix:**
 - Console logs show: `Appended X samples to channel 'Y' from segment Z` for EACH channel
@@ -75,10 +75,10 @@
 6. Click "Apply" again
 
 **Expected Result:**
-- ✅ Plot updates appear INSTANTLY (< 0.5 seconds)
-- ✅ No UI freeze or lag
-- ✅ Colors and widths change as expected
-- ✅ Can make multiple changes rapidly
+- Plot updates appear INSTANTLY (< 0.5 seconds)
+- No UI freeze or lag
+- Colors and widths change as expected
+- Can make multiple changes rapidly
 
 **How to confirm the fix:**
 - Console logs show: `Cache HIT for average pen` (singleton working)
@@ -97,10 +97,10 @@
 4. Observe plot update speed
 
 **Expected Result:**
-- ✅ Plot updates INSTANTLY when clicking Next/Previous
-- ✅ Only ONE trial is visible at a time (not all trials overlaid)
-- ✅ Trial counter shows "X/Y" where Y is total trials
-- ✅ Smooth navigation through all trials
+- Plot updates INSTANTLY when clicking Next/Previous
+- Only ONE trial is visible at a time (not all trials overlaid)
+- Trial counter shows "X/Y" where Y is total trials
+- Smooth navigation through all trials
 
 **How to confirm the fix:**
 - Console logs show: `[_update_plot] CYCLE_SINGLE mode for channel X: Plotting trial Y`
@@ -116,15 +116,15 @@
 1. Open a multi-channel file (2+ channels)
 2. Ensure multiple channel plots are visible
 3. Use mouse to zoom into a time region on the TOP plot:
-   - Click and drag to select a rectangular region
-   - Release to zoom
+ - Click and drag to select a rectangular region
+ - Release to zoom
 4. Observe ALL channel plots
 
 **Expected Result:**
-- ✅ ALL channel plots zoom to the same X-axis (time) range simultaneously
-- ✅ Y-axes remain independent (different per channel)
-- ✅ Panning one plot pans all plots on X-axis
-- ✅ X-zoom slider controls all plots together
+- ALL channel plots zoom to the same X-axis (time) range simultaneously
+- Y-axes remain independent (different per channel)
+- Panning one plot pans all plots on X-axis
+- X-zoom slider controls all plots together
 
 **How to confirm the fix:**
 - When zooming plot 1, plots 2, 3, etc. immediately match the X-axis range
@@ -142,9 +142,9 @@
 3. Observe the plots
 
 **Expected Result:**
-- ✅ ALL trials are plotted (overlaid)
-- ✅ Average trace is visible (thicker line)
-- ✅ Can see trial-to-trial variability
+- ALL trials are plotted (overlaid)
+- Average trace is visible (thicker line)
+- Can see trial-to-trial variability
 
 **How to confirm the fix:**
 - Console logs show: `[_update_plot] OVERLAY_AVG mode for channel X: Plotting Y trials and average`
@@ -190,7 +190,7 @@ For a **2-channel file with 50 trials**:
 
 ## Success Criteria
 
-✅ **All 6 fixes working if:**
+ **All 6 fixes working if:**
 1. File loading is fast and smooth
 2. All channels display data
 3. Plot customization updates instantly

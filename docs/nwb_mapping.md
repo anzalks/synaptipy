@@ -38,8 +38,8 @@ appropriate NWB series class:
 
 ## SI Unit Conversion
 
-NWB best practices require data in SI base units.  Synaptipy and Neo
-typically store data in millivolts (mV) or picoamperes (pA).  The exporter
+NWB best practices require data in SI base units. Synaptipy and Neo
+typically store data in millivolts (mV) or picoamperes (pA). The exporter
 converts automatically:
 
 | Original Unit | SI Unit | Conversion Factor | Stored in NWB `conversion` field |
@@ -57,7 +57,7 @@ can recover the original units if needed.
 
 ## Electrode Metadata
 
-Each channel is associated with an `IntracellularElectrode` object.  The
+Each channel is associated with an `IntracellularElectrode` object. The
 following metadata fields are populated from the NWB Export Dialog or from
 channel attributes:
 
@@ -108,7 +108,7 @@ Populated from the **Subject** tab in the export dialog:
 ## Sweep Organisation
 
 Each trial within a channel is stored as a separate `PatchClampSeries`
-(or subclass) with a unique `sweep_number` (`np.uint64`).  The naming
+(or subclass) with a unique `sweep_number` (`np.uint64`). The naming
 convention is:
 
 ```
@@ -122,14 +122,14 @@ For example, `Vm_trial_000`, `Vm_trial_001`, etc.
 ## Limitations and Future Work
 
 1. **Stimulus data** - Stimulus waveforms are not currently exported to
-   `nwbfile.stimulus`.  This is planned for a future release.
+ `nwbfile.stimulus`. This is planned for a future release.
 2. **IntracellularRecordingsTable** - NWB 2.x icephys best practices
-   recommend using the `IntracellularRecordingsTable` for organising
-   sweeps.  Synaptipy currently uses per-series `sweep_number` attributes
-   instead.
+ recommend using the `IntracellularRecordingsTable` for organising
+ sweeps. Synaptipy currently uses per-series `sweep_number` attributes
+ instead.
 3. **Analysis results** - Computed features (Rin, spike metrics, etc.) are
-   exported to CSV/JSON but not embedded in the NWB file.  Future versions
-   may write these to NWB `ProcessingModule` containers.
+ exported to CSV/JSON but not embedded in the NWB file. Future versions
+ may write these to NWB `ProcessingModule` containers.
 
 ---
 
@@ -140,13 +140,13 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 exporter = NWBExporter()
 exporter.export(
-    recording=my_recording,
-    output_path=Path("output.nwb"),
-    session_metadata={
-        "session_description": "Whole-cell patch-clamp recording",
-        "identifier": str(uuid.uuid4()),
-        "session_start_time": datetime.now(timezone.utc),
-        "experimenter": "J. Smith",
-    },
+ recording=my_recording,
+ output_path=Path("output.nwb"),
+ session_metadata={
+ "session_description": "Whole-cell patch-clamp recording",
+ "identifier": str(uuid.uuid4()),
+ "session_start_time": datetime.now(timezone.utc),
+ "experimenter": "J. Smith",
+ },
 )
 ```

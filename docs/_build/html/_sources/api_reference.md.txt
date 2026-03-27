@@ -5,10 +5,10 @@ This document provides reference information for developers using Synaptipy as a
 ## Table of Contents
 
 - [Core Components](#core-components)
-  - [Data Model](#data-model)
-  - [File Readers](#file-readers)
-  - [Analysis](#analysis)
-  - [Exporters](#exporters)
+ - [Data Model](#data-model)
+ - [File Readers](#file-readers)
+ - [Analysis](#analysis)
+ - [Exporters](#exporters)
 - [Licensing](#licensing)
 
 ## Core Components
@@ -39,17 +39,17 @@ from Synaptipy.core.data_model import Channel
 
 # A channel represents a single data stream
 channel = Channel(
-    id="ch1",
-    name="Vm",
-    units="mV",
-    sampling_rate=10000.0,
-    data_trials=[numpy_array_with_data]
+ id="ch1",
+ name="Vm",
+ units="mV",
+ sampling_rate=10000.0,
+ data_trials=[numpy_array_with_data]
 )
 
 # Access channel properties
 name = channel.name
 units = channel.units
-data = channel.data_trials[0]  # Get first trial's data
+data = channel.data_trials[0] # Get first trial's data
 ```
 
 ### File Readers
@@ -83,16 +83,16 @@ from Synaptipy.core.analysis.intrinsic_properties import calculate_rin
 
 # Calculate input resistance from a voltage trace and a known current step
 result = calculate_rin(
-    voltage_trace=voltage_array,       # 1D NumPy array (mV)
-    time_vector=time_array,            # 1D NumPy array (s)
-    current_amplitude=-100.0,          # Current step amplitude (pA)
-    baseline_window=(0.1, 0.2),        # seconds
-    response_window=(0.5, 0.6),        # seconds
+ voltage_trace=voltage_array, # 1D NumPy array (mV)
+ time_vector=time_array, # 1D NumPy array (s)
+ current_amplitude=-100.0, # Current step amplitude (pA)
+ baseline_window=(0.1, 0.2), # seconds
+ response_window=(0.5, 0.6), # seconds
 )
 
 # result is a RinResult dataclass
 if result.is_valid:
-    input_resistance = result.value    # Input resistance in MOhm
+ input_resistance = result.value # Input resistance in MOhm
 ```
 
 #### Sag Ratio
@@ -102,22 +102,22 @@ from Synaptipy.core.analysis.intrinsic_properties import calculate_sag_ratio
 
 # Compute sag ratio from a hyperpolarising current-step trace
 result = calculate_sag_ratio(
-    voltage_trace=voltage_array,                  # 1D NumPy array (mV)
-    time_vector=time_array,                       # 1D NumPy array (s)
-    baseline_window=(0.0, 0.1),                   # seconds
-    response_peak_window=(0.1, 0.3),              # seconds (early sag)
-    response_steady_state_window=(0.8, 1.0),      # seconds (late plateau)
-    peak_smoothing_ms=5.0,                        # Savitzky-Golay smoothing
-    rebound_window_ms=100.0,                      # post-stimulus window
+ voltage_trace=voltage_array, # 1D NumPy array (mV)
+ time_vector=time_array, # 1D NumPy array (s)
+ baseline_window=(0.0, 0.1), # seconds
+ response_peak_window=(0.1, 0.3), # seconds (early sag)
+ response_steady_state_window=(0.8, 1.0), # seconds (late plateau)
+ peak_smoothing_ms=5.0, # Savitzky-Golay smoothing
+ rebound_window_ms=100.0, # post-stimulus window
 )
 
 # result is a dict
-sag_ratio    = result["sag_ratio"]              # >1 means Ih sag present
-sag_pct      = result["sag_percentage"]         # 0-100 %
-v_peak       = result["v_peak"]                 # mV
-v_ss         = result["v_ss"]                   # mV
-v_baseline   = result["v_baseline"]             # mV
-rebound      = result["rebound_depolarization"] # mV
+sag_ratio = result["sag_ratio"] # >1 means Ih sag present
+sag_pct = result["sag_percentage"] # 0-100 %
+v_peak = result["v_peak"] # mV
+v_ss = result["v_ss"] # mV
+v_baseline = result["v_baseline"] # mV
+rebound = result["rebound_depolarization"] # mV
 ```
 
 #### Spike Detection
@@ -127,28 +127,28 @@ from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
 
 # Detect spikes using threshold crossing
 spike_result = detect_spikes_threshold(
-    data=voltage_array,
-    time=time_array,
-    threshold=-20.0,                   # mV
-    refractory_period=0.002,           # seconds
+ data=voltage_array,
+ time=time_array,
+ threshold=-20.0, # mV
+ refractory_period=0.002, # seconds
 )
 
 # spike_result is a SpikeTrainResult dataclass
-spike_times  = spike_result.spike_times      # np.ndarray (seconds)
-mean_freq    = spike_result.mean_frequency   # Hz
+spike_times = spike_result.spike_times # np.ndarray (seconds)
+mean_freq = spike_result.mean_frequency # Hz
 ```
 
 #### Analysis Registry (Plugin Interface)
 
 ```python
-import Synaptipy.core.analysis            # triggers all @register decorators
+import Synaptipy.core.analysis # triggers all @register decorators
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 # List all registered analyses (built-in + plugins)
-names = AnalysisRegistry.list_registered()   # list[str]
+names = AnalysisRegistry.list_registered() # list[str]
 
 # List only 'analysis'-type entries
-analysis_names = AnalysisRegistry.list_analysis()  # list[str]
+analysis_names = AnalysisRegistry.list_analysis() # list[str]
 
 # Get metadata (ui_params, plots, label, type)
 meta = AnalysisRegistry.get_metadata("sag_ratio_analysis")
@@ -170,12 +170,12 @@ exporter = NWBExporter()
 
 # Set metadata
 metadata = {
-    'session_description': 'Recording session',
-    'experimenter': 'Researcher Name',
-    'lab': 'Lab Name',
-    'institution': 'Institution',
-    'experiment_description': 'Experiment details',
-    'session_id': 'session123'
+ 'session_description': 'Recording session',
+ 'experimenter': 'Researcher Name',
+ 'lab': 'Lab Name',
+ 'institution': 'Institution',
+ 'experiment_description': 'Experiment details',
+ 'session_id': 'session123'
 }
 
 # Export to NWB format

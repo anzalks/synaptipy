@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AnalyserTab Layout Refactoring &mdash; Synaptipy 0.1.0b1 documentation</title>
+  <title>AnalyserTab Layout Refactoring &mdash; Synaptipy 0.1.0b6 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="../_static/logo.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=e4e59774"></script>
+      <script src="../_static/documentation_options.js?v=2f6c07b9"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -26,7 +26,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅" href="REFACTORING_FINAL_SUMMARY.html" />
+    <link rel="next" title="Phase 2 &amp; 3 Refactoring - FINAL SUMMARY" href="REFACTORING_FINAL_SUMMARY.html" />
     <link rel="prev" title="Explorer X-Axis Shift Fix" href="EXPLORER_XAXIS_SHIFT_FIX.html" /> 
 </head>
 
@@ -235,7 +235,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#installation">Installation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#requirements">Requirements</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#standalone-application-recommended">Standalone Application (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#python-package-installation">Python Package Installation</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#developer-installation">Developer Installation</a></li>
 </ul>
 </li>
@@ -352,7 +356,6 @@
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-1-pure-analysis-logic">3.1 Part 1: Pure Analysis Logic</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-2-registry-wrapper">3.2 Part 2: Registry Wrapper</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#return-dict-conventions">3.3 Return Dict Conventions</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#batch-export-and-dynamic-csvs">3.4 Batch Export and Dynamic CSVs</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#defining-gui-parameters-ui-params">4. Defining GUI Parameters (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a><ul>
@@ -710,6 +713,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#linux"><strong>Linux</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#standalone-installers-recommended">Standalone Installers (Recommended)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#installation-commands">Installation Commands</a><ul>
@@ -1021,8 +1025,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ERROR_REPORT.html#testing-recommendations">7. Testing Recommendations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ERROR_REPORT.html#fixes-applied">Fixes Applied</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ERROR_REPORT.html#fix-1-added-region-check-in-calculate-tau-line-1286-1288">Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ERROR_REPORT.html#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ERROR_REPORT.html#conclusion">Conclusion</a></li>
@@ -1100,7 +1104,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#issue-found-and-fixed">Issue Found and Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#problem">Problem</a></li>
 <li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#solution">Solution</a></li>
@@ -1113,8 +1117,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#complete-implementation-summary">Complete Implementation Summary</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#code-quality-verification">Code Quality Verification</a></li>
@@ -1139,9 +1143,9 @@
 <li class="toctree-l2"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html">Synaptipy Analysis Module Refactoring - Implementation Summary</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phases-completed">Phases Completed</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">✅ Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">✅ Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">✅ Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#implementation-statistics">Implementation Statistics</a><ul>
@@ -1178,7 +1182,7 @@
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="REFACTORING_SUCCESS.html">✅ REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="REFACTORING_SUCCESS.html">REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_SUCCESS.html#achievement-unlocked-100-test-pass-rate">Achievement Unlocked: 100% Test Pass Rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_SUCCESS.html#what-was-accomplished">What Was Accomplished</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="REFACTORING_SUCCESS.html#files-modified-5">Files Modified: 5</a></li>
@@ -1255,9 +1259,9 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#refactoring-implementation-plan">Refactoring Implementation Plan</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation ⏳</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#success-criteria">Success Criteria</a><ul>
@@ -1267,12 +1271,12 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#post-refactoring-results">Post-Refactoring Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS.html">Analysis Functions, UI Elements, and Failure Points</a><ul>
@@ -1457,10 +1461,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html">Performance Optimizations - Implementation Summary</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#all-implementations-complete">✅ All Implementations Complete</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#all-implementations-complete">All Implementations Complete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature</a></li>
+<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#test-results">Test Results</a></li>
@@ -1495,23 +1499,23 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html">Final Performance Optimizations Implementation Report</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">✅ ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature ✅</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code> ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-src-synaptipy-application-gui-explorer-tab-py">File: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/explorer_tab.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#test-results">Test Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#manual-verification-checklist">Manual Verification Checklist</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#files-modified-summary">Files Modified Summary</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#implementation-files-4-files">Implementation Files (4 files)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#test-files-2-files">Test Files (2 files)</a></li>
@@ -1528,8 +1532,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html">Final Verification Guide - Performance Optimizations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#quick-verification-checklist">Quick Verification Checklist</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">✅ Automated Tests Passed</a></li>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#code-verification-complete">✅ Code Verification Complete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">Automated Tests Passed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#code-verification-complete">Code Verification Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#manual-testing-instructions">Manual Testing Instructions</a><ul>
@@ -1559,7 +1563,7 @@
 <li class="toctree-l3"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASE1_COMPLETE.html">🎉 Phase 1 Refactoring COMPLETE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASE1_COMPLETE.html">Phase 1 Refactoring COMPLETE</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#files-refactored">Files Refactored</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#test-results">Test Results</a></li>
@@ -1578,10 +1582,10 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html">🎉 PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html">PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#executive-summary">Executive Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#final-test-results">Final Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#issues-fixed">Issues Fixed</a><ul>
@@ -1594,8 +1598,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#architecture-before-vs-after">Architecture Before vs After</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication ❌</a></li>
-<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#quality-metrics">Quality Metrics</a></li>
@@ -1615,7 +1619,7 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#git-commit-message">Git Commit Message</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#phase-2-template-method-pattern-for-analysis-execution">Phase 2: Template Method Pattern for Analysis Execution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#baseanalysistab-changes">BaseAnalysisTab Changes</a></li>
@@ -1653,15 +1657,15 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#summary">Summary</a></li>
-<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#objectives">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#implementation">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#benefits">Benefits</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#id1">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#id2">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#usage-pattern">Usage Pattern</a></li>
@@ -1683,15 +1687,15 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="ALL_TESTS_PASSING.html">✅ ALL TESTS PASSING - ZERO ERRORS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ALL_TESTS_PASSING.html">ALL TESTS PASSING - ZERO ERRORS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#comprehensive-verification-report">Comprehensive Verification Report</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#error-that-was-fixed">Error That Was Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#the-pre-existing-error-rin-tab-display-name-mismatch">The “Pre-Existing Error”: Rin Tab Display Name Mismatch</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#complete-test-results">Complete Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12 ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#verification-checklist">Verification Checklist</a></li>
@@ -1734,8 +1738,8 @@
              
   <section class="tex2jax_ignore mathjax_ignore" id="analysertab-layout-refactoring">
 <h1>AnalyserTab Layout Refactoring<a class="headerlink" href="#analysertab-layout-refactoring" title="Link to this heading"></a></h1>
-<p><strong>Date:</strong> November 21, 2025<br />
-<strong>Author:</strong> Anzal K Shahul<br />
+<p><strong>Date:</strong> November 21, 2025
+<strong>Author:</strong> Anzal K Shahul
 <strong>Status:</strong> Completed</p>
 <section id="overview">
 <h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
@@ -1748,38 +1752,26 @@
 <section id="layout-changes">
 <h4>Layout Changes<a class="headerlink" href="#layout-changes" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><strong>Replaced vertical layout with horizontal splitter:</strong></p>
-<ul>
+<li><p><strong>Replaced vertical layout with horizontal splitter:</strong></p></li>
 <li><p>Left Pane (70%): Analysis sub-tabs with plots (naturally becomes ~1.2x+ taller)</p></li>
 <li><p>Right Pane (30%): Sidebar with controls</p></li>
-</ul>
-</li>
-<li><p><strong>Sidebar Components:</strong></p>
-<ul>
+<li><p><strong>Sidebar Components:</strong></p></li>
 <li><p>“Analysis Input Set” group with file list widget</p></li>
 <li><p>“Analyze Item” group with centralized combo box selector</p></li>
 <li><p>Both groups pushed to top with stretch at bottom</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="new-features">
 <h4>New Features<a class="headerlink" href="#new-features" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><strong>Central Analysis Item Selector:</strong></p>
-<ul>
+<li><p><strong>Central Analysis Item Selector:</strong></p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">self.central_analysis_item_combo</span></code> attribute</p></li>
 <li><p>Populated in <code class="docutils literal notranslate"><span class="pre">update_analysis_sources()</span></code> method</p></li>
 <li><p>Replaces individual combo boxes in each analysis tab</p></li>
-</ul>
-</li>
-<li><p><strong>Central Control Logic:</strong></p>
-<ul>
+<li><p><strong>Central Control Logic:</strong></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">_on_central_item_selected(index)</span></code>: Forwards selection to active tab</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">_on_tab_changed(tab_index)</span></code>: Updates newly visible tab with current selection</p></li>
 <li><p>Connected to <code class="docutils literal notranslate"><span class="pre">sub_tab_widget.currentChanged</span></code> signal</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="updated-methods">
@@ -1796,49 +1788,34 @@
 <section id="removed-components">
 <h4>Removed Components<a class="headerlink" href="#removed-components" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><strong>Deleted <code class="docutils literal notranslate"><span class="pre">_setup_analysis_item_selector()</span></code> method</strong></p>
-<ul>
+<li><p><strong>Deleted <code class="docutils literal notranslate"><span class="pre">_setup_analysis_item_selector()</span></code> method</strong></p></li>
 <li><p>Tabs no longer create their own selector</p></li>
 <li><p>Central selector in parent handles this now</p></li>
-</ul>
-</li>
-<li><p><strong>Removed <code class="docutils literal notranslate"><span class="pre">self.analysis_item_combo</span></code> attribute</strong></p>
-<ul>
+<li><p><strong>Removed <code class="docutils literal notranslate"><span class="pre">self.analysis_item_combo</span></code> attribute</strong></p></li>
 <li><p>Commented out in <code class="docutils literal notranslate"><span class="pre">__init__</span></code></p></li>
 <li><p>All related logic removed</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="simplified-methods">
 <h4>Simplified Methods<a class="headerlink" href="#simplified-methods" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">update_state()</span></code>:</strong></p>
-<ul>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">update_state()</span></code>:</strong></p></li>
 <li><p>Only updates <code class="docutils literal notranslate"><span class="pre">self._analysis_items</span></code></p></li>
 <li><p>Resets <code class="docutils literal notranslate"><span class="pre">self._selected_item_recording</span> <span class="pre">=</span> <span class="pre">None</span></code></p></li>
 <li><p>Clears plot widget if present</p></li>
 <li><p>No longer manages combo box population</p></li>
-</ul>
-</li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">_on_analysis_item_selected()</span></code>:</strong></p>
-<ul>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">_on_analysis_item_selected()</span></code>:</strong></p></li>
 <li><p>Preserved exactly as before</p></li>
 <li><p>Now called externally by parent <code class="docutils literal notranslate"><span class="pre">AnalyserTab</span></code></p></li>
 <li><p>Still handles data loading and UI updates</p></li>
-</ul>
-</li>
 </ul>
 </section>
 <section id="updated-documentation">
 <h4>Updated Documentation<a class="headerlink" href="#updated-documentation" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">_setup_ui()</span></code> docstring updated</p>
-<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">_setup_ui()</span></code> docstring updated</p></li>
 <li><p>Removed requirement to call <code class="docutils literal notranslate"><span class="pre">_setup_analysis_item_selector()</span></code></p></li>
 <li><p>Notes that item selector is now centralized in parent</p></li>
-</ul>
-</li>
 </ul>
 </section>
 </section>
@@ -1847,14 +1824,11 @@
 <section id="high-dpi-support">
 <h4>High DPI Support<a class="headerlink" href="#high-dpi-support" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p><strong>Added High DPI PassThrough policy:</strong></p>
-<ul>
+<li><p><strong>Added High DPI PassThrough policy:</strong></p></li>
 <li><p>Checks for <code class="docutils literal notranslate"><span class="pre">QtCore.Qt.HighDpiScaleFactorRoundingPolicy</span></code> availability</p></li>
 <li><p>Sets <code class="docutils literal notranslate"><span class="pre">PassThrough</span></code> policy before QApplication creation</p></li>
 <li><p>Enables <code class="docutils literal notranslate"><span class="pre">AA_UseHighDpiPixmaps</span></code> attribute</p></li>
 <li><p>Includes error handling and logging</p></li>
-</ul>
-</li>
 </ul>
 </section>
 </section>
@@ -1864,21 +1838,21 @@
 <section id="before">
 <h3>Before<a class="headerlink" href="#before" title="Link to this heading"></a></h3>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>┌─────────────────────────────────────┐
-│     Analysis Input Set (List)       │
+│ Analysis Input Set (List) │
 ├─────────────────────────────────────┤
 │ ┌─────────────────────────────────┐ │
-│ │   RMP Tab                       │ │
-│ │ ┌────────────────────────────┐  │ │
-│ │ │ &quot;Analyze Item:&quot; [Combo ▼]  │  │ │
-│ │ └────────────────────────────┘  │ │
-│ │ [Plot Area - smaller]          │ │
+│ │ RMP Tab │ │
+│ │ ┌────────────────────────────┐ │ │
+│ │ │ &quot;Analyze Item:&quot; [Combo ▼] │ │ │
+│ │ └────────────────────────────┘ │ │
+│ │ [Plot Area - smaller] │ │
 │ └─────────────────────────────────┘ │
 │ ┌─────────────────────────────────┐ │
-│ │   Rin Tab                       │ │
-│ │ ┌────────────────────────────┐  │ │
-│ │ │ &quot;Analyze Item:&quot; [Combo ▼]  │  │ │
-│ │ └────────────────────────────┘  │ │
-│ │ [Plot Area - smaller]          │ │
+│ │ Rin Tab │ │
+│ │ ┌────────────────────────────┐ │ │
+│ │ │ &quot;Analyze Item:&quot; [Combo ▼] │ │ │
+│ │ └────────────────────────────┘ │ │
+│ │ [Plot Area - smaller] │ │
 │ └─────────────────────────────────┘ │
 └─────────────────────────────────────┘
 </pre></div>
@@ -1887,22 +1861,22 @@
 <section id="after">
 <h3>After<a class="headerlink" href="#after" title="Link to this heading"></a></h3>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>┌────────────────────────────────────┬──────────────────┐
-│                                    │ Analysis Input   │
-│  RMP Tab | Rin Tab | Spike Tab    │ Set (List)       │
-│  ┌──────────────────────────────┐ │ ┌──────────────┐ │
-│  │                              │ │ │ File: test1  │ │
-│  │  [Plot Area - 1.2x+ taller]  │ │ │ File: test2  │ │
-│  │                              │ │ └──────────────┘ │
-│  │                              │ │                  │
-│  │                              │ │ Analyze Item:    │
-│  │                              │ │ ┌──────────────┐ │
-│  │                              │ │ │ Item 1: ... ▼│ │
-│  │                              │ │ └──────────────┘ │
-│  │                              │ │                  │
-│  └──────────────────────────────┘ │                  │
-│                                    │                  │
+│ │ Analysis Input │
+│ RMP Tab | Rin Tab | Spike Tab │ Set (List) │
+│ ┌──────────────────────────────┐ │ ┌──────────────┐ │
+│ │ │ │ │ File: test1 │ │
+│ │ [Plot Area - 1.2x+ taller] │ │ │ File: test2 │ │
+│ │ │ │ └──────────────┘ │
+│ │ │ │ │
+│ │ │ │ Analyze Item: │
+│ │ │ │ ┌──────────────┐ │
+│ │ │ │ │ Item 1: ... ▼│ │
+│ │ │ │ └──────────────┘ │
+│ │ │ │ │
+│ └──────────────────────────────┘ │ │
+│ │ │
 └────────────────────────────────────┴──────────────────┘
-         70% (Stretchable)                30%
+ 70% (Stretchable) 30%
 </pre></div>
 </div>
 </section>
@@ -1921,7 +1895,7 @@
 <h2>Testing<a class="headerlink" href="#testing" title="Link to this heading"></a></h2>
 <section id="import-test">
 <h3>Import Test<a class="headerlink" href="#import-test" title="Link to this heading"></a></h3>
-<p>✅ Successfully imports without errors</p>
+<p>Successfully imports without errors</p>
 </section>
 <section id="unit-tests">
 <h3>Unit Tests<a class="headerlink" href="#unit-tests" title="Link to this heading"></a></h3>
@@ -1929,12 +1903,9 @@
 <li><p>Core tests: All passing</p></li>
 <li><p>Explorer tab tests: All passing</p></li>
 <li><p>Main window tests: Mostly passing (1 teardown error unrelated to refactoring)</p></li>
-<li><p>Analysis tab tests: Some failures expected due to removed <code class="docutils literal notranslate"><span class="pre">analysis_item_combo</span></code> attribute</p>
-<ul>
+<li><p>Analysis tab tests: Some failures expected due to removed <code class="docutils literal notranslate"><span class="pre">analysis_item_combo</span></code> attribute</p></li>
 <li><p>Tests need updating to reflect new architecture</p></li>
 <li><p>Functionality works correctly despite test failures</p></li>
-</ul>
-</li>
 </ul>
 </section>
 </section>
@@ -1943,42 +1914,43 @@
 <section id="what-changed-for-analysis-tab-developers">
 <h3>What Changed for Analysis Tab Developers<a class="headerlink" href="#what-changed-for-analysis-tab-developers" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
-<li><p><strong>No longer call <code class="docutils literal notranslate"><span class="pre">_setup_analysis_item_selector()</span></code></strong></p>
+<li><p><strong>No longer call <code class="docutils literal notranslate"><span class="pre">_setup_analysis_item_selector()</span></code></strong></p></li>
+</ol>
 <ul class="simple">
 <li><p>Remove this line from your <code class="docutils literal notranslate"><span class="pre">_setup_ui()</span></code> method</p></li>
 <li><p>Item selector is now in parent sidebar</p></li>
 </ul>
-</li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">update_state()</span></code> signature unchanged</strong></p>
+<ol class="arabic simple" start="2">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">update_state()</span></code> signature unchanged</strong></p></li>
+</ol>
 <ul class="simple">
 <li><p>Still receives <code class="docutils literal notranslate"><span class="pre">analysis_items</span></code> list</p></li>
 <li><p>Still should reset internal state</p></li>
 <li><p>No need to populate combo box anymore</p></li>
 </ul>
-</li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">_on_analysis_item_selected()</span></code> signature unchanged</strong></p>
+<ol class="arabic simple" start="3">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">_on_analysis_item_selected()</span></code> signature unchanged</strong></p></li>
+</ol>
 <ul class="simple">
 <li><p>Will be called by parent when user selects item</p></li>
 <li><p>Still responsible for loading data and updating UI</p></li>
 <li><p>No changes needed to this method</p></li>
 </ul>
-</li>
-</ol>
 </section>
 <section id="example-migration">
 <h3>Example Migration<a class="headerlink" href="#example-migration" title="Link to this heading"></a></h3>
 <p><strong>Before:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_setup_ui</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="n">layout</span> <span class="o">=</span> <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QVBoxLayout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_setup_analysis_item_selector</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>  <span class="c1"># Remove this</span>
-    <span class="c1"># ... rest of UI setup</span>
+ <span class="n">layout</span> <span class="o">=</span> <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QVBoxLayout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">_setup_analysis_item_selector</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="c1"># Remove this</span>
+ <span class="c1"># ... rest of UI setup</span>
 </pre></div>
 </div>
 <p><strong>After:</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_setup_ui</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="n">layout</span> <span class="o">=</span> <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QVBoxLayout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-    <span class="c1"># Item selector removed - now in parent sidebar</span>
-    <span class="c1"># ... rest of UI setup</span>
+ <span class="n">layout</span> <span class="o">=</span> <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QVBoxLayout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+ <span class="c1"># Item selector removed - now in parent sidebar</span>
+ <span class="c1"># ... rest of UI setup</span>
 </pre></div>
 </div>
 </section>
@@ -2035,14 +2007,14 @@ python<span class="w"> </span>-m<span class="w"> </span>Synaptipy
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="EXPLORER_XAXIS_SHIFT_FIX.html" class="btn btn-neutral float-left" title="Explorer X-Axis Shift Fix" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="REFACTORING_FINAL_SUMMARY.html" class="btn btn-neutral float-right" title="Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="REFACTORING_FINAL_SUMMARY.html" class="btn btn-neutral float-right" title="Phase 2 &amp; 3 Refactoring - FINAL SUMMARY" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Mar 08, 2026.
+      <span class="lastupdated">Last updated on Mar 27, 2026.
       </span></p>
   </div>
 
