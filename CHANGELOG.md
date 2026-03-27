@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0b5] - 2026-03-27
+## [0.1.0b6] - 2026-03-27
 
 ### Changed
 
-- Bumped package version to 0.1.0b5.
-- Documentation: standalone installer links point to the GitHub releases page so beta/pre-release assets are visible (not only `/releases/latest`); filename examples updated to v0.1.0b5.
+- Bumped package version to 0.1.0b6.
+- Documentation: standalone installer links point to the GitHub releases page so beta/pre-release assets are visible (not only `/releases/latest`); filename examples updated to v0.1.0b6.
 
 ## [0.1.0b1] - 2026-03-03
 
