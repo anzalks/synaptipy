@@ -1,8 +1,20 @@
-# src/Synaptipy/core/analysis/event_detection.py
+# src/Synaptipy/core/analysis/synaptic_events.py
 # -*- coding: utf-8 -*-
 """
-Analysis functions for detecting synaptic events (miniature, evoked).
-Refactored to use Adaptive Peak Finding and Parametric Matched Filtering.
+Core Protocol Module 4: Synaptic Events.
+
+Consolidates all synaptic event detection methods (adaptive threshold,
+template matching, baseline-peak-kinetics) from event_detection.py into
+one self-contained module.
+
+All registry wrapper functions return::
+
+    {
+        "module_used": "synaptic_events",
+        "metrics": { ... flat result keys ... }
+    }
+
+Exports ``detect_minis_threshold`` as a backward-compatibility alias.
 """
 
 import logging
@@ -18,7 +30,10 @@ from Synaptipy.core.signal_processor import find_artifact_windows
 
 log = logging.getLogger(__name__)
 
-# --- 1. Adaptive Threshold Detection ---
+
+# ---------------------------------------------------------------------------
+# 1. Adaptive Threshold Detection
+# ---------------------------------------------------------------------------
 
 
 def detect_events_threshold(  # noqa: C901
@@ -31,33 +46,15 @@ def detect_events_threshold(  # noqa: C901
     artifact_mask: Optional[np.ndarray] = None,
 ) -> EventDetectionResult:
     """
-    Detects events using Topological Prominence to handle shifting baselines
-    and overlapping events (e.g., EPSCs riding on top of earlier EPSCs).
+    Detect events using topological prominence to handle shifting baselines.
 
-    Incorporates a 2-STD noise baseline check to prevent false positives
-    from noisy fluctuations, while accommodating a wide dynamic range
-    (from <10pA to >400pA).
-
-    Args:
-        data: Signal array.
-        time: Time array (seconds).
-        threshold: Target prominence threshold (positive value).
-        polarity: 'positive' or 'negative'.
-        refractory_period: Minimum time between events (seconds).
-        artifact_mask: Boolean mask for artifact regions.
-
-    Returns:
-        EventDetectionResult
+    Incorporates a 2-STD noise floor check to prevent false positives.
     """
     if data.size < 2 or time.shape != data.shape:
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message="Invalid data/time shape")
 
     try:
-        # Rolling Baseline
-        if len(time) > 1:
-            fs = 1.0 / (time[1] - time[0])
-        else:
-            fs = 10000.0
+        fs = 1.0 / (time[1] - time[0]) if len(time) > 1 else 10000.0
 
         if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
             from scipy.ndimage import median_filter
@@ -73,39 +70,20 @@ def detect_events_threshold(  # noqa: C901
         else:
             baseline_corrected_data = data
 
-        # 1. Rectification
         is_negative = polarity == "negative"
         work_data = -baseline_corrected_data if is_negative else baseline_corrected_data
 
-        # 2. Noise Floor Estimation (Scientific Basis: 2-STD deviation rule)
-        # Use MAD for robust noise deviation estimation resistant to large events
         noise_sd = median_abs_deviation(work_data, scale="normal")
         if noise_sd == 0:
             noise_sd = 1e-12
 
-        # The prominence must clear BOTH the user-defined threshold and
-        # the baseline noise floor (minimum 2 standard deviations) to be
-        # considered a true signal.
         abs_threshold = abs(threshold)
         min_prominence = max(abs_threshold, 2.0 * noise_sd)
 
-        # 3. Refractory & Kinetics Filter
-        if len(time) > 1:
-            fs = 1.0 / (time[1] - time[0])
-        else:
-            fs = 10000.0
-
         distance_samples = max(1, int(refractory_period * fs))
-
-        # Biological Constraint: True synaptic events have a minimal physiological width (e.g., >0.2ms half-width).
-        # This explicitly rejects single-point electrical noise/artifacts that have huge prominence but no duration.
         min_width_samples = max(2, int(0.0002 * fs))
 
-        # 4. Prominence-Based Peak Detection
-        # Topological Prominence handles overlapping "riding" events mathematically perfectly.
-        # However, the event must STILL cross the absolute value threshold from baseline (height)
-        # to qualify under "Threshold Based" user expectations, rejecting pure noise wiggles at +10pA.
-        peaks, properties = signal.find_peaks(
+        peaks, _ = signal.find_peaks(
             work_data,
             prominence=min_prominence,
             height=abs_threshold,
@@ -114,25 +92,16 @@ def detect_events_threshold(  # noqa: C901
         )
 
         n_artifacts_rejected = 0
-
-        # 5. Artifact Filter
         if artifact_mask is not None and len(peaks) > 0:
-            # Mask defines indices where artifacts occur (True = artifact)
-            # Ensure peaks are within bounds
             valid_idx_mask = peaks < len(artifact_mask)
             peaks = peaks[valid_idx_mask]
-
             not_artifact_mask = ~artifact_mask[peaks]
             n_artifacts_rejected = int(np.sum(~not_artifact_mask))
-
             peaks = peaks[not_artifact_mask]
 
-        # 6. Gather Results
         event_indices = peaks.astype(int)
-
         if len(event_indices) > 0:
             event_times = time[event_indices]
-            # Always return the real amplitudes (with original sign)
             event_amplitudes = baseline_corrected_data[event_indices]
         else:
             event_times = np.array([])
@@ -168,21 +137,16 @@ def detect_events_threshold(  # noqa: C901
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
 
 
-# Backward compatibility alias (if needed by other modules not yet updated, though we updated wrappers below)
+# Backward compatibility alias
 detect_minis_threshold = detect_events_threshold
 
 
 @AnalysisRegistry.register(
     "event_detection_threshold",
-    label="Event Detection",
-    method_selector={
-        "Threshold Based": "event_detection_threshold",
-        "Deconvolution (Custom)": "event_detection_deconvolution",
-        "Baseline + Peak + Kinetics": "event_detection_baseline_peak",
-    },
+    label="Event Detection (Threshold)",
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
-        {"type": "event_markers"},
+        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
         {"type": "threshold_line", "param": "threshold"},
         {"type": "artifact_overlay"},
     ],
@@ -192,7 +156,7 @@ detect_minis_threshold = detect_events_threshold
             "label": "Threshold (pA/mV):",
             "type": "float",
             "default": 5.0,
-            "min": 0.0,
+            "min": -1e9,
             "max": 1e9,
             "decimals": 4,
         },
@@ -235,12 +199,12 @@ detect_minis_threshold = detect_events_threshold
 def run_event_detection_threshold_wrapper(
     data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
 ) -> Dict[str, Any]:
+    """Wrapper for adaptive threshold event detection."""
     threshold = kwargs.get("threshold", 5.0)
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
     rolling_baseline_window_ms = kwargs.get("rolling_baseline_window_ms", 100.0)
 
-    # Artifact rejection
     reject_artifacts = kwargs.get("reject_artifacts", False)
     artifact_mask = None
     if reject_artifacts:
@@ -259,18 +223,26 @@ def run_event_detection_threshold_wrapper(
     )
 
     if not result.is_valid:
-        return {"event_error": result.error_message}
+        return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
 
+    _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
     return {
-        "event_count": result.event_count,
-        "frequency_hz": result.frequency_hz,
-        "mean_amplitude": result.mean_amplitude,
-        "amplitude_sd": result.amplitude_sd,
-        "result": result,
+        "module_used": "synaptic_events",
+        "metrics": {
+            "event_count": result.event_count,
+            "frequency_hz": result.frequency_hz,
+            "mean_amplitude": result.mean_amplitude,
+            "amplitude_sd": result.amplitude_sd,
+            "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
+            "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
+            "_result_obj": result,
+        },
     }
 
 
-# --- 2. Parametric Template Matching (Deconvolution Replacement) ---
+# ---------------------------------------------------------------------------
+# 2. Parametric Template Matching
+# ---------------------------------------------------------------------------
 
 
 def detect_events_template(  # noqa: C901
@@ -285,55 +257,22 @@ def detect_events_template(  # noqa: C901
     time: Optional[np.ndarray] = None,
     min_event_distance_ms: float = 0.0,
 ) -> EventDetectionResult:
-    """
-    Detects events using Parametric Template Matching (Matched Filter).
-
-    Args:
-        data: Signal array.
-        sampling_rate: Hz.
-        threshold_std: Detection threshold in units of noise SD (Z-score).
-        tau_rise: Rise time constant (seconds).
-        tau_decay: Decay time constant (seconds).
-        polarity: 'positive' or 'negative'.
-        artifact_mask: Optional boolean mask for artifact regions.
-
-    Returns:
-        EventDetectionResult
-    """
+    """Detect events using matched-filter (template) approach."""
     try:
         dt = 1.0 / sampling_rate
         n_points = len(data)
 
-        # 1. Dynamic Template
-        # Create kernel timeline. Ensure it's long enough to capture the shape.
-        # 5 * tau_decay is usually sufficient for >99% settling.
         kernel_duration = 5 * max(tau_decay, tau_rise)
         t_kernel = np.arange(0, kernel_duration, dt)
 
-        # Bi-exponential: (1 - exp(-t/rise)) * exp(-t/decay) ?
-        # Or diff of exps: exp(-t/decay) - exp(-t/rise) (common for PSPs)
-        # Standard PSP shape: A * (exp(-t/tau_decay) - exp(-t/tau_rise))
-        # Ensure tau_decay > tau_rise for valid shape constraints if using diff-of-exps.
-        # If not, swap or handle? Usually decay > rise.
-
-        # Let's use the standard diff of exps which starts at 0 and goes up.
         if tau_decay == tau_rise:
-            # Alpha function t * exp(-t/tau)
             kernel = t_kernel * np.exp(-t_kernel / tau_decay)
         else:
             kernel = np.exp(-t_kernel / tau_decay) - np.exp(-t_kernel / tau_rise)
 
-        # Normalize: Sum=1 preserves area (charge). Max=1 preserves amplitude.
-        # For detection, Max=1 is often intuitive (template amplitude 1).
-        # "Normalize so its sum or max is 1.0" - use Max=1 so 'threshold'
-        # relates to signal amplitude. We ARE Z-scoring, so this is mainly
-        # for matched filter convenience.
-        # Actually, for matched filter, normalizing energy is common.
-        # Let's stick to Max=1 for simplicity unless noise properties dictate otherwise.
         if np.max(np.abs(kernel)) > 0:
             kernel /= np.max(np.abs(kernel))
 
-        # Rolling Baseline
         if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
             from scipy.ndimage import median_filter
 
@@ -348,42 +287,18 @@ def detect_events_template(  # noqa: C901
         else:
             baseline_corrected_data = data
 
-        # 2. Matched Filter (Cross-Correlation)
         is_negative = polarity == "negative"
         work_data = -baseline_corrected_data if is_negative else baseline_corrected_data
 
-        # "Calculate Cross-Correlation"
-        # signal.correlate or fftconvolve. Correlate flips kernel?
-        # A matched filter for signal s(t) is h(t) = s(-t). Convolution with h(t) is Correlation with s(t).
-        # So we want to correlates data with the template.
-        # mode='same' keeps size matching data.
-
-        # Note: fftconvolve is convolution. geometric correlation of f and g is f * g(-t).
-        # We want to match the shape `kernel` in `work_data`.
-        # So we convolve `work_data` with `kernel[::-1]` (time-reversed kernel).
-
-        template = kernel
-        # Time-reverse for matched filtering via convolution
-        matched_filter_kernel = template[::-1]
-
-        # Use fftconvolve for speed
+        matched_filter_kernel = kernel[::-1]
         filtered_trace = signal.fftconvolve(work_data, matched_filter_kernel, mode="same")
 
-        # 3. Z-Scoring
-        # Robust noise estimation using MAD
         mad = median_abs_deviation(filtered_trace, scale="normal")
-        # (scale='normal' makes it consistent with SD for Gaussian noise)
-
         if mad == 0:
-            mad = 1e-12  # Avoid div/0
+            mad = 1e-12
 
-        # Proper z-score: subtract center (median) and divide by scale (MAD)
         z_score_trace = (filtered_trace - np.median(filtered_trace)) / mad
 
-        # 4. Detection
-        # Find peaks where height > threshold_std
-        # 5. Dynamic Distance
-        # Use user-specified min distance, or fall back to tau_decay
         if min_event_distance_ms > 0:
             min_dist_samples = int((min_event_distance_ms / 1000.0) * sampling_rate)
         else:
@@ -393,19 +308,11 @@ def detect_events_template(  # noqa: C901
 
         peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
 
-        # Correct peak positions: the matched filter output peak is
-        # offset from the actual signal peak due to the template
-        # kernel's asymmetry.  With fftconvolve(data, kernel[::-1],
-        # mode='same'), the z-score peak at index i corresponds to
-        # an actual signal peak near  i + (kernel_peak - kernel_center).
-        # For a fast-rise / slow-decay kernel this offset is large
-        # and negative (e.g. -223 samples for tau_rise=0.5 ms,
-        # tau_decay=5 ms at 20 kHz).  We apply this analytical
-        # shift first, then refine with a small local argmax.
         kernel_peak_idx = int(np.argmax(kernel))
         kernel_center = (len(kernel) - 1) // 2
-        template_offset = kernel_peak_idx - kernel_center  # negative
+        template_offset = kernel_peak_idx - kernel_center
         refine_window = max(3, int(tau_rise * sampling_rate))
+
         if len(peak_indices) > 0:
             corrected_indices = np.empty_like(peak_indices)
             for i, idx in enumerate(peak_indices):
@@ -414,33 +321,18 @@ def detect_events_template(  # noqa: C901
                 win_end = min(n_points, shifted + refine_window + 1)
                 local_peak = np.argmax(work_data[win_start:win_end])
                 corrected_indices[i] = win_start + local_peak
-            # Deduplicate: if multiple detections snap to the same
-            # corrected index, keep only the first occurrence.
             peak_indices = np.unique(corrected_indices)
 
-        # Filter artifacts
         if artifact_mask is not None and len(peak_indices) > 0:
-            # Keep only peaks where mask is False
-            # Ensure indices are within bounds of mask
             n_mask = len(artifact_mask)
             valid_mask = peak_indices < n_mask
-
-            # Check mask value at peak index
             not_artifact = ~artifact_mask[peak_indices[valid_mask]]
+            peak_indices = peak_indices[valid_mask][not_artifact]
 
-            # Combine
-            final_indices = peak_indices[valid_mask][not_artifact]
-            peak_indices = final_indices
-
-        # Map back to results
         event_count = len(peak_indices)
         event_indices = peak_indices.astype(int)
-
-        # For amplitudes, we might want the value from the ORIGINAL data at those indices?
-        # Or the filtered amplitude? Usually original is preferred for "event amplitude".
         event_amplitudes = baseline_corrected_data[event_indices] if event_count > 0 else np.array([])
 
-        # Times
         if time is not None and len(time) == n_points:
             time_axis = time
         else:
@@ -456,8 +348,8 @@ def detect_events_template(  # noqa: C901
             event_times=event_times,
             event_amplitudes=event_amplitudes,
             detection_method="template_matching",
-            tau_rise_ms=tau_rise * 1000,
-            tau_decay_ms=tau_decay * 1000,
+            tau_rise_ms=tau_rise * 1000.0,
+            tau_decay_ms=tau_decay * 1000.0,
             threshold_sd=threshold_std,
             summary_stats={"noise_mad": mad},
             direction=polarity,
@@ -474,7 +366,7 @@ def detect_events_template(  # noqa: C901
     label="Event (Template Match)",
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
-        {"type": "event_markers"},
+        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
         {"type": "threshold_line", "param": "threshold_sd"},
         {"type": "artifact_overlay"},
     ],
@@ -549,7 +441,6 @@ def detect_events_template(  # noqa: C901
             "min": 0.0,
             "max": 100000.0,
             "decimals": 1,
-            # Template matching handles filtering; lowpass may be redundant
             "hidden": True,
         },
     ],
@@ -557,21 +448,15 @@ def detect_events_template(  # noqa: C901
 def run_event_detection_template_wrapper(
     data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
 ) -> Dict[str, Any]:
+    """Wrapper for template-matching event detection."""
     tau_rise_ms = kwargs.get("tau_rise_ms", 0.5)
     tau_decay_ms = kwargs.get("tau_decay_ms", 5.0)
     threshold_sd = kwargs.get("threshold_sd", 4.0)
-    # Filter freq ignored in this new implementation as Template Matching is a filter
+    direction = kwargs.get("direction", "negative")
 
-    # Convert ms to s
     tau_rise = tau_rise_ms / 1000.0
     tau_decay = tau_decay_ms / 1000.0
 
-    # Default polarity?
-    # kwargs might not have polarity if UI didn't pass it.
-    # Default to negative for now or check args?
-    direction = kwargs.get("direction", "negative")
-
-    # Artifact rejection
     reject_artifacts = kwargs.get("reject_artifacts", False)
     artifact_mask = None
     if reject_artifacts:
@@ -593,81 +478,60 @@ def run_event_detection_template_wrapper(
     )
 
     if not result.is_valid:
-        return {"event_error": result.error_message}
+        return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
 
+    _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
     return {
-        "event_count": result.event_count,
-        "tau_rise_ms": result.tau_rise_ms,
-        "tau_decay_ms": result.tau_decay_ms,
-        "threshold_sd": result.threshold_sd,
-        "event_indices": result.event_indices,
-        "result": result,
+        "module_used": "synaptic_events",
+        "metrics": {
+            "event_count": result.event_count,
+            "tau_rise_ms": result.tau_rise_ms,
+            "tau_decay_ms": result.tau_decay_ms,
+            "threshold_sd": result.threshold_sd,
+            "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
+            "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
+            "_result_obj": result,
+        },
     }
 
 
-# Keep the legacy simplified threshold crossing for now or remove?
-# The plan replaced "Mini Detection" (which was threshold) with `detect_events_threshold`.
-# And "Deconvolution" with `detect_events_template`.
-# There was a "Threshold Crossing (Legacy)" block - keeping for
-# compatibility reference. Sticking to requested deliverables.
-# I'll stick to the requested deliverables which were "Generate the complete code for: event_detection.py".
-# The prompt implies I should rewrite it. Ideally I keep *other* unconnected logic if it exists,
-# but the file seemed to only contain:
-# 1. Mini Detection (Threshold) -> Replaced by Phase 1
-# 2. Threshold Crossing (Legacy) -> Redundant with Phase 1?
-# 3. Deconvolution -> Replaced by Phase 2
-# 4. Baseline Peak -> Keep for safety?
-
-# I will append the Baseline Peak code from the original file to ensure no regression for that specific analysis type.
+# ---------------------------------------------------------------------------
+# 3. Baseline + Peak + Kinetics Detection
+# ---------------------------------------------------------------------------
 
 
 def _find_stable_baseline_segment(
-    data: np.ndarray, sample_rate: float, window_duration_s: float = 0.5, step_duration_s: float = 0.1
+    data: np.ndarray,
+    sample_rate: float,
+    window_duration_s: float = 0.5,
+    step_duration_s: float = 0.1,
 ) -> Tuple[Optional[float], Optional[float], Optional[Tuple[int, int]]]:
-    """
-    Find the most stable (lowest variance) segment for baseline estimation.
-
-    Slides a window across the data and returns the segment with minimum variance.
-
-    Args:
-        data: 1D signal array.
-        sample_rate: Sampling rate in Hz.
-        window_duration_s: Duration of each candidate window in seconds.
-        step_duration_s: Step size between windows in seconds.
-
-    Returns:
-        Tuple of (mean, std, (start_idx, end_idx)) for the most stable segment,
-        or (None, None, None) if no valid segment is found.
-    """
+    """Find the most stable (lowest-variance) baseline segment."""
     n_points = len(data)
-    window_samples = int(window_duration_s * sample_rate)
-    step_samples = int(step_duration_s * sample_rate)
+    window_samples = max(2, int(window_duration_s * sample_rate))
+    step_samples = max(1, int(step_duration_s * sample_rate))
 
-    if window_samples < 2:
-        window_samples = 2
-    if step_samples < 1:
-        step_samples = 1
     if window_samples >= n_points:
-        return np.mean(data), np.std(data), (0, n_points)
+        return float(np.mean(data)), float(np.std(data)), (0, n_points)
 
     min_variance = np.inf
-    best = None
-    best_mean = None
-    best_sd = None
+    best: Optional[Tuple[int, int]] = None
+    best_mean: Optional[float] = None
+    best_sd: Optional[float] = None
 
     for i in range(0, n_points - window_samples + 1, step_samples):
         segment = data[i : i + window_samples]
-        variance = np.var(segment)
+        variance = float(np.var(segment))
         if variance < min_variance:
             min_variance = variance
             best = (i, i + window_samples)
-            best_mean = np.mean(segment)
-            best_sd = np.sqrt(variance)
+            best_mean = float(np.mean(segment))
+            best_sd = float(np.sqrt(variance))
 
     return best_mean, best_sd, best
 
 
-def detect_events_baseline_peak_kinetics(
+def detect_events_baseline_peak_kinetics(  # noqa: C901
     data: np.ndarray,
     sample_rate: float,
     direction: str = "negative",
@@ -679,17 +543,16 @@ def detect_events_baseline_peak_kinetics(
     auto_baseline: bool = True,
     rolling_baseline_window_ms: float = 0.0,
 ) -> EventDetectionResult:
+    """Detect events via stable-baseline estimation then prominence-based peak finding."""
     if direction not in ["negative", "positive"]:
         return EventDetectionResult(value=0, unit="counts", is_valid=False, error_message="Invalid direction")
 
-    # Detect Baseline from most stable segment
     baseline_mean, baseline_sd, _ = _find_stable_baseline_segment(data, sample_rate, baseline_window_s, baseline_step_s)
     if baseline_mean is None:
         return EventDetectionResult(value=0, unit="counts", is_valid=True, event_count=0)
 
     is_negative = direction == "negative"
 
-    # Optional rolling baseline subtraction to handle slow drift
     if rolling_baseline_window_ms > 0:
         from scipy.ndimage import median_filter
 
@@ -704,23 +567,17 @@ def detect_events_baseline_peak_kinetics(
     else:
         work_data = data
 
-    # Rectify for peak detection
     signal_to_process = -work_data if is_negative else work_data
 
-    # Use robust noise estimate (MAD) to avoid overly sensitive thresholds
     noise_sd = median_abs_deviation(signal_to_process, scale="normal")
     if noise_sd == 0:
-        noise_sd = baseline_sd if baseline_sd > 0 else 1e-12
+        noise_sd = baseline_sd if baseline_sd and baseline_sd > 0 else 1e-12
 
-    # Threshold: SD-factor applied to robust noise estimate
     threshold_val = threshold_sd_factor * noise_sd
 
-    # Filtering
     if filter_freq_hz and filter_freq_hz > 0:
         try:
             sos = signal.butter(4, filter_freq_hz, "low", fs=sample_rate, output="sos")
-            # Use sosfilt forward+backward instead of sosfiltfilt to avoid
-            # lfilter_zi → numpy.linalg.solve SIGBUS on macOS ARM + scipy 1.16 + numpy 1.26
             signal_c = np.ascontiguousarray(signal_to_process, dtype=np.float64)
             sos_c = np.ascontiguousarray(sos, dtype=np.float64)
             fwd = signal.sosfilt(sos_c, signal_c)
@@ -730,9 +587,7 @@ def detect_events_baseline_peak_kinetics(
     else:
         filtered = signal_to_process
 
-    # Peak detection with prominence requirement to reject noise
     min_dist = max(1, int(min_event_separation_ms / 1000.0 * sample_rate))
-    # Minimum width to reject single-sample noise spikes (>0.2ms)
     min_width = max(2, int(0.0002 * sample_rate))
     peaks, _ = signal.find_peaks(
         filtered,
@@ -742,7 +597,6 @@ def detect_events_baseline_peak_kinetics(
         width=min_width,
     )
 
-    # Revert threshold to original data scale for visualization
     display_threshold_val = -threshold_val if is_negative else threshold_val
 
     return EventDetectionResult(
@@ -762,7 +616,7 @@ def detect_events_baseline_peak_kinetics(
     label="Event (Baseline Peak)",
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
-        {"type": "event_markers"},
+        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
         {"type": "artifact_overlay"},
     ],
     ui_params=[
@@ -816,6 +670,7 @@ def detect_events_baseline_peak_kinetics(
 def run_event_detection_baseline_peak_wrapper(
     data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
 ) -> Dict[str, Any]:
+    """Wrapper for baseline-peak event detection."""
     direction = kwargs.get("direction", "negative")
     result = detect_events_baseline_peak_kinetics(
         data,
@@ -829,5 +684,33 @@ def run_event_detection_baseline_peak_wrapper(
         rolling_baseline_window_ms=kwargs.get("rolling_baseline_window_ms", 100.0),
     )
     if not result.is_valid:
-        return {"event_error": result.error_message}
-    return {"event_count": result.event_count, "result": result}
+        return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
+    _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
+    return {
+        "module_used": "synaptic_events",
+        "metrics": {
+            "event_count": result.event_count,
+            "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
+            "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
+            "_result_obj": result,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Module-level tab aggregator
+# ---------------------------------------------------------------------------
+@AnalysisRegistry.register(
+    "synaptic_events",
+    label="Synaptic Events",
+    method_selector={
+        "Threshold Based": "event_detection_threshold",
+        "Deconvolution (Custom)": "event_detection_deconvolution",
+        "Baseline + Peak + Kinetics": "event_detection_baseline_peak",
+    },
+    ui_params=[],
+    plots=[],
+)
+def synaptic_events_module(**kwargs):
+    """Module-level aggregator tab for synaptic event detection analyses."""
+    return {}

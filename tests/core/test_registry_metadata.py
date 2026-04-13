@@ -55,7 +55,7 @@ def test_spike_detection_metadata():
     # Re-import to ensure registration runs after clear()
     import importlib
 
-    import Synaptipy.core.analysis.spike_analysis as sa
+    import Synaptipy.core.analysis.single_spike as sa
 
     importlib.reload(sa)
 
@@ -121,18 +121,13 @@ def test_full_package_import_populates_registry():
     """
     import importlib
 
-    import Synaptipy.core.analysis.basic_features as m0
-    import Synaptipy.core.analysis.burst_analysis as m5
-    import Synaptipy.core.analysis.capacitance as m7
-    import Synaptipy.core.analysis.event_detection as m3
-    import Synaptipy.core.analysis.excitability as m6
-    import Synaptipy.core.analysis.intrinsic_properties as m2
-    import Synaptipy.core.analysis.optogenetics as m8
-    import Synaptipy.core.analysis.phase_plane as m4
-    import Synaptipy.core.analysis.spike_analysis as m1
-    import Synaptipy.core.analysis.train_dynamics as m9
+    import Synaptipy.core.analysis.evoked_responses as m4
+    import Synaptipy.core.analysis.firing_dynamics as m2
+    import Synaptipy.core.analysis.passive_properties as m0
+    import Synaptipy.core.analysis.single_spike as m1
+    import Synaptipy.core.analysis.synaptic_events as m3
 
-    for module in (m0, m1, m2, m3, m4, m5, m6, m7, m8, m9):
+    for module in (m0, m1, m2, m3, m4):
         importlib.reload(module)
 
     registered = set(AnalysisRegistry.list_registered())

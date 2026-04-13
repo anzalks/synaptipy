@@ -478,16 +478,18 @@ class TestRegisteredAnalyses:
         # We need to reload the modules to re-register the functions
         import importlib
 
-        import Synaptipy.core.analysis.basic_features as basic_mod
-        import Synaptipy.core.analysis.event_detection as event_mod
-        import Synaptipy.core.analysis.intrinsic_properties as intrinsic_mod
-        import Synaptipy.core.analysis.spike_analysis as spike_mod
+        import Synaptipy.core.analysis.evoked_responses as er_mod
+        import Synaptipy.core.analysis.firing_dynamics as fd_mod
+        import Synaptipy.core.analysis.passive_properties as passive_mod
+        import Synaptipy.core.analysis.single_spike as spike_mod
+        import Synaptipy.core.analysis.synaptic_events as event_mod
 
         # Reload to trigger decorator registration
+        importlib.reload(passive_mod)
         importlib.reload(spike_mod)
-        importlib.reload(basic_mod)
-        importlib.reload(intrinsic_mod)
+        importlib.reload(fd_mod)
         importlib.reload(event_mod)
+        importlib.reload(er_mod)
 
     def test_spike_detection_registered(self):
         """Test that spike_detection is registered."""
@@ -526,8 +528,8 @@ class TestRegisteredAnalyses:
         result = func(data, time, sampling_rate, threshold=-20.0, refractory_ms=2.0)
 
         assert isinstance(result, dict)
-        assert "spike_count" in result
-        assert "mean_freq_hz" in result
+        assert "spike_count" in result["metrics"]
+        assert "mean_freq_hz" in result["metrics"]
 
     def test_rmp_analysis_wrapper_returns_dict(self):
         """Test that rmp_analysis wrapper returns proper dict."""
@@ -541,8 +543,8 @@ class TestRegisteredAnalyses:
         result = func(data, time, sampling_rate, baseline_start=0.0, baseline_end=0.5)
 
         assert isinstance(result, dict)
-        assert "rmp_mv" in result
-        assert result["rmp_mv"] == pytest.approx(-65.0, abs=0.1)
+        assert "rmp_mv" in result["metrics"]
+        assert result["metrics"]["rmp_mv"] == pytest.approx(-65.0, abs=0.1)
 
 
 class TestBatchOutputEnrichment:
@@ -778,18 +780,13 @@ class TestBatchAllAnalysisTypes:
     @classmethod
     def setup_class(cls):
         """Ensure all analysis modules are imported and registered."""
-        import Synaptipy.core.analysis.basic_features as bf
-        import Synaptipy.core.analysis.burst_analysis as ba
-        import Synaptipy.core.analysis.capacitance as cap
-        import Synaptipy.core.analysis.event_detection as ed
-        import Synaptipy.core.analysis.excitability as exc
-        import Synaptipy.core.analysis.intrinsic_properties as ip
-        import Synaptipy.core.analysis.optogenetics as opto
-        import Synaptipy.core.analysis.phase_plane as pp
-        import Synaptipy.core.analysis.spike_analysis as sa
-        import Synaptipy.core.analysis.train_dynamics as td
+        import Synaptipy.core.analysis.evoked_responses as er_mod
+        import Synaptipy.core.analysis.firing_dynamics as fd_mod
+        import Synaptipy.core.analysis.passive_properties as pp_mod
+        import Synaptipy.core.analysis.single_spike as ss_mod
+        import Synaptipy.core.analysis.synaptic_events as se_mod
 
-        for mod in [bf, sa, ed, ba, exc, ip, pp, cap, opto, td]:
+        for mod in [pp_mod, ss_mod, fd_mod, se_mod, er_mod]:
             importlib.reload(mod)
 
     def _run_batch_single(
@@ -1155,9 +1152,10 @@ class TestBatchAllAnalysisTypes:
             [data],
         )
         self._assert_common_columns(df, "train_dynamics", "first_trial")
-        # train_dynamics requires at least 2 spikes for ISI calculations
-        assert "error" in df.columns
-        assert "spike" in str(df.iloc[0]["error"]).lower()
+        # train_dynamics requires at least 2 spikes for ISI calculations;
+        # the wrapper now returns a graceful error key instead of raising.
+        assert "train_dynamics_error" in df.columns
+        assert "spike" in str(df.iloc[0]["train_dynamics_error"]).lower()
 
     # ------------------------------------------------------------------
     # Cross-cutting: all_trials scope

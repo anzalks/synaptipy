@@ -690,6 +690,10 @@ class BatchAnalysisEngine:
                     p.pop("trial_index", None)
 
                     res = analysis_func(d, t, sampling_rate, **p)
+                    # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
+                    if "metrics" in res and isinstance(res.get("metrics"), dict):
+                        metrics = res.pop("metrics")
+                        res.update(metrics)
                     # Add metadata
                     res.update(
                         {
@@ -716,6 +720,10 @@ class BatchAnalysisEngine:
                     if scope == "channel_set":
                         # Pass full list
                         res = analysis_func(data, time, sampling_rate, **params)
+                        # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
+                        if "metrics" in res and isinstance(res.get("metrics"), dict):
+                            metrics = res.pop("metrics")
+                            res.update(metrics)
                         res.update(
                             {
                                 "file_name": file_path.name,

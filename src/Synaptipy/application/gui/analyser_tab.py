@@ -430,7 +430,28 @@ class AnalyserTab(QtWidgets.QWidget):
             if hasattr(tab, "get_covered_analysis_names"):
                 loaded_registry_names.update(tab.get_covered_analysis_names())
 
-        for analysis_name in registered_analyses:
+        # Enforce a fixed logical order for the core module tabs.
+        # Tabs whose registry name appears in CORE_ORDER come first in that order;
+        # all other registered entries (custom/plugin tabs) are appended after.
+        CORE_ORDER = [
+            "passive_properties",
+            "single_spike",
+            "synaptic_events",
+            "firing_dynamics",
+            "evoked_responses",
+        ]
+
+        def _tab_sort_key(name):
+            meta = AnalysisRegistry.get_metadata(name) or {}
+            has_selector = "method_selector" in meta
+            try:
+                core_rank = CORE_ORDER.index(name)
+            except ValueError:
+                # Not a core module: module-level non-core tabs before leaf tabs, then alpha
+                core_rank = len(CORE_ORDER) + (0 if has_selector else 1)
+            return (core_rank, name)
+
+        for analysis_name in sorted(registered_analyses, key=_tab_sort_key):
             if analysis_name not in loaded_registry_names:
                 log.debug(f"Loading metadata-driven tab for: {analysis_name}")
                 try:
@@ -440,6 +461,10 @@ class AnalyserTab(QtWidgets.QWidget):
                         settings_ref=self._settings,
                         parent=self,
                     )
+                    # Mark all names covered by this tab (self + method_selector children)
+                    # so they do not receive their own redundant tab.
+                    if hasattr(tab_instance, "get_covered_analysis_names"):
+                        loaded_registry_names.update(tab_instance.get_covered_analysis_names())
                     self.sub_tab_widget.addTab(tab_instance, tab_instance.get_display_name())
                     self._loaded_analysis_tabs.append(tab_instance)
 

@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 from PySide6 import QtCore
 
-from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
 from Synaptipy.core.results import SpikeTrainResult
 from Synaptipy.shared.data_cache import DataCache
 

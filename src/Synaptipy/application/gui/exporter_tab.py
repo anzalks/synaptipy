@@ -461,9 +461,14 @@ class ExporterTab(QtWidgets.QWidget):
         ]  # Only count one selection per row
 
     @staticmethod
-    def _flatten_result(res: dict) -> dict:
+    def _flatten_result(res: dict) -> dict:  # noqa: C901
         """Flatten a single result dict, expanding nested objects/dicts."""
         flat_res = dict(res)
+        # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
+        if isinstance(flat_res.get("metrics"), dict):
+            for k, v in flat_res.pop("metrics").items():
+                if k not in flat_res:
+                    flat_res[k] = v
         nested_obj = flat_res.get("result")
         if hasattr(nested_obj, "__dict__"):
             for k, v in nested_obj.__dict__.items():

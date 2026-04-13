@@ -9,7 +9,7 @@ Events (Template)).
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.optogenetics import (
+from Synaptipy.core.analysis.evoked_responses import (
     extract_ttl_epochs,
     run_opto_sync_wrapper,
 )
@@ -86,12 +86,12 @@ class TestOptoSyncWrapperSpikes:
 
         result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=-10.0)
 
-        assert "optical_latency_ms" in result
-        assert "response_probability" in result
-        assert "stimulus_count" in result
-        assert result["stimulus_count"] == 3
-        assert "event_times" in result
-        assert isinstance(result["event_times"], list)
+        assert "optical_latency_ms" in result["metrics"]
+        assert "response_probability" in result["metrics"]
+        assert "stimulus_count" in result["metrics"]
+        assert result["metrics"]["stimulus_count"] == 3
+        assert "event_times" in result["metrics"]
+        assert isinstance(result["metrics"]["event_times"], list)
 
     def test_response_probability_full(self):
         """All three stimuli get a response → probability == 1.0."""
@@ -104,7 +104,7 @@ class TestOptoSyncWrapperSpikes:
             data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=-10.0, response_window_ms=20.0
         )
 
-        assert result.get("response_probability") == pytest.approx(1.0, abs=0.01)
+        assert result["metrics"].get("response_probability") == pytest.approx(1.0, abs=0.01)
 
     def test_no_spikes(self):
         """No spikes → probability 0."""
@@ -115,7 +115,7 @@ class TestOptoSyncWrapperSpikes:
         result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=0.0)
 
         # Response probability should be 0
-        assert result.get("response_probability") == pytest.approx(0.0)
+        assert result["metrics"].get("response_probability") == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -146,9 +146,9 @@ class TestOptoSyncWrapperEventsThreshold:
             response_window_ms=40.0,
         )
 
-        assert "optical_latency_ms" in result
-        assert "stimulus_count" in result
-        assert result["stimulus_count"] == 3
+        assert "optical_latency_ms" in result["metrics"]
+        assert "stimulus_count" in result["metrics"]
+        assert result["metrics"]["stimulus_count"] == 3
 
     def test_event_count_key_present(self):
         sr = 10_000.0
@@ -164,9 +164,9 @@ class TestOptoSyncWrapperEventsThreshold:
             event_threshold=5.0,
         )
 
-        assert "event_count" in result
-        assert "event_times" in result
-        assert isinstance(result["event_times"], list)
+        assert "event_count" in result["metrics"]
+        assert "event_times" in result["metrics"]
+        assert isinstance(result["metrics"]["event_times"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +192,8 @@ class TestOptoSyncWrapperEventsTemplate:
             response_window_ms=30.0,
         )
 
-        assert "stimulus_count" in result
-        assert "event_count" in result
+        assert "stimulus_count" in result["metrics"]
+        assert "event_count" in result["metrics"]
 
     def test_unknown_type_falls_back_gracefully(self):
         """Unrecognised event_detection_type should not raise, just return no events."""
