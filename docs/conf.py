@@ -141,9 +141,8 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     ".DS_Store",
-    # Agentic / developer-internal files — not part of public docs
-    "../.agent/rules.md",
-    "../.github/copilot-instructions.md",
+    ".agent/*",
+    ".github/*",
     "decisions/REFACTORING_GUIDE.md",
 ]
 
