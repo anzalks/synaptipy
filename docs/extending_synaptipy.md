@@ -36,7 +36,7 @@ and batch engine the next time the application starts.
 6. [Where to Put Your Plugin File](#6-where-to-put-your-plugin-file)
 7. [For Core Contributors — Adding a Built-in Analysis](#7-for-core-contributors--adding-a-built-in-analysis)
 8. [Testing Your Plugin](#8-testing-your-plugin)
-9. [Full Annotated Example — Signal-to-Noise Ratio](#9-full-annotated-example--signal-to-noise-ratio)
+9. [Full Annotated Example — Synaptic Charge Transfer](#9-full-annotated-example--synaptic-charge-transfer)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---
@@ -51,9 +51,12 @@ function and its metadata (parameter definitions, plot overlays, label, etc.).
 At startup, Synaptipy:
 
 1. Loads all **built-in** analyses from `src/Synaptipy/core/analysis/`.
-2. Scans `~/.synaptipy/plugins/` for `.py` files and imports each one.
-   Importing executes the `@AnalysisRegistry.register` decorators, adding your
-   functions to the registry.
+2. Scans **two** plugin directories in order:
+   - `examples/plugins/` inside the Synaptipy installation — shipped example
+     plugins that work out-of-the-box without any extra setup.
+   - `~/.synaptipy/plugins/` — your personal or third-party additions.
+   If a file with the same stem name exists in both directories, the user copy
+   takes precedence and a warning is written to the log.
 3. Builds the Analyser GUI.  For every registered analysis that does *not*
    already have a hand-coded tab class, a **metadata-driven tab is created
    automatically** — complete with parameter widgets, a Run button, a results
@@ -465,7 +468,18 @@ Plot the trace with optional spike/event markers.
 
 ## 6. Where to Put Your Plugin File
 
-### Option A: User Plugin Directory (recommended for end users)
+### Option A: Built-in Examples Directory
+
+Synaptipy ships ready-to-run example plugins in `examples/plugins/`.  These are
+loaded automatically at startup so you can try them immediately and use them as
+templates:
+
+| File | Analysis |
+|------|----------|
+| `examples/plugins/opto_jitter.py` | Optogenetic latency jitter across trials |
+| `examples/plugins/ap_repolarization.py` | Maximum action-potential repolarization rate |
+
+### Option B: User Plugin Directory (recommended for personal additions)
 
 | Platform | Full path |
 |----------|----------|
@@ -478,7 +492,7 @@ Plot the trace with optional spike/event markers.
 - Will not be overwritten by upgrades.
 - On Windows, open the folder with `%USERPROFILE%\.synaptipy\plugins` in Explorer.
 
-### Option B: Built-in Module (for core contributors)
+### Option C: Built-in Module (for core contributors)
 
 If you are contributing to the Synaptipy repository itself:
 
@@ -568,91 +582,106 @@ conda run -n synaptipy python -m pytest tests/core/test_plugin_template.py -v
 
 ---
 
-## 9. Full Annotated Example — Signal-to-Noise Ratio
+## 9. Full Annotated Example — Synaptic Charge Transfer
 
-Save this as `~/.synaptipy/plugins/snr_analysis.py`:
+This example measures the **total synaptic charge** ($Q$, in picocoulombs)
+delivered during a postsynaptic current by integrating the current trace inside
+a user-defined time window using the trapezoidal rule.
+
+$$Q = \int_{t_1}^{t_2} I(t)\, dt$$
+
+For a current trace in pA and time in seconds the result is in pA·s = pC.
+
+Save this as `~/.synaptipy/plugins/synaptic_charge.py` (or copy it from
+`examples/plugins/`):
 
 ```python
 """
-Custom Synaptipy Plugin: Signal-to-Noise Ratio (SNR) Analysis.
+Custom Synaptipy Plugin: Synaptic Charge Transfer (Area Under Curve).
 
 Drop this file in ~/.synaptipy/plugins/ and restart Synaptipy.
-A new "Signal-to-Noise Ratio" tab will appear in the Analyser.
+A new "Synaptic Charge Transfer" tab will appear in the Analyser.
 """
-import numpy as np
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
+import numpy as np
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
 
 # ── Part 1: Pure logic ─────────────────────────────────────────────
-def calculate_snr(
+def calculate_synaptic_charge(
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
-    noise_start: float,
-    noise_end: float,
-    signal_start: float,
-    signal_end: float,
+    window_start: float,
+    window_end: float,
+    baseline_start: float,
+    baseline_end: float,
 ) -> Dict[str, Any]:
     """
-    Calculate signal-to-noise ratio.
+    Integrate the baseline-subtracted current trace to obtain total charge.
 
     Args:
-        data: 1-D voltage trace.
-        time: 1-D time array in seconds.
+        data: 1-D current trace in pA.
+        time: 1-D time array in seconds, same length as data.
         sampling_rate: Sampling rate in Hz.
-        noise_start: Start of the noise-only window (seconds).
-        noise_end: End of the noise-only window (seconds).
-        signal_start: Start of the signal window (seconds).
-        signal_end: End of the signal window (seconds).
+        window_start: Start of the integration window (seconds).
+        window_end: End of the integration window (seconds).
+        baseline_start: Start of the baseline window (seconds).
+        baseline_end: End of the baseline window (seconds).
 
     Returns:
-        Dict with 'snr_db', 'noise_rms', 'signal_rms'.
+        Dict with 'Total_Charge_pC' and hidden keys for plot overlays.
+        Returns {'error': ...} on invalid input.
     """
     if data.size == 0:
         return {"error": "Empty data array"}
 
-    # Convert time boundaries to sample indices
-    noise_i0 = int(np.searchsorted(time, noise_start, side="left"))
-    noise_i1 = int(np.searchsorted(time, noise_end, side="right"))
-    sig_i0 = int(np.searchsorted(time, signal_start, side="left"))
-    sig_i1 = int(np.searchsorted(time, signal_end, side="right"))
+    # Baseline window
+    bl_i0 = int(np.searchsorted(time, baseline_start, side="left"))
+    bl_i1 = int(np.searchsorted(time, baseline_end, side="right"))
+    baseline_seg = data[bl_i0:bl_i1]
+    if baseline_seg.size < 2:
+        return {"error": "Baseline window too narrow (need >= 2 samples)"}
+    baseline_mean = float(np.mean(baseline_seg))
 
-    noise_segment = data[noise_i0:noise_i1]
-    signal_segment = data[sig_i0:sig_i1]
+    # Integration window
+    win_i0 = int(np.searchsorted(time, window_start, side="left"))
+    win_i1 = int(np.searchsorted(time, window_end, side="right"))
+    win_time = time[win_i0:win_i1]
+    win_data = data[win_i0:win_i1] - baseline_mean
 
-    if noise_segment.size < 2 or signal_segment.size < 2:
-        return {"error": "Window too narrow — need at least 2 samples"}
+    if win_data.size < 2:
+        return {"error": "Integration window too narrow (need >= 2 samples)"}
 
-    noise_rms = float(np.sqrt(np.mean(noise_segment ** 2)))
-    signal_rms = float(np.sqrt(np.mean(signal_segment ** 2)))
-
-    if noise_rms == 0:
-        return {"error": "Noise RMS is zero — cannot compute SNR"}
-
-    snr_db = float(20.0 * np.log10(signal_rms / noise_rms))
+    # np.trapz integrates pA * s = pC
+    charge_pC = float(np.trapz(win_data, win_time))
 
     return {
-        "snr_db": round(snr_db, 2),
-        "noise_rms": round(noise_rms, 4),
-        "signal_rms": round(signal_rms, 4),
-        # Hidden keys for plot overlays (not shown in results table)
-        "_noise_level": noise_rms,
-        "_signal_level": signal_rms,
+        "module_used": "synaptic_charge",
+        "metrics": {
+            "Total_Charge_pC": round(charge_pC, 4),
+        },
+        # Scalar top-level key for the results table
+        "Total_Charge_pC": round(charge_pC, 4),
+        "Baseline_pA": round(baseline_mean, 4),
+        # Private keys for plot overlays
+        "_baseline_level": baseline_mean,
     }
 
 
 # ── Part 2: Registry wrapper ──────────────────────────────────────
 @AnalysisRegistry.register(
-    name="snr_analysis",
-    label="Signal-to-Noise Ratio",
+    name="synaptic_charge",
+    label="Synaptic Charge Transfer",
     ui_params=[
         {
-            "name": "noise_start",
-            "label": "Noise Window Start (s):",
+            "name": "baseline_start",
+            "label": "Baseline Start (s):",
             "type": "float",
             "default": 0.0,
             "min": 0.0,
@@ -660,61 +689,71 @@ def calculate_snr(
             "decimals": 4,
         },
         {
-            "name": "noise_end",
-            "label": "Noise Window End (s):",
+            "name": "baseline_end",
+            "label": "Baseline End (s):",
             "type": "float",
-            "default": 0.1,
+            "default": 0.05,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
         },
         {
-            "name": "signal_start",
-            "label": "Signal Window Start (s):",
+            "name": "window_start",
+            "label": "Integration Start (s):",
             "type": "float",
-            "default": 0.1,
+            "default": 0.05,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
         },
         {
-            "name": "signal_end",
-            "label": "Signal Window End (s):",
+            "name": "window_end",
+            "label": "Integration End (s):",
             "type": "float",
-            "default": 0.5,
+            "default": 0.3,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
         },
     ],
     plots=[
-        # Draggable region for noise window (blue)
-        {"type": "interactive_region", "data": ["noise_start", "noise_end"], "color": "b"},
-        # Draggable region for signal window (green)
-        {"type": "interactive_region", "data": ["signal_start", "signal_end"], "color": "g"},
-        # Horizontal line at noise RMS level
-        {"type": "hlines", "data": ["_noise_level"], "color": "b", "styles": ["dash"]},
-        # Horizontal line at signal RMS level
-        {"type": "hlines", "data": ["_signal_level"], "color": "g", "styles": ["solid"]},
+        # Draggable region over the baseline window
+        {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "b"},
+        # Draggable region over the integration window
+        {"type": "interactive_region", "data": ["window_start", "window_end"], "color": "g"},
+        # Horizontal line at the baseline level
+        {"type": "hlines", "data": ["_baseline_level"], "color": "b", "styles": ["dash"]},
     ],
 )
-def run_snr_wrapper(
+def run_synaptic_charge_wrapper(
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
     **kwargs,
 ) -> Dict[str, Any]:
-    """Registry wrapper — extracts kwargs and calls pure logic."""
-    return calculate_snr(
+    """Registry wrapper - extracts kwargs and calls pure logic."""
+    return calculate_synaptic_charge(
         data=data,
         time=time,
         sampling_rate=sampling_rate,
-        noise_start=kwargs.get("noise_start", 0.0),
-        noise_end=kwargs.get("noise_end", 0.1),
-        signal_start=kwargs.get("signal_start", 0.1),
-        signal_end=kwargs.get("signal_end", 0.5),
+        window_start=kwargs.get("window_start", 0.05),
+        window_end=kwargs.get("window_end", 0.3),
+        baseline_start=kwargs.get("baseline_start", 0.0),
+        baseline_end=kwargs.get("baseline_end", 0.05),
     )
 ```
+
+The key design points illustrated here:
+- A dedicated **baseline window** is used to subtract the holding current
+  before integration, keeping the result physically meaningful.
+- `np.trapz` is used for trapezoidal integration (not a simple sum), which is
+  exact for linear interpolations between sample points.
+- The return dict follows the **nested output schema** `{"module_used": ...,
+  "metrics": {...}}` alongside flat scalar keys for the results table.
+- Two `interactive_region` overlays let the user drag both windows directly on
+  the trace without typing numbers.
+- `_baseline_level` (private key) feeds the `hlines` overlay without appearing
+  in the results table.
 
 ---
 

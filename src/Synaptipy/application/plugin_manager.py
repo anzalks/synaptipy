@@ -3,9 +3,17 @@
 """
 Plugin Manager for Synaptipy.
 
-Scans the user's plugin directory (`~/.synaptipy/plugins/`) and dynamically
-loads external Python scripts. Any script using the @AnalysisRegistry.register
-decorator will automatically populate the UI and Batch Engine.
+Scans two plugin directories and dynamically loads external Python scripts.
+Any script using the @AnalysisRegistry.register decorator will automatically
+populate the UI and Batch Engine.
+
+Search order:
+1. Built-in examples: ``<project_root>/examples/plugins/`` - shipped with the
+   package so features work out-of-the-box.
+2. User plugins: ``~/.synaptipy/plugins/`` - personal or third-party additions.
+
+When the same stem name appears in both directories the user's copy takes
+precedence and a warning is logged.
 
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
@@ -22,13 +30,19 @@ log = logging.getLogger(__name__)
 # Default location for 3rd-party user plugins
 PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 
+# Built-in example plugins shipped alongside the source tree.
+# Resolved relative to this file: src/Synaptipy/application/ -> project_root
+_THIS_FILE = Path(__file__).resolve()
+_PROJECT_ROOT = _THIS_FILE.parents[3]  # src/Synaptipy/application -> project root
+EXAMPLES_PLUGIN_DIR = _PROJECT_ROOT / "examples" / "plugins"
+
 
 class PluginManager:
     """Manages the discovery, loading, and registration of third-party plugins."""
 
     @classmethod
     def create_plugin_directory(cls):
-        """Ensures the plugin directory exists."""
+        """Ensures the user plugin directory exists."""
         try:
             PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
             log.debug(f"Plugin directory verified at: {PLUGIN_DIR}")
@@ -37,52 +51,74 @@ class PluginManager:
 
     @classmethod
     def get_plugin_files(cls) -> List[Path]:
-        """Returns a list of all .py files in the plugin directory."""
-        if not PLUGIN_DIR.exists():
-            return []
+        """
+        Returns a deduplicated list of plugin ``.py`` files from both
+        ``examples/plugins/`` and ``~/.synaptipy/plugins/``.
 
-        # Only loading top-level python files for safety and simplicity
-        plugin_files = list(PLUGIN_DIR.glob("*.py"))
-        # Exclude __init__.py if it exists
-        return [f for f in plugin_files if f.name != "__init__.py"]
+        The user directory takes precedence: if a file with the same stem
+        exists in both locations, the examples copy is skipped and a warning
+        is emitted so the author knows their local version is active.
+        """
+        search_dirs = [EXAMPLES_PLUGIN_DIR, PLUGIN_DIR]
+        seen_stems: dict = {}  # stem -> Path that claimed it first (user wins)
+        result: List[Path] = []
+
+        # Collect user plugins first so they shadow examples
+        for search_dir in reversed(search_dirs):
+            if not (search_dir.exists() and search_dir.is_dir()):
+                continue
+            for p_file in sorted(search_dir.glob("*.py")):
+                if p_file.name == "__init__.py":
+                    continue
+                stem = p_file.stem
+                if stem in seen_stems:
+                    log.warning(
+                        f"Plugin name collision: '{p_file.name}' in {search_dir} "
+                        f"is shadowed by the user copy at {seen_stems[stem]}. "
+                        "The user copy will be used."
+                    )
+                else:
+                    seen_stems[stem] = p_file
+                    result.append(p_file)
+
+        return result
 
     @classmethod
     def load_plugins(cls):
         """
-        Dynamically imports all plugins found in the plugin directory.
-        Gracefully catches ImportErrors or SyntaxErrors so a bad plugin
-        does not crash the main application.
+        Dynamically imports all plugins discovered by ``get_plugin_files()``.
+
+        Plugins from ``examples/plugins/`` are loaded first, then user plugins.
+        A bad plugin (``ImportError``, ``SyntaxError``, or any other exception)
+        is skipped gracefully so it does not crash the main application.
         """
         cls.create_plugin_directory()
         plugin_files = cls.get_plugin_files()
 
         if not plugin_files:
-            log.debug("No third-party plugins found.")
+            log.debug("No plugins found.")
             return
 
         log.info(f"Discovered {len(plugin_files)} plugin(s). Attempting to load...")
 
-        # Add the plugin directory to sys.path so plugins can potentially
-        # import local helper files if they need to, although top-level is preferred.
-        plugin_str_path = str(PLUGIN_DIR)
-        if plugin_str_path not in sys.path:
-            sys.path.insert(0, plugin_str_path)
+        # Make both plugin directories importable so plugins can pull in
+        # sibling helper modules if they need to.
+        for search_dir in (EXAMPLES_PLUGIN_DIR, PLUGIN_DIR):
+            dir_str = str(search_dir)
+            if search_dir.is_dir() and dir_str not in sys.path:
+                sys.path.insert(0, dir_str)
 
         for p_file in plugin_files:
             module_name = f"synaptipy_plugin_{p_file.stem}"
             try:
-                # Use standard importlib to dynamically load the module from file path
                 spec = importlib.util.spec_from_file_location(module_name, str(p_file))
                 if spec is None or spec.loader is None:
                     log.warning(f"Could not load plugin specification for {p_file.name}")
                     continue
 
                 module = importlib.util.module_from_spec(spec)
-
-                # We need to manually add the module to sys.modules
                 sys.modules[module_name] = module
-
-                # Execute the module (This triggers the @AnalysisRegistry.register decorators!)
+                # Executing the module triggers @AnalysisRegistry.register decorators.
                 spec.loader.exec_module(module)
 
                 log.info(f"Successfully loaded plugin: {p_file.name}")
