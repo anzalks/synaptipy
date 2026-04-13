@@ -315,13 +315,24 @@ def calculate_optogenetic_sync(
             "default": "negative",
             "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
         },
+        {
+            "name": "response_polarity",
+            "type": "choice",
+            "label": "Peak Polarity:",
+            "choices": ["max", "min", "abs"],
+            "default": "max",
+            "tooltip": "Direction to search for peak response voltage within the window.",
+        },
     ],
     plots=[
         {"name": "Trace", "type": "trace", "show_events": True},
         {"type": "vlines", "data": "stimulus_onsets", "color": "c"},
+        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "color": "y", "symbol": "d"},
     ],
 )
-def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
+def run_opto_sync_wrapper(  # noqa: C901
+    data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
+) -> Dict[str, Any]:
     """
     Wrapper for optogenetic synchronization analysis.
 
@@ -330,6 +341,7 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
     ttl_threshold = kwargs.get("ttl_threshold", 2.5)
     response_window_ms = kwargs.get("response_window_ms", 20.0)
     event_detection_type = kwargs.get("event_detection_type", "Spikes")
+    response_polarity = kwargs.get("response_polarity", "max")
 
     ap_times = kwargs.get("action_potential_times", None)
 
@@ -398,6 +410,28 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
     if not result.is_valid:
         return {"module_used": "evoked_responses", "metrics": {"error": result.error_message}}
 
+    # Find peak response voltage within each TTL stimulus window
+    _peak_times: List[float] = []
+    _peak_amps: List[float] = []
+    _window_s = response_window_ms / 1000.0
+    if result.stimulus_onsets is not None and len(data) > 0:
+        for _onset in result.stimulus_onsets:
+            _idx_start = int(np.searchsorted(time, _onset, side="left"))
+            _idx_end = int(np.searchsorted(time, _onset + _window_s, side="right"))
+            _idx_start = max(0, min(_idx_start, len(data) - 1))
+            _idx_end = max(_idx_start + 1, min(_idx_end, len(data)))
+            _window_data = data[_idx_start:_idx_end]
+            if len(_window_data) > 0:
+                if response_polarity == "min":
+                    _local_idx = int(np.argmin(_window_data))
+                elif response_polarity == "abs":
+                    _local_idx = int(np.argmax(np.abs(_window_data)))
+                else:
+                    _local_idx = int(np.argmax(_window_data))
+                _abs_idx = _idx_start + _local_idx
+                _peak_times.append(float(time[_abs_idx]))
+                _peak_amps.append(float(data[_abs_idx]))
+
     return {
         "module_used": "evoked_responses",
         "metrics": {
@@ -408,6 +442,8 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
             "event_count": len(ap_times),
             "event_times": ap_times.tolist() if hasattr(ap_times, "tolist") else list(ap_times),
             "stimulus_onsets": (result.stimulus_onsets.tolist() if result.stimulus_onsets is not None else []),
+            "_peak_times": _peak_times,
+            "_peak_amps": _peak_amps,
         },
     }
 
