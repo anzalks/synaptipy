@@ -87,6 +87,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # --- END ADDED ---
         # --- ADDED: Save Button ---
         self.save_button: Optional[QtWidgets.QPushButton] = None
+        # Saved Results list widget (populated by _setup_save_button)
+        self._saved_results_list: Optional[QtWidgets.QListWidget] = None
         # --- END ADDED ---
         # --- ADDED: Zoom Sync Manager ---
         self.zoom_sync: Optional[PlotZoomSyncManager] = None
@@ -207,7 +209,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _reset_plot_view(self) -> None:
         """Reset the plot view to default range."""
-        if self.plot_widget:
+        vb = self.plot_widget.getViewBox() if self.plot_widget else None
+        if vb is not None:
+            # Clear any hard limits that could constrain the reset, then
+            # enable auto-range so the ViewBox immediately snaps back to the
+            # full bounding rect of all visible plot items.
+            vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
+            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+        elif self.plot_widget:
             self.plot_widget.autoRange()
 
     def _save_plot(self):
@@ -333,7 +342,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._active_preprocessing_settings = {}
 
         if step_type == "baseline":
-            self._active_preprocessing_settings["baseline"] = settings
+            if settings.get("method") == "none":
+                # "None" selected — remove baseline step and revert
+                self._active_preprocessing_settings.pop("baseline", None)
+                if not self._active_preprocessing_settings:
+                    self._active_preprocessing_settings = None
+            else:
+                self._active_preprocessing_settings["baseline"] = settings
         elif step_type == "filter":
             filter_method = settings.get("method", "unknown")
             if "filters" not in self._active_preprocessing_settings:
@@ -676,10 +691,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.setLabel("left", "Amplitude")
         self.plot_widget.setLabel("bottom", "Time", units="s")
 
-        # Standard interaction mode
+        # Left mouse button pans; right mouse button zooms via SynaptipyViewBox.
         vb = self.plot_widget.getViewBox()
         if vb:
-            vb.setMouseMode(pg.ViewBox.RectMode)
+            pass  # Mouse mode is handled by SynaptipyViewBox (injected in add_plot).
 
         # Add windows signal protection? handled by new canvas?
         # Base canvas handles signal protection if needed, but we can verify.
@@ -867,7 +882,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     # --- ADDED: Method to setup save button ---
     def _setup_save_button(self, layout: QtWidgets.QLayout, alignment=QtCore.Qt.AlignmentFlag.AlignCenter):
-        """Adds a standard 'Save Result' button to the layout and connects it."""
+        """Adds a standard 'Save Result' button and a 'Saved Results' list to the layout."""
         self.save_button = QtWidgets.QPushButton(f"Save {self.get_display_name()} Result")
         self.save_button.setIcon(QtGui.QIcon.fromTheme("document-save"))  # Optional icon
         self.save_button.setToolTip(
@@ -884,7 +899,30 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             layout.addWidget(self.save_button, 0, alignment)
         else:
             layout.addWidget(self.save_button)
-        log.debug(f"{self.__class__.__name__}: Save button setup.")
+
+        # Saved results tracking list
+        saved_group = QtWidgets.QGroupBox("Saved Results")
+        saved_group.setToolTip("Results saved during this session. Each entry shows analysis type, file, and time.")
+        saved_inner = QtWidgets.QVBoxLayout(saved_group)
+        saved_inner.setContentsMargins(4, 4, 4, 4)
+
+        self._saved_results_list = QtWidgets.QListWidget()
+        self._saved_results_list.setMaximumHeight(120)
+        self._saved_results_list.setToolTip(
+            "Saved results for this analysis tab.\n" "Double-click an entry to copy the save path to the clipboard."
+        )
+        self._saved_results_list.itemDoubleClicked.connect(self._on_saved_result_double_clicked)
+        saved_inner.addWidget(self._saved_results_list)
+
+        layout.addWidget(saved_group)
+        log.debug(f"{self.__class__.__name__}: Save button and saved-results list set up.")
+
+    def _on_saved_result_double_clicked(self, item: QtWidgets.QListWidgetItem):
+        """Copy the item text to the clipboard when double-clicked."""
+        try:
+            QtWidgets.QApplication.clipboard().setText(item.text())
+        except Exception:
+            pass
 
     # --- END ADDED ---
 
@@ -1036,7 +1074,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def auto_range_plot(self):
         """Auto-range the plot to fit all data."""
         log.debug(f"[ANALYSIS-BASE] Auto-ranging plot for {self.__class__.__name__}")
-        if self.zoom_sync:
+        vb = self.plot_widget.getViewBox() if self.plot_widget else None
+        if vb is not None:
+            # Clear any hard view-limits, then force an immediate re-range to
+            # the full extents of all visible traces (enableAutoRange triggers
+            # an update on the next paint cycle, which is more reliable than
+            # a one-shot autoRange() call after manual zooming).
+            log.debug("[ANALYSIS-BASE] Using enableAutoRange for full-data reset")
+            vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
+            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+        elif self.zoom_sync:
             log.debug("[ANALYSIS-BASE] Using zoom sync auto-range")
             self.zoom_sync.auto_range()
         elif self.plot_widget:
@@ -1272,14 +1319,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             specific_data = self._get_specific_result_data()
             if specific_data is not None:
                 self._request_save_result(specific_data)
-                # Provide visual feedback to the user
+                # Provide visual feedback in the status label
                 if hasattr(self, "status_label") and self.status_label:
                     self.status_label.setText("Status: Results saved successfully")
+                # Append entry to the saved results list widget
+                self._append_to_saved_results_list(specific_data)
             else:
                 log.warning("Save requested, but _get_specific_result_data returned None.")
                 QtWidgets.QMessageBox.warning(self, "Save Error", "No valid result available to save.")
-
-                # Disable the save button as a precaution
                 self._set_save_button_enabled(False)
         except NotImplementedError:
             log.error(
@@ -1289,6 +1336,29 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         except Exception as e:
             log.error(f"Error getting specific result data in {self.__class__.__name__}: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Save Error", f"Error preparing result for saving:\n{e}")
+
+    def _append_to_saved_results_list(self, result_data: Dict[str, Any]):
+        """Append a summary entry to the visible Saved Results list widget."""
+        if not hasattr(self, "_saved_results_list") or self._saved_results_list is None:
+            return
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%H:%M:%S")
+        fname = ""
+        if self._selected_item_recording and self._selected_item_recording.source_file:
+            fname = self._selected_item_recording.source_file.name
+        label = f"[{ts}] {self.get_display_name()}"
+        if fname:
+            label += f"  |  {fname}"
+        # Include the first numeric result value if available
+        for v in result_data.values():
+            if isinstance(v, (int, float)):
+                label += f"  =  {round(v, 4)}"
+                break
+        item = QtWidgets.QListWidgetItem(label)
+        item.setToolTip(str(result_data))
+        self._saved_results_list.addItem(item)
+        self._saved_results_list.scrollToBottom()
 
     # --- END ADDED ---
 
@@ -1476,7 +1546,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Signal Channel Selection
         self.signal_channel_combobox = QtWidgets.QComboBox()
-        self.signal_channel_combobox.setToolTip("Select the signal channel to plot and analyze.")
+        self.signal_channel_combobox.setToolTip(
+            "Select the recording channel to analyse.\n" "Channels are labelled by name, ID, and physical units."
+        )
         self.signal_channel_combobox.setEnabled(False)
 
         hbox1 = QtWidgets.QHBoxLayout()
@@ -1486,7 +1558,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Data Source Selection (Trial vs Average)
         self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select specific trial or average trace.")
+        self.data_source_combobox.setToolTip(
+            "Select which data to analyse:\n"
+            "  Average Trace – mean of all (or selected) trials\n"
+            "  Trial N       – a specific individual sweep"
+        )
         self.data_source_combobox.setEnabled(False)
 
         hbox2 = QtWidgets.QHBoxLayout()
@@ -2133,10 +2209,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._analysis_thread.quit()
             self._analysis_thread.wait()
 
-    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:
+    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:  # noqa: C901
         """
         Create a separate popup window with a PlotWidget.
-        The window is tracked and will be closed when the tab is cleaned up.
+        The window includes Export Data and Save Plot buttons and is tracked
+        for cleanup when the tab is closed.
 
         Args:
             title: Window title.
@@ -2149,10 +2226,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Create a new window (QMainWindow or QWidget)
         popup = QtWidgets.QMainWindow(self)  # Parented to self so it closes with app, but we track it too
         popup.setWindowTitle(title)
-        popup.resize(600, 400)
+        popup.resize(600, 440)
 
         # Prevent window from being destroyed when closed - it will just hide
-        # User can restore it via View > Show Analysis Popup Windows
         popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         # Create central widget and layout
@@ -2169,7 +2245,82 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if y_label:
             plot_widget.setLabel("left", y_label)
 
-        layout.addWidget(plot_widget)
+        layout.addWidget(plot_widget, stretch=1)
+
+        # --- Button row: Reset View | Save Plot | Export Data ---
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.addStretch()
+
+        reset_btn = QtWidgets.QPushButton("Reset View")
+        reset_btn.setToolTip("Reset zoom and pan to fit all data in this popup.")
+        style_button(reset_btn)
+        reset_btn.clicked.connect(lambda: plot_widget.autoRange())
+        btn_layout.addWidget(reset_btn)
+
+        save_plot_btn = QtWidgets.QPushButton("Save Plot")
+        save_plot_btn.setToolTip("Save this plot as an image file (PNG, PDF, SVG).")
+        style_button(save_plot_btn)
+
+        def _save_popup_plot():
+            try:
+                from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+                from Synaptipy.shared.plot_exporter import PlotExporter
+
+                dialog = PlotExportDialog(popup)
+                if dialog.exec():
+                    cfg = dialog.get_settings()
+                    fmt = cfg["format"]
+                    dpi = cfg["dpi"]
+                    filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+                        popup,
+                        "Save Plot",
+                        str(Path.home() / f"{title.lower().replace(' ', '_')}.{fmt}"),
+                        f"Images (*.{fmt})",
+                    )
+                    if filename:
+                        exporter = PlotExporter(recording=None, plot_canvas_widget=plot_widget)
+                        exporter.export(filename, fmt, dpi)
+            except Exception as exc:
+                log.error(f"Popup plot save error: {exc}")
+                QtWidgets.QMessageBox.critical(popup, "Save Error", str(exc))
+
+        save_plot_btn.clicked.connect(_save_popup_plot)
+        btn_layout.addWidget(save_plot_btn)
+
+        export_btn = QtWidgets.QPushButton("Export Data")
+        export_btn.setToolTip("Export the plotted data values as a CSV file.")
+        style_button(export_btn)
+
+        def _export_popup_data():
+            try:
+                filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    popup,
+                    "Export Data",
+                    str(Path.home() / f"{title.lower().replace(' ', '_')}_data.csv"),
+                    "CSV Files (*.csv)",
+                )
+                if not filename:
+                    return
+                import csv
+
+                with open(filename, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.writer(fh)
+                    writer.writerow(["x", "y"])
+                    for item in plot_widget.getPlotItem().items:
+                        if hasattr(item, "getData"):
+                            xs, ys = item.getData()
+                            if xs is not None and ys is not None:
+                                for x, y in zip(xs, ys):
+                                    writer.writerow([x, y])
+            except Exception as exc:
+                log.error(f"Popup data export error: {exc}")
+                QtWidgets.QMessageBox.critical(popup, "Export Error", str(exc))
+
+        export_btn.clicked.connect(_export_popup_data)
+        btn_layout.addWidget(export_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
 
         # Show and track
         popup.show()

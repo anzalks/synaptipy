@@ -256,6 +256,18 @@ ranges.
   To find the nearest index use: insert with `"left"`, then compare `idx-1` vs `idx`.
 - Do not use deprecated numpy APIs (e.g. `np.bool`, `np.int` — use built-ins).
 
+## Mandatory formatting and test gate — DO NOT SKIP
+After **every** code change run these four commands in order and fix all errors
+before declaring done:
+```bash
+black src/ tests/
+isort src/ tests/
+flake8 src/ tests/
+python scripts/run_tests.py
+```
+Do not stop generating or fixing until all four commands succeed with zero
+errors and all tests pass.
+
 ## Testing rules
 - Every new analysis function needs a test in `tests/core/`
 - Every new GUI behaviour needs a test in `tests/gui/`

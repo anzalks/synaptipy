@@ -16,6 +16,7 @@ import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from .plot_customization import get_plot_customization_manager
+from .viewbox import SynaptipyViewBox
 
 log = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ class SynaptipyPlotFactory:
             Configured PlotWidget
         """
         try:
-            # Create the plot widget
-            plot_widget = pg.PlotWidget(parent=parent)
+            # Create the plot widget with custom ViewBox (left=pan, right=rect-zoom)
+            plot_widget = pg.PlotWidget(parent=parent, viewBox=SynaptipyViewBox())
 
             # Set background immediately
             plot_widget.setBackground(background)
@@ -57,10 +58,6 @@ class SynaptipyPlotFactory:
             # Configure view box
             viewbox = plot_widget.getViewBox()
             if viewbox:
-                if mouse_mode == "rect":
-                    viewbox.setMouseMode(pg.ViewBox.RectMode)
-                elif mouse_mode == "pan":
-                    viewbox.setMouseMode(pg.ViewBox.PanMode)
                 viewbox.mouseEnabled = True
 
             # Windows Fix: Explicitly set SizePolicy and Minimum Size

@@ -1,5 +1,6 @@
 # src/Synaptipy/application/controllers/file_io_controller.py
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -52,8 +53,10 @@ class FileIOController:
             QtWidgets.QMessageBox.critical(self.parent, "Adapter Error", f"Could not get file types from adapter:\n{e}")
             file_filter = "All Files (*)"
 
-        # 2. Get Last Directory
+        # 2. Get Last Directory (fallback to cwd so dialog opens in a useful location)
         last_dir = self.settings.value("lastDirectory", "", type=str)
+        if not last_dir:
+            last_dir = os.getcwd()
 
         # 3. Setup Dialog
         dialog = QtWidgets.QFileDialog(self.parent, "Open Recording File", filter=file_filter)
