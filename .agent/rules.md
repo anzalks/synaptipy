@@ -92,7 +92,16 @@ All analysis features must be split into two distinct parts:
 * **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures (0 errors allowed).
 * **Whitespace Hygiene**: Agents MUST inspect and fix all flake8 whitespace warnings (W293, W391, W504, etc.) before finishing a task. Codebase should be pristine.
 
-**2. Cross-Platform Compatibility (The "Windows" Rule)**
+**2. Mandatory Formatting and Test Gate (Zero-Tolerance)**
+* **Every Generation Cycle**: After writing or modifying any Python file, the Agent MUST automatically run:
+    1. `python -m black src/ tests/` — auto-format code
+    2. `python -m isort src/ tests/` — sort imports
+    3. `python -m flake8 src/ tests/` — verify linting compliance
+    4. `python scripts/run_tests.py` — execute full test suite
+* **Non-Negotiable Rule**: Do NOT stop generating or fixing until all four commands succeed with zero errors and all tests pass. If tests fail, automatically debug and fix regressions before moving on.
+* **Pre-Completion Checklist**: Before marking any task as complete, confirm that `scripts/run_tests.py` shows 100% pass rate.
+
+**3. Cross-Platform Compatibility (The "Windows" Rule)**
 * **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).
     * **Requirement**: ALWAYS use `pathlib.Path` (e.g., `Path("data") / filename`).
     * *Reason*: The CI pipeline runs on `windows-latest`, which will fail on hardcoded forward slashes.

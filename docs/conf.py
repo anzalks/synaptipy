@@ -137,7 +137,15 @@ intersphinx_mapping = {
 master_doc = "index"
 
 # Patterns to exclude from documentation build
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    # Agentic / developer-internal files — not part of public docs
+    "../.agent/rules.md",
+    "../.github/copilot-instructions.md",
+    "decisions/REFACTORING_GUIDE.md",
+]
 
 # Pygments syntax highlighting style
 pygments_style = "sphinx"

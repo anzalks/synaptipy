@@ -69,9 +69,13 @@ class PlotZoomSyncManager(QtCore.QObject):
             # Connect viewbox signals to our handlers
             self.view_box.sigXRangeChanged.connect(self._on_x_range_changed)
             self.view_box.sigYRangeChanged.connect(self._on_y_range_changed)
+            # sigRangeChangedManually fires after every user-driven range
+            # change (pan, rect-zoom, wheel).  Use it as a fallback to sync
+            # scrollbars in cases where sigX/YRangeChanged are blocked by the
+            # floating-point threshold gate in updateViewRange.
+            self.view_box.sigRangeChangedManually.connect(self._on_range_changed_manually)
 
-            # Enable rectangle zoom mode
-            self.view_box.setMouseMode(pg.ViewBox.RectMode)
+            # Mouse mode (left=pan, right=rect-zoom) is handled by SynaptipyViewBox.
 
     def setup_controls(
         self,
@@ -203,8 +207,12 @@ class PlotZoomSyncManager(QtCore.QObject):
     def auto_range(self):
         """Auto-range the plot to fit all data."""
         if self.view_box:
-            self.view_box.autoRange()
-            log.debug("Plot auto-ranged")
+            # Clear any hard view-limits that a prior zoom may have applied,
+            # then enable auto-range so the ViewBox recalculates the bounding
+            # rect of all visible items and snaps to it on the next paint cycle.
+            self.view_box.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
+            self.view_box.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+            log.debug("Plot auto-ranged (limits cleared, enableAutoRange called)")
 
     def is_zoom_available(self) -> bool:
         """Check if zoom controls are available and functional."""
@@ -275,6 +283,27 @@ class PlotZoomSyncManager(QtCore.QObject):
     # ===========================================================================
     # Signal Handlers
     # ===========================================================================
+
+    def _on_range_changed_manually(self, axes_enabled):
+        """Handle any manual range change (pan, rect-zoom, wheel) via sigRangeChangedManually.
+
+        This is a fallback sync path: sigRangeChangedManually is emitted by
+        SynaptipyViewBox after every user-driven interaction, including
+        rect-zoom finalization (via showAxRect).  It ensures scrollbars and
+        limit fields stay in sync even when sigX/YRangeChanged are suppressed
+        by pyqtgraph's floating-point threshold gate.
+        """
+        if self._updating_viewranges or not self.view_box:
+            return
+        current_ranges = self.view_box.viewRange()
+        if not self.manual_limits_enabled:
+            if self.x_scrollbar and self.base_x_range:
+                self._update_scrollbar_from_view(self.x_scrollbar, self.base_x_range, current_ranges[0])
+            if self.y_scrollbar and self.base_y_range:
+                self._update_scrollbar_from_view(self.y_scrollbar, self.base_y_range, current_ranges[1])
+        self._update_limit_fields()
+        if self.on_range_changed:
+            self.on_range_changed("xy", current_ranges)
 
     def _on_x_range_changed(self, view_box, x_range):
         """Handle X range changes from plot interactions (rectangle zoom, etc.)"""

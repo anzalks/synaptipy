@@ -14,6 +14,7 @@ import pyqtgraph as pg
 from PySide6 import QtCore
 
 from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
+from Synaptipy.shared.viewbox import SynaptipyViewBox
 
 log = logging.getLogger(__name__)
 
@@ -85,12 +86,16 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             # disconnect all signals before widget.clear(), so no stale
             # callbacks are queued by the time add_plot() is called.
             # Calling processEvents() on macOS can execute post-widget.clear()
-            # callbacks that reference freed C++ ViewBox objects → SIGSEGV.
+            # callbacks that reference freed C++ ViewBox objects -> SIGSEGV.
             if sys.platform != "darwin":
                 try:
                     QtCore.QCoreApplication.processEvents()
                 except Exception:
                     pass
+
+        # Inject custom ViewBox: left=pan, right=rectangle-zoom
+        if "viewBox" not in kwargs:
+            kwargs["viewBox"] = SynaptipyViewBox()
 
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)
@@ -128,7 +133,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # White background for ViewBox
         if plot_item.getViewBox():
             plot_item.getViewBox().setBackgroundColor("white")
-            plot_item.getViewBox().setMouseMode(pg.ViewBox.RectMode)
+            # Mouse mode is handled by SynaptipyViewBox (left=pan, right=rect-zoom).
             # Remove the default ~2% padding so data fills the view edge-to-edge.
             # autoRange() and any setXRange/setYRange call that omits padding=
             # will then default to 0 instead of adding blank space around data.

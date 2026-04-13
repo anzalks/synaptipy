@@ -85,20 +85,52 @@ class SignalProcessingPipeline:
 
                 if op_type == "baseline":
                     method = step.get("method", "mode")
+                    start_t = step.get("start_t")
+                    end_t = step.get("end_t")
+                    use_region = (
+                        start_t is not None
+                        and end_t is not None
+                        and time_vector is not None
+                        and method in ("mean", "median", "mode")
+                    )
                     if method == "mode":
-                        decimals = int(step.get("decimals", 1))
-                        result = signal_processor.subtract_baseline_mode(result, decimals=decimals)
+                        if use_region:
+                            mask = (time_vector >= float(start_t)) & (time_vector <= float(end_t))
+                            if np.any(mask):
+                                decimals = int(step.get("decimals", 1))
+                                rounded = np.round(result[mask], decimals)
+                                if len(rounded):
+                                    vals, counts = np.unique(rounded, return_counts=True)
+                                    result = result - float(vals[np.argmax(counts)])
+                            else:
+                                decimals = int(step.get("decimals", 1))
+                                result = signal_processor.subtract_baseline_mode(result, decimals=decimals)
+                        else:
+                            decimals = int(step.get("decimals", 1))
+                            result = signal_processor.subtract_baseline_mode(result, decimals=decimals)
                     elif method == "mean":
-                        result = signal_processor.subtract_baseline_mean(result)
+                        if use_region:
+                            result = signal_processor.subtract_baseline_region(
+                                result, time_vector, float(start_t), float(end_t)
+                            )
+                        else:
+                            result = signal_processor.subtract_baseline_mean(result)
                     elif method == "median":
-                        result = signal_processor.subtract_baseline_median(result)
+                        if use_region:
+                            mask = (time_vector >= float(start_t)) & (time_vector <= float(end_t))
+                            if np.any(mask):
+                                result = result - float(np.median(result[mask]))
+                            else:
+                                result = signal_processor.subtract_baseline_median(result)
+                        else:
+                            result = signal_processor.subtract_baseline_median(result)
                     elif method == "linear":
                         result = signal_processor.subtract_baseline_linear(result)
                     elif method == "region":
                         if time_vector is not None:
-                            start_t = float(step.get("start_t", 0.0))
-                            end_t = float(step.get("end_t", 0.0))
-                            result = signal_processor.subtract_baseline_region(result, time_vector, start_t, end_t)
+                            st = float(step.get("start_t", 0.0))
+                            et = float(step.get("end_t", 0.0))
+                            result = signal_processor.subtract_baseline_region(result, time_vector, st, et)
                         else:
                             log.warning("Region baseline requested but no time vector provided. Skipping.")
 
