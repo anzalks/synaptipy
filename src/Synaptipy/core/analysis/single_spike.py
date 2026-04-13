@@ -609,7 +609,6 @@ def detect_threshold_kink(
             "max": 0.1,
             "decimals": 3,
         },
-        {"name": "show_phase_plane", "label": "Show Phase Plane", "type": "bool", "default": False},
     ],
     plots=[
         {"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]},
@@ -626,7 +625,6 @@ def run_spike_detection_wrapper(
     dvdt_threshold: float = 20.0,
     ahp_window: float = 0.05,
     onset_lookback: float = 0.01,
-    show_phase_plane: bool = False,
     **kwargs,
 ) -> Dict[str, Any]:
     """Wrapper for spike detection. Returns namespaced schema."""
@@ -689,11 +687,6 @@ def run_spike_detection_wrapper(
                 "parameters": params,
             }
             metrics.update(stats)
-
-            if show_phase_plane:
-                v_pp, dv_pp = get_phase_plane_trajectory(data, sampling_rate, sigma_ms=0.1)
-                metrics["_phase_voltage"] = v_pp
-                metrics["_phase_dvdt"] = dv_pp
         else:
             metrics = {
                 "spike_count": 0,
