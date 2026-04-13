@@ -9,27 +9,24 @@ This module also imports all analysis modules to trigger registration
 of analysis functions with the AnalysisRegistry for batch processing.
 """
 
-# Import analysis modules to trigger registration
-# Each module registers its functions via @AnalysisRegistry.register decorator
-from . import basic_features  # noqa: F401 - registers: rmp_analysis
-from . import burst_analysis  # noqa: F401 - registers: burst_analysis
-from . import capacitance  # noqa: F401 - registers: capacitance_analysis
-from . import event_detection  # noqa: F401 - registers: mini_detection, event_detection_threshold, etc.
-from . import excitability  # noqa: F401 - registers: fi_curve_analysis
-from . import intrinsic_properties  # noqa: F401 - registers: rin_analysis, tau_analysis, sag_ratio_analysis
-from . import optogenetics  # noqa: F401 - registers: optogenetic_sync
-from . import phase_plane  # noqa: F401 - registers: phase_plane_analysis
-from . import spike_analysis  # noqa: F401 - registers: spike_detection
-from . import train_dynamics  # noqa: F401 - registers: train_dynamics
+# Keep batch_engine importable
+# Import new consolidated modules to trigger @AnalysisRegistry.register decorators
+from . import batch_engine  # noqa: F401
+from . import evoked_responses  # noqa: F401 - registers: optogenetic_sync
+from . import firing_dynamics  # noqa: F401 - registers: excitability_analysis, burst_analysis, train_dynamics
+from . import passive_properties  # rmp_analysis, rin_analysis, tau_analysis, sag_ratio_analysis, iv_curve_analysis
+from . import single_spike  # noqa: F401 - registers: spike_detection, phase_plane_analysis
+from . import (  # noqa: F401; event_detection_threshold, event_detection_deconvolution, event_detection_baseline_peak
+    synaptic_events,
+)
 
-# Expose key functions for easier import
-from .basic_features import calculate_rmp
-from .event_detection import detect_minis_threshold
-from .intrinsic_properties import calculate_rin, calculate_sag_ratio, calculate_tau
+# Expose key functions for easier import (backward compatibility)
+from .passive_properties import calculate_rin, calculate_rmp, calculate_sag_ratio, calculate_tau
 
-# Import registry first
-from .registry import AnalysisRegistry
-from .spike_analysis import detect_spikes_threshold
+# Import registry first so the decorator is available when modules load
+from .registry import AnalysisRegistry  # noqa: F401
+from .single_spike import detect_spikes_threshold
+from .synaptic_events import detect_minis_threshold
 
 # Define what `from Synaptipy.core.analysis import *` imports
 __all__ = [

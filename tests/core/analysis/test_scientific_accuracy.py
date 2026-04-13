@@ -8,11 +8,11 @@ that were identified and fixed during the publication readiness audit.
 
 import numpy as np
 
-from Synaptipy.core.analysis.intrinsic_properties import (
+from Synaptipy.core.analysis.passive_properties import (
     calculate_rin,
     calculate_sag_ratio,
 )
-from Synaptipy.core.analysis.spike_analysis import (
+from Synaptipy.core.analysis.single_spike import (
     calculate_spike_features,
 )
 

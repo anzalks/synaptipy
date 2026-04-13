@@ -28,9 +28,6 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
-# Returned from intrinsic pre-check helpers when the trace dict passed to analysis is valid.
-_INTRINSIC_PLOT_READY = object()
-
 
 class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     """
@@ -85,6 +82,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         super().__init__(neo_adapter, settings_ref, parent)
         self._setup_ui()
         self._setup_interactive_regions()
+        # Module-level aggregator entries have no ui_params of their own;
+        # immediately prime the first sub-analysis so the tab is non-blank.
+        if self._method_map and not self.metadata.get("ui_params"):
+            self._on_method_selector_changed()
 
     @property
     def response_region(self):
@@ -115,22 +116,6 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         except TypeError:
             return False
         return True
-
-    def _calculate_tau(self, data: Dict[str, Any]):
-        """Require a non-empty trace dict (same object as ``self._current_plot_data`` in normal UI flow)."""
-        if not self._trace_package_ready(data):
-            return
-        return _INTRINSIC_PLOT_READY
-
-    def _calculate_sag_ratio(self, data: Dict[str, Any]):
-        if not self._trace_package_ready(data):
-            return
-        return _INTRINSIC_PLOT_READY
-
-    def _calculate_rin(self, data: Dict[str, Any]):
-        if not self._trace_package_ready(data):
-            return
-        return _INTRINSIC_PLOT_READY
 
     def get_registry_name(self) -> str:
         return self.analysis_name
@@ -236,7 +221,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.results_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.results_table.setAlternatingRowColors(True)
-        self.results_table.setMaximumHeight(200)
+        self.results_table.setMinimumHeight(250)
         self.results_layout.addRow(self.results_table)
 
         control_layout.addWidget(results_group)
@@ -354,7 +339,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._region_mode_combo.currentIndexChanged.connect(self._on_region_mode_changed)
             layout.addRow("Region Mode:", self._region_mode_combo)
 
-    def _on_method_selector_changed(self):
+    def _on_method_selector_changed(self):  # noqa: C901
         """Handle switching between analysis methods via the method combo box."""
         if not self.method_combobox:
             return
@@ -374,6 +359,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # Re-setup interactive regions for the new parameter set
         self._setup_interactive_regions()
+
+        # Show/hide the secondary channel row based on the new sub-analysis metadata
+        if hasattr(self, "_secondary_channel_combobox") and self._secondary_channel_combobox is not None:
+            sec_cfg = self.metadata.get("requires_secondary_channel")
+            show_sec = bool(sec_cfg and isinstance(sec_cfg, dict))
+            try:
+                if hasattr(self, "permanent_params_layout"):
+                    self.permanent_params_layout.setRowVisible(self._secondary_channel_combobox, show_sec)
+            except RuntimeError:
+                pass
 
         # Clear previous results
         if self.results_table:
@@ -783,7 +778,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         context["clamp_mode"] = "voltage_clamp" if is_voltage_clamp else "current_clamp"
 
         # Update generator
-        self.param_generator.update_visibility(context)
+        try:
+            self.param_generator.update_visibility(context)
+        except RuntimeError:
+            pass  # UI is being torn down or rebuilt — safe to ignore
 
     def _on_data_plotted(self):
         """Hook called after data is plotted — re-add persistent items then trigger analysis."""
@@ -880,39 +878,6 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # --- Inject secondary channel data if configured ---
         self._inject_secondary_channel_data(params, data)
 
-        if self.analysis_name == "tau_analysis":
-            gate = self._calculate_tau(data)
-            if gate is not _INTRINSIC_PLOT_READY:
-                return {
-                    "tau_ms": float(np.nan),
-                    "fit_time": [],
-                    "fit_values": [],
-                    "parameters": params,
-                }
-
-        if self.analysis_name == "sag_ratio_analysis":
-            gate = self._calculate_sag_ratio(data)
-            if gate is not _INTRINSIC_PLOT_READY:
-                nan = float(np.nan)
-                return {
-                    "sag_ratio": nan,
-                    "sag_percentage": nan,
-                    "v_peak": nan,
-                    "v_ss": nan,
-                    "v_baseline": nan,
-                    "rebound_depolarization": nan,
-                    "sag_error": "Plot region or data unavailable",
-                }
-
-        if self.analysis_name == "rin_analysis":
-            gate = self._calculate_rin(data)
-            if gate is not _INTRINSIC_PLOT_READY:
-                return {
-                    "rin_mohm": None,
-                    "conductance_us": None,
-                    "rin_error": "Plot region or data unavailable",
-                }
-
         try:
             if requires_multi_trial and self._selected_item_recording and self.signal_channel_combobox:
                 # Fetch all trials systematically
@@ -963,14 +928,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 # Call the function with single arrays
                 results = func(voltage, time, fs, **params)
 
-            # If results is a list (like spikes), wrap it?
-            # Or if it's a dict, pass it through.
+            # Normalise: wrap non-dict returns; flatten metrics nesting from new 5-module format
             if isinstance(results, list):
-                return {"list_results": results}
+                return {"module_used": self.analysis_name, "metrics": {"list_results": results}}
             elif isinstance(results, dict):
-                return results
+                # If returned dict already has module_used/metrics, pass through
+                if "module_used" in results or "metrics" in results:
+                    return results
+                # Wrap legacy flat dict in standard payload
+                return {"module_used": self.analysis_name, "metrics": results}
             else:
-                return {"result": results}
+                return {"module_used": self.analysis_name, "metrics": {"result": results}}
 
         except Exception as e:
             log.error(f"Analysis execution failed: {e}")
@@ -985,15 +953,28 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return
 
         try:
+            # Flatten nested {"module_used": ..., "metrics": {...}} schema for display
+            display_source = results
+            if isinstance(results, dict) and "metrics" in results:
+                display_source = results["metrics"]
+
+            # Also flatten legacy {"result": {...}} single-key wrappers
+            if isinstance(display_source, dict) and list(display_source.keys()) == ["result"]:
+                inner = display_source["result"]
+                if isinstance(inner, dict):
+                    display_source = inner
+                elif hasattr(inner, "__dict__"):
+                    display_source = inner.__dict__
+
             # robust extraction of items
             items = []
-            if isinstance(results, dict):
-                items = list(results.items())
-            elif hasattr(results, "__dict__"):
-                items = [(k, v) for k, v in results.__dict__.items() if not k.startswith("_")]
+            if isinstance(display_source, dict):
+                items = list(display_source.items())
+            elif hasattr(display_source, "__dict__"):
+                items = [(k, v) for k, v in display_source.__dict__.items() if not k.startswith("_")]
             else:
                 # Fallback
-                items = [("Result", str(results))]
+                items = [("Result", str(display_source))]
 
             # Filter out complex objects like arrays for the simple table view
             display_items = []
@@ -1003,20 +984,27 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     if str(k).startswith("_"):
                         continue
 
+                    # Skip complex iterables entirely
+                    if isinstance(v, (list, np.ndarray, dict)):
+                        continue
+
                     # Sanitize Key
                     key_str = str(k).replace("_", " ").title()
 
-                    # Sanitize Value
-                    if isinstance(v, (np.ndarray, list, dict)) and not isinstance(v, (float, int, str, bool)):
-                        # Skip large arrays or complex nested dicts in the summary table
-                        # or show a summary string
-                        if isinstance(v, (list, np.ndarray)):
-                            val_str = f"{type(v).__name__} (len={len(v)})"
+                    # Sanitize Value: format floats to 3 decimal places
+                    if isinstance(v, float):
+                        if np.isnan(v) or np.isinf(v):
+                            val_str = str(v)
                         else:
-                            val_str = str(type(v))
-                    elif isinstance(v, float):
-                        val_str = f"{v:.4g}"
+                            val_str = f"{v:.3f}"
+                    elif isinstance(v, bool):
+                        val_str = str(v)
+                    elif isinstance(v, int):
+                        val_str = str(v)
+                    elif isinstance(v, str):
+                        val_str = v
                     else:
+                        # Unknown scalar type — stringify
                         val_str = str(v)
 
                     display_items.append((key_str, val_str))
@@ -1040,7 +1028,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self.results_table.setRowCount(1)
 
         # --- Sync Rin spinboxes if auto-detect was used and returned window values ---
-        if isinstance(results, dict) and results.get("auto_detected") and hasattr(self, "param_generator"):
+        # Check both flat and nested metrics format
+        _results_flat = results.get("metrics", results) if isinstance(results, dict) else results
+        if isinstance(_results_flat, dict) and _results_flat.get("auto_detected") and hasattr(self, "param_generator"):
             spinbox_map = {
                 "_used_baseline_start": "baseline_start",
                 "_used_baseline_end": "baseline_end",
@@ -1049,7 +1039,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             }
             widgets = self.param_generator.widgets
             for result_key, param_key in spinbox_map.items():
-                val = results.get(result_key)
+                val = _results_flat.get(result_key)
                 if val is not None and param_key in widgets:
                     w = widgets[param_key]
                     was_read_only = getattr(w, "isReadOnly", lambda: False)()
@@ -1093,8 +1083,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self.plot_widget.removeItem(item)
         self._dynamic_plot_items.clear()
 
-        # Normalise result structure
-        if isinstance(results, dict) and "result" in results:
+        # Normalise result structure – support both new {"module_used", "metrics"} and legacy formats
+        if isinstance(results, dict) and "metrics" in results:
+            result_item = results["metrics"]
+        elif isinstance(results, dict) and "result" in results:
             result_item = results["result"]
         else:
             result_item = results
@@ -1219,11 +1211,31 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _viz_markers(self, cfg, result):
         x_key = cfg.get("x")
         y_key = cfg.get("y")
-        x_data = self._val(result, x_key, [])
-        y_data = self._val(result, y_key, [])
+        x_data = self._val(result, x_key)
+        if x_data is None and isinstance(result, dict) and "metrics" in result:
+            x_data = result["metrics"].get(x_key)
+        y_data = self._val(result, y_key)
+        if y_data is None and isinstance(result, dict) and "metrics" in result:
+            y_data = result["metrics"].get(y_key)
+        if x_data is None:
+            x_data = []
+        if y_data is None:
+            y_data = []
         if hasattr(x_data, "__len__") and hasattr(y_data, "__len__") and len(x_data) > 0 and len(y_data) > 0:
+            try:
+                x_arr = np.asarray(x_data, dtype=float)
+                y_arr = np.asarray(y_data, dtype=float)
+                valid = ~(np.isnan(x_arr) | np.isnan(y_arr))
+                x_arr, y_arr = x_arr[valid], y_arr[valid]
+                if len(x_arr) == 0:
+                    return
+            except (ValueError, TypeError):
+                return
             color = cfg.get("color", "r")
-            scatter = pg.ScatterPlotItem(x=x_data, y=y_data, size=10, pen=pg.mkPen(None), brush=pg.mkBrush(color))
+            symbol = cfg.get("symbol", "o")
+            scatter = pg.ScatterPlotItem(
+                x=x_arr, y=y_arr, size=10, symbol=symbol, pen=pg.mkPen(None), brush=pg.mkBrush(color)
+            )
             self.plot_widget.addItem(scatter)
             self._dynamic_plot_items.append(scatter)
 
@@ -1263,10 +1275,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if isinstance(vals, (int, float)):
             vals = [vals]
         for x in vals:
-            if x is not None and not np.isnan(x):
-                line = pg.InfiniteLine(pos=x, angle=90, pen=pg.mkPen(color, width=2, style=QtCore.Qt.DashLine))
-                self.plot_widget.addItem(line)
-                self._dynamic_plot_items.append(line)
+            try:
+                if x is None or not np.isfinite(float(x)):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            line = pg.InfiniteLine(pos=float(x), angle=90, pen=pg.mkPen(color, width=2, style=QtCore.Qt.DashLine))
+            self.plot_widget.addItem(line)
+            self._dynamic_plot_items.append(line)
 
     def _viz_hlines(self, cfg, result):
         data_keys = cfg.get("data", [])
@@ -1276,12 +1292,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         styles = cfg.get("styles", ["solid"] * len(data_keys))
         for idx, key in enumerate(data_keys):
             y = self._val(result, key)
-            if y is not None and not np.isnan(y):
-                s = styles[idx] if idx < len(styles) else "solid"
-                ps = QtCore.Qt.DashLine if s == "dash" else QtCore.Qt.SolidLine
-                line = pg.InfiniteLine(pos=y, angle=0, pen=pg.mkPen(color, width=2, style=ps))
-                self.plot_widget.addItem(line)
-                self._dynamic_plot_items.append(line)
+            try:
+                if y is None or not np.isfinite(float(y)):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            s = styles[idx] if idx < len(styles) else "solid"
+            ps = QtCore.Qt.DashLine if s == "dash" else QtCore.Qt.SolidLine
+            line = pg.InfiniteLine(pos=float(y), angle=0, pen=pg.mkPen(color, width=2, style=ps))
+            self.plot_widget.addItem(line)
+            self._dynamic_plot_items.append(line)
 
     def _viz_interactive_region(self, cfg):
         if getattr(self, "_interactive_region_created", False):
@@ -1304,6 +1324,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _viz_event_markers(self, cfg, result):
         """Update interactive event markers from result."""
+        # Unwrap _result_obj stored inside a metrics dict
+        if isinstance(result, dict) and "_result_obj" in result:
+            result = result["_result_obj"]
         is_obj = hasattr(result, "event_indices")
         event_indices = (
             result.event_indices if is_obj else (result.get("event_indices") if isinstance(result, dict) else None)
@@ -1369,12 +1392,19 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         y_data = self._val(result, y_key)
         if x_data is None or y_data is None:
             return
-        if not hasattr(x_data, "__len__") or len(x_data) == 0:
+        try:
+            x_arr = np.asarray(x_data, dtype=float)
+            y_arr = np.asarray(y_data, dtype=float)
+        except (ValueError, TypeError):
+            return
+        if len(x_arr) < 2 or len(y_arr) < 2:
+            return
+        if np.all(np.isnan(x_arr)) or np.all(np.isnan(y_arr)):
             return
         color = cfg.get("color", "r")
         width = cfg.get("width", 2)
         pen = pg.mkPen(color, width=width, style=QtCore.Qt.PenStyle.SolidLine)
-        curve = pg.PlotCurveItem(x=np.array(x_data), y=np.array(y_data), pen=pen)
+        curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
 
@@ -1421,11 +1451,20 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         else:
             self._popup_curves["fit"].setData([], [])
 
-    def _viz_popup_phase(self, cfg, result):
+    def _viz_popup_phase(self, cfg, result):  # noqa: C901
         """Show dV/dt vs V phase-plane in a popup with threshold + max markers."""
         voltage = self._val(result, "voltage")
         dvdt = self._val(result, "dvdt")
         if voltage is None or dvdt is None:
+            return
+        try:
+            voltage = np.asarray(voltage, dtype=float)
+            dvdt = np.asarray(dvdt, dtype=float)
+        except (ValueError, TypeError):
+            return
+        if len(voltage) == 0 or len(dvdt) == 0:
+            return
+        if np.all(np.isnan(voltage)) or np.all(np.isnan(dvdt)):
             return
 
         if self._popup_plot is None:

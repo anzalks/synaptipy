@@ -11,30 +11,24 @@ real-world batch processing.
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.basic_features import (
-    calculate_rmp,
-    find_stable_baseline,
-)
-from Synaptipy.core.analysis.burst_analysis import (
+from Synaptipy.core.analysis.firing_dynamics import (
     analyze_spikes_and_bursts,
     calculate_bursts_logic,
+    calculate_train_dynamics,
 )
-from Synaptipy.core.analysis.capacitance import (
+from Synaptipy.core.analysis.passive_properties import (
     calculate_capacitance_cc,
     calculate_capacitance_vc,
-)
-from Synaptipy.core.analysis.intrinsic_properties import (
     calculate_iv_curve,
     calculate_rin,
+    calculate_rmp,
     calculate_sag_ratio,
     calculate_tau,
+    find_stable_baseline,
 )
-from Synaptipy.core.analysis.spike_analysis import (
+from Synaptipy.core.analysis.single_spike import (
     calculate_spike_features,
     detect_spikes_threshold,
-)
-from Synaptipy.core.analysis.train_dynamics import (
-    calculate_train_dynamics,
 )
 from Synaptipy.core.signal_processor import blank_artifact
 

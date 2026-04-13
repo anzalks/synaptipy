@@ -33,13 +33,13 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Synaptipy imports
 # ---------------------------------------------------------------------------
-from Synaptipy.core.analysis.basic_features import calculate_rmp
-from Synaptipy.core.analysis.intrinsic_properties import (
+from Synaptipy.core.analysis.passive_properties import (
     calculate_rin,
+    calculate_rmp,
     calculate_sag_ratio,
     calculate_tau,
 )
-from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
 from Synaptipy.core.signal_processor import blank_artifact
 
 

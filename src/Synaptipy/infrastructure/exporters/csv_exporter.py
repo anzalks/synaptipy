@@ -88,6 +88,17 @@ class CSVExporter:
         try:
             log.debug(f"Writing {len(results)} analysis results to CSV: {output_path}")
 
+            # Pre-flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
+            # so that metric keys appear as top-level columns rather than a single "metrics" column.
+            def _pre_flatten(r: dict) -> dict:
+                out = dict(r)
+                if isinstance(out.get("metrics"), dict):
+                    for k, v in out.pop("metrics").items():
+                        out.setdefault(k, v)
+                return out
+
+            results = [_pre_flatten(r) for r in results]
+
             # Determine all possible fields across all results
             all_fields = set()
 

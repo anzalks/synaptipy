@@ -10,13 +10,13 @@ import time as time_mod
 import numpy as np
 
 from Synaptipy.core import signal_processor
-from Synaptipy.core.analysis.intrinsic_properties import (
+from Synaptipy.core.analysis.passive_properties import (
     _bi_exp_growth,
     _exp_growth,
     calculate_tau,
     run_tau_analysis_wrapper,
 )
-from Synaptipy.core.analysis.spike_analysis import (
+from Synaptipy.core.analysis.single_spike import (
     calculate_spike_features,
     run_spike_detection_wrapper,
 )
@@ -141,10 +141,11 @@ class TestTauWrapper:
         voltage = _exp_growth(t, -70, -60, 0.015)
 
         result = run_tau_analysis_wrapper(voltage, t, fs, stim_start_time=0.0, fit_duration=0.15)
+        metrics = result["metrics"]
 
-        assert "tau_ms" in result
-        assert "tau_model" in result
-        assert result["tau_model"] == "mono"
+        assert "tau_ms" in metrics
+        assert "tau_model" in metrics
+        assert metrics["tau_model"] == "mono"
 
     def test_wrapper_bi_output(self):
         """Wrapper with bi model should produce fast/slow keys."""
@@ -154,9 +155,10 @@ class TestTauWrapper:
         voltage += np.random.normal(0, 0.02, len(t))
 
         result = run_tau_analysis_wrapper(voltage, t, fs, stim_start_time=0.0, fit_duration=0.25, tau_model="bi")
+        metrics = result["metrics"]
 
-        assert "tau_fast_ms" in result or "tau_ms" in result
-        assert "parameters" in result
+        assert "tau_fast_ms" in metrics or "tau_ms" in metrics
+        assert "parameters" in metrics
 
     def test_wrapper_parameters_populated(self):
         """Parameters dict should contain all analysis arguments."""
@@ -175,8 +177,8 @@ class TestTauWrapper:
             tau_bound_max=0.5,
         )
 
-        assert "parameters" in result
-        params = result["parameters"]
+        assert "parameters" in result["metrics"]
+        params = result["metrics"]["parameters"]
         assert params["model"] == "mono"
         assert params["stim_start_time"] == 0.05
         assert params["fit_duration"] == 0.1
@@ -475,5 +477,5 @@ class TestParametersField:
         data[5001] = -20.0
 
         result = run_spike_detection_wrapper(data, t, 10000.0, threshold=-30.0)
-        assert "parameters" in result
-        assert result["parameters"]["threshold"] == -30.0
+        assert "parameters" in result["metrics"]
+        assert result["metrics"]["parameters"]["threshold"] == -30.0

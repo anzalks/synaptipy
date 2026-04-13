@@ -1,13 +1,17 @@
-# src/Synaptipy/core/analysis/optogenetics.py
+# src/Synaptipy/core/analysis/evoked_responses.py
 # -*- coding: utf-8 -*-
 """
-Optogenetic stimulus synchronization analysis.
+Core Protocol Module 5: Evoked Responses.
 
-Natively extracts digital/TTL optical stimulus pulses and correlates them with
-action potentials to determine optical latency, response probability, and jitter.
+Consolidates optogenetic stimulus synchronization (TTL-gated latency,
+probability, jitter analysis) from optogenetics.py.
 
-This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
-See the LICENSE file in the root of the repository for full license details.
+All registry wrapper functions return::
+
+    {
+        "module_used": "evoked_responses",
+        "metrics": { ... flat result keys ... }
+    }
 """
 
 import logging
@@ -16,12 +20,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from Synaptipy.core.analysis.event_detection import detect_events_template, detect_events_threshold
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
+from Synaptipy.core.analysis.synaptic_events import detect_events_template, detect_events_threshold
 from Synaptipy.core.results import AnalysisResult
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Result dataclass
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -34,7 +43,6 @@ class OptoSyncResult(AnalysisResult):
     stimulus_count: int = 0
     stimulus_onsets: Optional[np.ndarray] = None
     stimulus_offsets: Optional[np.ndarray] = None
-    # Lists of spike times responding to each stimulus
     responding_spikes: List[List[float]] = field(default_factory=list)
     parameters: Dict[str, Any] = field(default_factory=dict)
 
@@ -43,8 +51,13 @@ class OptoSyncResult(AnalysisResult):
             lat = f"{self.optical_latency_ms:.2f}" if self.optical_latency_ms is not None else "N/A"
             prob = f"{self.response_probability:.2f}" if self.response_probability is not None else "N/A"
             jit = f"{self.spike_jitter_ms:.2f}" if self.spike_jitter_ms is not None else "N/A"
-            return f"OptoSyncResult(Latency={lat} ms, Prob={prob}, Jitter={jit} ms, " f"Stims={self.stimulus_count})"
+            return f"OptoSyncResult(Latency={lat} ms, Prob={prob}, Jitter={jit} ms, Stims={self.stimulus_count})"
         return f"OptoSyncResult(Error: {self.error_message})"
+
+
+# ---------------------------------------------------------------------------
+# TTL Extraction
+# ---------------------------------------------------------------------------
 
 
 def extract_ttl_epochs(
@@ -54,16 +67,7 @@ def extract_ttl_epochs(
     auto_threshold: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Extracts rising and falling edges of a digital TTL signal.
-
-    Args:
-        ttl_data: The digital signal array (e.g. 0V to 5V pulses).
-        time: The timestamp array matching ttl_data.
-        threshold: Voltage threshold to define HIGH state (default 2.5V).
-        auto_threshold: If True and the given *threshold* produces no
-            edges (or only one edge), automatically compute a midpoint
-            threshold from the data range.  This makes detection robust
-            against unit rescaling (e.g. V → mV).
+    Extract rising and falling edges of a digital TTL signal.
 
     Returns:
         Tuple of (onsets, offsets) arrays in seconds.
@@ -71,12 +75,8 @@ def extract_ttl_epochs(
     if ttl_data.size == 0 or time.size == 0:
         return np.array([]), np.array([])
 
-    # Binarize signal based on threshold
     is_high = ttl_data > threshold
 
-    # Auto-threshold: if the supplied threshold leaves everything high
-    # or everything low (typically due to unit mismatches), fall back to
-    # midpoint of the signal's range.
     if auto_threshold:
         n_high = np.count_nonzero(is_high)
         if n_high == 0 or n_high == len(is_high):
@@ -86,8 +86,8 @@ def extract_ttl_epochs(
             if data_range > 0:
                 auto_thr = data_min + data_range * 0.5
                 log.info(
-                    "TTL threshold %.3f produced no edges; auto-adjusting "
-                    "to midpoint %.3f (data range %.3f – %.3f).",
+                    "TTL threshold %.3f produced no edges; auto-adjusting to midpoint %.3f "
+                    "(data range %.3f - %.3f).",
                     threshold,
                     auto_thr,
                     data_min,
@@ -95,38 +95,30 @@ def extract_ttl_epochs(
                 )
                 is_high = ttl_data > auto_thr
 
-    # Use numpy.diff to find edges
-    # diff evaluates to True at indices where signal crosses
-    # from False to True or True to False
-
-    # Prepend False to capture an edge if the signal starts high
     is_high_padded = np.insert(is_high, 0, False)
-
     diff_signal = np.diff(is_high_padded.astype(int))
-
-    # 1 indicates False -> True (Rising edge)
-    # -1 indicates True -> False (Falling edge)
     rising_edges_idx = np.where(diff_signal == 1)[0]
     falling_edges_idx = np.where(diff_signal == -1)[0]
 
-    # Handle the case where the signal ends while still high
     if len(rising_edges_idx) > len(falling_edges_idx):
-        # We append the very last index as the offset
         falling_edges_idx = np.append(falling_edges_idx, len(ttl_data) - 1)
 
     onsets = time[rising_edges_idx]
     offsets = time[falling_edges_idx]
-
     return onsets, offsets
 
 
 def _find_spikes_in_window(spikes: np.ndarray, t_start: float, t_end: float) -> np.ndarray:
-    """Helper to heavily vectorize finding spikes within a dynamic window."""
+    """Vectorised helper: return spikes within [t_start, t_end]."""
     if spikes.size == 0:
         return np.array([])
-
     mask = (spikes >= t_start) & (spikes <= t_end)
     return spikes[mask]
+
+
+# ---------------------------------------------------------------------------
+# Core Analysis
+# ---------------------------------------------------------------------------
 
 
 def calculate_optogenetic_sync(
@@ -137,14 +129,17 @@ def calculate_optogenetic_sync(
     response_window_ms: float = 20.0,
 ) -> OptoSyncResult:
     """
-    Core logic: Correlate TTL stimuli with Action Potential times.
+    Correlate TTL stimuli with action potential times.
 
     Args:
         ttl_data: Digital signal data trace.
-        action_potential_times: Pre-calculated spike times (in seconds).
+        action_potential_times: Pre-calculated spike/event times (seconds).
         time: Timestamps of the trace.
         ttl_threshold: Voltage threshold for TTL edge detection.
-        response_window_ms: Searching window for APs after stimulus onset (in ms).
+        response_window_ms: Search window for APs after stimulus onset (ms).
+
+    Returns:
+        OptoSyncResult.
     """
     if ttl_data.size == 0:
         return OptoSyncResult(value=None, unit="", is_valid=False, error_message="Empty TTL Data")
@@ -154,32 +149,24 @@ def calculate_optogenetic_sync(
 
     if stimulus_count == 0:
         return OptoSyncResult(
-            value=None, unit="", is_valid=False, error_message="No TTL stimuli detected above threshold"
+            value=None,
+            unit="",
+            is_valid=False,
+            error_message="No TTL stimuli detected above threshold",
         )
 
     window_s = response_window_ms / 1000.0
-
     latencies = []
     responding_spikes = []
     response_count = 0
 
-    # Evaluate response per stimulus
     for onset in onsets:
-        # Define window exclusively for this stimulus
-        t_start = onset
-        t_end = onset + window_s
-
-        # Find spikes in this window
-        valid_spikes = _find_spikes_in_window(action_potential_times, t_start, t_end)
+        valid_spikes = _find_spikes_in_window(action_potential_times, onset, onset + window_s)
         responding_spikes.append(valid_spikes.tolist())
-
         if valid_spikes.size > 0:
             response_count += 1
-            # We take the first spike in the window to calculate latency
-            first_spike_time = valid_spikes[0]
-            latencies.append((first_spike_time - onset) * 1000.0)  # ms
+            latencies.append((valid_spikes[0] - onset) * 1000.0)
 
-    # Calculate statistics
     if response_count > 0:
         optical_latency_ms = float(np.mean(latencies))
         spike_jitter_ms = float(np.std(latencies)) if len(latencies) > 1 else 0.0
@@ -188,8 +175,6 @@ def calculate_optogenetic_sync(
         optical_latency_ms = np.nan
         spike_jitter_ms = np.nan
         response_probability = 0.0
-
-    params = {"ttl_threshold": ttl_threshold, "response_window_ms": response_window_ms}
 
     return OptoSyncResult(
         value=optical_latency_ms,
@@ -202,11 +187,13 @@ def calculate_optogenetic_sync(
         stimulus_onsets=onsets,
         stimulus_offsets=offsets,
         responding_spikes=responding_spikes,
-        parameters=params,
+        parameters={"ttl_threshold": ttl_threshold, "response_window_ms": response_window_ms},
     )
 
 
-# --- WRAPPER (Dynamic Plugin Format) ---
+# ---------------------------------------------------------------------------
+# Registry Wrapper
+# ---------------------------------------------------------------------------
 
 
 @AnalysisRegistry.register(
@@ -238,7 +225,6 @@ def calculate_optogenetic_sync(
             "decimals": 2,
             "tooltip": "Time window after stimulus onset to search for events.",
         },
-        # ── Event type selector ──────────────────────────────────────────
         {
             "name": "event_detection_type",
             "type": "choice",
@@ -251,7 +237,6 @@ def calculate_optogenetic_sync(
                 "Events (Template): detect events by template/matched-filter."
             ),
         },
-        # ── Spike-detection params (visible only when Spikes is chosen) ─
         {
             "name": "spike_threshold",
             "type": "float",
@@ -263,7 +248,6 @@ def calculate_optogenetic_sync(
             "tooltip": "Voltage threshold to detect action potentials.",
             "visible_when": {"param": "event_detection_type", "value": "Spikes"},
         },
-        # ── Event-threshold params (visible when Events (Threshold)) ────
         {
             "name": "event_threshold",
             "type": "float",
@@ -293,7 +277,6 @@ def calculate_optogenetic_sync(
             "decimals": 4,
             "visible_when": {"param": "event_detection_type", "value": "Events (Threshold)"},
         },
-        # ── Template params (visible when Events (Template)) ────────────
         {
             "name": "template_tau_rise_ms",
             "type": "float",
@@ -333,50 +316,27 @@ def calculate_optogenetic_sync(
             "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
         },
     ],
-    # Visualization metadata
     plots=[
         {"name": "Trace", "type": "trace", "show_events": True},
-        {
-            "type": "vlines",
-            "data": "stimulus_onsets",
-            "color": "c",
-        },
+        {"type": "vlines", "data": "stimulus_onsets", "color": "c"},
     ],
 )
 def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """
     Wrapper for optogenetic synchronization analysis.
 
-    Correlates TTL/optical stimulus pulses with detected events.  The
-    type of event detection is controlled by ``event_detection_type``:
-
-    * ``"Spikes"`` — action potentials via threshold crossing.
-    * ``"Events (Threshold)"`` — synaptic events via adaptive prominence.
-    * ``"Events (Template)"`` — events via matched-filter (template).
-
-    Args:
-        data: 1-D array of the selected channel signal (typically voltage).
-        time: Corresponding time vector (seconds).
-        sampling_rate: Sampling rate in Hz.
-        **kwargs: See ``ui_params`` in the registration decorator.
-
-    Returns:
-        dict with ``optical_latency_ms``, ``response_probability``,
-        ``spike_jitter_ms``, ``stimulus_count``; or ``error`` on failure.
+    Correlates TTL/optical stimulus pulses with detected events.
     """
     ttl_threshold = kwargs.get("ttl_threshold", 2.5)
     response_window_ms = kwargs.get("response_window_ms", 20.0)
     event_detection_type = kwargs.get("event_detection_type", "Spikes")
 
-    # ------------------------------------------------------------------
-    # 1. Detect events/spikes from the primary channel
-    # ------------------------------------------------------------------
     ap_times = kwargs.get("action_potential_times", None)
 
     if ap_times is None:
         if event_detection_type == "Spikes":
             ap_threshold = kwargs.get("spike_threshold", 0.0)
-            refractory_samples = max(1, int(0.002 * sampling_rate))  # 2 ms
+            refractory_samples = max(1, int(0.002 * sampling_rate))
             spike_result = detect_spikes_threshold(
                 data, time, threshold=ap_threshold, refractory_samples=refractory_samples
             )
@@ -400,8 +360,8 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
                 ap_times = np.array([])
 
         elif event_detection_type == "Events (Template)":
-            tau_rise = kwargs.get("template_tau_rise_ms", 0.5) / 1000.0  # ms → s
-            tau_decay = kwargs.get("template_tau_decay_ms", 5.0) / 1000.0  # ms → s
+            tau_rise = kwargs.get("template_tau_rise_ms", 0.5) / 1000.0
+            tau_decay = kwargs.get("template_tau_decay_ms", 5.0) / 1000.0
             threshold_sd = kwargs.get("template_threshold_sd", 4.0)
             direction = kwargs.get("template_direction", "negative")
             ev_result = detect_events_template(
@@ -422,22 +382,11 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
             ap_times = np.array([])
             log.warning("Unknown event_detection_type '%s'; defaulting to no events.", event_detection_type)
 
-    # ------------------------------------------------------------------
-    # 2. TTL / optical stimulus data
-    # ------------------------------------------------------------------
     ttl_data = kwargs.get("ttl_data", None)
     if ttl_data is None:
-        log.warning(
-            "No TTL data provided. Using the voltage trace as a fallback for "
-            "TTL edge detection. This is only valid if the trace contains "
-            "large optical artifacts (> ttl_threshold V). For accurate results, "
-            "provide a dedicated TTL channel via the 'ttl_data' keyword argument."
-        )
+        log.debug("No TTL data provided; using voltage trace as fallback for TTL edge detection.")
         ttl_data = data
 
-    # ------------------------------------------------------------------
-    # 3. Core synchronisation analysis
-    # ------------------------------------------------------------------
     result = calculate_optogenetic_sync(
         ttl_data=ttl_data,
         action_potential_times=ap_times,
@@ -447,14 +396,39 @@ def run_opto_sync_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
     )
 
     if not result.is_valid:
-        return {"error": result.error_message}
+        return {"module_used": "evoked_responses", "metrics": {"error": result.error_message}}
 
     return {
-        "optical_latency_ms": result.optical_latency_ms,
-        "response_probability": result.response_probability,
-        "spike_jitter_ms": result.spike_jitter_ms,
-        "stimulus_count": result.stimulus_count,
-        "event_count": len(ap_times),
-        "event_times": ap_times.tolist() if hasattr(ap_times, "tolist") else list(ap_times),
-        "stimulus_onsets": (result.stimulus_onsets.tolist() if result.stimulus_onsets is not None else []),
+        "module_used": "evoked_responses",
+        "metrics": {
+            "optical_latency_ms": result.optical_latency_ms,
+            "response_probability": result.response_probability,
+            "spike_jitter_ms": result.spike_jitter_ms,
+            "stimulus_count": result.stimulus_count,
+            "event_count": len(ap_times),
+            "event_times": ap_times.tolist() if hasattr(ap_times, "tolist") else list(ap_times),
+            "stimulus_onsets": (result.stimulus_onsets.tolist() if result.stimulus_onsets is not None else []),
+        },
     }
+
+
+# ---------------------------------------------------------------------------
+# Module-level tab aggregator
+# ---------------------------------------------------------------------------
+@AnalysisRegistry.register(
+    "evoked_responses",
+    label="Evoked Responses",
+    requires_secondary_channel={
+        "param_name": "ttl_data",
+        "label": "TTL Channel:",
+        "tooltip": "Select the digital/TTL channel containing optical stimulus pulses.",
+    },
+    method_selector={
+        "Optogenetic Sync": "optogenetic_sync",
+    },
+    ui_params=[],
+    plots=[],
+)
+def evoked_responses_module(**kwargs):
+    """Module-level aggregator tab for evoked-response analyses."""
+    return {}
