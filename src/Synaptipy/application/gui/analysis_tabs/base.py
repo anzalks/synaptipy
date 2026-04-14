@@ -1832,7 +1832,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         for i in range(num_trials):
             self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
 
-        # 3. Set Initial Selection based on item_type
+        # 4. Cross-File Average (always available for multi-file workflows)
+        self.data_source_combobox.addItem("Cross-File Average", userData="cross_file_average")
+
+        # 4. Set Initial Selection based on item_type
         if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
             # Find and select the specific trial
             index = self.data_source_combobox.findData(item_trial_index)
@@ -1892,6 +1895,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if chan_id is None or data_source is None:
             log.debug(f"{self.__class__.__name__}: Invalid selection (chan={chan_id}, source={data_source})")
             self.plot_widget.clear()
+            return
+
+        # Cross-File Average is computed on-demand when analysis runs;
+        # just update the title and preserve the existing plot.
+        if data_source == "cross_file_average":
+            if self.plot_widget:
+                self.plot_widget.setTitle("Cross-File Average - Run analysis to compute")
             return
 
         if not self._selected_item_recording or chan_id not in self._selected_item_recording.channels:
@@ -2095,9 +2105,184 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.analysis_region.setVisible(True)
         pass  # Default implementation does nothing
 
+    # --- Cross-File Average ---
+
+    def _extract_per_file_trace(
+        self, item: Dict[str, Any], parsed_trials: List[int], channel_idx: int
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Load one analysis item and return its averaged trace for the requested
+        trials.  Returns ``None`` if the file cannot be loaded, does not have
+        the channel, or does not contain all requested trials.
+
+        Args:
+            item:          Single entry from ``_analysis_items``.
+            parsed_trials: 0-based trial indices to average within the file.
+            channel_idx:   0-based channel position (sorted by channel-id).
+
+        Returns:
+            ``(time_array, averaged_data)`` or ``None``.
+        """
+        path = item.get("path")
+        if not path:
+            return None
+        try:
+            recording = self.neo_adapter.read_recording(path)
+            if recording is None:
+                log.debug(f"Cross-file avg: could not load {path}")
+                return None
+
+            channels_sorted = sorted(recording.channels.items())
+            if channel_idx >= len(channels_sorted):
+                log.debug(f"Cross-file avg: {path.name} has fewer channels than index {channel_idx} - skipping")
+                return None
+
+            _, channel = channels_sorted[channel_idx]
+
+            file_traces: List[np.ndarray] = []
+            file_times: List[np.ndarray] = []
+            for trial_idx in parsed_trials:
+                trial_data = channel.get_data(trial_idx)
+                trial_time = channel.get_relative_time_vector(trial_idx)
+                if trial_data is None or trial_time is None:
+                    raise ValueError(f"Trial {trial_idx} returned None data in {path.name}")
+                file_traces.append(trial_data)
+                file_times.append(trial_time)
+
+            if not file_traces:
+                return None
+
+            min_file_len = min(len(t) for t in file_traces)
+            file_avg = np.mean(np.array([t[:min_file_len] for t in file_traces]), axis=0)
+            return file_times[0][:min_file_len], file_avg
+
+        except (IndexError, ValueError) as e:
+            log.debug(f"Cross-file avg: skipping {path}: {e}")
+            return None
+
+    def _get_cross_file_average(
+        self, parsed_trials: List[int], channel_idx: int
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
+        """
+        Compute the grand average of specified trials across all loaded files.
+
+        Delegates per-file extraction to ``_extract_per_file_trace``.  Files
+        that fail silently are excluded so the average denominator stays
+        scientifically correct.  All valid per-file averages are truncated to
+        the shortest array before the grand average is formed.
+
+        Args:
+            parsed_trials: Ordered list of 0-based trial indices to extract.
+            channel_idx:   Position of the target channel (0-based, sorted by
+                           channel-id) shared across files.
+
+        Returns:
+            Tuple ``(time_array, grand_average, n_files)`` where *n_files* is
+            the number of files that contributed.  Returns ``(None, None, 0)``
+            when no valid traces could be obtained.
+        """
+        valid_traces: List[np.ndarray] = []
+        valid_times: List[np.ndarray] = []
+
+        for item in self._analysis_items:
+            result = self._extract_per_file_trace(item, parsed_trials, channel_idx)
+            if result is not None:
+                file_time, file_avg = result
+                valid_traces.append(file_avg)
+                valid_times.append(file_time)
+
+        if not valid_traces:
+            return None, None, 0
+
+        # Align all per-file averages to the minimum length before grand averaging
+        min_len = min(len(t) for t in valid_traces)
+        truncated_traces = np.array([t[:min_len] for t in valid_traces])
+        truncated_time = valid_times[0][:min_len]
+
+        grand_average = np.mean(truncated_traces, axis=0)
+        return truncated_time, grand_average, len(valid_traces)
+
+    def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
+        """
+        Compute the cross-file grand average, apply preprocessing, plot the
+        result, and run the registered analysis function on it.
+
+        Called by ``_trigger_analysis`` when "Cross-File Average" is active.
+
+        Args:
+            params: Parameters gathered from ``_gather_analysis_parameters``.
+        """
+        if not self.signal_channel_combobox:
+            return
+
+        channel_idx = self.signal_channel_combobox.currentIndex()
+
+        # Determine which trials to extract; fall back to trial 0
+        parsed_trials: List[int] = [0]
+        if hasattr(self, "trial_selection_input") and self.trial_selection_input:
+            sel_text = self.trial_selection_input.text().strip()
+            if sel_text and self._selected_item_recording:
+                first_ch = next(iter(self._selected_item_recording.channels.values()), None)
+                n_ref = getattr(first_ch, "num_trials", 1) if first_ch else 1
+                from Synaptipy.shared.utils import parse_trial_selection_string
+
+                parsed = sorted(parse_trial_selection_string(sel_text, n_ref))
+                if parsed:
+                    parsed_trials = parsed
+
+        time_arr, grand_avg, n_files = self._get_cross_file_average(parsed_trials, channel_idx)
+
+        if time_arr is None or grand_avg is None or n_files == 0:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Cross-File Average",
+                "No valid data could be extracted for the cross-file average.\n"
+                "Ensure all loaded files share the selected channel and trial index.",
+            )
+            return
+
+        # Apply preprocessing pipeline to the grand average
+        fs = self._current_plot_data.get("sampling_rate", 1.0) if self._current_plot_data else 1.0
+        processed = grand_avg.copy()
+        if self._active_preprocessing_settings and self.pipeline:
+            result = self.pipeline.process(grand_avg, fs, time_arr)
+            if result is not None:
+                processed = result
+
+        # Build data dict compatible with _execute_core_analysis
+        chan_name = self.signal_channel_combobox.currentText() if self.signal_channel_combobox else ""
+        units = self._current_plot_data.get("units", "") if self._current_plot_data else ""
+        cross_data: Dict[str, Any] = {
+            "data": processed,
+            "time": time_arr,
+            "raw_data": grand_avg.copy(),
+            "raw_time": time_arr.copy(),
+            "data_source": "cross_file_average",
+            "sampling_rate": fs,
+            "channel_name": chan_name,
+            "units": units,
+        }
+
+        # Plot the cross-file average
+        if self.plot_widget:
+            self.plot_widget.clear()
+            avg_pen = get_average_pen()
+            self.plot_widget.plot(time_arr, processed, pen=avg_pen, name="Cross-File Average")
+            self.plot_widget.setTitle(f"Cross-File Average (N={n_files} files)")
+            self.plot_widget.setLabel("bottom", "Time", units="s")
+            self.plot_widget.setLabel("left", chan_name, units=units)
+            self.auto_range_plot()
+
+        # Run the registered analysis on the grand average
+        results = self._execute_core_analysis(params, cross_data)
+        if results is None:
+            return
+
+        self._on_analysis_result(results)
+
     # --- PHASE 2: Template Method Pattern ---
     @QtCore.Slot()
-    def _trigger_analysis(self):
+    def _trigger_analysis(self):  # noqa: C901
         """
         Template method that orchestrates the analysis workflow.
         This method should NOT be overridden by subclasses.
@@ -2117,6 +2302,36 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         log.debug(f"{self.__class__.__name__}: Triggering analysis")
+
+        # --- Cross-File Average Intercept ---
+        # When this mode is active, data comes from all loaded files rather
+        # than from _current_plot_data (which reflects only the selected file).
+        if self.data_source_combobox is not None and self.data_source_combobox.currentData() == "cross_file_average":
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+            self._last_analysis_result = None
+            try:
+                params = self._gather_analysis_parameters()
+                if params:
+                    # Inject restricted analysis window if active
+                    if (
+                        getattr(self, "restrict_analysis_checkbox", None)
+                        and self.restrict_analysis_checkbox.isChecked()
+                        and getattr(self, "analysis_region", None)
+                    ):
+                        min_t, max_t = self.analysis_region.getRegion()
+                        params["t_start"] = min_t
+                        params["t_end"] = max_t
+                    self._execute_cross_file_average_analysis(params)
+            except Exception as e:
+                log.error(f"{self.__class__.__name__}: Cross-file analysis failed: {e}", exc_info=True)
+                QtWidgets.QMessageBox.critical(
+                    self, "Analysis Error", f"An error occurred during cross-file analysis:\n{str(e)}"
+                )
+                self._set_save_button_enabled(False)
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+            return
+        # --- End Cross-File Average Intercept ---
 
         # Validate data
         # Validate data
