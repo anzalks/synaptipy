@@ -79,7 +79,7 @@ files = adapter.list_compatible_files("/path/to/directory")
 #### Input Resistance
 
 ```python
-from Synaptipy.core.analysis.intrinsic_properties import calculate_rin
+from Synaptipy.core.analysis.passive_properties import calculate_rin
 
 # Calculate input resistance from a voltage trace and a known current step
 result = calculate_rin(
@@ -98,7 +98,7 @@ if result.is_valid:
 #### Sag Ratio
 
 ```python
-from Synaptipy.core.analysis.intrinsic_properties import calculate_sag_ratio
+from Synaptipy.core.analysis.passive_properties import calculate_sag_ratio
 
 # Compute sag ratio from a hyperpolarising current-step trace
 result = calculate_sag_ratio(
@@ -123,7 +123,7 @@ rebound = result["rebound_depolarization"] # mV
 #### Spike Detection
 
 ```python
-from Synaptipy.core.analysis.spike_analysis import detect_spikes_threshold
+from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
 
 # Detect spikes using threshold crossing
 spike_result = detect_spikes_threshold(

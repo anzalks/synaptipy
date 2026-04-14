@@ -427,7 +427,32 @@ and batch processing all work immediately.
 > **Formal mathematics:** For publication-ready LaTeX definitions of every metric
 > computed below, see the [Algorithmic Definitions](../algorithmic_definitions.md) page.
 
+All 15 analyses are grouped into five tabs that match the neuroscience workflow from
+passive membrane characterisation through synaptic and optogenetic studies.
+
+| UI Tab | Analyses covered |
+|--------|------------------|
+| **Intrinsic Properties** | Baseline/RMP (4.1), Input Resistance (4.6), Tau (4.7), I-V Curve (4.8), Capacitance (4.10), Sag Ratio (4.15) |
+| **Spike Analysis** | Spike Detection (4.2), Phase Plane (4.13) |
+| **Excitability** | Excitability — F-I Curve (4.11), Burst (4.9), Spike Train Dynamics (4.14) |
+| **Synaptic Events** | Threshold (4.3), Deconvolution (4.4), Baseline+Peak+Kinetics (4.5) |
+| **Optogenetics** | Optogenetic Synchronization (4.12) |
+
+![Intrinsic Properties tab](screenshots/analyser_intrinsic_properties.png)
+
+![Spike Analysis tab](screenshots/analyser_spike_analysis.png)
+
+![Excitability tab](screenshots/analyser_excitability.png)
+
+![Synaptic Events tab](screenshots/analyser_synaptic_events.png)
+
+![Optogenetics tab](screenshots/analyser_optogenetics.png)
+
+---
+
 ### 4.1 Baseline / RMP Analysis
+
+![Baseline RMP interface](screenshots/analyser_intrinsic_properties_baseline_rmp.png)
 
 **Registry name**: `rmp_analysis` | **Tab label**: *Baseline (RMP)*
 
@@ -463,6 +488,8 @@ Green draggable region; solid red h-line at RMP; dashed red h-lines at ±SD.
 ---
 
 ### 4.2 Spike Detection
+
+![Spike Detection interface](screenshots/analyser_spike_analysis_spike_detection.png)
 
 **Registry name**: `spike_detection` | **Tab label**: *Spike Detection*
 
@@ -508,6 +535,8 @@ Red dashed threshold h-line; red dot markers at spike peaks.
 
 ### 4.3 Event Detection — Threshold Based
 
+![Event Detection — Threshold interface](screenshots/analyser_synaptic_events_threshold_based.png)
+
 **Registry name**: `event_detection_threshold` | **Tab label**: *Event Detection*
 
 Detects mEPSCs / mIPSCs using adaptive prominence-based thresholding.
@@ -549,6 +578,8 @@ draggable threshold line; artifact overlay.
 
 ### 4.4 Event Detection — Template Match / Deconvolution
 
+![Event Detection — Deconvolution interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
+
 **Registry name**: `event_detection_deconvolution` | **Tab label**: *Event (Template Match)*
 
 Detects events via a matched-filter approach using a bi-exponential template.
@@ -584,6 +615,8 @@ Same interactive markers / threshold line / artifact overlay.
 
 ### 4.5 Event Detection — Baseline Peak / Kinetics
 
+![Event Detection — Baseline Peak interface](screenshots/analyser_synaptic_events_baseline__peak__kinetics.png)
+
 **Registry name**: `event_detection_baseline_peak` | **Tab label**: *Event (Baseline Peak)*
 
 Detects events by finding the most stable baseline and locating peaks above the
@@ -616,6 +649,8 @@ noise floor.
 ---
 
 ### 4.6 Input Resistance (Rin)
+
+![Input Resistance interface](screenshots/analyser_intrinsic_properties_input_resistance.png)
 
 **Registry name**: `rin_analysis` | **Tab label**: *Input Resistance*
 
@@ -662,6 +697,8 @@ voltage; red h-line at steady-state voltage.
 
 ### 4.7 Tau (Membrane Time Constant)
 
+![Tau interface](screenshots/analyser_intrinsic_properties_tau_time_constant.png)
+
 **Registry name**: `tau_analysis` | **Tab label**: *Tau (Time Constant)*
 
 Fits the membrane charging curve to extract the passive time constant.
@@ -697,6 +734,8 @@ Red exponential fit curve overlaid on the raw voltage trace.
 
 ### 4.8 I-V Curve
 
+![I-V Curve interface](screenshots/analyser_intrinsic_properties_i-v_curve.png)
+
 **Registry name**: `iv_curve_analysis` | **Tab label**: *I-V Curve*
 **Requires multiple trials** (multi-sweep step protocol).
 
@@ -727,6 +766,8 @@ Popup I-V scatter + linear regression line with slope annotation and R².
 ---
 
 ### 4.9 Burst Analysis
+
+![Burst Analysis interface](screenshots/analyser_excitability_burst_analysis.png)
 
 **Registry name**: `burst_analysis` | **Tab label**: *Burst*
 
@@ -760,6 +801,8 @@ Red bracket lines spanning each burst, with spike markers inside each burst.
 
 ### 4.10 Capacitance
 
+![Capacitance interface](screenshots/analyser_intrinsic_properties_capacitance.png)
+
 **Registry name**: `capacitance_analysis` | **Tab label**: *Capacitance*
 
 Estimates whole-cell membrane capacitance from step protocols.
@@ -787,6 +830,8 @@ Estimates whole-cell membrane capacitance from step protocols.
 ---
 
 ### 4.11 Excitability (F-I Curve)
+
+![Excitability interface](screenshots/analyser_excitability_excitability.png)
 
 **Registry name**: `excitability_analysis` | **Tab label**: *Excitability*
 **Requires multiple trials** (increasing current-step protocol).
@@ -819,6 +864,8 @@ Popup F-I scatter with regression line and slope annotation.
 ---
 
 ### 4.12 Optogenetic Synchronization
+
+![Optogenetics interface](screenshots/analyser_optogenetics_optogenetic_sync.png)
 
 **Registry name**: `optogenetic_sync` | **Tab label**: *Optogenetic Synchronization*
 **Requires secondary TTL channel** (dropdown to select the optical stimulus channel).
@@ -883,6 +930,8 @@ Event markers on signal trace; cyan dashed vertical lines at TTL onsets.
 
 ### 4.13 Phase Plane Analysis
 
+![Phase Plane interface](screenshots/analyser_spike_analysis_phase_plane.png)
+
 **Registry name**: `phase_plane_analysis` | **Tab label**: *Phase Plane*
 
 Visualizes AP dynamics in phase space (dV/dt vs. V).
@@ -919,6 +968,8 @@ H-line on main trace at threshold voltage.
 
 ### 4.14 Spike Train Dynamics
 
+![Spike Train Dynamics interface](screenshots/analyser_excitability_spike_train_dynamics.png)
+
 **Registry name**: `train_dynamics` | **Tab label**: *Spike Train Dynamics*
 
 Quantifies spike train regularity and temporal structure with ISI statistics.
@@ -949,6 +1000,8 @@ Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
 ---
 
 ### 4.15 Sag Ratio (I_h)
+
+![Sag Ratio interface](screenshots/analyser_intrinsic_properties_sag_ratio_ih.png)
 
 **Registry name**: `sag_ratio_analysis` | **Tab label**: *Sag Ratio (Ih)*
 

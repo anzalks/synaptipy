@@ -47,6 +47,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """
         self.analysis_name = analysis_name
         self.metadata = AnalysisRegistry.get_metadata(analysis_name)
+        # Stable module-level identity - never overwritten by method-selector switching.
+        self._module_name: str = analysis_name
+        self._module_metadata: Dict[str, Any] = AnalysisRegistry.get_metadata(analysis_name)
         self.param_widgets: Dict[str, QtWidgets.QWidget] = {}
         self._popup_windows = []
         self._interactive_regions = {}
@@ -118,15 +121,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         return True
 
     def get_registry_name(self) -> str:
-        return self.analysis_name
+        # Always return the original module/aggregator name, not the active sub-method.
+        return self._module_name
 
     def get_display_name(self) -> str:
-        # Use label from metadata if available, else format the name
-        return self.metadata.get("label", self.analysis_name.replace("_", " ").title())
+        # Use the module-level label, which is stable across method-selector changes.
+        return self._module_metadata.get("label", self._module_name.replace("_", " ").title())
 
     def get_covered_analysis_names(self) -> List[str]:
         """Return all registry names this tab covers (including method selector alternatives)."""
-        names = [self.analysis_name]
+        names = [self._module_name]
         names.extend(self._method_map.values())
         return list(set(names))
 

@@ -439,6 +439,7 @@ class AnalyserTab(QtWidgets.QWidget):
             "firing_dynamics",
             "synaptic_events",
             "evoked_responses",
+            "phase_plane_analysis",
         ]
 
         def _tab_sort_key(name):

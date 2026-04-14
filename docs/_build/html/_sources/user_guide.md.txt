@@ -153,12 +153,28 @@ For the full list of Neo-supported formats, see the
 ### Plot Options
 
 - **Plot Mode**:
- - "Overlay All + Avg": Shows all trials with the average highlighted
- - "Cycle Single Trial": Shows one trial at a time with navigation controls
-- **Manual Trial Averaging (Across Files)**:
- - While in "Cycle Single Trial", use the **"Add Current Trial to Avg Set"** button.
- - Navigate to completely different files and continue adding trials to your global selection.
- - Check **"Plot Selected Avg"** to instantly overlay the average of all your manually cherry-picked trials from across the entire dataset.
+  - "Overlay All + Avg": Shows all trials with the average highlighted
+  - "Cycle Single Trial": Shows one trial at a time with navigation controls
+- **Cross-File Trial Averaging**:
+  While in "Cycle Single Trial" mode, you can manually build a grand average
+  from any combination of files and trials across the entire session:
+  1. Use the **"Add Current Trial to Avg Set"** button to add the currently
+     displayed trial - including any active preprocessing transforms - to the
+     global selection set.
+  2. Navigate freely between files (even files of different durations or
+     sampling protocols) and continue adding trials. The selection accumulates
+     persistently until cleared.
+  3. Enable **"Plot Selected Avg"** to overlay the grand average on the current
+     recording view.
+
+  **Shape-mismatch handling:** Because recordings from different files may have
+  different durations, the accumulator uses
+  `sum[:min_len] += trial[:min_len]` where
+  `min_len = min(len(accumulator), len(trial))`. This silently truncates every
+  trial to the shortest array in the selection before summing, so recordings
+  with different lengths never cause a NumPy broadcast error. The resulting
+  average is plotted against the time vector of the first trial added to the
+  set.
 - **Channel Selection**: Choose which channel to view from the dropdown
 - **Downsampling**: Enable/disable automatic downsampling for large datasets
 
@@ -270,6 +286,55 @@ All analysis sub-tabs share the following interface behaviours:
  - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
 
 ## Advanced Options
+
+### Preferences
+
+Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access the application settings:
+
+| Setting | Description |
+|---------|-------------|
+| **Scroll Behavior** | Choose Natural, Inverted, or System scroll direction for plots. |
+| **Appearance** | Switch between Light, Dark, or System color theme. |
+| **Enable Custom Plugins** | When checked, Synaptipy loads Python plugins from `~/.synaptipy/plugins/` and `examples/plugins/`. See below for the hot-reload mechanism. |
+
+#### Enable Custom Plugins - Hot-Reload Mechanism
+
+Toggling "Enable Custom Plugins" does **not** require an application restart.
+When the checkbox state changes and the dialog is accepted, Synaptipy:
+
+1. Calls `PluginManager.reload_plugins()`, which first calls
+   `AnalysisRegistry.unregister_plugins()` to purge every plugin-sourced
+   entry (those flagged `source="plugin"`) from the registry while leaving
+   all built-in analyses intact.
+2. If the setting is now **enabled**, re-executes every `.py` file discovered
+   in `examples/plugins/` (bundled examples) then `~/.synaptipy/plugins/`
+   (user additions). Each file's `@AnalysisRegistry.register(...)` decorator
+   re-runs and re-populates the registry.
+3. Calls `AnalyserTab.rebuild_analysis_tabs()` to destroy the existing
+   sub-tab widgets and regenerate them from the updated registry - all within
+   the running process.
+
+The net effect is that plugin tabs appear or disappear immediately without
+reloading the application. A syntax error or import failure in a single plugin
+is caught and logged; remaining plugins still load normally.
+
+> **Tip:** If you install a new plugin file while Synaptipy is running, open
+> Preferences and toggle "Enable Custom Plugins" off then on to force an
+> immediate reload of all plugins from disk.
+
+#### Included Example Plugins
+
+Synaptipy ships three ready-to-run example plugins in `examples/plugins/`.
+With **Enable Custom Plugins** active they load automatically:
+
+| Plugin file | Analyser tab label | What it measures |
+|-------------|--------------------|------------------|
+| `synaptic_charge.py` | Synaptic Charge (AUC) | Area under a postsynaptic current trace (total charge in pC); shaded fill + peak star overlay |
+| `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in spike latency after an optogenetic TTL pulse |
+| `ap_repolarization.py` | AP Repolarization Rate | Maximum rate of membrane-potential decline (dV/dt minimum) during an action potential |
+
+Copy any of these files to `~/.synaptipy/plugins/` and edit your copy to create
+a personalised variant without modifying the Synaptipy installation.
 
 ### Command Line Arguments
 
