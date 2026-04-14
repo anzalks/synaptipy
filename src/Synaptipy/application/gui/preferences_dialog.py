@@ -33,7 +33,12 @@ class PreferencesDialog(QtWidgets.QDialog):
     Contains settings for:
     - Scroll behavior (Natural/Inverted/System)
     - Theme appearance (Light/Dark/System)
+    - Extensions (custom plugins)
     """
+
+    # Emitted when the user saves/applies a changed plugin-enable state.
+    # The bool argument is the new value (True = plugins enabled).
+    sigPluginsToggled = QtCore.Signal(bool)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
@@ -161,7 +166,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         plugins_description.setStyleSheet("color: gray; font-size: 11px;")
         plugins_layout.addWidget(plugins_description)
 
-        self.enable_plugins_checkbox = QtWidgets.QCheckBox("Enable Custom Plugins (requires restart)")
+        self.enable_plugins_checkbox = QtWidgets.QCheckBox("Enable Custom Plugins")
         self.enable_plugins_checkbox.setToolTip(
             "When checked, Synaptipy loads Python plugins from the user and examples plugin directories."
         )
@@ -237,15 +242,19 @@ class PreferencesDialog(QtWidgets.QDialog):
         apply_theme(new_theme)
         log.debug(f"Applied theme mode: {new_theme.value}")
 
-        # Save plugins toggle
+        # Save plugins toggle and emit signal if it changed
         plugins_enabled = self.enable_plugins_checkbox.isChecked()
+        plugins_changed = plugins_enabled != self._original_enable_plugins
         self._settings.setValue("enable_plugins", plugins_enabled)
-        log.debug(f"Applied enable_plugins: {plugins_enabled}")
+        log.debug(f"Applied enable_plugins: {plugins_enabled} (changed={plugins_changed})")
 
         # Update original values (so cancel won't revert)
         self._original_scroll_direction = new_scroll
         self._original_theme_mode = new_theme
         self._original_enable_plugins = plugins_enabled
+
+        if plugins_changed:
+            self.sigPluginsToggled.emit(plugins_enabled)
 
     def _on_accepted(self):
         """Handle OK button click."""

@@ -74,7 +74,9 @@ class StartupManager(QtCore.QObject):
         # of the package does.  This is the root cause of analyses missing on Windows.
         try:
             import Synaptipy.core.analysis  # noqa: F401 — side-effect: registers all built-in analyses
+            from Synaptipy.core.analysis.registry import AnalysisRegistry
 
+            AnalysisRegistry.mark_core_snapshot()
             log.debug("Built-in analysis modules loaded and registered.")
         except Exception as e:
             log.error(f"Failed to import built-in analysis modules: {e}")

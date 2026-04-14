@@ -8,7 +8,7 @@ to register themselves via decorators, enabling flexible pipeline configuration.
 """
 
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Set
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class AnalysisRegistry:
     _registry: Dict[str, Callable] = {}
     _metadata: Dict[str, Dict[str, Any]] = {}
     _original_metadata: Dict[str, Dict[str, Any]] = {}  # Store factory defaults
+    _core_analyses: Set[str] = set()  # Names registered by core package (not plugins)
 
     @classmethod
     def register(cls, name: str, type: str = "analysis", **kwargs) -> Callable:
@@ -132,6 +133,33 @@ class AnalysisRegistry:
         return [name for name, meta in cls._metadata.items() if meta.get("type", "analysis") == "analysis"]
 
     @classmethod
+    def mark_core_snapshot(cls):
+        """
+        Record the current registry keys as the immutable core set.
+
+        Call this once after importing the built-in analysis package but
+        *before* loading any external plugins.  ``unregister_plugins()``
+        uses this snapshot to know which entries must never be removed.
+        """
+        cls._core_analyses = set(cls._registry.keys())
+        log.debug(f"Core analysis snapshot taken: {len(cls._core_analyses)} entries.")
+
+    @classmethod
+    def unregister_plugins(cls):
+        """
+        Remove all analyses that are NOT part of the core package.
+
+        Safe to call multiple times.  Only affects entries added after the
+        last ``mark_core_snapshot()`` call (i.e. plugin-contributed entries).
+        """
+        keys_to_remove = [k for k in list(cls._registry.keys()) if k not in cls._core_analyses]
+        for k in keys_to_remove:
+            cls._registry.pop(k, None)
+            cls._metadata.pop(k, None)
+            cls._original_metadata.pop(k, None)
+        log.debug(f"Unregistered {len(keys_to_remove)} plugin analyses: {keys_to_remove}")
+
+    @classmethod
     def clear(cls):
         """
         Clear all registered functions (mainly for testing).
@@ -139,6 +167,7 @@ class AnalysisRegistry:
         cls._registry.clear()
         cls._metadata.clear()
         cls._original_metadata.clear()
+        cls._core_analyses.clear()
         log.debug("Analysis registry cleared")
 
     @classmethod
