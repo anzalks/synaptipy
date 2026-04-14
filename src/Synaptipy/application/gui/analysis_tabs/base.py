@@ -1076,13 +1076,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug(f"[ANALYSIS-BASE] Auto-ranging plot for {self.__class__.__name__}")
         vb = self.plot_widget.getViewBox() if self.plot_widget else None
         if vb is not None:
-            # Clear any hard view-limits, then force an immediate re-range to
-            # the full extents of all visible traces (enableAutoRange triggers
-            # an update on the next paint cycle, which is more reliable than
-            # a one-shot autoRange() call after manual zooming).
-            log.debug("[ANALYSIS-BASE] Using enableAutoRange for full-data reset")
+            # Clear any hard view-limits, enable auto-range mode, then also
+            # call autoRange() immediately so the extent is applied synchronously
+            # (required in offscreen/headless test environments where paint events
+            # are not dispatched, causing enableAutoRange-only updates to be deferred
+            # indefinitely).
+            log.debug("[ANALYSIS-BASE] Using enableAutoRange + immediate autoRange for full-data reset")
             vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
             vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+            vb.autoRange()
         elif self.zoom_sync:
             log.debug("[ANALYSIS-BASE] Using zoom sync auto-range")
             self.zoom_sync.auto_range()
