@@ -2112,6 +2112,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         7. Enable save button
         8. Handle errors and restore cursor
         """
+        # Tab is in the process of being removed — exit silently.
+        if getattr(self, "_unmounting", False):
+            return
+
         log.debug(f"{self.__class__.__name__}: Triggering analysis")
 
         # Validate data
@@ -2157,9 +2161,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # BUG 1 FIX: Check if results is None before proceeding
             if results is None:
                 log.warning(f"{self.__class__.__name__}: Analysis returned None")
-                QtWidgets.QMessageBox.warning(
-                    self, "Analysis Failed", "Analysis could not be completed. Please check your parameters and data."
-                )
+                # If the tab is being torn down (hot-reload), stay silent.
+                if not getattr(self, "_unmounting", False):
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Analysis Failed",
+                        "Analysis could not be completed. Please check your parameters and data.",
+                    )
                 self._set_save_button_enabled(False)
                 return
 
