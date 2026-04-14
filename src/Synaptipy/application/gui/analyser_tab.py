@@ -497,9 +497,23 @@ class AnalyserTab(QtWidgets.QWidget):
         """
         log.debug("Rebuilding analysis sub-tabs after plugin reload.")
 
-        # Remove all current tabs and drop Python references
-        while self.sub_tab_widget.count() > 0:
-            self.sub_tab_widget.removeTab(0)
+        # Mark every existing tab as unmounting so that any in-flight signals
+        # (e.g. debounce timers, currentChanged) exit quietly without popups.
+        for tab in self._loaded_analysis_tabs:
+            tab._unmounting = True
+
+        # Block signals on the tab widget so that iterative removeTab() calls
+        # do not emit currentChanged while half the tabs are already gone.
+        self.sub_tab_widget.blockSignals(True)
+        try:
+            while self.sub_tab_widget.count() > 0:
+                widget = self.sub_tab_widget.widget(0)
+                self.sub_tab_widget.removeTab(0)
+                if widget is not None:
+                    widget.deleteLater()
+        finally:
+            self.sub_tab_widget.blockSignals(False)
+
         self._loaded_analysis_tabs = []
 
         # Rebuild from the (now updated) registry
@@ -507,6 +521,11 @@ class AnalyserTab(QtWidgets.QWidget):
 
         # Re-apply current source items so the new tabs are populated
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
+
+        # Manually fire an update for the first tab so the screen refreshes.
+        if self.sub_tab_widget.count() > 0:
+            self._on_tab_changed(0)
+
         log.debug("Analysis sub-tabs rebuilt successfully.")
 
     # --- Batch Analysis Handler ---

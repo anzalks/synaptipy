@@ -869,7 +869,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Run the registered analysis function."""
         func = AnalysisRegistry.get_function(self.analysis_name)
         if not func:
-            raise ValueError(f"Analysis function '{self.analysis_name}' not found.")
+            # The analysis was unregistered (e.g. plugin hot-reload in progress).
+            # Return None so the caller exits quietly without showing an error popup.
+            log.debug(f"_execute_core_analysis: '{self.analysis_name}' not in registry — skipping silently.")
+            return None
 
         # Check if the analysis requires all trials
         metadata = AnalysisRegistry.get_metadata(self.analysis_name)
