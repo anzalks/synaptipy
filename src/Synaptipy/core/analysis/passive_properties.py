@@ -1471,7 +1471,7 @@ def run_capacitance_analysis_wrapper(
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
     "passive_properties",
-    label="Passive Properties",
+    label="Intrinsic Properties",
     method_selector={
         "Baseline (RMP)": "rmp_analysis",
         "Input Resistance": "rin_analysis",

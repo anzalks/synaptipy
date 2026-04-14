@@ -453,7 +453,7 @@ def run_opto_sync_wrapper(  # noqa: C901
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
     "evoked_responses",
-    label="Evoked Responses",
+    label="Optogenetics",
     requires_secondary_channel={
         "param_name": "ttl_data",
         "label": "TTL Channel:",
