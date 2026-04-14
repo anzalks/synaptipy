@@ -134,8 +134,7 @@ def calculate_opto_jitter(
     if len(latencies_ms) < 2:
         return {
             "error": (
-                f"Too few sweeps with detected spikes ({len(latencies_ms)}) "
-                "to compute jitter - need at least 2."
+                f"Too few sweeps with detected spikes ({len(latencies_ms)}) " "to compute jitter - need at least 2."
             )
         }
 

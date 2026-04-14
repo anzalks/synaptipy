@@ -436,8 +436,8 @@ class AnalyserTab(QtWidgets.QWidget):
         CORE_ORDER = [
             "passive_properties",
             "single_spike",
-            "synaptic_events",
             "firing_dynamics",
+            "synaptic_events",
             "evoked_responses",
         ]
 

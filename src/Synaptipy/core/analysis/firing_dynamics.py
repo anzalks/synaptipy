@@ -586,7 +586,7 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
     "firing_dynamics",
-    label="Firing Dynamics",
+    label="Excitability",
     method_selector={
         "Excitability": "excitability_analysis",
         "Burst Analysis": "burst_analysis",

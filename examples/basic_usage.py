@@ -12,9 +12,10 @@ See the LICENSE file in the root of the repository for full license details.
 import numpy as np
 from matplotlib import pyplot as plt
 
-# Import Synaptipy components
-from Synaptipy.core.data_model import Recording, Channel
 from Synaptipy.analysis.resistance_analysis import calculate_input_resistance
+
+# Import Synaptipy components
+from Synaptipy.core.data_model import Channel, Recording
 
 
 def create_synthetic_data():
@@ -35,12 +36,7 @@ def create_synthetic_data():
 
     # Create a mock voltage channel
     v_channel = Channel(
-        id="1",
-        name="Vm",
-        units="mV",
-        sampling_rate=10000.0,
-        data_trials=[voltage_data],
-        trial_t_starts=[0.0]
+        id="1", name="Vm", units="mV", sampling_rate=10000.0, data_trials=[voltage_data], trial_t_starts=[0.0]
     )
 
     # Create current channel with a step response
@@ -52,12 +48,7 @@ def create_synthetic_data():
 
     # Create a mock current channel
     i_channel = Channel(
-        id="2",
-        name="Im",
-        units="pA",
-        sampling_rate=10000.0,
-        data_trials=[current_data],
-        trial_t_starts=[0.0]
+        id="2", name="Im", units="pA", sampling_rate=10000.0, data_trials=[current_data], trial_t_starts=[0.0]
     )
 
     # Add channels to recording
@@ -114,7 +105,7 @@ def main():
         i_channel=i_channel,
         baseline_window=baseline_window,
         response_window=response_window,
-        trial_index=0  # Use first trial
+        trial_index=0,  # Use first trial
     )
 
     # Print results
@@ -128,20 +119,20 @@ def main():
 
     # Plot voltage trace
     plt.subplot(2, 1, 1)
-    plt.plot(time_vec, v_channel.data_trials[0], 'b-', label='Voltage')
-    plt.axvspan(baseline_window[0], baseline_window[1], alpha=0.2, color='green', label='Baseline')
-    plt.axvspan(response_window[0], response_window[1], alpha=0.2, color='red', label='Response')
-    plt.ylabel('Voltage (mV)')
+    plt.plot(time_vec, v_channel.data_trials[0], "b-", label="Voltage")
+    plt.axvspan(baseline_window[0], baseline_window[1], alpha=0.2, color="green", label="Baseline")
+    plt.axvspan(response_window[0], response_window[1], alpha=0.2, color="red", label="Response")
+    plt.ylabel("Voltage (mV)")
     plt.legend()
-    plt.title('Input Resistance Analysis')
+    plt.title("Input Resistance Analysis")
 
     # Plot current trace
     plt.subplot(2, 1, 2)
-    plt.plot(time_vec, i_channel.data_trials[0], 'r-', label='Current')
-    plt.axvspan(baseline_window[0], baseline_window[1], alpha=0.2, color='green', label='Baseline')
-    plt.axvspan(response_window[0], response_window[1], alpha=0.2, color='red', label='Response')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Current (pA)')
+    plt.plot(time_vec, i_channel.data_trials[0], "r-", label="Current")
+    plt.axvspan(baseline_window[0], baseline_window[1], alpha=0.2, color="green", label="Baseline")
+    plt.axvspan(response_window[0], response_window[1], alpha=0.2, color="red", label="Response")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Current (pA)")
     plt.legend()
 
     # Option: Export to NWB (uncomment to use)

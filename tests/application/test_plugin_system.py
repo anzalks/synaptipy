@@ -404,7 +404,7 @@ class TestSynapticChargeSchema:
         fn = AnalysisRegistry.get_function("synaptic_charge")
         assert fn is not None, "synaptic_charge not in registry after loading module"
 
-        result = fn(data, t, fs, integration_start=0.0, integration_end=0.1)
+        result = fn(data, t, fs, window_start=0.0, window_end=0.1)
 
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
@@ -417,7 +417,7 @@ class TestSynapticChargeSchema:
         """Integrating a purely negative (inward) trace must yield a negative charge."""
         data, t, fs = synthetic_epsc
         fn = AnalysisRegistry.get_function("synaptic_charge")
-        result = fn(data, t, fs, integration_start=0.0, integration_end=0.1)
+        result = fn(data, t, fs, window_start=0.0, window_end=0.1)
         if "error" not in result:
             assert result["metrics"]["Charge_pC"] < 0.0, "Charge must be negative for an inward current"
 
@@ -425,7 +425,7 @@ class TestSynapticChargeSchema:
         """Peak amplitude must be negative for an inward EPSC."""
         data, t, fs = synthetic_epsc
         fn = AnalysisRegistry.get_function("synaptic_charge")
-        result = fn(data, t, fs, integration_start=0.0, integration_end=0.1)
+        result = fn(data, t, fs, window_start=0.0, window_end=0.1)
         if "error" not in result:
             assert result["metrics"]["Peak_Amp"] < 0.0, "Peak_Amp must be negative for an inward current"
 
@@ -433,7 +433,7 @@ class TestSynapticChargeSchema:
         """Hidden keys required by fill_between and markers overlays must be present."""
         data, t, fs = synthetic_epsc
         fn = AnalysisRegistry.get_function("synaptic_charge")
-        result = fn(data, t, fs, integration_start=0.0, integration_end=0.1)
+        result = fn(data, t, fs, window_start=0.0, window_end=0.1)
         if "error" not in result:
             for key in ("_int_x", "_int_y", "_baseline", "_peak_t", "_peak_v"):
                 assert key in result, f"Missing private plotting key '{key}'"
@@ -449,21 +449,21 @@ class TestSynapticChargeSchema:
             data=np.array([]),
             time=np.array([]),
             sampling_rate=10_000.0,
-            integration_start=0.0,
-            integration_end=0.1,
+            window_start=0.0,
+            window_end=0.1,
         )
         assert "error" in result, "Expected error dict for empty data"
 
     def test_inverted_window_returns_error(self, sc_module, synthetic_epsc):
-        """integration_start >= integration_end must produce a graceful error."""
+        """window_start >= window_end must produce a graceful error."""
         mod = sc_module
         data, t, fs = synthetic_epsc
         result = mod.calculate_synaptic_charge(
             data=data,
             time=t,
             sampling_rate=fs,
-            integration_start=0.2,
-            integration_end=0.1,
+            window_start=0.2,
+            window_end=0.1,
         )
         assert "error" in result, "Expected error dict for inverted window"
 
@@ -476,7 +476,7 @@ class TestSynapticChargeSchema:
             data=data,
             time=t,
             sampling_rate=fs,
-            integration_start=0.05,
-            integration_end=0.05 + 5e-6,  # 5 microseconds = 0.05 samples
+            window_start=0.05,
+            window_end=0.05 + 5e-6,  # 5 microseconds = 0.05 samples
         )
         assert "error" in result, "Expected error dict for sub-sample window"

@@ -803,7 +803,7 @@ phase_plane_analysis = phase_plane_analysis_wrapper
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
     "single_spike",
-    label="Single Spike Kinetics",
+    label="Spike Analysis",
     method_selector={
         "Spike Detection": "spike_detection",
         "Phase Plane": "phase_plane_analysis",

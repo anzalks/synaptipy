@@ -1145,8 +1145,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self._viz_overlay_fit(plot_cfg, result_item)
 
             # --- shaded fill-between two curves ---
+            # Pass full results so top-level private array keys (_int_x etc.) are found
             elif plot_type == "fill_between":
-                self._viz_fill_between(plot_cfg, result_item)
+                self._viz_fill_between(plot_cfg, results)
 
             # trace — optional spike markers overlay
             elif plot_type == "trace":
@@ -1311,20 +1312,37 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if getattr(self, "_interactive_region_created", False):
             return
         param_keys = cfg.get("data", ["baseline_start", "baseline_end"])
-        color = cfg.get("color", "g")
-        region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, None], movable=True)
-        region.setBrush(pg.mkBrush(color))
+        # Read initial values from param widgets if available
+        start_val = 0.0
+        end_val = 0.1
+        if hasattr(self, "param_generator") and len(param_keys) >= 2:
+            widgets = self.param_generator.widgets
+            if param_keys[0] in widgets:
+                start_val = float(widgets[param_keys[0]].value())
+            if param_keys[1] in widgets:
+                end_val = float(widgets[param_keys[1]].value())
+        region = pg.LinearRegionItem(
+            values=[start_val, end_val],
+            orientation="vertical",
+            brush=pg.mkBrush(50, 50, 200, 50),
+            pen=pg.mkPen(50, 50, 200, 150),
+            movable=True,
+        )
         self.plot_widget.addItem(region)
         self._dynamic_plot_items.append(region)
         self._interactive_region_created = True
 
         def on_region_changed():
             mn, mx = region.getRegion()
-            if hasattr(self, "param_generator"):
-                self.param_generator.set_params({param_keys[0]: mn, param_keys[1]: mx})
+            if hasattr(self, "param_generator") and len(param_keys) >= 2:
+                widgets = self.param_generator.widgets
+                if param_keys[0] in widgets:
+                    widgets[param_keys[0]].setValue(mn)
+                if param_keys[1] in widgets:
+                    widgets[param_keys[1]].setValue(mx)
                 self._on_param_changed()
 
-        region.sigRegionChanged.connect(on_region_changed)
+        region.sigRegionChangeFinished.connect(on_region_changed)
 
     def _viz_event_markers(self, cfg, result):
         """Update interactive event markers from result."""
