@@ -262,6 +262,14 @@ def run(output_dir: Path) -> bool:  # noqa: C901
     print(f"[theme] {target_theme.value}")
 
     try:
+        # Load built-in analyses then example/user plugins so that plugin
+        # tabs (e.g. Synaptic Charge AUC) appear in the Analyser before the
+        # MainWindow UI is constructed.
+        import Synaptipy.core.analysis  # noqa: F401 — registers built-ins
+        from Synaptipy.application.plugin_manager import PluginManager  # noqa: PLC0415
+
+        PluginManager.load_plugins()
+
         window = MainWindow()
         window.resize(_WINDOW_W, _WINDOW_H)
         window.show()
