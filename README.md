@@ -21,32 +21,32 @@ Synaptipy is a cross-platform, open-source application for the visualization and
 
 ## Analysis Capabilities
 
-Synaptipy provides 15 built-in analysis modules, each available interactively in the GUI and as a composable unit in the batch processing pipeline.
+Synaptipy provides 15 built-in analysis routines organised into five core module tabs, each available interactively in the GUI and as a composable unit in the batch processing pipeline.
 
-**Intrinsic Membrane Properties**
-- Resting Membrane Potential (RMP) - statistical baseline extraction from a user-defined window
-- Input Resistance (Rin) - delta-V / delta-I from voltage response to a hyperpolarizing current step
-- Membrane Time Constant (Tau) - single-exponential fit to the voltage decay after a current step
-- I-V Curve - current-voltage relationship and aggregate Rin from multi-trial step protocols
-- Sag Ratio (I_h) - quantifies hyperpolarisation-activated sag from the ratio of peak-to-steady-state deflection, with rebound depolarisation measurement
-- Cell Capacitance (Cm) - derived from Tau/Rin in current-clamp, or capacitive-transient integration in voltage-clamp
+**Tab 1: Intrinsic Properties**
+- **Baseline (RMP)** - mean or median membrane potential measured over a user-defined quiescent window
+- **Input Resistance** - delta-V / delta-I from a voltage response to a hyperpolarising current step; auto-detects step edges from the stimulus derivative and falls back gracefully when auto-detection fails
+- **Tau (Time Constant)** - single-exponential fit to the voltage decay after a current step; returns NaN with a clear error flag when the fit fails
+- **Sag Ratio (Ih)** - quantifies hyperpolarisation-activated sag as the peak-to-steady-state voltage ratio; includes rebound depolarisation measurement after stimulus offset
+- **I-V Curve** - current-voltage relationship across a multi-trial step protocol; fits aggregate Rin from the slope
+- **Capacitance** - membrane capacitance derived from Tau/Rin in current-clamp, or from capacitive-transient integration in voltage-clamp
 
-Interactive intrinsic analyses (Rin, Tau, Sag, RMP) include defensive checks: zero current steps yield NaN Rin instead of division errors, exponential fits that fail return NaN Tau with a clear error flag, empty time windows yield NaN means instead of crashing, and the metadata-driven analyser tab skips Tau/Sag when plot data or region items are missing.
+**Tab 2: Spike Analysis**
+- **Spike Detection** - threshold-crossing AP detection with refractory period filtering; extracts per-spike amplitude, half-width, rise time, decay time, threshold voltage, and after-hyperpolarisation (AHP)
+- **Phase Plane** - dV/dt vs. voltage trajectory for AP initiation dynamics; detects threshold via a kink-slope criterion and reports mean threshold voltage and maximum dV/dt
 
-**Action Potential Analysis**
-- Spike Detection - threshold- and dV/dt-based AP detection with refractory period filtering; extracts amplitude, half-width, rise time, decay time, threshold voltage, and after-hyperpolarisation (AHP)
-- Burst Analysis - max-ISI burst detection; reports burst count, mean spikes per burst, burst duration, and intra-burst frequency
-- Spike Train Dynamics - inter-spike interval (ISI) statistics, coefficient of variation (CV), CV2, and local variation (LV)
-- Excitability / F-I Curve (multi-trial) - rheobase, F-I slope, maximum firing frequency, and spike-frequency adaptation ratio
-- Phase Plane Analysis - dV/dt versus voltage plot for AP initiation dynamics and threshold characterisation
+**Tab 3: Excitability**
+- **Excitability (F-I Curve)** - multi-trial rheobase, F-I slope, maximum firing frequency, and spike-frequency adaptation ratio; generates a popup F-I scatter plot
+- **Burst Analysis** - max-ISI burst detection; reports burst count, mean spikes per burst, mean burst duration, and intra-burst frequency
+- **Spike Train Dynamics** - ISI statistics including mean ISI, coefficient of variation (CV), local variation (LV), and CV2; generates a popup ISI plot
 
-**Synaptic Event Detection**
-- Adaptive Threshold - prominence-based detection that accommodates shifting baselines and overlapping events
-- Template Matching - parametric deconvolution using a user-defined double-exponential template for miniature event detection
-- Baseline-Peak - direct baseline-to-peak amplitude detection for evoked or spontaneous events
+**Tab 4: Synaptic Events**
+- **Event Detection (Threshold)** - prominence-based threshold detection that accommodates shifting baselines and overlapping events; interactive event markers with click-to-remove and Ctrl+click-to-add
+- **Event (Template Match)** - parametric deconvolution against a user-defined double-exponential template for miniature event detection
+- **Event (Baseline Peak)** - direct baseline-to-peak amplitude detection with kinetics estimation for evoked or spontaneous events
 
-**Optogenetics**
-- Optogenetic Synchronisation - extracts TTL/digital stimulus pulses from a secondary channel and correlates them with spikes to compute optical latency, response probability, and jitter
+**Tab 5: Optogenetics**
+- **Optogenetic Synchronisation** - extracts TTL/digital stimulus pulses from a secondary channel and correlates them with spikes or synaptic events to compute optical latency, response probability, and jitter
 
 ## Extensibility and Plugin Interface
 
@@ -54,7 +54,25 @@ Synaptipy is built around a central `AnalysisRegistry` that maps named analysis 
 
 A fully documented template (`src/Synaptipy/templates/analysis_template.py`) defines the required function signature and return types, enabling researchers to integrate custom algorithms without any knowledge of the GUI internals.
 
-**Plug & Play Data Export**: The batch engine processes custom analysis outputs dynamically. Any new dictionaries returned by custom plugins will automatically generate their own isolated CSV files during export, perfectly mapping your custom variables to dynamically created spreadsheet columns.
+### Hot-Reloadable Plugin Ecosystem
+
+Plugins are first-class citizens, not an afterthought. The plugin system is designed for zero-friction iteration:
+
+- **No restart required for toggling:** When the user checks or unchecks "Enable Custom Plugins" in **Edit > Preferences**, Synaptipy calls `PluginManager.reload_plugins()` to purge all plugin-contributed entries from the `AnalysisRegistry` and re-execute every plugin file discovered on disk. It then calls `AnalyserTab.rebuild_analysis_tabs()` to regenerate the entire Analyser tab UI from the updated registry - all within the running process, with no application restart needed.
+- **Scoped unregistration:** Only plugin-sourced analyses (those flagged as `source="plugin"` in registry metadata) are removed during a reload. Built-in analyses are untouched.
+- **Two discovery paths:** `examples/plugins/` is scanned first (bundled examples), then `~/.synaptipy/plugins/` (user additions). A user copy with the same filename always takes precedence, enabling personalised variants without modifying the Synaptipy installation.
+- **Crash isolation:** A syntax error or import failure in one plugin is caught and logged; remaining plugins still load and appear in the UI.
+
+**Plug & Play Data Export**: The batch engine processes custom plugin outputs dynamically. Any key in the `metrics` dict returned by a plugin wrapper automatically generates its own CSV column during batch export.
+
+**Plugin Return Schema:** Every wrapper function must return a nested dict:
+```python
+return {
+    "module_used": "my_plugin",
+    "metrics": {"Val1": 1.0, "Val2": 2.0},
+}
+```
+Private keys (prefixed with `_`) pass data to plot overlays without appearing in the results table. See `docs/extending_synaptipy.md` for the full specification.
 
 ## Supported File Formats
 
@@ -82,11 +100,20 @@ Any format supported by Neo but not listed above can be made available by adding
 
 ## Visualization
 
-- OpenGL-accelerated trace rendering capable of displaying multi-million sample recordings at interactive frame rates
+- OpenGL-accelerated trace rendering via PyQtGraph capable of displaying multi-million sample recordings at interactive frame rates
 - Tree-based multi-file explorer with synchronised analysis view
 - Interactive zooming, panning, and per-channel scaling
 - Batch result overlays and popup plots (I-V curves, F-I curves, phase planes) generated directly within the GUI
-- **Global Trace Caching**: Cherry-pick and manually average specific trials across multiple independent files to generate cross-recording comparisons natively.
+
+### Cross-File Trial Averaging
+
+Synaptipy's Explorer tab supports manual grand-average construction across any combination of files and trials:
+
+- While in **"Cycle Single Trial"** mode, click **"Add Current Trial to Avg Set"** to capture the currently displayed trial (including any active preprocessing pipeline transforms).
+- Navigate freely to other files - even files of different durations or recording protocols - and continue adding trials. The global selection accumulates across the entire session.
+- Enable **"Plot Selected Avg"** to overlay the grand average on the current recording view.
+- **Shape-mismatch safety:** When computing the average, each trial is accumulated with `sum[:min_len] += trial[:min_len]` where `min_len = min(len(accumulator), len(trial))`. This dynamically truncates to the shortest array in the selection, preventing NumPy broadcast errors when recordings have different durations. The resulting average is plotted against the time vector of the first trial added.
+- The selection persists until the user clears it, enabling iterative comparison as new files are loaded.
 
 ## Batch Processing
 

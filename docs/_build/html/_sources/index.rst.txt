@@ -65,63 +65,63 @@ Collaborations, bug reports, and pull requests are welcome.
 
 .. grid:: 2
 
- .. grid-item-card:: Quick-start Tutorial
- :link: tutorial/index
- :link-type: doc
+   .. grid-item-card:: Quick-start Tutorial
+      :link: tutorial/index
+      :link-type: doc
 
- A full walkthrough of every feature - Explorer, Analyser, Batch
- Processing, and Exporter - with the maths behind each analysis module.
+      A full walkthrough of every feature - Explorer, Analyser, Batch
+      Processing, and Exporter - with the maths behind each analysis module.
 
- .. grid-item-card:: User Guide
- :link: user_guide
- :link-type: doc
+   .. grid-item-card:: User Guide
+      :link: user_guide
+      :link-type: doc
 
- Installation, supported file formats, and a detailed walkthrough of
- all three application tabs.
-
-.. grid:: 2
-
- .. grid-item-card:: API Reference
- :link: api_reference
- :link-type: doc
-
- Public Python API for using Synaptipy as a library in your own scripts.
-
- .. grid-item-card:: Developer Guide
- :link: developer_guide
- :link-type: doc
-
- Project structure, coding standards, testing, and contribution workflow.
+      Installation, supported file formats, and a detailed walkthrough of
+      all three application tabs.
 
 .. grid:: 2
 
- .. grid-item-card:: Algorithmic Definitions
- :link: algorithmic_definitions
- :link-type: doc
+   .. grid-item-card:: API Reference
+      :link: api_reference
+      :link-type: doc
 
- Formal mathematical definitions for every analysis metric - suitable
- for citation in manuscripts and peer review.
+      Public Python API for using Synaptipy as a library in your own scripts.
 
- .. grid-item-card:: NWB Export Mapping
- :link: nwb_mapping
- :link-type: doc
+   .. grid-item-card:: Developer Guide
+      :link: developer_guide
+      :link-type: doc
 
- How Synaptipy maps electrophysiology data to NWB 2.x containers,
- including electrode metadata and unit conventions.
+      Project structure, coding standards, testing, and contribution workflow.
 
 .. grid:: 2
 
- .. grid-item-card:: Source on GitHub
- :link: https://github.com/anzalks/synaptipy
- :link-type: url
+   .. grid-item-card:: Algorithmic Definitions
+      :link: algorithmic_definitions
+      :link-type: doc
 
- Browse the source code, open issues, or submit pull requests on GitHub.
+      Formal mathematical definitions for every analysis metric - suitable
+      for citation in manuscripts and peer review.
 
- .. grid-item-card:: Changelog
- :link: https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md
- :link-type: url
+   .. grid-item-card:: NWB Export Mapping
+      :link: nwb_mapping
+      :link-type: doc
 
- Release history and notable changes between versions.
+      How Synaptipy maps electrophysiology data to NWB 2.x containers,
+      including electrode metadata and unit conventions.
+
+.. grid:: 2
+
+   .. grid-item-card:: Source on GitHub
+      :link: https://github.com/anzalks/synaptipy
+      :link-type: url
+
+      Browse the source code, open issues, or submit pull requests on GitHub.
+
+   .. grid-item-card:: Changelog
+      :link: https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md
+      :link-type: url
+
+      Release history and notable changes between versions.
 
 ----
 

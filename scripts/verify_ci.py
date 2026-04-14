@@ -4,11 +4,12 @@ Local CI Verification Script for Synaptipy.
 Runs the same checks as the GitHub Actions workflow to ensure cross-platform compatibility.
 """
 
-import sys
-import subprocess
-import platform
+import argparse
 import os
+import platform
 import re
+import subprocess
+import sys
 from typing import List, Tuple
 
 
@@ -17,10 +18,7 @@ def run_command(command: List[str], description: str) -> Tuple[bool, str]:
     print(f"Running: {description}...")
     try:
         result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False  # We want to handle the return code manually
+            command, capture_output=True, text=True, check=False  # We want to handle the return code manually
         )
         if result.returncode == 0:
             print(f"[PASS] {description} Passed")
@@ -41,26 +39,25 @@ def check_dependencies():
     for tool in tools:
         print(f"Checking for {tool}...")
         try:
-            subprocess.run(
-                [sys.executable, "-m", "pip", "show", tool],
-                capture_output=True,
-                check=True
-            )
+            subprocess.run([sys.executable, "-m", "pip", "show", tool], capture_output=True, check=True)
         except subprocess.CalledProcessError:
             print(f"[WARN] {tool} not found. Installing...")
             try:
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock"],
-                    check=True
-                )
+                subprocess.run([sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock"], check=True)
             except subprocess.CalledProcessError:
                 print("[WARN] Standard install failed (PEP 668?). Retrying with --break-system-packages...")
                 subprocess.run(
                     [
-                        sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock",
-                        "--break-system-packages"
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        tool,
+                        "pytest-qt",
+                        "pytest-mock",
+                        "--break-system-packages",
                     ],
-                    check=True
+                    check=True,
                 )
 
 
@@ -69,7 +66,7 @@ def check_flake8() -> bool:
     # Matches GitHub Actions: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
     success_critical, _ = run_command(
         [sys.executable, "-m", "flake8", ".", "--count", "--select=E9,F63,F7,F82", "--show-source", "--statistics"],
-        "Critical Syntax Check"
+        "Critical Syntax Check",
     )
 
     # Matches GitHub Actions (Strict Mode requested by User):
@@ -77,10 +74,16 @@ def check_flake8() -> bool:
     # Removed --exit-zero to enforce strictness
     success_style, _ = run_command(
         [
-            sys.executable, "-m", "flake8", ".", "--count", "--max-complexity=10", "--max-line-length=127",
-            "--statistics"
+            sys.executable,
+            "-m",
+            "flake8",
+            ".",
+            "--count",
+            "--max-complexity=10",
+            "--max-line-length=127",
+            "--statistics",
         ],
-        "Style & Complexity Check"
+        "Style & Complexity Check",
     )
 
     return success_critical and success_style
@@ -89,6 +92,7 @@ def check_flake8() -> bool:
 def check_tests() -> bool:
     """Run pytest with offscreen platform."""
     import os
+
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
 
@@ -102,7 +106,7 @@ def check_tests() -> bool:
             env=env,
             capture_output=True,
             text=True,
-            timeout=120  # Overall timeout of 2 minutes for all tests
+            timeout=120,  # Overall timeout of 2 minutes for all tests
         )
         if result.returncode == 0:
             print("[PASS] Pytest Passed")
@@ -127,7 +131,7 @@ def check_no_emojis() -> bool:  # noqa: C901
     print("Running: Emoji Scanner...")
     # Regex for emojis (simplified range, covers most common ones)
     # Using a broad unicode range for emojis and symbols commonly used as emojis
-    emoji_pattern = re.compile(r'[\U00010000-\U0010ffff]', flags=re.UNICODE)
+    emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 
     found_emojis = False
     affected_files = []
@@ -141,7 +145,7 @@ def check_no_emojis() -> bool:  # noqa: C901
             dirs.remove(".idea")
 
         for file in files:
-            if file.endswith(('.py', '.md', '.txt', '.yml', '.yaml')):
+            if file.endswith((".py", ".md", ".txt", ".yml", ".yaml")):
                 path = os.path.join(root, file)
                 # Skip the verification script itself
                 if "verify_ci.py" in path:
@@ -150,13 +154,22 @@ def check_no_emojis() -> bool:  # noqa: C901
                 if ".agent/rules.md" in path:
                     continue
                 # Skip virtual environment directories and docs
-                if any(x in path for x in [
-                    "site-packages", "dist-packages", "venv", ".env", ".verify_venv_temp", "lib/python", "docs/"
-                ]):
+                if any(
+                    x in path
+                    for x in [
+                        "site-packages",
+                        "dist-packages",
+                        "venv",
+                        ".env",
+                        ".verify_venv_temp",
+                        "lib/python",
+                        "docs/",
+                    ]
+                ):
                     continue
 
                 try:
-                    with open(path, 'r', encoding='utf-8') as f:
+                    with open(path, "r", encoding="utf-8") as f:
                         content = f.read()
                         if emoji_pattern.search(content):
                             found_emojis = True
@@ -174,7 +187,50 @@ def check_no_emojis() -> bool:  # noqa: C901
         return True
 
 
+def check_screenshots() -> bool:
+    """Regenerate documentation screenshots headlessly and verify exit code."""
+    script = os.path.join(os.path.dirname(__file__), "capture_screenshots.py")
+    if not os.path.exists(script):
+        print("[FAIL] capture_screenshots.py not found")
+        return False
+
+    print("Running: Screenshot Capture (headless)...")
+    env = os.environ.copy()
+    env.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, script],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            print("[PASS] Screenshot Capture Passed")
+            return True
+        else:
+            print("[FAIL] Screenshot Capture Failed")
+            print(result.stdout[-2000:] if len(result.stdout) > 2000 else result.stdout)
+            print(result.stderr[-1000:] if len(result.stderr) > 1000 else result.stderr)
+            return False
+    except subprocess.TimeoutExpired:
+        print("[FAIL] Screenshot Capture timed out after 60 seconds")
+        return False
+    except Exception as exc:
+        print(f"[FAIL] Screenshot Capture raised: {exc}")
+        return False
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Local CI verification for Synaptipy.")
+    parser.add_argument(
+        "--with-screenshots",
+        action="store_true",
+        help="Also regenerate docs screenshots (headless; adds ~20 s).",
+    )
+    args, _ = parser.parse_known_args()
+
     print(f"[INFO] Starting Local CI Verification on {platform.system()}...")
 
     # Ensure dependencies are present
@@ -187,8 +243,11 @@ def main():
     checks = [
         check_flake8(),
         check_tests(),
-        check_no_emojis()
+        check_no_emojis(),
     ]
+
+    if args.with_screenshots:
+        checks.append(check_screenshots())
 
     if all(checks):
         print("\n[SUCCESS] All CI Checks Passed! You are ready to push.")

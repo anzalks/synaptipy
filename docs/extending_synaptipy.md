@@ -75,7 +75,9 @@ At startup, Synaptipy:
 │  )                                                       │
 │  def run_snr(data, time, sampling_rate, **kwargs):        │
 │      ...                                                 │
-│      return {"snr_db": 42.3, "noise_rms": 0.15}          │
+│      return {"module_used": "snr_analysis",              │
+│              "metrics": {"snr_db": 42.3,                 │
+│                          "noise_rms": 0.15}}             │
 └──────────────────────────────────────────────────────────┘
          │
          ▼ startup → PluginManager.load_plugins()
@@ -177,7 +179,8 @@ def calculate_snr(
 ### 3.2 Part 2: Registry Wrapper
 
 A thin wrapper decorated with `@AnalysisRegistry.register(...)`.  It extracts
-parameters from `kwargs`, calls your logic function, and returns a flat dict.
+parameters from `kwargs`, calls your logic function, and returns a dict that
+follows the **nested output schema**.
 
 ```python
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -202,7 +205,18 @@ def run_snr_wrapper(
 
     result = calculate_snr(data, sampling_rate, noise_start, noise_end,
                            signal_start, signal_end)
-    return result
+
+    if "error" in result:
+        return result  # propagate error dict unchanged
+
+    return {
+        "module_used": "snr_analysis",
+        "metrics": {
+            "snr_db": result["snr_db"],
+            "noise_rms": result["noise_rms"],
+            "signal_rms": result["signal_rms"],
+        },
+    }
 ```
 
 **The wrapper signature is fixed:**
@@ -220,16 +234,34 @@ def wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) 
 
 ### 3.3 Return Dict Conventions
 
-The wrapper must return a `Dict[str, Any]`.  Every key–value pair appears as a
-row in the results table.
+Wrappers **must** return a `Dict[str, Any]` using the nested output schema:
+
+```python
+{
+    "module_used": "my_plugin_name",   # string identifying the source module
+    "metrics": {                       # all scalar results go here
+        "MyMetric1": 1.0,
+        "MyMetric2": 42,
+    },
+    # optional private keys for plot overlays (hidden from results table):
+    "_fit_curve": np.array(...),
+    "_event_indices": [...],
+}
+```
+
+The `metrics` dict drives the results table and batch CSV columns.  Any key
+in `metrics` appears as a column header; any value that is a number is
+written to the CSV.
 
 | Convention | Behaviour |
 |---|---|
-| Keys starting with `_` (underscore) | **Hidden** from the results table and batch dialog.  Use for internal data passed to plot overlays (e.g. `"_fit_curve"`, `"_event_indices"`). |
-| Key named `"error"` | If present, the GUI shows an error message instead of results. |
-| Numeric values (`int`, `float`) | Displayed as-is in the results table. |
-| `np.ndarray` values | Displayed as shape summary (e.g. `"array(150,)"`). |
-| `None` values | Displayed as `"N/A"`. |
+| `"module_used"` | Identifies the source; used by the batch engine to route results to the correct CSV file. |
+| Keys inside `"metrics"` | Displayed in the results table and exported to CSV.  Use plain, human-readable names. |
+| Keys starting with `_` at the **top level** | **Hidden** from the results table.  Use for arrays passed to plot overlays (e.g. `"_fit_curve"`, `"_event_indices"`). |
+| Key named `"error"` at the top level | If present, the GUI shows an error message instead of results. |
+| Numeric values in `metrics` (`int`, `float`) | Displayed as-is in the results table. |
+| `np.ndarray` values in `metrics` | Displayed as shape summary (e.g. `"array(150,)"`). |
+| `None` values in `metrics` | Displayed as `"N/A"`. |
 
 ---
 
