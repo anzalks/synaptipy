@@ -424,11 +424,30 @@ class MainWindow(QtWidgets.QMainWindow):
             from .preferences_dialog import PreferencesDialog
 
             dialog = PreferencesDialog(self)
+            dialog.sigPluginsToggled.connect(self._on_plugins_toggled)
             dialog.exec()
             log.debug("Preferences dialog closed")
         except Exception as e:
             log.error(f"Failed to show preferences dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open preferences:\n{e}")
+
+    @QtCore.Slot(bool)
+    def _on_plugins_toggled(self, enabled: bool):
+        """Hot-reload plugins and rebuild Analyser tabs when the user toggles the plugin setting."""
+        log.info(f"Plugin setting changed to {enabled}. Hot-reloading plugins...")
+        try:
+            from Synaptipy.application.plugin_manager import PluginManager
+
+            PluginManager.reload_plugins()
+        except Exception as e:
+            log.error(f"Failed to reload plugins: {e}")
+
+        if hasattr(self, "analyser_tab") and self.analyser_tab:
+            try:
+                self.analyser_tab.rebuild_analysis_tabs()
+                log.info("Analyser tabs rebuilt after plugin toggle.")
+            except Exception as e:
+                log.error(f"Failed to rebuild analyser tabs: {e}")
 
     def _show_analysis_config(self):
         """Show the global analysis configuration dialog."""

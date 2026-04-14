@@ -487,6 +487,28 @@ class AnalyserTab(QtWidgets.QWidget):
                 except Exception as e:
                     log.error(f"Failed to inject global controls into first tab: {e}", exc_info=True)
 
+    def rebuild_analysis_tabs(self):
+        """
+        Clear and rebuild the analysis sub-tabs after a plugin reload.
+
+        This method is called by the main window when the user toggles the
+        "Enable Custom Plugins" preference so that the UI reflects the new
+        registry state without requiring an application restart.
+        """
+        log.debug("Rebuilding analysis sub-tabs after plugin reload.")
+
+        # Remove all current tabs and drop Python references
+        while self.sub_tab_widget.count() > 0:
+            self.sub_tab_widget.removeTab(0)
+        self._loaded_analysis_tabs = []
+
+        # Rebuild from the (now updated) registry
+        self._load_analysis_tabs()
+
+        # Re-apply current source items so the new tabs are populated
+        self.update_analysis_sources(self.session_manager.selected_analysis_items)
+        log.debug("Analysis sub-tabs rebuilt successfully.")
+
     # --- Batch Analysis Handler ---
     @QtCore.Slot()
     def _on_batch_analysis_clicked(self):  # noqa: C901

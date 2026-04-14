@@ -90,13 +90,18 @@ class PluginManager:
         """Attempt to import one plugin file and log any failure gracefully."""
         module_name = f"synaptipy_plugin_{p_file.stem}"
         try:
-            spec = importlib.util.spec_from_file_location(module_name, str(p_file))
-            if spec is None or spec.loader is None:
-                log.warning(f"Could not load plugin specification for {p_file.name}")
-                return
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
+            if module_name in sys.modules:
+                # Module already loaded — force a reload so the
+                # @AnalysisRegistry.register decorators fire again.
+                importlib.reload(sys.modules[module_name])
+            else:
+                spec = importlib.util.spec_from_file_location(module_name, str(p_file))
+                if spec is None or spec.loader is None:
+                    log.warning(f"Could not load plugin specification for {p_file.name}")
+                    return
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
             log.info(f"Successfully loaded plugin: {p_file.name}")
         except ImportError as e:
             log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
@@ -141,3 +146,41 @@ class PluginManager:
             cls._load_single_plugin(p_file)
 
         log.info("Finished loading plugins.")
+
+    @classmethod
+    def reload_plugins(cls):
+        """
+        Hot-reload plugins without restarting the application.
+
+        Purges all plugin-contributed analyses from ``AnalysisRegistry``,
+        then re-loads plugins if the ``enable_plugins`` setting is ``True``.
+        Call this after the user toggles the "Enable Custom Plugins" preference,
+        then rebuild the Analyser UI to reflect the change.
+        """
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+        AnalysisRegistry.unregister_plugins()
+        log.debug("Plugin analyses unregistered for hot-reload.")
+
+        if not QSettings().value("enable_plugins", True, type=bool):
+            log.info("Plugin reload: enable_plugins is False — plugins will not be re-loaded.")
+            return
+
+        cls.create_plugin_directory()
+        plugin_files = cls.get_plugin_files()
+
+        if not plugin_files:
+            log.debug("No plugins found during hot-reload.")
+            return
+
+        log.info(f"Hot-reloading {len(plugin_files)} plugin(s)...")
+
+        for search_dir in (EXAMPLES_PLUGIN_DIR, PLUGIN_DIR):
+            dir_str = str(search_dir)
+            if search_dir.is_dir() and dir_str not in sys.path:
+                sys.path.insert(0, dir_str)
+
+        for p_file in plugin_files:
+            cls._load_single_plugin(p_file)
+
+        log.info("Hot-reload complete.")
