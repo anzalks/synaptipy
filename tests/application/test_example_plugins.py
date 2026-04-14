@@ -187,12 +187,10 @@ class TestPluginDiscovery:
             PluginManager.load_plugins()
 
         assert AnalysisRegistry.get_function("opto_jitter") is not None, (
-            "opto_jitter was not registered. "
-            f"Registered: {AnalysisRegistry.list_registered()}"
+            "opto_jitter was not registered. " f"Registered: {AnalysisRegistry.list_registered()}"
         )
         assert AnalysisRegistry.get_function("ap_repolarization") is not None, (
-            "ap_repolarization was not registered. "
-            f"Registered: {AnalysisRegistry.list_registered()}"
+            "ap_repolarization was not registered. " f"Registered: {AnalysisRegistry.list_registered()}"
         )
 
     def test_user_dir_takes_precedence(self, tmp_path):
@@ -365,9 +363,9 @@ class TestOptoJitterPlugin:
         )
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
         expected_jitter = float(np.std([5.0, 6.0, 7.0], ddof=1))
-        assert abs(result["Jitter_ms"] - expected_jitter) < 0.2, (
-            f"Jitter {result['Jitter_ms']:.4f} ms, expected {expected_jitter:.4f} ms"
-        )
+        assert (
+            abs(result["Jitter_ms"] - expected_jitter) < 0.2
+        ), f"Jitter {result['Jitter_ms']:.4f} ms, expected {expected_jitter:.4f} ms"
 
 
 class TestAPRepolarizationPlugin:
@@ -410,9 +408,9 @@ class TestAPRepolarizationPlugin:
         func = AnalysisRegistry.get_function("ap_repolarization")
         result = func(data, t, fs, window_start=0.0, window_end=1.0, spike_threshold=-20.0)
         if "error" not in result:
-            assert result["metrics"]["Max_Repol_V_s"] < 0.0, (
-                f"Expected negative repolarization rate, got {result['metrics']['Max_Repol_V_s']}"
-            )
+            assert (
+                result["metrics"]["Max_Repol_V_s"] < 0.0
+            ), f"Expected negative repolarization rate, got {result['metrics']['Max_Repol_V_s']}"
 
     def test_private_marker_keys_present(self, ap_module, synthetic_spike):
         """Private _repol_time and _repol_val are returned for the marker overlay."""

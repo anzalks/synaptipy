@@ -33,6 +33,7 @@ and batch engine the next time the application starts.
    - [5.8 `brackets` — Burst/Event Brackets](#58-brackets--burstevent-brackets)
    - [5.9 `event_markers` — Interactive Event Points](#59-event_markers--interactive-event-points)
    - [5.10 `trace` — Base Trace with Overlay](#510-trace--base-trace-with-overlay)
+   - [5.11 `fill_between` — Shaded Region Between Two Curves](#511-fill_between--shaded-region-between-two-curves)
 6. [Where to Put Your Plugin File](#6-where-to-put-your-plugin-file)
 7. [For Core Contributors — Adding a Built-in Analysis](#7-for-core-contributors--adding-a-built-in-analysis)
 8. [Testing Your Plugin](#8-testing-your-plugin)
@@ -464,20 +465,94 @@ Plot the trace with optional spike/event markers.
 {"type": "trace", "show_spikes": True}
 ```
 
+### 5.11 `fill_between` — Shaded Region Between Two Curves
+
+Draw a translucent filled area between a primary curve (`y1`) and a baseline
+curve or constant (`y2`).  This is ideal for visualising integrated areas such
+as synaptic charge transfer.
+
+```python
+{
+    "type": "fill_between",
+    "x": "_int_x",        # key for the shared time array
+    "y1": "_int_y",       # key for the upper/primary curve (required)
+    "y2": "_base",        # key for the lower curve or scalar baseline (default: 0.0)
+    "brush": (0, 100, 255, 100),  # RGBA fill colour (optional)
+}
+```
+
+The named keys are looked up first in the top-level result dict and then inside
+the nested `result["metrics"]` dict, so both a flat schema and the standard
+`{"module_used": ..., "metrics": {...}}` schema are supported transparently.
+
+`y2` may be:
+- a key pointing to an **array** of the same length as `y1` (arbitrary curve),
+- a key pointing to a **scalar** (constant horizontal baseline), or
+- omitted entirely (defaults to zero).
+
+**Example — Synaptic Charge Transfer with shaded integral:**
+
+```python
+plots=[
+    {"type": "interactive_region", "data": ["window_start", "window_end"], "color": "g"},
+    {
+        "type": "fill_between",
+        "x": "_int_x",
+        "y1": "_int_y",
+        "y2": "_base",
+        "brush": (0, 100, 255, 100),
+    },
+]
+```
+
+The corresponding return dict must include `_int_x`, `_int_y`, and `_base` as
+private (hidden) keys:
+
+```python
+return {
+    "module_used": "synaptic_charge",
+    "metrics": {"Total_Charge_pC": charge},
+    "Total_Charge_pC": charge,
+    "_int_x": win_time.tolist(),
+    "_int_y": win_data.tolist(),
+    "_base": baseline_mean,
+}
+```
+
 ---
 
 ## 6. Where to Put Your Plugin File
+
+> **Prerequisite — Enable Custom Plugins:** Before your plugin will load you
+> must ensure the "Enable Custom Plugins" checkbox is checked in
+> **Edit > Preferences > Extensions** (or **Synaptipy > Preferences** on
+> macOS).  This setting is on by default.  After changing it, restart
+> Synaptipy for the change to take effect.
 
 ### Option A: Built-in Examples Directory
 
 Synaptipy ships ready-to-run example plugins in `examples/plugins/`.  These are
 loaded automatically at startup so you can try them immediately and use them as
-templates:
+templates.  Enable them via **Edit > Preferences** (or **Synaptipy > Preferences**
+on macOS) by checking **Enable Custom Plugins**, then restart Synaptipy.
 
-| File | Analysis |
-|------|----------|
-| `examples/plugins/opto_jitter.py` | Optogenetic latency jitter across trials |
-| `examples/plugins/ap_repolarization.py` | Maximum action-potential repolarization rate |
+---
+
+#### Included Example Plugins
+
+| File | Label in GUI | Purpose |
+|------|-------------|---------|
+| `examples/plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Integrates a postsynaptic current trace over a user-defined window to compute total charge (pC) via the trapezoidal rule; highlights the integrated area with a shaded fill overlay and marks the peak amplitude with a star symbol. |
+| `examples/plugins/opto_jitter.py` | Opto Latency Jitter | Detects the first spike in each sweep following a TTL pulse and reports trial-to-trial latency variability (jitter) for optogenetic monosynaptic verification. Requires a secondary digital/TTL channel. |
+| `examples/plugins/ap_repolarization.py` | AP Repolarization Rate | Finds the steepest falling slope (dV/dt minimum) of the first action potential in a window, quantifying maximum repolarization rate in V/s as a proxy for potassium-channel dynamics. |
+
+To use these plugins:
+
+1. Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).
+2. Check **Enable Custom Plugins**.
+3. Restart Synaptipy.  Each plugin appears as a new sub-tab in the Analyser.
+
+To customise one, copy the file to `~/.synaptipy/plugins/` and edit your copy.  Synaptipy prefers the user copy over the bundled example, so your changes take effect immediately on the next restart.
 
 ### Option B: User Plugin Directory (recommended for personal additions)
 
@@ -671,6 +746,9 @@ def calculate_synaptic_charge(
         "Baseline_pA": round(baseline_mean, 4),
         # Private keys for plot overlays
         "_baseline_level": baseline_mean,
+        "_int_x": win_time.tolist(),
+        "_int_y": (data[win_i0:win_i1]).tolist(),
+        "_base": baseline_mean,
     }
 
 
@@ -723,6 +801,14 @@ def calculate_synaptic_charge(
         {"type": "interactive_region", "data": ["window_start", "window_end"], "color": "g"},
         # Horizontal line at the baseline level
         {"type": "hlines", "data": ["_baseline_level"], "color": "b", "styles": ["dash"]},
+        # Shaded fill between the raw current and the baseline level
+        {
+            "type": "fill_between",
+            "x": "_int_x",
+            "y1": "_int_y",
+            "y2": "_base",
+            "brush": (0, 100, 255, 100),
+        },
     ],
 )
 def run_synaptic_charge_wrapper(
@@ -752,8 +838,10 @@ The key design points illustrated here:
   "metrics": {...}}` alongside flat scalar keys for the results table.
 - Two `interactive_region` overlays let the user drag both windows directly on
   the trace without typing numbers.
-- `_baseline_level` (private key) feeds the `hlines` overlay without appearing
-  in the results table.
+- A `fill_between` overlay shades the integrated area, making the charge
+  visually obvious on the trace.
+- `_baseline_level`, `_int_x`, `_int_y`, and `_base` (private keys) feed the
+  plot overlays without appearing in the results table.
 
 ---
 

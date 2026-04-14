@@ -9,7 +9,7 @@ Provides a unified preferences interface for scroll direction and theme settings
 import logging
 from typing import Optional
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.shared.scroll_settings import (
     ScrollDirection,
@@ -41,9 +41,12 @@ class PreferencesDialog(QtWidgets.QDialog):
         self.setMinimumWidth(450)
         self.setMinimumHeight(350)
 
+        self._settings = QtCore.QSettings()
+
         # Store original values for cancel
         self._original_scroll_direction = get_scroll_direction()
         self._original_theme_mode = get_theme_mode()
+        self._original_enable_plugins = self._settings.value("enable_plugins", True, type=bool)
 
         self._setup_ui()
         self._load_current_settings()
@@ -147,6 +150,25 @@ class PreferencesDialog(QtWidgets.QDialog):
 
         layout.addWidget(appearance_group)
 
+        # --- Extensions / Plugins Settings Group ---
+        plugins_group = QtWidgets.QGroupBox("Extensions")
+        plugins_layout = QtWidgets.QVBoxLayout(plugins_group)
+
+        plugins_description = QtWidgets.QLabel(
+            "Custom plugins are loaded from <b>~/.synaptipy/plugins/</b> and " "<b>examples/plugins/</b> at startup."
+        )
+        plugins_description.setWordWrap(True)
+        plugins_description.setStyleSheet("color: gray; font-size: 11px;")
+        plugins_layout.addWidget(plugins_description)
+
+        self.enable_plugins_checkbox = QtWidgets.QCheckBox("Enable Custom Plugins (requires restart)")
+        self.enable_plugins_checkbox.setToolTip(
+            "When checked, Synaptipy loads Python plugins from the user and examples plugin directories."
+        )
+        plugins_layout.addWidget(self.enable_plugins_checkbox)
+
+        layout.addWidget(plugins_group)
+
         # Spacer
         layout.addStretch()
 
@@ -171,6 +193,9 @@ class PreferencesDialog(QtWidgets.QDialog):
             self.theme_dark_radio.setChecked(True)
         else:
             self.theme_system_radio.setChecked(True)
+
+        # Plugins toggle
+        self.enable_plugins_checkbox.setChecked(self._settings.value("enable_plugins", True, type=bool))
 
     def _get_selected_scroll_direction(self) -> ScrollDirection:
         """Get the currently selected scroll direction."""
@@ -212,9 +237,15 @@ class PreferencesDialog(QtWidgets.QDialog):
         apply_theme(new_theme)
         log.debug(f"Applied theme mode: {new_theme.value}")
 
+        # Save plugins toggle
+        plugins_enabled = self.enable_plugins_checkbox.isChecked()
+        self._settings.setValue("enable_plugins", plugins_enabled)
+        log.debug(f"Applied enable_plugins: {plugins_enabled}")
+
         # Update original values (so cancel won't revert)
         self._original_scroll_direction = new_scroll
         self._original_theme_mode = new_theme
+        self._original_enable_plugins = plugins_enabled
 
     def _on_accepted(self):
         """Handle OK button click."""
@@ -234,14 +265,17 @@ class PreferencesDialog(QtWidgets.QDialog):
         # Set UI to defaults
         self.scroll_system_radio.setChecked(True)
         self.theme_system_radio.setChecked(True)
+        self.enable_plugins_checkbox.setChecked(True)
 
         # Apply the defaults
         set_scroll_direction(ScrollDirection.SYSTEM)
         set_theme_mode(ThemeMode.SYSTEM)
         apply_theme(ThemeMode.SYSTEM)
+        self._settings.setValue("enable_plugins", True)
 
         # Update original values
         self._original_scroll_direction = ScrollDirection.SYSTEM
         self._original_theme_mode = ThemeMode.SYSTEM
+        self._original_enable_plugins = True
 
         log.debug("Reset all preferences to defaults")

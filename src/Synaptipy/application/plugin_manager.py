@@ -25,6 +25,8 @@ import sys
 from pathlib import Path
 from typing import List
 
+from PySide6.QtCore import QSettings
+
 log = logging.getLogger(__name__)
 
 # Default location for 3rd-party user plugins
@@ -84,6 +86,26 @@ class PluginManager:
         return result
 
     @classmethod
+    def _load_single_plugin(cls, p_file: Path) -> None:
+        """Attempt to import one plugin file and log any failure gracefully."""
+        module_name = f"synaptipy_plugin_{p_file.stem}"
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, str(p_file))
+            if spec is None or spec.loader is None:
+                log.warning(f"Could not load plugin specification for {p_file.name}")
+                return
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+            log.info(f"Successfully loaded plugin: {p_file.name}")
+        except ImportError as e:
+            log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
+        except SyntaxError as e:
+            log.error(f"SyntaxError in plugin '{p_file.name}': {e}", exc_info=False)
+        except Exception as e:
+            log.error(f"Unexpected error loading plugin '{p_file.name}': {e}", exc_info=False)
+
+    @classmethod
     def load_plugins(cls):
         """
         Dynamically imports all plugins discovered by ``get_plugin_files()``.
@@ -91,7 +113,14 @@ class PluginManager:
         Plugins from ``examples/plugins/`` are loaded first, then user plugins.
         A bad plugin (``ImportError``, ``SyntaxError``, or any other exception)
         is skipped gracefully so it does not crash the main application.
+
+        Loading is skipped entirely when the ``enable_plugins`` QSettings key
+        is ``False`` (set via Preferences -> Extensions).
         """
+        if not QSettings().value("enable_plugins", True, type=bool):
+            log.info("Plugin loading is disabled via Preferences (enable_plugins=False). Skipping.")
+            return
+
         cls.create_plugin_directory()
         plugin_files = cls.get_plugin_files()
 
@@ -109,25 +138,6 @@ class PluginManager:
                 sys.path.insert(0, dir_str)
 
         for p_file in plugin_files:
-            module_name = f"synaptipy_plugin_{p_file.stem}"
-            try:
-                spec = importlib.util.spec_from_file_location(module_name, str(p_file))
-                if spec is None or spec.loader is None:
-                    log.warning(f"Could not load plugin specification for {p_file.name}")
-                    continue
-
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                # Executing the module triggers @AnalysisRegistry.register decorators.
-                spec.loader.exec_module(module)
-
-                log.info(f"Successfully loaded plugin: {p_file.name}")
-
-            except ImportError as e:
-                log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
-            except SyntaxError as e:
-                log.error(f"SyntaxError in plugin '{p_file.name}': {e}", exc_info=False)
-            except Exception as e:
-                log.error(f"Unexpected error loading plugin '{p_file.name}': {e}", exc_info=False)
+            cls._load_single_plugin(p_file)
 
         log.info("Finished loading plugins.")
