@@ -271,6 +271,32 @@ All analysis sub-tabs share the following interface behaviours:
 
 ## Advanced Options
 
+### Preferences
+
+Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access the application settings:
+
+| Setting | Description |
+|---------|-------------|
+| **Scroll Behavior** | Choose Natural, Inverted, or System scroll direction for plots. |
+| **Appearance** | Switch between Light, Dark, or System color theme. |
+| **Enable Custom Plugins** | When checked, Synaptipy loads Python plugins from `~/.synaptipy/plugins/` and `examples/plugins/` at startup. Uncheck to disable all plugin loading. **Requires a restart to take effect.** |
+
+> **Tip:** If you install a new plugin and it does not appear as an Analyser tab, verify that "Enable Custom Plugins" is checked in Preferences and then restart Synaptipy.
+
+#### Included Example Plugins
+
+Synaptipy ships three ready-to-run example plugins in `examples/plugins/`.
+With **Enable Custom Plugins** active they load automatically:
+
+| Plugin file | Analyser tab label | What it measures |
+|-------------|--------------------|------------------|
+| `synaptic_charge.py` | Synaptic Charge (AUC) | Area under a postsynaptic current trace (total charge in pC); shaded fill + peak star overlay |
+| `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in spike latency after an optogenetic TTL pulse |
+| `ap_repolarization.py` | AP Repolarization Rate | Maximum rate of membrane-potential decline (dV/dt minimum) during an action potential |
+
+Copy any of these files to `~/.synaptipy/plugins/` and edit your copy to create
+a personalised variant without modifying the Synaptipy installation.
+
 ### Command Line Arguments
 
 Synaptipy supports several command-line arguments:

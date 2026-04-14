@@ -29,6 +29,21 @@ The `data/` folder contains sample recordings for testing:
 | `2023_04_11_0022.abf` | Axon Binary | Whole-cell patch-clamp recording |
 | `240326_003.wcp` | WinWCP | Whole-cell patch-clamp recording |
 
+## Example Plugins
+
+The `plugins/` folder contains ready-to-run analysis plugins that demonstrate
+Synaptipy's plugin system and serve as copyable templates:
+
+| Plugin file | Analyser tab label | What it measures |
+|-------------|--------------------|------------------|
+| `plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Integrates a postsynaptic current trace over a user-defined window; reports total charge (pC) and peak amplitude, with a shaded fill overlay and a star at the peak |
+| `plugins/opto_jitter.py` | Opto Latency Jitter | Trial-to-trial latency jitter of the first spike following an optogenetic TTL pulse (requires a secondary digital channel) |
+| `plugins/ap_repolarization.py` | AP Repolarization Rate | Maximum repolarization rate (dV/dt minimum) of the first action potential in a search window |
+
+These plugins are loaded automatically when **Enable Custom Plugins** is checked
+in **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).  Copy any
+file to `~/.synaptipy/plugins/` to create a personal variant.
+
 ## Running
 
 ```bash

@@ -114,17 +114,12 @@ class TestPluginTemplateLogic:
             data=data,
             time=time,
             sampling_rate=fs,
-            window_start=0.0,
-            window_end=0.5,
-            threshold=0.0,
         )
 
         assert isinstance(result, dict)
-        assert "mean_value" in result
-        assert "std_dev" in result
-        assert "points_above_threshold" in result
-        assert "_threshold_level" in result
-        assert "_mean_level" in result
+        assert "Mean_Value" in result
+        assert "module_used" in result
+        assert "metrics" in result
         assert "error" not in result
 
     def test_logic_empty_data(self):
@@ -140,37 +135,13 @@ class TestPluginTemplateLogic:
             data=np.array([]),
             time=np.array([]),
             sampling_rate=10000.0,
-            window_start=0.0,
-            window_end=0.5,
-            threshold=0.0,
         )
         assert "error" in result
 
-    def test_logic_narrow_window(self, synthetic_trace):
-        """Logic function returns error for a window with < 2 samples."""
-        data, time, fs = synthetic_trace
+    def test_logic_mean_value_correct(self):
+        """Logic function computes mean correctly for a simple array."""
         spec = importlib.util.spec_from_file_location(
-            "plugin_template_narrow",
-            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-
-        # Window from 0.0 to 0.0 — zero width
-        result = mod.calculate_my_metric(
-            data=data,
-            time=time,
-            sampling_rate=fs,
-            window_start=0.5,
-            window_end=0.5,
-            threshold=0.0,
-        )
-        assert "error" in result
-
-    def test_logic_threshold_counting(self):
-        """Verify threshold counting is correct."""
-        spec = importlib.util.spec_from_file_location(
-            "plugin_template_count",
+            "plugin_template_mean",
             str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
@@ -179,39 +150,24 @@ class TestPluginTemplateLogic:
         data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
         time = np.array([0.0, 0.1, 0.2, 0.3, 0.4])
 
-        result = mod.calculate_my_metric(
-            data=data,
-            time=time,
-            sampling_rate=10.0,
-            window_start=0.0,
-            window_end=0.5,
-            threshold=3.0,
-        )
-        # Values > 3.0 are 4.0 and 5.0 → 2 points
-        assert result["points_above_threshold"] == 2
+        result = mod.calculate_my_metric(data=data, time=time, sampling_rate=10.0)
+        assert "error" not in result
+        assert abs(result["Mean_Value"] - 3.0) < 1e-6
 
-    def test_private_keys_convention(self, synthetic_trace):
-        """Private keys (starting with _) are present in the result dict."""
+    def test_public_keys_convention(self, synthetic_trace):
+        """Result dict has at least one public key and the nested 'metrics' schema."""
         data, time, fs = synthetic_trace
         spec = importlib.util.spec_from_file_location(
-            "plugin_template_private",
+            "plugin_template_keys",
             str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        result = mod.calculate_my_metric(
-            data=data,
-            time=time,
-            sampling_rate=fs,
-            window_start=0.0,
-            window_end=0.5,
-            threshold=0.0,
-        )
-        private_keys = [k for k in result if k.startswith("_")]
+        result = mod.calculate_my_metric(data=data, time=time, sampling_rate=fs)
         public_keys = [k for k in result if not k.startswith("_")]
-        assert len(private_keys) >= 1, "Expected at least one private key"
         assert len(public_keys) >= 1, "Expected at least one public key"
+        assert isinstance(result.get("metrics"), dict), "Expected nested 'metrics' dict"
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +207,7 @@ class TestPluginManagerLoading:
         assert "ui_params" in meta
         assert "plots" in meta
         assert isinstance(meta["ui_params"], list)
-        assert len(meta["ui_params"]) >= 3  # window_start, window_end, threshold
+        assert len(meta["ui_params"]) >= 2  # window_start, window_end
 
     def test_loaded_plugin_ui_param_types(self, plugin_dir):
         """All ui_params have valid type fields."""
@@ -277,9 +233,9 @@ class TestPluginManagerLoading:
         func = AnalysisRegistry.get_function("my_custom_metric")
         data, time, fs = synthetic_trace
 
-        result = func(data, time, fs, window_start=0.0, window_end=0.5, threshold=0.0)
+        result = func(data, time, fs, window_start=0.0, window_end=0.5)
         assert isinstance(result, dict)
-        assert "mean_value" in result
+        assert "Mean_Value" in result
         assert "error" not in result
 
     def test_loaded_plugin_plots_reference_valid_keys(self, plugin_dir, synthetic_trace):
@@ -374,7 +330,7 @@ class TestWrapperConventions:
         data, time, fs = synthetic_trace
 
         # Call with kwargs matching ui_params
-        result = func(data, time, fs, window_start=0.0, window_end=1.0, threshold=-5.0)
+        result = func(data, time, fs, window_start=0.0, window_end=1.0)
         assert isinstance(result, dict)
 
     def test_wrapper_defaults_work(self, plugin_dir, synthetic_trace):

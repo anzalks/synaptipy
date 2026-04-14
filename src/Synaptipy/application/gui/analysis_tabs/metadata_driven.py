@@ -1144,6 +1144,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif plot_type == "overlay_fit":
                 self._viz_overlay_fit(plot_cfg, result_item)
 
+            # --- shaded fill-between two curves ---
+            elif plot_type == "fill_between":
+                self._viz_fill_between(plot_cfg, result_item)
+
             # trace — optional spike markers overlay
             elif plot_type == "trace":
                 if plot_cfg.get("show_spikes") and self._current_plot_data:
@@ -1407,6 +1411,109 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
+
+    # ------------------------------------------------------------------
+    # fill_between helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_fill_y2(self, y2_data, y1_len: int) -> np.ndarray:
+        """Convert the y2 config value (array, scalar, or None) to a NumPy array."""
+        if y2_data is None:
+            return np.zeros(y1_len)
+        try:
+            y2_scalar = float(y2_data)
+            return np.full(y1_len, y2_scalar)
+        except (TypeError, ValueError):
+            pass
+        try:
+            return np.asarray(y2_data, dtype=float)
+        except (ValueError, TypeError):
+            return np.zeros(y1_len)
+
+    def _resolve_fill_brush(self, cfg):
+        """Return a QBrush from the ``brush`` (RGBA tuple) or ``color`` key in cfg."""
+        brush_spec = cfg.get("brush")
+        color_spec = cfg.get("color")
+        if brush_spec is not None:
+            return pg.mkBrush(*brush_spec)
+        if color_spec is not None:
+            if isinstance(color_spec, (list, tuple)):
+                return pg.mkBrush(*color_spec)
+            return pg.mkBrush(color_spec)
+        return pg.mkBrush(0, 100, 255, 100)
+
+    def _prepare_fill_arrays(self, x_data, y1_data, y2_data):
+        """Validate, convert, and NaN-filter arrays for fill_between.
+
+        Returns a ``(x_arr, y1_arr, y2_arr)`` triple or ``None`` when the
+        arrays are invalid or entirely NaN.
+        """
+        try:
+            x_arr = np.asarray(x_data, dtype=float)
+            y1_arr = np.asarray(y1_data, dtype=float)
+        except (ValueError, TypeError):
+            return None
+        if len(x_arr) < 2 or len(y1_arr) < 2 or len(x_arr) != len(y1_arr):
+            return None
+        y2_arr = self._resolve_fill_y2(y2_data, len(y1_arr))
+        valid = ~(np.isnan(x_arr) | np.isnan(y1_arr) | np.isnan(y2_arr))
+        if not np.any(valid):
+            return None
+        x_arr, y1_arr, y2_arr = x_arr[valid], y1_arr[valid], y2_arr[valid]
+        if len(x_arr) < 2:
+            return None
+        return x_arr, y1_arr, y2_arr
+
+    def _val_with_metrics(self, result, key):
+        """Extract *key* from *result* directly, then fall back to result['metrics']."""
+        if key is None:
+            return None
+        val = self._val(result, key)
+        if val is None and isinstance(result, dict):
+            val = result.get("metrics", {}).get(key)
+        return val
+
+    def _viz_fill_between(self, cfg, result):
+        """Draw a shaded region between two curves (y1 and y2) along a shared x axis.
+
+        The ``result`` dict is searched directly then inside ``result['metrics']``
+        so both flat and nested ``{"module_used", "metrics"}`` schemas are supported.
+
+        Config keys:
+            x     -- key for the shared x-axis array (required)
+            y1    -- key for the upper/primary curve array (required)
+            y2    -- key for the lower/baseline curve, or a scalar (default 0.0)
+            brush -- (r, g, b, a) tuple for the fill colour (takes precedence)
+            color -- colour string or tuple (used when ``brush`` is not set)
+        """
+        if not self.plot_widget:
+            return
+
+        x_data = self._val_with_metrics(result, cfg.get("x"))
+        y1_data = self._val_with_metrics(result, cfg.get("y1"))
+        y2_data = self._val_with_metrics(result, cfg.get("y2"))
+
+        if x_data is None or y1_data is None:
+            log.debug("_viz_fill_between: missing x or y1 data, skipping.")
+            return
+
+        arrays = self._prepare_fill_arrays(x_data, y1_data, y2_data)
+        if arrays is None:
+            log.debug("_viz_fill_between: arrays invalid or all-NaN, skipping.")
+            return
+
+        x_arr, y1_arr, y2_arr = arrays
+        brush = self._resolve_fill_brush(cfg)
+        pen_none = pg.mkPen(None)
+
+        curve1 = pg.PlotCurveItem(x=x_arr, y=y1_arr, pen=pen_none)
+        curve2 = pg.PlotCurveItem(x=x_arr, y=y2_arr, pen=pen_none)
+        fill = pg.FillBetweenItem(curve1, curve2, brush=brush)
+
+        # Only add fill to the plot; curve1/curve2 are kept alive via
+        # _dynamic_plot_items so FillBetweenItem can reference their data.
+        self.plot_widget.addItem(fill)
+        self._dynamic_plot_items.extend([curve1, curve2, fill])
 
     def _viz_popup_xy(self, cfg, result):
         """Show scatter + optional regression line in a popup."""
