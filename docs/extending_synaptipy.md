@@ -65,19 +65,19 @@ At startup, Synaptipy:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ~/.synaptipy/plugins/my_snr_analysis.py                 │
+│  ~/.synaptipy/plugins/synaptic_charge.py                 │
 │                                                          │
 │  @AnalysisRegistry.register(                             │
-│      name="snr_analysis",                                │
-│      label="Signal-to-Noise Ratio",                      │
+│      name="synaptic_charge",                             │
+│      label="Synaptic Charge (AUC)",                      │
 │      ui_params=[...],                                    │
 │      plots=[...]                                         │
 │  )                                                       │
-│  def run_snr(data, time, sampling_rate, **kwargs):        │
+│  def run_auc(data, time, sampling_rate, **kwargs):        │
 │      ...                                                 │
-│      return {"module_used": "snr_analysis",              │
-│              "metrics": {"snr_db": 42.3,                 │
-│                          "noise_rms": 0.15}}             │
+│      return {"module_used": "synaptic_charge",           │
+│              "metrics": {"Charge_pC": 1.23,              │
+│                          "Baseline_pA": -42.0}}          │
 └──────────────────────────────────────────────────────────┘
          │
          ▼ startup → PluginManager.load_plugins()
@@ -86,18 +86,21 @@ At startup, Synaptipy:
 │  ├── rmp_analysis          (built-in)                    │
 │  ├── spike_detection       (built-in)                    │
 │  ├── ...                                                 │
-│  └── snr_analysis          ← YOUR PLUGIN                 │
+│  └── synaptic_charge       ← YOUR PLUGIN                 │
 └──────────────────────────────────────────────────────────┘
          │
          ▼ GUI build → auto-generated MetadataDrivenAnalysisTab
 ┌──────────────────────────────────────────────────────────┐
-│  Analyser Tab:  ... | Baseline | Spikes | SNR ◄──────── │
+│  Analyser Tab:  ... | Baseline | Spikes |                │
+│                     Synaptic Charge (AUC) ◄───────────  │
 │  ┌────────────────────────────────────────────┐          │
-│  │ Noise Window Start (s):  [0.0        ]     │          │
-│  │ Noise Window End (s):    [0.1        ]     │          │
+│  │ Baseline Start (s):    [0.0        ]       │          │
+│  │ Baseline End (s):      [0.05       ]       │          │
+│  │ Window Start (s):      [0.05       ]       │          │
+│  │ Window End (s):        [0.3        ]       │          │
 │  │           [ ▶ Run Analysis ]               │          │
 │  │ ──────────────────────────────────────      │          │
-│  │ Results: SNR = 42.3 dB                     │          │
+│  │ Results: Charge = 1.23 pC                  │          │
 │  └────────────────────────────────────────────┘          │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -156,17 +159,36 @@ No GUI dependencies (no PySide6, no pyqtgraph).
 ```python
 import numpy as np
 
-def calculate_snr(
+def calculate_area_under_curve(
     data: np.ndarray,
+    time: np.ndarray,
     sampling_rate: float,
-    noise_start: float,
-    noise_end: float,
-    signal_start: float,
-    signal_end: float,
+    baseline_start: float,
+    baseline_end: float,
+    window_start: float,
+    window_end: float,
 ) -> dict:
-    """Calculate signal-to-noise ratio in decibels."""
-    # ... your NumPy / SciPy logic ...
-    return {"snr_db": snr, "noise_rms": noise_rms, "signal_rms": signal_rms}
+    """Integrate baseline-subtracted trace to obtain synaptic charge (pC)."""
+    bl0 = int(np.searchsorted(time, baseline_start, side="left"))
+    bl1 = int(np.searchsorted(time, baseline_end,   side="right"))
+    baseline = float(np.mean(data[bl0:bl1])) if bl1 > bl0 else 0.0
+
+    wi0 = int(np.searchsorted(time, window_start, side="left"))
+    wi1 = int(np.searchsorted(time, window_end,   side="right"))
+    win_t = time[wi0:wi1]
+    win_d = data[wi0:wi1] - baseline
+
+    if win_t.size < 2:
+        return {"error": "Integration window too narrow"}
+
+    charge_pc = float(np.trapezoid(win_d, win_t))
+    return {
+        "Charge_pC":   round(charge_pc, 6),
+        "Baseline_pA": round(baseline,  4),
+        "_int_x": win_t,
+        "_int_y": data[wi0:wi1],
+        "_base":  baseline,
+    }
 ```
 
 **Rules for the logic function:**
@@ -186,37 +208,27 @@ follows the **nested output schema**.
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 @AnalysisRegistry.register(
-    name="snr_analysis",              # unique internal name
-    label="Signal-to-Noise Ratio",    # display name in the tab
-    ui_params=[...],                  # parameter widgets (see §4)
-    plots=[...],                      # plot overlays (see §5)
+    name="synaptic_charge",              # unique internal name
+    label="Synaptic Charge (AUC)",       # display name in the tab
+    ui_params=[...],                     # parameter widgets (see §4)
+    plots=[...],                         # plot overlays (see §5)
 )
-def run_snr_wrapper(
+def run_auc_wrapper(
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
     **kwargs,
 ) -> dict:
-    """Registry wrapper for SNR analysis."""
-    noise_start = kwargs.get("noise_start", 0.0)
-    noise_end = kwargs.get("noise_end", 0.1)
-    signal_start = kwargs.get("signal_start", 0.1)
-    signal_end = kwargs.get("signal_end", 0.5)
-
-    result = calculate_snr(data, sampling_rate, noise_start, noise_end,
-                           signal_start, signal_end)
-
-    if "error" in result:
-        return result  # propagate error dict unchanged
-
-    return {
-        "module_used": "snr_analysis",
-        "metrics": {
-            "snr_db": result["snr_db"],
-            "noise_rms": result["noise_rms"],
-            "signal_rms": result["signal_rms"],
-        },
-    }
+    """Registry wrapper for AUC / synaptic charge analysis."""
+    return calculate_area_under_curve(
+        data=data,
+        time=time,
+        sampling_rate=sampling_rate,
+        baseline_start=kwargs.get("baseline_start", 0.0),
+        baseline_end=kwargs.get("baseline_end",     0.05),
+        window_start=kwargs.get("window_start",     0.05),
+        window_end=kwargs.get("window_end",         0.3),
+    )
 ```
 
 **The wrapper signature is fixed:**
@@ -643,21 +655,32 @@ cannot provide.
 Since the logic function is pure Python + NumPy, test it directly with pytest:
 
 ```python
-# test_my_snr.py
+# test_my_auc.py
 import numpy as np
-from my_analysis import calculate_snr   # or import from plugin path
+from my_analysis import calculate_area_under_curve
 
-def test_snr_basic():
+def test_auc_basic():
     fs = 10000.0
-    t = np.arange(0, 1.0, 1 / fs)
-    # Known signal + noise
-    signal = np.sin(2 * np.pi * 50 * t) * 10.0
-    noise = np.random.default_rng(42).normal(0, 0.5, len(t))
-    data = np.concatenate([noise[:1000], signal[1000:]])
+    t = np.arange(0, 0.5, 1 / fs)
+    # Flat baseline followed by a rectangular current pulse
+    data = np.zeros_like(t)
+    data[(t >= 0.1) & (t < 0.3)] = -100.0  # 100 pA inward current, 200 ms
 
-    result = calculate_snr(data, fs, 0.0, 0.1, 0.1, 1.0)
-    assert result["snr_db"] > 20.0
-    assert result["noise_rms"] > 0
+    result = calculate_area_under_curve(data, t, fs,
+                                        baseline_start=0.0, baseline_end=0.05,
+                                        window_start=0.1,   window_end=0.3)
+    # Expected charge: -100 pA * 0.2 s = -20 pC (trapezoid should be close)
+    assert abs(result["Charge_pC"] - (-20.0)) < 0.01
+    assert result["Baseline_pA"] == 0.0
+
+def test_auc_error_on_narrow_window():
+    fs = 1000.0
+    t = np.array([0.0, 0.001])
+    data = np.array([0.0, -1.0])
+    result = calculate_area_under_curve(data, t, fs,
+                                        baseline_start=0.0, baseline_end=0.001,
+                                        window_start=0.5,   window_end=0.6)
+    assert "error" in result
 ```
 
 ### Integration-testing the registry wrapper
@@ -666,17 +689,17 @@ def test_snr_basic():
 import numpy as np
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
-def test_snr_registered():
+def test_auc_registered():
     # Ensure the plugin is loaded
     from Synaptipy.application.plugin_manager import PluginManager
     PluginManager.load_plugins()
 
-    func = AnalysisRegistry.get_function("snr_analysis")
+    func = AnalysisRegistry.get_function("synaptic_charge")
     assert func is not None
 
-    meta = AnalysisRegistry.get_metadata("snr_analysis")
+    meta = AnalysisRegistry.get_metadata("synaptic_charge")
     assert "ui_params" in meta
-    assert meta.get("label") == "Signal-to-Noise Ratio"
+    assert meta.get("label") == "Synaptic Charge (AUC)"
 ```
 
 ### Testing the template shipped with Synaptipy

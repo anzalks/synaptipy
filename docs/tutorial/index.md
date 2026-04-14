@@ -234,6 +234,30 @@ Synaptipy source code**.  All you need is a single Python file — Synaptipy
 generates the parameter panel, Run button, results table, and plot overlays
 automatically from the metadata you provide.
 
+#### Bundled Example Plugins
+
+Three ready-to-run example plugins ship with every Synaptipy installation.
+When **Enable Custom Plugins** is checked in **Edit > Preferences** (it is on
+by default), they appear automatically as new sub-tabs in the Analyser and are
+the fastest way to see what the plugin system can do before writing your own.
+
+| File | Tab label | What it measures |
+|------|-----------|-----------------|
+| `examples/plugins/synaptic_charge.py` | **Synaptic Charge (AUC)** | Total charge (pC) of a postsynaptic current via trapezoidal integration over a user-defined window; shaded fill overlay marks the integrated area and a star marks the detected peak amplitude. |
+| `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for optogenetically evoked spikes; requires a secondary digital/TTL channel. |
+| `examples/plugins/ap_repolarization.py` | **Max Repolarization Rate** | Steepest falling dV/dt of the first action potential in a window (V/s), a proxy for voltage-gated potassium-channel dynamics. |
+
+![Synaptic Charge (AUC) plugin tab](screenshots/analyser_synaptic_charge_auc.png)
+
+![Max Repolarization Rate plugin tab](screenshots/analyser_max_repolarization_rate.png)
+
+![Opto Latency Jitter plugin tab](screenshots/analyser_opto_latency_jitter.png)
+
+To customise an example, copy it to `~/.synaptipy/plugins/` and edit your copy.
+Synaptipy always prefers the user copy over the bundled file.
+
+---
+
 #### Step 1 — Create the plugin file
 
 Copy the starter template that ships with Synaptipy:
@@ -263,30 +287,40 @@ Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_ana
 #### Step 2 — Write your analysis function
 
 Open `~/.synaptipy/plugins/my_analysis.py` in any text editor.  The file has two
-parts:
+parts.  The example below implements **area-under-the-curve (AUC)** measurement
+— the same approach used by the bundled `synaptic_charge.py` plugin.
 
 **Part A — Your analysis logic** (plain Python + NumPy, no GUI code):
 
 ```python
 import numpy as np
 
-def calculate_snr(data, time, sampling_rate, noise_start, noise_end,
-                  signal_start, signal_end):
-    """Calculate signal-to-noise ratio in dB."""
-    # Convert seconds → sample indices
-    ni0 = int(np.searchsorted(time, noise_start, side="left"))
-    ni1 = int(np.searchsorted(time, noise_end,   side="right"))
-    si0 = int(np.searchsorted(time, signal_start, side="left"))
-    si1 = int(np.searchsorted(time, signal_end,   side="right"))
+def calculate_area_under_curve(data, time, sampling_rate,
+                               baseline_start, baseline_end,
+                               window_start, window_end):
+    """Integrate a baseline-subtracted trace to obtain synaptic charge (pC)."""
+    # Baseline: mean over the pre-event window
+    bl0 = int(np.searchsorted(time, baseline_start, side="left"))
+    bl1 = int(np.searchsorted(time, baseline_end,   side="right"))
+    baseline = float(np.mean(data[bl0:bl1])) if bl1 > bl0 else 0.0
 
-    noise_rms  = float(np.sqrt(np.mean(data[ni0:ni1] ** 2)))
-    signal_rms = float(np.sqrt(np.mean(data[si0:si1] ** 2)))
-    snr_db     = float(20.0 * np.log10(signal_rms / noise_rms))
+    # Integration window
+    wi0 = int(np.searchsorted(time, window_start, side="left"))
+    wi1 = int(np.searchsorted(time, window_end,   side="right"))
+    win_t = time[wi0:wi1]
+    win_d = data[wi0:wi1] - baseline
 
+    if win_t.size < 2:
+        return {"error": "Integration window too narrow"}
+
+    # np.trapezoid: pA * s = pC
+    charge_pc = float(np.trapezoid(win_d, win_t))
     return {
-        "snr_db":     round(snr_db, 2),
-        "noise_rms":  round(noise_rms, 4),
-        "signal_rms": round(signal_rms, 4),
+        "Charge_pC":   round(charge_pc, 6),
+        "Baseline_pA": round(baseline,  4),
+        "_int_x": win_t,          # hidden — fed to fill_between overlay
+        "_int_y": data[wi0:wi1],  # hidden — raw (unshifted) curve for shading
+        "_base":  baseline,       # hidden — baseline level for hline
     }
 ```
 
@@ -296,19 +330,19 @@ def calculate_snr(data, time, sampling_rate, noise_start, noise_end,
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 @AnalysisRegistry.register(
-    name="snr_analysis",               # unique internal ID
-    label="Signal-to-Noise Ratio",     # name shown on the tab
-    ui_params=[...],                   # parameter widgets  (see below)
-    plots=[...],                       # plot overlays      (see below)
+    name="synaptic_charge",              # unique internal ID
+    label="Synaptic Charge (AUC)",       # name shown on the tab
+    ui_params=[...],                     # parameter widgets  (see below)
+    plots=[...],                         # plot overlays      (see below)
 )
-def run_snr(data, time, sampling_rate, **kwargs):
+def run_auc(data, time, sampling_rate, **kwargs):
     """Wrapper — pulls GUI values from kwargs and calls the logic."""
-    return calculate_snr(
+    return calculate_area_under_curve(
         data, time, sampling_rate,
-        noise_start  = kwargs.get("noise_start",  0.0),
-        noise_end    = kwargs.get("noise_end",    0.1),
-        signal_start = kwargs.get("signal_start", 0.1),
-        signal_end   = kwargs.get("signal_end",   0.5),
+        baseline_start = kwargs.get("baseline_start", 0.0),
+        baseline_end   = kwargs.get("baseline_end",   0.05),
+        window_start   = kwargs.get("window_start",   0.05),
+        window_end     = kwargs.get("window_end",     0.3),
     )
 ```
 
@@ -328,18 +362,18 @@ Four widget types are available:
 | `"bool"` | Check box | `{"name": "auto_detect", "label": "Auto-Detect Baseline", "type": "bool", "default": False}` |
 | `"choice"` | Drop-down | `{"name": "direction", "label": "Direction:", "type": "choice", "choices": ["negative", "positive"], "default": "negative"}` |
 
-Full example for the SNR analysis:
+Full example for the AUC analysis:
 
 ```python
 ui_params=[
-    {"name": "noise_start",  "label": "Noise Start (s):",  "type": "float",
-     "default": 0.0, "min": 0.0, "max": 1e9, "decimals": 4},
-    {"name": "noise_end",    "label": "Noise End (s):",    "type": "float",
-     "default": 0.1, "min": 0.0, "max": 1e9, "decimals": 4},
-    {"name": "signal_start", "label": "Signal Start (s):", "type": "float",
-     "default": 0.1, "min": 0.0, "max": 1e9, "decimals": 4},
-    {"name": "signal_end",   "label": "Signal End (s):",   "type": "float",
-     "default": 0.5, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "baseline_start", "label": "Baseline Start (s):", "type": "float",
+     "default": 0.0,  "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "baseline_end",   "label": "Baseline End (s):",   "type": "float",
+     "default": 0.05, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "window_start",   "label": "Window Start (s):",   "type": "float",
+     "default": 0.05, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "window_end",     "label": "Window End (s):",     "type": "float",
+     "default": 0.3,  "min": 0.0, "max": 1e9, "decimals": 4},
 ],
 ```
 
@@ -356,21 +390,25 @@ runs.  Common overlay types:
 
 | Type | What it draws | Example |
 |------|---------------|---------|
-| `"interactive_region"` | Draggable shaded region synced to two float parameters | `{"type": "interactive_region", "data": ["noise_start", "noise_end"], "color": "b"}` |
-| `"hlines"` | Horizontal lines at result values | `{"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]}` |
+| `"interactive_region"` | Draggable shaded region synced to two float parameters | `{"type": "interactive_region", "data": ["window_start", "window_end"], "color": "g"}` |
+| `"hlines"` | Horizontal lines at result values | `{"type": "hlines", "data": ["_base"], "color": "b", "styles": ["dash"]}` |
 | `"vlines"` | Vertical lines at result values | `{"type": "vlines", "data": "stim_times", "color": "c"}` |
 | `"markers"` | Scatter dots at (x, y) arrays from result | `{"type": "markers", "x": "peak_times", "y": "peak_voltages", "color": "r"}` |
 | `"threshold_line"` | Draggable h-line synced to a parameter | `{"type": "threshold_line", "param": "threshold"}` |
 | `"overlay_fit"` | Curve overlay (e.g. exponential fit) | `{"type": "overlay_fit", "x": "_fit_t", "y": "_fit_v", "color": "r"}` |
+| `"fill_between"` | Shaded filled area between two curves | `{"type": "fill_between", "x": "_int_x", "y1": "_int_y", "y2": "_base", "brush": (0, 100, 255, 100)}` |
 | `"popup_xy"` | Opens a separate plot window | `{"type": "popup_xy", "title": "F-I Curve", "x": "currents", "y": "rates", "x_label": "I (pA)", "y_label": "f (Hz)"}` |
 
-Full example — two draggable windows and a dashed line at the noise level:
+Full example — baseline region, integration region, baseline h-line, and shaded
+integrated area:
 
 ```python
 plots=[
-    {"type": "interactive_region", "data": ["noise_start", "noise_end"],   "color": "b"},
-    {"type": "interactive_region", "data": ["signal_start", "signal_end"], "color": "g"},
-    {"type": "hlines", "data": ["noise_rms"], "color": "b", "styles": ["dash"]},
+    {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "b"},
+    {"type": "interactive_region", "data": ["window_start",   "window_end"],   "color": "g"},
+    {"type": "hlines", "data": ["_base"], "color": "b", "styles": ["dash"]},
+    {"type": "fill_between", "x": "_int_x", "y1": "_int_y", "y2": "_base",
+     "brush": (0, 100, 255, 100)},
 ],
 ```
 
@@ -382,9 +420,11 @@ prefix the key with an underscore:
 
 ```python
 return {
-    "snr_db":       42.3,        # ← shown in results table
-    "noise_rms":    0.15,        # ← shown in results table
-    "_fit_curve":   some_array,  # ← hidden (used by overlay_fit)
+    "Charge_pC":    1.23,       # ← shown in results table
+    "Baseline_pA":  -42.0,      # ← shown in results table
+    "_int_x":  time_array,      # ← hidden (used by fill_between overlay)
+    "_int_y":  data_array,      # ← hidden (used by fill_between overlay)
+    "_base":   -42.0,           # ← hidden (used by hlines overlay)
 }
 ```
 
@@ -396,12 +436,13 @@ will display the message instead of a results table.
 Save your file, restart Synaptipy, and your new tab appears in the Analyser:
 
 ```
-Analyser → ... | Baseline | Spikes | Signal-to-Noise Ratio
+Analyser → ... | Baseline | Spikes | Synaptic Charge (AUC)
 ```
 
-Load a file, select a channel, and click **Run Analysis** (or just change a
-parameter — analysis re-runs automatically).  The results table, plot overlays,
-and batch processing all work immediately.
+Load a voltage-clamp recording, select the current channel, and click
+**Run Analysis** (or just change a parameter — analysis re-runs automatically).
+The results table, shaded fill overlay, and batch processing all work
+immediately.
 
 #### Tips
 
