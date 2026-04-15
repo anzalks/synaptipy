@@ -431,15 +431,22 @@ class AnalyserTab(QtWidgets.QWidget):
                 loaded_registry_names.update(tab.get_covered_analysis_names())
 
         # Enforce a fixed logical order for the core module tabs.
-        # Tabs whose registry name appears in CORE_ORDER come first in that order;
-        # all other registered entries (custom/plugin tabs) are appended after.
+        # Each entry is a MODULE-LEVEL aggregator tab that groups sub-analyses
+        # via a method_selector.  Child leaf registrations (e.g. spike_detection,
+        # phase_plane_analysis) are covered by get_covered_analysis_names() and
+        # must NOT appear here as standalone top-level tabs.
+        # The five pillars of the Synaptipy Analyser UI:
+        #   1. Passive Properties   → intrinsic membrane features
+        #   2. Spike Analysis       → single-spike kinetics & phase plane
+        #   3. Excitability         → firing dynamics & adaptation
+        #   4. Synaptic Events      → event detection methods
+        #   5. Evoked Responses     → optogenetics & paired-pulse
         CORE_ORDER = [
             "passive_properties",
             "single_spike",
             "firing_dynamics",
             "synaptic_events",
             "evoked_responses",
-            "phase_plane_analysis",
         ]
 
         def _tab_sort_key(name):

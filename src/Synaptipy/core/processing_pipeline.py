@@ -169,3 +169,135 @@ class SignalProcessingPipeline:
                 log.error(f"Error processing step {step}: {e}")
 
         return result
+
+
+# ---------------------------------------------------------------------------
+# Immutable Trace Correction Pipeline
+# ---------------------------------------------------------------------------
+
+
+def apply_trace_corrections(
+    data: np.ndarray,
+    time: np.ndarray,
+    fs: float,
+    *,
+    ljp_mv: float = 0.0,
+    pn_traces: Optional[np.ndarray] = None,
+    pn_scale: float = 1.0,
+    pre_event_window_s: Optional[tuple] = None,
+    filter_steps: Optional[List[Dict[str, Any]]] = None,
+) -> np.ndarray:
+    """Apply the immutable four-step trace correction in a guaranteed order.
+
+    Regardless of the order the user toggles settings in the GUI, **this
+    function must be used as the single entry point for all backend
+    corrections** so that the execution order is always:
+
+    Step A - LJP Voltage Offset
+        ``V_true = V_recorded - ljp_mv``
+
+    Step B - P/N Leak Subtraction
+        If *pn_traces* is supplied, compute the per-sample mean across the
+        sub-threshold repetitions, scale by *pn_scale*, and subtract from the
+        corrected trace.  This removes capacitive transients and steady-state
+        leak currents without affecting the signal of interest.
+
+    Step C - Scalar Noise-Floor Zeroing
+        Subtract the median of the user-specified pre-event window
+        ``pre_event_window_s = (t_start, t_end)``.  Because the LJP and
+        P/N corrections have already been applied, this median reflects only
+        the residual noise floor, not a physiological offset.
+
+    Step D - Signal Filtering
+        Apply any filters listed in *filter_steps* (same dict schema as
+        ``SignalProcessingPipeline``: ``{'type': 'filter', 'method': 'lowpass',
+        'cutoff': 1000, 'order': 5}``).  Running filters **after** A-C
+        prevents edge artefacts from the transient subtraction from being
+        smeared across the waveform.
+
+    Args:
+        data:                Raw (uncorrected) signal array.
+        time:                Time vector aligned with *data* (seconds).
+        fs:                  Sampling rate in Hz.
+        ljp_mv:              Liquid Junction Potential in mV.  Step A only
+                             runs when ``ljp_mv != 0.0``.
+        pn_traces:           2-D array of shape ``(n_sweeps, n_samples)``
+                             containing the sub-threshold P/N sweeps.  Step B
+                             is skipped when *pn_traces* is ``None``.
+        pn_scale:            Scalar factor applied to the averaged P/N
+                             template before subtraction (default 1.0).
+        pre_event_window_s:  ``(t_start, t_end)`` tuple in seconds.  Step C
+                             is skipped when this is ``None``.
+        filter_steps:        List of filter dicts consumed by
+                             ``SignalProcessingPipeline.process()``.  Step D
+                             is skipped when the list is empty or ``None``.
+
+    Returns:
+        Corrected signal array (always a copy — the input is never mutated).
+    """
+    if data is None or data.size == 0:
+        return data
+
+    result: np.ndarray = data.copy()
+
+    # ------------------------------------------------------------------
+    # Step A — Liquid Junction Potential subtraction
+    # ------------------------------------------------------------------
+    if ljp_mv != 0.0:
+        result = result - float(ljp_mv)
+        log.debug("apply_trace_corrections: Step A — LJP %.4f mV subtracted.", ljp_mv)
+
+    # ------------------------------------------------------------------
+    # Step B — P/N Leak Subtraction
+    # ------------------------------------------------------------------
+    if pn_traces is not None:
+        pn_arr = np.asarray(pn_traces, dtype=float)
+        if pn_arr.ndim == 1:
+            pn_arr = pn_arr[np.newaxis, :]
+        if pn_arr.shape[1] == result.shape[0]:
+            pn_mean = pn_arr.mean(axis=0) * float(pn_scale)
+            result = result - pn_mean
+            log.debug(
+                "apply_trace_corrections: Step B — P/N leak subtracted (%d sweeps, scale=%.3f).",
+                pn_arr.shape[0],
+                pn_scale,
+            )
+        else:
+            log.warning(
+                "apply_trace_corrections: Step B skipped — pn_traces length %d != data length %d.",
+                pn_arr.shape[1],
+                result.shape[0],
+            )
+
+    # ------------------------------------------------------------------
+    # Step C — Pre-event Scalar Zeroing (median of pre-event window)
+    # ------------------------------------------------------------------
+    if pre_event_window_s is not None and time is not None and time.size == result.size:
+        t0, t1 = float(pre_event_window_s[0]), float(pre_event_window_s[1])
+        mask = (time >= t0) & (time < t1)
+        if np.any(mask):
+            floor_offset = float(np.median(result[mask]))
+            result = result - floor_offset
+            log.debug(
+                "apply_trace_corrections: Step C — noise floor zeroed (%.4f mV, window %.3f-%.3f s).",
+                floor_offset,
+                t0,
+                t1,
+            )
+        else:
+            log.warning(
+                "apply_trace_corrections: Step C skipped — no samples in window %.3f-%.3f s.",
+                t0,
+                t1,
+            )
+
+    # ------------------------------------------------------------------
+    # Step D — Signal Filtering
+    # ------------------------------------------------------------------
+    if filter_steps:
+        pipeline = SignalProcessingPipeline()
+        pipeline.set_steps(filter_steps)
+        result = pipeline.process(result, fs, time_vector=time)
+        log.debug("apply_trace_corrections: Step D — %d filter step(s) applied.", len(filter_steps))
+
+    return result
