@@ -49,7 +49,7 @@ for _mod in _MOCK_MODULES:
 # Project information
 # ---------------------------------------------------------------------------
 project = "Synaptipy"
-copyright = "2024, Anzal K Shahul"
+copyright = "2024-2026, Anzal K Shahul"
 author = "Anzal K Shahul"
 
 # Retrieve version from the package itself
