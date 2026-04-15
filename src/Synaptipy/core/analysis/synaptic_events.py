@@ -150,7 +150,7 @@ def calculate_event_charge_dynamic(
     integration_end = max(1, onset_idx)
     t_seg = np.arange(integration_end) * dt
     trace_slice = segment[:integration_end]
-    charge = float(np.trapz(trace_slice - local_baseline, t_seg))
+    charge = float(np.trapezoid(trace_slice - local_baseline, t_seg))
     return charge
 
 

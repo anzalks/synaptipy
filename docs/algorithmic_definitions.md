@@ -9,7 +9,7 @@ equations match the variable names in the source code.
 
 ## 1. Baseline / Resting Membrane Potential (RMP)
 
-**Module:** `basic_features.py` · **Registry name:** `rmp_analysis`
+**Module:** `passive_properties.py` · **Registry name:** `rmp_analysis`
 
 $$
 V_{\text{RMP}} = \frac{1}{N} \sum_{i \in \mathcal{W}} V_i
@@ -477,7 +477,7 @@ lookback window preceding the spike peak, reflecting the axonal initiation site.
 
 ## 12. Spike Train Dynamics
 
-**Module:** `train_dynamics.py` · **Registry name:** `train_dynamics`
+**Module:** `firing_dynamics.py` · **Registry name:** `train_dynamics`
 
 **ISI** = `numpy.diff(spike_times)`
 
@@ -511,7 +511,7 @@ $\text{LV} < 1$: regular; $\text{LV} \approx 1$: Poisson; $\text{LV} > 1$: burst
 
 ## 13. Optogenetic Synchronisation
 
-**Module:** `optogenetics.py` · **Registry name:** `optogenetic_sync`
+**Module:** `evoked_responses.py` · **Registry name:** `optogenetic_sync`
 
 **TTL edge detection:** binarise the stimulus channel at `ttl_threshold`, then
 find rising edges via `numpy.diff`.
@@ -690,3 +690,76 @@ Peak detection is then applied to $z_{\text{combined}}$ at the user-specified
 threshold.  This ensures that both fast somatic (narrow) and slow dendritic
 (broadened) events cross the detection threshold, without requiring the user
 to re-tune $\tau_{\text{decay}}$ for distal inputs.
+---
+
+## 16. Immutable Trace Correction Pipeline
+
+**Module:** `core/processing_pipeline.py` · **Function:** `apply_trace_corrections`
+
+To prevent math artefacts caused by order-dependent GUI interactions, all
+backend analysis **must** pass raw data through `apply_trace_corrections()`
+before feature extraction.  The function enforces the following four-step
+sequence unconditionally:
+
+### Step A - Liquid Junction Potential (LJP) Subtraction
+
+$$
+V_{\text{true}}(t) = V_{\text{recorded}}(t) - \text{LJP}
+$$
+
+The LJP arises from the electrochemical potential difference between the patch
+pipette solution and the bath.  Correcting it is mandatory for any
+voltage-dependent analysis (AP threshold, RMP, I-V curve).
+
+### Step B - P/N Leak Subtraction
+
+$$
+I_{\text{corrected}}(t) = I_{\text{signal}}(t)
+ - \frac{1}{K} \sum_{k=1}^{K} I_{\text{leak},k}(t) \cdot p
+$$
+
+where $K$ is the number of sub-threshold P/N repetitions and $p = 1/N$ is
+the scaling factor (default $p=1$).  This removes capacitive transients and
+steady-state leak currents before any further correction.
+
+### Step C - Pre-Event Noise Floor Zeroing
+
+$$
+V'(t) = V_{\text{corrected}}(t) - \operatorname{median}_{t \in \mathcal{W}_{\text{pre}}} V_{\text{corrected}}(t)
+$$
+
+The median of the immediate pre-event window $\mathcal{W}_{\text{pre}}$ is
+subtracted as a scalar.  Because Steps A and B have already been applied, this
+median reflects only the residual noise floor.
+
+### Step D - Signal Filtering
+
+Any user-requested digital filters (low-pass, notch, etc.) are applied
+**after** Steps A-C.  Filtering first would smear step-transients from leak
+subtraction across the waveform and corrupt the P/N correction.
+
+> **Immutability guarantee:** regardless of the order in which the user toggles
+> preprocessing options in the GUI, the execution order A → B → C → D is always
+> enforced by `apply_trace_corrections()`.
+
+---
+
+## 17. 5-Pillar Analyser Architecture
+
+The Synaptipy Analyser UI is structured around exactly **five primary tabs**,
+each corresponding to a module-level aggregator entry in the `AnalysisRegistry`:
+
+| Pillar | Registry name | Label | Sub-analyses |
+|--------|--------------|-------|--------------|
+| 1 | `passive_properties` | Intrinsic Properties | RMP, Rin, Tau, Sag, I-V, Capacitance |
+| 2 | `single_spike` | Spike Analysis | Spike Detection, Phase Plane |
+| 3 | `firing_dynamics` | Excitability | Excitability, Burst Analysis, Spike Train Dynamics |
+| 4 | `synaptic_events` | Synaptic Events | Threshold, Deconvolution, Baseline+Peak+Kinetics |
+| 5 | `evoked_responses` | Optogenetics | Optogenetic Sync, Paired-Pulse Ratio |
+
+Leaf registrations (e.g. `spike_detection`, `phase_plane_analysis`) are covered
+by their parent module tab via `MetadataDrivenAnalysisTab.get_covered_analysis_names()`
+and do not appear as independent top-level tabs.
+
+Custom plugin analyses registered by the user are appended after the five core
+pillars in alphabetical order.

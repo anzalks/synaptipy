@@ -80,16 +80,17 @@ src/Synaptipy/                       # Main package
 │   ├── data_model.py                # Recording and Channel classes
 │   ├── results.py                   # Typed result dataclasses
 │   ├── processing_pipeline.py       # Signal processing pipeline
+│   │                                # (includes apply_trace_corrections - immutable A→B→C→D)
 │   ├── signal_processor.py          # Low-level signal processing
 │   ├── source_interfaces.py         # Data source abstraction
 │   └── analysis/                    # Analysis algorithms (registry pattern)
 │       ├── registry.py              # AnalysisRegistry (decorator pattern)
 │       ├── batch_engine.py          # Batch processing engine
-│       ├── passive_properties.py    # RMP, Rin, Tau, Sag, I-V, Capacitance
-│       ├── single_spike.py          # Spike detection and phase plane
-│       ├── firing_dynamics.py       # Excitability, burst, train dynamics
-│       ├── synaptic_events.py       # Event detection (3 methods)
-│       └── evoked_responses.py      # Optogenetic sync analysis
+│       ├── passive_properties.py    # Pillar 1: RMP, Rin, Tau, Sag, I-V, Capacitance
+│       ├── single_spike.py          # Pillar 2: Spike detection and phase plane
+│       ├── firing_dynamics.py       # Pillar 3: Excitability, burst, train dynamics
+│       ├── synaptic_events.py       # Pillar 4: Event detection (3 methods)
+│       └── evoked_responses.py      # Pillar 5: Optogenetic sync + paired-pulse ratio
 ├── infrastructure/                  # I/O and external integrations
 │   ├── file_readers/                # Neo-based file readers (NeoAdapter)
 │   ├── exporters/                   # NWB export (NWBExporter)
@@ -124,6 +125,37 @@ scripts/                             # Utility scripts
 docs/                                # Sphinx documentation (ReadTheDocs)
 examples/                            # Example scripts, notebooks, plugins
 ```
+
+## 5-Pillar Analyser Architecture
+
+The Synaptipy Analyser UI is organised around five primary tabs (pillars).
+Each pillar corresponds to a single module-level aggregator entry in the
+`AnalysisRegistry`.  Sub-analyses are exposed via `method_selector` drop-downs
+inside each pillar tab and are **never** shown as independent top-level tabs.
+
+| Pillar | Module file | Registry key | Sub-analyses |
+|--------|------------|-------------|--------------|
+| 1 - Intrinsic Properties | `passive_properties.py` | `passive_properties` | Baseline (RMP), Input Resistance, Tau, Sag Ratio, I-V Curve, Capacitance |
+| 2 - Spike Analysis | `single_spike.py` | `single_spike` | Spike Detection, Phase Plane |
+| 3 - Excitability | `firing_dynamics.py` | `firing_dynamics` | Excitability, Burst Analysis, Spike Train Dynamics |
+| 4 - Synaptic Events | `synaptic_events.py` | `synaptic_events` | Threshold, Deconvolution, Baseline+Peak+Kinetics |
+| 5 - Optogenetics | `evoked_responses.py` | `evoked_responses` | Optogenetic Sync, Paired-Pulse Ratio |
+
+Custom plugin analyses are appended after the five core pillars.
+
+### Immutable Trace Correction Pipeline
+
+All backend analysis must obtain its input trace from
+`apply_trace_corrections()` in `core/processing_pipeline.py`.  This function
+enforces the following correction order regardless of GUI state:
+
+1. **Step A - LJP:** `V_true = V_recorded - LJP_mv`
+2. **Step B - P/N Leak:** subtract scaled mean of sub-threshold sweeps
+3. **Step C - Noise Floor:** subtract median of pre-event window
+4. **Step D - Filtering:** apply any digital filters
+
+See [Algorithmic Definitions - Section 16](algorithmic_definitions.md) for the
+full mathematical specification.
 
 ## Writing Custom Analysis Plugins
 
