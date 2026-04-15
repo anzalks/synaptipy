@@ -10,7 +10,7 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import pyqtgraph as pg
 from PySide6 import QtCore
@@ -157,6 +157,28 @@ class PlotCustomizationManager:
                 "color": "#808080",  # Gray
                 "width": default_width,  # Use constant (1 pixel)
                 "opacity": 70,  # 70% = 70% opaque (alpha 0.7)
+            },
+            # --- Advanced analysis marker styling ---
+            "scatter_points": {
+                "color": "#ffff00",  # Yellow - high visibility against dark traces
+                "opacity": 100,
+                "size": 8,  # Symbol size in pixels
+                "symbol": "o",  # 'o', 't', 'd', 's', '+', 'star'
+            },
+            "selection_windows": {
+                "color": "#00aaff",  # Cyan-blue
+                "opacity": 30,  # Semi-transparent fill
+                "line_style": "dash",  # 'solid', 'dash', 'dot', 'dashdot'
+            },
+            "auc_fill": {
+                "color": "#ff7700",  # Orange
+                "opacity": 40,  # Semi-transparent area fill
+            },
+            "hv_lines": {
+                "color": "#ff0000",  # Red
+                "opacity": 80,
+                "width": default_width,
+                "line_style": "dash",  # 'solid', 'dash', 'dot', 'dashdot'
             },
         }
 
@@ -592,6 +614,98 @@ class PlotCustomizationManager:
         except Exception as e:
             log.debug(f"Could not update plot item pens: {e}")
 
+    def _make_qcolor(self, color_str: str, opacity: int):
+        """Convert a hex/named colour string and opacity (0-100) to QColor."""
+        from PySide6.QtGui import QColor
+
+        alpha_value = int(max(0, min(100, opacity)) / 100.0 * 255)
+        if color_str.startswith("#"):
+            r = int(color_str[1:3], 16)
+            g = int(color_str[3:5], 16)
+            b = int(color_str[5:7], 16)
+            return QColor(r, g, b, alpha_value)
+        color = QColor(color_str)
+        color.setAlpha(alpha_value)
+        return color
+
+    @staticmethod
+    def _line_style_to_qt(style: str):
+        """Map a line-style name to the corresponding Qt.PenStyle."""
+        from PySide6.QtCore import Qt
+
+        mapping = {
+            "solid": Qt.PenStyle.SolidLine,
+            "dash": Qt.PenStyle.DashLine,
+            "dot": Qt.PenStyle.DotLine,
+            "dashdot": Qt.PenStyle.DashDotLine,
+        }
+        return mapping.get(style, Qt.PenStyle.SolidLine)
+
+    def get_scatter_pen_and_brush(self) -> "Tuple[pg.mkPen, pg.mkBrush]":
+        """
+        Return (pen, brush) for scatter point items (detected spikes/peaks).
+
+        The pen uses fully opaque colour; the brush uses the configured
+        opacity so points are visually distinct from traces without
+        completely obscuring them.
+        """
+        prefs = self.defaults.get("scatter_points", {})
+        color_str = prefs.get("color", "#ffff00")
+        opacity = int(prefs.get("opacity", 100))
+        size = int(prefs.get("size", 8))  # noqa: F841 — size consumed by caller
+        fill_color = self._make_qcolor(color_str, opacity)
+        border_color = self._make_qcolor(color_str, 100)
+        pen = pg.mkPen(color=border_color, width=1)
+        brush = pg.mkBrush(color=fill_color)
+        return pen, brush
+
+    def get_scatter_symbol(self) -> str:
+        """Return the symbol string for scatter point items."""
+        return self.defaults.get("scatter_points", {}).get("symbol", "o")
+
+    def get_scatter_size(self) -> int:
+        """Return the symbol size (pixels) for scatter point items."""
+        return int(self.defaults.get("scatter_points", {}).get("size", 8))
+
+    def get_selection_window_brush(self) -> "pg.mkBrush":
+        """Return brush for LinearRegionItem selection windows."""
+        prefs = self.defaults.get("selection_windows", {})
+        color_str = prefs.get("color", "#00aaff")
+        opacity = int(prefs.get("opacity", 30))
+        fill_color = self._make_qcolor(color_str, opacity)
+        return pg.mkBrush(color=fill_color)
+
+    def get_selection_window_pen(self) -> "pg.mkPen":
+        """Return border pen for LinearRegionItem selection windows."""
+        prefs = self.defaults.get("selection_windows", {})
+        color_str = prefs.get("color", "#00aaff")
+        line_style = prefs.get("line_style", "dash")
+        border_color = self._make_qcolor(color_str, 100)
+        qt_style = self._line_style_to_qt(line_style)
+        return pg.mkPen(color=border_color, width=1, style=qt_style)
+
+    def get_auc_brush(self) -> "pg.mkBrush":
+        """Return brush for AUC / synaptic-charge area fills (FillBetweenItem)."""
+        prefs = self.defaults.get("auc_fill", {})
+        color_str = prefs.get("color", "#ff7700")
+        opacity = int(prefs.get("opacity", 40))
+        fill_color = self._make_qcolor(color_str, opacity)
+        return pg.mkBrush(color=fill_color)
+
+    def get_hv_line_pen(self) -> "pg.mkPen":
+        """Return pen for horizontal/vertical InfiniteLine markers (thresholds, stim onset)."""
+        prefs = self.defaults.get("hv_lines", {})
+        color_str = prefs.get("color", "#ff0000")
+        opacity = int(prefs.get("opacity", 80))
+        try:
+            width = float(prefs.get("width", 1))
+        except (ValueError, TypeError):
+            width = 1.0
+        line_style = prefs.get("line_style", "dash")
+        color = self._make_qcolor(color_str, opacity)
+        qt_style = self._line_style_to_qt(line_style)
+        return pg.mkPen(color=color, width=width, style=qt_style)
+
 
 # Global instance for application-wide access
 _plot_customization_manager = None
@@ -624,6 +738,31 @@ def get_grid_pen() -> pg.mkPen:
 def is_grid_enabled() -> bool:
     """Check if grid is currently enabled."""
     return get_plot_customization_manager().is_grid_enabled()
+
+
+def get_scatter_pen_and_brush():
+    """Get pen and brush for scatter point markers."""
+    return get_plot_customization_manager().get_scatter_pen_and_brush()
+
+
+def get_selection_window_brush():
+    """Get brush for LinearRegionItem selection windows."""
+    return get_plot_customization_manager().get_selection_window_brush()
+
+
+def get_selection_window_pen():
+    """Get border pen for LinearRegionItem selection windows."""
+    return get_plot_customization_manager().get_selection_window_pen()
+
+
+def get_auc_brush():
+    """Get brush for AUC / synaptic charge area fills."""
+    return get_plot_customization_manager().get_auc_brush()
+
+
+def get_hv_line_pen():
+    """Get pen for horizontal/vertical InfiniteLine markers."""
+    return get_plot_customization_manager().get_hv_line_pen()
 
 
 def update_grid_visibility(plot_widgets: list):

@@ -395,6 +395,41 @@ class NeoAdapter:
 
     # --- Refactored Helper Methods ---
 
+    @staticmethod
+    def _extract_channel_name(ch_info, ch_id: str) -> str:
+        """
+        Extract the native channel name from a Neo header record.
+
+        Priority order:
+        1. ``name`` field in the header record (byte-string or plain string).
+        2. String representation of the channel ID when no name is available.
+
+        No generic fallbacks such as "Channel 0" are used so that the UI
+        always reflects the exact label stored in the acquisition file.
+
+        Args:
+            ch_info: A dict or numpy structured-array row from the Neo header.
+            ch_id:   String representation of the channel identifier.
+
+        Returns:
+            The native channel name, stripped of whitespace.
+        """
+        if isinstance(ch_info, dict):
+            raw = ch_info.get("name", "")
+        else:
+            # numpy structured array row
+            if "name" in ch_info.dtype.names:
+                raw = ch_info["name"]
+            else:
+                raw = ""
+
+        if isinstance(raw, bytes):
+            name = raw.decode("utf-8", errors="replace").strip()
+        else:
+            name = str(raw).strip()
+
+        return name if name else ch_id
+
     def _discover_channels_from_header(self, reader, num_segments: int, lazy: bool) -> Dict[str, Dict]:
         """Stage 1: Discover ALL potential channels from the header first."""
         channel_metadata_map: Dict[str, Dict] = {}
@@ -408,16 +443,7 @@ class NeoAdapter:
                     if isinstance(ch_info, dict)
                     else str(ch_info["id"]) if "id" in ch_info.dtype.names else str(i)
                 )
-                if isinstance(ch_info, dict):
-                    ch_name = str(ch_info.get("name", f"Channel {ch_id}"))
-                else:
-                    if "name" in ch_info.dtype.names and ch_info["name"]:
-                        ch_name_raw = ch_info["name"]
-                        ch_name = (
-                            ch_name_raw.decode().strip() if isinstance(ch_name_raw, bytes) else str(ch_name_raw).strip()
-                        )
-                    else:
-                        ch_name = f"Channel {ch_id}"
+                ch_name = self._extract_channel_name(ch_info, ch_id)
 
                 map_key = f"id_{ch_id}"
                 if map_key not in channel_metadata_map:
@@ -475,17 +501,51 @@ class NeoAdapter:
 
             # Ensure entry exists
             if map_key not in channel_metadata_map:
-                # Dynamic discovery fallback (shouldn't happen often with strict header read)
-                # If we discover a channel late, we can't easily pre-allocate without knowing total segments here
-                # So we might fallback to append, or assume handled.
-                # For safety, initialize with empty list or pre-filled if we knew num_segments.
-                # Since we don't pass num_segments here easily, let's just use append for fallback.
+                # Dynamic discovery fallback for channels not seen in the header.
+                # Prefer the native .name attribute on the AnalogSignal object so
+                # the UI always shows the label from the acquisition file rather
+                # than a synthetic "Channel N" string.
+                native_name = ""
+                if hasattr(anasig, "name") and anasig.name:
+                    raw_name = anasig.name
+                    native_name = (
+                        raw_name.decode("utf-8", errors="replace").strip()
+                        if isinstance(raw_name, bytes)
+                        else str(raw_name).strip()
+                    )
                 channel_metadata_map[map_key] = {
                     "id": anasig_id,
-                    "name": f"Channel {anasig_id}",
+                    "name": native_name if native_name else anasig_id,
                     "data_trials": [],
                 }
-                log.warning(f"Channel {anasig_id} discovered late (not in header). Pre-allocation skipped.")
+                log.warning(
+                    "Channel %s discovered late (not in header); name='%s'.",
+                    anasig_id,
+                    channel_metadata_map[map_key]["name"],
+                )
+            else:
+                # If the header pre-populated an entry, still prefer the AnalogSignal
+                # .name attribute as the most authoritative source (it is populated
+                # directly from Neo's internal channel metadata, which can be richer
+                # than the flattened header record for multi-column signals).
+                current_name = channel_metadata_map[map_key].get("name", "")
+                if hasattr(anasig, "name") and anasig.name and seg_idx == 0:
+                    raw_name = anasig.name
+                    native_name = (
+                        raw_name.decode("utf-8", errors="replace").strip()
+                        if isinstance(raw_name, bytes)
+                        else str(raw_name).strip()
+                    )
+                    # Override only if the native name is non-empty and different
+                    # from the already-discovered header name.
+                    if native_name and native_name != current_name:
+                        log.debug(
+                            "Channel %s: overriding header name '%s' with signal name '%s'.",
+                            anasig_id,
+                            current_name,
+                            native_name,
+                        )
+                        channel_metadata_map[map_key]["name"] = native_name
 
             # --- Populate Handle Map ---
             if handle_map is not None and anasig_id not in handle_map:

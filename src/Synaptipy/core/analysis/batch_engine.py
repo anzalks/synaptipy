@@ -356,10 +356,15 @@ class BatchAnalysisEngine:
                 rec_meta = self._recording_metadata(recording)
 
                 # Iterate through channels
-                for channel_name, channel in channels_to_process:
+                for channel_key, channel in channels_to_process:
                     # Check for cancellation
                     if self._cancelled:
                         break
+
+                    # Prefer the native channel name from the acquisition file header.
+                    # Fall back to the channel key (ID) only when no name is available.
+                    native_channel_name = getattr(channel, "name", None)
+                    channel_name = native_channel_name if native_channel_name else channel_key
 
                     # Per-channel metadata available to every result row
                     ch_meta = {

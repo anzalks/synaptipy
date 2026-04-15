@@ -41,6 +41,8 @@ class OptoSyncResult(AnalysisResult):
     response_probability: Optional[float] = None
     spike_jitter_ms: Optional[float] = None
     stimulus_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
     stimulus_onsets: Optional[np.ndarray] = None
     stimulus_offsets: Optional[np.ndarray] = None
     responding_spikes: List[List[float]] = field(default_factory=list)
@@ -51,7 +53,11 @@ class OptoSyncResult(AnalysisResult):
             lat = f"{self.optical_latency_ms:.2f}" if self.optical_latency_ms is not None else "N/A"
             prob = f"{self.response_probability:.2f}" if self.response_probability is not None else "N/A"
             jit = f"{self.spike_jitter_ms:.2f}" if self.spike_jitter_ms is not None else "N/A"
-            return f"OptoSyncResult(Latency={lat} ms, Prob={prob}, Jitter={jit} ms, Stims={self.stimulus_count})"
+            return (
+                f"OptoSyncResult(Latency={lat} ms, Prob={prob}, "
+                f"Success={self.success_count}/{self.stimulus_count}, "
+                f"Jitter={jit} ms)"
+            )
         return f"OptoSyncResult(Error: {self.error_message})"
 
 
@@ -167,6 +173,10 @@ def calculate_optogenetic_sync(
             response_count += 1
             latencies.append((valid_spikes[0] - onset) * 1000.0)
 
+    failure_count = stimulus_count - response_count
+
+    # Latency and jitter are computed only over *successful* trials to prevent
+    # NaN propagation from failure trials.
     if response_count > 0:
         optical_latency_ms = float(np.mean(latencies))
         spike_jitter_ms = float(np.std(latencies)) if len(latencies) > 1 else 0.0
@@ -184,6 +194,8 @@ def calculate_optogenetic_sync(
         response_probability=response_probability,
         spike_jitter_ms=spike_jitter_ms,
         stimulus_count=stimulus_count,
+        success_count=response_count,
+        failure_count=failure_count,
         stimulus_onsets=onsets,
         stimulus_offsets=offsets,
         responding_spikes=responding_spikes,
@@ -432,13 +444,19 @@ def run_opto_sync_wrapper(  # noqa: C901
                 _peak_times.append(float(time[_abs_idx]))
                 _peak_amps.append(float(data[_abs_idx]))
 
+    # Response probability as a percentage for human-readable reporting.
+    resp_prob_pct = round(result.response_probability * 100.0, 2) if result.response_probability is not None else np.nan
+
     return {
         "module_used": "evoked_responses",
         "metrics": {
             "optical_latency_ms": result.optical_latency_ms,
             "response_probability": result.response_probability,
+            "Response Probability (%)": resp_prob_pct,
             "spike_jitter_ms": result.spike_jitter_ms,
             "stimulus_count": result.stimulus_count,
+            "Success Count": result.success_count,
+            "Failure Count": result.failure_count,
             "event_count": len(ap_times),
             "event_times": ap_times.tolist() if hasattr(ap_times, "tolist") else list(ap_times),
             "stimulus_onsets": (result.stimulus_onsets.tolist() if result.stimulus_onsets is not None else []),

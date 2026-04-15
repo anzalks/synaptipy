@@ -71,6 +71,10 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self._create_average_tab()
         self._create_single_trial_tab()
         self._create_grid_tab()
+        self._create_scatter_points_tab()
+        self._create_selection_windows_tab()
+        self._create_auc_fill_tab()
+        self._create_hv_lines_tab()
 
         # --- Performance Option ---
         performance_group = QtWidgets.QGroupBox("Performance")
@@ -265,6 +269,176 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         layout.addStretch()
         self.tab_widget.addTab(tab, "Grid")
 
+    # -----------------------------------------------------------------------
+    # Advanced marker tabs
+    # -----------------------------------------------------------------------
+
+    def _create_scatter_points_tab(self):
+        """Create tab for scatter point (detected spikes/peaks) styling."""
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        color_group = QtWidgets.QGroupBox("Color")
+        cl = QtWidgets.QHBoxLayout(color_group)
+        self.scatter_color_combo = QtWidgets.QComboBox()
+        self._populate_color_combo(self.scatter_color_combo)
+        cl.addWidget(QtWidgets.QLabel("Symbol Color:"))
+        cl.addWidget(self.scatter_color_combo)
+        cl.addStretch()
+        layout.addWidget(color_group)
+
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        ol = QtWidgets.QHBoxLayout(opacity_group)
+        self.scatter_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.scatter_opacity_combo)
+        ol.addWidget(QtWidgets.QLabel("Opacity:"))
+        ol.addWidget(self.scatter_opacity_combo)
+        ol.addStretch()
+        layout.addWidget(opacity_group)
+
+        size_group = QtWidgets.QGroupBox("Symbol Size")
+        sl = QtWidgets.QHBoxLayout(size_group)
+        self.scatter_size_combo = QtWidgets.QComboBox()
+        for sz in [4, 6, 8, 10, 12, 16, 20]:
+            self.scatter_size_combo.addItem(f"{sz} px", sz)
+        sl.addWidget(QtWidgets.QLabel("Size (px):"))
+        sl.addWidget(self.scatter_size_combo)
+        sl.addStretch()
+        layout.addWidget(size_group)
+
+        symbol_group = QtWidgets.QGroupBox("Symbol Shape")
+        sym_l = QtWidgets.QHBoxLayout(symbol_group)
+        self.scatter_symbol_combo = QtWidgets.QComboBox()
+        for sym_name, sym_val in [
+            ("Circle", "o"),
+            ("Triangle", "t"),
+            ("Diamond", "d"),
+            ("Square", "s"),
+            ("Plus", "+"),
+            ("Star", "star"),
+        ]:
+            self.scatter_symbol_combo.addItem(sym_name, sym_val)
+        sym_l.addWidget(QtWidgets.QLabel("Shape:"))
+        sym_l.addWidget(self.scatter_symbol_combo)
+        sym_l.addStretch()
+        layout.addWidget(symbol_group)
+
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "Scatter Points")
+
+    def _create_selection_windows_tab(self):
+        """Create tab for selection window (LinearRegionItem) styling."""
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        color_group = QtWidgets.QGroupBox("Color")
+        cl = QtWidgets.QHBoxLayout(color_group)
+        self.sel_win_color_combo = QtWidgets.QComboBox()
+        self._populate_color_combo(self.sel_win_color_combo)
+        cl.addWidget(QtWidgets.QLabel("Fill Color:"))
+        cl.addWidget(self.sel_win_color_combo)
+        cl.addStretch()
+        layout.addWidget(color_group)
+
+        opacity_group = QtWidgets.QGroupBox("Fill Opacity")
+        ol = QtWidgets.QHBoxLayout(opacity_group)
+        self.sel_win_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.sel_win_opacity_combo)
+        ol.addWidget(QtWidgets.QLabel("Opacity:"))
+        ol.addWidget(self.sel_win_opacity_combo)
+        ol.addStretch()
+        layout.addWidget(opacity_group)
+
+        style_group = QtWidgets.QGroupBox("Border Style")
+        stl = QtWidgets.QHBoxLayout(style_group)
+        self.sel_win_style_combo = QtWidgets.QComboBox()
+        self._populate_line_style_combo(self.sel_win_style_combo)
+        stl.addWidget(QtWidgets.QLabel("Line Style:"))
+        stl.addWidget(self.sel_win_style_combo)
+        stl.addStretch()
+        layout.addWidget(style_group)
+
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "Selection Windows")
+
+    def _create_auc_fill_tab(self):
+        """Create tab for AUC / synaptic charge area fill styling."""
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        color_group = QtWidgets.QGroupBox("Color")
+        cl = QtWidgets.QHBoxLayout(color_group)
+        self.auc_color_combo = QtWidgets.QComboBox()
+        self._populate_color_combo(self.auc_color_combo)
+        cl.addWidget(QtWidgets.QLabel("Fill Color:"))
+        cl.addWidget(self.auc_color_combo)
+        cl.addStretch()
+        layout.addWidget(color_group)
+
+        opacity_group = QtWidgets.QGroupBox("Fill Opacity")
+        ol = QtWidgets.QHBoxLayout(opacity_group)
+        self.auc_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.auc_opacity_combo)
+        ol.addWidget(QtWidgets.QLabel("Opacity:"))
+        ol.addWidget(self.auc_opacity_combo)
+        ol.addStretch()
+        layout.addWidget(opacity_group)
+
+        info = QtWidgets.QLabel("Applied to synaptic charge (AUC) shaded regions.")
+        info.setStyleSheet("color: gray; font-style: italic;")
+        layout.addWidget(info)
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "AUC Fill")
+
+    def _create_hv_lines_tab(self):
+        """Create tab for horizontal/vertical InfiniteLine marker styling."""
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        color_group = QtWidgets.QGroupBox("Color")
+        cl = QtWidgets.QHBoxLayout(color_group)
+        self.hv_lines_color_combo = QtWidgets.QComboBox()
+        self._populate_color_combo(self.hv_lines_color_combo)
+        cl.addWidget(QtWidgets.QLabel("Line Color:"))
+        cl.addWidget(self.hv_lines_color_combo)
+        cl.addStretch()
+        layout.addWidget(color_group)
+
+        width_group = QtWidgets.QGroupBox("Line Width")
+        wl = QtWidgets.QHBoxLayout(width_group)
+        self.hv_lines_width_combo = QtWidgets.QComboBox()
+        self._populate_width_combo(self.hv_lines_width_combo)
+        wl.addWidget(QtWidgets.QLabel("Width (pts):"))
+        wl.addWidget(self.hv_lines_width_combo)
+        wl.addStretch()
+        layout.addWidget(width_group)
+
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        ol = QtWidgets.QHBoxLayout(opacity_group)
+        self.hv_lines_opacity_combo = QtWidgets.QComboBox()
+        self._populate_opacity_combo(self.hv_lines_opacity_combo)
+        ol.addWidget(QtWidgets.QLabel("Opacity:"))
+        ol.addWidget(self.hv_lines_opacity_combo)
+        ol.addStretch()
+        layout.addWidget(opacity_group)
+
+        style_group = QtWidgets.QGroupBox("Line Style")
+        stl = QtWidgets.QHBoxLayout(style_group)
+        self.hv_lines_style_combo = QtWidgets.QComboBox()
+        self._populate_line_style_combo(self.hv_lines_style_combo)
+        stl.addWidget(QtWidgets.QLabel("Line Style:"))
+        stl.addWidget(self.hv_lines_style_combo)
+        stl.addStretch()
+        layout.addWidget(style_group)
+
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "H/V Lines")
+
+    def _populate_line_style_combo(self, combo: QtWidgets.QComboBox):
+        """Populate a line-style combo box."""
+        for name, val in [("Solid", "solid"), ("Dash", "dash"), ("Dot", "dot"), ("Dash-Dot", "dashdot")]:
+            combo.addItem(name, val)
+
     def _populate_color_combo(self, combo: QtWidgets.QComboBox):
         """Populate a color combo box with matplotlib color options."""
         # Include both named colors and the original matplotlib blue
@@ -329,6 +503,31 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             self._set_combo_value(self.grid_opacity_combo, self.current_preferences["grid"]["opacity"])
             self.grid_enabled_checkbox.setChecked(self.current_preferences["grid"]["enabled"])
 
+            # Scatter points preferences
+            sp = self.current_preferences.get("scatter_points", {})
+            self._set_combo_value(self.scatter_color_combo, sp.get("color", "#ffff00"))
+            self._set_combo_value(self.scatter_opacity_combo, sp.get("opacity", 100))
+            self._set_combo_value(self.scatter_size_combo, sp.get("size", 8))
+            self._set_combo_value(self.scatter_symbol_combo, sp.get("symbol", "o"))
+
+            # Selection windows preferences
+            sw = self.current_preferences.get("selection_windows", {})
+            self._set_combo_value(self.sel_win_color_combo, sw.get("color", "#00aaff"))
+            self._set_combo_value(self.sel_win_opacity_combo, sw.get("opacity", 30))
+            self._set_combo_value(self.sel_win_style_combo, sw.get("line_style", "dash"))
+
+            # AUC fill preferences
+            auc = self.current_preferences.get("auc_fill", {})
+            self._set_combo_value(self.auc_color_combo, auc.get("color", "#ff7700"))
+            self._set_combo_value(self.auc_opacity_combo, auc.get("opacity", 40))
+
+            # H/V lines preferences
+            hvl = self.current_preferences.get("hv_lines", {})
+            self._set_combo_value(self.hv_lines_color_combo, hvl.get("color", "#ff0000"))
+            self._set_combo_value(self.hv_lines_width_combo, hvl.get("width", 1))
+            self._set_combo_value(self.hv_lines_opacity_combo, hvl.get("opacity", 80))
+            self._set_combo_value(self.hv_lines_style_combo, hvl.get("line_style", "dash"))
+
             log.debug("Current preferences loaded into UI")
         except Exception as e:
             log.error(f"Failed to load current preferences: {e}")
@@ -371,6 +570,53 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self.grid_width_combo.currentIndexChanged.connect(self._on_grid_width_changed)
         self.grid_opacity_combo.currentIndexChanged.connect(self._on_grid_opacity_changed)
         self.grid_enabled_checkbox.stateChanged.connect(self._on_grid_enabled_changed)
+
+        # Advanced marker controls
+        self.scatter_color_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("scatter_points", "color", self.scatter_color_combo.currentData())
+        )
+        self.scatter_opacity_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("scatter_points", "opacity", self.scatter_opacity_combo.currentData())
+        )
+        self.scatter_size_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("scatter_points", "size", self.scatter_size_combo.currentData())
+        )
+        self.scatter_symbol_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("scatter_points", "symbol", self.scatter_symbol_combo.currentData())
+        )
+        self.sel_win_color_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("selection_windows", "color", self.sel_win_color_combo.currentData())
+        )
+        self.sel_win_opacity_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("selection_windows", "opacity", self.sel_win_opacity_combo.currentData())
+        )
+        self.sel_win_style_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("selection_windows", "line_style", self.sel_win_style_combo.currentData())
+        )
+        self.auc_color_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("auc_fill", "color", self.auc_color_combo.currentData())
+        )
+        self.auc_opacity_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("auc_fill", "opacity", self.auc_opacity_combo.currentData())
+        )
+        self.hv_lines_color_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("hv_lines", "color", self.hv_lines_color_combo.currentData())
+        )
+        self.hv_lines_width_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("hv_lines", "width", self.hv_lines_width_combo.currentData())
+        )
+        self.hv_lines_opacity_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("hv_lines", "opacity", self.hv_lines_opacity_combo.currentData())
+        )
+        self.hv_lines_style_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("hv_lines", "line_style", self.hv_lines_style_combo.currentData())
+        )
+
+    def _update_advanced(self, group: str, key: str, value: Any):
+        """Update a preference value in one of the advanced marker groups."""
+        if group not in self.current_preferences:
+            self.current_preferences[group] = {}
+        self.current_preferences[group][key] = value
 
     def _on_average_color_changed(self):
         """Handle average color change."""
