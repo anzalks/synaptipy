@@ -46,6 +46,10 @@ class RinResult(AnalysisResult):
     """
     Result of Input Resistance (Rin) analysis.
     Primary 'value' is the Input Resistance in MOhm.
+
+    Extended fields for Ih-sag correction:
+    - rin_peak_mohm: Rin from the maximum voltage deflection (peak sag).
+    - rin_steady_state_mohm: Rin from the last 20% of the response window.
     """
 
     tau: Optional[float] = None  # Membrane time constant in seconds (or ms)
@@ -55,6 +59,8 @@ class RinResult(AnalysisResult):
     current_injection: Optional[float] = None  # Delta I in pA
     baseline_voltage: Optional[float] = None  # Baseline V in mV
     steady_state_voltage: Optional[float] = None  # Steady state V in mV
+    rin_peak_mohm: Optional[float] = None  # Peak Rin (Ih-corrected) in MOhm
+    rin_steady_state_mohm: Optional[float] = None  # Steady-state Rin in MOhm
     parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
 
     def __repr__(self):
@@ -130,6 +136,9 @@ class EventDetectionResult(AnalysisResult):
     # Artifact Rejection
     n_artifacts_rejected: int = 0
     artifact_mask: Optional[np.ndarray] = None
+
+    # Local pre-event baseline amplitudes (one per event, for summating events)
+    local_baseline_amplitudes: Optional[np.ndarray] = None
 
     def __repr__(self):
         if self.is_valid:

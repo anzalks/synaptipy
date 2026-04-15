@@ -189,9 +189,14 @@ def calculate_rin(
     baseline_window: Tuple[float, float],
     response_window: Tuple[float, float],
     parameters: Dict[str, Any] = None,
+    rs_artifact_blanking_ms: float = 0.5,
 ) -> RinResult:
     """
     Calculate Input Resistance (Rin = delta_V / delta_I).
+
+    Also computes Peak Rin (from maximum voltage deflection, sensitive to Ih
+    sag) and Steady-State Rin (from the last 20% of the response window,
+    reflecting the true membrane resistance after sag recovery).
 
     Args:
         voltage_trace: 1D voltage array (mV).
@@ -200,9 +205,13 @@ def calculate_rin(
         baseline_window: (start, end) seconds for baseline.
         response_window: (start, end) seconds for response.
         parameters: Optional parameter dict stored in result.
+        rs_artifact_blanking_ms: Duration (ms) to skip at the start of the
+            response window, preventing series-resistance jump contamination
+            (default 0.5 ms).
 
     Returns:
-        RinResult object.
+        RinResult object with value (mean Rin), rin_peak_mohm, and
+        rin_steady_state_mohm populated.
     """
     try:
         delta_i_pa = float(current_amplitude)
@@ -222,7 +231,13 @@ def calculate_rin(
 
     try:
         baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
-        response_mask = (time_vector >= response_window[0]) & (time_vector < response_window[1])
+
+        # Apply Rs artifact blanking: skip the first rs_artifact_blanking_ms of the response window.
+        blanking_s = max(0.0, rs_artifact_blanking_ms) / 1000.0
+        blanked_response_start = response_window[0] + blanking_s
+        if blanked_response_start >= response_window[1]:
+            blanked_response_start = response_window[0]
+        response_mask = (time_vector >= blanked_response_start) & (time_vector < response_window[1])
 
         baseline_slice = voltage_trace[baseline_mask]
         response_slice = voltage_trace[response_mask]
@@ -235,8 +250,10 @@ def calculate_rin(
                 parameters=parameters or {},
             )
 
-        baseline_voltage = np.mean(baseline_slice)
-        response_voltage = np.mean(response_slice)
+        baseline_voltage = float(np.mean(baseline_slice))
+
+        # --- Mean response (backward-compatible primary value) ---
+        response_voltage = float(np.mean(response_slice))
         delta_v = response_voltage - baseline_voltage
 
         delta_i_nA = abs(delta_i_pa) / 1000.0
@@ -252,7 +269,26 @@ def calculate_rin(
         rin = abs(delta_v) / delta_i_nA
         conductance_us = 1.0 / rin if rin != 0 else 0.0
 
-        log.debug(f"Calculated Rin: dV={delta_v:.3f}, dI={delta_i_pa:.3f}, Rin={rin:.3f}")
+        # --- Peak Rin: maximum absolute voltage deflection (captures Ih sag) ---
+        abs_devs = np.abs(response_slice - baseline_voltage)
+        peak_voltage = float(response_slice[int(np.argmax(abs_devs))])
+        peak_delta_v = peak_voltage - baseline_voltage
+        rin_peak = abs(peak_delta_v) / delta_i_nA if delta_i_nA != 0 else float(np.nan)
+
+        # --- Steady-State Rin: mean of the last 20% of the (blanked) response window ---
+        ss_start_idx = max(0, int(len(response_slice) * 0.8))
+        ss_voltage = float(np.mean(response_slice[ss_start_idx:]))
+        ss_delta_v = ss_voltage - baseline_voltage
+        rin_ss = abs(ss_delta_v) / delta_i_nA if delta_i_nA != 0 else float(np.nan)
+
+        log.debug(
+            "Calculated Rin: dV=%.3f, dI=%.3f, Rin=%.3f, RinPeak=%.3f, RinSS=%.3f",
+            delta_v,
+            delta_i_pa,
+            rin,
+            rin_peak,
+            rin_ss,
+        )
         return RinResult(
             value=rin,
             unit="MOhm",
@@ -260,7 +296,9 @@ def calculate_rin(
             voltage_deflection=delta_v,
             current_injection=delta_i_pa,
             baseline_voltage=baseline_voltage,
-            steady_state_voltage=response_voltage,
+            steady_state_voltage=ss_voltage,
+            rin_peak_mohm=rin_peak,
+            rin_steady_state_mohm=rin_ss,
             parameters=parameters or {},
         )
     except (ValueError, TypeError, KeyError, IndexError) as e:
@@ -379,10 +417,26 @@ def calculate_iv_curve(
         except Exception as e:
             log.warning(f"Linear regression failed during I-V curve calculation: {e}", exc_info=True)
 
+    # Dynamic Rectification Index: ratio of chord conductance at the most
+    # hyperpolarized step to that at the smallest (least negative) step.
+    # RI > 1 indicates inward rectification (Ih present); RI = 1 is linear.
+    rectification_index = None
+    negative_pairs = [(c, dv) for c, dv in zip(valid_currents, valid_delta_vs) if c < 0 and dv != 0]
+    if len(negative_pairs) >= 2:
+        negative_pairs_sorted = sorted(negative_pairs, key=lambda x: x[0])
+        extreme_current, extreme_dv = negative_pairs_sorted[0]  # most hyperpolarized
+        small_current, small_dv = negative_pairs_sorted[-1]  # smallest negative step
+        # Chord conductance: |delta_I (pA)| / |delta_V (mV)| = nS
+        g_extreme = abs(extreme_current) / abs(extreme_dv)
+        g_small = abs(small_current) / abs(small_dv)
+        if g_small > 0:
+            rectification_index = float(g_extreme / g_small)
+
     return {
         "rin_aggregate_mohm": rin_mohm,
         "iv_intercept": iv_intercept,
         "iv_r_squared": r_squared,
+        "rectification_index": rectification_index,
         "baseline_voltages": baseline_voltages,
         "steady_state_voltages": steady_state_voltages,
         "delta_vs": delta_vs,
@@ -634,45 +688,108 @@ def calculate_capacitance_cc(tau_ms: float, rin_mohm: float) -> Optional[float]:
     return cm_nf * 1000.0
 
 
+def _fit_cm_from_transient(
+    t_decay: np.ndarray,
+    i_decay: np.ndarray,
+    delta_i: np.ndarray,
+    t_trans: np.ndarray,
+    rs_mohm: float,
+    voltage_step_amplitude_mv: float,
+) -> float:
+    """Fit mono-exponential to capacitive transient; fall back to AUC on failure.
+
+    Returns Cm in pF.
+    """
+    from scipy import integrate, optimize
+
+    def _mono_exp(t: np.ndarray, a: float, tau: float) -> np.ndarray:
+        return a * np.exp(-t / tau)
+
+    if len(t_decay) >= 4 and t_decay[-1] > 0:
+        try:
+            tau_guess = (t_decay[-1] - t_decay[0]) / 3.0
+            p0 = [float(i_decay[0]), max(tau_guess, 1e-6)]
+            bounds = ([0.0, 1e-6], [np.inf, float(t_decay[-1]) * 10.0])
+            popt, _ = optimize.curve_fit(_mono_exp, t_decay, i_decay, p0=p0, bounds=bounds, maxfev=2000)
+            tau_s = float(popt[1])
+            return tau_s / (rs_mohm * 1e6) * 1e12
+        except (RuntimeError, ValueError):
+            pass
+
+    # AUC fallback
+    Q_pc = float(integrate.trapezoid(delta_i, t_trans))
+    return abs(Q_pc / float(voltage_step_amplitude_mv) * 1000.0)
+
+
 def calculate_capacitance_vc(
     current_trace: np.ndarray,
     time_vector: np.ndarray,
     baseline_window: Tuple[float, float],
     transient_window: Tuple[float, float],
     voltage_step_amplitude_mv: float,
-) -> Optional[float]:
+) -> Optional[Dict[str, float]]:
     """
-    Calculate Cell Capacitance (Cm) from Voltage-Clamp using the area under
-    the capacitive transient (Cm = Q / delta_V).
+    Calculate Cm and Rs from a voltage-clamp capacitive transient.
 
-    Returns Cm in pF, or None on failure.
+    Method:
+    1. Rs = |delta_V| / I_peak  (Ohm's law at the instant of the step).
+    2. Fit a mono-exponential to the transient decay -> tau_transient.
+    3. Cm = tau_transient / Rs.
+
+    Falls back to the charge-integral (AUC) method for Cm when the
+    exponential fit fails.
+
+    Args:
+        current_trace: 1-D current array (pA).
+        time_vector: Corresponding time array (s).
+        baseline_window: (start, end) in seconds for pre-step baseline.
+        transient_window: (start, end) in seconds covering the capacitive transient.
+        voltage_step_amplitude_mv: Voltage command step (mV).  Sign is ignored.
+
+    Returns:
+        Dict with keys ``capacitance_pf`` (pF) and ``series_resistance_mohm`` (MOhm),
+        or None on failure.
     """
-    from scipy import integrate
-
     if voltage_step_amplitude_mv == 0:
         return None
     try:
         base_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
         if not np.any(base_mask):
             return None
+        i_baseline = float(np.mean(current_trace[base_mask]))
+
         trans_mask = (time_vector >= transient_window[0]) & (time_vector < transient_window[1])
         if not np.any(trans_mask):
             return None
 
         t_trans = time_vector[trans_mask]
-        i_trans = current_trace[trans_mask]
+        # Baseline-subtracted transient current (pA)
+        i_trans = current_trace[trans_mask] - i_baseline
 
-        end_idx = len(i_trans)
-        ss_start_idx = int(end_idx * 0.8)
-        if ss_start_idx >= end_idx:
-            ss_start_idx = end_idx - 1
-        i_steadystate = np.mean(i_trans[ss_start_idx:])
+        # Steady-state: mean of the last 20 % of the transient window
+        n = len(i_trans)
+        ss_start = max(0, int(n * 0.8))
+        i_ss = float(np.mean(i_trans[ss_start:])) if ss_start < n else float(i_trans[-1])
+        # Transient component (charge-carrying, decays to zero)
+        delta_i = i_trans - i_ss
 
-        delta_i = i_trans - i_steadystate
-        Q_pc = integrate.trapezoid(delta_i, t_trans)
-        cm_nf = Q_pc / voltage_step_amplitude_mv
-        cm_pf = abs(cm_nf * 1000.0)
-        return float(cm_pf)
+        # --- Rs via Ohm's law ---
+        # Rs [MOhm] = |delta_V [mV]| / |I_peak [pA]| * 1000
+        # Derivation: Rs = V/I = (V_mV * 1e-3) / (I_pA * 1e-12) * 1e-6  (MOhm)
+        #           = V_mV / I_pA * 1e3
+        i_peak_abs = float(np.max(np.abs(delta_i)))
+        if i_peak_abs < 1e-3:  # guard: < 1 fA is non-physical
+            return None
+        rs_mohm = abs(float(voltage_step_amplitude_mv)) / i_peak_abs * 1000.0
+
+        # --- Exponential fit for tau_transient ---
+        i_peak_idx = int(np.argmax(np.abs(delta_i)))
+        t_decay = t_trans[i_peak_idx:] - t_trans[i_peak_idx]
+        i_decay = np.abs(delta_i[i_peak_idx:])
+
+        cm_pf = _fit_cm_from_transient(t_decay, i_decay, delta_i, t_trans, rs_mohm, voltage_step_amplitude_mv)
+
+        return {"capacitance_pf": float(cm_pf), "series_resistance_mohm": float(rs_mohm)}
     except Exception as e:
         log.error(f"Error calculating VC capacitance: {e}")
         return None
@@ -683,9 +800,60 @@ def calculate_capacitance_vc(
 # ---------------------------------------------------------------------------
 
 
+def _coerce_trial_lists(
+    data_list: Union[np.ndarray, List[np.ndarray]],
+    time_list: Union[np.ndarray, List[np.ndarray]],
+) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    """Normalise data/time inputs to flat Python lists for multi-trial processing."""
+    if isinstance(data_list, np.ndarray):
+        if data_list.ndim == 1:
+            data_list = [data_list]
+            time_list = [time_list] if isinstance(time_list, np.ndarray) else list(time_list)
+        elif data_list.ndim == 2:
+            data_list = [data_list[i] for i in range(data_list.shape[0])]
+            if isinstance(time_list, np.ndarray) and time_list.ndim == 1:
+                time_list = [time_list for _ in range(len(data_list))]
+            elif isinstance(time_list, np.ndarray) and time_list.ndim == 2:
+                time_list = [time_list[i] for i in range(time_list.shape[0])]
+    if isinstance(time_list, np.ndarray):
+        time_list = [time_list]
+    return list(data_list), list(time_list)
+
+
+def _resolve_sweep_baseline(
+    sweep_data: np.ndarray,
+    sweep_time: np.ndarray,
+    sampling_rate: float,
+    baseline_start: float,
+    baseline_end: float,
+    auto_detect: bool,
+    window_duration: float,
+    step_duration: float,
+    rs_artifact_blanking_ms: float,
+) -> Tuple[float, float]:
+    """Return the (effective_start, effective_end) baseline window for one sweep."""
+    bl_start, bl_end = baseline_start, baseline_end
+    if auto_detect:
+        _, _, window = find_stable_baseline(
+            sweep_data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration
+        )
+        if window:
+            bl_start, bl_end = window
+        else:
+            bl_start = float(sweep_time[0]) if len(sweep_time) > 0 else 0.0
+            bl_end = float(sweep_time[-1]) if len(sweep_time) > 0 else 0.1
+    if len(sweep_time) > 0:
+        bl_end = min(bl_end, float(sweep_time[-1]))
+        bl_start = max(bl_start, float(sweep_time[0]))
+    blanking_s = rs_artifact_blanking_ms / 1000.0
+    blanked_start = bl_start + blanking_s
+    return (blanked_start if blanked_start < bl_end else bl_start), bl_end
+
+
 @AnalysisRegistry.register(
     "rmp_analysis",
     label="Baseline (RMP)",
+    requires_multi_trial=True,
     ui_params=[
         {
             "name": "baseline_start",
@@ -724,51 +892,96 @@ def calculate_capacitance_vc(
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "rs_artifact_blanking_ms",
+            "label": "Rs Blanking (ms):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 2,
+            "tooltip": "Skip this many ms at the start of the baseline window to avoid Rs artifact contamination.",
+        },
     ],
     plots=[
         {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "g"},
         {"type": "hlines", "data": ["rmp_mv"], "color": "r", "styles": ["solid"]},
         {"type": "hlines", "data": ["rmp_mv_plus_sd", "rmp_mv_minus_sd"], "color": "r", "styles": ["dash", "dash"]},
+        {
+            "type": "popup_xy",
+            "title": "RMP Stability",
+            "x": "sweep_indices",
+            "y": "rmp_per_sweep",
+            "x_label": "Sweep Index",
+            "y_label": "RMP (mV)",
+        },
     ],
 )
-def run_rmp_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
-    """Wrapper for RMP analysis. Returns namespaced schema."""
+def run_rmp_analysis_wrapper(  # noqa: C901
+    data_list: Union[np.ndarray, List[np.ndarray]],
+    time_list: Union[np.ndarray, List[np.ndarray]],
+    sampling_rate: float,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Wrapper for RMP analysis. Accepts single or multi-trial data. Returns namespaced schema."""
     try:
+        data_list, time_list = _coerce_trial_lists(data_list, time_list)
+
         baseline_start = kwargs.get("baseline_start", 0.0)
         baseline_end = kwargs.get("baseline_end", 0.1)
         auto_detect = kwargs.get("auto_detect", False)
+        rs_artifact_blanking_ms = float(kwargs.get("rs_artifact_blanking_ms", 0.5))
+        window_duration = kwargs.get("window_duration", 0.5)
+        step_duration = kwargs.get("step_duration", 0.1)
 
-        if auto_detect:
-            window_duration = kwargs.get("window_duration", 0.5)
-            step_duration = kwargs.get("step_duration", 0.1)
-            mean, sd, window = find_stable_baseline(
-                data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration
+        rmp_per_sweep: List[float] = []
+        for sweep_data, sweep_time in zip(data_list, time_list):
+            eff_start, eff_end = _resolve_sweep_baseline(
+                sweep_data,
+                sweep_time,
+                sampling_rate,
+                baseline_start,
+                baseline_end,
+                auto_detect,
+                window_duration,
+                step_duration,
+                rs_artifact_blanking_ms,
             )
-            if window:
-                baseline_start, baseline_end = window
+            sweep_result = calculate_rmp(sweep_data, sweep_time, (eff_start, eff_end))
+            if sweep_result.is_valid and sweep_result.value is not None:
+                rmp_per_sweep.append(float(sweep_result.value))
             else:
-                baseline_start = time[0] if len(time) > 0 else 0.0
-                baseline_end = time[-1] if len(time) > 0 else 0.1
+                rmp_per_sweep.append(float(np.nan))
 
-        if len(time) > 0:
-            baseline_end = min(baseline_end, time[-1])
-            baseline_start = max(baseline_start, time[0])
-
-        result = calculate_rmp(data, time, (baseline_start, baseline_end))
-
-        if result.is_valid and result.value is not None:
-            sd = result.std_dev if result.std_dev is not None else 0.0
-            metrics = {
-                "rmp_mv": result.value,
-                "rmp_std": sd,
-                "rmp_drift": result.drift if result.drift is not None else 0.0,
-                "rmp_duration": result.duration if result.duration is not None else 0.0,
-                "rmp_mv_plus_sd": result.value + sd,
-                "rmp_mv_minus_sd": result.value - sd,
+        sweep_indices = list(range(len(rmp_per_sweep)))
+        valid_rmps = [r for r in rmp_per_sweep if not np.isnan(r)]
+        if not valid_rmps:
+            return {
+                "module_used": "passive_properties",
+                "metrics": {"rmp_mv": None, "rmp_std": None, "rmp_error": "No valid RMP values computed"},
             }
-        else:
-            metrics = {"rmp_mv": None, "rmp_std": None, "rmp_error": result.error_message or "Unknown error"}
 
+        rmp_mean = float(np.mean(valid_rmps))
+        rmp_std = float(np.std(valid_rmps))
+
+        rmp_drift_rate = 0.0
+        if len(valid_rmps) >= 2:
+            valid_idxs = [i for i, r in enumerate(rmp_per_sweep) if not np.isnan(r)]
+            try:
+                slope, _, _, _, _ = linregress(valid_idxs, valid_rmps)
+                rmp_drift_rate = float(slope)
+            except (ValueError, TypeError):
+                pass
+
+        metrics: Dict[str, Any] = {
+            "rmp_mv": rmp_mean,
+            "rmp_std": rmp_std,
+            "rmp_drift_rate_mv_per_sweep": rmp_drift_rate,
+            "rmp_per_sweep": rmp_per_sweep,
+            "sweep_indices": sweep_indices,
+            "rmp_mv_plus_sd": rmp_mean + rmp_std,
+            "rmp_mv_minus_sd": rmp_mean - rmp_std,
+        }
         return {"module_used": "passive_properties", "metrics": metrics}
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
@@ -966,6 +1179,16 @@ def run_sag_ratio_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "rs_artifact_blanking_ms",
+            "label": "Rs Blanking (ms):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 10.0,
+            "decimals": 2,
+            "tooltip": "Skip this many ms at the start of the response window to avoid Rs jump contamination.",
+        },
     ],
 )
 def run_rin_analysis_wrapper(  # noqa: C901
@@ -980,6 +1203,7 @@ def run_rin_analysis_wrapper(  # noqa: C901
         response_start = kwargs.get("response_start", 0.3)
         response_end = kwargs.get("response_end", 0.4)
         voltage_step = kwargs.get("voltage_step", 0.0)
+        rs_artifact_blanking_ms = float(kwargs.get("rs_artifact_blanking_ms", 0.5))
 
         if current_amplitude == 0 and voltage_step == 0:
             return {
@@ -1032,6 +1256,7 @@ def run_rin_analysis_wrapper(  # noqa: C901
             "auto_detect_pulse": auto_detect_pulse,
             "baseline_window": (baseline_start, baseline_end),
             "response_window": (response_start, response_end),
+            "rs_artifact_blanking_ms": rs_artifact_blanking_ms,
         }
 
         if is_voltage_clamp:
@@ -1051,11 +1276,14 @@ def run_rin_analysis_wrapper(  # noqa: C901
                 (baseline_start, baseline_end),
                 (response_start, response_end),
                 parameters=params,
+                rs_artifact_blanking_ms=rs_artifact_blanking_ms,
             )
 
         if result.is_valid and result.value is not None:
             metrics = {
                 "rin_mohm": result.value,
+                "rin_peak_mohm": result.rin_peak_mohm,
+                "rin_steady_state_mohm": result.rin_steady_state_mohm,
                 "conductance_us": result.conductance if result.conductance is not None else 0.0,
                 "voltage_deflection_mv": result.voltage_deflection if result.voltage_deflection is not None else 0.0,
                 "current_injection_pa": result.current_injection if result.current_injection is not None else 0.0,
@@ -1336,6 +1564,7 @@ def run_iv_curve_wrapper(
             "rin_aggregate_mohm": results["rin_aggregate_mohm"],
             "iv_intercept": results["iv_intercept"],
             "iv_r_squared": results["iv_r_squared"],
+            "rectification_index": results["rectification_index"],
             "baseline_voltages": results["baseline_voltages"],
             "steady_state_voltages": results["steady_state_voltages"],
             "delta_vs": results["delta_vs"],
@@ -1455,13 +1684,20 @@ def run_capacitance_analysis_wrapper(
 
     elif mode == "Voltage-Clamp":
         voltage_step = kwargs.get("voltage_step_mv", -5.0)
-        cm_pf = calculate_capacitance_vc(data, time, base_window, resp_window, voltage_step)
-        if cm_pf is None:
+        vc_result = calculate_capacitance_vc(data, time, base_window, resp_window, voltage_step)
+        if vc_result is None:
             return {
                 "module_used": "passive_properties",
                 "metrics": {"error": "Failed to calculate Cm from Voltage-Clamp transient"},
             }
-        return {"module_used": "passive_properties", "metrics": {"capacitance_pf": cm_pf, "mode": mode}}
+        return {
+            "module_used": "passive_properties",
+            "metrics": {
+                "capacitance_pf": vc_result["capacitance_pf"],
+                "series_resistance_mohm": vc_result["series_resistance_mohm"],
+                "mode": mode,
+            },
+        }
     else:
         return {"module_used": "passive_properties", "metrics": {"error": "Unknown mode"}}
 
