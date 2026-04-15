@@ -132,25 +132,39 @@ def calculate_opto_jitter(
         sweep_numbers.append(sweep_idx + 1)
 
     if len(latencies_ms) < 2:
+        # Report counts so callers can distinguish 0% from low-N cases.
+        n_detected = len(latencies_ms)
+        n_failures = n_sweeps - n_detected
         return {
             "error": (
-                f"Too few sweeps with detected spikes ({len(latencies_ms)}) " "to compute jitter - need at least 2."
-            )
+                f"Too few sweeps with detected spikes ({n_detected}/{n_sweeps}) "
+                "to compute jitter - need at least 2."
+            ),
+            # Include partial counts even on failure so batch engines can aggregate.
+            "metrics": {
+                "Success Count": n_detected,
+                "Failure Count": n_failures,
+                "Response Probability (%)": round(n_detected / max(n_sweeps, 1) * 100.0, 2),
+            },
         }
 
     lat_arr = np.array(latencies_ms, dtype=float)
     jitter_val = float(np.std(lat_arr, ddof=1))
     mean_latency = float(np.mean(lat_arr))
 
+    n_failures = n_sweeps - len(latencies_ms)
+    resp_prob_pct = round(len(latencies_ms) / max(n_sweeps, 1) * 100.0, 2)
+
     return {
         "module_used": "opto_jitter",
         "metrics": {
             "Jitter_ms": round(jitter_val, 4),
+            "Mean_Latency_ms": round(mean_latency, 4),
+            "N_Sweeps_Detected": len(latencies_ms),
+            "Success Count": len(latencies_ms),
+            "Failure Count": n_failures,
+            "Response Probability (%)": resp_prob_pct,
         },
-        # Flat scalar keys shown in the results table
-        "Mean_Latency_ms": round(mean_latency, 4),
-        "Jitter_ms": round(jitter_val, 4),
-        "N_Sweeps_Detected": len(latencies_ms),
         # Private arrays for the popup_xy plot overlay (hidden from table)
         "_sweep_numbers": np.array(sweep_numbers, dtype=float),
         "_latencies": lat_arr,

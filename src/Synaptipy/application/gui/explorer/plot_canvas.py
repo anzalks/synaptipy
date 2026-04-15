@@ -197,8 +197,12 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             except Exception as e:
                 log.warning(f"Error styling ViewBox: {e}")
 
-            # Labels
-            plot_item.setLabel("left", text=channel.get_primary_data_label(), units=channel.units)
+            # Labels — prefer the native channel name from the acquisition file;
+            # fall back to the signal-type label only when name equals the id.
+            chan_display_name = getattr(channel, "name", None)
+            if not chan_display_name or chan_display_name == chan_key:
+                chan_display_name = channel.get_primary_data_label()
+            plot_item.setLabel("left", text=chan_display_name, units=channel.units)
             plot_item.getAxis("left").setWidth(self.Y_AXIS_FIXED_WIDTH)
 
             # Bottom Axis

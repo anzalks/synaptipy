@@ -363,9 +363,8 @@ class TestOptoJitterPlugin:
         )
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
         expected_jitter = float(np.std([5.0, 6.0, 7.0], ddof=1))
-        assert (
-            abs(result["Jitter_ms"] - expected_jitter) < 0.2
-        ), f"Jitter {result['Jitter_ms']:.4f} ms, expected {expected_jitter:.4f} ms"
+        jitter_val = result["metrics"]["Jitter_ms"]
+        assert abs(jitter_val - expected_jitter) < 0.2, f"Jitter {jitter_val:.4f} ms, expected {expected_jitter:.4f} ms"
 
 
 class TestAPRepolarizationPlugin:
