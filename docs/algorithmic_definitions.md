@@ -43,7 +43,7 @@ where $\mathcal{W}_k$ slides in steps of `step_duration` with width
 
 ## 2. Input Resistance ($R_{\text{in}}$)
 
-**Module:** `intrinsic_properties.py` · **Registry name:** `rin_analysis`
+**Module:** `passive_properties.py` · **Registry name:** `rin_analysis`
 
 $$
 R_{\text{in}} \;(\text{M}\Omega) = \frac{|\Delta V|}{|\Delta I|}
@@ -65,6 +65,57 @@ Current is converted internally: $\Delta I_{\text{nA}} = |\Delta I_{\text{pA}}| 
 $$
 G \;(\mu\text{S}) = \frac{1}{R_{\text{in}} \;(\text{M}\Omega)}
 $$
+
+### 2.1 Series-Resistance Artifact Blanking
+
+An uncompensated bridge balance produces an instantaneous voltage jump at
+stimulus onset. To prevent this $R_s$ artifact from inflating $\Delta V$, the
+first `rs_artifact_blanking_ms` milliseconds (default 0.5 ms) of the response
+window are excluded from all voltage measurements:
+
+$$
+\mathcal{W}_{\text{resp}}^{\text{blanked}} =
+ \{ i : t_{\text{resp,start}} + t_{\text{blank}} \le t_i < t_{\text{resp,end}} \}
+$$
+
+where $t_{\text{blank}} = \texttt{rs\_artifact\_blanking\_ms} \times 10^{-3}$.
+
+The same blanking logic is available for the RMP baseline window via the
+`rs_artifact_blanking_ms` parameter of `run_rmp_analysis_wrapper`.
+
+### 2.2 Peak $R_{\text{in}}$ and Steady-State $R_{\text{in}}$ ($I_h$ correction)
+
+Cells expressing HCN channels ($I_h$) exhibit a voltage "sag" during
+sustained hyperpolarisation: the voltage first reaches a maximum deflection
+(Peak) and then partially recovers toward a lower steady-state. A single
+$R_{\text{in}}$ value is therefore biologically ambiguous.
+
+**Peak $R_{\text{in}}$** uses the sample of maximum absolute voltage deflection
+within the (blanked) response window:
+
+$$
+V_{\text{peak}} = V\!\left[\arg\max_i |V_i - \bar{V}_{\text{baseline}}|\right],
+\quad i \in \mathcal{W}_{\text{resp}}^{\text{blanked}}
+$$
+
+$$
+R_{\text{in,peak}} = \frac{|V_{\text{peak}} - \bar{V}_{\text{baseline}}|}{|\Delta I_{\text{nA}}|}
+$$
+
+**Steady-State $R_{\text{in}}$** uses the mean voltage over the last 20% of
+the (blanked) response window, reflecting the membrane resistance after sag
+recovery:
+
+$$
+R_{\text{in,ss}} = \frac{|\bar{V}_{\text{last 20\%}} - \bar{V}_{\text{baseline}}|}{|\Delta I_{\text{nA}}|}
+$$
+
+For a cell with strong $I_h$: $R_{\text{in,peak}} > R_{\text{in,ss}}$.
+For a cell without sag: $R_{\text{in,peak}} \approx R_{\text{in,ss}}$.
+
+Both metrics are returned by `calculate_rin` via `rin_peak_mohm` and
+`rin_steady_state_mohm` on the `RinResult` object and are exposed as CSV
+columns by the batch exporter.
 
 ---
 
@@ -249,13 +300,31 @@ $$
  \frac{dV}{dt}(t)
 $$
 
+### 6.10 Absolute Peak Voltage and Overshoot
+
+Classical neurophysiology reports the raw membrane potential at the AP peak
+and the extent to which it exceeds $0\,\text{mV}$ (overshoot):
+
+$$
+V_{\text{peak,abs}} = V\bigl[i_{\text{peak}}\bigr]
+$$
+
+$$
+\text{Overshoot} \;(\text{mV}) = \max\!\bigl(0,\; V_{\text{peak,abs}}\bigr)
+$$
+
+An overshoot of 0 indicates the AP peaked below $0\,\text{mV}$ (e.g. in
+immature neurons or under pharmacological block of Na$^+$ channels).
+Both metrics are returned as `absolute_peak_mv` and `overshoot_mv` in the
+per-spike feature dictionaries produced by `calculate_spike_features`.
+
 ---
 
 ## 7. Event Detection
 
 ### 7.1 Threshold-based detection
 
-**Module:** `event_detection.py` · **Registry name:** `event_detection_threshold`
+**Module:** `synaptic_events.py` · **Registry name:** `event_detection_threshold`
 
 1. Rolling median subtraction (window = `rolling_baseline_window_ms`).
 2. Noise estimate via Median Absolute Deviation:
@@ -289,6 +358,44 @@ $$
 Uses sliding-window variance minimisation to find the most stable baseline
 segment, estimates noise as $\hat{\sigma} = 1.4826 \times \text{MAD}$ in that
 region, and detects peaks with prominence $\ge 0.5 \times \text{threshold}$.
+
+### 7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)
+
+Synaptic events that occur during the exponential decay of a preceding event
+(summation) ride on a shifted baseline. Using the global resting potential as
+the amplitude reference artificially inflates the measured amplitude of the
+second event (or any subsequent event in a burst).
+
+For each detected event peak index $i_k$, Synaptipy searches a window of
+`pre_event_window_ms` (default 2 ms, valid range 1-3 ms) immediately
+preceding the peak and computes a **local foot voltage** $V_{\text{foot},k}$:
+
+$$
+V_{\text{foot},k} =
+\begin{cases}
+\max_{j \in \mathcal{P}_k} V_j & \text{(negative polarity)} \\
+\min_{j \in \mathcal{P}_k} V_j & \text{(positive polarity)}
+\end{cases}
+$$
+
+where $\mathcal{P}_k = \{j : i_k - N_{\text{pre}} \le j < i_k\}$ and
+$N_{\text{pre}} = \lfloor \texttt{pre\_event\_window\_ms} \times f_s / 1000 \rfloor$.
+
+The **local amplitude** of event $k$ is then:
+
+$$
+A_{\text{local},k} =
+\begin{cases}
+V_{\text{foot},k} - V_k & \text{(negative polarity)} \\
+V_k - V_{\text{foot},k} & \text{(positive polarity)}
+\end{cases}
+$$
+
+This definition ensures that in a summating train, each event's amplitude
+reflects the true biological quantal size rather than the accumulated
+depolarisation from prior events. The values are returned as
+`_local_baselines` and `_local_amplitudes` in the metrics dict, together
+with the scalar summary `mean_local_amplitude`.
 
 ---
 
@@ -482,3 +589,104 @@ For stimulus artefact suppression, three interpolation modes are available:
  *Journal of Neurophysiology*, 75(5), 1806-1814.
 - Shinomoto, S., Shima, K., & Tanji, J. (2003). Differences in spiking
  patterns among cortical neurons. *Neural Computation*, 15(12), 2823-2842.
+
+---
+
+## 15. Advanced Biophysics (Publication Audit)
+
+### 15.1 Voltage-Clamp Series Resistance and True Membrane Capacitance
+
+Classical area-under-the-curve (AUC) Cm estimation is biologically invalid
+without Rs compensation.  The implementation uses:
+
+**Step 1 - Series Resistance (Ohm's law at the instant of the voltage step):**
+
+$$
+R_s \;[\text{MOhm}] = \frac{|\Delta V \;[\text{mV}]|}{|I_{\text{peak}} \;[\text{pA}]|} \times 10^{3}
+$$
+
+where $I_{\text{peak}}$ is the baseline-subtracted transient peak and
+$\Delta V$ is the command voltage step amplitude.
+
+**Step 2 - Transient time constant (mono-exponential fit):**
+
+A mono-exponential $I(t) = A \exp(-t / \tau)$ is fitted to the decaying phase
+of the transient using `scipy.optimize.curve_fit`.  The fit starts at the
+transient peak and uses the last 20% of the transient window as a steady-state
+reference.
+
+**Step 3 - Membrane Capacitance:**
+
+$$
+C_m \;[\text{pF}] = \frac{\tau \;[\text{s}]}{R_s \;[\Omega]} \times 10^{12}
+= \frac{\tau \;[\text{s}]}{R_s \;[\text{MOhm}] \times 10^{6}} \times 10^{12}
+$$
+
+If the exponential fit fails (insufficient samples or poor convergence), the
+function falls back to the charge-integral (AUC) method for $C_m$ while still
+reporting the Ohm's-law $R_s$.
+
+### 15.2 Dynamic AP Threshold via Maximum Curvature ($d^2V/dt^2$)
+
+A fixed dV/dt threshold fails during spike trains because Na$^+$ channel
+inactivation progressively slows the AP upstroke.  The physiological onset is
+instead defined as the point of **maximum curvature** of the voltage trace:
+
+$$
+\text{threshold index} = \operatorname{argmax}_{j \in \mathcal{W}} \frac{d^2V}{dt^2}(j)
+$$
+
+where $\mathcal{W}$ is a lookback window of `onset_lookback` seconds immediately
+before each spike peak.  Both $dV/dt$ and $d^2V/dt^2$ are computed via
+`numpy.gradient` on the voltage array.
+
+**Fallback rule:** if the $d^2V/dt^2$ maximum lies at the edge of $\mathcal{W}$
+(index 0 or $|\mathcal{W}|-1$), the estimate is unreliable (boundary artefact).
+In that case the algorithm reverts to the first $dV/dt > \theta_{\text{fallback}}$
+crossing within $\mathcal{W}$, where $\theta_{\text{fallback}}$ defaults to
+20 V/s (= 20,000 mV/s).
+
+### 15.3 Separation of Fast AHP and Medium AHP
+
+A single AHP measurement conflates fast ($\text{K}_V$, BK channels) and medium
+($\text{K}_{Ca}$, SK channels) dynamics.  Two independent searches are made:
+
+| Metric | Window | Dominant channel |
+|---|---|---|
+| $\text{fAHP depth}$ | 1-5 ms post-peak | Na$^+$ channel-mediated repolarisation overshoot, BK |
+| $\text{mAHP depth}$ | 10-50 ms post-peak | SK/IK Ca$^{2+}$-activated K$^+$ |
+
+$$
+\text{fAHP depth} = V_{\text{threshold}} - \min_{t \in [t_{\text{peak}}+1\text{ ms},\; t_{\text{peak}}+5\text{ ms}]} V(t)
+$$
+
+$$
+\text{mAHP depth} = V_{\text{threshold}} - \min_{t \in [t_{\text{peak}}+10\text{ ms},\; t_{\text{peak}}+50\text{ ms}]} V(t)
+$$
+
+Positive depth = hyperpolarisation relative to AP threshold.
+
+### 15.4 Multi-Kernel Dendritic Tolerance in Template Matching
+
+Cable theory predicts that synaptic currents arriving at distal dendrites
+appear 2-3x slower at the soma due to RC filtering.  A bank of three
+bi-exponential kernels is generated:
+
+$$
+k_s(t) = \exp\!\left(-t / (s \cdot \tau_{\text{decay}})\right) - \exp\!\left(-t / \tau_{\text{rise}}\right),
+\quad s \in \{1, 2, 3\}
+$$
+
+Each kernel is normalised to unit peak amplitude and convolved with the
+baseline-corrected data.  The three resulting filtered traces are z-scored
+independently using the median absolute deviation (MAD), then combined
+pointwise by taking the maximum:
+
+$$
+z_{\text{combined}}(t) = \max_{s \in \{1,2,3\}} z_s(t)
+$$
+
+Peak detection is then applied to $z_{\text{combined}}$ at the user-specified
+threshold.  This ensures that both fast somatic (narrow) and slow dendritic
+(broadened) events cross the detection threshold, without requiring the user
+to re-tune $\tau_{\text{decay}}$ for distal inputs.

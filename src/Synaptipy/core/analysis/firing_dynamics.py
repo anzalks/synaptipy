@@ -249,6 +249,8 @@ def calculate_bursts_logic(
     max_isi_start: float = 0.01,
     max_isi_end: float = 0.2,
     min_spikes: int = 2,
+    dynamic_burst: bool = False,
+    burst_isi_fraction: float = 0.3,
     parameters: Optional[Dict[str, Any]] = None,
 ) -> BurstResult:
     """
@@ -256,9 +258,15 @@ def calculate_bursts_logic(
 
     Args:
         spike_times: 1D array of spike times (seconds).
-        max_isi_start: Max ISI to start a burst (s).
-        max_isi_end: Max ISI to continue a burst (s).
+        max_isi_start: Max ISI to start a burst (s). Ignored when dynamic_burst=True.
+        max_isi_end: Max ISI to continue a burst (s). Ignored when dynamic_burst=True.
         min_spikes: Minimum spikes per burst.
+        dynamic_burst: When True, compute the mean ISI of the whole train and
+            define the burst boundary as ``burst_isi_fraction * mean_isi``.
+            This abandons hardcoded thresholds in favour of the train's own
+            temporal structure.
+        burst_isi_fraction: Fraction of mean ISI used as burst boundary when
+            ``dynamic_burst=True`` (default 0.3, i.e. 30%).
 
     Returns:
         BurstResult object.
@@ -277,6 +285,14 @@ def calculate_bursts_logic(
         )
 
     isis = np.diff(spike_times)
+
+    # Dynamic threshold: fraction of the global mean ISI
+    if dynamic_burst and len(isis) >= 1:
+        mean_isi = float(np.mean(isis))
+        dyn_threshold = burst_isi_fraction * mean_isi
+        max_isi_start = dyn_threshold
+        max_isi_end = dyn_threshold
+
     bursts = []
     current_burst: List[float] = []
     in_burst = False
@@ -335,6 +351,8 @@ def analyze_spikes_and_bursts(
     max_isi_start: float,
     max_isi_end: float,
     refractory_ms: float = 2.0,
+    dynamic_burst: bool = False,
+    burst_isi_fraction: float = 0.3,
     parameters: Optional[Dict[str, Any]] = None,
 ) -> BurstResult:
     """Detect spikes then detect bursts."""
@@ -345,7 +363,12 @@ def analyze_spikes_and_bursts(
     if spike_result.spike_times is None:
         return BurstResult(value=0, unit="bursts", is_valid=True, burst_count=0, bursts=[])
     return calculate_bursts_logic(
-        spike_result.spike_times, max_isi_start=max_isi_start, max_isi_end=max_isi_end, parameters=parameters
+        spike_result.spike_times,
+        max_isi_start=max_isi_start,
+        max_isi_end=max_isi_end,
+        dynamic_burst=dynamic_burst,
+        burst_isi_fraction=burst_isi_fraction,
+        parameters=parameters,
     )
 
 
@@ -381,6 +404,18 @@ def analyze_spikes_and_bursts(
             "decimals": 4,
         },
         {"name": "min_spikes", "label": "Min Spikes:", "type": "int", "default": 2, "min": 2, "max": 1000},
+        {"name": "dynamic_burst", "label": "Dynamic ISI Threshold", "type": "bool", "default": False},
+        {
+            "name": "burst_isi_fraction",
+            "label": "Burst ISI Fraction:",
+            "type": "float",
+            "default": 0.3,
+            "min": 0.01,
+            "max": 1.0,
+            "decimals": 2,
+            "tooltip": "Spikes are in a burst if ISI < this fraction of the train mean ISI.",
+            "visible_when": {"param": "dynamic_burst", "value": True},
+        },
     ],
     plots=[{"type": "brackets", "data": "bursts", "color": "r"}],
 )
@@ -389,6 +424,8 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     threshold = kwargs.get("threshold", -20.0)
     max_isi_start = kwargs.get("max_isi_start", 0.01)
     max_isi_end = kwargs.get("max_isi_end", 0.1)
+    dynamic_burst = kwargs.get("dynamic_burst", False)
+    burst_isi_fraction = float(kwargs.get("burst_isi_fraction", 0.3))
 
     result = analyze_spikes_and_bursts(
         data=data,
@@ -397,6 +434,8 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
         threshold=threshold,
         max_isi_start=max_isi_start,
         max_isi_end=max_isi_end,
+        dynamic_burst=dynamic_burst,
+        burst_isi_fraction=burst_isi_fraction,
         parameters=kwargs,
     )
 
@@ -430,6 +469,7 @@ class TrainDynamicsResult(AnalysisResult):
     cv: Optional[float] = None
     cv2: Optional[float] = None
     lv: Optional[float] = None
+    adaptation_index: Optional[float] = None
     isis: Optional[np.ndarray] = None
     parameters: Dict[str, Any] = field(default_factory=dict)
 
@@ -501,6 +541,9 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
     lv_array = 3.0 * ((isi_i - isi_next) ** 2) / ((isi_i + isi_next) ** 2)
     lv_val = float(np.mean(lv_array))
 
+    # Adaptation index: ISI_last / ISI_first (>1 = adapting, <1 = bursting)
+    adaptation_index = float(isis[-1] / isis[0]) if isis[0] > 0 else float(np.nan)
+
     return TrainDynamicsResult(
         value=cv,
         unit="",
@@ -510,6 +553,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
         cv=cv,
         cv2=cv2_val,
         lv=lv_val,
+        adaptation_index=adaptation_index,
         isis=isis,
     )
 
@@ -522,11 +566,11 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             "name": "spike_threshold",
             "type": "float",
             "label": "AP Threshold (mV)",
-            "default": 0.0,
-            "min": -50.0,
+            "default": -20.0,
+            "min": -100.0,
             "max": 50.0,
             "step": 1.0,
-            "tooltip": "Threshold to detect action potentials.",
+            "tooltip": "Threshold to detect action potentials. Lower this for blunted or dendritic spikes.",
         }
     ],
     plots=[
@@ -543,6 +587,8 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
 )
 def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
     """Wrapper for Spike Train Dynamics."""
+    from Synaptipy.core.analysis.single_spike import calculate_spike_features
+
     ap_threshold = kwargs.get("spike_threshold", 0.0)
     ap_times = kwargs.get("action_potential_times", None)
     spike_indices = None
@@ -566,12 +612,28 @@ def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     isi_ms = (result.isis * 1000.0).tolist() if result.isis is not None and len(result.isis) > 0 else []
     isi_numbers = list(range(1, len(isi_ms) + 1))
 
+    # Spike broadening index: half_width_last / half_width_first for trains >= 3 spikes
+    spike_broadening_index = float(np.nan)
+    if spike_indices is not None and len(spike_indices) >= 3:
+        try:
+            features_list = calculate_spike_features(data, time, spike_indices)
+            widths = [f.get("half_width") for f in features_list if f.get("half_width") is not None]
+            valid_widths = [w for w in widths if w is not None and not np.isnan(w)]
+            if len(valid_widths) >= 3:
+                spike_broadening_index = (
+                    float(valid_widths[-1] / valid_widths[0]) if valid_widths[0] > 0 else float(np.nan)
+                )
+        except Exception as e:
+            log.warning(f"Could not compute spike broadening index: {e}")
+
     metrics: Dict[str, Any] = {
         "spike_count": result.spike_count,
         "mean_isi_s": result.mean_isi_s,
         "cv": result.cv,
         "cv2": result.cv2,
         "lv": result.lv,
+        "adaptation_index": result.adaptation_index,
+        "spike_broadening_index": spike_broadening_index,
         "isi_numbers": isi_numbers,
         "isi_ms": isi_ms,
     }

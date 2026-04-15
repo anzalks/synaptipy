@@ -32,8 +32,183 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Quiescent Noise Floor
+# ---------------------------------------------------------------------------
+
+
+def find_quiescent_baseline_rms(
+    data: np.ndarray,
+    sample_rate: float,
+    window_ms: float = 20.0,
+) -> Tuple[float, Tuple[int, int]]:
+    """
+    Identify the quietest (minimum-variance) segment in a trace via a sliding
+    window and return its RMS as the noise floor.
+
+    Unlike a fixed pre-trace window (e.g. ``trace[0:50]``), this approach is
+    robust to recordings with spontaneous activity at the start: the search
+    considers the *entire* trace, selecting the 20 ms chunk with the smallest
+    variance regardless of its position.
+
+    Args:
+        data: 1D signal array (mV or pA).
+        sample_rate: Sampling rate (Hz).
+        window_ms: Duration of the sliding window (ms, default 20).
+
+    Returns:
+        Tuple of (rms_noise_floor, (start_idx, end_idx)) where the indices
+        define the quiescent window used for the RMS calculation.
+    """
+    n = len(data)
+    window_samples = max(2, int(window_ms / 1000.0 * sample_rate))
+    step_samples = max(1, window_samples // 2)
+
+    min_var = np.inf
+    best_start = 0
+
+    for i in range(0, n - window_samples + 1, step_samples):
+        chunk = data[i : i + window_samples]
+        var = float(np.var(chunk))
+        if var < min_var:
+            min_var = var
+            best_start = i
+
+    best_end = best_start + window_samples
+    quiescent_chunk = data[best_start:best_end]
+    rms = float(np.sqrt(np.mean(quiescent_chunk**2)))
+    return rms, (best_start, best_end)
+
+
+# ---------------------------------------------------------------------------
+# Dynamic AUC / Charge Integration
+# ---------------------------------------------------------------------------
+
+
+def calculate_event_charge_dynamic(
+    data: np.ndarray,
+    event_index: int,
+    sample_rate: float,
+    local_baseline: float,
+    polarity: str = "negative",
+    max_duration_ms: float = 100.0,
+) -> float:
+    """
+    Integrate event charge (area under curve) with a dynamic boundary.
+
+    The integration ends at whichever comes first:
+    - The signal returns to ``local_baseline`` (event complete).
+    - A large derivative transient indicates the onset of a subsequent
+      summating event (onset detected as |dV/dt| > 3x the noise in the
+      early derivative).
+
+    Args:
+        data: 1D signal array.
+        event_index: Sample index of the event peak.
+        sample_rate: Sampling rate (Hz).
+        local_baseline: Local baseline voltage/current level.
+        polarity: ``"negative"`` or ``"positive"``.
+        max_duration_ms: Hard cap on integration window (ms).
+
+    Returns:
+        Signed charge (area under curve relative to baseline, in units of
+        data * seconds, e.g. mV·s or pA·s).
+    """
+    dt = 1.0 / sample_rate
+    max_samples = max(2, int(max_duration_ms / 1000.0 * sample_rate))
+    start = int(event_index)
+    end = min(start + max_samples, len(data))
+
+    segment = data[start:end]
+    if len(segment) < 2:
+        return 0.0
+
+    # Boundary 1: signal returns to local baseline
+    if polarity == "negative":
+        returned = np.where(segment >= local_baseline)[0]
+    else:
+        returned = np.where(segment <= local_baseline)[0]
+    baseline_return_idx = int(returned[0]) if len(returned) > 0 else len(segment)
+
+    # Boundary 2: onset of subsequent event (derivative transient)
+    dvdt_seg = np.diff(segment[:baseline_return_idx]) if baseline_return_idx > 1 else np.array([])
+    onset_idx = baseline_return_idx
+    if len(dvdt_seg) > 4:
+        # Estimate noise from the first quarter of the derivative
+        n_noise = max(2, len(dvdt_seg) // 4)
+        noise_std = float(np.std(dvdt_seg[:n_noise]))
+        if noise_std > 0:
+            min_pts = max(1, int(0.001 * sample_rate))  # skip first 1 ms
+            if polarity == "negative":
+                candidates = np.where(dvdt_seg < -3.0 * noise_std)[0]
+            else:
+                candidates = np.where(dvdt_seg > 3.0 * noise_std)[0]
+            candidates = candidates[candidates >= min_pts]
+            if len(candidates) > 0:
+                onset_idx = min(baseline_return_idx, int(candidates[0]))
+
+    integration_end = max(1, onset_idx)
+    t_seg = np.arange(integration_end) * dt
+    trace_slice = segment[:integration_end]
+    charge = float(np.trapz(trace_slice - local_baseline, t_seg))
+    return charge
+
+
+# ---------------------------------------------------------------------------
 # 1. Adaptive Threshold Detection
 # ---------------------------------------------------------------------------
+
+
+def compute_local_pre_event_baseline(
+    data: np.ndarray,
+    event_indices: np.ndarray,
+    sample_rate: float,
+    pre_event_window_ms: float = 2.0,
+    polarity: str = "negative",
+) -> np.ndarray:
+    """
+    Compute a local pre-event baseline voltage for each detected event.
+
+    For summ ating synaptic events that ride on the decay of a previous event,
+    the global resting potential is a poor amplitude reference. This function
+    searches the `pre_event_window_ms` immediately preceding each event peak
+    and returns the local "foot" voltage:
+
+    - Negative polarity: the maximum (most depolarised) voltage in the search
+      window - i.e. the point before the hyperpolarising/inward current event
+      begins to deflect the trace.
+    - Positive polarity: the minimum (most hyperpolarised) voltage.
+
+    Args:
+        data: 1D voltage/current array.
+        event_indices: Integer indices of detected event peaks.
+        sample_rate: Sampling rate in Hz.
+        pre_event_window_ms: Duration (ms) of the search window before each
+            peak (default 2.0 ms, valid range 1-3 ms recommended).
+        polarity: "negative" or "positive".
+
+    Returns:
+        1D float array of local baseline values, one per event.
+    """
+    if len(event_indices) == 0:
+        return np.array([], dtype=float)
+
+    search_samples = max(1, int(pre_event_window_ms / 1000.0 * sample_rate))
+    local_baselines = np.empty(len(event_indices), dtype=float)
+
+    for k, idx in enumerate(event_indices):
+        win_start = max(0, int(idx) - search_samples)
+        win_end = max(win_start + 1, int(idx))
+        segment = data[win_start:win_end]
+        if segment.size == 0:
+            local_baselines[k] = float(data[max(0, int(idx))])
+        elif polarity == "negative":
+            # Foot of a negative event: highest voltage before the downswing.
+            local_baselines[k] = float(np.max(segment))
+        else:
+            # Foot of a positive event: lowest voltage before the upswing.
+            local_baselines[k] = float(np.min(segment))
+
+    return local_baselines
 
 
 def detect_events_threshold(  # noqa: C901
@@ -44,11 +219,16 @@ def detect_events_threshold(  # noqa: C901
     refractory_period: float = 0.002,
     rolling_baseline_window_ms: Optional[float] = 100.0,
     artifact_mask: Optional[np.ndarray] = None,
+    use_quiescent_noise_floor: bool = True,
+    quiescent_window_ms: float = 20.0,
 ) -> EventDetectionResult:
     """
     Detect events using topological prominence to handle shifting baselines.
 
-    Incorporates a 2-STD noise floor check to prevent false positives.
+    By default uses a quiescent-noise-floor estimate: the RMS of the
+    minimum-variance 20 ms chunk in the trace is used to set a dynamic
+    noise threshold, preventing false positives even when spontaneous
+    activity dominates the beginning of the recording.
     """
     if data.size < 2 or time.shape != data.shape:
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message="Invalid data/time shape")
@@ -73,9 +253,14 @@ def detect_events_threshold(  # noqa: C901
         is_negative = polarity == "negative"
         work_data = -baseline_corrected_data if is_negative else baseline_corrected_data
 
-        noise_sd = median_abs_deviation(work_data, scale="normal")
-        if noise_sd == 0:
-            noise_sd = 1e-12
+        if use_quiescent_noise_floor:
+            # Dynamic noise floor: RMS of the quietest window in the trace
+            quiescent_rms, _ = find_quiescent_baseline_rms(work_data, fs, window_ms=quiescent_window_ms)
+            noise_sd = quiescent_rms if quiescent_rms > 0 else 1e-12
+        else:
+            noise_sd = median_abs_deviation(work_data, scale="normal")
+            if noise_sd == 0:
+                noise_sd = 1e-12
 
         abs_threshold = abs(threshold)
         min_prominence = max(abs_threshold, 2.0 * noise_sd)
@@ -194,6 +379,23 @@ detect_minis_threshold = detect_events_threshold
             "min": 0.0,
         },
         {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
+        {
+            "name": "use_quiescent_noise_floor",
+            "label": "Quiescent Noise Floor",
+            "type": "bool",
+            "default": True,
+            "tooltip": "Use minimum-variance sliding window to estimate noise, ignoring bursts at recording start.",
+        },
+        {
+            "name": "quiescent_window_ms",
+            "label": "Quiescent Window (ms):",
+            "type": "float",
+            "default": 20.0,
+            "min": 1.0,
+            "max": 500.0,
+            "decimals": 1,
+            "visible_when": {"param": "use_quiescent_noise_floor", "value": True},
+        },
     ],
 )
 def run_event_detection_threshold_wrapper(
@@ -204,6 +406,8 @@ def run_event_detection_threshold_wrapper(
     direction = kwargs.get("direction", "negative")
     refractory_period = kwargs.get("refractory_period", 0.005)
     rolling_baseline_window_ms = kwargs.get("rolling_baseline_window_ms", 100.0)
+    use_quiescent_noise_floor = kwargs.get("use_quiescent_noise_floor", True)
+    quiescent_window_ms = float(kwargs.get("quiescent_window_ms", 20.0))
 
     reject_artifacts = kwargs.get("reject_artifacts", False)
     artifact_mask = None
@@ -220,12 +424,33 @@ def run_event_detection_threshold_wrapper(
         refractory_period,
         rolling_baseline_window_ms=rolling_baseline_window_ms,
         artifact_mask=artifact_mask,
+        use_quiescent_noise_floor=use_quiescent_noise_floor,
+        quiescent_window_ms=quiescent_window_ms,
     )
 
     if not result.is_valid:
         return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
 
     _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
+
+    # Compute local pre-event baseline for each detected event (handles summating events).
+    local_baselines = compute_local_pre_event_baseline(data, _idx, sampling_rate, polarity=direction)
+    if len(_idx) > 0:
+        if direction == "negative":
+            local_amplitudes = local_baselines - data[_idx]
+        else:
+            local_amplitudes = data[_idx] - local_baselines
+    else:
+        local_amplitudes = np.array([], dtype=float)
+
+    # Dynamic AUC: integrate each event charge with a dynamic boundary
+    event_charges = []
+    for k, idx in enumerate(_idx):
+        lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))
+        charge = calculate_event_charge_dynamic(data, idx, sampling_rate, lb, polarity=direction)
+        event_charges.append(charge)
+    mean_charge = float(np.mean(event_charges)) if event_charges else 0.0
+
     return {
         "module_used": "synaptic_events",
         "metrics": {
@@ -233,8 +458,13 @@ def run_event_detection_threshold_wrapper(
             "frequency_hz": result.frequency_hz,
             "mean_amplitude": result.mean_amplitude,
             "amplitude_sd": result.amplitude_sd,
+            "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else 0.0,
+            "mean_event_charge": mean_charge,
+            "_event_charges": event_charges,
             "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
             "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
+            "_local_baselines": local_baselines.tolist() if local_baselines.size > 0 else [],
+            "_local_amplitudes": local_amplitudes.tolist() if local_amplitudes.size > 0 else [],
             "_result_obj": result,
         },
     }
@@ -257,21 +487,32 @@ def detect_events_template(  # noqa: C901
     time: Optional[np.ndarray] = None,
     min_event_distance_ms: float = 0.0,
 ) -> EventDetectionResult:
-    """Detect events using matched-filter (template) approach."""
+    """Detect events using a multi-kernel matched-filter bank.
+
+    Three kernels are built using the specified tau_rise and tau_decay × 1, 2, 3
+    to tolerate dendritic filtering that prolongs event decay (Cable theory
+    predicts a ~2-3× slowdown for distal inputs).  A combined z-score trace
+    (pointwise maximum across the three filtered traces) is used for peak
+    detection, improving sensitivity to both somatic and dendritic events.
+    """
     try:
         dt = 1.0 / sampling_rate
         n_points = len(data)
 
-        kernel_duration = 5 * max(tau_decay, tau_rise)
-        t_kernel = np.arange(0, kernel_duration, dt)
+        def _build_kernel(td: float) -> np.ndarray:
+            """Alpha/bi-exponential kernel for a given tau_decay."""
+            kernel_duration = 5 * max(td, tau_rise)
+            t_k = np.arange(0, kernel_duration, dt)
+            if td == tau_rise:
+                k = t_k * np.exp(-t_k / td)
+            else:
+                k = np.exp(-t_k / td) - np.exp(-t_k / tau_rise)
+            max_abs = np.max(np.abs(k))
+            if max_abs > 0:
+                k /= max_abs
+            return k
 
-        if tau_decay == tau_rise:
-            kernel = t_kernel * np.exp(-t_kernel / tau_decay)
-        else:
-            kernel = np.exp(-t_kernel / tau_decay) - np.exp(-t_kernel / tau_rise)
-
-        if np.max(np.abs(kernel)) > 0:
-            kernel /= np.max(np.abs(kernel))
+        kernels = [_build_kernel(tau_decay * scale) for scale in (1.0, 2.0, 3.0)]
 
         if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
             from scipy.ndimage import median_filter
@@ -290,14 +531,39 @@ def detect_events_template(  # noqa: C901
         is_negative = polarity == "negative"
         work_data = -baseline_corrected_data if is_negative else baseline_corrected_data
 
-        matched_filter_kernel = kernel[::-1]
-        filtered_trace = signal.fftconvolve(work_data, matched_filter_kernel, mode="same")
+        # Compute filtered traces and z-scores for each kernel.
+        # Each kernel's matched-filter peak is shifted from the true event time by
+        # (kernel_peak_idx - kernel_center) samples; align all z-score traces to
+        # the primary (1x) kernel reference so that the max-combination produces a
+        # single sharp peak per event rather than multiple spread-out humps.
+        primary_kernel = kernels[0]
+        kernel_center_0 = (len(primary_kernel) - 1) // 2
+        ref_offset = int(np.argmax(primary_kernel)) - kernel_center_0  # 1x shift
 
-        mad = median_abs_deviation(filtered_trace, scale="normal")
+        z_traces = []
+        for k in kernels:
+            matched_k = k[::-1]
+            filtered = signal.fftconvolve(work_data, matched_k, mode="same")
+            mad = median_abs_deviation(filtered, scale="normal")
+            if mad == 0:
+                mad = 1e-12
+            z = (filtered - np.median(filtered)) / mad
+            # Align this kernel's peak to the primary kernel's reference
+            k_offset = int(np.argmax(k)) - (len(k) - 1) // 2
+            relative_shift = k_offset - ref_offset
+            if relative_shift != 0:
+                z = np.roll(z, relative_shift)
+                if relative_shift > 0:
+                    z[:relative_shift] = 0.0
+                else:
+                    z[relative_shift:] = 0.0
+            z_traces.append(z)
+
+        z_score_trace = np.max(np.stack(z_traces, axis=0), axis=0)
+        # Noise estimate from the primary (unscaled) kernel for return metadata
+        mad = float(median_abs_deviation(signal.fftconvolve(work_data, kernels[0][::-1], mode="same"), scale="normal"))
         if mad == 0:
             mad = 1e-12
-
-        z_score_trace = (filtered_trace - np.median(filtered_trace)) / mad
 
         if min_event_distance_ms > 0:
             min_dist_samples = int((min_event_distance_ms / 1000.0) * sampling_rate)
@@ -308,9 +574,10 @@ def detect_events_template(  # noqa: C901
 
         peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
 
-        kernel_peak_idx = int(np.argmax(kernel))
-        kernel_center = (len(kernel) - 1) // 2
-        template_offset = kernel_peak_idx - kernel_center
+        # Peak refinement: z_score peaks are aligned to the primary kernel reference,
+        # so apply only the primary kernel's offset when searching for the raw data peak.
+        kernel_peak_idx = int(np.argmax(primary_kernel))
+        template_offset = kernel_peak_idx - kernel_center_0
         refine_window = max(3, int(tau_rise * sampling_rate))
 
         if len(peak_indices) > 0:
@@ -481,6 +748,17 @@ def run_event_detection_template_wrapper(
         return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
 
     _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
+
+    # Compute local pre-event baseline for each event (handles summating events).
+    local_baselines = compute_local_pre_event_baseline(data, _idx, sampling_rate, polarity=direction)
+    if len(_idx) > 0:
+        if direction == "negative":
+            local_amplitudes = local_baselines - data[_idx]
+        else:
+            local_amplitudes = data[_idx] - local_baselines
+    else:
+        local_amplitudes = np.array([], dtype=float)
+
     return {
         "module_used": "synaptic_events",
         "metrics": {
@@ -488,8 +766,11 @@ def run_event_detection_template_wrapper(
             "tau_rise_ms": result.tau_rise_ms,
             "tau_decay_ms": result.tau_decay_ms,
             "threshold_sd": result.threshold_sd,
+            "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else 0.0,
             "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
             "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
+            "_local_baselines": local_baselines.tolist() if local_baselines.size > 0 else [],
+            "_local_amplitudes": local_amplitudes.tolist() if local_amplitudes.size > 0 else [],
             "_result_obj": result,
         },
     }

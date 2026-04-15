@@ -224,12 +224,12 @@ class TestAHPReturnToBaseline:
         return data, t, np.array([peak_idx])
 
     def test_ahp_depth_measured(self):
-        """AHP depth should be detected."""
+        """fAHP depth should be detected (AHP min at ~3 ms post-peak is within 1-5 ms window)."""
         data, t, spikes = self._make_spike_with_ahp(ahp_depth=10.0)
         features = calculate_spike_features(data, t, spikes)
         assert len(features) == 1
-        assert not np.isnan(features[0]["ahp_depth"])
-        assert features[0]["ahp_depth"] > 0
+        assert not np.isnan(features[0]["fahp_depth"])
+        assert features[0]["fahp_depth"] > 0
 
     def test_ahp_duration_adaptive(self):
         """AHP duration should reflect actual recovery time, not fixed window."""
@@ -382,11 +382,14 @@ class TestVectorizedFeatures:
             "half_width",
             "rise_time_10_90",
             "decay_time_90_10",
-            "ahp_depth",
+            "fahp_depth",
+            "mahp_depth",
             "ahp_duration_half",
             "adp_amplitude",
             "max_dvdt",
             "min_dvdt",
+            "absolute_peak_mv",
+            "overshoot_mv",
         }
         assert set(features[0].keys()) == expected_keys
 

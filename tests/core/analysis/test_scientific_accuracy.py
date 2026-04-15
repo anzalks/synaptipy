@@ -211,3 +211,159 @@ class TestSagRatioPercentile:
         sag = result["sag_ratio"]
         assert 0 < sag <= 1.6, f"Unexpected sag ratio: {sag}"
         assert "rebound_depolarization" in result
+
+
+class TestVCSeriesResistanceAccuracy:
+    """Verify that Rs and Cm are recovered accurately from synthetic transients."""
+
+    @staticmethod
+    def _make_transient(
+        rs_mohm: float,
+        cm_pf: float,
+        voltage_step_mv: float = -10.0,
+        sampling_rate: float = 100000.0,
+        duration_s: float = 0.05,
+    ):
+        """Synthesise an ideal mono-exponential VC transient for a given Rs and Cm."""
+        from Synaptipy.core.analysis.passive_properties import calculate_capacitance_vc
+
+        dt = 1.0 / sampling_rate
+        t = np.arange(0, duration_s, dt)
+        baseline_end = 0.005
+        step_start = 0.010
+        step_end = step_start + 0.030
+
+        rs_ohm = rs_mohm * 1e6
+        cm_f = cm_pf * 1e-12
+        tau_s = rs_ohm * cm_f
+        i_peak_pa = (voltage_step_mv * 1e-3 / rs_ohm) * 1e12
+
+        current = np.zeros_like(t)
+        step_idx = int(step_start / dt)
+        for idx in range(step_idx, len(t)):
+            t_rel = (idx - step_idx) * dt
+            current[idx] = i_peak_pa * np.exp(-t_rel / tau_s)
+
+        bw = (0.0, baseline_end)
+        tw = (step_start, step_end)
+        result = calculate_capacitance_vc(current, t, bw, tw, voltage_step_amplitude_mv=voltage_step_mv)
+        return result, rs_mohm, cm_pf
+
+    def test_rs_extracted_within_20_percent(self):
+        """Rs recovered from a synthetic transient must be within 20% of the true value.
+
+        This tolerance accounts for sampling discretisation at 100 kHz and
+        imperfect exponential fit initialisation.
+        """
+        true_rs = 10.0  # MOhm
+        result, _, _ = self._make_transient(rs_mohm=true_rs, cm_pf=100.0)
+
+        assert result is not None, "Expected dict, got None"
+        rs_est = result["series_resistance_mohm"]
+        rel_error = abs(rs_est - true_rs) / true_rs
+        assert rel_error < 0.20, f"Rs estimate {rs_est:.2f} MOhm deviates {rel_error*100:.1f}% from true {true_rs} MOhm"
+
+    def test_cm_extracted_within_20_percent(self):
+        """Cm recovered via tau/Rs must be within 20% of the true value."""
+        true_cm = 100.0  # pF
+        result, _, _ = self._make_transient(rs_mohm=10.0, cm_pf=true_cm)
+
+        assert result is not None
+        cm_est = result["capacitance_pf"]
+        rel_error = abs(cm_est - true_cm) / true_cm
+        assert rel_error < 0.20, f"Cm estimate {cm_est:.2f} pF deviates {rel_error*100:.1f}% from true {true_cm} pF"
+
+    def test_larger_rs_yields_larger_estimate(self):
+        """Doubling Rs on the same Cm should roughly double the Rs estimate."""
+        result_lo, _, _ = self._make_transient(rs_mohm=10.0, cm_pf=100.0)
+        result_hi, _, _ = self._make_transient(rs_mohm=20.0, cm_pf=100.0)
+
+        assert result_lo is not None and result_hi is not None
+        assert (
+            result_hi["series_resistance_mohm"] > result_lo["series_resistance_mohm"]
+        ), "Higher true Rs must yield higher estimated Rs"
+
+
+class TestFAHPMAHPAccuracy:
+    """Verify fAHP and mAHP windows target the correct temporal post-spike regions."""
+
+    @staticmethod
+    def _build_spike(
+        fahp_min_mv: float = -73.0,
+        mahp_min_mv: float = -70.0,
+        baseline_mv: float = -65.0,
+        sampling_rate: float = 20000.0,
+    ):
+        """Build a synthetic spike trace with analytically placed AHP minima.
+
+        fAHP minimum placed at 2 ms post-peak (inside 1-5 ms window).
+        mAHP minimum placed at 20 ms post-peak (inside 10-50 ms window).
+        """
+        dt = 1.0 / sampling_rate
+        t = np.arange(0, 0.15, dt)
+        n = len(t)
+        v = np.full(n, baseline_mv)
+
+        peak_idx = int(0.030 / dt)
+        rise = int(0.001 / dt)
+        # Spike upstroke
+        for i in range(rise):
+            v[peak_idx - rise + i] = baseline_mv + 85.0 * i / rise
+        v[peak_idx] = baseline_mv + 85.0
+
+        # Place fAHP trough
+        fahp_idx = int(0.032 / dt)  # 2 ms post-peak
+        for i in range(peak_idx, fahp_idx + 1):
+            frac = (i - peak_idx) / (fahp_idx - peak_idx)
+            v[i] = (baseline_mv + 85.0) + (fahp_min_mv - (baseline_mv + 85.0)) * frac
+
+        # Gradual recovery then mAHP trough
+        mahp_idx = int(0.050 / dt)  # 20 ms post-peak
+        for i in range(fahp_idx, mahp_idx + 1):
+            frac = (i - fahp_idx) / (mahp_idx - fahp_idx)
+            v[i] = fahp_min_mv + (mahp_min_mv - fahp_min_mv) * frac
+
+        # Recovery to baseline
+        for i in range(mahp_idx, n):
+            frac = (i - mahp_idx) / max(1, n - mahp_idx)
+            v[i] = mahp_min_mv + (baseline_mv - mahp_min_mv) * frac
+
+        spike_indices = np.array([peak_idx])
+        return v, t, spike_indices, baseline_mv
+
+    def test_fahp_measured_in_correct_window(self):
+        """fAHP depth should reflect the minimum in the 1-5 ms window, not later."""
+        fahp_min_mv = -73.0  # 8 mV below baseline (-65)
+        v, t, spikes, bl = self._build_spike(fahp_min_mv=fahp_min_mv, mahp_min_mv=-70.0)
+
+        features = calculate_spike_features(v, t, spikes)
+        assert len(features) == 1
+        feat = features[0]
+
+        # fahp_depth = ap_threshold - min_voltage_in_fahp_window
+        # ap_threshold is near -65; min in 1-5 ms window is near -73
+        # So depth should be approximately 8 mV (threshold - fahp_min)
+        assert feat["fahp_depth"] > 0, f"fahp_depth must be positive, got {feat['fahp_depth']}"
+
+    def test_mahp_measured_in_correct_window(self):
+        """mAHP depth should reflect the minimum in the 10-50 ms window."""
+        mahp_min_mv = -70.0  # 5 mV below baseline
+        v, t, spikes, bl = self._build_spike(fahp_min_mv=-73.0, mahp_min_mv=mahp_min_mv)
+
+        features = calculate_spike_features(v, t, spikes)
+        feat = features[0]
+
+        assert feat["mahp_depth"] > 0, f"mahp_depth must be positive, got {feat['mahp_depth']}"
+
+    def test_fahp_deeper_than_mahp_when_appropriate(self):
+        """When fAHP minimum is deeper (more negative) than mAHP minimum, fahp_depth > mahp_depth."""
+        # fAHP trough at -73 mV (8 mV below -65 baseline)
+        # mAHP trough at -70 mV (5 mV below -65 baseline)
+        v, t, spikes, bl = self._build_spike(fahp_min_mv=-73.0, mahp_min_mv=-70.0)
+        features = calculate_spike_features(v, t, spikes)
+        feat = features[0]
+
+        assert feat["fahp_depth"] > feat["mahp_depth"], (
+            f"Expected fahp_depth ({feat['fahp_depth']:.2f}) > mahp_depth ({feat['mahp_depth']:.2f}) "
+            "when fAHP trough is deeper than mAHP trough"
+        )

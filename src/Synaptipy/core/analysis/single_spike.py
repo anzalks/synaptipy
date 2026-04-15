@@ -177,13 +177,29 @@ def calculate_spike_features(  # noqa: C901
     dvdt_threshold: float = 20.0,
     ahp_window_sec: float = 0.05,
     onset_lookback: float = 0.01,
+    fahp_window_ms: Tuple[float, float] = (1.0, 5.0),
+    mahp_window_ms: Tuple[float, float] = (10.0, 50.0),
 ) -> List[Dict[str, Any]]:
     """
     Calculate detailed features for each detected spike (vectorised NumPy).
 
     Returns list of dicts per spike: ap_threshold, amplitude, half_width,
-    rise_time_10_90, decay_time_90_10, ahp_depth, ahp_duration_half,
-    adp_amplitude, max_dvdt, min_dvdt.
+    rise_time_10_90, decay_time_90_10, fahp_depth, mahp_depth,
+    ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
+
+    AP threshold is detected via the peak of d2V/dt2 in the pre-spike lookback
+    window (maximum curvature method).  Falls back to the first dV/dt crossing
+    above ``dvdt_threshold`` when d2V/dt2 gives a boundary result.
+
+    Args:
+        data: 1-D voltage array (mV).
+        time: Corresponding time array (s).
+        spike_indices: Array of sample indices for each spike peak.
+        dvdt_threshold: Fallback dV/dt threshold for AP onset (V/s).
+        ahp_window_sec: Duration of AHP/ADP search window (s).
+        onset_lookback: Lookback window before each spike peak (s).
+        fahp_window_ms: (start, end) of fast-AHP window after peak (ms).
+        mahp_window_ms: (start, end) of medium-AHP window after peak (ms).
     """
     if spike_indices is None or spike_indices.size == 0:
         return []
@@ -200,24 +216,37 @@ def calculate_spike_features(  # noqa: C901
         return []
 
     dvdt = np.gradient(data, dt)
+    d2vdt2 = np.gradient(dvdt, dt)
     threshold_val_mvs = dvdt_threshold * 1000.0
 
     lookback_samples = int(onset_lookback / dt)
     post_peak_samples = int(0.01 / dt)
     ahp_max_samples = int(ahp_window_sec / dt)
 
-    # --- AP Threshold (onset) via dV/dt ---
+    # --- AP Threshold (onset) via d2V/dt2 peak (maximum curvature method) ---
+    # The kink in the voltage trace where the AP upstroke begins corresponds to
+    # the peak of the second derivative.  Falls back to the first dV/dt crossing
+    # when the d2V/dt2 peak falls at the window boundary (unreliable estimate).
     lookback_range = np.arange(-lookback_samples, 0)
     onset_window_indices = spike_indices[:, None] + lookback_range
     np.clip(onset_window_indices, 0, n_data - 1, out=onset_window_indices)
-    onset_dvdt_windows = dvdt[onset_window_indices]
 
+    onset_d2vdt2_windows = d2vdt2[onset_window_indices]
+    d2vdt2_peak_rel = np.argmax(onset_d2vdt2_windows, axis=1)
+    thresh_indices_d2 = onset_window_indices[np.arange(n_spikes), d2vdt2_peak_rel]
+
+    # Fallback: first dV/dt crossing above threshold
+    onset_dvdt_windows = dvdt[onset_window_indices]
     crossings_mask = onset_dvdt_windows > threshold_val_mvs
     has_crossing = np.any(crossings_mask, axis=1)
     first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
     fallback_indices = np.maximum(0, spike_indices - int(0.001 / dt))
     found_thresh_indices = onset_window_indices[np.arange(n_spikes), first_crossing_rel_idx]
-    thresh_indices = np.where(has_crossing, found_thresh_indices, fallback_indices)
+    dvdt_thresh_indices = np.where(has_crossing, found_thresh_indices, fallback_indices)
+
+    # Use d2V/dt2 peak unless it sits at the edge of the lookback window
+    at_edge = (d2vdt2_peak_rel == 0) | (d2vdt2_peak_rel >= lookback_samples - 1)
+    thresh_indices = np.where(at_edge, dvdt_thresh_indices, thresh_indices_d2)
     ap_thresholds = data[thresh_indices]
     peak_vals = data[spike_indices]
     amplitudes = peak_vals - ap_thresholds
@@ -378,8 +407,6 @@ def calculate_spike_features(  # noqa: C901
         end = min(ahp_max_samples_per_spike[i], idx + mean_window + 1)
         ahp_min_vals[i] = np.mean(ahp_waveforms[i, start:end])
 
-    ahp_depths = ap_thresholds - ahp_min_vals
-
     rec_targets = ap_thresholds - 0.1 * amplitudes
     rec_target_bcast = rec_targets[:, None]
     is_after_min = col_idxs_ahp > ahp_min_rel_indices[:, None]
@@ -414,6 +441,29 @@ def calculate_spike_features(  # noqa: C901
         calced_adps = adp_peaks - ahp_min_vals
         adp_amplitudes = np.where(has_adp, calced_adps, np.nan)
 
+    # --- fAHP and mAHP (separate physiological windows) ---
+    # fAHP: fast AHP (default 1-5 ms post-peak): Na+ channel-mediated repolarisation overshoot
+    # mAHP: medium AHP (default 10-50 ms post-peak): K+ channel-mediated hyperpolarisation
+    fahp_start = max(1, int(fahp_window_ms[0] / 1000.0 / dt))
+    fahp_end = max(fahp_start + 1, int(fahp_window_ms[1] / 1000.0 / dt))
+    mahp_start = max(1, int(mahp_window_ms[0] / 1000.0 / dt))
+    mahp_end = max(mahp_start + 1, int(mahp_window_ms[1] / 1000.0 / dt))
+
+    def _window_min(start_s: int, end_s: int) -> np.ndarray:
+        """Return per-spike min voltage in [peak+start_s, peak+end_s)."""
+        w_len = end_s - start_s
+        if w_len <= 0:
+            return np.full(n_spikes, np.nan)
+        w_range = np.arange(start_s, end_s)
+        w_indices = spike_indices[:, None] + w_range
+        np.clip(w_indices, 0, n_data - 1, out=w_indices)
+        return np.min(data[w_indices], axis=1)
+
+    fahp_min_vals = _window_min(fahp_start, fahp_end)
+    mahp_min_vals = _window_min(mahp_start, mahp_end)
+    fahp_depths = ap_thresholds - fahp_min_vals
+    mahp_depths = ap_thresholds - mahp_min_vals
+
     # --- max/min dV/dt ---
     full_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
     pre_peak_dvdt = np.where(is_pre_peak, full_dvdt, -np.inf)
@@ -430,11 +480,14 @@ def calculate_spike_features(  # noqa: C901
                 "half_width": float(half_widths[i]),
                 "rise_time_10_90": float(rise_times[i]),
                 "decay_time_90_10": float(decay_times[i]),
-                "ahp_depth": float(ahp_depths[i]),
+                "fahp_depth": float(fahp_depths[i]),
+                "mahp_depth": float(mahp_depths[i]),
                 "ahp_duration_half": float(ahp_durations[i]),
                 "adp_amplitude": float(adp_amplitudes[i]),
                 "max_dvdt": float(max_dvdts[i]),
                 "min_dvdt": float(min_dvdts[i]),
+                "absolute_peak_mv": float(peak_vals[i]),
+                "overshoot_mv": float(max(0.0, peak_vals[i])),
             }
         )
     return features_list
@@ -480,25 +533,36 @@ def analyze_multi_sweep_spikes(
 
 def calculate_dvdt(voltage: np.ndarray, sampling_rate: float, sigma_ms: float = 0.1) -> np.ndarray:
     """
-    Calculate dV/dt (V/s) with optional Gaussian smoothing.
+    Calculate dV/dt (V/s) with optional Savitzky-Golay smoothing.
+
+    Computes the raw derivative first, then applies a Savitzky-Golay filter
+    (polynomial order 3) directly to the derivative array.  This preserves
+    the true max dV/dt better than pre-smoothing the voltage with a Gaussian,
+    which attenuates the sharp upstroke of action potentials.
 
     Args:
         voltage: 1D voltage array (mV).
         sampling_rate: Sampling rate (Hz).
-        sigma_ms: Smoothing sigma (ms). Set to 0 for no smoothing.
+        sigma_ms: Smoothing window (ms). The SG window length is derived as
+            ``max(5, int(sigma_ms / 1000 * sampling_rate))``, rounded up to the
+            next odd integer.  Set to 0 for no smoothing.
 
     Returns:
         1D array of dV/dt in V/s.
     """
     dt = 1.0 / sampling_rate
-    if sigma_ms > 0:
-        from scipy.ndimage import gaussian_filter1d
-
-        sigma_samples = (sigma_ms / 1000.0) * sampling_rate
-        if sigma_samples > 0.5:
-            voltage = gaussian_filter1d(voltage, sigma_samples)
-
     dvdt = np.gradient(voltage, dt) / 1000.0  # mV/s -> V/s
+
+    if sigma_ms > 0 and len(dvdt) >= 5:
+        # Dynamic window length derived from sigma_ms and sampling rate (must be odd >= 5)
+        window_samples = max(5, int(sigma_ms / 1000.0 * sampling_rate))
+        if window_samples % 2 == 0:
+            window_samples += 1
+        # Cap at signal length (savgol_filter requires window <= len)
+        window_samples = min(window_samples, len(dvdt) if len(dvdt) % 2 == 1 else len(dvdt) - 1)
+        if window_samples >= 5:
+            dvdt = savgol_filter(dvdt, window_samples, 3)
+
     return dvdt
 
 
