@@ -3,13 +3,23 @@
 """
 CSV Exporter for Synaptipy.
 Handles exporting recording data and analysis results to CSV format.
+Automatically writes a companion provenance JSON alongside every results CSV.
 """
 
+import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+try:
+    import Synaptipy
+
+    _SYNAPTIPY_VERSION = getattr(Synaptipy, "__version__", "unknown")
+except Exception:
+    _SYNAPTIPY_VERSION = "unknown"
 
 from Synaptipy.core.data_model import Recording
 
@@ -69,14 +79,25 @@ class CSVExporter:
 
         return success_count, error_count
 
-    def export_analysis_results(self, results: List[Dict[str, Any]], output_path: Path) -> bool:  # noqa: C901
+    def export_analysis_results(  # noqa: C901
+        self,
+        results: List[Dict[str, Any]],
+        output_path: Path,
+        analysis_config: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         Export a list of analysis result dictionaries to a single CSV file.
         Handles nested dictionaries (e.g., 'summary_stats', 'parameters') by flattening them.
 
+        A companion ``<stem>_provenance.json`` file is automatically written
+        next to the CSV.  It records the Synaptipy version, timestamp, analysis
+        parameters, and source file names so that results are fully reproducible.
+
         Args:
             results: List of result dictionaries.
             output_path: Path to save the CSV file.
+            analysis_config: Optional dict of analysis configuration parameters
+                to embed in the provenance record.
 
         Returns:
             True if successful, False otherwise.
@@ -249,8 +270,59 @@ class CSVExporter:
             df.to_csv(output_path, index=False, encoding="utf-8")
 
             log.info(f"Successfully exported {len(results)} analysis results to {output_path}")
+
+            # --- Write provenance JSON ---
+            self._write_provenance(
+                csv_path=output_path,
+                results=results,
+                analysis_config=analysis_config,
+            )
+
             return True
 
         except Exception as e:
             log.error(f"Failed to export analysis results: {e}", exc_info=True)
             return False
+
+    # ------------------------------------------------------------------
+    def _write_provenance(
+        self,
+        csv_path: Path,
+        results: List[Dict[str, Any]],
+        analysis_config: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Write a companion ``<stem>_provenance.json`` next to *csv_path*.
+
+        The file is intentionally human-readable (indent=2) and contains:
+
+        - ``synaptipy_version`` – package version string
+        - ``timestamp_utc``     – ISO-8601 export timestamp (UTC)
+        - ``csv_file``          – basename of the exported CSV
+        - ``source_files``      – list of unique source file names extracted
+          from the result rows (``source_file_name`` key)
+        - ``analysis_config``   – the caller-supplied config dict (or ``{}``
+          when not provided)
+        - ``analysis_types``    – list of unique ``analysis_type`` values found
+          in the result rows
+        """
+        provenance_path = csv_path.with_name(csv_path.stem + "_provenance.json")
+
+        # Collect unique source file names and analysis types
+        source_files = sorted({str(r.get("source_file_name", "")) for r in results if r.get("source_file_name")})
+        analysis_types = sorted({str(r.get("analysis_type", "")) for r in results if r.get("analysis_type")})
+
+        provenance: Dict[str, Any] = {
+            "synaptipy_version": _SYNAPTIPY_VERSION,
+            "timestamp_utc": datetime.now(tz=timezone.utc).isoformat(),
+            "csv_file": csv_path.name,
+            "source_files": source_files,
+            "analysis_types": analysis_types,
+            "analysis_config": analysis_config or {},
+        }
+
+        try:
+            with open(provenance_path, "w", encoding="utf-8") as fh:
+                json.dump(provenance, fh, indent=2, default=str)
+            log.info("Provenance record written to %s", provenance_path)
+        except Exception as exc:
+            log.warning("Could not write provenance JSON: %s", exc)

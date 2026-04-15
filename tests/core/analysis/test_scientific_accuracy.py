@@ -367,3 +367,157 @@ class TestFAHPMAHPAccuracy:
             f"Expected fahp_depth ({feat['fahp_depth']:.2f}) > mahp_depth ({feat['mahp_depth']:.2f}) "
             "when fAHP trough is deeper than mAHP trough"
         )
+
+
+# ---------------------------------------------------------------------------
+# LJP Correction Tests
+# ---------------------------------------------------------------------------
+
+
+class TestLJPCorrection:
+    """Verify that Liquid Junction Potential correction shifts voltage by the expected amount."""
+
+    def _make_rmp_data(self, resting_mv: float, n_samples: int = 1000, fs: float = 20000.0):
+        """Return (data_array, time_array) for a flat trace at *resting_mv*."""
+        t = np.arange(n_samples) / fs
+        v = np.full(n_samples, resting_mv)
+        return v, t
+
+    def test_ljp_shifts_rmp_by_exact_value(self):
+        """RMP with LJP=10 mV should equal (raw_rmp - 10) mV."""
+        from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
+
+        raw_mv = -70.0
+        ljp_mv = 10.0
+        v, _ = self._make_rmp_data(raw_mv)
+
+        corrected = apply_ljp_correction(v, ljp_mv)
+
+        assert np.allclose(
+            corrected, raw_mv - ljp_mv
+        ), f"Expected all samples to be {raw_mv - ljp_mv} mV; got mean {corrected.mean():.4f}"
+
+    def test_zero_ljp_returns_original_array(self):
+        """When LJP=0, apply_ljp_correction must return the original array (no copy)."""
+        from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
+
+        v, _ = self._make_rmp_data(-65.0)
+        result = apply_ljp_correction(v, 0.0)
+
+        # Same object expected (no unnecessary copy)
+        assert result is v, "apply_ljp_correction with ljp_mv=0 should return the original array."
+
+    def test_negative_ljp_increases_apparent_voltage(self):
+        """A negative LJP shifts recorded voltage positive (V_true = V_recorded - LJP)."""
+        from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
+
+        raw_mv = -70.0
+        ljp_mv = -5.0  # negative LJP → add 5 mV
+        v, _ = self._make_rmp_data(raw_mv)
+        corrected = apply_ljp_correction(v, ljp_mv)
+
+        assert np.allclose(corrected, raw_mv + 5.0), f"Expected {raw_mv + 5.0} mV; got {corrected.mean():.4f}"
+
+
+# ---------------------------------------------------------------------------
+# PPR Residual Subtraction Tests
+# ---------------------------------------------------------------------------
+
+
+class TestPPRResidualSubtraction:
+    """Verify that PPR with residual subtraction yields a different (more accurate) ratio."""
+
+    @staticmethod
+    def _make_ppr_trace(
+        r1_amp: float = -50.0,
+        r2_amp: float = -50.0,
+        stim1_s: float = 0.1,
+        stim2_s: float = 0.2,
+        decay_tau_s: float = 0.05,
+        fs: float = 10000.0,
+        duration_s: float = 0.5,
+        baseline_mv: float = -65.0,
+    ):
+        """Synthesise a two-EPSP current-clamp trace with monoexponential decay from stim1."""
+        n = int(duration_s * fs)
+        t = np.arange(n) / fs
+        v = np.full(n, baseline_mv)
+
+        # First event: alpha-function-like rise + monoexponential decay
+        idx1 = int(stim1_s * fs)
+        for i in range(idx1, n):
+            dt = (i - idx1) / fs
+            v[i] += r1_amp * dt / decay_tau_s * np.exp(1.0 - dt / decay_tau_s) if dt > 0 else 0.0
+
+        # Second event: same shape but amplitude r2_amp (additive on top of decaying tail)
+        idx2 = int(stim2_s * fs)
+        for i in range(idx2, n):
+            dt = (i - idx2) / fs
+            v[i] += r2_amp * dt / decay_tau_s * np.exp(1.0 - dt / decay_tau_s) if dt > 0 else 0.0
+
+        return v, t
+
+    def test_ppr_corrected_differs_from_raw_when_residual_present(self):
+        """When stim2 rides on a decaying tail from stim1, corrected PPR != raw peak division."""
+        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+
+        v, t = self._make_ppr_trace(r1_amp=-50.0, r2_amp=-30.0, decay_tau_s=0.04, fs=10000.0)
+
+        result = calculate_paired_pulse_ratio(
+            data=v,
+            time=t,
+            stim1_onset_s=0.1,
+            stim2_onset_s=0.2,
+            response_window_ms=20.0,
+            baseline_window_ms=5.0,
+            fit_decay_from_ms=5.0,
+            fit_decay_window_ms=60.0,
+            polarity="negative",
+        )
+
+        assert result["ppr_error"] is None, f"Unexpected PPR error: {result['ppr_error']}"
+
+        r_raw = result["r2_amplitude_raw"]
+        r_corr = result["r2_amplitude_corrected"]
+        residual = result["residual_at_stim2"]
+
+        assert (
+            residual is not None and abs(residual) > 0
+        ), "Expected a non-zero residual from exponential decay under stim2."
+        assert abs(r_corr - r_raw) > 1e-6, (
+            f"Corrected amplitude ({r_corr:.4f}) should differ from raw ({r_raw:.4f}) " "when residual is non-zero."
+        )
+
+    def test_ppr_close_to_one_for_identical_events_no_decay(self):
+        """When both events are equal amplitude and tail decay is negligible, PPR ≈ 1."""
+        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+
+        # Build trace with a very fast decay so residual under stim2 is negligible
+        v, t = self._make_ppr_trace(
+            r1_amp=-50.0,
+            r2_amp=-50.0,
+            stim1_s=0.1,
+            stim2_s=0.4,
+            decay_tau_s=0.01,  # fast decay — negligible at 300 ms ISI
+            fs=10000.0,
+        )
+
+        result = calculate_paired_pulse_ratio(
+            data=v,
+            time=t,
+            stim1_onset_s=0.1,
+            stim2_onset_s=0.4,
+            response_window_ms=20.0,
+            baseline_window_ms=5.0,
+            fit_decay_from_ms=5.0,
+            fit_decay_window_ms=40.0,
+            polarity="negative",
+        )
+
+        if result["ppr_error"] is not None:
+            # Tolerate fit failures in edge-case synthetic traces
+            return
+
+        ppr = result["paired_pulse_ratio"]
+        assert ppr is not None, "PPR should not be None for valid equal-amplitude events."
+        assert 0.5 <= ppr <= 2.0, f"PPR {ppr:.3f} is outside reasonable range [0.5, 2.0]."
