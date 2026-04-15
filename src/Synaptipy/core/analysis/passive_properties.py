@@ -27,6 +27,32 @@ from Synaptipy.core.results import RinResult, RmpResult
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# LJP correction helper (shared across analysis wrappers)
+# ---------------------------------------------------------------------------
+
+
+def apply_ljp_correction(voltage: np.ndarray, ljp_mv: float) -> np.ndarray:
+    """Return a copy of *voltage* with the Liquid Junction Potential subtracted.
+
+    $V_{true} = V_{recorded} - LJP$
+
+    When ``ljp_mv`` is 0.0 the original array is returned unchanged to avoid
+    unnecessary allocations in the common case.
+
+    Args:
+        voltage: 1-D voltage array in mV.
+        ljp_mv:  Liquid Junction Potential in mV (positive value shifts
+                 voltage downward; negative shifts upward).
+
+    Returns:
+        Corrected voltage array (same dtype as input).
+    """
+    if ljp_mv == 0.0:
+        return voltage
+    return voltage - ljp_mv
+
+
+# ---------------------------------------------------------------------------
 # Helpers / internal constants
 # ---------------------------------------------------------------------------
 
@@ -902,6 +928,16 @@ def _resolve_sweep_baseline(
             "decimals": 2,
             "tooltip": "Skip this many ms at the start of the baseline window to avoid Rs artifact contamination.",
         },
+        {
+            "name": "ljp_correction_mv",
+            "label": "LJP Correction (mV):",
+            "type": "float",
+            "default": 0.0,
+            "min": -100.0,
+            "max": 100.0,
+            "decimals": 2,
+            "tooltip": "Liquid Junction Potential in mV. V_true = V_recorded - LJP.",
+        },
     ],
     plots=[
         {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "g"},
@@ -926,6 +962,10 @@ def run_rmp_analysis_wrapper(  # noqa: C901
     """Wrapper for RMP analysis. Accepts single or multi-trial data. Returns namespaced schema."""
     try:
         data_list, time_list = _coerce_trial_lists(data_list, time_list)
+
+        ljp_mv = float(kwargs.get("ljp_correction_mv", 0.0))
+        # Apply LJP: V_true = V_recorded - LJP (per-sweep, before any calculation)
+        data_list = [apply_ljp_correction(d, ljp_mv) for d in data_list]
 
         baseline_start = kwargs.get("baseline_start", 0.0)
         baseline_end = kwargs.get("baseline_end", 0.1)

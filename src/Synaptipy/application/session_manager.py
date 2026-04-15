@@ -39,12 +39,22 @@ class SessionManager(QObject):
         super().__init__()
         self._current_recording: Optional[Recording] = None
         self._selected_analysis_items: List[Dict[str, Any]] = []
-        self._global_settings: Dict[str, Any] = {}
+        self._global_settings: Dict[str, Any] = {"liquid_junction_potential_mv": 0.0}
         self._preprocessing_settings: Optional[Dict[str, Any]] = None
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
         self._initialized = True
         log.debug("SessionManager initialized.")
+
+    @property
+    def liquid_junction_potential_mv(self) -> float:
+        """Global Liquid Junction Potential correction (mV). Default 0.0."""
+        return float(self._global_settings.get("liquid_junction_potential_mv", 0.0))
+
+    @liquid_junction_potential_mv.setter
+    def liquid_junction_potential_mv(self, value: float) -> None:
+        """Set the global LJP correction and emit global_settings_changed."""
+        self.update_global_setting("liquid_junction_potential_mv", float(value))
 
     @property
     def current_recording(self) -> Optional[Recording]:

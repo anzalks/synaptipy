@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy.optimize import curve_fit
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
@@ -201,6 +202,204 @@ def calculate_optogenetic_sync(
         responding_spikes=responding_spikes,
         parameters={"ttl_threshold": ttl_threshold, "response_window_ms": response_window_ms},
     )
+
+
+# ---------------------------------------------------------------------------
+# Paired-Pulse Ratio with Residual Subtraction
+# ---------------------------------------------------------------------------
+
+
+def calculate_paired_pulse_ratio(  # noqa: C901
+    data: np.ndarray,
+    time: np.ndarray,
+    stim1_onset_s: float,
+    stim2_onset_s: float,
+    response_window_ms: float = 20.0,
+    baseline_window_ms: float = 5.0,
+    fit_decay_from_ms: float = 5.0,
+    fit_decay_window_ms: float = 30.0,
+    polarity: str = "negative",
+) -> Dict[str, Any]:
+    """Calculate Paired-Pulse Ratio with residual decay subtraction.
+
+    Without subtracting the residual exponential decay of the first event
+    under the second stimulus window, the measured amplitude of the second
+    response is artificially inflated (facilitation) or deflated (depression),
+    yielding biologically invalid PPR values.
+
+    Algorithm:
+    1. Measure amplitude of response 1 (R1) relative to its local pre-stimulus
+       baseline.
+    2. Fit a mono-exponential decay to the *tail* of R1 (from
+       ``fit_decay_from_ms`` to ``fit_decay_window_ms`` after stim1_onset).
+    3. Extrapolate the decay curve to estimate the residual baseline level at
+       stim2_onset.
+    4. Measure amplitude of response 2 (R2_raw) relative to its own pre-stimulus
+       sample.
+    5. Subtract the residual decay value from R2_raw to obtain R2_corrected.
+    6. Return ``paired_pulse_ratio = R2_corrected / R1``.
+
+    Args:
+        data: 1-D voltage/current array (mV or pA).
+        time: 1-D time array (s).
+        stim1_onset_s: Time of first stimulus onset (s).
+        stim2_onset_s: Time of second stimulus onset (s).
+        response_window_ms: Duration after each stimulus to search for peak (ms).
+        baseline_window_ms: Pre-stimulus baseline window (ms) to compute local
+            baseline for each response.
+        fit_decay_from_ms: Offset from stim1_onset to start fitting decay (ms).
+            Should be after the initial transient.
+        fit_decay_window_ms: Window duration for decay fit (ms).
+        polarity: ``"negative"`` (inward/downward events, e.g. EPSCs) or
+            ``"positive"``.
+
+    Returns:
+        Dict with keys:
+
+        - ``r1_amplitude``         – amplitude of first response (baseline-subtracted)
+        - ``r2_amplitude_raw``     – raw amplitude of second response
+        - ``r2_amplitude_corrected`` – R2 after subtracting residual decay
+        - ``residual_at_stim2``    – estimated residual baseline at stim2_onset
+        - ``paired_pulse_ratio``   – R2_corrected / R1
+        - ``decay_tau_ms``         – time constant of first event decay (ms)
+        - ``ppr_error``            – None on success; error string on failure
+    """
+    out: Dict[str, Any] = {
+        "r1_amplitude": None,
+        "r2_amplitude_raw": None,
+        "r2_amplitude_corrected": None,
+        "residual_at_stim2": None,
+        "paired_pulse_ratio": None,
+        "decay_tau_ms": None,
+        "ppr_error": None,
+    }
+
+    if data.size < 2 or time.shape != data.shape:
+        out["ppr_error"] = "Invalid data or time array"
+        return out
+
+    fs = 1.0 / float(time[1] - time[0])  # noqa: F841
+
+    def _nearest_idx(t: float) -> int:
+        return int(np.searchsorted(time, t))
+
+    def _local_baseline(stim_onset_s: float) -> float:
+        bl_start_s = stim_onset_s - baseline_window_ms / 1000.0
+        bl_start_s = max(bl_start_s, float(time[0]))
+        i0 = _nearest_idx(bl_start_s)
+        i1 = _nearest_idx(stim_onset_s)
+        i1 = max(i0 + 1, i1)
+        segment = data[i0:i1]
+        return float(np.mean(segment)) if segment.size > 0 else float(data[_nearest_idx(stim_onset_s)])
+
+    def _response_peak(stim_onset_s: float, baseline: float) -> Tuple[float, float]:
+        """Return (peak_amplitude, raw_peak_value) relative to baseline."""
+        win_start = _nearest_idx(stim_onset_s)
+        win_end = min(_nearest_idx(stim_onset_s + response_window_ms / 1000.0) + 1, len(data))
+        if win_end <= win_start:
+            return 0.0, baseline
+        segment = data[win_start:win_end]
+        if polarity == "negative":
+            peak_raw = float(np.min(segment))
+            return baseline - peak_raw, peak_raw
+        else:
+            peak_raw = float(np.max(segment))
+            return peak_raw - baseline, peak_raw
+
+    # --- R1 ---
+    bl1 = _local_baseline(stim1_onset_s)
+    r1_amp, _ = _response_peak(stim1_onset_s, bl1)
+    out["r1_amplitude"] = r1_amp
+
+    if r1_amp <= 0:
+        out["ppr_error"] = "R1 amplitude <= 0; cannot compute PPR"
+        return out
+
+    # --- Exponential decay fit on R1 tail ---
+    def _mono_exp(t: np.ndarray, a: float, tau: float, c: float) -> np.ndarray:
+        return a * np.exp(-t / tau) + c
+
+    fit_start_s = stim1_onset_s + fit_decay_from_ms / 1000.0
+    fit_end_s = stim1_onset_s + (fit_decay_from_ms + fit_decay_window_ms) / 1000.0
+    fit_end_s = min(fit_end_s, stim2_onset_s)
+
+    i_fit0 = _nearest_idx(fit_start_s)
+    i_fit1 = _nearest_idx(fit_end_s)
+    if i_fit1 - i_fit0 < 4:
+        # Fallback: no residual correction
+        bl2 = _local_baseline(stim2_onset_s)
+        r2_amp_raw, _ = _response_peak(stim2_onset_s, bl2)
+        out["r2_amplitude_raw"] = r2_amp_raw
+        out["r2_amplitude_corrected"] = r2_amp_raw
+        out["residual_at_stim2"] = 0.0
+        out["decay_tau_ms"] = None
+        if r1_amp > 0:
+            out["paired_pulse_ratio"] = r2_amp_raw / r1_amp
+        out["ppr_error"] = "Decay fit window too short; no residual correction applied"
+        return out
+
+    t_fit = (time[i_fit0:i_fit1] - time[i_fit0]) * 1000.0  # ms
+    y_fit = data[i_fit0:i_fit1]
+    # Amplitude at fit start relative to long-run asymptote (approx bl1)
+    a0 = float(y_fit[0] - bl1) if polarity == "positive" else float(bl1 - y_fit[0])
+    a0 = max(a0, 1e-6)
+    tau0 = max(1.0, float(t_fit[-1]) / 3.0)
+
+    residual_at_stim2 = 0.0
+    tau_ms = None
+    try:
+        # Fit in the direction of the event
+        if polarity == "negative":
+            popt, _ = curve_fit(
+                _mono_exp,
+                t_fit,
+                y_fit,
+                p0=[-a0, tau0, bl1],
+                bounds=([-a0 * 20, 0.1, bl1 - r1_amp * 2], [0.0, tau0 * 50, bl1 + r1_amp]),
+                maxfev=3000,
+            )
+        else:
+            popt, _ = curve_fit(
+                _mono_exp,
+                t_fit,
+                y_fit,
+                p0=[a0, tau0, bl1],
+                bounds=([0.0, 0.1, bl1 - r1_amp], [a0 * 20, tau0 * 50, bl1 + r1_amp * 2]),
+                maxfev=3000,
+            )
+        tau_ms = float(popt[1])
+        out["decay_tau_ms"] = tau_ms
+        # Evaluate decay at stim2_onset
+        t_at_stim2_ms = (stim2_onset_s - time[i_fit0]) * 1000.0
+        residual_at_stim2 = float(_mono_exp(t_at_stim2_ms, *popt)) - bl1
+        out["residual_at_stim2"] = residual_at_stim2
+    except Exception as exc:
+        log.warning("PPR decay fit failed: %s", exc)
+        out["ppr_error"] = f"Decay fit failed: {exc}"
+
+    # --- R2 ---
+    bl2 = _local_baseline(stim2_onset_s)
+    r2_amp_raw, r2_peak_raw = _response_peak(stim2_onset_s, bl2)
+    out["r2_amplitude_raw"] = r2_amp_raw
+
+    # Subtract residual decay from R2 to get corrected amplitude
+    if polarity == "negative":
+        # The residual decay raises the apparent baseline under R2
+        corrected_bl2 = bl2 + residual_at_stim2
+    else:
+        corrected_bl2 = bl2 + residual_at_stim2
+
+    if polarity == "negative":
+        r2_corrected = corrected_bl2 - r2_peak_raw
+    else:
+        r2_corrected = r2_peak_raw - corrected_bl2
+
+    out["r2_amplitude_corrected"] = float(r2_corrected)
+
+    if r1_amp > 0:
+        out["paired_pulse_ratio"] = float(r2_corrected) / r1_amp
+
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +666,125 @@ def run_opto_sync_wrapper(  # noqa: C901
 
 
 # ---------------------------------------------------------------------------
+# PPR Registry Wrapper
+# ---------------------------------------------------------------------------
+
+
+@AnalysisRegistry.register(
+    "paired_pulse_ratio",
+    label="Paired-Pulse Ratio",
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {"type": "vlines", "data": "_stim_onsets", "color": "c"},
+    ],
+    ui_params=[
+        {
+            "name": "stim1_onset_s",
+            "label": "Stim 1 Onset (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "stim2_onset_s",
+            "label": "Stim 2 Onset (s):",
+            "type": "float",
+            "default": 0.2,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+        },
+        {
+            "name": "polarity",
+            "label": "Event Polarity:",
+            "type": "choice",
+            "choices": ["negative", "positive"],
+            "default": "negative",
+        },
+        {
+            "name": "response_window_ms",
+            "label": "Response Window (ms):",
+            "type": "float",
+            "default": 20.0,
+            "min": 1.0,
+            "max": 500.0,
+            "decimals": 1,
+        },
+        {
+            "name": "baseline_window_ms",
+            "label": "Baseline Window (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 1.0,
+            "max": 100.0,
+            "decimals": 1,
+        },
+        {
+            "name": "fit_decay_from_ms",
+            "label": "Decay Fit Start (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 100.0,
+            "decimals": 1,
+            "tooltip": "Offset from Stim1 onset to begin fitting the decay (skip initial transient).",
+        },
+        {
+            "name": "fit_decay_window_ms",
+            "label": "Decay Fit Window (ms):",
+            "type": "float",
+            "default": 30.0,
+            "min": 5.0,
+            "max": 500.0,
+            "decimals": 1,
+        },
+    ],
+)
+def run_ppr_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Wrapper for Paired-Pulse Ratio analysis with residual decay subtraction."""
+    stim1_onset_s = float(kwargs.get("stim1_onset_s", 0.1))
+    stim2_onset_s = float(kwargs.get("stim2_onset_s", 0.2))
+    polarity = kwargs.get("polarity", "negative")
+    response_window_ms = float(kwargs.get("response_window_ms", 20.0))
+    baseline_window_ms = float(kwargs.get("baseline_window_ms", 5.0))
+    fit_decay_from_ms = float(kwargs.get("fit_decay_from_ms", 5.0))
+    fit_decay_window_ms = float(kwargs.get("fit_decay_window_ms", 30.0))
+
+    result = calculate_paired_pulse_ratio(
+        data=data,
+        time=time,
+        stim1_onset_s=stim1_onset_s,
+        stim2_onset_s=stim2_onset_s,
+        response_window_ms=response_window_ms,
+        baseline_window_ms=baseline_window_ms,
+        fit_decay_from_ms=fit_decay_from_ms,
+        fit_decay_window_ms=fit_decay_window_ms,
+        polarity=polarity,
+    )
+
+    return {
+        "module_used": "evoked_responses",
+        "metrics": {
+            "r1_amplitude": result["r1_amplitude"],
+            "r2_amplitude_raw": result["r2_amplitude_raw"],
+            "r2_amplitude_corrected": result["r2_amplitude_corrected"],
+            "residual_at_stim2": result["residual_at_stim2"],
+            "paired_pulse_ratio": result["paired_pulse_ratio"],
+            "decay_tau_ms": result["decay_tau_ms"],
+            "ppr_error": result["ppr_error"],
+            "_stim_onsets": [stim1_onset_s, stim2_onset_s],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Module-level tab aggregator
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
@@ -479,6 +797,7 @@ def run_opto_sync_wrapper(  # noqa: C901
     },
     method_selector={
         "Optogenetic Sync": "optogenetic_sync",
+        "Paired-Pulse Ratio": "paired_pulse_ratio",
     },
     ui_params=[],
     plots=[],

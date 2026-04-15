@@ -135,6 +135,20 @@ class NWBExporter:
         if not hasattr(recording, "channels") or not isinstance(recording.channels, dict):
             raise ValueError("Recording object is missing 'channels' dictionary or is not a dictionary.")
 
+        # --- Inject required metadata defaults for DANDI compliance ---
+        # Subject ID and Species are required by NWB/DANDI validators.
+        if not session_metadata.get("subject_id"):
+            session_metadata = dict(session_metadata)  # avoid mutating caller's dict
+            session_metadata.setdefault("subject_id", "unknown_subject")
+            log.warning("NWB export: 'subject_id' not provided; defaulting to 'unknown_subject'.")
+        if not session_metadata.get("species"):
+            session_metadata.setdefault("species", "unknown species")
+            log.warning("NWB export: 'species' not provided; defaulting to 'unknown species'.")
+        if not session_metadata.get("device_name"):
+            session_metadata = dict(session_metadata)
+            session_metadata.setdefault("device_name", "Amplifier")
+            log.warning("NWB export: 'device_name' not provided; defaulting to 'Amplifier'.")
+
         # --- Validate Metadata & Prepare NWBFile ---
         required_keys = ["session_description", "identifier", "session_start_time"]
         missing_keys = [key for key in required_keys if key not in session_metadata or not session_metadata[key]]
@@ -356,6 +370,30 @@ class NWBExporter:
             log.debug(f"Writing NWB to: {output_path}")
             with NWBHDF5IO(str(output_path), "w") as io:
                 io.write(nwbfile)
+
+            # --- pynwb post-write validation ---
+            # Validate the written file to flag DANDI-compliance issues.
+            # Done after the write so that container_source is already set
+            # on the nwbfile object (avoids "Cannot change container_source" error).
+            try:
+                from pynwb import validate as pynwb_validate
+
+                with NWBHDF5IO(str(output_path), "r") as _io_val:
+                    _validation_errors = pynwb_validate(io=_io_val)
+
+                if _validation_errors:
+                    err_lines = "\n  ".join(str(e) for e in _validation_errors)
+                    log.warning(
+                        "NWB validation found %d issue(s) — file may not be DANDI-compliant:\n  %s",
+                        len(_validation_errors),
+                        err_lines,
+                    )
+                else:
+                    log.info("NWB validation passed (0 errors).")
+            except ImportError:
+                log.debug("pynwb.validate not available; skipping post-write validation.")
+            except Exception as exc_val:
+                log.warning("NWB validation step raised an unexpected error: %s", exc_val)
 
             log.info("NWB export complete.")
 

@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from scipy.signal import savgol_filter
 
+from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.results import SpikeTrainResult
 
@@ -673,6 +674,16 @@ def detect_threshold_kink(
             "max": 0.1,
             "decimals": 3,
         },
+        {
+            "name": "ljp_correction_mv",
+            "label": "LJP Correction (mV):",
+            "type": "float",
+            "default": 0.0,
+            "min": -100.0,
+            "max": 100.0,
+            "decimals": 2,
+            "tooltip": "Liquid Junction Potential in mV. V_true = V_recorded - LJP.",
+        },
     ],
     plots=[
         {"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]},
@@ -693,6 +704,8 @@ def run_spike_detection_wrapper(
 ) -> Dict[str, Any]:
     """Wrapper for spike detection. Returns namespaced schema."""
     try:
+        ljp_mv = float(kwargs.get("ljp_correction_mv", 0.0))
+        data = apply_ljp_correction(data, ljp_mv)
         refractory_samples = int(refractory_period * sampling_rate)
         peak_window_samples = int(peak_search_window * sampling_rate)
 
@@ -815,6 +828,16 @@ def run_spike_detection_wrapper(
             "max": 100.0,
             "decimals": 2,
         },
+        {
+            "name": "ljp_correction_mv",
+            "label": "LJP Correction (mV):",
+            "type": "float",
+            "default": 0.0,
+            "min": -100.0,
+            "max": 100.0,
+            "decimals": 2,
+            "tooltip": "Liquid Junction Potential in mV. V_true = V_recorded - LJP.",
+        },
     ],
 )
 def phase_plane_analysis_wrapper(
@@ -829,6 +852,9 @@ def phase_plane_analysis_wrapper(
     spike_threshold = kwargs.get("spike_threshold", -20.0)
     search_window_ms = kwargs.get("search_window_ms", 5.0)
     kink_slope = kwargs.get("kink_slope", 10.0)
+
+    ljp_mv = float(kwargs.get("ljp_correction_mv", 0.0))
+    voltage = apply_ljp_correction(voltage, ljp_mv)
 
     v, dvdt = get_phase_plane_trajectory(voltage, sampling_rate, sigma_ms)
 

@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from scipy import signal
+from scipy.optimize import curve_fit
 from scipy.stats import median_abs_deviation
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -151,6 +152,133 @@ def calculate_event_charge_dynamic(
     trace_slice = segment[:integration_end]
     charge = float(np.trapz(trace_slice - local_baseline, t_seg))
     return charge
+
+
+# ---------------------------------------------------------------------------
+# Bi-Exponential Decay Kinetics Fitting
+# ---------------------------------------------------------------------------
+
+
+def fit_biexponential_decay(  # noqa: C901
+    data: np.ndarray,
+    event_index: int,
+    sample_rate: float,
+    local_baseline: float,
+    polarity: str = "negative",
+    fit_window_ms: float = 80.0,
+) -> Dict[str, Any]:
+    """Fit mono- and bi-exponential decays to a synaptic event.
+
+    Tries a bi-exponential fit first. Falls back to mono-exponential when the
+    bi-exp fit does not converge or yields non-physical parameters (negative
+    amplitudes or time constants).
+
+    Bi-exponential model (relative to baseline)::
+
+        f(t) = A_fast * exp(-t / tau_fast) + A_slow * exp(-t / tau_slow)
+
+    with A_fast + A_slow normalised by the event peak amplitude at t=0.
+
+    Args:
+        data: 1-D signal array.
+        event_index: Sample index of the event peak.
+        sample_rate: Sampling rate (Hz).
+        local_baseline: Local baseline level (same units as data).
+        polarity: ``"negative"`` or ``"positive"``.
+        fit_window_ms: Maximum duration of the decay segment to fit (ms).
+
+    Returns:
+        Dict with keys:
+
+        - ``tau_mono_ms``    – mono-exp time constant (ms)
+        - ``tau_fast_ms``    – fast component time constant (ms); ``None`` if
+          bi-exp did not converge
+        - ``tau_slow_ms``    – slow component time constant (ms); ``None`` if
+          bi-exp did not converge
+        - ``bi_exp_converged`` – True when bi-exp fit was accepted
+        - ``decay_fit_error`` – ``None`` when fit succeeded; error message
+          string otherwise
+    """
+    result: Dict[str, Any] = {
+        "tau_mono_ms": None,
+        "tau_fast_ms": None,
+        "tau_slow_ms": None,
+        "bi_exp_converged": False,
+        "decay_fit_error": None,
+    }
+
+    dt = 1.0 / sample_rate
+    max_samples = max(4, int(fit_window_ms / 1000.0 * sample_rate))
+    start = int(event_index)
+    end = min(start + max_samples, len(data))
+    segment = data[start:end]
+
+    if len(segment) < 5:
+        result["decay_fit_error"] = "Segment too short"
+        return result
+
+    # Build relative amplitude trace (positive, regardless of polarity)
+    if polarity == "negative":
+        y = local_baseline - segment
+    else:
+        y = segment - local_baseline
+
+    peak_amp = float(y[0]) if y.size > 0 else 0.0
+    if peak_amp <= 0:
+        result["decay_fit_error"] = "Non-positive peak amplitude"
+        return result
+
+    # Find where signal returns to baseline (positive threshold cross)
+    returned = np.where(y <= 0)[0]
+    decay_end = int(returned[0]) if len(returned) > 0 else len(y)
+    y_fit = y[:decay_end]
+    t_fit = np.arange(len(y_fit)) * dt * 1000.0  # ms
+
+    if len(t_fit) < 4:
+        result["decay_fit_error"] = "Decay segment too short after baseline crossing"
+        return result
+
+    # --- Mono-exponential fit ---
+    def mono_exp(t: np.ndarray, a: float, tau: float) -> np.ndarray:
+        return a * np.exp(-t / tau)
+
+    tau_mono_ms = None
+    try:
+        p0_mono = [peak_amp, max(0.1, t_fit[-1] / 3.0)]
+        bounds_mono = ([0.0, 0.01], [peak_amp * 10, t_fit[-1] * 20 + 1.0])
+        popt_m, _ = curve_fit(mono_exp, t_fit, y_fit, p0=p0_mono, bounds=bounds_mono, maxfev=2000)
+        tau_mono_ms = float(popt_m[1])
+        result["tau_mono_ms"] = tau_mono_ms
+    except Exception as exc_m:
+        result["decay_fit_error"] = f"Mono-exp failed: {exc_m}"
+        return result
+
+    # --- Bi-exponential fit ---
+    def bi_exp(t: np.ndarray, a_f: float, tau_f: float, a_s: float, tau_s: float) -> np.ndarray:
+        return a_f * np.exp(-t / tau_f) + a_s * np.exp(-t / tau_s)
+
+    try:
+        # Initialise: fast half of mono, slow twice; amplitudes split equally
+        p0_bi = [peak_amp * 0.6, tau_mono_ms * 0.4, peak_amp * 0.4, tau_mono_ms * 2.0]
+        bounds_bi = (
+            [0.0, 0.01, 0.0, 0.01],
+            [peak_amp * 5, tau_mono_ms * 5, peak_amp * 5, tau_mono_ms * 50 + 1.0],
+        )
+        popt_b, _ = curve_fit(bi_exp, t_fit, y_fit, p0=p0_bi, bounds=bounds_bi, maxfev=4000)
+        a_f, tau_f, a_s, tau_s = popt_b
+
+        # Sanity: both amplitudes and both taus must be positive and tau_fast < tau_slow
+        if a_f > 0 and a_s > 0 and tau_f > 0 and tau_s > 0 and tau_f != tau_s:
+            tau_fast = min(tau_f, tau_s)
+            tau_slow = max(tau_f, tau_s)
+            result["tau_fast_ms"] = float(tau_fast)
+            result["tau_slow_ms"] = float(tau_slow)
+            result["bi_exp_converged"] = True
+    except Exception:
+        # Bi-exp failed; mono-exp result is still valid
+        pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +579,23 @@ def run_event_detection_threshold_wrapper(
         event_charges.append(charge)
     mean_charge = float(np.mean(event_charges)) if event_charges else 0.0
 
+    # Bi-exponential decay kinetics (aggregate over all detected events)
+    tau_fast_list = []
+    tau_slow_list = []
+    tau_mono_list = []
+    for k, idx in enumerate(_idx):
+        lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))
+        kin = fit_biexponential_decay(data, idx, sampling_rate, lb, polarity=direction)
+        if kin["tau_mono_ms"] is not None:
+            tau_mono_list.append(kin["tau_mono_ms"])
+        if kin["bi_exp_converged"]:
+            tau_fast_list.append(kin["tau_fast_ms"])
+            tau_slow_list.append(kin["tau_slow_ms"])
+
+    mean_tau_mono = float(np.mean(tau_mono_list)) if tau_mono_list else float("nan")
+    mean_tau_fast = float(np.mean(tau_fast_list)) if tau_fast_list else None
+    mean_tau_slow = float(np.mean(tau_slow_list)) if tau_slow_list else None
+
     return {
         "module_used": "synaptic_events",
         "metrics": {
@@ -460,6 +605,9 @@ def run_event_detection_threshold_wrapper(
             "amplitude_sd": result.amplitude_sd,
             "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else 0.0,
             "mean_event_charge": mean_charge,
+            "tau_mono_ms": mean_tau_mono,
+            "tau_fast_ms": mean_tau_fast,
+            "tau_slow_ms": mean_tau_slow,
             "_event_charges": event_charges,
             "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
             "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
