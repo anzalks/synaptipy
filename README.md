@@ -131,14 +131,14 @@ Synaptipy follows a strict separation-of-concerns design:
 - **Application layer** - PySide6 (Qt6) user interface and plugin manager
 - **Infrastructure layer** - file I/O via Neo and PyNWB; NWB export
 
-| Component | Technology | Minimum Version |
+| Component | Technology | Version |
 |---|---|---|
-| Language | Python | 3.10 |
-| GUI Framework | PySide6 | 6.7.0 |
-| Plotting Engine | PyQtGraph | 0.13.0 |
-| Electrophysiology I/O | Neo | 0.14.0 |
-| NWB Export | PyNWB | 3.1.0 |
-| Numerical Computation | SciPy / NumPy | 1.13.0 / 2.0.0 |
+| Language | Python | 3.10 - 3.12 |
+| GUI Framework | PySide6 | 6.7.3 (pinned) |
+| Plotting Engine | PyQtGraph | 0.13.0+ |
+| Electrophysiology I/O | Neo | 0.14.0+ |
+| NWB Export | PyNWB | 3.1.0+ |
+| Numerical Computation | SciPy / NumPy | 1.13.0+ / 2.0.0+ |
 
 ## Installation
 

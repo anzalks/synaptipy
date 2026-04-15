@@ -1,7 +1,7 @@
 # Writing Custom Analysis Plugins for Synaptipy
 
 This guide explains how to add your own analysis function to Synaptipy as a new
-tab in the Analyser — **without modifying any Synaptipy source code**.  You write
+tab in the Analyser - **without modifying any Synaptipy source code**.  You write
 a single Python file, drop it in a folder, and your analysis appears in the GUI
 and batch engine the next time the application starts.
 
@@ -9,9 +9,9 @@ and batch engine the next time the application starts.
 
 ## Table of Contents
 
-1. [Overview — How the Plugin System Works](#1-overview--how-the-plugin-system-works)
-2. [Quick Start — Your First Plugin in 5 Minutes](#2-quick-start--your-first-plugin-in-5-minutes)
-3. [The Plugin File — Anatomy of a Custom Analysis](#3-the-plugin-file--anatomy-of-a-custom-analysis)
+1. [Overview - How the Plugin System Works](#1-overview--how-the-plugin-system-works)
+2. [Quick Start - Your First Plugin in 5 Minutes](#2-quick-start--your-first-plugin-in-5-minutes)
+3. [The Plugin File - Anatomy of a Custom Analysis](#3-the-plugin-file--anatomy-of-a-custom-analysis)
    - [3.1 Part 1: Pure Analysis Logic](#31-part-1-pure-analysis-logic)
    - [3.2 Part 2: Registry Wrapper](#32-part-2-registry-wrapper)
    - [3.3 Return Dict Conventions](#33-return-dict-conventions)
@@ -23,28 +23,28 @@ and batch engine the next time the application starts.
    - [4.5 Common Optional Fields](#45-common-optional-fields)
    - [4.6 Conditional Visibility (`visible_when`)](#46-conditional-visibility-visible_when)
 5. [Defining Plot Overlays (`plots`)](#5-defining-plot-overlays-plots)
-   - [5.1 `hlines` — Horizontal Lines](#51-hlines--horizontal-lines)
-   - [5.2 `vlines` — Vertical Lines](#52-vlines--vertical-lines)
-   - [5.3 `markers` — Scatter Points](#53-markers--scatter-points)
-   - [5.4 `interactive_region` — Draggable Region](#54-interactive_region--draggable-region)
-   - [5.5 `threshold_line` — Draggable Threshold](#55-threshold_line--draggable-threshold)
-   - [5.6 `overlay_fit` — Curve Overlay](#56-overlay_fit--curve-overlay)
-   - [5.7 `popup_xy` — Popup Scatter/Line Plot](#57-popup_xy--popup-scatterline-plot)
-   - [5.8 `brackets` — Burst/Event Brackets](#58-brackets--burstevent-brackets)
-   - [5.9 `event_markers` — Interactive Event Points](#59-event_markers--interactive-event-points)
-   - [5.10 `trace` — Base Trace with Overlay](#510-trace--base-trace-with-overlay)
-   - [5.11 `fill_between` — Shaded Region Between Two Curves](#511-fill_between--shaded-region-between-two-curves)
+   - [5.1 `hlines` - Horizontal Lines](#51-hlines--horizontal-lines)
+   - [5.2 `vlines` - Vertical Lines](#52-vlines--vertical-lines)
+   - [5.3 `markers` - Scatter Points](#53-markers--scatter-points)
+   - [5.4 `interactive_region` - Draggable Region](#54-interactive_region--draggable-region)
+   - [5.5 `threshold_line` - Draggable Threshold](#55-threshold_line--draggable-threshold)
+   - [5.6 `overlay_fit` - Curve Overlay](#56-overlay_fit--curve-overlay)
+   - [5.7 `popup_xy` - Popup Scatter/Line Plot](#57-popup_xy--popup-scatterline-plot)
+   - [5.8 `brackets` - Burst/Event Brackets](#58-brackets--burstevent-brackets)
+   - [5.9 `event_markers` - Interactive Event Points](#59-event_markers--interactive-event-points)
+   - [5.10 `trace` - Base Trace with Overlay](#510-trace--base-trace-with-overlay)
+   - [5.11 `fill_between` - Shaded Region Between Two Curves](#511-fill_between--shaded-region-between-two-curves)
 6. [Where to Put Your Plugin File](#6-where-to-put-your-plugin-file)
-7. [For Core Contributors — Adding a Built-in Analysis](#7-for-core-contributors--adding-a-built-in-analysis)
+7. [For Core Contributors - Adding a Built-in Analysis](#7-for-core-contributors--adding-a-built-in-analysis)
 8. [Testing Your Plugin](#8-testing-your-plugin)
-9. [Full Annotated Example — Synaptic Charge Transfer](#9-full-annotated-example--synaptic-charge-transfer)
+9. [Full Annotated Example - Synaptic Charge Transfer](#9-full-annotated-example--synaptic-charge-transfer)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---
 
-## 1. Overview — How the Plugin System Works
+## 1. Overview - How the Plugin System Works
 
-Synaptipy has a central **`AnalysisRegistry`** — a Python class that maps named
+Synaptipy has a central **`AnalysisRegistry`** - a Python class that maps named
 analysis functions to the GUI and batch engine.  You register a function by
 decorating it with `@AnalysisRegistry.register(...)`.  The decorator stores the
 function and its metadata (parameter definitions, plot overlays, label, etc.).
@@ -53,14 +53,14 @@ At startup, Synaptipy:
 
 1. Loads all **built-in** analyses from `src/Synaptipy/core/analysis/`.
 2. Scans **two** plugin directories in order:
-   - `examples/plugins/` inside the Synaptipy installation — shipped example
+   - `examples/plugins/` inside the Synaptipy installation - shipped example
      plugins that work out-of-the-box without any extra setup.
-   - `~/.synaptipy/plugins/` — your personal or third-party additions.
+   - `~/.synaptipy/plugins/` - your personal or third-party additions.
    If a file with the same stem name exists in both directories, the user copy
    takes precedence and a warning is written to the log.
 3. Builds the Analyser GUI.  For every registered analysis that does *not*
    already have a hand-coded tab class, a **metadata-driven tab is created
-   automatically** — complete with parameter widgets, a Run button, a results
+   automatically** - complete with parameter widgets, a Run button, a results
    table, and plot overlays.  Your function appears as a new sub-tab.
 
 ```
@@ -106,12 +106,12 @@ At startup, Synaptipy:
 ```
 
 **You do not need to write any GUI code.** The `ui_params` list generates the
-parameter widgets, and the `plots` list generates the plot overlays — all from
+parameter widgets, and the `plots` list generates the plot overlays - all from
 metadata.
 
 ---
 
-## 2. Quick Start — Your First Plugin in 5 Minutes
+## 2. Quick Start - Your First Plugin in 5 Minutes
 
 1. Copy the template:
    ```bash
@@ -143,11 +143,11 @@ metadata.
 
 4. (Re)start Synaptipy.  Your analysis appears as a new tab in the Analyser.
 
-No `pip install`, no editing `__init__.py`, no rebuilding — just save and restart.
+No `pip install`, no editing `__init__.py`, no rebuilding - just save and restart.
 
 ---
 
-## 3. The Plugin File — Anatomy of a Custom Analysis
+## 3. The Plugin File - Anatomy of a Custom Analysis
 
 A plugin file has two parts:
 
@@ -193,7 +193,7 @@ def calculate_area_under_curve(
 
 **Rules for the logic function:**
 
-- Takes explicit, typed arguments — no `**kwargs`.
+- Takes explicit, typed arguments - no `**kwargs`.
 - Returns a typed result object or a plain dict.
 - Must handle edge cases (empty data, bad windows) gracefully.
 - Must not import any GUI modules.
@@ -328,7 +328,7 @@ Creates a drop-down combo box.
 }
 ```
 
-> **Note:** You can use `"options"` instead of `"choices"` — both keys are accepted.
+> **Note:** You can use `"options"` instead of `"choices"` - both keys are accepted.
 
 ### 4.4 `bool` Parameter
 
@@ -351,7 +351,7 @@ These fields work on any parameter type:
 |---|---|---|
 | `"tooltip"` | `str` | Tooltip text shown on hover. |
 | `"hidden"` | `bool` | If `True`, the widget is not created at all.  Use for internal params that should not be user-editable. |
-| `"visible_when"` | `dict` | Conditional visibility — see below. |
+| `"visible_when"` | `dict` | Conditional visibility - see below. |
 
 ### 4.6 Conditional Visibility (`visible_when`)
 
@@ -392,7 +392,7 @@ There is also a `"context"` form for clamp-mode-aware parameters:
 The `plots` list in `@AnalysisRegistry.register(...)` defines visual overlays
 rendered on the data trace after analysis completes.  Each entry is a dict.
 
-### 5.1 `hlines` — Horizontal Lines
+### 5.1 `hlines` - Horizontal Lines
 
 Draw horizontal lines at y-positions taken from the result dict.
 
@@ -408,7 +408,7 @@ Draw horizontal lines at y-positions taken from the result dict.
 | `color` | Line colour (default `"r"`). |
 | `styles` | List of `"solid"` or `"dash"`, one per key (default: all `"solid"`). |
 
-### 5.2 `vlines` — Vertical Lines
+### 5.2 `vlines` - Vertical Lines
 
 Draw vertical lines at x-positions.
 
@@ -421,7 +421,7 @@ Draw vertical lines at x-positions.
 | `data` | Result-dict key holding a scalar or array of x-positions. |
 | `color` | Line colour (default `"b"`). |
 
-### 5.3 `markers` — Scatter Points
+### 5.3 `markers` - Scatter Points
 
 Draw scatter points at (x, y) positions from result arrays.
 
@@ -429,7 +429,7 @@ Draw scatter points at (x, y) positions from result arrays.
 {"type": "markers", "x": "peak_times", "y": "peak_values", "color": "r"}
 ```
 
-### 5.4 `interactive_region` — Draggable Region
+### 5.4 `interactive_region` - Draggable Region
 
 A shaded region linked to two float spinboxes.  Dragging the region updates the
 spinbox values, and changing a spinbox moves the region.
@@ -440,7 +440,7 @@ spinbox values, and changing a spinbox moves the region.
 
 `"data"` must be a 2-element list of `ui_params` names (not result keys).
 
-### 5.5 `threshold_line` — Draggable Threshold
+### 5.5 `threshold_line` - Draggable Threshold
 
 A horizontal line synced to a float parameter widget.
 
@@ -448,7 +448,7 @@ A horizontal line synced to a float parameter widget.
 {"type": "threshold_line", "param": "threshold"}
 ```
 
-### 5.6 `overlay_fit` — Curve Overlay
+### 5.6 `overlay_fit` - Curve Overlay
 
 Overlay a fitted curve on the trace.
 
@@ -463,7 +463,7 @@ Overlay a fitted curve on the trace.
 }
 ```
 
-### 5.7 `popup_xy` — Popup Scatter/Line Plot
+### 5.7 `popup_xy` - Popup Scatter/Line Plot
 
 Open a separate window showing e.g. an I-V or F-I curve.
 
@@ -480,7 +480,7 @@ Open a separate window showing e.g. an I-V or F-I curve.
 
 Optionally add `"slope_key"` and `"intercept_key"` for a regression line.
 
-### 5.8 `brackets` — Burst/Event Brackets
+### 5.8 `brackets` - Burst/Event Brackets
 
 Draw bracket bars above burst groups.
 
@@ -491,7 +491,7 @@ Draw bracket bars above burst groups.
 `"data"` key should hold a list of arrays (each array = spike times within one
 burst).
 
-### 5.9 `event_markers` — Interactive Event Points
+### 5.9 `event_markers` - Interactive Event Points
 
 Scatter plot with click-to-remove and Ctrl+click-to-add.
 
@@ -501,7 +501,7 @@ Scatter plot with click-to-remove and Ctrl+click-to-add.
 
 Reads `result["event_indices"]` automatically.
 
-### 5.10 `trace` — Base Trace with Overlay
+### 5.10 `trace` - Base Trace with Overlay
 
 Plot the trace with optional spike/event markers.
 
@@ -509,7 +509,7 @@ Plot the trace with optional spike/event markers.
 {"type": "trace", "show_spikes": True}
 ```
 
-### 5.11 `fill_between` — Shaded Region Between Two Curves
+### 5.11 `fill_between` - Shaded Region Between Two Curves
 
 Draw a translucent filled area between a primary curve (`y1`) and a baseline
 curve or constant (`y2`).  This is ideal for visualising integrated areas such
@@ -534,7 +534,7 @@ the nested `result["metrics"]` dict, so both a flat schema and the standard
 - a key pointing to a **scalar** (constant horizontal baseline), or
 - omitted entirely (defaults to zero).
 
-**Example — Synaptic Charge Transfer with shaded integral:**
+**Example - Synaptic Charge Transfer with shaded integral:**
 
 ```python
 plots=[
@@ -567,7 +567,7 @@ return {
 
 ## 6. Where to Put Your Plugin File
 
-> **Prerequisite — Enable Custom Plugins:** Before your plugin will load you
+> **Prerequisite - Enable Custom Plugins:** Before your plugin will load you
 > must ensure the "Enable Custom Plugins" checkbox is checked in
 > **Edit > Preferences > Extensions** (or **Synaptipy > Preferences** on
 > macOS).  This setting is on by default.  After changing it, restart
@@ -631,7 +631,7 @@ If you are contributing to the Synaptipy repository itself:
 
 ---
 
-## 7. For Core Contributors — Adding a Built-in Analysis
+## 7. For Core Contributors - Adding a Built-in Analysis
 
 Step-by-step:
 
@@ -712,7 +712,7 @@ conda run -n synaptipy python -m pytest tests/core/test_plugin_template.py -v
 
 ---
 
-## 9. Full Annotated Example — Synaptic Charge Transfer
+## 9. Full Annotated Example - Synaptic Charge Transfer
 
 This example measures the **total synaptic charge** ($Q$, in picocoulombs)
 delivered during a postsynaptic current by integrating the current trace inside
@@ -905,7 +905,7 @@ The key design points illustrated here:
 | Symptom | Cause | Fix |
 |---|---|---|
 | Tab does not appear | Plugin file has a syntax error | Check the Synaptipy log (`~/.synaptipy/synaptipy.log`) for `SyntaxError` messages. |
-| Tab does not appear | File not in the plugins folder | Verify the path: macOS/Linux: `ls ~/.synaptipy/plugins/` — Windows: `dir %USERPROFILE%\.synaptipy\plugins` |
+| Tab does not appear | File not in the plugins folder | Verify the path: macOS/Linux: `ls ~/.synaptipy/plugins/` - Windows: `dir %USERPROFILE%\.synaptipy\plugins` |
 | Tab does not appear | Missing `@AnalysisRegistry.register` decorator | The file must contain a decorated function. |
 | `ImportError` in log | Plugin imports a package not installed in your environment | Install the dependency: `pip install <package>` |
 | `name "X" is already registered` warning | Two plugins use the same `name=` string | Change one plugin's `name=` to something unique. |

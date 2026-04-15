@@ -47,41 +47,82 @@ This will install Synaptipy in development mode with all development dependencie
 The Synaptipy codebase is organized as follows:
 
 ```
-src/Synaptipy/ # Main package
-├── __init__.py # Package initialization
-├── __main__.py # Entry point for CLI
-├── application/ # GUI application components
-│ ├── app.py # Main application entry
-│ └── gui/ # UI components and tabs
-├── core/ # Core data structures and analysis
-│ ├── data_model.py # Recording and Channel classes
-│ ├── results.py # Typed result dataclasses
-│ └── analysis/ # Analysis algorithms
-│ ├── intrinsic_properties.py # Rin, tau, conductance, sag ratio, I-V curve
-│ ├── spike_analysis.py # Spike detection and features
-│ ├── basic_features.py # RMP, baseline statistics
-│ ├── excitability.py # F-I curve
-│ ├── burst_analysis.py # Burst detection
-│ ├── phase_plane.py # Phase-plane analysis
-│ └── ... # Additional analysis modules
-├── infrastructure/ # Supporting components
-│ ├── file_readers/ # Data file readers
-│ └── exporters/ # Data exporters
-└── shared/ # Shared utilities
- ├── constants.py # Constants used across the package
- └── error_handling.py # Custom error classes
+src/Synaptipy/                       # Main package
+├── __init__.py                      # Package initialization
+├── __main__.py                      # Entry point for `python -m Synaptipy`
+├── application/                     # GUI application layer
+│   ├── __main__.py                  # GUI entry point (run_gui)
+│   ├── cli/                         # Command-line interface
+│   ├── controllers/                 # MVC controllers
+│   │   ├── analysis_formatter.py    # Format analysis results for display
+│   │   ├── analysis_plot_manager.py # Manage plot overlays for analysis
+│   │   ├── file_io_controller.py    # File open/save coordination
+│   │   ├── live_analysis_controller.py  # Real-time spike detection
+│   │   └── shortcut_manager.py      # Keyboard shortcut bindings
+│   ├── data_loader.py               # Background file loading (QThread)
+│   ├── gui/                         # Main GUI components
+│   │   ├── main_window.py           # MainWindow (3 tabs)
+│   │   ├── analyser_tab.py          # Dynamic analysis tab manager
+│   │   ├── explorer/                # Data explorer tab
+│   │   │   └── explorer_tab.py
+│   │   ├── exporter_tab.py          # NWB/CSV export tab
+│   │   ├── analysis_tabs/           # Analysis tab framework
+│   │   │   ├── base.py              # BaseAnalysisTab (ABC)
+│   │   │   └── metadata_driven.py   # MetadataDrivenAnalysisTab (auto-generated)
+│   │   ├── analysis_worker.py       # Worker thread for analysis
+│   │   ├── dialogs/                 # Modal dialogs (batch, NWB, preferences)
+│   │   ├── widgets/                 # Reusable GUI widgets
+│   │   └── ui_generator.py          # Dynamic UI generation from metadata
+│   ├── plugin_manager.py            # Plugin discovery and loading
+│   ├── session_manager.py           # Session state persistence
+│   └── startup_manager.py           # Application startup sequence
+├── core/                            # Core analysis and data models
+│   ├── data_model.py                # Recording and Channel classes
+│   ├── results.py                   # Typed result dataclasses
+│   ├── processing_pipeline.py       # Signal processing pipeline
+│   ├── signal_processor.py          # Low-level signal processing
+│   ├── source_interfaces.py         # Data source abstraction
+│   └── analysis/                    # Analysis algorithms (registry pattern)
+│       ├── registry.py              # AnalysisRegistry (decorator pattern)
+│       ├── batch_engine.py          # Batch processing engine
+│       ├── passive_properties.py    # RMP, Rin, Tau, Sag, I-V, Capacitance
+│       ├── single_spike.py          # Spike detection and phase plane
+│       ├── firing_dynamics.py       # Excitability, burst, train dynamics
+│       ├── synaptic_events.py       # Event detection (3 methods)
+│       └── evoked_responses.py      # Optogenetic sync analysis
+├── infrastructure/                  # I/O and external integrations
+│   ├── file_readers/                # Neo-based file readers (NeoAdapter)
+│   ├── exporters/                   # NWB export (NWBExporter)
+│   └── neo_patches.py               # Neo compatibility patches
+├── shared/                          # Utilities and styling
+│   ├── constants.py                 # Application-wide constants
+│   ├── error_handling.py            # Custom error classes
+│   ├── logging_config.py            # Logging configuration
+│   ├── styling.py                   # Qt theming (light/dark)
+│   ├── theme_manager.py             # Theme state management
+│   ├── plot_factory.py              # Reusable plot components
+│   ├── plot_zoom_sync.py            # Cross-tab zoom synchronization
+│   ├── plot_customization.py        # Plot appearance options
+│   └── viewbox.py                   # Custom ViewBox subclass
+├── resources/                       # Icons and assets
+└── templates/                       # Plugin templates
+    ├── analysis_template.py         # Annotated analysis template
+    ├── plugin_template.py           # Quick-start plugin template
+    └── tab_template.py              # Custom tab template
 
-tests/ # Test suite
-├── conftest.py # Pytest fixtures
-├── application/ # Application tests
-├── core/ # Core module tests
-└── infrastructure/ # Infrastructure tests
+tests/                               # Test suite
+├── conftest.py                      # Pytest fixtures (platform-specific)
+├── application/                     # Application and GUI tests
+├── core/                            # Core module tests
+├── infrastructure/                  # Infrastructure tests
+├── gui/                             # GUI-specific tests
+└── shared/                          # Shared utility tests
 
-scripts/ # Utility scripts
-└── run_tests.py # Test runner script
+scripts/                             # Utility scripts
+└── run_tests.py                     # Test runner script
 
-docs/ # Documentation
-examples/ # Example scripts
+docs/                                # Sphinx documentation (ReadTheDocs)
+examples/                            # Example scripts, notebooks, plugins
 ```
 
 ## Writing Custom Analysis Plugins
@@ -95,6 +136,15 @@ Synaptipy supports two ways to add new analysis functions:
 2. **Built-in modules (core contributors):** Add a module to
  `src/Synaptipy/core/analysis/`, register the import in `__init__.py`,
  and add tests.
+
+Three bundled example plugins ship in `examples/plugins/` and are loaded
+automatically when **Enable Custom Plugins** is checked in Preferences:
+
+| Plugin file | Tab label | Purpose |
+|---|---|---|
+| `synaptic_charge.py` | Synaptic Charge (AUC) | Integrates postsynaptic current to compute total charge (pC) |
+| `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial spike latency variability after TTL pulse |
+| `ap_repolarization.py` | AP Repolarization Rate | Maximum repolarization rate (dV/dt minimum) of the first AP |
 
 A ready-to-copy template is at `src/Synaptipy/templates/plugin_template.py`.
 For the complete reference - including all `ui_params` types, `plots` types,
@@ -152,12 +202,27 @@ Run with coverage reporting:
 python scripts/run_tests.py --coverage
 ```
 
+### CI Test Matrix
+
+CI runs on all three platforms across Python 3.10, 3.11, and 3.12:
+
+| Platform | Python Versions |
+|---|---|
+| Ubuntu (latest) | 3.10, 3.11, 3.12 |
+| Windows (latest) | 3.10, 3.11, 3.12 |
+| macOS (latest) | 3.10, 3.11, 3.12 |
+
+CI enforces `black --check`, `isort --check`, and `flake8`. PRs that fail
+any of these checks are rejected.
+
 ### Writing Tests
 
 - Place tests in the appropriate subdirectory of the `tests/` folder
 - Name test files with `test_` prefix
 - Use pytest fixtures for setup and teardown
 - Mock external dependencies where appropriate
+- Every new analysis function needs a test in `tests/core/`
+- Every new GUI behaviour needs a test in `tests/gui/`
 
 ## CI Behaviour and Platform-Specific Test Rules
 

@@ -1,7 +1,7 @@
 # Synaptipy Examples
 
 This directory contains runnable examples that demonstrate Synaptipy's
-programmatic API.
+programmatic API and plugin system.
 
 ## Jupyter Notebooks
 
@@ -42,7 +42,16 @@ Synaptipy's plugin system and serve as copyable templates:
 
 These plugins are loaded automatically when **Enable Custom Plugins** is checked
 in **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).  Copy any
-file to `~/.synaptipy/plugins/` to create a personal variant.
+file to `~/.synaptipy/plugins/` to create a personal variant that takes
+precedence over the bundled copy.
+
+## Batch Processing
+
+The `BatchAnalysisEngine` can chain any registered analysis (built-in or plugin)
+across multiple files. Results are exported to a Pandas DataFrame with
+standardised metadata columns, suitable for direct import into Python, R, or
+MATLAB. See [01_batch_analysis.ipynb](01_batch_analysis.ipynb) for a full
+walkthrough.
 
 ## Running
 

@@ -2,7 +2,15 @@
 
 This page documents how Synaptipy maps electrophysiology data to the
 [Neurodata Without Borders (NWB) 2.x](https://www.nwb.org/) format when
-exporting via **File → Export to NWB** or the `NWBExporter` API.
+exporting via **File - Export to NWB** or the `NWBExporter` API.
+
+:::{important}
+The NWB exporter writes voltage/current traces, electrode metadata, and
+session information. **Stimulus waveforms**, the
+**IntracellularRecordingsTable**, and **embedded analysis results** are not
+yet exported. See [Limitations and Future Work](#limitations-and-future-work)
+for details.
+:::
 
 ---
 

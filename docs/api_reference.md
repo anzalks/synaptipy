@@ -8,6 +8,9 @@ This document provides reference information for developers using Synaptipy as a
  - [Data Model](#data-model)
  - [File Readers](#file-readers)
  - [Analysis](#analysis)
+ - [Batch Processing](#batch-processing)
+ - [Signal Processing](#signal-processing)
+ - [Plugin System](#plugin-system)
  - [Exporters](#exporters)
 - [Licensing](#licensing)
 
@@ -157,6 +160,122 @@ meta = AnalysisRegistry.get_metadata("sag_ratio_analysis")
 func = AnalysisRegistry.get_function("sag_ratio_analysis")
 result = func(data, time, sampling_rate, baseline_start=0.0, baseline_end=0.1)
 ```
+
+### Batch Processing
+
+#### BatchAnalysisEngine
+
+The batch engine runs any combination of registered analysis functions across
+multiple files and collects results into a single Pandas DataFrame.
+
+```python
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from pathlib import Path
+
+engine = BatchAnalysisEngine()
+
+# Define a multi-step pipeline
+pipeline = [
+    {
+        'analysis': 'spike_detection',
+        'scope': 'all_trials',       # or 'average'
+        'params': {'threshold': -20.0, 'refractory_ms': 2.0}
+    },
+    {
+        'analysis': 'excitability_analysis',
+        'scope': 'all_trials',
+        'params': {'threshold': -20.0}
+    },
+]
+
+# Run across multiple files
+files = [Path("file1.abf"), Path("file2.abf")]
+results_df = engine.run_batch(files, pipeline)
+
+# results_df columns (order):
+#   file_name, protocol, channel, channel_units, analysis, scope,
+#   trial_index, sampling_rate, <analysis-specific metrics>,
+#   batch_timestamp, error, debug_trace
+
+# List available analyses
+available = engine.list_available_analyses()  # list[str]
+
+# Get info about a specific analysis
+info = engine.get_analysis_info("spike_detection")  # dict
+
+# Cancel a running batch
+engine.cancel()
+```
+
+**Output conventions:**
+
+| Convention | Behaviour |
+|---|---|
+| Metadata columns first | `file_name`, `protocol`, `channel`, `channel_units`, `analysis`, `scope`, `trial_index`, `sampling_rate` |
+| Private keys (`_` prefix) | Array data hidden from CSV export |
+| Human-readable aliases | `cv` becomes `coeff_of_variation`, `fi_slope` becomes `fi_gain_hz_per_pa` |
+| Error column | Contains error message if analysis failed for a given file/trial |
+
+### Signal Processing
+
+#### ProcessingPipeline
+
+Chain preprocessing steps (filters, baseline subtraction, artifact blanking)
+into a reusable pipeline.
+
+```python
+from Synaptipy.core.processing_pipeline import ProcessingPipeline
+
+pipeline = ProcessingPipeline()
+
+# Add a bandpass filter
+pipeline.add_step({
+    "type": "bandpass",
+    "low_cutoff": 1.0,       # Hz
+    "high_cutoff": 5000.0,   # Hz
+    "order": 4,
+})
+
+# Add baseline subtraction
+pipeline.add_step({
+    "type": "baseline",
+    "method": "median",       # "mean", "median", "mode", "detrend", "window"
+})
+
+# Add artifact blanking
+pipeline.add_step({
+    "type": "artifact",
+    "onset_time": 0.1,        # seconds
+    "duration_ms": 5.0,       # milliseconds
+    "method": "linear",       # "hold", "zero", or "linear"
+})
+
+# Apply to data
+processed_data = pipeline.apply(raw_data, sampling_rate)
+```
+
+### Plugin System
+
+#### PluginManager
+
+Discover and load user plugins at runtime.
+
+```python
+from Synaptipy.application.plugin_manager import PluginManager
+
+# Load all plugins from both directories
+#   1. examples/plugins/  (bundled)
+#   2. ~/.synaptipy/plugins/  (user)
+PluginManager.load_plugins()
+
+# Reload plugins (unregister old, re-discover and re-register)
+PluginManager.reload_plugins()
+```
+
+Plugin discovery paths and precedence:
+- `examples/plugins/` is scanned first (bundled examples).
+- `~/.synaptipy/plugins/` is scanned second (user additions).
+- A user file with the same stem name as a bundled file takes precedence.
 
 ### Exporters
 
