@@ -183,7 +183,27 @@ All analysis features must be split into two distinct parts:
 *   **Consistent Terminology**: Use the exact project name `Synaptipy` (capital S, lowercase the rest) throughout. Do not use `SynaptiPy`, `synaptipy`, or `SYNAPTIPY` in prose (only in code/CLI contexts).
 *   **Cross-reference accuracy**: When one documentation file references another, verify the link target exists. Dead links are not acceptable.
 
-## VI. REFACTORING CONSTRAINTS
+## VI. UI ARCHITECTURE IMMUTABLE DIRECTIVES
+
+### RULE 1 - Strict 5-Pillar Analysis Tab Architecture
+All core analysis features MUST be rigidly mapped into exactly five UI subtabs:
+1. `Passive Properties`
+2. `Single Spike Kinetics`
+3. `Firing Dynamics`
+4. `Synaptic Events`
+5. `Evoked Responses`
+
+Any highly specialized or novel metric requested in the future MUST be implemented
+as a separate file in `examples/plugins/` and NEVER added to the core UI tabs.
+This rule is immutable: no exceptions are permitted without a documented architectural
+decision record approved by the lead developer.
+
+### RULE 2 - Popup Discipline
+Never trigger popup plots automatically upon file load. Analysis popups MUST ONLY
+trigger when the user explicitly navigates to the `Analyser` tab or clicks a
+dedicated plot button. Auto-popup on file load is forbidden without exception.
+
+## VII. REFACTORING CONSTRAINTS
 
 **1. "God Object" Prevention**
 *   **Class Limit**: No class should exceed **500 lines**. If it grows beyond, refactor into smaller, focused classes.

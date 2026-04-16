@@ -339,6 +339,201 @@ def compute_local_pre_event_baseline(
     return local_baselines
 
 
+# ---------------------------------------------------------------------------
+# Paired-Pulse Ratio with Residual Decay Subtraction
+# ---------------------------------------------------------------------------
+
+
+def _fit_p1_decay_residual(
+    data: np.ndarray,
+    time: np.ndarray,
+    peak1_idx: int,
+    s2_t: float,
+    global_baseline: float,
+    sample_rate: float,
+) -> Tuple[float, float]:
+    """Fit mono-exp decay to P1 tail; return (residual_at_p2, tau_p1_ms)."""
+    nan = float("nan")
+    max_decay_samples = min(int(0.2 * sample_rate), int((s2_t - time[peak1_idx]) * sample_rate) - 1)
+    decay_end_idx = min(peak1_idx + max(4, max_decay_samples), len(data) - 1)
+
+    if decay_end_idx <= peak1_idx + 3:
+        return 0.0, nan
+
+    t_decay = time[peak1_idx:decay_end_idx] - time[peak1_idx]
+    i_decay = data[peak1_idx:decay_end_idx] - global_baseline
+
+    def _mono_exp_ppr(t, A, tau):
+        return A * np.exp(-t / tau)
+
+    tau_guess = float(t_decay[-1] / 3.0) if t_decay[-1] > 0 else 0.01
+    p0 = [float(i_decay[0]) if i_decay.size > 0 else 1.0, tau_guess]
+    try:
+        popt, _ = curve_fit(
+            _mono_exp_ppr,
+            t_decay,
+            i_decay,
+            p0=p0,
+            bounds=([-np.inf, 1e-4], [np.inf, 2.0]),
+            maxfev=2000,
+        )
+        tau_p1_ms = float(popt[1]) * 1000.0
+        t_at_s2 = s2_t - time[peak1_idx]
+        residual_at_p2 = float(_mono_exp_ppr(t_at_s2, *popt))
+        return residual_at_p2, tau_p1_ms
+    except (RuntimeError, ValueError):
+        log.debug("PPR: mono-exp decay fit did not converge; using zero residual.")
+        return 0.0, nan
+
+
+def _measure_ppr_peak(
+    data: np.ndarray,
+    time: np.ndarray,
+    onset_s: float,
+    baseline: float,
+    resp_samples: int,
+    polarity: str,
+) -> Tuple[float, int]:
+    """Return (amplitude, peak_index) relative to *baseline* in a post-onset window."""
+    nan = float("nan")
+    onset_idx = int(np.searchsorted(time, onset_s, side="left"))
+    end_idx = min(onset_idx + resp_samples, len(data))
+    if onset_idx >= end_idx:
+        return nan, onset_idx
+    segment = data[onset_idx:end_idx]
+    if polarity == "negative":
+        rel_idx = int(np.argmin(segment))
+    else:
+        rel_idx = int(np.argmax(segment))
+    peak_idx = onset_idx + rel_idx
+    amp = float(data[peak_idx]) - float(baseline)
+    return amp, peak_idx
+
+
+def calculate_paired_pulse_ratio(
+    data: np.ndarray,
+    time: np.ndarray,
+    stimulus_onsets_s: np.ndarray,
+    sample_rate: float,
+    response_window_ms: float = 20.0,
+    polarity: str = "negative",
+) -> Dict[str, Any]:
+    """Calculate the Paired-Pulse Ratio (PPR) with residual decay correction.
+
+    A naive amplitude ratio (P2/P1) is contaminated by the unresolved decay
+    tail of the first response.  This function:
+
+    1. Fits a mono-exponential decay to the P1 tail.
+    2. Evaluates the fitted tail at the P2 onset to obtain the *residual*
+       baseline offset.
+    3. Measures P2 amplitude relative to the corrected (residual-subtracted)
+       baseline instead of the global baseline.
+
+    PPR = A2_corrected / A1
+
+    Parameters
+    ----------
+    data : np.ndarray
+        1-D signal array (pA or mV).
+    time : np.ndarray
+        1-D time array (seconds), same length as *data*.
+    stimulus_onsets_s : np.ndarray
+        1-D array of stimulus onset times (seconds).  At least two are required.
+    sample_rate : float
+        Sampling rate (Hz).
+    response_window_ms : float
+        Duration (ms) of the post-stimulus window searched for the peak.
+    polarity : str
+        ``"negative"`` for inward currents/hyperpolarisations;
+        ``"positive"`` for depolarisations.
+
+    Returns
+    -------
+    dict
+        Keys:
+
+        - ``ppr``                  – corrected P2/P1 amplitude ratio
+        - ``ppr_naive``            – uncorrected P2/P1 ratio (no residual subtraction)
+        - ``amplitude_p1``         – P1 amplitude relative to pre-stimulus baseline
+        - ``amplitude_p2_corrected`` – P2 amplitude after residual subtraction
+        - ``amplitude_p2_naive``   – P2 amplitude relative to global baseline
+        - ``residual_at_p2``       – predicted P1 tail amplitude at P2 onset
+        - ``tau_p1_ms``            – time constant of the P1 decay fit (ms)
+        - ``interpulse_interval_ms`` – interval between S1 and S2 (ms)
+        - ``error``                – error message string when calculation fails
+    """
+    nan = float(np.nan)
+    result: Dict[str, Any] = {
+        "ppr": nan,
+        "ppr_naive": nan,
+        "amplitude_p1": nan,
+        "amplitude_p2_corrected": nan,
+        "amplitude_p2_naive": nan,
+        "residual_at_p2": nan,
+        "tau_p1_ms": nan,
+        "interpulse_interval_ms": nan,
+        "error": None,
+    }
+
+    if len(stimulus_onsets_s) < 2:
+        result["error"] = "Need at least 2 stimulus onsets for PPR."
+        return result
+
+    resp_samples = max(2, int(response_window_ms / 1000.0 * sample_rate))
+
+    def _measure_peak(onset_s: float, baseline: float) -> Tuple[float, int]:
+        return _measure_ppr_peak(data, time, onset_s, baseline, resp_samples, polarity)
+
+    try:
+        s1_t = float(stimulus_onsets_s[0])
+        s2_t = float(stimulus_onsets_s[1])
+        isi_ms = (s2_t - s1_t) * 1000.0
+        result["interpulse_interval_ms"] = isi_ms
+
+        # Pre-S1 baseline (5 ms before S1)
+        base_mask = (time >= s1_t - 0.005) & (time < s1_t)
+        if not np.any(base_mask):
+            result["error"] = "No pre-S1 baseline samples."
+            return result
+        global_baseline = float(np.mean(data[base_mask]))
+
+        # P1 amplitude
+        amp_p1, peak1_idx = _measure_peak(s1_t, global_baseline)
+        if np.isnan(amp_p1) or amp_p1 == 0.0:
+            result["error"] = "P1 amplitude is zero or NaN."
+            return result
+        result["amplitude_p1"] = amp_p1
+
+        # Naive P2 amplitude (no correction)
+        amp_p2_naive, peak2_idx = _measure_peak(s2_t, global_baseline)
+        result["amplitude_p2_naive"] = amp_p2_naive
+        if amp_p1 != 0.0:
+            result["ppr_naive"] = float(amp_p2_naive / amp_p1)
+
+        # ------------------------------------------------------------------ #
+        # Fit mono-exponential decay to P1 tail to predict residual at S2    #
+        # ------------------------------------------------------------------ #
+        residual_at_p2, tau_p1_ms = _fit_p1_decay_residual(data, time, peak1_idx, s2_t, global_baseline, sample_rate)
+        if not np.isnan(tau_p1_ms):
+            result["tau_p1_ms"] = tau_p1_ms
+
+        result["residual_at_p2"] = residual_at_p2
+
+        # Corrected P2 amplitude: subtract the predicted residual from the baseline
+        corrected_p2_baseline = global_baseline + residual_at_p2
+        amp_p2_corrected, _ = _measure_peak(s2_t, corrected_p2_baseline)
+        result["amplitude_p2_corrected"] = amp_p2_corrected
+
+        if amp_p1 != 0.0:
+            result["ppr"] = float(amp_p2_corrected / amp_p1)
+
+    except (ValueError, TypeError, IndexError) as e:
+        result["error"] = str(e)
+        log.warning("calculate_paired_pulse_ratio: %s", e)
+
+    return result
+
+
 def detect_events_threshold(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,

@@ -19,6 +19,7 @@ Output Design Principles
 Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
 
+import gc
 import logging
 import traceback  # Added for stack trace logging
 from datetime import datetime
@@ -40,6 +41,8 @@ log = logging.getLogger(__name__)
 # Column ordering constants — metadata first, results middle, debug last
 # ---------------------------------------------------------------------------
 _METADATA_COLUMNS_ORDER = [
+    "subject_id",
+    "cell_id",
     "file_name",
     "file_path",
     "protocol",
@@ -225,7 +228,12 @@ class BatchAnalysisEngine:
 
     @staticmethod
     def _recording_metadata(recording: "Recording") -> Dict[str, Any]:
-        """Extract recording-level metadata for result rows."""
+        """Extract recording-level metadata for result rows.
+
+        Includes ``subject_id`` and ``cell_id`` when set on the Recording so
+        that downstream hierarchical mixed-effects analyses can distinguish
+        between-subject (N) from within-subject (n) observations.
+        """
         meta: Dict[str, Any] = {}
         if recording is None:
             return meta
@@ -233,6 +241,10 @@ class BatchAnalysisEngine:
             meta["protocol"] = recording.protocol_name
         if hasattr(recording, "duration") and recording.duration is not None:
             meta["recording_duration_s"] = round(float(recording.duration), 4)
+        if hasattr(recording, "subject_id"):
+            meta["subject_id"] = recording.subject_id
+        if hasattr(recording, "cell_id"):
+            meta["cell_id"] = recording.cell_id
         return meta
 
     @staticmethod
@@ -258,6 +270,30 @@ class BatchAnalysisEngine:
 
         ordered = leading + results + trailing + private
         return df[[c for c in ordered if c in all_cols]]
+
+    @staticmethod
+    def _append_batch_error_log(file_name: str, file_path_str: str, exc: Exception) -> None:
+        """Append a one-line error entry to ``~/.synaptipy/logs/batch_errors.log``.
+
+        Writing errors to a dedicated log file ensures a 100-file batch is never
+        aborted by a single corrupted recording.  Each line is ISO-8601 timestamped
+        so the analyst can correlate entries with their batch run.
+
+        Args:
+            file_name:     Base name of the failed file.
+            file_path_str: Full path string for the failed file.
+            exc:           The exception that caused the failure.
+        """
+        try:
+            log_dir = Path.home() / ".synaptipy" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            error_log_path = log_dir / "batch_errors.log"
+            timestamp = datetime.now().isoformat(timespec="seconds")
+            entry = f"{timestamp} | {file_name} | {file_path_str} | {type(exc).__name__}: {exc}\n"
+            with open(error_log_path, "a", encoding="utf-8") as fh:
+                fh.write(entry)
+        except Exception as write_exc:  # noqa: BLE001
+            log.warning("Could not write to batch_errors.log: %s", write_exc)
 
     def run_batch(  # noqa: C901
         self,
@@ -408,7 +444,7 @@ class BatchAnalysisEngine:
 
                             # Extend results list with all results from this task
                             results_list.extend(task_results)
-                        except (ValueError, TypeError, KeyError, IndexError) as e:
+                        except Exception as e:  # noqa: BLE001 - broad catch intentional for fault-tolerance
                             log.error(
                                 f"Error processing task {task.get('analysis', 'unknown')} on "
                                 f"{file_path.name}/{channel_name}: {e}",
@@ -427,18 +463,30 @@ class BatchAnalysisEngine:
                             }
                             error_row.update(ch_meta)
                             results_list.append(error_row)
+                            continue
 
-            except (ValueError, TypeError, KeyError, IndexError) as e:
+            except Exception as e:  # noqa: BLE001 - broad catch intentional; Domino Defense
+                # A single corrupted or unreadable file must never abort the entire batch run.
+                # Log the full traceback to batch_errors.log and continue to the next file.
                 log.error(f"Error processing batch file {file_path}: {e}", exc_info=True)
-                # Add error row
+                self._append_batch_error_log(file_name, file_path_str, e)
                 results_list.append(
                     {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
+                        "file_name": file_name,
+                        "file_path": file_path_str,
                         "error": str(e),
                         "debug_trace": traceback.format_exc(),
                     }
                 )
+                continue
+            finally:
+                # Release the Recording object and collected data immediately after
+                # each file to prevent cumulative PySide6 / NumPy OOM in headless batch
+                # runs.  gc.collect() ensures cyclic references are broken even when
+                # GC is otherwise disabled for test-mode offscreen stability.
+                recording = None  # noqa: F841  # drop reference
+                gc.collect()
+                log.debug("gc.collect() called after processing item %d.", i)
 
         if progress_callback:
             if self._cancelled:

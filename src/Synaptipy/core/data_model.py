@@ -375,6 +375,16 @@ class Recording:
         self.injected_current: Optional[float] = None
         self.metadata: Dict[str, Any] = {}  # Use Any for metadata flexibility
 
+        # --- Nested data hierarchy (n vs N) ---
+        # subject_id identifies the biological subject (e.g. "Mouse_01").
+        # cell_id identifies the recorded cell within that subject (e.g. "Cell_A").
+        # Both fields are optional and must be set by the caller after loading.
+        # The BatchAnalysisEngine propagates them into every result row so that
+        # downstream mixed-effects / hierarchical ANOVA tools can distinguish
+        # between-subject variance (N) from within-subject replication (n).
+        self.subject_id: Optional[str] = None
+        self.cell_id: Optional[str] = None
+
         # --- Lazy Loading Support ---
         # --- Lazy Loading Support ---
         self.source_handle: Optional[SourceHandle] = None  # Decoupled handle for lazy loading

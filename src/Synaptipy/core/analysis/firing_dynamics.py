@@ -22,7 +22,7 @@ import numpy as np
 from scipy.stats import linregress
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
+from Synaptipy.core.analysis.single_spike import calculate_spike_features, detect_spikes_threshold
 from Synaptipy.core.results import AnalysisResult, BurstResult
 
 log = logging.getLogger(__name__)
@@ -72,6 +72,7 @@ def calculate_fi_curve(  # noqa: C901
     spike_counts = []
     frequencies = []
     adaptation_ratios = []
+    broadening_indices = []  # Width_last / Width_first within each sweep
 
     for i, (data, time) in enumerate(zip(sweeps, time_vectors)):
         dt = time[1] - time[0] if len(time) > 1 else 1e-4
@@ -90,6 +91,20 @@ def calculate_fi_curve(  # noqa: C901
                 adaptation_ratios.append(np.nan)
         else:
             adaptation_ratios.append(np.nan)
+
+        # Spike Broadening Index: half-width of last spike / half-width of first spike
+        broadening_idx = np.nan
+        if count >= 2 and result.spike_indices is not None and len(result.spike_indices) >= 2:
+            try:
+                spike_idx_arr = result.spike_indices
+                features = calculate_spike_features(data, time, spike_idx_arr)
+                widths = [f.get("half_width") for f in features if f.get("half_width") is not None]
+                valid_widths = [w for w in widths if w is not None and not np.isnan(w) and w > 0]
+                if len(valid_widths) >= 2:
+                    broadening_idx = float(valid_widths[-1] / valid_widths[0])
+            except (ValueError, TypeError, IndexError):
+                pass
+        broadening_indices.append(broadening_idx)
 
     sorted_indices = np.argsort(current_steps)
     sorted_currents = np.array(current_steps)[sorted_indices]
@@ -126,6 +141,7 @@ def calculate_fi_curve(  # noqa: C901
         "spike_counts": spike_counts,
         "frequencies": frequencies,
         "adaptation_ratios": adaptation_ratios,
+        "broadening_indices": broadening_indices,
         "current_steps": current_steps,
     }
 
@@ -230,6 +246,7 @@ def run_excitability_analysis_wrapper(
                 "max_freq_hz": results["max_freq"],
                 "frequencies": results["frequencies"],
                 "adaptation_ratios": results["adaptation_ratios"],
+                "broadening_indices": results.get("broadening_indices", []),
                 "current_steps": results["current_steps"],
             },
         }
