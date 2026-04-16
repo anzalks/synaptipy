@@ -55,7 +55,9 @@ Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisat
 15 built-in analysis modules spanning intrinsic membrane properties, action potential
 characterisation, synaptic event detection, and optogenetics, a composable batch processing
 engine, and an extensible plugin interface that allows custom analysis routines to be
-integrated without modifying the core package. File I/O is handled through
+integrated without modifying the core package. Three example plugins ship with
+the application and are loadable via a single checkbox in Preferences.
+File I/O is handled through
 `Neo <https://neo.readthedocs.io>`_, supporting over 30 acquisition formats including
 Axon ABF, WinWCP, CED/Spike2, Intan, Igor Pro, NWB, Open Ephys, and more.
 NWB export is provided via `PyNWB <https://pynwb.readthedocs.io>`_.
@@ -110,6 +112,14 @@ Collaborations, bug reports, and pull requests are welcome.
       including electrode metadata and unit conventions.
 
 .. grid:: 2
+
+   .. grid-item-card:: Writing Plugins
+      :link: extending_synaptipy
+      :link-type: doc
+
+      Add custom analysis routines without modifying source code -
+      complete reference for ``ui_params``, ``plots``, return-dict
+      conventions, and three bundled example plugins.
 
    .. grid-item-card:: Source on GitHub
       :link: https://github.com/anzalks/synaptipy

@@ -21,7 +21,9 @@ Author: Anzal K Shahul <anzal.ks@gmail.com>
 
 import gc
 import logging
+import multiprocessing
 import traceback  # Added for stack trace logging
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -99,20 +101,52 @@ class BatchAnalysisEngine:
         results_df = engine.run_batch(files, pipeline)
     """
 
-    def __init__(self, neo_adapter: Optional[NeoAdapter] = None):
+    def __init__(self, neo_adapter: Optional[NeoAdapter] = None, max_workers: int = 1):
         """
         Initialize the batch analysis engine.
 
         Args:
             neo_adapter: Optional NeoAdapter instance. If None, creates a new one.
+            max_workers: Number of parallel worker processes for :meth:`run_batch`.
+                         1 (default) means fully sequential execution.
+                         Values > 1 enable :class:`~concurrent.futures.ProcessPoolExecutor`
+                         parallelism.  Pass ``-1`` to use all available CPU cores.
         """
         self.neo_adapter = neo_adapter if neo_adapter else NeoAdapter()
         self._cancelled = False
+        cpu_count = multiprocessing.cpu_count()
+        if max_workers < 0:
+            self.max_workers: int = cpu_count
+        else:
+            self.max_workers = max(1, int(max_workers))
 
     def cancel(self):
         """Request cancellation of the current batch run."""
         self._cancelled = True
         log.debug("Batch analysis cancellation requested.")
+
+    def update_performance_settings(self, settings: Dict[str, Any]) -> None:
+        """Dynamically update performance limits without restarting.
+
+        Reads ``max_cpu_cores`` from *settings* and updates :attr:`max_workers`
+        immediately so the next :meth:`run_batch` call picks up the new value.
+        This is the subscriber side of the pub/sub ``preferences_changed`` signal.
+
+        Args:
+            settings: Dict that may contain ``"max_cpu_cores"`` (int) and/or
+                      ``"max_ram_allocation_gb"`` (float, logged but not enforced here).
+        """
+        if "max_cpu_cores" in settings:
+            requested = int(settings["max_cpu_cores"])
+            cpu_count = multiprocessing.cpu_count()
+            self.max_workers = max(1, min(requested, cpu_count))
+            log.info("BatchAnalysisEngine: max_workers updated to %d.", self.max_workers)
+
+        if "max_ram_allocation_gb" in settings:
+            log.info(
+                "BatchAnalysisEngine: max_ram_allocation_gb=%s noted (OOM guard via gc.collect).",
+                settings["max_ram_allocation_gb"],
+            )
 
     @staticmethod
     def list_available_analyses() -> List[str]:
@@ -295,6 +329,116 @@ class BatchAnalysisEngine:
         except Exception as write_exc:  # noqa: BLE001
             log.warning("Could not write to batch_errors.log: %s", write_exc)
 
+    # ------------------------------------------------------------------
+    # Parallel execution helpers
+    # ------------------------------------------------------------------
+
+    def _run_batch_parallel(  # noqa: C901
+        self,
+        files: List[Union[Path, "Recording"]],
+        pipeline_config: List[Dict[str, Any]],
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        channel_filter: Optional[List[str]],
+    ) -> pd.DataFrame:
+        """Distribute file-level processing across :attr:`max_workers` worker processes.
+
+        Each worker process receives a single file path (in-memory Recording objects
+        are serialised via pickle), imports the full analysis package to populate the
+        registry, and returns a list of result-row dicts.  Progress signals are emitted
+        through the optional *progress_callback* as each future completes.
+
+        OOM safety: every worker calls ``gc.collect()`` after processing its file.
+        """
+        total_files = len(files)
+        batch_start_time = datetime.now()
+
+        # Separate paths from pre-loaded Recording objects.
+        # Pre-loaded Recording objects are processed sequentially (pickle cost not worth it).
+        path_tasks: List[Tuple[int, Path]] = []
+        inline_recordings: List[Tuple[int, Any]] = []
+
+        for idx, item in enumerate(files):
+            if isinstance(item, (str, Path)):
+                path_tasks.append((idx, Path(item)))
+            else:
+                inline_recordings.append((idx, item))
+
+        all_rows: List[List[Dict[str, Any]]] = [[] for _ in range(total_files)]
+        completed_count = 0
+
+        # Submit path-based tasks to the pool
+        future_to_idx: Dict[Any, int] = {}
+        pool_kwargs: Dict[str, Any] = {"max_workers": self.max_workers}
+        # Use spawn context on all platforms for process-safety with Qt/numpy
+        ctx = multiprocessing.get_context("spawn")
+        pool_kwargs["mp_context"] = ctx
+
+        with ProcessPoolExecutor(**pool_kwargs) as executor:
+            for orig_idx, file_path in path_tasks:
+                future = executor.submit(
+                    _worker_process_file,
+                    str(file_path),
+                    pipeline_config,
+                    channel_filter,
+                )
+                future_to_idx[future] = orig_idx
+
+            for future in as_completed(future_to_idx):
+                orig_idx = future_to_idx[future]
+                file_path = files[orig_idx]
+                file_name = Path(str(file_path)).name
+                completed_count += 1
+
+                try:
+                    rows = future.result()
+                    all_rows[orig_idx] = rows
+                except Exception as exc:  # noqa: BLE001
+                    log.error("Worker failed for %s: %s", file_path, exc, exc_info=True)
+                    self._append_batch_error_log(file_name, str(file_path), exc)
+                    all_rows[orig_idx] = [
+                        {
+                            "file_name": file_name,
+                            "file_path": str(file_path),
+                            "error": str(exc),
+                            "debug_trace": traceback.format_exc(),
+                        }
+                    ]
+                finally:
+                    if progress_callback:
+                        progress_callback(completed_count, total_files, f"Processed {file_name}")
+
+                if self._cancelled:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
+
+        # Process in-memory recordings sequentially (they can't be pickled reliably)
+        for orig_idx, recording in inline_recordings:
+            if self._cancelled:
+                break
+            completed_count += 1
+            file_name = getattr(getattr(recording, "source_file", None), "name", f"InMemory_{orig_idx}")
+            if progress_callback:
+                progress_callback(completed_count, total_files, f"Processing {file_name}...")
+            try:
+                df_inline = self._run_batch_sequential([recording], pipeline_config, None, channel_filter)
+                all_rows[orig_idx] = df_inline.to_dict("records") if not df_inline.empty else []
+            except Exception as exc:  # noqa: BLE001
+                log.error("Inline recording failed: %s", exc, exc_info=True)
+                all_rows[orig_idx] = [
+                    {"file_name": file_name, "error": str(exc), "debug_trace": traceback.format_exc()}
+                ]
+
+        if progress_callback:
+            msg = "Batch cancelled." if self._cancelled else "Batch analysis complete."
+            progress_callback(total_files, total_files, msg)
+
+        flat_rows = [row for rows in all_rows for row in rows]
+        df = pd.DataFrame(flat_rows)
+        if not df.empty:
+            df["batch_timestamp"] = batch_start_time.isoformat()
+            df = self._order_columns(df)
+        return df
+
     def run_batch(  # noqa: C901
         self,
         files: List[Union[Path, "Recording"]],
@@ -304,6 +448,12 @@ class BatchAnalysisEngine:
     ) -> pd.DataFrame:
         """
         Run analysis on a list of files/recordings using a flexible pipeline configuration.
+
+        When :attr:`max_workers` > 1 **and** *files* contains at least two items, the
+        file-level loop is distributed across worker processes via
+        :class:`~concurrent.futures.ProcessPoolExecutor`.  The GUI thread is never
+        blocked in either mode — callers should wrap this in a
+        :class:`~Synaptipy.application.gui.analysis_worker.BatchWorker` QThread.
 
         Args:
             files: List of file paths OR Recording objects to process.
@@ -315,13 +465,32 @@ class BatchAnalysisEngine:
             pandas DataFrame containing aggregated results with metadata.
         """
         self._cancelled = False
-        results_list = []
         total_files = len(files)
 
         # Validate pipeline config
         if not pipeline_config:
             log.warning("Empty pipeline_config provided. No analyses will be run.")
             return pd.DataFrame()
+
+        # Route to parallel executor when max_workers > 1 and we have multiple files
+        if self.max_workers > 1 and total_files > 1:
+            log.info(
+                "BatchAnalysisEngine: starting parallel batch (%d workers, %d files).", self.max_workers, total_files
+            )
+            return self._run_batch_parallel(files, pipeline_config, progress_callback, channel_filter)
+
+        return self._run_batch_sequential(files, pipeline_config, progress_callback, channel_filter)
+
+    def _run_batch_sequential(  # noqa: C901
+        self,
+        files: List[Union[Path, "Recording"]],
+        pipeline_config: List[Dict[str, Any]],
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        channel_filter: Optional[List[str]],
+    ) -> pd.DataFrame:
+        """Sequential (single-process) batch processing — the original implementation."""
+        results_list = []
+        total_files = len(files)
 
         # Add batch metadata
         batch_start_time = datetime.now()
@@ -832,3 +1001,50 @@ class BatchAnalysisEngine:
                         "debug_trace": traceback.format_exc(),
                     }
                 ], None
+
+
+# ---------------------------------------------------------------------------
+# Module-level worker function for ProcessPoolExecutor
+# ---------------------------------------------------------------------------
+
+
+def _worker_process_file(
+    file_path_str: str,
+    pipeline_config: List[Dict[str, Any]],
+    channel_filter: Optional[List[str]],
+) -> List[Dict[str, Any]]:
+    """Process a single file in an isolated worker process.
+
+    This function is called by :class:`~concurrent.futures.ProcessPoolExecutor`
+    in a freshly spawned process.  It re-imports the full analysis package so
+    that all ``@AnalysisRegistry.register`` decorators execute, then delegates
+    to :class:`BatchAnalysisEngine` with ``max_workers=1`` (sequential) to avoid
+    recursive parallelism.
+
+    OOM safety: ``gc.collect()`` is called explicitly after processing.
+
+    Args:
+        file_path_str: Absolute path to the recording file (str, pickle-safe).
+        pipeline_config: Serialised pipeline task list.
+        channel_filter: Optional channel whitelist.
+
+    Returns:
+        List of result-row dicts ready for ``pd.DataFrame()``.
+    """
+    import gc as _gc  # avoid shadowing module-level gc import
+    from pathlib import Path as _Path
+
+    # Trigger all @AnalysisRegistry.register decorators in this new process
+    import Synaptipy.core.analysis  # noqa: F401,F811
+
+    engine = BatchAnalysisEngine(max_workers=1)
+    try:
+        df = engine._run_batch_sequential(
+            [_Path(file_path_str)],
+            pipeline_config,
+            None,  # progress_callback not serialisable across processes
+            channel_filter,
+        )
+        return df.to_dict("records") if not df.empty else []
+    finally:
+        _gc.collect()

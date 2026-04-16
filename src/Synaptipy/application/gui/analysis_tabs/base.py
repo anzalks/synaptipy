@@ -160,6 +160,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._popup_windows: List[QtWidgets.QWidget] = []  # Track popup windows for cleanup
         self._analysis_thread: Optional[QtCore.QThread] = None  # Track analysis thread for cleanup
 
+        # --- PHASE 6: Visibility gating ---
+        # When a file is loaded in the Explorer while this tab is hidden, we
+        # defer the analysis update and process it lazily on next showEvent.
+        self._pending_update: bool = False
+
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
         # Connect Customization Signals
@@ -172,6 +177,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._update_plot_pens_only()
         else:
             self._plot_selected_data()
+
+    def showEvent(self, event) -> None:
+        """Process any deferred analysis update accumulated while this tab was hidden."""
+        super().showEvent(event)
+        if getattr(self, "_pending_update", False):
+            self._pending_update = False
+            log.debug(f"{self.__class__.__name__}: processing deferred update on showEvent")
+            self._trigger_analysis()
 
     # --- ADDED: Method to set global controls (Removed duplicate) ---
     # The actual implementation is further down in the file.
@@ -2301,6 +2314,20 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """
         # Tab is in the process of being removed — exit silently.
         if getattr(self, "_unmounting", False):
+            return
+
+        # Visibility gate: when this tab is hidden and the trigger is automatic
+        # (debounce timer fired in response to a SessionManager signal such as
+        # "new file loaded"), defer the work rather than running analysis in the
+        # background or spawning popups that steal focus from the Explorer.
+        # Manual user actions (button click) intentionally bypass this gate so
+        # the user still gets immediate feedback even if the tab is not
+        # currently the active one.
+        sender = self.sender()
+        _is_auto = (sender is self._analysis_debounce_timer) or isinstance(sender, QtCore.QTimer)
+        if _is_auto and not self.isVisible():
+            self._pending_update = True
+            log.debug(f"{self.__class__.__name__}: tab hidden — deferring auto analysis update")
             return
 
         log.debug(f"{self.__class__.__name__}: Triggering analysis")

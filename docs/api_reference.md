@@ -168,11 +168,24 @@ result = func(data, time, sampling_rate, baseline_start=0.0, baseline_end=0.1)
 The batch engine runs any combination of registered analysis functions across
 multiple files and collects results into a single Pandas DataFrame.
 
+Pass `max_workers > 1` to enable multi-core parallelism via
+`concurrent.futures.ProcessPoolExecutor`.  Worker processes are spawned with
+the `"spawn"` start method for Qt/numpy safety.  Call `update_performance_settings()`
+at runtime (wired to `SessionManager.preferences_changed`) to change the
+worker count without restarting.
+
 ```python
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from pathlib import Path
 
+# Sequential (default)
 engine = BatchAnalysisEngine()
+
+# Multi-core: use 4 worker processes
+engine = BatchAnalysisEngine(max_workers=4)
+
+# Dynamic update (no restart required)
+engine.update_performance_settings({"max_cpu_cores": 8, "max_ram_allocation_gb": 16.0})
 
 # Define a multi-step pipeline
 pipeline = [
@@ -188,7 +201,7 @@ pipeline = [
     },
 ]
 
-# Run across multiple files
+# Run across multiple files (auto-routes to parallel when max_workers > 1)
 files = [Path("file1.abf"), Path("file2.abf")]
 results_df = engine.run_batch(files, pipeline)
 
@@ -216,7 +229,73 @@ engine.cancel()
 | Human-readable aliases | `cv` becomes `coeff_of_variation`, `fi_slope` becomes `fi_gain_hz_per_pa` |
 | Error column | Contains error message if analysis failed for a given file/trial |
 
+#### BatchWorker (QThread)
+
+For GUI applications use `BatchWorker` instead of calling `run_batch()` directly.
+It wraps the engine in a `QThread` so the GUI remains 100% responsive.
+
+```python
+from Synaptipy.application.gui.analysis_worker import BatchWorker
+
+worker = BatchWorker(engine, files, pipeline, channel_filter=["IN_0"])
+worker.progress.connect(lambda cur, tot, msg: progress_bar.setValue(cur))
+worker.batch_finished.connect(lambda df: results_table.load(df))
+worker.batch_error.connect(lambda err: QMessageBox.critical(None, "Batch Error", err))
+worker.start()          # non-blocking — runs in a separate thread
+# worker.cancel()       # request early stop
+```
+
+#### EpochManager
+
+Manage experimental epoch boundaries (Baseline, Stim, Washout) derived from
+hardware TTL pulses or defined manually.
+
+```python
+from Synaptipy.core.analysis.epoch_manager import Epoch, EpochManager
+
+em = EpochManager()
+
+# Auto-detect from TTL channel
+em.from_ttl(ttl_data, time_vector, ttl_threshold=2.5, pre_stim_s=1.0, post_stim_s=1.0)
+
+# Manual definition
+em.add_manual_epoch("Baseline", 0.0, 60.0)
+em.add_manual_epoch("Stim",     60.0, 120.0)
+em.add_manual_epoch("Washout",  120.0, 300.0)
+
+# Extract per-epoch data slices from a channel
+slices = em.get_epoch_slices(channel, trial_index=0)
+# slices = {"Baseline": (data_array, time_array), "Stim": ..., "Washout": ...}
+```
+
 ### Signal Processing
+
+#### compute_psd / multi_harmonic_notch
+
+```python
+from Synaptipy.core.signal_processor import compute_psd, multi_harmonic_notch, comb_filter
+
+# Power Spectral Density (Welch's method)
+freqs, psd = compute_psd(data, sampling_rate=20000.0)
+
+# Multi-harmonic notch: strip 50 Hz and all harmonics (100, 150, 200 Hz …)
+clean = multi_harmonic_notch(data, fundamental_hz=50.0, fs=20000.0, Q=30.0)
+
+# IIR comb filter (equivalent, uses scipy.signal.iircomb internally)
+clean = comb_filter(data, freq=50.0, Q=30.0, fs=20000.0)
+```
+
+#### UndoStack (Channel.push_undo / Channel.undo)
+
+Non-destructive editing via a lightweight state-history stack.
+
+```python
+channel.push_undo("apply lowpass 300 Hz")   # snapshot before change
+channel.data_trials = filtered_trials       # mutate
+
+if channel.can_undo:
+    channel.undo()                          # restore previous state
+```
 
 #### ProcessingPipeline
 

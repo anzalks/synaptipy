@@ -4,7 +4,7 @@ Includes filtering and trace quality checks.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -721,3 +721,119 @@ def find_artifact_windows(data: np.ndarray, fs: float, slope_threshold: float, p
         mask = ndimage.binary_dilation(mask, structure=structure)
 
     return mask
+
+
+# ---------------------------------------------------------------------------
+# Power Spectral Density
+# ---------------------------------------------------------------------------
+
+
+def compute_psd(
+    data: np.ndarray,
+    sampling_rate: float,
+    nperseg: Optional[int] = None,
+    window: str = "hann",
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute Power Spectral Density (PSD) using Welch's method.
+
+    Args:
+        data: 1D signal array.
+        sampling_rate: Sampling rate in Hz.
+        nperseg: FFT segment length. Defaults to ``min(len(data), 4096)``.
+        window: Window function name passed to :func:`scipy.signal.welch` (default ``"hann"``).
+
+    Returns:
+        Tuple ``(frequencies, psd)`` where *frequencies* is in Hz and *psd* is
+        in (data_units)^2/Hz.  Both arrays are 1-D float64.  On failure or
+        missing scipy an empty-array pair is returned.
+    """
+    scipy_signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        log.warning("Scipy not available. Cannot compute PSD.")
+        return np.array([]), np.array([])
+
+    if data is None or len(data) == 0:
+        return np.array([]), np.array([])
+
+    data = np.ascontiguousarray(data, dtype=np.float64)
+    seg = int(nperseg) if nperseg else min(len(data), 4096)
+    seg = max(seg, 2)  # welch requires at least 2 samples per segment
+
+    try:
+        freqs, psd = scipy_signal.welch(data, fs=sampling_rate, nperseg=seg, window=window)
+        return freqs.astype(np.float64), psd.astype(np.float64)
+    except Exception as exc:
+        log.error("PSD computation failed: %s", exc)
+        return np.array([]), np.array([])
+
+
+# ---------------------------------------------------------------------------
+# Multi-harmonic notch (convenience wrapper around comb_filter)
+# ---------------------------------------------------------------------------
+
+
+def multi_harmonic_notch(
+    data: np.ndarray,
+    fundamental_hz: float,
+    fs: float,
+    max_harmonics: Optional[int] = None,
+    Q: float = 30.0,
+) -> np.ndarray:
+    """Strip a fundamental frequency and its harmonics using cascaded notch filters.
+
+    Applies a discrete notch at *fundamental_hz*, *2 * fundamental_hz*,
+    *3 * fundamental_hz*, …, up to the Nyquist limit (or *max_harmonics*,
+    whichever comes first).
+
+    Prefer :func:`comb_filter` (IIR comb via :func:`scipy.signal.iircomb`) when
+    the scipy version supports it.  This function falls back to cascaded
+    :func:`notch_filter` calls, which is always available.
+
+    Args:
+        data: Input signal array.
+        fundamental_hz: Fundamental line-noise frequency to remove (e.g. 50 or 60).
+        fs: Sampling rate in Hz.
+        max_harmonics: Maximum number of harmonics to remove including the
+            fundamental.  ``None`` means remove all harmonics below Nyquist.
+        Q: Quality factor for each notch (higher = narrower).  Default 30.
+
+    Returns:
+        Filtered signal, or original data if filtering is impossible.
+    """
+    scipy_signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        log.warning("Scipy not available. Cannot apply multi-harmonic notch.")
+        return data
+
+    if data is None or len(data) == 0:
+        return data
+
+    if fundamental_hz <= 0 or fs <= 0:
+        log.warning("Invalid fundamental_hz or fs for multi_harmonic_notch.")
+        return data
+
+    # Try the efficient IIR comb approach first.
+    nyq = 0.5 * fs
+    freq_norm = fundamental_hz / nyq
+    if 0 < freq_norm < 1:
+        try:
+            b, a = scipy_signal.iircomb(fundamental_hz, Q, ftype="notch", fs=fs)
+            z, p, k = scipy_signal.tf2zpk(b, a)
+            sos = scipy_signal.zpk2sos(z, p, k)
+            return _sosfiltfilt_safe(sos, data)
+        except Exception as exc:
+            log.debug("iircomb unavailable or failed (%s); falling back to cascaded notch.", exc)
+
+    # Cascaded notch fallback: apply a notch at each harmonic individually.
+    result = np.copy(data)
+    harmonic = 1
+    while True:
+        freq = harmonic * fundamental_hz
+        if freq >= nyq:
+            break
+        if max_harmonics is not None and harmonic > max_harmonics:
+            break
+        result = notch_filter(result, freq, Q, fs)
+        harmonic += 1
+
+    return result

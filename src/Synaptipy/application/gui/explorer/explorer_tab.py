@@ -361,6 +361,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self.plot_canvas.x_range_changed.connect(self._on_vb_x_range_changed)
         self.plot_canvas.y_range_changed.connect(self._on_vb_y_range_changed)
 
+        # Global plot-customization signal — propagate pen/brush changes to Explorer canvas
+        from Synaptipy.shared.plot_customization import get_plot_customization_signals
+
+        get_plot_customization_signals().preferences_updated.connect(self.update_plot_pens)
+
         # Analysis Buttons
         self.add_analysis_btn.clicked.connect(self._add_selection_to_analysis_set)
         self.clear_analysis_btn.clicked.connect(self._clear_analysis_set)
@@ -403,52 +408,63 @@ class ExplorerTab(QtWidgets.QWidget):
         except Exception as e:
             log.error(f"Failed to prepare live analysis request: {e}")
 
-    def _on_live_analysis_finished(self, result: SpikeTrainResult):
-        """Handle new analysis result: Draw Red Dots."""
-        # 1. Check if result matches current view context?
-        # (Controller cancels old ones, but we should verify channel/trial if possible,
-        # but parameters dict has it).
+    def _resolve_peak_y_values(
+        self,
+        cid: str,
+        trial_idx: int,
+        spike_times: np.ndarray,
+        spike_indices: Optional[np.ndarray],
+        threshold: float,
+    ) -> tuple:
+        """Return (x_vals, y_vals) for scatter dots at true biological peaks.
 
+        Looks up the actual trace amplitude at each detected spike index.
+        Falls back to the threshold level when trace data is unavailable.
+        """
+        x_vals = spike_times
+        if spike_indices is not None and len(spike_indices) > 0:
+            trace_data: Optional[np.ndarray] = None
+            if cid in self._processed_cache and trial_idx in self._processed_cache.get(cid, {}):
+                _, trace_data = self._processed_cache[cid][trial_idx]
+            elif cid in self._data_cache and trial_idx in self._data_cache.get(cid, {}):
+                _, trace_data = self._data_cache[cid][trial_idx]
+            if trace_data is not None:
+                valid_mask = spike_indices < len(trace_data)
+                y_vals = trace_data[spike_indices[valid_mask].astype(int)]
+                return spike_times[valid_mask], y_vals
+        return x_vals, np.full(len(x_vals), float(threshold))
+
+    def _on_live_analysis_finished(self, result: SpikeTrainResult):
+        """Handle new analysis result: draw scatter dots on true biological peaks."""
         cid = result.parameters.get("channel_id")
         trial_idx = result.parameters.get("trial_index")
 
-        # Verify context match to avoid flashing wrong dots
         if trial_idx != self.current_trial_index:
             return
 
         item_key = f"spikes_{cid}"
 
-        # 2. Update Plot
-        # We need to access the plot item.
-        if cid in self.plot_canvas.channel_plots:
-            plot_item = self.plot_canvas.channel_plots[cid]
+        if cid not in self.plot_canvas.channel_plots:
+            return
 
-            # Remove old scatter if stored
-            # We need a place to store the scatter item reference.
-            # We can store it in a dict on ExplorerTab: self.active_scatter_items = {}
-            if not hasattr(self, "active_scatter_items"):
-                self.active_scatter_items = {}
+        plot_item = self.plot_canvas.channel_plots[cid]
 
-            if item_key in self.active_scatter_items:
-                plot_item.removeItem(self.active_scatter_items[item_key])
+        if not hasattr(self, "active_scatter_items"):
+            self.active_scatter_items = {}
 
-            if result.spike_times is not None and len(result.spike_times) > 0:
-                # Get Y-values for the dots. trace[spike_indices]
-                # But we only have times/indices. We need the data again?
-                # Or we can just plot at Threshold level?
-                # Plotting at Threshold level is good for visualization.
-                threshold = result.parameters.get("threshold", 0)
+        if item_key in self.active_scatter_items:
+            plot_item.removeItem(self.active_scatter_items[item_key])
 
-                # Or better: plot on the trace?
-                # To plot on trace, we need data.
-                # Let's plot at Threshold for now as it shows the crossing clearly.
-                y_vals = np.full(len(result.spike_times), threshold)
-
-                scatter = pg.ScatterPlotItem(
-                    x=result.spike_times, y=y_vals, pen=pg.mkPen(None), brush=pg.mkBrush("r"), size=10, pxMode=True
-                )
-                plot_item.addItem(scatter)
-                self.active_scatter_items[item_key] = scatter
+        if result.spike_times is not None and len(result.spike_times) > 0:
+            threshold = result.parameters.get("threshold", 0)
+            x_vals, y_vals = self._resolve_peak_y_values(
+                cid, trial_idx, result.spike_times, result.spike_indices, threshold
+            )
+            scatter = pg.ScatterPlotItem(
+                x=x_vals, y=y_vals, pen=pg.mkPen(None), brush=pg.mkBrush("r"), size=10, pxMode=True
+            )
+            plot_item.addItem(scatter)
+            self.active_scatter_items[item_key] = scatter
 
     # --- File Loading ---
     @staticmethod

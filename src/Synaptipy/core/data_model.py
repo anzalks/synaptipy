@@ -21,6 +21,73 @@ from Synaptipy.core.source_interfaces import SourceHandle
 log = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Undo / Command support
+# ---------------------------------------------------------------------------
+
+
+class UndoStack:
+    """Lightweight state-history stack for non-destructive editing (Command pattern).
+
+    Stores deep-copy snapshots of channel data before destructive operations so
+    that a single :meth:`Channel.undo` call instantly restores the previous state.
+    Memory depth is capped at *max_depth* entries (oldest entries are evicted).
+
+    Usage::
+
+        channel.push_undo("apply lowpass 300 Hz")
+        channel.data_trials = filtered_trials
+        # ...
+        channel.undo()  # restores data_trials to state before the filter
+    """
+
+    def __init__(self, max_depth: int = 20):
+        """
+        Initialise the undo stack.
+
+        Args:
+            max_depth: Maximum number of undo levels retained (default 20).
+        """
+        self._max_depth = max(1, int(max_depth))
+        self._states: List[Tuple[str, Dict[str, Any]]] = []
+
+    def push(self, label: str, state: Dict[str, Any]) -> None:
+        """Save a named state snapshot.
+
+        Args:
+            label: Human-readable description of the pending change (e.g. ``"notch 50 Hz"``).
+            state: Arbitrary serialisable dict representing the channel state to restore.
+        """
+        self._states.append((label, state))
+        if len(self._states) > self._max_depth:
+            self._states.pop(0)
+
+    def pop(self) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """Remove and return the most recently saved state.
+
+        Returns:
+            ``(label, state)`` tuple, or ``None`` if the stack is empty.
+        """
+        return self._states.pop() if self._states else None
+
+    def can_undo(self) -> bool:
+        """Return ``True`` if at least one undo level is available."""
+        return bool(self._states)
+
+    @property
+    def depth(self) -> int:
+        """Number of undo levels currently stored."""
+        return len(self._states)
+
+    def clear(self) -> None:
+        """Discard all saved states."""
+        self._states.clear()
+
+    def __repr__(self) -> str:
+        labels = [lbl for lbl, _ in self._states]
+        return f"UndoStack(depth={self.depth}, labels={labels})"
+
+
 class Channel:
     """
     Represents a single channel of recorded data, potentially across multiple
@@ -98,6 +165,9 @@ class Channel:
         # --- Lazy Loading Support ---
         self.loader = loader
         self.metadata: Dict[str, Any] = {}  # General metadata dictionary
+
+        # --- Undo stack (non-destructive editing) ---
+        self._undo_stack: UndoStack = UndoStack()
 
     @property
     def num_trials(self) -> int:
@@ -342,6 +412,43 @@ class Channel:
         except (ValueError, TypeError):
             # Handles cases where there's no data left after filtering
             return None
+
+    # --- Undo support (non-destructive editing) ---
+
+    def push_undo(self, label: str = "") -> None:
+        """Save the current ``data_trials`` state so that :meth:`undo` can restore it.
+
+        Call this *before* any destructive operation (filter, event deletion, …).
+
+        Args:
+            label: Short human-readable description of the upcoming change
+                   (e.g. ``"lowpass 300 Hz"``).  Stored for UI display only.
+        """
+        snapshot = {
+            "data_trials": [t.copy() if isinstance(t, np.ndarray) else t for t in self.data_trials],
+        }
+        self._undo_stack.push(label, snapshot)
+        log.debug("Channel '%s': pushed undo state '%s' (stack depth %d).", self.name, label, self._undo_stack.depth)
+
+    def undo(self) -> bool:
+        """Restore ``data_trials`` to the last saved state.
+
+        Returns:
+            ``True`` if a state was restored, ``False`` if the stack was empty.
+        """
+        entry = self._undo_stack.pop()
+        if entry is None:
+            log.debug("Channel '%s': undo requested but stack is empty.", self.name)
+            return False
+        label, snapshot = entry
+        self.data_trials = snapshot["data_trials"]
+        log.debug("Channel '%s': undid '%s' (stack depth now %d).", self.name, label, self._undo_stack.depth)
+        return True
+
+    @property
+    def can_undo(self) -> bool:
+        """``True`` when at least one undo level is available."""
+        return self._undo_stack.can_undo()
 
     def __repr__(self):
         return f"Channel(id='{self.id}', name='{self.name}', units='{self.units}', trials={self.num_trials})"
