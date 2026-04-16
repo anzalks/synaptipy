@@ -1801,9 +1801,9 @@ class ExplorerTab(QtWidgets.QWidget):
             return
         self._updating_viewranges = True
         try:
-            scroll_val = self.y_controls.global_y_scrollbar.value()
+            global_scroll_val = self.y_controls.global_y_scrollbar.value()
 
-            # Apply to ALL visible channels
+            # Apply to ALL visible channels, preserving each channel's own scroll position
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
                     continue
@@ -1812,11 +1812,13 @@ class ExplorerTab(QtWidgets.QWidget):
                 if not plot or not plot.isVisible():
                     continue
 
+                # Use the channel's individual scrollbar if available; fall back to global
+                sb = self.y_controls.individual_y_scrollbars.get(cid)
+                scroll_val = sb.value() if sb is not None else global_scroll_val
+
                 new_min, new_max = self._calculate_visible_range(base_range[0], base_range[1], value, scroll_val)
                 plot.setYRange(new_min, new_max, padding=0)
-
-                # ALSO Update individual controls to match global
-                self.y_controls.set_individual_scrollbar(cid, scroll_val)
+                # Do NOT overwrite individual scrollbar — preserve each channel's scroll offset
 
         finally:
             self._updating_viewranges = False
@@ -1973,14 +1975,15 @@ class ExplorerTab(QtWidgets.QWidget):
                         continue
                     other_plot = self.plot_canvas.get_plot(other_cid)
                     if other_plot and other_plot.isVisible():
-                        nm, nM = self._calculate_visible_range(other_base[0], other_base[1], z, s)
-                        other_plot.setYRange(nm, nM, padding=0)
-                        # Also update their individual scrollbars
-                        self.y_controls.set_individual_scrollbar(other_cid, s)
-
-                        # And page steps
+                        # Preserve each channel's own independent Y-center: fetch
+                        # the other channel's current scrollbar value instead of
+                        # broadcasting the source channel's scroll position (s).
                         other_sb = self.y_controls.individual_y_scrollbars.get(other_cid)
-                        if other_sb:
+                        other_s = other_sb.value() if other_sb is not None else s
+                        nm, nM = self._calculate_visible_range(other_base[0], other_base[1], z, other_s)
+                        other_plot.setYRange(nm, nM, padding=0)
+                        # Update their individual scrollbars (unchanged: they already hold other_s)
+                        if other_sb is not None:
                             other_sb.setPageStep(page_step)
 
         except Exception as e:

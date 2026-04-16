@@ -25,6 +25,7 @@ from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.shared.plot_customization import get_hv_line_pen, get_scatter_pen_and_brush
 
 log = logging.getLogger(__name__)
 
@@ -788,9 +789,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             pass  # UI is being torn down or rebuilt — safe to ignore
 
     def _on_data_plotted(self):
-        """Hook called after data is plotted — re-add persistent items then trigger analysis."""
+        """Hook called after data is plotted - re-add persistent items then trigger analysis.
+
+        Uses the debounce timer so the visibility gate in ``_trigger_analysis``
+        recognises this as an automatic trigger and defers when the tab is hidden.
+        """
         self._ensure_custom_items_on_plot()
-        self._trigger_analysis()
+        if self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     def _on_param_changed(self):
         """Handle parameter changes."""
@@ -1243,10 +1249,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     return
             except (ValueError, TypeError):
                 return
-            color = cfg.get("color", "r")
+            color = cfg.get("color")
             symbol = cfg.get("symbol", "o")
+            if color is None:
+                scatter_pen, scatter_brush = get_scatter_pen_and_brush()
+                scatter_size = 10
+            else:
+                scatter_pen = pg.mkPen(None)
+                scatter_brush = pg.mkBrush(color)
+                scatter_size = 10
             scatter = pg.ScatterPlotItem(
-                x=x_arr, y=y_arr, size=10, symbol=symbol, pen=pg.mkPen(None), brush=pg.mkBrush(color)
+                x=x_arr, y=y_arr, size=scatter_size, symbol=symbol, pen=scatter_pen, brush=scatter_brush
             )
             self.plot_widget.addItem(scatter)
             self._dynamic_plot_items.append(scatter)
@@ -1283,7 +1296,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
         vals = self._val(result, data_key, [])
-        color = cfg.get("color", "b")
+        color = cfg.get("color")
         if isinstance(vals, (int, float)):
             vals = [vals]
         for x in vals:
@@ -1292,7 +1305,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     continue
             except (TypeError, ValueError):
                 continue
-            line = pg.InfiniteLine(pos=float(x), angle=90, pen=pg.mkPen(color, width=2, style=QtCore.Qt.DashLine))
+            if color is None:
+                pen = get_hv_line_pen()
+            else:
+                pen = pg.mkPen(color, width=2, style=QtCore.Qt.DashLine)
+            line = pg.InfiniteLine(pos=float(x), angle=90, pen=pen)
             self.plot_widget.addItem(line)
             self._dynamic_plot_items.append(line)
 
