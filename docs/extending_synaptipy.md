@@ -900,7 +900,84 @@ The key design points illustrated here:
 
 ---
 
-## 10. Troubleshooting
+## 10. Applying Global Themes to Plugins
+
+Synaptipy ships a global plot-customisation system (`shared/plot_customization.py`)
+that lets users change trace colours, line widths, scatter sizes, and region
+fills from **Edit > Preferences > Plot Customisation**.  When a user saves new
+preferences, a `preferences_updated` signal fires and all built-in canvases
+instantly re-style their existing plot items - no file reload required.
+
+### How the theme reaches your plugin
+
+The registry wrapper receives all GUI state through `**kwargs`.  Synaptipy
+injects a `theme_config` dict whenever the current plot-customisation settings
+are relevant to the analysis call.  Your wrapper can read it like this:
+
+```python
+@AnalysisRegistry.register(name="my_metric", ...)
+def run_my_metric_wrapper(data, time, sampling_rate, **kwargs):
+    theme_config = kwargs.get("theme_config", {})
+
+    # Retrieve individual style properties with sensible defaults
+    trace_color  = theme_config.get("single_trial_color", (200, 200, 200))
+    avg_color    = theme_config.get("average_color",      (255, 255,   0))
+    scatter_color = theme_config.get("scatter_color",     (255,   0,   0))
+    line_width   = theme_config.get("line_width",         1.5)
+
+    return my_metric_logic(data, time, sampling_rate,
+                           trace_color=trace_color,
+                           avg_color=avg_color)
+```
+
+Available keys in `theme_config`:
+
+| Key | Type | Description |
+|---|---|---|
+| `single_trial_color` | `(R, G, B)` tuple | Colour of individual trial traces |
+| `average_color` | `(R, G, B)` tuple | Colour of the average overlay |
+| `scatter_color` | `(R, G, B)` tuple | Colour of scatter / event markers |
+| `region_color` | `(R, G, B, A)` tuple | Fill colour of `LinearRegionItem`s |
+| `threshold_color` | `(R, G, B)` tuple | Colour of threshold `InfiniteLine`s |
+| `line_width` | `float` | Stroke width for all trace pens |
+| `scatter_size` | `int` | Symbol size for scatter plots |
+
+Always guard with `.get("key", default)` so your plugin works even when
+`theme_config` is absent (e.g. in batch-only usage or unit tests).
+
+### Returning styled plot data
+
+If your analysis produces overlay arrays (stored under private `_`-prefixed
+keys), you can store the chosen colour alongside them so the canvas can apply
+it verbatim:
+
+```python
+return {
+    "My_Value": 42.0,
+    "_plot_x": time_slice,
+    "_plot_y": data_slice,
+    "_plot_color": theme_config.get("average_color", (255, 255, 0)),
+}
+```
+
+The canvas reads `_plot_color` when drawing the overlay curve and passes it
+directly to `pg.mkPen()`.
+
+### Listening to live theme changes in a popup window
+
+If your plugin opens a secondary `pg.PlotWidget` popup (via the `popup_xy`
+plot type), connect to the global signal so it re-styles on the fly:
+
+```python
+from Synaptipy.shared.plot_customization import get_plot_customization_signals
+
+signals = get_plot_customization_signals()
+signals.preferences_updated.connect(my_popup_widget.update_pens)
+```
+
+---
+
+## 11. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|

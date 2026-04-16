@@ -26,6 +26,9 @@ class SessionManager(QObject):
     global_settings_changed = Signal(dict)  # Emits Dict[str, Any]
     preprocessing_settings_changed = Signal(object)  # Emits preprocessing settings dict or None
     file_context_changed = Signal(list, int)  # Emits file_list, current_index
+    # Emitted when performance preferences change (max_cpu_cores, max_ram_allocation_gb).
+    # Subscribers (e.g. BatchAnalysisEngine) can call update_performance_settings() immediately.
+    preferences_changed = Signal(dict)  # Emits performance settings dict
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -43,6 +46,7 @@ class SessionManager(QObject):
         self._preprocessing_settings: Optional[Dict[str, Any]] = None
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
+        self._performance_settings: Dict[str, Any] = {"max_cpu_cores": 1, "max_ram_allocation_gb": 4.0}
         self._initialized = True
         log.debug("SessionManager initialized.")
 
@@ -196,3 +200,36 @@ class SessionManager(QObject):
                 for method in sorted(self._preprocessing_settings["filters"].keys()):
                     steps.append(self._preprocessing_settings["filters"][method])
         return steps
+
+    # ------------------------------------------------------------------
+    # Performance settings — pub/sub
+    # ------------------------------------------------------------------
+
+    @property
+    def performance_settings(self) -> Dict[str, Any]:
+        """Current performance settings (max_cpu_cores, max_ram_allocation_gb)."""
+        return dict(self._performance_settings)
+
+    @performance_settings.setter
+    def performance_settings(self, settings: Dict[str, Any]) -> None:
+        """Update performance settings and emit :attr:`preferences_changed`.
+
+        This is the *publisher* side of the pub/sub architecture.  Connecting
+        a :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`'s
+        :meth:`~BatchAnalysisEngine.update_performance_settings` slot to
+        :attr:`preferences_changed` keeps the engine in sync without restarts.
+
+        Args:
+            settings: Dict with any subset of ``"max_cpu_cores"`` (int) and
+                      ``"max_ram_allocation_gb"`` (float).
+        """
+        if not isinstance(settings, dict):
+            log.warning("performance_settings must be a dict, got %s.", type(settings).__name__)
+            return
+        self._performance_settings.update(settings)
+        log.debug("SessionManager: performance_settings updated: %s", self._performance_settings)
+        self.preferences_changed.emit(dict(self._performance_settings))
+
+    def emit_preferences_changed(self) -> None:
+        """Re-emit the current performance settings (e.g. on app start-up)."""
+        self.preferences_changed.emit(dict(self._performance_settings))

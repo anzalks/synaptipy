@@ -69,3 +69,56 @@ def test_timer_trigger_suppresses_popup(tab, monkeypatch, qtbot):
 
     # Assert popup NOT shown
     mock_warning.assert_not_called()
+
+
+def test_hidden_tab_defers_analysis(tab, monkeypatch, qtbot):
+    """Task 4: auto-triggered analysis on a hidden tab must be deferred."""
+    # Ensure tab is not visible (default for a widget not added to a visible window)
+    assert not tab.isVisible(), "tab should start hidden in this test"
+
+    # Give it some data so the no-data early-return does not fire first
+    tab._current_plot_data = {"dummy": True}
+    tab._pending_update = False
+
+    analysis_called = []
+    original = tab._gather_analysis_parameters
+
+    def spy(*args, **kwargs):
+        analysis_called.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(tab, "_gather_analysis_parameters", spy)
+
+    # Simulate auto-trigger via the debounce timer (mimics file-load signal path)
+    timer = tab._analysis_debounce_timer
+    timer.setInterval(0)
+    timer.setSingleShot(True)
+    with qtbot.waitSignal(timer.timeout, timeout=1000):
+        timer.start()
+    qtbot.wait(50)  # allow slot to run
+
+    # Analysis must NOT have run; a deferred flag must be set instead
+    assert not analysis_called, "Analysis ran on a hidden tab via auto-trigger"
+    assert tab._pending_update, "_pending_update flag not set for hidden tab"
+
+
+def test_show_event_processes_pending_update(tab, monkeypatch, qtbot):
+    """Task 4: showEvent must flush _pending_update by calling _trigger_analysis."""
+    tab._pending_update = True
+    tab._current_plot_data = None  # ensure fast-path no-data exit after show
+
+    triggered = []
+
+    def spy():
+        triggered.append(True)
+        # do NOT call original — avoid side effects in unit test
+
+    monkeypatch.setattr(tab, "_trigger_analysis", spy)
+
+    # showEvent sets _pending_update = False then calls _trigger_analysis
+    from PySide6.QtGui import QShowEvent
+
+    tab.showEvent(QShowEvent())
+
+    assert triggered, "showEvent did not call _trigger_analysis"
+    assert not tab._pending_update, "_pending_update not cleared by showEvent"

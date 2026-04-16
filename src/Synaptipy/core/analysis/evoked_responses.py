@@ -219,6 +219,7 @@ def calculate_paired_pulse_ratio(  # noqa: C901
     fit_decay_from_ms: float = 5.0,
     fit_decay_window_ms: float = 30.0,
     polarity: str = "negative",
+    artifact_blanking_ms: float = 1.0,
 ) -> Dict[str, Any]:
     """Calculate Paired-Pulse Ratio with residual decay subtraction.
 
@@ -252,6 +253,10 @@ def calculate_paired_pulse_ratio(  # noqa: C901
         fit_decay_window_ms: Window duration for decay fit (ms).
         polarity: ``"negative"`` (inward/downward events, e.g. EPSCs) or
             ``"positive"``.
+        artifact_blanking_ms: Duration (ms) after each stimulus onset to ignore
+            when searching for the peak response (default 1.0).  Prevents the
+            stimulus shock-wave artefact from being identified as the biological
+            response peak.
 
     Returns:
         Dict with keys:
@@ -293,8 +298,13 @@ def calculate_paired_pulse_ratio(  # noqa: C901
         return float(np.mean(segment)) if segment.size > 0 else float(data[_nearest_idx(stim_onset_s)])
 
     def _response_peak(stim_onset_s: float, baseline: float) -> Tuple[float, float]:
-        """Return (peak_amplitude, raw_peak_value) relative to baseline."""
-        win_start = _nearest_idx(stim_onset_s)
+        """Return (peak_amplitude, raw_peak_value) relative to baseline.
+
+        Data within ``artifact_blanking_ms`` of the stimulus onset are excluded
+        so that the stimulus artefact is never mistaken for the biological peak.
+        """
+        blank_s = artifact_blanking_ms / 1000.0
+        win_start = _nearest_idx(stim_onset_s + blank_s)
         win_end = min(_nearest_idx(stim_onset_s + response_window_ms / 1000.0) + 1, len(data))
         if win_end <= win_start:
             return 0.0, baseline
@@ -409,11 +419,11 @@ def calculate_paired_pulse_ratio(  # noqa: C901
 
 @AnalysisRegistry.register(
     name="optogenetic_sync",
-    label="Optogenetic Synchronization",
+    label="Evoked Sync",
     requires_secondary_channel={
         "param_name": "ttl_data",
-        "label": "TTL Channel:",
-        "tooltip": "Select the digital/TTL channel containing optical stimulus pulses.",
+        "label": "TTL / Stimulus Channel:",
+        "tooltip": "Select the digital/TTL or stimulus channel (optical or electrical).",
     },
     ui_params=[
         {
@@ -534,6 +544,16 @@ def calculate_paired_pulse_ratio(  # noqa: C901
             "default": "max",
             "tooltip": "Direction to search for peak response voltage within the window.",
         },
+        {
+            "name": "artifact_blanking_ms",
+            "type": "float",
+            "label": "Artifact Blanking (ms):",
+            "default": 1.0,
+            "min": 0.0,
+            "max": 50.0,
+            "decimals": 2,
+            "tooltip": "Data within this window after each stimulus onset are excluded from peak detection.",
+        },
     ],
     plots=[
         {"name": "Trace", "type": "trace", "show_events": True},
@@ -553,6 +573,7 @@ def run_opto_sync_wrapper(  # noqa: C901
     response_window_ms = kwargs.get("response_window_ms", 20.0)
     event_detection_type = kwargs.get("event_detection_type", "Spikes")
     response_polarity = kwargs.get("response_polarity", "max")
+    artifact_blanking_ms = float(kwargs.get("artifact_blanking_ms", 1.0))
 
     ap_times = kwargs.get("action_potential_times", None)
 
@@ -621,13 +642,16 @@ def run_opto_sync_wrapper(  # noqa: C901
     if not result.is_valid:
         return {"module_used": "evoked_responses", "metrics": {"error": result.error_message}}
 
-    # Find peak response voltage within each TTL stimulus window
+    # Find peak response voltage within each TTL stimulus window.
+    # The first artifact_blanking_ms after each stimulus onset are skipped so
+    # that the stimulus shock-wave artefact is never reported as the peak.
     _peak_times: List[float] = []
     _peak_amps: List[float] = []
     _window_s = response_window_ms / 1000.0
+    _blank_s = artifact_blanking_ms / 1000.0
     if result.stimulus_onsets is not None and len(data) > 0:
         for _onset in result.stimulus_onsets:
-            _idx_start = int(np.searchsorted(time, _onset, side="left"))
+            _idx_start = int(np.searchsorted(time, _onset + _blank_s, side="left"))
             _idx_end = int(np.searchsorted(time, _onset + _window_s, side="right"))
             _idx_start = max(0, min(_idx_start, len(data) - 1))
             _idx_end = max(_idx_start + 1, min(_idx_end, len(data)))
@@ -740,6 +764,16 @@ def run_opto_sync_wrapper(  # noqa: C901
             "max": 500.0,
             "decimals": 1,
         },
+        {
+            "name": "artifact_blanking_ms",
+            "label": "Artifact Blanking (ms):",
+            "type": "float",
+            "default": 1.0,
+            "min": 0.0,
+            "max": 50.0,
+            "decimals": 2,
+            "tooltip": "Data within this window after each stimulus onset are excluded from peak detection.",
+        },
     ],
 )
 def run_ppr_wrapper(
@@ -756,6 +790,7 @@ def run_ppr_wrapper(
     baseline_window_ms = float(kwargs.get("baseline_window_ms", 5.0))
     fit_decay_from_ms = float(kwargs.get("fit_decay_from_ms", 5.0))
     fit_decay_window_ms = float(kwargs.get("fit_decay_window_ms", 30.0))
+    artifact_blanking_ms = float(kwargs.get("artifact_blanking_ms", 1.0))
 
     result = calculate_paired_pulse_ratio(
         data=data,
@@ -767,6 +802,7 @@ def run_ppr_wrapper(
         fit_decay_from_ms=fit_decay_from_ms,
         fit_decay_window_ms=fit_decay_window_ms,
         polarity=polarity,
+        artifact_blanking_ms=artifact_blanking_ms,
     )
 
     return {
@@ -789,14 +825,14 @@ def run_ppr_wrapper(
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
     "evoked_responses",
-    label="Optogenetics",
+    label="Evoked Responses",
     requires_secondary_channel={
         "param_name": "ttl_data",
-        "label": "TTL Channel:",
-        "tooltip": "Select the digital/TTL channel containing optical stimulus pulses.",
+        "label": "TTL / Stimulus Channel:",
+        "tooltip": "Select the digital/TTL or stimulus channel (optical or electrical).",
     },
     method_selector={
-        "Optogenetic Sync": "optogenetic_sync",
+        "Evoked Sync": "optogenetic_sync",
         "Paired-Pulse Ratio": "paired_pulse_ratio",
     },
     ui_params=[],

@@ -141,6 +141,22 @@ def run_my_custom_metric_wrapper(
 
     The signature ``(data, time, sampling_rate, **kwargs)`` is fixed.
     CHANGE: update ``kwargs.get()`` calls to match your ui_params names.
+
+    Global Themes
+    -------------
+    Synaptipy injects a ``theme_config`` dict into ``kwargs`` whenever the
+    user changes plot-customisation settings (colours, line widths, etc.).
+    Use it to tint your result overlays so they stay visually consistent::
+
+        theme_config = kwargs.get("theme_config", {})
+        trace_color = theme_config.get("single_trial_color", (200, 200, 200))
+        avg_color   = theme_config.get("average_color", (255, 255, 0))
+
+    The dict contains the same keys as
+    :func:`~Synaptipy.shared.plot_customization.get_plot_customization_manager`
+    properties (``single_trial_color``, ``average_color``, ``scatter_color``,
+    ``line_width``, etc.).  If the key is absent, fall back to a sensible
+    default so your plugin works even without custom styling.
     """
     return calculate_my_metric(
         data=data,

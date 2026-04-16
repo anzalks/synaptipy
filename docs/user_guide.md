@@ -184,6 +184,16 @@ The Analyser tab provides 15 built-in analysis routines organised into five
 module tabs. Each sub-tab is auto-generated from registry metadata and provides
 parameter widgets, an interactive plot, a results table, and plot overlays.
 
+The five Analyser pillars are:
+
+| Pillar | Registry name | What it covers |
+|---|---|---|
+| **Intrinsic Properties** | `passive_properties` | RMP, Rin, Tau, Sag Ratio, I-V Curve, Capacitance |
+| **Spike Analysis** | `single_spike` | Spike detection, Phase-plane analysis |
+| **Excitability** | `firing_dynamics` | F-I curve, Burst analysis, Train dynamics |
+| **Synaptic Events** | `synaptic_events` | Miniature event detection (threshold, template, deconvolution) |
+| **Optogenetics** | `evoked_responses` | Optogenetic synchronisation, Paired-pulse ratio |
+
 All analysis sub-tabs share the following interface behaviours:
 
 - **Free-form numeric input** - Number fields accept freely typed values;

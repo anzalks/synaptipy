@@ -51,11 +51,11 @@ Synaptipy is available both as a standalone application and as a Python package.
 You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.deb`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
 - **macOS**: Download the `.dmg`, open it, and drag Synaptipy to your Applications folder.
 - **Windows**: Download and run the `_Setup.exe` installer.
-- **Linux**: Download the `.deb` package and install it via `sudo dpkg -i <filename.deb>`.
+- **Linux**: Download the `.AppImage` file, make it executable (`chmod +x Synaptipy-*.AppImage`), and run it directly.
 
 #### Python Package Installation
 
-Synaptipy is not yet published on PyPI. Install from source using the conda environment:
+Install from source using the conda environment:
 
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
@@ -180,6 +180,10 @@ For the full list of Neo-supported formats, see the
 
 ## Using the Analyser Tab
 
+The Analyser tab provides 15 built-in analysis routines organised into five
+module tabs. Each sub-tab is auto-generated from registry metadata and provides
+parameter widgets, an interactive plot, a results table, and plot overlays.
+
 All analysis sub-tabs share the following interface behaviours:
 
 - **Free-form numeric input** - Number fields accept freely typed values;
@@ -263,6 +267,41 @@ All analysis sub-tabs share the following interface behaviours:
 7. The plot shows horizontal lines at V_baseline (blue), V_peak (magenta),
  and V_ss (red)
 
+### Additional Analysis Modules
+
+The following analysis modules are also available in the Analyser tab.
+All parameters are auto-generated from registry metadata and include tooltips,
+valid ranges, and conditional visibility based on clamp mode.
+
+**Intrinsic Properties tab:**
+- **Tau (Time Constant)** - Single or bi-exponential fit to the voltage decay
+  after a current step. Returns tau in ms with an overlay of the fitted curve.
+- **I-V Curve** - Current-voltage relationship across multi-trial step protocols.
+  Fits aggregate Rin from the slope and opens a popup I-V scatter plot.
+- **Capacitance** - Membrane capacitance from Tau/Rin (current-clamp) or
+  capacitive-transient integration (voltage-clamp).
+
+**Spike Analysis tab:**
+- **Phase Plane** - dV/dt vs. voltage trajectory for AP initiation dynamics.
+  Detects threshold via kink-slope criterion; reports mean threshold voltage
+  and maximum dV/dt. Opens a popup phase-plane plot.
+
+**Excitability tab:**
+- **Excitability (F-I Curve)** - Multi-trial rheobase, F-I slope, maximum
+  firing frequency, and spike-frequency adaptation ratio. Opens a popup
+  F-I scatter plot. Requires multi-trial recordings.
+- **Burst Analysis** - Max-ISI burst detection; reports burst count, mean
+  spikes per burst, mean burst duration, and intra-burst frequency.
+- **Spike Train Dynamics** - ISI statistics: mean ISI, coefficient of variation
+  (CV), local variation (LV), and CV2. Opens a popup ISI plot.
+
+**Synaptic Events tab:**
+- **Event Detection (Template Match)** - Parametric deconvolution against a
+  double-exponential template for miniature event detection. Configurable
+  rise/decay tau, threshold in SD, and direction.
+- **Event Detection (Baseline Peak)** - Direct baseline-to-peak amplitude
+  detection with kinetics estimation for evoked or spontaneous events.
+
 ## Using the Exporter Tab
 
 ### Exporting to NWB
@@ -275,6 +314,13 @@ All analysis sub-tabs share the following interface behaviours:
  - Experimenter information
  - Lab/institution details
 5. Click "Export to NWB" and wait for the export to complete
+
+:::{note}
+The NWB exporter currently writes voltage/current traces and electrode
+metadata. Stimulus waveforms, `IntracellularRecordingsTable`, and embedded
+analysis results are not yet exported. See [NWB Export Mapping](nwb_mapping.md)
+for full details on what is included and planned.
+:::
 
 ### Exporting Analysis Results
 

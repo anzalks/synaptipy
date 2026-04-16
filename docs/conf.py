@@ -55,6 +55,7 @@ author = "Anzal K Shahul"
 # Retrieve version from the package itself
 try:
     from Synaptipy import __version__ as _version  # noqa: E402
+
     release = _version
     version = _version
 except Exception:
@@ -68,17 +69,17 @@ extensions = [
     # Core
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
-    "sphinx.ext.napoleon",          # Google / NumPy docstring support
-    "sphinx.ext.viewcode",          # Add [source] links
-    "sphinx.ext.intersphinx",       # Cross-references to external docs
-    "sphinx.ext.todo",              # .. todo:: directives
-    "sphinx.ext.coverage",          # Coverage checks
-    "sphinx.ext.mathjax",           # Render LaTeX math in HTML output
+    "sphinx.ext.napoleon",  # Google / NumPy docstring support
+    "sphinx.ext.viewcode",  # Add [source] links
+    "sphinx.ext.intersphinx",  # Cross-references to external docs
+    "sphinx.ext.todo",  # .. todo:: directives
+    "sphinx.ext.coverage",  # Coverage checks
+    "sphinx.ext.mathjax",  # Render LaTeX math in HTML output
     # Third-party
-    "myst_parser",                   # Parse .md files with MyST
-    "sphinx_autodoc_typehints",     # Render type hints in autodoc
-    "sphinx_copybutton",            # Copy-button on code blocks
-    "sphinx_design",                # Cards, grids, tabs, etc.
+    "myst_parser",  # Parse .md files with MyST
+    "sphinx_autodoc_typehints",  # Render type hints in autodoc
+    "sphinx_copybutton",  # Copy-button on code blocks
+    "sphinx_design",  # Cards, grids, tabs, etc.
 ]
 
 # Autosummary: generate stub files automatically

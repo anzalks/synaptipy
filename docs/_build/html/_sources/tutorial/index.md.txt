@@ -17,12 +17,12 @@ including the mathematical methods used in each analysis module.
 2. [Signal Preprocessing](#2-signal-preprocessing)
 3. [The Analyser Tab](#3-the-analyser-tab)
    - [3.6 Adding Your Own Analysis Tab](#36-adding-your-own-analysis-tab)
-4. [Analysis Modules — Detailed Reference](#4-analysis-modules--detailed-reference)
+4. [Analysis Modules - Detailed Reference](#4-analysis-modules--detailed-reference)
    - [4.1 Baseline / RMP](#41-baseline--rmp-analysis)
    - [4.2 Spike Detection](#42-spike-detection)
-   - [4.3 Event Detection — Threshold Based](#43-event-detection--threshold-based)
-   - [4.4 Event Detection — Template Match](#44-event-detection--template-match--deconvolution)
-   - [4.5 Event Detection — Baseline Peak](#45-event-detection--baseline-peak--kinetics)
+   - [4.3 Event Detection - Threshold Based](#43-event-detection--threshold-based)
+   - [4.4 Event Detection - Template Match](#44-event-detection--template-match--deconvolution)
+   - [4.5 Event Detection - Baseline Peak](#45-event-detection--baseline-peak--kinetics)
    - [4.6 Input Resistance](#46-input-resistance-rin)
    - [4.7 Tau (Time Constant)](#47-tau-membrane-time-constant)
    - [4.8 I-V Curve](#48-i-v-curve)
@@ -49,52 +49,52 @@ electrophysiology data files. It supports all formats handled by the Neo library
 
 ### 1.1 File Sidebar
 
-- **File System Tree** — A live tree filtered to supported electrophysiology extensions.
+- **File System Tree** - A live tree filtered to supported electrophysiology extensions.
   Click any file to load it instantly.
-- **Project Tree** — Groups recordings hierarchically by **Animal → Slice → Cell**.
+- **Project Tree** - Groups recordings hierarchically by **Animal → Slice → Cell**.
   Supports multi-selection for batch operations.
-- **Drag & Drop** — Drag files from the OS file manager directly into the sidebar.
-- **Quality Indicator** — Traffic-light badge per file:
-  - Green **Good** — Clean signal, low drift, acceptable SNR.
-  - Yellow **Warning** — Moderate baseline drift or line noise detected.
-  - Red **Bad** — Excessive noise, drift, or signal quality issues.
+- **Drag & Drop** - Drag files from the OS file manager directly into the sidebar.
+- **Quality Indicator** - Traffic-light badge per file:
+  - Green **Good** - Clean signal, low drift, acceptable SNR.
+  - Yellow **Warning** - Moderate baseline drift or line noise detected.
+  - Red **Bad** - Excessive noise, drift, or signal quality issues.
   Hover to see detailed metrics: RMS noise, drift rate, and specific warnings.
 
 ### 1.2 Plot Canvas
 
-- **Multi-Channel Display** — Each channel is plotted on a separate axis with linked
+- **Multi-Channel Display** - Each channel is plotted on a separate axis with linked
   X-axes for synchronized panning/zooming.
-- **Hardware-Accelerated Rendering** — PyQtGraph + OpenGL, up to 60 fps on large files.
-- **Interactive Navigation** — Scroll to zoom, drag to pan, toolbar for fine control.
+- **Hardware-Accelerated Rendering** - PyQtGraph + OpenGL, up to 60 fps on large files.
+- **Interactive Navigation** - Scroll to zoom, drag to pan, toolbar for fine control.
 
 ### 1.3 Display Configuration Panel
 
 - **Plot Mode**
-  - *Overlay All + Average* — All trials with average highlighted in bold.
-  - *Cycle Single Trial* — One trial at a time with Prev/Next buttons.
-- **Auto Downsample** — Reduces data density automatically for very large files.
-- **Manual Trial Averaging** (Cycle mode) — Add Current Trial / Clear Average /
+  - *Overlay All + Average* - All trials with average highlighted in bold.
+  - *Cycle Single Trial* - One trial at a time with Prev/Next buttons.
+- **Auto Downsample** - Reduces data density automatically for very large files.
+- **Manual Trial Averaging** (Cycle mode) - Add Current Trial / Clear Average /
   Plot Selected Average.
-- **Trial Selection** — Trial Gap (skip N) and Start Trial index for sub-sampling.
-- **Channel Visibility** — Per-channel show/hide checkboxes.
-- **Live Spike Detection** — Real-time detection with configurable threshold
+- **Trial Selection** - Trial Gap (skip N) and Start Trial index for sub-sampling.
+- **Channel Visibility** - Per-channel show/hide checkboxes.
+- **Live Spike Detection** - Real-time detection with configurable threshold
   (default −20 mV) and refractory period (default 2 ms). Spikes shown as red dots.
 
 ### 1.4 Toolbar
 
-- **Prev / Next File** — Navigate through all files in the directory.
-- **Save Plot** — Export the current view to PNG or PDF.
-- **Reset View** — Restore default zoom and position.
-- **Lock Zoom** — Preserve the viewport when switching files (useful for cross-file
+- **Prev / Next File** - Navigate through all files in the directory.
+- **Save Plot** - Export the current view to PNG or PDF.
+- **Reset View** - Restore default zoom and position.
+- **Lock Zoom** - Preserve the viewport when switching files (useful for cross-file
   comparison of the same time window).
-- **X Zoom Slider** — Fine horizontal zoom control.
-- **Prev / Next Trial** (Cycle mode) — Navigate individual sweeps.
+- **X Zoom Slider** - Fine horizontal zoom control.
+- **Prev / Next Trial** (Cycle mode) - Navigate individual sweeps.
 
 ### 1.5 Y-Axis Controls
 
-- **Lock Y Views** — Link or unlink Y-axes across channels.
-- **Global Y Controls** (locked) — Single slider + scroll bar for all channels.
-- **Per-Channel Y Controls** (unlocked) — Independent slider + scroll bar per channel.
+- **Lock Y Views** - Link or unlink Y-axes across channels.
+- **Global Y Controls** (locked) - Single slider + scroll bar for all channels.
+- **Per-Channel Y Controls** (unlocked) - Independent slider + scroll bar per channel.
   All controls are debounced (50 ms) for smooth interaction.
 
 ### 1.6 Adding Data to the Analyser
@@ -118,7 +118,7 @@ All filters use zero-phase Butterworth IIR via `scipy.signal.sosfiltfilt`
 | **Lowpass** | Cutoff (Hz), Order | Remove high-frequency noise |
 | **Highpass** | Cutoff (Hz), Order | Remove slow baseline drift |
 | **Bandpass** | Low & High cutoff (Hz), Order | Pass a specific frequency band |
-| **Notch** | Center (Hz), Q-factor | Remove a narrow band (e.g., 50/60 Hz mains) — `scipy.signal.iirnotch` |
+| **Notch** | Center (Hz), Q-factor | Remove a narrow band (e.g., 50/60 Hz mains) - `scipy.signal.iirnotch` |
 | **Comb** | Base freq (Hz), Q, N harmonics | Cascaded notch filters removing a fundamental and all harmonics |
 
 ### 2.2 Baseline Subtraction Methods
@@ -159,10 +159,10 @@ pipeline.add_step({
 ### 2.4 Trace Quality Assessment
 
 Computed on file load; shown as a traffic-light badge with tooltip:
-- **SNR** — signal power / noise power.
-- **Baseline Drift** — linear regression slope over the full trace (mV/s).
-- **Line Noise** — Welch PSD at 50/60 Hz.
-- **Low-Frequency Variance** — energy below a configurable cutoff.
+- **SNR** - signal power / noise power.
+- **Baseline Drift** - linear regression slope over the full trace (mV/s).
+- **Line Noise** - Welch PSD at 50/60 Hz.
+- **Low-Frequency Variance** - energy below a configurable cutoff.
 
 ---
 
@@ -171,57 +171,57 @@ Computed on file load; shown as a traffic-light badge with tooltip:
 ![Analyser Tab](screenshots/analyser_tab.png)
 
 The central analysis engine. All 15 analysis sub-tabs are auto-built from registry
-metadata — parameter widgets, interactive plots, and result tables are generated
+metadata - parameter widgets, interactive plots, and result tables are generated
 automatically.
 
 ### 3.1 File and Data Source Selection
 
-- **File Selector** — All files in the analysis set.
-- **Channel Selector** — Choose the channel to analyze. Clamp mode (CC / VC) is
+- **File Selector** - All files in the analysis set.
+- **Channel Selector** - Choose the channel to analyze. Clamp mode (CC / VC) is
   auto-detected from channel units and controls which parameters appear.
-- **Data Source** — Average (mean of all trials), Trial 1, Trial 2, etc.
-- **Drag-and-Drop File List** — Drop files directly from the Explorer sidebar.
+- **Data Source** - Average (mean of all trials), Trial 1, Trial 2, etc.
+- **Drag-and-Drop File List** - Drop files directly from the Explorer sidebar.
 
 ### 3.2 Analysis Sub-Tab Features
 
 Each sub-tab provides:
 
-- **Parameter Panel** — Auto-generated spin boxes, combo boxes, and checkboxes.
+- **Parameter Panel** - Auto-generated spin boxes, combo boxes, and checkboxes.
   All include tooltips, unit suffixes, valid min/max ranges.
-  - *Free-form numeric entry* — Number fields accept typed values directly;
+  - *Free-form numeric entry* - Number fields accept typed values directly;
     intermediate states (a lone `−`, an empty field, etc.) are tolerated while
     typing and validated only on commit. Stepping uses adaptive decimal increments.
-  - *Interactive / Manual mode* — Sub-tabs with draggable plot regions expose a
+  - *Interactive / Manual mode* - Sub-tabs with draggable plot regions expose a
     mode selector. In **Interactive** mode the time-window spinboxes are read-only
     (their values are driven by the plot regions); switching to **Manual** mode
     unlocks all spinboxes for direct entry.
-  - *Conditional visibility* — Parameters that are irrelevant for the current
+  - *Conditional visibility* - Parameters that are irrelevant for the current
     clamp mode, analysis type, or detection method are hidden automatically.
 - **Interactive Plot**
-  - *Draggable Regions* — Color-coded overlays (blue = baseline, red = response,
+  - *Draggable Regions* - Color-coded overlays (blue = baseline, red = response,
     orange = peak, green = steady-state) bidirectionally linked to parameter boxes.
-  - *Interactive Event Markers* — Click to remove; Ctrl+click on trace to add.
-  - *Draggable Threshold Line* — Syncs with the threshold parameter.
-  - *Artifact Overlay* — Semi-transparent green shading on detected artifact windows.
-  - *Fit Overlays* — Exponential or regression curves overlaid on the trace.
-- **Results Table** — Parameter / Value pairs for all computed metrics.
-- **Clamp-Mode Awareness** — Parameters show/hide automatically (CC vs. VC).
+  - *Interactive Event Markers* - Click to remove; Ctrl+click on trace to add.
+  - *Draggable Threshold Line* - Syncs with the threshold parameter.
+  - *Artifact Overlay* - Semi-transparent green shading on detected artifact windows.
+  - *Fit Overlays* - Exponential or regression curves overlaid on the trace.
+- **Results Table** - Parameter / Value pairs for all computed metrics.
+- **Clamp-Mode Awareness** - Parameters show/hide automatically (CC vs. VC).
 
 ### 3.3 Shared Controls
 
-- **Run Analysis** — Executes with current parameters; also auto-triggers (debounced)
+- **Run Analysis** - Executes with current parameters; also auto-triggers (debounced)
   on parameter change.
-- **Save Result** — Accumulate result to the session for later export/comparison.
-- **Copy Methods Text** — Publication-ready methods paragraph copied to clipboard.
-- **Run Batch** — Opens the Batch Analysis Dialog (see Section 5).
-- **Cross-Tab Zoom Sync** — Zoom states shared across all analysis sub-tabs.
+- **Save Result** - Accumulate result to the session for later export/comparison.
+- **Copy Methods Text** - Publication-ready methods paragraph copied to clipboard.
+- **Run Batch** - Opens the Batch Analysis Dialog (see Section 5).
+- **Cross-Tab Zoom Sync** - Zoom states shared across all analysis sub-tabs.
 
 ### 3.4 Popup Windows
 
-- **I-V Curve popup** — Scatter + linear regression with R² annotation.
-- **F-I Curve popup** — Firing frequency vs. current with regression.
-- **Phase Plane popup** — dV/dt vs. V with threshold circles and max-dV/dt crosses.
-- **ISI Plot popup** — ISI number vs. ISI duration scatter.
+- **I-V Curve popup** - Scatter + linear regression with R² annotation.
+- **F-I Curve popup** - Firing frequency vs. current with regression.
+- **Phase Plane popup** - dV/dt vs. V with threshold circles and max-dV/dt crosses.
+- **ISI Plot popup** - ISI number vs. ISI duration scatter.
 
 ### 3.5 Session Summary
 
@@ -230,11 +230,35 @@ Shows all accumulated results with **Mean ± SD** for numeric columns across cel
 ### 3.6 Adding Your Own Analysis Tab
 
 You can add a completely new analysis tab to the Analyser **without touching any
-Synaptipy source code**.  All you need is a single Python file — Synaptipy
+Synaptipy source code**.  All you need is a single Python file - Synaptipy
 generates the parameter panel, Run button, results table, and plot overlays
 automatically from the metadata you provide.
 
-#### Step 1 — Create the plugin file
+#### Bundled Example Plugins
+
+Three ready-to-run example plugins ship with every Synaptipy installation.
+When **Enable Custom Plugins** is checked in **Edit > Preferences** (it is on
+by default), they appear automatically as new sub-tabs in the Analyser and are
+the fastest way to see what the plugin system can do before writing your own.
+
+| File | Tab label | What it measures |
+|------|-----------|-----------------|
+| `examples/plugins/synaptic_charge.py` | **Synaptic Charge (AUC)** | Total charge (pC) of a postsynaptic current via trapezoidal integration over a user-defined window; shaded fill overlay marks the integrated area and a star marks the detected peak amplitude. |
+| `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for optogenetically evoked spikes; requires a secondary digital/TTL channel. |
+| `examples/plugins/ap_repolarization.py` | **Max Repolarization Rate** | Steepest falling dV/dt of the first action potential in a window (V/s), a proxy for voltage-gated potassium-channel dynamics. |
+
+![Synaptic Charge (AUC) plugin tab](screenshots/analyser_synaptic_charge_auc.png)
+
+![Max Repolarization Rate plugin tab](screenshots/analyser_max_repolarization_rate.png)
+
+![Opto Latency Jitter plugin tab](screenshots/analyser_opto_latency_jitter.png)
+
+To customise an example, copy it to `~/.synaptipy/plugins/` and edit your copy.
+Synaptipy always prefers the user copy over the bundled file.
+
+---
+
+#### Step 1 - Create the plugin file
 
 Copy the starter template that ships with Synaptipy:
 
@@ -254,69 +278,79 @@ Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_ana
 > | Windows | `C:\Users\<YourUsername>\.synaptipy\plugins\` |
 >
 > If the folder does not exist yet, either create it manually or simply start
-> Synaptipy once — it creates the folder automatically.
+> Synaptipy once - it creates the folder automatically.
 >
 > **Windows tip:** You can open the folder in Explorer by typing
 > `%USERPROFILE%\.synaptipy\plugins` in the address bar, or in PowerShell:
 > `explorer "$HOME\.synaptipy\plugins"`
 
-#### Step 2 — Write your analysis function
+#### Step 2 - Write your analysis function
 
 Open `~/.synaptipy/plugins/my_analysis.py` in any text editor.  The file has two
-parts:
+parts.  The example below implements **area-under-the-curve (AUC)** measurement
+- the same approach used by the bundled `synaptic_charge.py` plugin.
 
-**Part A — Your analysis logic** (plain Python + NumPy, no GUI code):
+**Part A - Your analysis logic** (plain Python + NumPy, no GUI code):
 
 ```python
 import numpy as np
 
-def calculate_snr(data, time, sampling_rate, noise_start, noise_end,
-                  signal_start, signal_end):
-    """Calculate signal-to-noise ratio in dB."""
-    # Convert seconds → sample indices
-    ni0 = int(np.searchsorted(time, noise_start, side="left"))
-    ni1 = int(np.searchsorted(time, noise_end,   side="right"))
-    si0 = int(np.searchsorted(time, signal_start, side="left"))
-    si1 = int(np.searchsorted(time, signal_end,   side="right"))
+def calculate_area_under_curve(data, time, sampling_rate,
+                               baseline_start, baseline_end,
+                               window_start, window_end):
+    """Integrate a baseline-subtracted trace to obtain synaptic charge (pC)."""
+    # Baseline: mean over the pre-event window
+    bl0 = int(np.searchsorted(time, baseline_start, side="left"))
+    bl1 = int(np.searchsorted(time, baseline_end,   side="right"))
+    baseline = float(np.mean(data[bl0:bl1])) if bl1 > bl0 else 0.0
 
-    noise_rms  = float(np.sqrt(np.mean(data[ni0:ni1] ** 2)))
-    signal_rms = float(np.sqrt(np.mean(data[si0:si1] ** 2)))
-    snr_db     = float(20.0 * np.log10(signal_rms / noise_rms))
+    # Integration window
+    wi0 = int(np.searchsorted(time, window_start, side="left"))
+    wi1 = int(np.searchsorted(time, window_end,   side="right"))
+    win_t = time[wi0:wi1]
+    win_d = data[wi0:wi1] - baseline
 
+    if win_t.size < 2:
+        return {"error": "Integration window too narrow"}
+
+    # np.trapezoid: pA * s = pC
+    charge_pc = float(np.trapezoid(win_d, win_t))
     return {
-        "snr_db":     round(snr_db, 2),
-        "noise_rms":  round(noise_rms, 4),
-        "signal_rms": round(signal_rms, 4),
+        "Charge_pC":   round(charge_pc, 6),
+        "Baseline_pA": round(baseline,  4),
+        "_int_x": win_t,          # hidden - fed to fill_between overlay
+        "_int_y": data[wi0:wi1],  # hidden - raw (unshifted) curve for shading
+        "_base":  baseline,       # hidden - baseline level for hline
     }
 ```
 
-**Part B — Register it with the decorator:**
+**Part B - Register it with the decorator:**
 
 ```python
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 @AnalysisRegistry.register(
-    name="snr_analysis",               # unique internal ID
-    label="Signal-to-Noise Ratio",     # name shown on the tab
-    ui_params=[...],                   # parameter widgets  (see below)
-    plots=[...],                       # plot overlays      (see below)
+    name="synaptic_charge",              # unique internal ID
+    label="Synaptic Charge (AUC)",       # name shown on the tab
+    ui_params=[...],                     # parameter widgets  (see below)
+    plots=[...],                         # plot overlays      (see below)
 )
-def run_snr(data, time, sampling_rate, **kwargs):
-    """Wrapper — pulls GUI values from kwargs and calls the logic."""
-    return calculate_snr(
+def run_auc(data, time, sampling_rate, **kwargs):
+    """Wrapper - pulls GUI values from kwargs and calls the logic."""
+    return calculate_area_under_curve(
         data, time, sampling_rate,
-        noise_start  = kwargs.get("noise_start",  0.0),
-        noise_end    = kwargs.get("noise_end",    0.1),
-        signal_start = kwargs.get("signal_start", 0.1),
-        signal_end   = kwargs.get("signal_end",   0.5),
+        baseline_start = kwargs.get("baseline_start", 0.0),
+        baseline_end   = kwargs.get("baseline_end",   0.05),
+        window_start   = kwargs.get("window_start",   0.05),
+        window_end     = kwargs.get("window_end",     0.3),
     )
 ```
 
 > **The wrapper signature is fixed:** `def f(data, time, sampling_rate, **kwargs)`
-> — Synaptipy passes in the trace array, time array, and sampling rate, plus
+> - Synaptipy passes in the trace array, time array, and sampling rate, plus
 > every parameter widget value as a keyword argument.
 
-#### Step 3 — Define parameter widgets (`ui_params`)
+#### Step 3 - Define parameter widgets (`ui_params`)
 
 Each dict in the `ui_params` list creates one widget in the parameter panel.
 Four widget types are available:
@@ -328,53 +362,57 @@ Four widget types are available:
 | `"bool"` | Check box | `{"name": "auto_detect", "label": "Auto-Detect Baseline", "type": "bool", "default": False}` |
 | `"choice"` | Drop-down | `{"name": "direction", "label": "Direction:", "type": "choice", "choices": ["negative", "positive"], "default": "negative"}` |
 
-Full example for the SNR analysis:
+Full example for the AUC analysis:
 
 ```python
 ui_params=[
-    {"name": "noise_start",  "label": "Noise Start (s):",  "type": "float",
-     "default": 0.0, "min": 0.0, "max": 1e9, "decimals": 4},
-    {"name": "noise_end",    "label": "Noise End (s):",    "type": "float",
-     "default": 0.1, "min": 0.0, "max": 1e9, "decimals": 4},
-    {"name": "signal_start", "label": "Signal Start (s):", "type": "float",
-     "default": 0.1, "min": 0.0, "max": 1e9, "decimals": 4},
-    {"name": "signal_end",   "label": "Signal End (s):",   "type": "float",
-     "default": 0.5, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "baseline_start", "label": "Baseline Start (s):", "type": "float",
+     "default": 0.0,  "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "baseline_end",   "label": "Baseline End (s):",   "type": "float",
+     "default": 0.05, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "window_start",   "label": "Window Start (s):",   "type": "float",
+     "default": 0.05, "min": 0.0, "max": 1e9, "decimals": 4},
+    {"name": "window_end",     "label": "Window End (s):",     "type": "float",
+     "default": 0.3,  "min": 0.0, "max": 1e9, "decimals": 4},
 ],
 ```
 
 **Optional extras on any parameter:**
 
-- `"tooltip": "Hover text"` — shows on mouse-over.
-- `"visible_when": {"param": "mode", "value": "advanced"}` — shows this widget
+- `"tooltip": "Hover text"` - shows on mouse-over.
+- `"visible_when": {"param": "mode", "value": "advanced"}` - shows this widget
   only when another widget named `"mode"` has the value `"advanced"`.
 
-#### Step 4 — Define plot overlays (`plots`)
+#### Step 4 - Define plot overlays (`plots`)
 
 Each dict in the `plots` list draws something on the trace after the analysis
 runs.  Common overlay types:
 
 | Type | What it draws | Example |
 |------|---------------|---------|
-| `"interactive_region"` | Draggable shaded region synced to two float parameters | `{"type": "interactive_region", "data": ["noise_start", "noise_end"], "color": "b"}` |
-| `"hlines"` | Horizontal lines at result values | `{"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]}` |
+| `"interactive_region"` | Draggable shaded region synced to two float parameters | `{"type": "interactive_region", "data": ["window_start", "window_end"], "color": "g"}` |
+| `"hlines"` | Horizontal lines at result values | `{"type": "hlines", "data": ["_base"], "color": "b", "styles": ["dash"]}` |
 | `"vlines"` | Vertical lines at result values | `{"type": "vlines", "data": "stim_times", "color": "c"}` |
 | `"markers"` | Scatter dots at (x, y) arrays from result | `{"type": "markers", "x": "peak_times", "y": "peak_voltages", "color": "r"}` |
 | `"threshold_line"` | Draggable h-line synced to a parameter | `{"type": "threshold_line", "param": "threshold"}` |
 | `"overlay_fit"` | Curve overlay (e.g. exponential fit) | `{"type": "overlay_fit", "x": "_fit_t", "y": "_fit_v", "color": "r"}` |
+| `"fill_between"` | Shaded filled area between two curves | `{"type": "fill_between", "x": "_int_x", "y1": "_int_y", "y2": "_base", "brush": (0, 100, 255, 100)}` |
 | `"popup_xy"` | Opens a separate plot window | `{"type": "popup_xy", "title": "F-I Curve", "x": "currents", "y": "rates", "x_label": "I (pA)", "y_label": "f (Hz)"}` |
 
-Full example — two draggable windows and a dashed line at the noise level:
+Full example - baseline region, integration region, baseline h-line, and shaded
+integrated area:
 
 ```python
 plots=[
-    {"type": "interactive_region", "data": ["noise_start", "noise_end"],   "color": "b"},
-    {"type": "interactive_region", "data": ["signal_start", "signal_end"], "color": "g"},
-    {"type": "hlines", "data": ["noise_rms"], "color": "b", "styles": ["dash"]},
+    {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "b"},
+    {"type": "interactive_region", "data": ["window_start",   "window_end"],   "color": "g"},
+    {"type": "hlines", "data": ["_base"], "color": "b", "styles": ["dash"]},
+    {"type": "fill_between", "x": "_int_x", "y1": "_int_y", "y2": "_base",
+     "brush": (0, 100, 255, 100)},
 ],
 ```
 
-#### Step 5 — Control what shows in the results table
+#### Step 5 - Control what shows in the results table
 
 Every key in the dict your function returns becomes a row in the results table.
 To keep helper data out of the table (e.g. arrays used only by plot overlays),
@@ -382,47 +420,50 @@ prefix the key with an underscore:
 
 ```python
 return {
-    "snr_db":       42.3,        # ← shown in results table
-    "noise_rms":    0.15,        # ← shown in results table
-    "_fit_curve":   some_array,  # ← hidden (used by overlay_fit)
+    "Charge_pC":    1.23,       # ← shown in results table
+    "Baseline_pA":  -42.0,      # ← shown in results table
+    "_int_x":  time_array,      # ← hidden (used by fill_between overlay)
+    "_int_y":  data_array,      # ← hidden (used by fill_between overlay)
+    "_base":   -42.0,           # ← hidden (used by hlines overlay)
 }
 ```
 
 If your function encounters an error, return `{"error": "message"}` and the GUI
 will display the message instead of a results table.
 
-#### Step 6 — Restart and use
+#### Step 6 - Restart and use
 
 Save your file, restart Synaptipy, and your new tab appears in the Analyser:
 
 ```
-Analyser → ... | Baseline | Spikes | Signal-to-Noise Ratio
+Analyser → ... | Baseline | Spikes | Synaptic Charge (AUC)
 ```
 
-Load a file, select a channel, and click **Run Analysis** (or just change a
-parameter — analysis re-runs automatically).  The results table, plot overlays,
-and batch processing all work immediately.
+Load a voltage-clamp recording, select the current channel, and click
+**Run Analysis** (or just change a parameter - analysis re-runs automatically).
+The results table, shaded fill overlay, and batch processing all work
+immediately.
 
 #### Tips
 
-- **No rebuild needed** — just save the `.py` file and restart Synaptipy.
-- **Errors are safe** — if your plugin has a syntax error or crashes, Synaptipy
+- **No rebuild needed** - just save the `.py` file and restart Synaptipy.
+- **Errors are safe** - if your plugin has a syntax error or crashes, Synaptipy
   logs the error and keeps running (your tab simply won't appear).  Check the log
   at `~/.synaptipy/logs/` (Windows: `C:\Users\<YourUsername>\.synaptipy\logs\`).
-- **Multiple plugins** — put as many `.py` files in the plugins folder as you
+- **Multiple plugins** - put as many `.py` files in the plugins folder as you
   like; each one with an `@AnalysisRegistry.register` decorator creates a
   separate tab.
-- **Use any installed package** — your plugin can import SciPy, scikit-learn,
+- **Use any installed package** - your plugin can import SciPy, scikit-learn,
   or anything installed in the same Python environment.
-- **Template location** — the ready-to-copy template is at
+- **Template location** - the ready-to-copy template is at
   `src/Synaptipy/templates/plugin_template.py`.
-- **Full reference** — for the complete list of all parameter types, all 12
+- **Full reference** - for the complete list of all parameter types, all 12
   plot overlay types, and advanced features like conditional visibility, see
   [Writing Custom Analysis Plugins](../extending_synaptipy.md).
 
 ---
 
-## 4. Analysis Modules — Detailed Reference
+## 4. Analysis Modules - Detailed Reference
 
 > **Formal mathematics:** For publication-ready LaTeX definitions of every metric
 > computed below, see the [Algorithmic Definitions](../algorithmic_definitions.md) page.
@@ -434,7 +475,7 @@ passive membrane characterisation through synaptic and optogenetic studies.
 |--------|------------------|
 | **Intrinsic Properties** | Baseline/RMP (4.1), Input Resistance (4.6), Tau (4.7), I-V Curve (4.8), Capacitance (4.10), Sag Ratio (4.15) |
 | **Spike Analysis** | Spike Detection (4.2), Phase Plane (4.13) |
-| **Excitability** | Excitability — F-I Curve (4.11), Burst (4.9), Spike Train Dynamics (4.14) |
+| **Excitability** | Excitability - F-I Curve (4.11), Burst (4.9), Spike Train Dynamics (4.14) |
 | **Synaptic Events** | Threshold (4.3), Deconvolution (4.4), Baseline+Peak+Kinetics (4.5) |
 | **Optogenetics** | Optogenetic Synchronization (4.12) |
 
@@ -508,12 +549,12 @@ Automated detection and comprehensive parameterization of action potentials.
 
 #### Methods
 
-- **Onset** — `numpy.gradient` computes dV/dt; onset where dV/dt > `dvdt_threshold`.
+- **Onset** - `numpy.gradient` computes dV/dt; onset where dV/dt > `dvdt_threshold`.
   More robust against baseline drift than amplitude thresholding.
 - **Per-spike features** (vectorized NumPy):
   - Amplitude = V_peak − V_threshold
   - Half-width at 50% amplitude (linear interpolation)
-  - Rise time 10–90%, Decay time 90–10% (sub-sample precision)
+  - Rise time 10-90%, Decay time 90-10% (sub-sample precision)
   - AHP depth = V_threshold − V_min_post (Savitzky-Golay smoothed)
   - AHP duration = repolarization to AHP recovery
   - ADP amplitude = local max after AHP trough
@@ -533,15 +574,15 @@ Red dashed threshold h-line; red dot markers at spike peaks.
 
 ---
 
-### 4.3 Event Detection — Threshold Based
+### 4.3 Event Detection - Threshold Based
 
-![Event Detection — Threshold interface](screenshots/analyser_synaptic_events_threshold_based.png)
+![Event Detection - Threshold interface](screenshots/analyser_synaptic_events_threshold_based.png)
 
 **Registry name**: `event_detection_threshold` | **Tab label**: *Event Detection*
 
 Detects mEPSCs / mIPSCs using adaptive prominence-based thresholding.
 A **method selector** dropdown switches between all three event detection
-algorithms (sections 4.3 – 4.5).
+algorithms (sections 4.3 - 4.5).
 
 #### Parameters
 
@@ -576,9 +617,9 @@ draggable threshold line; artifact overlay.
 
 ---
 
-### 4.4 Event Detection — Template Match / Deconvolution
+### 4.4 Event Detection - Template Match / Deconvolution
 
-![Event Detection — Deconvolution interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
+![Event Detection - Deconvolution interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
 
 **Registry name**: `event_detection_deconvolution` | **Tab label**: *Event (Template Match)*
 
@@ -613,9 +654,9 @@ Same interactive markers / threshold line / artifact overlay.
 
 ---
 
-### 4.5 Event Detection — Baseline Peak / Kinetics
+### 4.5 Event Detection - Baseline Peak / Kinetics
 
-![Event Detection — Baseline Peak interface](screenshots/analyser_synaptic_events_baseline__peak__kinetics.png)
+![Event Detection - Baseline Peak interface](screenshots/analyser_synaptic_events_baseline__peak__kinetics.png)
 
 **Registry name**: `event_detection_baseline_peak` | **Tab label**: *Event (Baseline Peak)*
 
@@ -908,10 +949,10 @@ Parameters for the inactive detection modes are hidden automatically.
 1. TTL edge detection: binarize → `numpy.diff` for rising edges.
 2. For each stimulus onset, the response window is searched for an event using
    the selected detection method:
-   - **Spikes** — threshold-crossing AP detection with refractory filtering.
-   - **Events (Threshold)** — prominence-based threshold crossing with direction
+   - **Spikes** - threshold-crossing AP detection with refractory filtering.
+   - **Events (Threshold)** - prominence-based threshold crossing with direction
      and refractory filtering (`detect_events_threshold`).
-   - **Events (Template)** — double-exponential template deconvolution
+   - **Events (Template)** - double-exponential template deconvolution
      (`detect_events_template`).
 3. Optical latency = mean(t_event − t_onset).
 4. Response probability = stimuli_with_events / total_stimuli.
@@ -951,7 +992,7 @@ Visualizes AP dynamics in phase space (dV/dt vs. V).
 1. dV/dt via `numpy.gradient` + `scipy.ndimage.gaussian_filter1d`.
 2. Phase-plane trajectory = V(t) vs. dV/dt(t).
 3. Kink detection: first point where dV/dt crosses kink_slope in the lookback
-   window before the spike peak — reflects axonal AP initiation.
+   window before the spike peak - reflects axonal AP initiation.
 4. Max dV/dt = peak upstroke velocity.
 
 #### Results
@@ -983,11 +1024,11 @@ Quantifies spike train regularity and temporal structure with ISI statistics.
 #### Methods
 
 1. ISI = numpy.diff(spike_times).
-2. **CV** = σ_ISI / μ_ISI — global variability (0 = regular, 1 = Poisson).
+2. **CV** = σ_ISI / μ_ISI - global variability (0 = regular, 1 = Poisson).
 3. **CV₂** (Holt et al. 1996) = mean(2|ISI_(i+1) − ISI_i| / (ISI_(i+1) + ISI_i))
-   — local variability, insensitive to slow rate changes.
+   - local variability, insensitive to slow rate changes.
 4. **LV** (Shinomoto et al. 2003) = mean(3(ISI_i − ISI_(i+1))² / (ISI_i + ISI_(i+1))²)
-   — LV < 1 regular, LV ≈ 1 Poisson, LV > 1 bursty.
+   - LV < 1 regular, LV ≈ 1 Poisson, LV > 1 bursty.
 
 #### Results
 
@@ -1006,7 +1047,7 @@ Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
 **Registry name**: `sag_ratio_analysis` | **Tab label**: *Sag Ratio (Ih)*
 
 Quantifies hyperpolarisation-activated sag (I_h current) from a hyperpolarising
-current-step protocol. This is a standalone analysis module — while the Rin
+current-step protocol. This is a standalone analysis module - while the Rin
 analysis (§4.6) includes sag ratio in its output, this dedicated tab provides
 finer control over the measurement windows and smoothing.
 
@@ -1020,13 +1061,13 @@ finer control over the measurement windows and smoothing.
 | Peak Window End | float (s) | End of the peak search window |
 | Steady-State Start | float (s) | Start of the steady-state measurement window |
 | Steady-State End | float (s) | End of the steady-state measurement window |
-| Peak Smoothing | float (ms) | Savitzky–Golay smoothing window for peak detection (default 5 ms) |
+| Peak Smoothing | float (ms) | Savitzky-Golay smoothing window for peak detection (default 5 ms) |
 | Rebound Window | float (ms) | Window after stimulus offset for rebound measurement (default 100 ms) |
 
 #### Methods
 
 1. **V_baseline** = mean voltage in baseline window.
-2. **V_peak** = minimum of Savitzky–Golay-smoothed voltage in the peak window
+2. **V_peak** = minimum of Savitzky-Golay-smoothed voltage in the peak window
    (polynomial order 3, window = `peak_smoothing_ms`).
 3. **V_ss** = mean voltage in steady-state window.
 4. **Sag Ratio** = (V_peak − V_baseline) / (V_ss − V_baseline). A value > 1
@@ -1068,14 +1109,14 @@ Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
 
 ### 5.3 Building a Pipeline
 
-1. **Add Step** — select from all 15 registered analyses (or registered
+1. **Add Step** - select from all 15 registered analyses (or registered
    preprocessing functions).
-2. **Scope** — determines how data is fed to the analysis function:
-   - *Average* — single averaged trace across all trials.
-   - *All Trials* — analysis runs once per trial, producing one row per trial.
-   - *First Trial* — analysis runs on trial 0 only.
-   - *Specific Trial* — pick a 0-based trial index.
-   - *Channel Set* — pass the full list of trials to the function (e.g. for
+2. **Scope** - determines how data is fed to the analysis function:
+   - *Average* - single averaged trace across all trials.
+   - *All Trials* - analysis runs once per trial, producing one row per trial.
+   - *First Trial* - analysis runs on trial 0 only.
+   - *Specific Trial* - pick a 0-based trial index.
+   - *Channel Set* - pass the full list of trials to the function (e.g. for
      F-I curves or I-V curves that need all sweeps at once).
 3. Configure **Parameters** with auto-generated widgets driven by
    `ui_params` in the registry metadata.
@@ -1086,7 +1127,7 @@ Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
 ### 5.4 Running and Cancellation
 
 A background `QThread` worker processes each file sequentially with per-file
-progress updates.  Click **Stop** at any time — cancellation is thread-safe
+progress updates.  Click **Stop** at any time - cancellation is thread-safe
 and produces a partial-result DataFrame.
 
 ### 5.5 Output Columns
@@ -1191,7 +1232,7 @@ pipeline = [
 
 df = engine.run_batch(files, pipeline, channel_filter=["Vm_prime"])
 
-# Export — private columns are internal; drop for clean CSV
+# Export - private columns are internal; drop for clean CSV
 clean = df.drop(columns=[c for c in df.columns if c.startswith("_")])
 clean.to_csv("results.csv", index=False)
 ```
@@ -1202,9 +1243,9 @@ When a **preprocessing** step (e.g. bandpass filter, baseline subtraction) is
 in the pipeline, it modifies the data context passed to all subsequent analysis
 steps for the *same channel*.  This means you can build pipelines like:
 
-1. Bandpass Filter (preprocessing) — modifies data in-place in the context
-2. Spike Detection — runs on filtered data
-3. Burst Analysis — also runs on filtered data
+1. Bandpass Filter (preprocessing) - modifies data in-place in the context
+2. Spike Detection - runs on filtered data
+3. Burst Analysis - also runs on filtered data
 
 The context is not shared across channels or files.
 
@@ -1227,11 +1268,11 @@ The context is not shared across channels or files.
 ### 6.1 NWB Export
 
 Click **"Export to NWB"** to open the NWB Metadata Dialog (four tabs):
-- **Session** — description, UUID (auto-generated), start time, experimenter,
+- **Session** - description, UUID (auto-generated), start time, experimenter,
   lab, institution.
-- **Subject** — ID, species, age (ISO 8601), sex, genotype, weight.
-- **Device** — name, description, manufacturer.
-- **Electrodes** — description, location, filtering.
+- **Subject** - ID, species, age (ISO 8601), sex, genotype, weight.
+- **Device** - name, description, manufacturer.
+- **Electrodes** - description, location, filtering.
 
 The exporter automatically selects the appropriate NWB series class based on
 channel units:
@@ -1248,7 +1289,7 @@ All data is stored in SI base units (volts, amperes) with the appropriate
 mapping between Synaptipy data structures and NWB containers, see the
 [NWB Export Mapping](../nwb_mapping.md) reference page.
 
-Produces a `.nwb` file with raw traces, metadata, and extracted features —
+Produces a `.nwb` file with raw traces, metadata, and extracted features -
 fully NWB 2.x compliant.
 
 ### 6.2 Analysis Results Export
@@ -1270,20 +1311,20 @@ Every Explorer and Analyser sub-tab has a **"Save Plot"** button:
 
 ### 7.1 Preferences Dialog (Edit → Preferences)
 
-- **Scroll Behavior** — Natural, Inverted, or System.
-- **Appearance** — Light, Dark, or System theme with live preview.
+- **Scroll Behavior** - Natural, Inverted, or System.
+- **Appearance** - Light, Dark, or System theme with live preview.
 
 ### 7.2 Plot Customization Dialog (View → Plot Customization)
 
-- **Average Trace** — color, line width, opacity.
-- **Single Trial** — color, line width, opacity + "Force Opaque" toggle for faster
+- **Average Trace** - color, line width, opacity.
+- **Single Trial** - color, line width, opacity + "Force Opaque" toggle for faster
   rendering on large datasets.
-- **Grid** — grid line customization.
+- **Grid** - grid line customization.
 - Each tab includes **Reset to Defaults**.
 
 ### 7.3 Analysis Defaults (Edit → Configure Analysis Defaults)
 
-Registry parameter editor — modify default values for any analysis module.
+Registry parameter editor - modify default values for any analysis module.
 Changes persist across sessions.
 
 ---
@@ -1320,7 +1361,7 @@ You can add custom analysis functions **without modifying any Synaptipy source
 code**.  Place a Python script in `~/.synaptipy/plugins/` with a function
 decorated by `@AnalysisRegistry.register(...)` and restart the application.
 Your analysis will appear as a new tab in the Analyser, complete with
-auto-generated parameter widgets, a results table, and plot overlays — all
+auto-generated parameter widgets, a results table, and plot overlays - all
 driven by metadata in the decorator.
 
 A ready-to-copy template is included at `src/Synaptipy/templates/plugin_template.py`.
