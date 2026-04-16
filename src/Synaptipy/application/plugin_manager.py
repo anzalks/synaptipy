@@ -8,6 +8,7 @@ Any script using the @AnalysisRegistry.register decorator will automatically
 populate the UI and Batch Engine.
 
 Search order:
+
 1. Built-in examples: ``<project_root>/examples/plugins/`` - shipped with the
    package so features work out-of-the-box.
 2. User plugins: ``~/.synaptipy/plugins/`` - personal or third-party additions.

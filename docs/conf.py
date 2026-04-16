@@ -85,7 +85,7 @@ extensions = [
 autosummary_generate = True
 
 # Napoleon settings
-napoleon_google_docstring = False
+napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_preprocess_types = True
 napoleon_use_param = True

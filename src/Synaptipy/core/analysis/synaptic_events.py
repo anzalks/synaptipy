@@ -97,9 +97,10 @@ def calculate_event_charge_dynamic(
     Integrate event charge (area under curve) with a dynamic boundary.
 
     The integration ends at whichever comes first:
+
     - The signal returns to ``local_baseline`` (event complete).
     - A large derivative transient indicates the onset of a subsequent
-      summating event (onset detected as |dV/dt| > 3x the noise in the
+      summating event (onset detected as ``dV/dt`` > 3x the noise in the
       early derivative).
 
     Args:
