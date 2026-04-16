@@ -469,7 +469,7 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 <li class="toctree-l4"><a class="reference internal" href="#output-design-principles">Output Design Principles</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine"><code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#id2">Usage Example</a></li>
-<li class="toctree-l4"><a class="reference internal" href="#module-Synaptipy.core.analysis.epoch_manager">Epoch Manager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#epoch-manager">Epoch Manager</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#module-Synaptipy.core.signal_processor">Signal Processing</a><ul>
@@ -1839,17 +1839,21 @@ channel.undo()  # restores data_trials to state before the filter
 </pre></div>
 </div>
 <p>Initialise the undo stack.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>max_depth: Maximum number of undo levels retained (default 20).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>max_depth</strong> – Maximum number of undo levels retained (default 20).</p>
 </dd>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="Synaptipy.core.data_model.UndoStack.push">
 <span class="sig-name descname"><span class="pre">push</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/data_model.html#UndoStack.push"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.data_model.UndoStack.push" title="Link to this definition"></a></dt>
 <dd><p>Save a named state snapshot.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>label: Human-readable description of the pending change (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;notch</span> <span class="pre">50</span> <span class="pre">Hz&quot;</span></code>).
-state: Arbitrary serialisable dict representing the channel state to restore.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> – Human-readable description of the pending change (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;notch</span> <span class="pre">50</span> <span class="pre">Hz&quot;</span></code>).</p></li>
+<li><p><strong>state</strong> – Arbitrary serialisable dict representing the channel state to restore.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -1858,8 +1862,9 @@ state: Arbitrary serialisable dict representing the channel state to restore.</p
 <dt class="sig sig-object py" id="Synaptipy.core.data_model.UndoStack.pop">
 <span class="sig-name descname"><span class="pre">pop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/data_model.html#UndoStack.pop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.data_model.UndoStack.pop" title="Link to this definition"></a></dt>
 <dd><p>Remove and return the most recently saved state.</p>
-<dl class="simple">
-<dt>Returns:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">(label,</span> <span class="pre">state)</span></code> tuple, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the stack is empty.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">(label,</span> <span class="pre">state)</span></code> tuple, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the stack is empty.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1891,16 +1896,17 @@ state: Arbitrary serialisable dict representing the channel state to restore.</p
 <p>Represents a single channel of recorded data, potentially across multiple
 trials or segments.</p>
 <p>Initializes a Channel object.</p>
-<dl>
-<dt>Args:</dt><dd><p>id: A unique identifier for the channel (e.g., ‘0’, ‘1’, ‘Vm’).
-name: A descriptive name for the channel (e.g., ‘Voltage’, ‘IN_0’).
-units: The physical units of the data (e.g., ‘mV’, ‘pA’, ‘V’).
-sampling_rate: The sampling frequency in Hz.
-data_trials: A list where each element is a 1D NumPy array</p>
-<blockquote>
-<div><p>representing the data for one trial/segment.</p>
-</div></blockquote>
-<p>loader: Optional callable/object with load_trial(index) method for lazy loading.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>id</strong> – A unique identifier for the channel (e.g., ‘0’, ‘1’, ‘Vm’).</p></li>
+<li><p><strong>name</strong> – A descriptive name for the channel (e.g., ‘Voltage’, ‘IN_0’).</p></li>
+<li><p><strong>units</strong> – The physical units of the data (e.g., ‘mV’, ‘pA’, ‘V’).</p></li>
+<li><p><strong>sampling_rate</strong> – The sampling frequency in Hz.</p></li>
+<li><p><strong>data_trials</strong> – A list where each element is a 1D NumPy array
+representing the data for one trial/segment.</p></li>
+<li><p><strong>loader</strong> – Optional callable/object with load_trial(index) method for lazy loading.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py property">
@@ -1992,11 +1998,10 @@ Returns None if no finite data is found.</p>
 <span class="sig-name descname"><span class="pre">push_undo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/data_model.html#Channel.push_undo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.data_model.Channel.push_undo" title="Link to this definition"></a></dt>
 <dd><p>Save the current <code class="docutils literal notranslate"><span class="pre">data_trials</span></code> state so that <a class="reference internal" href="#Synaptipy.core.data_model.Channel.undo" title="Synaptipy.core.data_model.Channel.undo"><code class="xref py py-meth docutils literal notranslate"><span class="pre">undo()</span></code></a> can restore it.</p>
 <p>Call this <em>before</em> any destructive operation (filter, event deletion, …).</p>
-<dl class="simple">
-<dt>Args:</dt><dd><dl class="simple">
-<dt>label: Short human-readable description of the upcoming change</dt><dd><p>(e.g. <code class="docutils literal notranslate"><span class="pre">&quot;lowpass</span> <span class="pre">300</span> <span class="pre">Hz&quot;</span></code>).  Stored for UI display only.</p>
-</dd>
-</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>label</strong> – Short human-readable description of the upcoming change
+(e.g. <code class="docutils literal notranslate"><span class="pre">&quot;lowpass</span> <span class="pre">300</span> <span class="pre">Hz&quot;</span></code>).  Stored for UI display only.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2005,8 +2010,9 @@ Returns None if no finite data is found.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.data_model.Channel.undo">
 <span class="sig-name descname"><span class="pre">undo</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/data_model.html#Channel.undo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.data_model.Channel.undo" title="Link to this definition"></a></dt>
 <dd><p>Restore <code class="docutils literal notranslate"><span class="pre">data_trials</span></code> to the last saved state.</p>
-<dl class="simple">
-<dt>Returns:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> if a state was restored, <code class="docutils literal notranslate"><span class="pre">False</span></code> if the stack was empty.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">True</span></code> if a state was restored, <code class="docutils literal notranslate"><span class="pre">False</span></code> if the stack was empty.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2026,8 +2032,9 @@ Returns None if no finite data is found.</p>
 <p>Represents data and metadata loaded from a single recording file.
 Contains multiple Channel objects.</p>
 <p>Initializes a Recording object.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>source_file: The Path object pointing to the original data file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>source_file</strong> – The Path object pointing to the original data file.</p>
 </dd>
 </dl>
 <dl class="py property">
@@ -2159,14 +2166,16 @@ Membrane Time Constant (Tau), Sag Ratio, and Capacitance analysis.</p>
 <p>$V_{true} = V_{recorded} - LJP$</p>
 <p>When <code class="docutils literal notranslate"><span class="pre">ljp_mv</span></code> is 0.0 the original array is returned unchanged to avoid
 unnecessary allocations in the common case.</p>
-<dl>
-<dt>Args:</dt><dd><p>voltage: 1-D voltage array in mV.
-ljp_mv:  Liquid Junction Potential in mV (positive value shifts</p>
-<blockquote>
-<div><p>voltage downward; negative shifts upward).</p>
-</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>voltage</strong> – 1-D voltage array in mV.</p></li>
+<li><p><strong>ljp_mv</strong> – Liquid Junction Potential in mV (positive value shifts
+voltage downward; negative shifts upward).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Corrected voltage array (same dtype as input).</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Corrected voltage array (same dtype as input).</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2175,12 +2184,16 @@ ljp_mv:  Liquid Junction Potential in mV (positive value shifts</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.passive_properties.calculate_rmp">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.passive_properties.</span></span><span class="sig-name descname"><span class="pre">calculate_rmp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline_window</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/passive_properties.html#calculate_rmp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.passive_properties.calculate_rmp" title="Link to this definition"></a></dt>
 <dd><p>Calculate the Resting Membrane Potential (RMP) from a defined baseline window.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1D NumPy array of voltage data.
-time: 1D NumPy array of corresponding time points (seconds).
-baseline_window: Tuple (start_time, end_time) defining the baseline period.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D NumPy array of voltage data.</p></li>
+<li><p><strong>time</strong> – 1D NumPy array of corresponding time points (seconds).</p></li>
+<li><p><strong>baseline_window</strong> – Tuple (start_time, end_time) defining the baseline period.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>RmpResult object.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>RmpResult object.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2204,20 +2217,22 @@ baseline_window: Tuple (start_time, end_time) defining the baseline period.</p>
 <p>Also computes Peak Rin (from maximum voltage deflection, sensitive to Ih
 sag) and Steady-State Rin (from the last 20% of the response window,
 reflecting the true membrane resistance after sag recovery).</p>
-<dl>
-<dt>Args:</dt><dd><p>voltage_trace: 1D voltage array (mV).
-time_vector: 1D time array (s).
-current_amplitude: Current step amplitude (pA).
-baseline_window: (start, end) seconds for baseline.
-response_window: (start, end) seconds for response.
-parameters: Optional parameter dict stored in result.
-rs_artifact_blanking_ms: Duration (ms) to skip at the start of the</p>
-<blockquote>
-<div><p>response window, preventing series-resistance jump contamination
-(default 0.5 ms).</p>
-</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>voltage_trace</strong> – 1D voltage array (mV).</p></li>
+<li><p><strong>time_vector</strong> – 1D time array (s).</p></li>
+<li><p><strong>current_amplitude</strong> – Current step amplitude (pA).</p></li>
+<li><p><strong>baseline_window</strong> – (start, end) seconds for baseline.</p></li>
+<li><p><strong>response_window</strong> – (start, end) seconds for response.</p></li>
+<li><p><strong>parameters</strong> – Optional parameter dict stored in result.</p></li>
+<li><p><strong>rs_artifact_blanking_ms</strong> – Duration (ms) to skip at the start of the
+response window, preventing series-resistance jump contamination
+(default 0.5 ms).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>RinResult object with value (mean Rin), rin_peak_mohm, and
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>RinResult object with value (mean Rin), rin_peak_mohm, and
 rin_steady_state_mohm populated.</p>
 </dd>
 </dl>
@@ -2313,19 +2328,26 @@ Values are <code class="docutils literal notranslate"><span class="pre">float(np
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.passive_properties.calculate_tau">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.passive_properties.</span></span><span class="sig-name descname"><span class="pre">calculate_tau</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">voltage_trace</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_vector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stim_start_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fit_duration</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'mono'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">artifact_blanking_ms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/passive_properties.html#calculate_tau"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.passive_properties.calculate_tau" title="Link to this definition"></a></dt>
 <dd><p>Calculate Membrane Time Constant (Tau) by fitting an exponential.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>voltage_trace: 1D voltage array (mV).
-time_vector: 1D time array (s).
-stim_start_time: Stimulus onset time (s).
-fit_duration: Duration of fit window (s).
-model: ‘mono’ or ‘bi’.
-tau_bounds: (min_tau, max_tau) in seconds. Defaults to (1e-4, 1.0).
-artifact_blanking_ms: Time to skip after stimulus onset (ms).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>voltage_trace</strong> – 1D voltage array (mV).</p></li>
+<li><p><strong>time_vector</strong> – 1D time array (s).</p></li>
+<li><p><strong>stim_start_time</strong> – Stimulus onset time (s).</p></li>
+<li><p><strong>fit_duration</strong> – Duration of fit window (s).</p></li>
+<li><p><strong>model</strong> – ‘mono’ or ‘bi’.</p></li>
+<li><p><strong>tau_bounds</strong> – (min_tau, max_tau) in seconds. Defaults to (1e-4, 1.0).</p></li>
+<li><p><strong>artifact_blanking_ms</strong> – Time to skip after stimulus onset (ms).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>For model=’mono’: dict with tau_ms, fit_time, fit_values.
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict with tau_ms, fit_time, fit_values.
 For model=’bi’: dict with tau_fast_ms, tau_slow_ms, amplitude_fast,
 amplitude_slow, V_ss, fit_time, fit_values.
 None if fitting fails fatally.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For model=’mono’</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2350,19 +2372,23 @@ v_baseline, rebound_depolarization.</p>
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.passive_properties.</span></span><span class="sig-name descname"><span class="pre">calculate_capacitance_vc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">current_trace</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_vector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transient_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">voltage_step_amplitude_mv</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/passive_properties.html#calculate_capacitance_vc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.passive_properties.calculate_capacitance_vc" title="Link to this definition"></a></dt>
 <dd><p>Calculate Cm and Rs from a voltage-clamp capacitive transient.</p>
 <p>Method:
-1. Rs = <a href="#id5"><span class="problematic" id="id6">|delta_V|</span></a> / I_peak  (Ohm’s law at the instant of the step).
+1. Rs = <code class="docutils literal notranslate"><span class="pre">delta_V</span> <span class="pre">/</span> <span class="pre">I_peak</span></code>  (Ohm’s law at the instant of the step).
 2. Fit a mono-exponential to the transient decay -&gt; tau_transient.
 3. Cm = tau_transient / Rs.</p>
 <p>Falls back to the charge-integral (AUC) method for Cm when the
 exponential fit fails.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>current_trace: 1-D current array (pA).
-time_vector: Corresponding time array (s).
-baseline_window: (start, end) in seconds for pre-step baseline.
-transient_window: (start, end) in seconds covering the capacitive transient.
-voltage_step_amplitude_mv: Voltage command step (mV).  Sign is ignored.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>current_trace</strong> – 1-D current array (pA).</p></li>
+<li><p><strong>time_vector</strong> – Corresponding time array (s).</p></li>
+<li><p><strong>baseline_window</strong> – (start, end) in seconds for pre-step baseline.</p></li>
+<li><p><strong>transient_window</strong> – (start, end) in seconds covering the capacitive transient.</p></li>
+<li><p><strong>voltage_step_amplitude_mv</strong> – Voltage command step (mV).  Sign is ignored.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">capacitance_pf</span></code> (pF) and <code class="docutils literal notranslate"><span class="pre">series_resistance_mohm</span></code> (MOhm),
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict with keys <code class="docutils literal notranslate"><span class="pre">capacitance_pf</span></code> (pF) and <code class="docutils literal notranslate"><span class="pre">series_resistance_mohm</span></code> (MOhm),
 or None on failure.</p>
 </dd>
 </dl>
@@ -2428,16 +2454,20 @@ half-width, rise/decay times, AHP) and Phase Plane (dV/dt vs V) analysis.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.single_spike.detect_spikes_threshold">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.single_spike.</span></span><span class="sig-name descname"><span class="pre">detect_spikes_threshold</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">refractory_samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_search_window_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dvdt_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/single_spike.html#detect_spikes_threshold"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.single_spike.detect_spikes_threshold" title="Link to this definition"></a></dt>
 <dd><p>Detect spikes based on dV/dt threshold crossing with refractory period.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1D voltage array (mV).
-time: 1D time array (s).
-threshold: Minimum voltage that the peak must exceed (mV).
-refractory_samples: Minimum samples between spikes.
-peak_search_window_samples: Samples to search for peak after crossing.
-parameters: Optional parameter dict recorded in result.
-dvdt_threshold: dV/dt threshold for onset detection (V/s, default 20.0).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D voltage array (mV).</p></li>
+<li><p><strong>time</strong> – 1D time array (s).</p></li>
+<li><p><strong>threshold</strong> – Minimum voltage that the peak must exceed (mV).</p></li>
+<li><p><strong>refractory_samples</strong> – Minimum samples between spikes.</p></li>
+<li><p><strong>peak_search_window_samples</strong> – Samples to search for peak after crossing.</p></li>
+<li><p><strong>parameters</strong> – Optional parameter dict recorded in result.</p></li>
+<li><p><strong>dvdt_threshold</strong> – dV/dt threshold for onset detection (V/s, default 20.0).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>SpikeTrainResult.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>SpikeTrainResult.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2452,15 +2482,18 @@ ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.</p>
 <p>AP threshold is detected via the peak of d2V/dt2 in the pre-spike lookback
 window (maximum curvature method).  Falls back to the first dV/dt crossing
 above <code class="docutils literal notranslate"><span class="pre">dvdt_threshold</span></code> when d2V/dt2 gives a boundary result.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1-D voltage array (mV).
-time: Corresponding time array (s).
-spike_indices: Array of sample indices for each spike peak.
-dvdt_threshold: Fallback dV/dt threshold for AP onset (V/s).
-ahp_window_sec: Duration of AHP/ADP search window (s).
-onset_lookback: Lookback window before each spike peak (s).
-fahp_window_ms: (start, end) of fast-AHP window after peak (ms).
-mahp_window_ms: (start, end) of medium-AHP window after peak (ms).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1-D voltage array (mV).</p></li>
+<li><p><strong>time</strong> – Corresponding time array (s).</p></li>
+<li><p><strong>spike_indices</strong> – Array of sample indices for each spike peak.</p></li>
+<li><p><strong>dvdt_threshold</strong> – Fallback dV/dt threshold for AP onset (V/s).</p></li>
+<li><p><strong>ahp_window_sec</strong> – Duration of AHP/ADP search window (s).</p></li>
+<li><p><strong>onset_lookback</strong> – Lookback window before each spike peak (s).</p></li>
+<li><p><strong>fahp_window_ms</strong> – (start, end) of fast-AHP window after peak (ms).</p></li>
+<li><p><strong>mahp_window_ms</strong> – (start, end) of medium-AHP window after peak (ms).</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -2485,16 +2518,18 @@ mahp_window_ms: (start, end) of medium-AHP window after peak (ms).</p>
 (polynomial order 3) directly to the derivative array.  This preserves
 the true max dV/dt better than pre-smoothing the voltage with a Gaussian,
 which attenuates the sharp upstroke of action potentials.</p>
-<dl>
-<dt>Args:</dt><dd><p>voltage: 1D voltage array (mV).
-sampling_rate: Sampling rate (Hz).
-sigma_ms: Smoothing window (ms). The SG window length is derived as</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">max(5,</span> <span class="pre">int(sigma_ms</span> <span class="pre">/</span> <span class="pre">1000</span> <span class="pre">*</span> <span class="pre">sampling_rate))</span></code>, rounded up to the
-next odd integer.  Set to 0 for no smoothing.</p>
-</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>voltage</strong> – 1D voltage array (mV).</p></li>
+<li><p><strong>sampling_rate</strong> – Sampling rate (Hz).</p></li>
+<li><p><strong>sigma_ms</strong> – Smoothing window (ms). The SG window length is derived as
+<code class="docutils literal notranslate"><span class="pre">max(5,</span> <span class="pre">int(sigma_ms</span> <span class="pre">/</span> <span class="pre">1000</span> <span class="pre">*</span> <span class="pre">sampling_rate))</span></code>, rounded up to the
+next odd integer.  Set to 0 for no smoothing.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>1D array of dV/dt in V/s.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>1D array of dV/dt in V/s.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2556,14 +2591,18 @@ next odd integer.  Set to 0 for no smoothing.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.firing_dynamics.calculate_fi_curve">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.firing_dynamics.</span></span><span class="sig-name descname"><span class="pre">calculate_fi_curve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sweeps</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_vectors</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-20.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">refractory_ms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/firing_dynamics.html#calculate_fi_curve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.firing_dynamics.calculate_fi_curve" title="Link to this definition"></a></dt>
 <dd><p>Calculate F-I Curve properties from a set of sweeps.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>sweeps: List of voltage traces (1D arrays).
-time_vectors: List of corresponding time vectors.
-current_steps: List of current amplitudes for each sweep. If None, inferred.
-threshold: Spike detection threshold (mV).
-refractory_ms: Refractory period (ms).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sweeps</strong> – List of voltage traces (1D arrays).</p></li>
+<li><p><strong>time_vectors</strong> – List of corresponding time vectors.</p></li>
+<li><p><strong>current_steps</strong> – List of current amplitudes for each sweep. If None, inferred.</p></li>
+<li><p><strong>threshold</strong> – Spike detection threshold (mV).</p></li>
+<li><p><strong>refractory_ms</strong> – Refractory period (ms).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Dictionary with rheobase_pa, fi_slope, max_freq, spike_counts, frequencies,
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary with rheobase_pa, fi_slope, max_freq, spike_counts, frequencies,
 adaptation_ratios, current_steps.</p>
 </dd>
 </dl>
@@ -2579,23 +2618,23 @@ adaptation_ratios, current_steps.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.firing_dynamics.calculate_bursts_logic">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.firing_dynamics.</span></span><span class="sig-name descname"><span class="pre">calculate_bursts_logic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spike_times</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_isi_start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_isi_end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_spikes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dynamic_burst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">burst_isi_fraction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/firing_dynamics.html#calculate_bursts_logic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.firing_dynamics.calculate_bursts_logic" title="Link to this definition"></a></dt>
 <dd><p>Detect bursts in a spike train.</p>
-<dl>
-<dt>Args:</dt><dd><p>spike_times: 1D array of spike times (seconds).
-max_isi_start: Max ISI to start a burst (s). Ignored when dynamic_burst=True.
-max_isi_end: Max ISI to continue a burst (s). Ignored when dynamic_burst=True.
-min_spikes: Minimum spikes per burst.
-dynamic_burst: When True, compute the mean ISI of the whole train and</p>
-<blockquote>
-<div><p>define the burst boundary as <code class="docutils literal notranslate"><span class="pre">burst_isi_fraction</span> <span class="pre">*</span> <span class="pre">mean_isi</span></code>.
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spike_times</strong> – 1D array of spike times (seconds).</p></li>
+<li><p><strong>max_isi_start</strong> – Max ISI to start a burst (s). Ignored when dynamic_burst=True.</p></li>
+<li><p><strong>max_isi_end</strong> – Max ISI to continue a burst (s). Ignored when dynamic_burst=True.</p></li>
+<li><p><strong>min_spikes</strong> – Minimum spikes per burst.</p></li>
+<li><p><strong>dynamic_burst</strong> – When True, compute the mean ISI of the whole train and
+define the burst boundary as <code class="docutils literal notranslate"><span class="pre">burst_isi_fraction</span> <span class="pre">*</span> <span class="pre">mean_isi</span></code>.
 This abandons hardcoded thresholds in favour of the train’s own
-temporal structure.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>burst_isi_fraction: Fraction of mean ISI used as burst boundary when</dt><dd><p><code class="docutils literal notranslate"><span class="pre">dynamic_burst=True</span></code> (default 0.3, i.e. 30%).</p>
+temporal structure.</p></li>
+<li><p><strong>burst_isi_fraction</strong> – Fraction of mean ISI used as burst boundary when
+<code class="docutils literal notranslate"><span class="pre">dynamic_burst=True</span></code> (default 0.3, i.e. 30%).</p></li>
+</ul>
 </dd>
-</dl>
-</dd>
-<dt>Returns:</dt><dd><p>BurstResult object.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>BurstResult object.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2663,10 +2702,12 @@ temporal structure.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.firing_dynamics.calculate_train_dynamics">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.firing_dynamics.</span></span><span class="sig-name descname"><span class="pre">calculate_train_dynamics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spike_times</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/firing_dynamics.html#calculate_train_dynamics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.firing_dynamics.calculate_train_dynamics" title="Link to this definition"></a></dt>
 <dd><p>Compute native spike train statistical metrics.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>spike_times: 1D NumPy array of spike times in seconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>spike_times</strong> – 1D NumPy array of spike times in seconds.</p>
 </dd>
-<dt>Returns:</dt><dd><p>TrainDynamicsResult.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>TrainDynamicsResult.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2709,12 +2750,16 @@ window and return its RMS as the noise floor.</p>
 robust to recordings with spontaneous activity at the start: the search
 considers the <em>entire</em> trace, selecting the 20 ms chunk with the smallest
 variance regardless of its position.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1D signal array (mV or pA).
-sample_rate: Sampling rate (Hz).
-window_ms: Duration of the sliding window (ms, default 20).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D signal array (mV or pA).</p></li>
+<li><p><strong>sample_rate</strong> – Sampling rate (Hz).</p></li>
+<li><p><strong>window_ms</strong> – Duration of the sliding window (ms, default 20).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Tuple of (rms_noise_floor, (start_idx, end_idx)) where the indices
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (rms_noise_floor, (start_idx, end_idx)) where the indices
 define the quiescent window used for the RMS calculation.</p>
 </dd>
 </dl>
@@ -2724,22 +2769,26 @@ define the quiescent window used for the RMS calculation.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.synaptic_events.calculate_event_charge_dynamic">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.synaptic_events.</span></span><span class="sig-name descname"><span class="pre">calculate_event_charge_dynamic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_rate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">polarity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'negative'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_duration_ms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/synaptic_events.html#calculate_event_charge_dynamic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.synaptic_events.calculate_event_charge_dynamic" title="Link to this definition"></a></dt>
 <dd><p>Integrate event charge (area under curve) with a dynamic boundary.</p>
-<p>The integration ends at whichever comes first:
-- The signal returns to <code class="docutils literal notranslate"><span class="pre">local_baseline</span></code> (event complete).
-- A large derivative transient indicates the onset of a subsequent</p>
-<blockquote>
-<div><p>summating event (onset detected as <a href="#id7"><span class="problematic" id="id8">|dV/dt|</span></a> &gt; 3x the noise in the
-early derivative).</p>
-</div></blockquote>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1D signal array.
-event_index: Sample index of the event peak.
-sample_rate: Sampling rate (Hz).
-local_baseline: Local baseline voltage/current level.
-polarity: <code class="docutils literal notranslate"><span class="pre">&quot;negative&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;positive&quot;</span></code>.
-max_duration_ms: Hard cap on integration window (ms).</p>
+<p>The integration ends at whichever comes first:</p>
+<ul class="simple">
+<li><p>The signal returns to <code class="docutils literal notranslate"><span class="pre">local_baseline</span></code> (event complete).</p></li>
+<li><p>A large derivative transient indicates the onset of a subsequent
+summating event (onset detected as <code class="docutils literal notranslate"><span class="pre">dV/dt</span></code> &gt; 3x the noise in the
+early derivative).</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D signal array.</p></li>
+<li><p><strong>event_index</strong> – Sample index of the event peak.</p></li>
+<li><p><strong>sample_rate</strong> – Sampling rate (Hz).</p></li>
+<li><p><strong>local_baseline</strong> – Local baseline voltage/current level.</p></li>
+<li><p><strong>polarity</strong> – <code class="docutils literal notranslate"><span class="pre">&quot;negative&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;positive&quot;</span></code>.</p></li>
+<li><p><strong>max_duration_ms</strong> – Hard cap on integration window (ms).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Signed charge (area under curve relative to baseline, in units of
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Signed charge (area under curve relative to baseline, in units of
 data * seconds, e.g. mV·s or pA·s).</p>
 </dd>
 </dl>
@@ -2757,16 +2806,19 @@ amplitudes or time constants).</p>
 </pre></div>
 </div>
 <p>with A_fast + A_slow normalised by the event peak amplitude at t=0.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1-D signal array.
-event_index: Sample index of the event peak.
-sample_rate: Sampling rate (Hz).
-local_baseline: Local baseline level (same units as data).
-polarity: <code class="docutils literal notranslate"><span class="pre">&quot;negative&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;positive&quot;</span></code>.
-fit_window_ms: Maximum duration of the decay segment to fit (ms).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1-D signal array.</p></li>
+<li><p><strong>event_index</strong> – Sample index of the event peak.</p></li>
+<li><p><strong>sample_rate</strong> – Sampling rate (Hz).</p></li>
+<li><p><strong>local_baseline</strong> – Local baseline level (same units as data).</p></li>
+<li><p><strong>polarity</strong> – <code class="docutils literal notranslate"><span class="pre">&quot;negative&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;positive&quot;</span></code>.</p></li>
+<li><p><strong>fit_window_ms</strong> – Maximum duration of the decay segment to fit (ms).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Dict with keys:</p>
-<ul class="simple">
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">tau_mono_ms</span></code>    – mono-exp time constant (ms)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">tau_fast_ms</span></code>    – fast component time constant (ms); <code class="docutils literal notranslate"><span class="pre">None</span></code> if
 bi-exp did not converge</p></li>
@@ -2776,6 +2828,10 @@ bi-exp did not converge</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">decay_fit_error</span></code> – <code class="docutils literal notranslate"><span class="pre">None</span></code> when fit succeeded; error message
 string otherwise</p></li>
 </ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with keys</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2794,17 +2850,19 @@ window - i.e. the point before the hyperpolarising/inward current event
 begins to deflect the trace.</p></li>
 <li><p>Positive polarity: the minimum (most hyperpolarised) voltage.</p></li>
 </ul>
-<dl>
-<dt>Args:</dt><dd><p>data: 1D voltage/current array.
-event_indices: Integer indices of detected event peaks.
-sample_rate: Sampling rate in Hz.
-pre_event_window_ms: Duration (ms) of the search window before each</p>
-<blockquote>
-<div><p>peak (default 2.0 ms, valid range 1-3 ms recommended).</p>
-</div></blockquote>
-<p>polarity: “negative” or “positive”.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D voltage/current array.</p></li>
+<li><p><strong>event_indices</strong> – Integer indices of detected event peaks.</p></li>
+<li><p><strong>sample_rate</strong> – Sampling rate in Hz.</p></li>
+<li><p><strong>pre_event_window_ms</strong> – Duration (ms) of the search window before each
+peak (default 2.0 ms, valid range 1-3 ms recommended).</p></li>
+<li><p><strong>polarity</strong> – “negative” or “positive”.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>1D float array of local baseline values, one per event.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>1D float array of local baseline values, one per event.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2993,8 +3051,9 @@ probability, jitter analysis) from optogenetics.py.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.evoked_responses.</span></span><span class="sig-name descname"><span class="pre">extract_ttl_epochs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ttl_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/evoked_responses.html#extract_ttl_epochs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs" title="Link to this definition"></a></dt>
 <dd><p>Extract rising and falling edges of a digital TTL signal.</p>
-<dl class="simple">
-<dt>Returns:</dt><dd><p>Tuple of (onsets, offsets) arrays in seconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple of (onsets, offsets) arrays in seconds.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3003,14 +3062,18 @@ probability, jitter analysis) from optogenetics.py.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.evoked_responses.calculate_optogenetic_sync">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.evoked_responses.</span></span><span class="sig-name descname"><span class="pre">calculate_optogenetic_sync</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ttl_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">action_potential_times</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ttl_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_window_ms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/evoked_responses.html#calculate_optogenetic_sync"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.evoked_responses.calculate_optogenetic_sync" title="Link to this definition"></a></dt>
 <dd><p>Correlate TTL stimuli with action potential times.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>ttl_data: Digital signal data trace.
-action_potential_times: Pre-calculated spike/event times (seconds).
-time: Timestamps of the trace.
-ttl_threshold: Voltage threshold for TTL edge detection.
-response_window_ms: Search window for APs after stimulus onset (ms).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ttl_data</strong> – Digital signal data trace.</p></li>
+<li><p><strong>action_potential_times</strong> – Pre-calculated spike/event times (seconds).</p></li>
+<li><p><strong>time</strong> – Timestamps of the trace.</p></li>
+<li><p><strong>ttl_threshold</strong> – Voltage threshold for TTL edge detection.</p></li>
+<li><p><strong>response_window_ms</strong> – Search window for APs after stimulus onset (ms).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>OptoSyncResult.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>OptoSyncResult.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3023,12 +3086,10 @@ response_window_ms: Search window for APs after stimulus onset (ms).</p>
 under the second stimulus window, the measured amplitude of the second
 response is artificially inflated (facilitation) or deflated (depression),
 yielding biologically invalid PPR values.</p>
-<p>Algorithm:
-1. Measure amplitude of response 1 (R1) relative to its local pre-stimulus</p>
-<blockquote>
-<div><p>baseline.</p>
-</div></blockquote>
-<ol class="arabic simple" start="2">
+<p>Algorithm:</p>
+<ol class="arabic simple">
+<li><p>Measure amplitude of response 1 (R1) relative to its local pre-stimulus
+baseline.</p></li>
 <li><p>Fit a mono-exponential decay to the <em>tail</em> of R1 (from
 <code class="docutils literal notranslate"><span class="pre">fit_decay_from_ms</span></code> to <code class="docutils literal notranslate"><span class="pre">fit_decay_window_ms</span></code> after stim1_onset).</p></li>
 <li><p>Extrapolate the decay curve to estimate the residual baseline level at
@@ -3038,34 +3099,29 @@ sample.</p></li>
 <li><p>Subtract the residual decay value from R2_raw to obtain R2_corrected.</p></li>
 <li><p>Return <code class="docutils literal notranslate"><span class="pre">paired_pulse_ratio</span> <span class="pre">=</span> <span class="pre">R2_corrected</span> <span class="pre">/</span> <span class="pre">R1</span></code>.</p></li>
 </ol>
-<dl>
-<dt>Args:</dt><dd><p>data: 1-D voltage/current array (mV or pA).
-time: 1-D time array (s).
-stim1_onset_s: Time of first stimulus onset (s).
-stim2_onset_s: Time of second stimulus onset (s).
-response_window_ms: Duration after each stimulus to search for peak (ms).
-baseline_window_ms: Pre-stimulus baseline window (ms) to compute local</p>
-<blockquote>
-<div><p>baseline for each response.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>fit_decay_from_ms: Offset from stim1_onset to start fitting decay (ms).</dt><dd><p>Should be after the initial transient.</p>
-</dd>
-</dl>
-<p>fit_decay_window_ms: Window duration for decay fit (ms).
-polarity: <code class="docutils literal notranslate"><span class="pre">&quot;negative&quot;</span></code> (inward/downward events, e.g. EPSCs) or</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">&quot;positive&quot;</span></code>.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>artifact_blanking_ms: Duration (ms) after each stimulus onset to ignore</dt><dd><p>when searching for the peak response (default 1.0).  Prevents the
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1-D voltage/current array (mV or pA).</p></li>
+<li><p><strong>time</strong> – 1-D time array (s).</p></li>
+<li><p><strong>stim1_onset_s</strong> – Time of first stimulus onset (s).</p></li>
+<li><p><strong>stim2_onset_s</strong> – Time of second stimulus onset (s).</p></li>
+<li><p><strong>response_window_ms</strong> – Duration after each stimulus to search for peak (ms).</p></li>
+<li><p><strong>baseline_window_ms</strong> – Pre-stimulus baseline window (ms) to compute local
+baseline for each response.</p></li>
+<li><p><strong>fit_decay_from_ms</strong> – Offset from stim1_onset to start fitting decay (ms).
+Should be after the initial transient.</p></li>
+<li><p><strong>fit_decay_window_ms</strong> – Window duration for decay fit (ms).</p></li>
+<li><p><strong>polarity</strong> – <code class="docutils literal notranslate"><span class="pre">&quot;negative&quot;</span></code> (inward/downward events, e.g. EPSCs) or
+<code class="docutils literal notranslate"><span class="pre">&quot;positive&quot;</span></code>.</p></li>
+<li><p><strong>artifact_blanking_ms</strong> – Duration (ms) after each stimulus onset to ignore
+when searching for the peak response (default 1.0).  Prevents the
 stimulus shock-wave artefact from being identified as the biological
-response peak.</p>
+response peak.</p></li>
+</ul>
 </dd>
-</dl>
-</dd>
-<dt>Returns:</dt><dd><p>Dict with keys:</p>
-<ul class="simple">
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">r1_amplitude</span></code>         – amplitude of first response (baseline-subtracted)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">r2_amplitude_raw</span></code>     – raw amplitude of second response</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">r2_amplitude_corrected</span></code> – R2 after subtracting residual decay</p></li>
@@ -3074,6 +3130,10 @@ response peak.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">decay_tau_ms</span></code>         – time constant of first event decay (ms)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ppr_error</span></code>            – None on success; error string on failure</p></li>
 </ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict with keys</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3116,38 +3176,44 @@ and then retrieved by name for use in batch processing pipelines.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.register">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'analysis'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.register"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.register" title="Link to this definition"></a></dt>
 <dd><p>Decorator to register an analysis or preprocessing function.</p>
-<dl>
-<dt>Args:</dt><dd><p>name: Unique identifier for the function (e.g., “spike_detection”)
-type: The type of function (“analysis” or “preprocessing”)
-<a href="#id1"><span class="problematic" id="id2">**</span></a>kwargs: Additional metadata to store with the function (e.g., ui_params)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – Unique identifier for the function (e.g., “spike_detection”)</p></li>
+<li><p><strong>type</strong> – The type of function (“analysis” or “preprocessing”)</p></li>
+<li><p><strong>**kwargs</strong> – Additional metadata to store with the function (e.g., ui_params)</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Decorator function</p>
-</dd>
-<dt>Example:</dt><dd><p>&#64;AnalysisRegistry.register(“spike_detection”, ui_params=[…])
-def run_spike_detection(data, time, sampling_rate, <a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs):</p>
-<blockquote>
-<div><p># … analysis logic …
-return results_dict</p>
-</div></blockquote>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Decorator function</p>
 </dd>
 </dl>
+<p>Example:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>@AnalysisRegistry.register(&quot;spike_detection&quot;, ui_params=[...])
+def run_spike_detection(data, time, sampling_rate, **kwargs):
+    # ... analysis logic ...
+    return results_dict
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.register_processor">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">register_processor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.register_processor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.register_processor" title="Link to this definition"></a></dt>
 <dd><p>Decorator to register a preprocessing function.
-Alias for register(name, type=”preprocessing”, <a href="#id5"><span class="problematic" id="id6">**</span></a>kwargs).</p>
+Alias for <code class="docutils literal notranslate"><span class="pre">register(name,</span> <span class="pre">type=&quot;preprocessing&quot;,</span> <span class="pre">**kwargs)</span></code>.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.get_function">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.get_function"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.get_function" title="Link to this definition"></a></dt>
 <dd><p>Retrieve a registered analysis function by name.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>name: The registered name of the function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The registered name of the function</p>
 </dd>
-<dt>Returns:</dt><dd><p>The registered function, or None if not found</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The registered function, or None if not found</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3156,10 +3222,12 @@ Alias for register(name, type=”preprocessing”, <a href="#id5"><span class="p
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.get_metadata">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.get_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.get_metadata" title="Link to this definition"></a></dt>
 <dd><p>Retrieve metadata for a registered analysis function.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>name: The registered name of the function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The registered name of the function</p>
 </dd>
-<dt>Returns:</dt><dd><p>Dictionary of metadata, or empty dict if not found</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary of metadata, or empty dict if not found</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3168,8 +3236,9 @@ Alias for register(name, type=”preprocessing”, <a href="#id5"><span class="p
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.list_registered">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_registered</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.list_registered"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.list_registered" title="Link to this definition"></a></dt>
 <dd><p>Get a list of all registered analysis function names.</p>
-<dl class="simple">
-<dt>Returns:</dt><dd><p>List of registered function names</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of registered function names</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3178,10 +3247,12 @@ Alias for register(name, type=”preprocessing”, <a href="#id5"><span class="p
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.list_by_type">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type_str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.list_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.list_by_type" title="Link to this definition"></a></dt>
 <dd><p>Get registered function names filtered by type.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>type_str: The type to filter by (e.g., “analysis”, “preprocessing”)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>type_str</strong> – The type to filter by (e.g., “analysis”, “preprocessing”)</p>
 </dd>
-<dt>Returns:</dt><dd><p>List of function names matching the given type</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of function names matching the given type</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3225,9 +3296,12 @@ last <code class="docutils literal notranslate"><span class="pre">mark_core_snap
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.registry.AnalysisRegistry.update_default_params">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">update_default_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">analysis_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_defaults</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/registry.html#AnalysisRegistry.update_default_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.registry.AnalysisRegistry.update_default_params" title="Link to this definition"></a></dt>
 <dd><p>Update default values for a registered analysis.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>analysis_name: Name of anylsis
-new_defaults: Dictionary of {param_name: new_value}</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>analysis_name</strong> – Name of anylsis</p></li>
+<li><p><strong>new_defaults</strong> – Dictionary of {param_name: new_value}</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -3284,39 +3358,34 @@ private <code class="docutils literal notranslate"><span class="pre">_</span></c
 <p>The engine uses a registry-based architecture where analysis functions register
 themselves via decorators, and the pipeline configuration defines what analyses
 to run on which data scopes.</p>
-<dl>
-<dt>Example Usage:</dt><dd><p>engine = BatchAnalysisEngine()
-files = [Path(“file1.abf”), Path(“file2.abf”)]
-pipeline = [</p>
-<blockquote>
-<div><dl class="simple">
-<dt>{</dt><dd><p>‘analysis’: ‘spike_detection’,
-‘scope’: ‘all_trials’,
-‘params’: {‘threshold’: -15.0, ‘refractory_ms’: 2.0}</p>
-</dd>
-</dl>
-<p>},
-{</p>
-<blockquote>
-<div><p>‘analysis’: ‘rmp_analysis’,
-‘scope’: ‘average’,
-‘params’: {‘baseline_start’: 0.0, ‘baseline_end’: 0.1}</p>
-</div></blockquote>
-<p>}</p>
-</div></blockquote>
-<p>]
-results_df = engine.run_batch(files, pipeline)</p>
-</dd>
-</dl>
+<p>Example:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>engine = BatchAnalysisEngine()
+files = [Path(&quot;file1.abf&quot;), Path(&quot;file2.abf&quot;)]
+pipeline = [
+    {
+        &#39;analysis&#39;: &#39;spike_detection&#39;,
+        &#39;scope&#39;: &#39;all_trials&#39;,
+        &#39;params&#39;: {&#39;threshold&#39;: -15.0, &#39;refractory_ms&#39;: 2.0}
+    },
+    {
+        &#39;analysis&#39;: &#39;rmp_analysis&#39;,
+        &#39;scope&#39;: &#39;average&#39;,
+        &#39;params&#39;: {&#39;baseline_start&#39;: 0.0, &#39;baseline_end&#39;: 0.1}
+    }
+]
+results_df = engine.run_batch(files, pipeline)
+</pre></div>
+</div>
 <p>Initialize the batch analysis engine.</p>
-<dl>
-<dt>Args:</dt><dd><p>neo_adapter: Optional NeoAdapter instance. If None, creates a new one.
-max_workers: Number of parallel worker processes for <a class="reference internal" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch" title="Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_batch()</span></code></a>.</p>
-<blockquote>
-<div><p>1 (default) means fully sequential execution.
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>neo_adapter</strong> – Optional NeoAdapter instance. If None, creates a new one.</p></li>
+<li><p><strong>max_workers</strong> – Number of parallel worker processes for <a class="reference internal" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch" title="Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_batch()</span></code></a>.
+1 (default) means fully sequential execution.
 Values &gt; 1 enable <a class="reference external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ProcessPoolExecutor</span></code></a>
-parallelism.  Pass <code class="docutils literal notranslate"><span class="pre">-1</span></code> to use all available CPU cores.</p>
-</div></blockquote>
+parallelism.  Pass <code class="docutils literal notranslate"><span class="pre">-1</span></code> to use all available CPU cores.</p></li>
+</ul>
 </dd>
 </dl>
 <dl class="py method">
@@ -3332,11 +3401,10 @@ parallelism.  Pass <code class="docutils literal notranslate"><span class="pre">
 <p>Reads <code class="docutils literal notranslate"><span class="pre">max_cpu_cores</span></code> from <em>settings</em> and updates <code class="xref py py-attr docutils literal notranslate"><span class="pre">max_workers</span></code>
 immediately so the next <a class="reference internal" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch" title="Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_batch()</span></code></a> call picks up the new value.
 This is the subscriber side of the pub/sub <code class="docutils literal notranslate"><span class="pre">preferences_changed</span></code> signal.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><dl class="simple">
-<dt>settings: Dict that may contain <code class="docutils literal notranslate"><span class="pre">&quot;max_cpu_cores&quot;</span></code> (int) and/or</dt><dd><p><code class="docutils literal notranslate"><span class="pre">&quot;max_ram_allocation_gb&quot;</span></code> (float, logged but not enforced here).</p>
-</dd>
-</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>settings</strong> – Dict that may contain <code class="docutils literal notranslate"><span class="pre">&quot;max_cpu_cores&quot;</span></code> (int) and/or
+<code class="docutils literal notranslate"><span class="pre">&quot;max_ram_allocation_gb&quot;</span></code> (float, logged but not enforced here).</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3345,8 +3413,9 @@ This is the subscriber side of the pub/sub <code class="docutils literal notrans
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.list_available_analyses">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_available_analyses</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/batch_engine.html#BatchAnalysisEngine.list_available_analyses"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.list_available_analyses" title="Link to this definition"></a></dt>
 <dd><p>Get a list of all registered analysis function names.</p>
-<dl class="simple">
-<dt>Returns:</dt><dd><p>List of available analysis names.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of available analysis names.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3355,10 +3424,12 @@ This is the subscriber side of the pub/sub <code class="docutils literal notrans
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.get_analysis_info">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_analysis_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/batch_engine.html#BatchAnalysisEngine.get_analysis_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.get_analysis_info" title="Link to this definition"></a></dt>
 <dd><p>Get information about a registered analysis function.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>name: The registered name of the analysis function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The registered name of the analysis function.</p>
 </dd>
-<dt>Returns:</dt><dd><p>Dictionary with function info (docstring, etc.) or None if not found.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary with function info (docstring, etc.) or None if not found.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3372,13 +3443,17 @@ file-level loop is distributed across worker processes via
 <a class="reference external" href="https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ProcessPoolExecutor</span></code></a>.  The GUI thread is never
 blocked in either mode — callers should wrap this in a
 <code class="xref py py-class docutils literal notranslate"><span class="pre">BatchWorker</span></code> QThread.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>files: List of file paths OR Recording objects to process.
-pipeline_config: List of task dictionaries.
-progress_callback: Optional callback (current, total, status_msg).
-channel_filter: Optional list of channel names/IDs to process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>files</strong> – List of file paths OR Recording objects to process.</p></li>
+<li><p><strong>pipeline_config</strong> – List of task dictionaries.</p></li>
+<li><p><strong>progress_callback</strong> – Optional callback (current, total, status_msg).</p></li>
+<li><p><strong>channel_filter</strong> – Optional list of channel names/IDs to process.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>pandas DataFrame containing aggregated results with metadata.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>pandas DataFrame containing aggregated results with metadata.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3405,73 +3480,120 @@ channel_filter: Optional list of channel names/IDs to process.</p>
 </pre></div>
 </div>
 </section>
-<section id="module-Synaptipy.core.analysis.epoch_manager">
-<span id="epoch-manager"></span><h4>Epoch Manager<a class="headerlink" href="#module-Synaptipy.core.analysis.epoch_manager" title="Link to this heading"></a></h4>
+<section id="epoch-manager">
+<h4>Epoch Manager<a class="headerlink" href="#epoch-manager" title="Link to this heading"></a></h4>
 <p>EpochManager - Hardware TTL and manual experimental epoch management.</p>
 <p>Experimental recordings often contain distinct phases (Baseline, Stimulation,
-Washout).  <a class="reference internal" href="#Synaptipy.core.analysis.epoch_manager.EpochManager" title="Synaptipy.core.analysis.epoch_manager.EpochManager"><code class="xref py py-class docutils literal notranslate"><span class="pre">EpochManager</span></code></a> either auto-detects these boundaries from a
+Washout).  <code class="xref py py-class docutils literal notranslate"><span class="pre">EpochManager</span></code> either auto-detects these boundaries from a
 TTL/Digital-Input channel or lets the researcher define them manually.</p>
 <p>Once epochs are defined, per-epoch data slices can be extracted from any
 <a class="reference internal" href="#Synaptipy.core.data_model.Channel" title="Synaptipy.core.data_model.Channel"><code class="xref py py-class docutils literal notranslate"><span class="pre">Channel</span></code></a> for downstream analysis
 (e.g. tracking plasticity changes across Stim vs. Baseline).</p>
 <dl class="py class">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.epoch_manager.</span></span><span class="sig-name descname"><span class="pre">Epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'manual'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#Epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.epoch_manager.</span></span><span class="sig-name descname"><span class="pre">Epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'manual'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#Epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>A named time window within a recording.</p>
-<dl class="simple">
-<dt>Attributes:</dt><dd><p>name: Human-readable label (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;Baseline&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;Stim&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;Washout&quot;</span></code>).
-start_time: Epoch start in seconds (relative to recording onset).
-end_time: Epoch end in seconds.
-epoch_type: Either <code class="docutils literal notranslate"><span class="pre">&quot;ttl&quot;</span></code> (auto-detected from hardware) or <code class="docutils literal notranslate"><span class="pre">&quot;manual&quot;</span></code>.
-metadata: Optional arbitrary key/value annotations.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">name</span></span></dt>
+<dd><p>Human-readable label (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;Baseline&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;Stim&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;Washout&quot;</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
 </dd>
 </dl>
+</dd></dl>
+
 <dl class="py attribute">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.name">
-<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.name" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">start_time</span></span></dt>
+<dd><p>Epoch start in seconds (relative to recording onset).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">end_time</span></span></dt>
+<dd><p>Epoch end in seconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">epoch_type</span></span></dt>
+<dd><p>Either <code class="docutils literal notranslate"><span class="pre">&quot;ttl&quot;</span></code> (auto-detected from hardware) or <code class="docutils literal notranslate"><span class="pre">&quot;manual&quot;</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">metadata</span></span></dt>
+<dd><p>Optional arbitrary key/value annotations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Any]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">name</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.start_time">
-<span class="sig-name descname"><span class="pre">start_time</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.start_time" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">start_time</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.end_time">
-<span class="sig-name descname"><span class="pre">end_time</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.end_time" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">end_time</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.epoch_type">
-<span class="sig-name descname"><span class="pre">epoch_type</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'manual'</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.epoch_type" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">epoch_type</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'manual'</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.metadata">
-<span class="sig-name descname"><span class="pre">metadata</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.metadata" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">metadata</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.duration">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">duration</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.duration" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">duration</span></span></dt>
 <dd><p>Epoch duration in seconds.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.Epoch.contains">
-<span class="sig-name descname"><span class="pre">contains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#Epoch.contains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.Epoch.contains" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">contains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#Epoch.contains"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> if time <em>t</em> falls within <code class="docutils literal notranslate"><span class="pre">[start_time,</span> <span class="pre">end_time]</span></code>.</p>
 </dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.epoch_manager.</span></span><span class="sig-name descname"><span class="pre">EpochManager</span></span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">Synaptipy.core.analysis.epoch_manager.</span></span><span class="sig-name descname"><span class="pre">EpochManager</span></span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Manage experimental epoch boundaries for a recording.</p>
-<p>Epochs are ordered by <a class="reference internal" href="#Synaptipy.core.analysis.epoch_manager.Epoch.start_time" title="Synaptipy.core.analysis.epoch_manager.Epoch.start_time"><code class="xref py py-attr docutils literal notranslate"><span class="pre">Epoch.start_time</span></code></a>.  Overlapping epochs are
+<p>Epochs are ordered by <code class="xref py py-attr docutils literal notranslate"><span class="pre">Epoch.start_time</span></code>.  Overlapping epochs are
 allowed so that the same window can be labelled with multiple semantic tags.</p>
 <p>Typical workflow:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>em = EpochManager()
@@ -3489,42 +3611,47 @@ slices = em.get_epoch_slices(channel, trial_index=0)
 </pre></div>
 </div>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.DEFAULT_EPOCH_NAMES">
-<span class="sig-name descname"><span class="pre">DEFAULT_EPOCH_NAMES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('Baseline',</span> <span class="pre">'Stim',</span> <span class="pre">'Washout')</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.DEFAULT_EPOCH_NAMES" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">DEFAULT_EPOCH_NAMES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('Baseline',</span> <span class="pre">'Stim',</span> <span class="pre">'Washout')</span></span></dt>
 <dd></dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.epochs">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">epochs</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">epochs</span></span></dt>
 <dd><p>Sorted list of all defined epochs.</p>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.epoch_names">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">epoch_names</span></span><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.epoch_names" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">epoch_names</span></span></dt>
 <dd><p>Names of all defined epochs in time order.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.add_manual_epoch">
-<span class="sig-name descname"><span class="pre">add_manual_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">metadata</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.add_manual_epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.add_manual_epoch" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">add_manual_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">metadata</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.add_manual_epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Add a manually defined epoch.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>name: Label for the epoch.
-start_time: Start time in seconds.
-end_time: End time in seconds.
-<a href="#id1"><span class="problematic" id="id2">**</span></a>metadata: Optional key/value annotations stored in <a class="reference internal" href="#Synaptipy.core.analysis.epoch_manager.Epoch.metadata" title="Synaptipy.core.analysis.epoch_manager.Epoch.metadata"><code class="xref py py-attr docutils literal notranslate"><span class="pre">Epoch.metadata</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – Label for the epoch.</p></li>
+<li><p><strong>start_time</strong> – Start time in seconds.</p></li>
+<li><p><strong>end_time</strong> – End time in seconds.</p></li>
+<li><p><strong>**metadata</strong> – Optional key/value annotations stored in <code class="xref py py-attr docutils literal notranslate"><span class="pre">Epoch.metadata</span></code>.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>The newly created <a class="reference internal" href="#Synaptipy.core.analysis.epoch_manager.Epoch" title="Synaptipy.core.analysis.epoch_manager.Epoch"><code class="xref py py-class docutils literal notranslate"><span class="pre">Epoch</span></code></a>.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The newly created <code class="xref py py-class docutils literal notranslate"><span class="pre">Epoch</span></code>.</p>
 </dd>
-<dt>Raises:</dt><dd><p>ValueError: If <em>end_time</em> &lt;= <em>start_time</em>.</p>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <em>end_time</em> &lt;= <em>start_time</em>.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.from_ttl">
-<span class="sig-name descname"><span class="pre">from_ttl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ttl_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ttl_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pre_stim_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post_stim_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_inter_epoch_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stim_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Stim'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Baseline'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">washout_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Washout'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.from_ttl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.from_ttl" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">from_ttl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ttl_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ttl_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pre_stim_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post_stim_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_inter_epoch_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stim_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Stim'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Baseline'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">washout_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Washout'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.from_ttl"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Auto-generate epochs from a TTL / Digital-Input channel.</p>
 <p>Detects TTL pulse boundaries using <a class="reference internal" href="#Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs" title="Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs"><code class="xref py py-func docutils literal notranslate"><span class="pre">extract_ttl_epochs()</span></code></a>,
 then creates:</p>
@@ -3535,52 +3662,58 @@ then creates:</p>
 <li><p>A <em>Washout</em> epoch from <code class="docutils literal notranslate"><span class="pre">last_offset</span> <span class="pre">+</span> <span class="pre">post_stim_s</span></code> to <code class="docutils literal notranslate"><span class="pre">time[-1]</span></code>,
 if enough time remains.</p></li>
 </ul>
-<dl class="simple">
-<dt>Returns:</dt><dd><p>List of the newly created <a class="reference internal" href="#Synaptipy.core.analysis.epoch_manager.Epoch" title="Synaptipy.core.analysis.epoch_manager.Epoch"><code class="xref py py-class docutils literal notranslate"><span class="pre">Epoch</span></code></a> objects.  The manager’s
-<a class="reference internal" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs" title="Synaptipy.core.analysis.epoch_manager.EpochManager.epochs"><code class="xref py py-attr docutils literal notranslate"><span class="pre">epochs</span></code></a> list is also updated in place.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of the newly created <code class="xref py py-class docutils literal notranslate"><span class="pre">Epoch</span></code> objects.  The manager’s
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">epochs</span></code> list is also updated in place.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch">
-<span class="sig-name descname"><span class="pre">get_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.get_epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">get_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.get_epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Return the first epoch whose name matches <em>name</em> (case-insensitive).</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.epochs_at_time">
-<span class="sig-name descname"><span class="pre">epochs_at_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.epochs_at_time"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs_at_time" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">epochs_at_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.epochs_at_time"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Return all epochs that contain time <em>t</em>.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch_slices">
-<span class="sig-name descname"><span class="pre">get_epoch_slices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trial_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.get_epoch_slices"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch_slices" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">get_epoch_slices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trial_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.get_epoch_slices"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Extract (data, time) slices for every epoch from a channel trial.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>channel: A <a class="reference internal" href="#Synaptipy.core.data_model.Channel" title="Synaptipy.core.data_model.Channel"><code class="xref py py-class docutils literal notranslate"><span class="pre">Channel</span></code></a> instance.
-trial_index: Which trial to slice (default 0).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>channel</strong> – A <a class="reference internal" href="#Synaptipy.core.data_model.Channel" title="Synaptipy.core.data_model.Channel"><code class="xref py py-class docutils literal notranslate"><span class="pre">Channel</span></code></a> instance.</p></li>
+<li><p><strong>trial_index</strong> – Which trial to slice (default 0).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Dict mapping epoch name to <code class="docutils literal notranslate"><span class="pre">(data_slice,</span> <span class="pre">time_slice)</span></code> ndarrays.
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dict mapping epoch name to <code class="docutils literal notranslate"><span class="pre">(data_slice,</span> <span class="pre">time_slice)</span></code> ndarrays.
 Epochs with no overlapping samples map to empty arrays.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.remove_epoch">
-<span class="sig-name descname"><span class="pre">remove_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.remove_epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.remove_epoch" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">remove_epoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.remove_epoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Remove the first epoch matching <em>name</em>.</p>
-<dl class="simple">
-<dt>Returns:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> if an epoch was removed, <code class="docutils literal notranslate"><span class="pre">False</span></code> if not found.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">True</span></code> if an epoch was removed, <code class="docutils literal notranslate"><span class="pre">False</span></code> if not found.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="Synaptipy.core.analysis.epoch_manager.EpochManager.clear">
-<span class="sig-name descname"><span class="pre">clear</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.clear"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.epoch_manager.EpochManager.clear" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">clear</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/epoch_manager.html#EpochManager.clear"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Remove all epochs.</p>
 </dd></dl>
 
@@ -3597,10 +3730,12 @@ Includes filtering and trace quality checks.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.signal_processor.validate_sampling_rate">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">validate_sampling_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#validate_sampling_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.validate_sampling_rate" title="Link to this definition"></a></dt>
 <dd><p>Validate sampling rate and warn if suspiciously low.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>fs: Sampling rate in Hz.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>fs</strong> – Sampling rate in Hz.</p>
 </dd>
-<dt>Returns:</dt><dd><p>True if valid (positive), False otherwise.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if valid (positive), False otherwise.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3613,11 +3748,15 @@ Includes filtering and trace quality checks.</p>
 - Signal-to-Noise Ratio (SNR) estimation
 - Baseline Drift
 - 50/60Hz Line Noise contamination</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1D numpy array of the signal (e.g., voltage in mV or current in pA).
-sampling_rate: Sampling rate in Hz.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D numpy array of the signal (e.g., voltage in mV or current in pA).</p></li>
+<li><p><strong>sampling_rate</strong> – Sampling rate in Hz.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Dictionary containing quality metrics and flags.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary containing quality metrics and flags.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3627,14 +3766,18 @@ sampling_rate: Sampling rate in Hz.</p>
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">bandpass_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lowcut</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">highcut</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#bandpass_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.bandpass_filter" title="Link to this definition"></a></dt>
 <dd><p>Apply a Butterworth bandpass filter to the data.
 Uses Second Order Sections (SOS) for numerical stability.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Input signal array
-lowcut: Low cutoff frequency in Hz
-highcut: High cutoff frequency in Hz
-fs: Sampling frequency in Hz
-order: Filter order (1-10, default 5)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>lowcut</strong> – Low cutoff frequency in Hz</p></li>
+<li><p><strong>highcut</strong> – High cutoff frequency in Hz</p></li>
+<li><p><strong>fs</strong> – Sampling frequency in Hz</p></li>
+<li><p><strong>order</strong> – Filter order (1-10, default 5)</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Filtered data, or original data if filtering fails</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered data, or original data if filtering fails</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3644,13 +3787,17 @@ order: Filter order (1-10, default 5)</p>
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">lowpass_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#lowpass_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.lowpass_filter" title="Link to this definition"></a></dt>
 <dd><p>Apply a Butterworth lowpass filter.
 Uses Second Order Sections (SOS) for numerical stability.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Input signal array
-cutoff: Cutoff frequency in Hz
-fs: Sampling frequency in Hz
-order: Filter order (1-10, default 5)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>cutoff</strong> – Cutoff frequency in Hz</p></li>
+<li><p><strong>fs</strong> – Sampling frequency in Hz</p></li>
+<li><p><strong>order</strong> – Filter order (1-10, default 5)</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Filtered data, or original data if filtering fails</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered data, or original data if filtering fails</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3660,13 +3807,17 @@ order: Filter order (1-10, default 5)</p>
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">highpass_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#highpass_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.highpass_filter" title="Link to this definition"></a></dt>
 <dd><p>Apply a Butterworth highpass filter.
 Uses Second Order Sections (SOS) for numerical stability.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Input signal array
-cutoff: Cutoff frequency in Hz
-fs: Sampling frequency in Hz
-order: Filter order (1-10, default 5)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>cutoff</strong> – Cutoff frequency in Hz</p></li>
+<li><p><strong>fs</strong> – Sampling frequency in Hz</p></li>
+<li><p><strong>order</strong> – Filter order (1-10, default 5)</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Filtered data, or original data if filtering fails</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered data, or original data if filtering fails</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3676,13 +3827,17 @@ order: Filter order (1-10, default 5)</p>
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">notch_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#notch_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.notch_filter" title="Link to this definition"></a></dt>
 <dd><p>Apply a notch filter to remove a specific frequency.
 Uses SOS format via zpk2sos for numerical stability.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Input signal array
-freq: Notch frequency in Hz
-Q: Quality factor (higher = narrower notch)
-fs: Sampling frequency in Hz</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>freq</strong> – Notch frequency in Hz</p></li>
+<li><p><strong>Q</strong> – Quality factor (higher = narrower notch)</p></li>
+<li><p><strong>fs</strong> – Sampling frequency in Hz</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Filtered data, or original data if filtering fails</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered data, or original data if filtering fails</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3692,13 +3847,17 @@ fs: Sampling frequency in Hz</p>
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">comb_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#comb_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.comb_filter" title="Link to this definition"></a></dt>
 <dd><p>Apply an IIR comb filter to remove a fundamental frequency and its harmonics.
 Useful for line noise (e.g., 50Hz or 60Hz).</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Input signal array
-freq: Fundamental frequency to remove in Hz (e.g., 50 or 60)
-Q: Quality factor (higher = narrower notches)
-fs: Sampling frequency in Hz</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>freq</strong> – Fundamental frequency to remove in Hz (e.g., 50 or 60)</p></li>
+<li><p><strong>Q</strong> – Quality factor (higher = narrower notches)</p></li>
+<li><p><strong>fs</strong> – Sampling frequency in Hz</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Filtered data, or original data if filtering fails</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered data, or original data if filtering fails</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3707,14 +3866,16 @@ fs: Sampling frequency in Hz</p>
 <dt class="sig sig-object py" id="Synaptipy.core.signal_processor.subtract_baseline_mode">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">subtract_baseline_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decimals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#subtract_baseline_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.subtract_baseline_mode" title="Link to this definition"></a></dt>
 <dd><p>Subtract baseline using the mode of the distribution of values.</p>
-<dl>
-<dt>Args:</dt><dd><p>data: Input signal array
-decimals: Number of decimal places to round to for mode calculation.</p>
-<blockquote>
-<div><p>If None, it tries to infer a reasonable precision or defaults to 1.</p>
-</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>decimals</strong> – Number of decimal places to round to for mode calculation.
+If None, it tries to infer a reasonable precision or defaults to 1.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Data with baseline subtracted (aligned to 0)</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Data with baseline subtracted (aligned to 0)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3742,11 +3903,14 @@ Useful for removing drift.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.signal_processor.subtract_baseline_region">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">subtract_baseline_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_t</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#subtract_baseline_region"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.subtract_baseline_region" title="Link to this definition"></a></dt>
 <dd><p>Subtract the mean value calculated from a specific time window.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Signal array
-t: Time vector (must be same length as data)
-start_t: Start time of baseline window
-end_t: End time of baseline window</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Signal array</p></li>
+<li><p><strong>t</strong> – Time vector (must be same length as data)</p></li>
+<li><p><strong>start_t</strong> – Start time of baseline window</p></li>
+<li><p><strong>end_t</strong> – End time of baseline window</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -3763,19 +3927,22 @@ sample value (sample-and-hold).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;linear&quot;</span></code> — linearly interpolate between the pre- and
 post-artifact boundary values.</p></li>
 </ul>
-<dl>
-<dt>Args:</dt><dd><p>data: 1-D signal array.
-time_vector: 1-D time array (same length as <em>data</em>), in seconds.
-onset_time: Start of the artifact window, in seconds.
-duration_ms: Duration of the artifact window, in milliseconds.
-method: Interpolation mode — <code class="docutils literal notranslate"><span class="pre">&quot;hold&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zero&quot;</span></code>, or</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">&quot;linear&quot;</span></code>.  Default <code class="docutils literal notranslate"><span class="pre">&quot;hold&quot;</span></code>.</p>
-</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1-D signal array.</p></li>
+<li><p><strong>time_vector</strong> – 1-D time array (same length as <em>data</em>), in seconds.</p></li>
+<li><p><strong>onset_time</strong> – Start of the artifact window, in seconds.</p></li>
+<li><p><strong>duration_ms</strong> – Duration of the artifact window, in milliseconds.</p></li>
+<li><p><strong>method</strong> – Interpolation mode — <code class="docutils literal notranslate"><span class="pre">&quot;hold&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zero&quot;</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">&quot;linear&quot;</span></code>.  Default <code class="docutils literal notranslate"><span class="pre">&quot;hold&quot;</span></code>.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Copy of <em>data</em> with the artifact window replaced.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Copy of <em>data</em> with the artifact window replaced.</p>
 </dd>
-<dt>Raises:</dt><dd><p>ValueError: If <em>method</em> is not one of the recognised modes.</p>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <em>method</em> is not one of the recognised modes.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3788,13 +3955,17 @@ method: Interpolation mode — <code class="docutils literal notranslate"><span 
 1. Calculate absolute gradient of the data.
 2. Threshold gradient to find high-slope points.
 3. Dilate the boolean mask by <cite>padding_ms</cite> to capture the artifact tail/ringing.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Signal array.
-fs: Sampling rate in Hz.
-slope_threshold: Threshold for the absolute gradient (e.g. pA/sample or mV/sample).
-padding_ms: Time to expand the mask around detected peaks (in milliseconds).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Signal array.</p></li>
+<li><p><strong>fs</strong> – Sampling rate in Hz.</p></li>
+<li><p><strong>slope_threshold</strong> – Threshold for the absolute gradient (e.g. pA/sample or mV/sample).</p></li>
+<li><p><strong>padding_ms</strong> – Time to expand the mask around detected peaks (in milliseconds).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Boolean mask of the same shape as <cite>data</cite>, where True indicates an artifact.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Boolean mask of the same shape as <cite>data</cite>, where True indicates an artifact.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3803,13 +3974,17 @@ padding_ms: Time to expand the mask around detected peaks (in milliseconds).</p>
 <dt class="sig sig-object py" id="Synaptipy.core.signal_processor.compute_psd">
 <span class="sig-prename descclassname"><span class="pre">Synaptipy.core.signal_processor.</span></span><span class="sig-name descname"><span class="pre">compute_psd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_rate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nperseg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hann'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/signal_processor.html#compute_psd"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.signal_processor.compute_psd" title="Link to this definition"></a></dt>
 <dd><p>Compute Power Spectral Density (PSD) using Welch’s method.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: 1D signal array.
-sampling_rate: Sampling rate in Hz.
-nperseg: FFT segment length. Defaults to <code class="docutils literal notranslate"><span class="pre">min(len(data),</span> <span class="pre">4096)</span></code>.
-window: Window function name passed to <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html#scipy.signal.welch" title="(in SciPy v1.17.0)"><code class="xref py py-func docutils literal notranslate"><span class="pre">scipy.signal.welch()</span></code></a> (default <code class="docutils literal notranslate"><span class="pre">&quot;hann&quot;</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1D signal array.</p></li>
+<li><p><strong>sampling_rate</strong> – Sampling rate in Hz.</p></li>
+<li><p><strong>nperseg</strong> – FFT segment length. Defaults to <code class="docutils literal notranslate"><span class="pre">min(len(data),</span> <span class="pre">4096)</span></code>.</p></li>
+<li><p><strong>window</strong> – Window function name passed to <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html#scipy.signal.welch" title="(in SciPy v1.17.0)"><code class="xref py py-func docutils literal notranslate"><span class="pre">scipy.signal.welch()</span></code></a> (default <code class="docutils literal notranslate"><span class="pre">&quot;hann&quot;</span></code>).</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Tuple <code class="docutils literal notranslate"><span class="pre">(frequencies,</span> <span class="pre">psd)</span></code> where <em>frequencies</em> is in Hz and <em>psd</em> is
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple <code class="docutils literal notranslate"><span class="pre">(frequencies,</span> <span class="pre">psd)</span></code> where <em>frequencies</em> is in Hz and <em>psd</em> is
 in (data_units)^2/Hz.  Both arrays are 1-D float64.  On failure or
 missing scipy an empty-array pair is returned.</p>
 </dd>
@@ -3826,17 +4001,19 @@ whichever comes first).</p>
 <p>Prefer <a class="reference internal" href="#Synaptipy.core.signal_processor.comb_filter" title="Synaptipy.core.signal_processor.comb_filter"><code class="xref py py-func docutils literal notranslate"><span class="pre">comb_filter()</span></code></a> (IIR comb via <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.iircomb.html#scipy.signal.iircomb" title="(in SciPy v1.17.0)"><code class="xref py py-func docutils literal notranslate"><span class="pre">scipy.signal.iircomb()</span></code></a>) when
 the scipy version supports it.  This function falls back to cascaded
 <a class="reference internal" href="#Synaptipy.core.signal_processor.notch_filter" title="Synaptipy.core.signal_processor.notch_filter"><code class="xref py py-func docutils literal notranslate"><span class="pre">notch_filter()</span></code></a> calls, which is always available.</p>
-<dl>
-<dt>Args:</dt><dd><p>data: Input signal array.
-fundamental_hz: Fundamental line-noise frequency to remove (e.g. 50 or 60).
-fs: Sampling rate in Hz.
-max_harmonics: Maximum number of harmonics to remove including the</p>
-<blockquote>
-<div><p>fundamental.  <code class="docutils literal notranslate"><span class="pre">None</span></code> means remove all harmonics below Nyquist.</p>
-</div></blockquote>
-<p>Q: Quality factor for each notch (higher = narrower).  Default 30.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array.</p></li>
+<li><p><strong>fundamental_hz</strong> – Fundamental line-noise frequency to remove (e.g. 50 or 60).</p></li>
+<li><p><strong>fs</strong> – Sampling rate in Hz.</p></li>
+<li><p><strong>max_harmonics</strong> – Maximum number of harmonics to remove including the
+fundamental.  <code class="docutils literal notranslate"><span class="pre">None</span></code> means remove all harmonics below Nyquist.</p></li>
+<li><p><strong>Q</strong> – Quality factor for each notch (higher = narrower).  Default 30.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Filtered signal, or original data if filtering is impossible.</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered signal, or original data if filtering is impossible.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3855,9 +4032,12 @@ Ensures that both visualization and analysis use the exact same processing seque
 <dt class="sig sig-object py" id="Synaptipy.core.processing_pipeline.SignalProcessingPipeline.add_step">
 <span class="sig-name descname"><span class="pre">add_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/processing_pipeline.html#SignalProcessingPipeline.add_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.add_step" title="Link to this definition"></a></dt>
 <dd><p>Add a processing step to the pipeline.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>step_config: Dictionary defining the step (e.g., {‘type’: ‘baseline’, ‘method’: ‘mean’})
-index: Optional index to insert at. If None, appends to end.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>step_config</strong> – Dictionary defining the step (e.g., {‘type’: ‘baseline’, ‘method’: ‘mean’})</p></li>
+<li><p><strong>index</strong> – Optional index to insert at. If None, appends to end.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -3890,12 +4070,16 @@ index: Optional index to insert at. If None, appends to end.</p>
 <dt class="sig sig-object py" id="Synaptipy.core.processing_pipeline.SignalProcessingPipeline.process">
 <span class="sig-name descname"><span class="pre">process</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_vector</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/processing_pipeline.html#SignalProcessingPipeline.process"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.process" title="Link to this definition"></a></dt>
 <dd><p>Apply all steps in order to the data.</p>
-<dl class="simple">
-<dt>Args:</dt><dd><p>data: Input signal array
-fs: Sampling rate in Hz
-time_vector: Optional time vector (required for region-based baseline)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input signal array</p></li>
+<li><p><strong>fs</strong> – Sampling rate in Hz</p></li>
+<li><p><strong>time_vector</strong> – Optional time vector (required for region-based baseline)</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Processed data array</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Processed data array</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3909,7 +4093,7 @@ time_vector: Optional time vector (required for region-based baseline)</p>
 <p>Regardless of the order the user toggles settings in the GUI, <strong>this
 function must be used as the single entry point for all backend
 corrections</strong> so that the execution order is always:</p>
-<dl>
+<dl class="simple">
 <dt>Step A - LJP Voltage Offset</dt><dd><p><code class="docutils literal notranslate"><span class="pre">V_true</span> <span class="pre">=</span> <span class="pre">V_recorded</span> <span class="pre">-</span> <span class="pre">ljp_mv</span></code></p>
 </dd>
 <dt>Step B - P/N Leak Subtraction</dt><dd><p>If <em>pn_traces</em> is supplied, compute the per-sample mean across the
@@ -3933,31 +4117,33 @@ already-flat waveform without sharp transient edges.</p>
 prevents edge artefacts from the transient subtraction from being
 smeared across the waveform.</p>
 </dd>
-<dt>Args:</dt><dd><p>data:                Raw (uncorrected) signal array.
-time:                Time vector aligned with <em>data</em> (seconds).
-fs:                  Sampling rate in Hz.
-ljp_mv:              Liquid Junction Potential in mV.  Step A only</p>
-<blockquote>
-<div><p>runs when <code class="docutils literal notranslate"><span class="pre">ljp_mv</span> <span class="pre">!=</span> <span class="pre">0.0</span></code>.</p>
-</div></blockquote>
-<dl class="simple">
-<dt>pn_traces:           2-D array of shape <code class="docutils literal notranslate"><span class="pre">(n_sweeps,</span> <span class="pre">n_samples)</span></code></dt><dd><p>containing the sub-threshold P/N sweeps.  Step B
-is skipped when <em>pn_traces</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
-</dd>
-<dt>pn_scale:            Scalar factor applied to the averaged P/N</dt><dd><p>template before subtraction (default 1.0).</p>
-</dd>
-<dt>pre_event_window_s:  <code class="docutils literal notranslate"><span class="pre">(t_start,</span> <span class="pre">t_end)</span></code> tuple in seconds.  Step C</dt><dd><p>is skipped when this is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
-</dd>
-<dt>artifact_interp_steps: List of artifact dicts with keys</dt><dd><p><code class="docutils literal notranslate"><span class="pre">onset_time</span></code> (s) and <code class="docutils literal notranslate"><span class="pre">duration_ms</span></code> (ms).
-Each defines a stimulus artifact to linearly
-interpolate.  Step D is skipped when <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
-</dd>
-<dt>filter_steps:        List of filter dicts consumed by</dt><dd><p><code class="docutils literal notranslate"><span class="pre">SignalProcessingPipeline.process()</span></code>.  Step E
-is skipped when the list is empty or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
-</dd>
 </dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Raw (uncorrected) signal array.</p></li>
+<li><p><strong>time</strong> – Time vector aligned with <em>data</em> (seconds).</p></li>
+<li><p><strong>fs</strong> – Sampling rate in Hz.</p></li>
+<li><p><strong>ljp_mv</strong> – Liquid Junction Potential in mV.  Step A only
+runs when <code class="docutils literal notranslate"><span class="pre">ljp_mv</span> <span class="pre">!=</span> <span class="pre">0.0</span></code>.</p></li>
+<li><p><strong>pn_traces</strong> – 2-D array of shape <code class="docutils literal notranslate"><span class="pre">(n_sweeps,</span> <span class="pre">n_samples)</span></code>
+containing the sub-threshold P/N sweeps.  Step B
+is skipped when <em>pn_traces</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>pn_scale</strong> – Scalar factor applied to the averaged P/N
+template before subtraction (default 1.0).</p></li>
+<li><p><strong>pre_event_window_s</strong> – <code class="docutils literal notranslate"><span class="pre">(t_start,</span> <span class="pre">t_end)</span></code> tuple in seconds.  Step C
+is skipped when this is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>artifact_interp_steps</strong> – List of artifact dicts with keys
+<code class="docutils literal notranslate"><span class="pre">onset_time</span></code> (s) and <code class="docutils literal notranslate"><span class="pre">duration_ms</span></code> (ms).
+Each defines a stimulus artifact to linearly
+interpolate.  Step D is skipped when <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>filter_steps</strong> – List of filter dicts consumed by
+<code class="docutils literal notranslate"><span class="pre">SignalProcessingPipeline.process()</span></code>.  Step E
+is skipped when the list is empty or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+</ul>
 </dd>
-<dt>Returns:</dt><dd><p>Corrected signal array (always a copy — the input is never mutated).</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Corrected signal array (always a copy — the input is never mutated).</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3971,12 +4157,10 @@ is skipped when the list is empty or <code class="docutils literal notranslate">
 <p>Scans two plugin directories and dynamically loads external Python scripts.
 Any script using the &#64;AnalysisRegistry.register decorator will automatically
 populate the UI and Batch Engine.</p>
-<p>Search order:
-1. Built-in examples: <code class="docutils literal notranslate"><span class="pre">&lt;project_root&gt;/examples/plugins/</span></code> - shipped with the</p>
-<blockquote>
-<div><p>package so features work out-of-the-box.</p>
-</div></blockquote>
-<ol class="arabic simple" start="2">
+<p>Search order:</p>
+<ol class="arabic simple">
+<li><p>Built-in examples: <code class="docutils literal notranslate"><span class="pre">&lt;project_root&gt;/examples/plugins/</span></code> - shipped with the
+package so features work out-of-the-box.</p></li>
 <li><p>User plugins: <code class="docutils literal notranslate"><span class="pre">~/.synaptipy/plugins/</span></code> - personal or third-party additions.</p></li>
 </ol>
 <p>When the same stem name appears in both directories the user’s copy takes
@@ -4095,18 +4279,20 @@ Utilizes metadata extracted by NeoAdapter and stored in data_model objects.</p>
 <dt class="sig sig-object py" id="Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export">
 <span class="sig-name descname"><span class="pre">export</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">recording</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_metadata</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/infrastructure/exporters/nwb_exporter.html#NWBExporter.export"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export" title="Link to this definition"></a></dt>
 <dd><p>Exports the given Recording object to an NWB file.</p>
-<dl>
-<dt>Args:</dt><dd><p>recording: The Recording object containing data and metadata.
-output_path: The Path object where the .nwb file will be saved.
-session_metadata: A dictionary containing user-provided or default</p>
-<blockquote>
-<div><p>metadata required for NWBFile creation. Expected keys:
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>recording</strong> – The Recording object containing data and metadata.</p></li>
+<li><p><strong>output_path</strong> – The Path object where the .nwb file will be saved.</p></li>
+<li><p><strong>session_metadata</strong> – A dictionary containing user-provided or default
+metadata required for NWBFile creation. Expected keys:
 ‘session_description’, ‘identifier’, ‘session_start_time’,
 plus optional ‘experimenter’, ‘lab’, ‘institution’, ‘session_id’,
-and Subject/Device/Electrode info.</p>
-</div></blockquote>
+and Subject/Device/Electrode info.</p></li>
+</ul>
 </dd>
-<dt>Raises:</dt><dd><p>ExportError: If any error occurs during the NWB file creation or writing.</p>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ExportError</strong> – If any error occurs during the NWB file creation or writing.</p>
 </dd>
 </dl>
 </dd></dl>

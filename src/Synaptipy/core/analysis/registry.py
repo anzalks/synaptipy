@@ -39,7 +39,8 @@ class AnalysisRegistry:
         Returns:
             Decorator function
 
-        Example:
+        Example::
+
             @AnalysisRegistry.register("spike_detection", ui_params=[...])
             def run_spike_detection(data, time, sampling_rate, **kwargs):
                 # ... analysis logic ...
@@ -66,7 +67,7 @@ class AnalysisRegistry:
     def register_processor(cls, name: str, **kwargs) -> Callable:
         """
         Decorator to register a preprocessing function.
-        Alias for register(name, type="preprocessing", **kwargs).
+        Alias for ``register(name, type="preprocessing", **kwargs)``.
         """
         return cls.register(name, type="preprocessing", **kwargs)
 

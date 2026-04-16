@@ -466,7 +466,7 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 <li class="toctree-l4"><a class="reference internal" href="api_reference.html#output-design-principles">Output Design Principles</a></li>
 <li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine"><code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="api_reference.html#id2">Usage Example</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">Epoch Manager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#epoch-manager">Epoch Manager</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.signal_processor">Signal Processing</a><ul>
@@ -1820,8 +1820,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.adaptation_index">adaptation_index (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.add_manual_epoch">add_manual_epoch() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.add_step">add_step() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry">AnalysisRegistry (class in Synaptipy.core.analysis.registry)</a>
@@ -1894,10 +1892,10 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.calculate_spike_features">calculate_spike_features() (in module Synaptipy.core.analysis.single_spike)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_tau">calculate_tau() (in module Synaptipy.core.analysis.passive_properties)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_tau">calculate_tau() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.calculate_train_dynamics">calculate_train_dynamics() (in module Synaptipy.core.analysis.firing_dynamics)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_vc_transient_parameters">calculate_vc_transient_parameters() (in module Synaptipy.core.analysis.passive_properties)</a>
@@ -1914,11 +1912,9 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.signal_processor.check_trace_quality">check_trace_quality() (in module Synaptipy.core.signal_processor)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.clear">clear() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.clear">clear() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
 
       <ul>
-        <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.clear">(Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
-</li>
         <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.clear">(Synaptipy.core.data_model.UndoStack method)</a>
 </li>
         <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.clear">(Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
@@ -1929,8 +1925,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
       <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.compute_local_pre_event_baseline">compute_local_pre_event_baseline() (in module Synaptipy.core.analysis.synaptic_events)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.signal_processor.compute_psd">compute_psd() (in module Synaptipy.core.signal_processor)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.contains">contains() (Synaptipy.core.analysis.epoch_manager.Epoch method)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager.create_plugin_directory">create_plugin_directory() (Synaptipy.application.plugin_manager.PluginManager class method)</a>
 </li>
@@ -1946,8 +1940,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 <h2 id="D">D</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.DEFAULT_EPOCH_NAMES">DEFAULT_EPOCH_NAMES (Synaptipy.core.analysis.epoch_manager.EpochManager attribute)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.depth">depth (Synaptipy.core.data_model.UndoStack property)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.detect_events_baseline_peak_kinetics">detect_events_baseline_peak_kinetics() (in module Synaptipy.core.analysis.synaptic_events)</a>
@@ -1964,34 +1956,18 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.detect_threshold_kink">detect_threshold_kink() (in module Synaptipy.core.analysis.single_spike)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.duration">duration (Synaptipy.core.analysis.epoch_manager.Epoch property)</a>
-</li>
   </ul></td>
 </tr></table>
 
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.end_time">end_time (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch">Epoch (class in Synaptipy.core.analysis.epoch_manager)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.epoch_names">epoch_names (Synaptipy.core.analysis.epoch_manager.EpochManager property)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.epoch_type">epoch_type (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager">EpochManager (class in Synaptipy.core.analysis.epoch_manager)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs">epochs (Synaptipy.core.analysis.epoch_manager.EpochManager property)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs_at_time">epochs_at_time() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.evoked_responses_module">evoked_responses_module() (in module Synaptipy.core.analysis.evoked_responses)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.data_model.Experiment">Experiment (class in Synaptipy.core.data_model)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export">export() (Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter method)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs">extract_ttl_epochs() (in module Synaptipy.core.analysis.evoked_responses)</a>
@@ -2016,8 +1992,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.fit_biexponential_decay">fit_biexponential_decay() (in module Synaptipy.core.analysis.synaptic_events)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.from_ttl">from_ttl() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
-</li>
   </ul></td>
 </tr></table>
 
@@ -2040,16 +2014,12 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_data_bounds">get_data_bounds() (Synaptipy.core.data_model.Channel method)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch">get_epoch() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
-</li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch_slices">get_epoch_slices() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_finite_data_bounds">get_finite_data_bounds() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.get_function">get_function() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.get_function">get_function() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.get_metadata">get_metadata() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.get_phase_plane_trajectory">get_phase_plane_trajectory() (in module Synaptipy.core.analysis.single_spike)</a>
@@ -2126,8 +2096,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.mean_isi_s">mean_isi_s (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.metadata">metadata (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
-</li>
       <li>
     module
 
@@ -2135,8 +2103,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
         <li><a href="api_reference.html#module-Synaptipy.application.plugin_manager">Synaptipy.application.plugin_manager</a>
 </li>
         <li><a href="api_reference.html#module-Synaptipy.core.analysis.batch_engine">Synaptipy.core.analysis.batch_engine</a>
-</li>
-        <li><a href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">Synaptipy.core.analysis.epoch_manager</a>
 </li>
         <li><a href="api_reference.html#module-Synaptipy.core.analysis.evoked_responses">Synaptipy.core.analysis.evoked_responses</a>
 </li>
@@ -2171,18 +2137,16 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.name">name (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter">NeoAdapter (class in Synaptipy.infrastructure.file_readers.neo_adapter)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.signal_processor.notch_filter">notch_filter() (in module Synaptipy.core.signal_processor)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.data_model.Recording.num_channels">num_channels (Synaptipy.core.data_model.Recording property)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.num_samples">num_samples (Synaptipy.core.data_model.Channel property)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.num_trials">num_trials (Synaptipy.core.data_model.Channel property)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter">NWBExporter (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
@@ -2251,8 +2215,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager.reload_plugins">reload_plugins() (Synaptipy.application.plugin_manager.PluginManager class method)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.remove_epoch">remove_epoch() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.remove_step_by_type">remove_step_by_type() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.reset_to_factory">reset_to_factory() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
@@ -2311,8 +2273,6 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.spike_jitter_ms">spike_jitter_ms (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
 </li>
-      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.start_time">start_time (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
-</li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.stimulus_count">stimulus_count (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
 </li>
       <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.stimulus_offsets">stimulus_offsets (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
@@ -2348,21 +2308,14 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </li>
       </ul></li>
       <li>
-    Synaptipy.core.analysis.epoch_manager
-
-      <ul>
-        <li><a href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">module</a>
-</li>
-      </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
     Synaptipy.core.analysis.evoked_responses
 
       <ul>
         <li><a href="api_reference.html#module-Synaptipy.core.analysis.evoked_responses">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     Synaptipy.core.analysis.firing_dynamics
 

@@ -189,6 +189,7 @@ results_df = engine.run_batch(files, pipeline)
    :members:
    :undoc-members: False
    :show-inheritance:
+   :no-index:
 ```
 
 ---

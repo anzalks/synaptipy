@@ -229,6 +229,7 @@ def calculate_paired_pulse_ratio(  # noqa: C901
     yielding biologically invalid PPR values.
 
     Algorithm:
+
     1. Measure amplitude of response 1 (R1) relative to its local pre-stimulus
        baseline.
     2. Fit a mono-exponential decay to the *tail* of R1 (from

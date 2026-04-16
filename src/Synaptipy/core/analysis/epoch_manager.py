@@ -125,7 +125,7 @@ class EpochManager:
             name: Label for the epoch.
             start_time: Start time in seconds.
             end_time: End time in seconds.
-            **metadata: Optional key/value annotations stored in :attr:`Epoch.metadata`.
+            ``**metadata``: Optional key/value annotations stored in :attr:`Epoch.metadata`.
 
         Returns:
             The newly created :class:`Epoch`.

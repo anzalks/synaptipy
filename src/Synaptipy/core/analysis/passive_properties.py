@@ -1041,7 +1041,7 @@ def calculate_capacitance_vc(
     Calculate Cm and Rs from a voltage-clamp capacitive transient.
 
     Method:
-    1. Rs = |delta_V| / I_peak  (Ohm's law at the instant of the step).
+    1. Rs = ``delta_V / I_peak``  (Ohm's law at the instant of the step).
     2. Fit a mono-exponential to the transient decay -> tau_transient.
     3. Cm = tau_transient / Rs.
 

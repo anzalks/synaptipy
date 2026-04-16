@@ -83,7 +83,8 @@ class BatchAnalysisEngine:
     themselves via decorators, and the pipeline configuration defines what analyses
     to run on which data scopes.
 
-    Example Usage:
+    Example::
+
         engine = BatchAnalysisEngine()
         files = [Path("file1.abf"), Path("file2.abf")]
         pipeline = [
