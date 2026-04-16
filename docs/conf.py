@@ -77,7 +77,6 @@ extensions = [
     "sphinx.ext.mathjax",  # Render LaTeX math in HTML output
     # Third-party
     "myst_parser",  # Parse .md files with MyST
-    "sphinx_autodoc_typehints",  # Render type hints in autodoc
     "sphinx_copybutton",  # Copy-button on code blocks
     "sphinx_design",  # Cards, grids, tabs, etc.
 ]
@@ -86,7 +85,7 @@ extensions = [
 autosummary_generate = True
 
 # Napoleon settings
-napoleon_google_docstring = True
+napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_preprocess_types = True
 napoleon_use_param = True
@@ -101,7 +100,7 @@ autodoc_default_options = {
     "show-inheritance": True,
     "member-order": "bysource",
 }
-autodoc_typehints = "description"
+autodoc_typehints = "none"
 autodoc_typehints_description_target = "documented"
 autoclass_content = "both"
 

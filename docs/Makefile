@@ -10,7 +10,7 @@ SPHINXBUILD = conda run -n $(CONDA_ENV) sphinx-build
 SOURCEDIR   = .
 BUILDDIR    = _build
 
-.PHONY: help html clean livehtml Makefile
+.PHONY: help html clean livehtml linkcheck Makefile
 
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
@@ -23,6 +23,11 @@ html:
 clean:
 	@rm -rf "$(BUILDDIR)"
 	@echo "Build directory cleaned."
+
+linkcheck:
+	@$(SPHINXBUILD) -b linkcheck "$(SOURCEDIR)" "$(BUILDDIR)/linkcheck" -W $(SPHINXOPTS) $(O)
+	@echo
+	@echo "Link check complete. Results are in $(BUILDDIR)/linkcheck."
 
 livehtml:
 	@conda run -n $(CONDA_ENV) sphinx-autobuild \
