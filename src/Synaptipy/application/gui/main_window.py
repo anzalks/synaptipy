@@ -27,6 +27,7 @@ from Synaptipy.shared.error_handling import ExportError, SynaptipyError
 
 # Import the new DataLoader for background file loading
 from ..data_loader import DataLoader
+from .about_dialog import AboutDialog
 from .analyser_tab import AnalyserTab
 
 # --- Tab Imports ---
@@ -204,6 +205,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_popup_windows_action = view_menu.addAction("Show Analysis &Popup Windows...")
         self.show_popup_windows_action.setToolTip("Show or restore any analysis popup windows (F-I curve, etc.)")
         self.show_popup_windows_action.triggered.connect(self._show_popup_windows)
+
+        # --- Help Menu ---
+        help_menu = menu_bar.addMenu("&Help")
+        self.about_action = help_menu.addAction("&About Synaptipy...")
+        self.about_action.setToolTip("Show version and citation information")
+        self.about_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.about_action.triggered.connect(self._show_about_dialog)
 
         log.debug("Menu bar and status bar setup complete.")
 
@@ -417,6 +425,17 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.error(f"Failed to show plot customization dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open plot customization:\n{e}")
+
+    def _show_about_dialog(self) -> None:
+        """Show the About Synaptipy dialog (Help -> About)."""
+        try:
+            import Synaptipy
+
+            version = getattr(Synaptipy, "__version__", "unknown")
+        except Exception:
+            version = "unknown"
+        dialog = AboutDialog(version=version, parent=self)
+        dialog.exec()
 
     def _show_preferences(self):
         """Show the preferences dialog."""

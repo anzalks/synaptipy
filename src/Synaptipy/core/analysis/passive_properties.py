@@ -332,6 +332,267 @@ def calculate_rin(
         return RinResult(value=None, unit="MOhm", is_valid=False, error_message=str(e), parameters=parameters or {})
 
 
+def _fit_vc_transient_decay(
+    decay_segment: np.ndarray,
+    t_decay: np.ndarray,
+    i_peak: float,
+    rs_mohm: float,
+    cm_charge_pf: float,
+) -> tuple:
+    """Fit a mono-exponential to the VC transient decay; return (tau_c_ms, cm_fit_pf)."""
+    nan = float("nan")
+    if len(decay_segment) < 4 or abs(i_peak) < 1e-12:
+        return nan, nan
+
+    def _mono_exp(t, A, tau, offset):
+        return A * np.exp(-t / tau) + offset
+
+    p0_exp = [float(i_peak), float(np.clip(rs_mohm * cm_charge_pf * 1e-6, 1e-6, 1.0)), 0.0]
+    try:
+        popt_exp, _ = curve_fit(
+            _mono_exp,
+            t_decay - t_decay[0],
+            decay_segment,
+            p0=p0_exp,
+            bounds=([-np.inf, 1e-6, -np.inf], [np.inf, 1.0, np.inf]),
+            maxfev=2000,
+        )
+        tau_c_s = float(popt_exp[1])
+        rs_ohm = rs_mohm * 1e6
+        cm_fit_pf = float(tau_c_s / rs_ohm * 1e12) if rs_ohm > 0 else nan
+        return tau_c_s * 1000.0, cm_fit_pf
+    except RuntimeError:
+        log.debug("_fit_vc_transient_decay: mono-exp fit did not converge.")
+        return nan, nan
+
+
+def calculate_vc_transient_parameters(
+    current_trace: np.ndarray,
+    time_vector: np.ndarray,
+    step_onset_time: float,
+    voltage_step_mv: float,
+    baseline_window_s: float = 0.005,
+    transient_window_ms: float = 20.0,
+) -> Dict[str, Any]:
+    """Fit the capacitive transient from a VC step to extract Rs and Cm.
+
+    In voltage-clamp, a command voltage step elicits a capacitive transient
+    whose peak height and time-integral allow decomposition of series resistance
+    (Rs) and whole-cell capacitance (Cm)::
+
+        Rs = delta_V / I_peak
+        Cm = Q_transient / delta_V    where Q is charge under the transient
+        tau_c = Rs * Cm  (capacitive charging time constant)
+
+    A mono-exponential is also fit to the transient decay to yield ``tau_c``
+    and a refined ``Cm_fit`` estimate.
+
+    Parameters
+    ----------
+    current_trace : np.ndarray
+        1-D current array (pA).
+    time_vector : np.ndarray
+        1-D time array aligned with *current_trace* (seconds).
+    step_onset_time : float
+        Time of the voltage-clamp step onset (seconds).
+    voltage_step_mv : float
+        Amplitude of the voltage step (mV). Sign is preserved.
+    baseline_window_s : float
+        Duration of the pre-step baseline used to compute holding current (s).
+    transient_window_ms : float
+        Duration of the post-step window searched for the transient peak (ms).
+
+    Returns
+    -------
+    dict
+        Keys: ``rs_mohm``, ``cm_pf``, ``tau_c_ms``, ``cm_fit_pf``,
+        ``transient_peak_pa``, ``transient_charge_pa_s``.
+        All values are ``float(np.nan)`` when the fit fails.
+    """
+    nan = float(np.nan)
+    result: Dict[str, Any] = {
+        "rs_mohm": nan,
+        "cm_pf": nan,
+        "tau_c_ms": nan,
+        "cm_fit_pf": nan,
+        "transient_peak_pa": nan,
+        "transient_charge_pa_s": nan,
+    }
+
+    if voltage_step_mv == 0.0:
+        log.warning("calculate_vc_transient_parameters: voltage_step_mv is zero.")
+        return result
+
+    try:
+        # Pre-step baseline current
+        baseline_end = step_onset_time
+        baseline_start = max(time_vector[0], baseline_end - baseline_window_s)
+        base_mask = (time_vector >= baseline_start) & (time_vector < baseline_end)
+        if not np.any(base_mask):
+            log.warning("calculate_vc_transient_parameters: no baseline samples found.")
+            return result
+        i_baseline = float(np.mean(current_trace[base_mask]))
+
+        # Transient window
+        trans_end = step_onset_time + transient_window_ms / 1000.0
+        trans_mask = (time_vector >= step_onset_time) & (time_vector < trans_end)
+        if not np.any(trans_mask):
+            log.warning("calculate_vc_transient_parameters: no transient samples found.")
+            return result
+
+        i_trans = current_trace[trans_mask] - i_baseline
+        t_trans = time_vector[trans_mask] - step_onset_time
+
+        # Peak capacitive current
+        if voltage_step_mv > 0:
+            peak_idx = int(np.argmax(i_trans))
+        else:
+            peak_idx = int(np.argmin(i_trans))
+        i_peak = float(i_trans[peak_idx])
+
+        if abs(i_peak) < 1e-12:
+            log.warning("calculate_vc_transient_parameters: transient peak is negligible.")
+            return result
+
+        # Rs: mV/pA = (1e-3 V)/(1e-12 A) = 1e9 Ohm = 1000 MOhm
+        rs_mohm = float(abs(voltage_step_mv) / abs(i_peak) * 1e3)
+
+        # Charge = integral of transient (after peak)
+        q_total = float(np.trapezoid(i_trans, t_trans))  # pA*s = pC
+        cm_charge_pf = abs(q_total) / abs(voltage_step_mv) * 1e3 if abs(voltage_step_mv) > 0 else nan
+        # Q(pA*s)/V_step(mV) * 1e6 -> pF  [pA*s/mV = 1e-12/1e-3 F = 1e-9 F; *1e6 -> 1e-3 pF? no]
+        # pA*s / mV = (1e-12 C)/(1e-3 V) = 1e-9 F = 1 nF; * 1e6 -> MOhm? Correct derivation:
+        # Cm(F) = Q(C)/V(V); Q(pA*s)=Q*1e-12 C; V(mV)=V*1e-3 V
+        # Cm = Q*1e-12 / (V*1e-3) = (Q/V)*1e-9 F = (Q/V)*1000 pF
+        # so Cm(pF) = (Q_pAs / V_mV) * 1e-9 / 1e-12 = (Q_pAs / V_mV) * 1000
+        cm_charge_pf = float(abs(q_total) / abs(voltage_step_mv) * 1e3) if abs(voltage_step_mv) > 0 else nan
+
+        # Mono-exponential fit to transient decay for tau_c
+        decay_segment = i_trans[peak_idx:]
+        t_decay = t_trans[peak_idx:]
+        tau_c_ms, cm_fit_pf = _fit_vc_transient_decay(decay_segment, t_decay, i_peak, rs_mohm, cm_charge_pf)
+
+        result.update(
+            {
+                "rs_mohm": rs_mohm,
+                "cm_pf": cm_charge_pf,
+                "tau_c_ms": tau_c_ms,
+                "cm_fit_pf": cm_fit_pf,
+                "transient_peak_pa": i_peak,
+                "transient_charge_pa_s": q_total,
+            }
+        )
+    except (ValueError, TypeError, IndexError, np.linalg.LinAlgError) as e:
+        log.warning("calculate_vc_transient_parameters: %s", e)
+
+    return result
+
+
+def calculate_cc_series_resistance_fast(
+    voltage_trace: np.ndarray,
+    time_vector: np.ndarray,
+    step_onset_time: float,
+    current_step_pa: float,
+    artifact_window_ms: float = 0.5,
+    tau_ms: Optional[float] = None,
+    rin_mohm: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Estimate CC series resistance from the fast voltage artifact and derive Cm.
+
+    In current clamp, the fast resistive drop at step onset reflects the
+    series (pipette + access) resistance before the membrane charges::
+
+        Rs = delta_V_fast / I_step   (first ``artifact_window_ms`` after onset)
+
+    When *tau_ms* and *rin_mohm* are supplied, CC membrane capacitance is
+    derived as::
+
+        Cm = tau_CC / R_in
+
+    Parameters
+    ----------
+    voltage_trace : np.ndarray
+        1-D voltage array (mV).
+    time_vector : np.ndarray
+        1-D time array (s).
+    step_onset_time : float
+        Time of the current step onset (seconds).
+    current_step_pa : float
+        Amplitude of the injected current step (pA). Must be non-zero.
+    artifact_window_ms : float
+        Duration of the initial fast artifact window used to measure
+        the instantaneous voltage drop (ms, default 0.5).
+    tau_ms : float, optional
+        Membrane time constant from exponential fit (ms).  Required to
+        derive ``cm_derived_pf``.
+    rin_mohm : float, optional
+        Input resistance (MOhm).  Required to derive ``cm_derived_pf``.
+
+    Returns
+    -------
+    dict
+        Keys: ``rs_cc_mohm``, ``cm_derived_pf``.
+        Values are ``float(np.nan)`` when the calculation fails.
+    """
+    nan = float(np.nan)
+    result: Dict[str, Any] = {"rs_cc_mohm": nan, "cm_derived_pf": nan}
+
+    if current_step_pa == 0.0:
+        log.warning("calculate_cc_series_resistance_fast: current_step_pa is zero.")
+        return result
+
+    try:
+        # Baseline: mean voltage in the 5 ms before step onset
+        pre_duration_s = 0.005
+        base_mask = (time_vector >= step_onset_time - pre_duration_s) & (time_vector < step_onset_time)
+        if not np.any(base_mask):
+            log.warning("calculate_cc_series_resistance_fast: no pre-step baseline samples.")
+            return result
+        v_baseline = float(np.mean(voltage_trace[base_mask]))
+
+        # Fast artifact window
+        art_end = step_onset_time + artifact_window_ms / 1000.0
+        art_mask = (time_vector >= step_onset_time) & (time_vector < art_end)
+        if not np.any(art_mask):
+            log.warning("calculate_cc_series_resistance_fast: no artifact window samples.")
+            return result
+
+        # The fast voltage drop is estimated as the mean in the artifact window
+        # minus the pre-step baseline (captures only the resistive drop).
+        v_artifact = float(np.mean(voltage_trace[art_mask]))
+        delta_v_fast = v_artifact - v_baseline  # mV
+
+        # Rs (CC) = delta_V_fast / I_step   (mV / pA = MOhm * 1e3 ... )
+        # mV/pA = (1e-3 V) / (1e-12 A) = 1e9 Ohm = 1000 MOhm
+        # For Rs in MOhm: mV/pA * 1e3
+        # Typical Rs: 5-30 MOhm -> delta_V ~ 0.025-0.15 mV per 1 pA ... 5 pA step -> 0.125 mV
+        # Correct: Rs (MOhm) = delta_V (mV) / I (pA) * 1e3 ... wait
+        # delta_V (mV) / I (pA) = 1e-3 V / 1e-12 A = 1e9 Ohm = 1000 MOhm
+        # So Rs_MOhm = delta_V_mV / I_pA * 1e-3 ... No:
+        # Rs (MOhm) = delta_V (mV) / I (pA) * 1000 / 1e6 = delta_V/I * 1e-3
+        # Hmm, let me be careful:
+        # Rs = V/I = (delta_V_mV * 1e-3 V) / (I_pA * 1e-12 A)
+        #          = delta_V_mV / I_pA * 1e-3/1e-12 Ohm
+        #          = delta_V_mV / I_pA * 1e9 Ohm
+        #          = delta_V_mV / I_pA * 1e3 MOhm
+        rs_cc_mohm = float(abs(delta_v_fast) / abs(current_step_pa) * 1e3)
+
+        result["rs_cc_mohm"] = rs_cc_mohm
+
+        # Derive Cm from tau and Rin
+        if tau_ms is not None and rin_mohm is not None and rin_mohm > 0:
+            tau_s = float(tau_ms) / 1000.0
+            rin_ohm = float(rin_mohm) * 1e6
+            cm_f = tau_s / rin_ohm
+            cm_pf = cm_f * 1e12
+            result["cm_derived_pf"] = float(cm_pf)
+
+    except (ValueError, TypeError, IndexError) as e:
+        log.warning("calculate_cc_series_resistance_fast: %s", e)
+
+    return result
+
+
 def calculate_conductance(
     current_trace: np.ndarray,
     time_vector: np.ndarray,
@@ -518,13 +779,35 @@ def calculate_tau(  # noqa: C901
             log.warning("Not enough data points to fit for Tau.")
             return None
 
-        V_0 = V_fit[0]
         V_ss_guess = np.mean(V_fit[-5:])
+
+        # Robust initial guess for the time constant via log-linear regression.
+        # Using V_fit[0] directly is unreliable when the first sample is noisy
+        # or the artifact blanking window clips the true onset.
+        # Strategy:
+        #   1. Compute V_norm = V_fit - V_ss_guess (the decaying component).
+        #   2. Fit a line to log(|V_norm| + epsilon) vs. t_fit using only
+        #      samples where the signal is still decaying monotonically.
+        #   3. tau_est = -1.0 / slope  (negative slope → positive tau).
+        #   4. Fall back to a fixed 10 ms when the log-fit is degenerate.
+        _V_norm = V_fit - V_ss_guess
+        _valid_log = np.abs(_V_norm) > 1e-6
+        tau_est = 0.01  # fallback 10 ms
+        if np.sum(_valid_log) >= 2:
+            try:
+                _log_vals = np.log(np.abs(_V_norm[_valid_log]) + 1e-10)
+                _slope_log, _ = np.polyfit(t_fit[_valid_log], _log_vals, 1)
+                if _slope_log < 0:
+                    tau_est = float(-1.0 / _slope_log)
+                    tau_est = float(np.clip(tau_est, tau_min, tau_max))
+            except (ValueError, np.linalg.LinAlgError):
+                pass  # keep fallback
+        V_0_est = float(V_fit[0])
 
         if model == "mono":
             lower_bounds = [-np.inf, -np.inf, tau_min]
             upper_bounds = [np.inf, np.inf, tau_max]
-            p0 = [V_ss_guess, V_0, 0.01]
+            p0 = [V_ss_guess, V_0_est, tau_est]
 
             try:
                 popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
@@ -543,8 +826,8 @@ def calculate_tau(  # noqa: C901
                 log.warning("Not enough data for bi-exponential fit (need >= 6).")
                 return None
 
-            A_fast_guess = 0.6 * (V_0 - V_ss_guess)
-            A_slow_guess = 0.4 * (V_0 - V_ss_guess)
+            A_fast_guess = 0.6 * (V_0_est - V_ss_guess)
+            A_slow_guess = 0.4 * (V_0_est - V_ss_guess)
             tau_fast_guess = min(0.005, tau_max * 0.1)
             tau_slow_guess = min(0.05, tau_max * 0.5)
             p0 = [V_ss_guess, A_fast_guess, tau_fast_guess, A_slow_guess, tau_slow_guess]

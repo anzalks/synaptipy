@@ -6,6 +6,7 @@ Handles exporting recording data and analysis results to CSV format.
 Automatically writes a companion provenance JSON alongside every results CSV.
 """
 
+import importlib.metadata
 import json
 import logging
 from datetime import datetime, timezone
@@ -24,6 +25,165 @@ except Exception:
 from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Dependency version helpers
+# ---------------------------------------------------------------------------
+
+_DEP_PACKAGES = ("numpy", "scipy", "neo", "pyqtgraph")
+
+
+def _get_dependency_versions() -> Dict[str, str]:
+    """Return installed versions of key scientific dependencies.
+
+    Uses :mod:`importlib.metadata` so the result always reflects the
+    *currently running* environment rather than any cached build artefact.
+    Unknown packages are reported as ``"unknown"`` rather than raising.
+
+    Returns:
+        Mapping of package name to version string.
+    """
+    versions: Dict[str, str] = {}
+    for pkg in _DEP_PACKAGES:
+        try:
+            versions[pkg] = importlib.metadata.version(pkg)
+        except importlib.metadata.PackageNotFoundError:
+            versions[pkg] = "unknown"
+    return versions
+
+
+# ---------------------------------------------------------------------------
+# Module-level constants for tidy long-format export
+# ---------------------------------------------------------------------------
+
+_TIDY_METADATA_KEYS = frozenset(
+    {
+        "file",
+        "file_name",
+        "source_file_name",
+        "source_file_path",
+        "file_path",
+        "group",
+        "channel",
+        "channel_id",
+        "channel_name",
+        "trial_index",
+        "trial_index_used",
+        "sweep",
+        "analysis_type",
+        "analysis",
+        "scope",
+        "sampling_rate",
+        "channel_units",
+        "trial_count",
+        "protocol",
+        "recording_duration_s",
+        "batch_timestamp",
+        "timestamp_saved",
+        "data_source_used",
+    }
+)
+
+_TIDY_UNIT_MAP: Dict[str, str] = {
+    "rmp_mv": "mV",
+    "tau_ms": "ms",
+    "tau_fast_ms": "ms",
+    "tau_slow_ms": "ms",
+    "rin_mohm": "MOhm",
+    "rin_peak_mohm": "MOhm",
+    "rin_steady_state_mohm": "MOhm",
+    "rs_mohm": "MOhm",
+    "rs_cc_mohm": "MOhm",
+    "cm_pf": "pF",
+    "cm_fit_pf": "pF",
+    "cm_derived_pf": "pF",
+    "sag_ratio": "ratio",
+    "sag_percentage": "%",
+    "rheobase_pa": "pA",
+    "fi_slope": "Hz/pA",
+    "amplitude": "mV",
+    "half_width": "ms",
+    "rise_time_10_90": "ms",
+    "decay_time_90_10": "ms",
+    "fahp_depth": "mV",
+    "mahp_depth": "mV",
+    "max_dvdt": "V/s",
+    "min_dvdt": "V/s",
+    "absolute_peak_mv": "mV",
+    "overshoot_mv": "mV",
+    "ppr": "ratio",
+    "ppr_naive": "ratio",
+    "tau_p1_ms": "ms",
+    "interpulse_interval_ms": "ms",
+    "event_amplitude": "pA",
+    "event_frequency_hz": "Hz",
+    "tau_mono_ms": "ms",
+    "adaptation_index": "ratio",
+}
+
+
+def _build_tidy_row(
+    flat: Dict[str, Any],
+    file_val: str,
+    group_val: str,
+    sweep_val: Any,
+    channel_val: str,
+    analysis_val: str,
+    units_chan: str,
+) -> List[Dict[str, Any]]:
+    """Convert one flat wide-format dict into a list of tidy long-format dicts."""
+    rows: List[Dict[str, Any]] = []
+    for metric, value in flat.items():
+        if metric in _TIDY_METADATA_KEYS or metric.startswith("_"):
+            continue
+        if isinstance(value, (list, np.ndarray, dict)):
+            continue
+        if not isinstance(value, (int, float, bool, str, type(None))):
+            continue
+        if metric in ("error", "debug_trace"):
+            continue
+        unit = _TIDY_UNIT_MAP.get(metric, units_chan)
+        rows.append(
+            {
+                "File": file_val,
+                "Group": group_val,
+                "Channel": channel_val,
+                "Sweep": sweep_val,
+                "Analysis": analysis_val,
+                "Metric": metric,
+                "Value": value,
+                "Unit": unit,
+            }
+        )
+    return rows
+
+
+def _tidy_get_meta(row: Dict[str, Any], keys: List[str]) -> str:
+    """Return the first non-None string value for any of the given keys."""
+    for k in keys:
+        v = row.get(k)
+        if v is not None:
+            return str(v)
+    return ""
+
+
+def _tidy_row_to_long(
+    row: Dict[str, Any],
+    file_keys: List[str],
+    group_keys: List[str],
+) -> List[Dict[str, Any]]:
+    """Convert one wide-format result dict into a list of tidy long-format dicts."""
+    flat: Dict[str, Any] = dict(row)
+    if isinstance(flat.get("metrics"), dict):
+        for k, v in flat.pop("metrics").items():
+            flat.setdefault(k, v)
+    file_val = _tidy_get_meta(flat, file_keys)
+    group_val = _tidy_get_meta(flat, group_keys)
+    sweep_val = flat.get("trial_index", flat.get("trial_index_used", ""))
+    channel_val = flat.get("channel_name", flat.get("channel", flat.get("channel_id", "")))
+    analysis_val = flat.get("analysis_type", flat.get("analysis", ""))
+    units_chan = flat.get("channel_units", "")
+    return _build_tidy_row(flat, file_val, group_val, sweep_val, channel_val, analysis_val, units_chan)
 
 
 class CSVExporter:
@@ -318,11 +478,94 @@ class CSVExporter:
             "source_files": source_files,
             "analysis_types": analysis_types,
             "analysis_config": analysis_config or {},
+            "dependencies": _get_dependency_versions(),
         }
 
         try:
             with open(provenance_path, "w", encoding="utf-8") as fh:
                 json.dump(provenance, fh, indent=2, default=str)
-            log.info("Provenance record written to %s", provenance_path)
+            log.info("Provenance wrote to %s", provenance_path)
         except Exception as exc:
             log.warning("Could not write provenance JSON: %s", exc)
+
+    def export_tidy(
+        self,
+        results: List[Dict[str, Any]],
+        output_path: Path,
+        analysis_config: Optional[Dict[str, Any]] = None,
+        file_col: str = "file",
+        group_col: str = "group",
+    ) -> bool:
+        """Export analysis results in tidy (long-format) CSV.
+
+        Each row represents one ``(File, Group, Sweep, Metric, Value, Unit)``
+        observation.  This layout is directly compatible with R ``tidyverse``,
+        Python ``seaborn``/``pandas``, MATLAB, and Origin for statistical
+        analysis and plotting.
+
+        Scalar result values are pivoted from the wide-format rows produced
+        by ``export_analysis_results``.  Private keys (starting with ``_``)
+        and non-scalar values (lists, arrays) are skipped.
+
+        A companion ``<stem>_provenance.json`` is written alongside the CSV.
+
+        Parameters
+        ----------
+        results : list of dict
+            Wide-format result rows, as produced by
+            ``BatchAnalysisEngine.run_batch``.
+        output_path : Path
+            Destination CSV path.
+        analysis_config : dict, optional
+            Analysis configuration embedded in the provenance record.
+        file_col : str
+            Key in each result dict that carries the source file name
+            (default ``"file"``; also tries ``"file_name"`` and
+            ``"source_file_name"`` as fallbacks).
+        group_col : str
+            Key in each result dict that carries the experimental group label
+            (default ``"group"``; falls back to empty string when absent).
+
+        Returns
+        -------
+        bool
+            ``True`` on success, ``False`` on failure.
+        """
+        if not results:
+            log.warning("export_tidy: no results to export.")
+            return False
+
+        try:
+            import csv as _csv
+
+            _file_keys = [file_col, "file_name", "source_file_name", "file"]
+            _group_keys = [group_col, "group"]
+
+            tidy_rows: List[Dict[str, Any]] = []
+            for row in results:
+                tidy_rows.extend(_tidy_row_to_long(row, _file_keys, _group_keys))
+
+            if not tidy_rows:
+                log.warning("export_tidy: no scalar metrics found; writing empty file.")
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", newline="", encoding="utf-8") as fh:
+                writer = _csv.DictWriter(
+                    fh,
+                    fieldnames=["File", "Group", "Channel", "Sweep", "Analysis", "Metric", "Value", "Unit"],
+                )
+                writer.writeheader()
+                writer.writerows(tidy_rows)
+
+            log.info("export_tidy: wrote %d rows to %s", len(tidy_rows), output_path)
+
+            self._write_provenance(
+                csv_path=output_path,
+                results=results,
+                analysis_config=analysis_config,
+            )
+            return True
+
+        except Exception as exc:
+            log.error("export_tidy failed: %s", exc, exc_info=True)
+            return False

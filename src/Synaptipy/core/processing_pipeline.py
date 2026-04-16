@@ -176,6 +176,50 @@ class SignalProcessingPipeline:
 # ---------------------------------------------------------------------------
 
 
+def _apply_pn_subtraction(result: np.ndarray, pn_traces, pn_scale: float) -> np.ndarray:
+    """Step B: P/N leak subtraction helper."""
+    pn_arr = np.asarray(pn_traces, dtype=float)
+    if pn_arr.ndim == 1:
+        pn_arr = pn_arr[np.newaxis, :]
+    if pn_arr.shape[1] == result.shape[0]:
+        pn_mean = pn_arr.mean(axis=0) * float(pn_scale)
+        result = result - pn_mean
+        log.debug(
+            "apply_trace_corrections: Step B — P/N leak subtracted (%d sweeps, scale=%.3f).",
+            pn_arr.shape[0],
+            pn_scale,
+        )
+    else:
+        log.warning(
+            "apply_trace_corrections: Step B skipped — pn_traces length %d != data length %d.",
+            pn_arr.shape[1],
+            result.shape[0],
+        )
+    return result
+
+
+def _apply_noise_floor_zeroing(result: np.ndarray, time: np.ndarray, pre_event_window_s: tuple) -> np.ndarray:
+    """Step C: scalar pre-event noise-floor zeroing helper."""
+    t0, t1 = float(pre_event_window_s[0]), float(pre_event_window_s[1])
+    mask = (time >= t0) & (time < t1)
+    if np.any(mask):
+        floor_offset = float(np.median(result[mask]))
+        result = result - floor_offset
+        log.debug(
+            "apply_trace_corrections: Step C — noise floor zeroed (%.4f mV, window %.3f-%.3f s).",
+            floor_offset,
+            t0,
+            t1,
+        )
+    else:
+        log.warning(
+            "apply_trace_corrections: Step C skipped — no samples in window %.3f-%.3f s.",
+            t0,
+            t1,
+        )
+    return result
+
+
 def apply_trace_corrections(
     data: np.ndarray,
     time: np.ndarray,
@@ -185,9 +229,10 @@ def apply_trace_corrections(
     pn_traces: Optional[np.ndarray] = None,
     pn_scale: float = 1.0,
     pre_event_window_s: Optional[tuple] = None,
+    artifact_interp_steps: Optional[List[Dict[str, Any]]] = None,
     filter_steps: Optional[List[Dict[str, Any]]] = None,
 ) -> np.ndarray:
-    """Apply the immutable four-step trace correction in a guaranteed order.
+    """Apply the immutable five-step trace correction in a guaranteed order.
 
     Regardless of the order the user toggles settings in the GUI, **this
     function must be used as the single entry point for all backend
@@ -208,10 +253,16 @@ def apply_trace_corrections(
         P/N corrections have already been applied, this median reflects only
         the residual noise floor, not a physiological offset.
 
-    Step D - Signal Filtering
+    Step D - Pre-filter Artifact Interpolation
+        Linearly interpolate across each stimulus artifact defined in
+        *artifact_interp_steps*.  Running this **after** A-C and **before**
+        filtering prevents Gibbs ringing: the DSP filter operates on an
+        already-flat waveform without sharp transient edges.
+
+    Step E - DSP Filtering
         Apply any filters listed in *filter_steps* (same dict schema as
         ``SignalProcessingPipeline``: ``{'type': 'filter', 'method': 'lowpass',
-        'cutoff': 1000, 'order': 5}``).  Running filters **after** A-C
+        'cutoff': 1000, 'order': 5}``).  Running filters **after** A-D
         prevents edge artefacts from the transient subtraction from being
         smeared across the waveform.
 
@@ -228,8 +279,12 @@ def apply_trace_corrections(
                              template before subtraction (default 1.0).
         pre_event_window_s:  ``(t_start, t_end)`` tuple in seconds.  Step C
                              is skipped when this is ``None``.
+        artifact_interp_steps: List of artifact dicts with keys
+                             ``onset_time`` (s) and ``duration_ms`` (ms).
+                             Each defines a stimulus artifact to linearly
+                             interpolate.  Step D is skipped when ``None``.
         filter_steps:        List of filter dicts consumed by
-                             ``SignalProcessingPipeline.process()``.  Step D
+                             ``SignalProcessingPipeline.process()``.  Step E
                              is skipped when the list is empty or ``None``.
 
     Returns:
@@ -251,53 +306,40 @@ def apply_trace_corrections(
     # Step B — P/N Leak Subtraction
     # ------------------------------------------------------------------
     if pn_traces is not None:
-        pn_arr = np.asarray(pn_traces, dtype=float)
-        if pn_arr.ndim == 1:
-            pn_arr = pn_arr[np.newaxis, :]
-        if pn_arr.shape[1] == result.shape[0]:
-            pn_mean = pn_arr.mean(axis=0) * float(pn_scale)
-            result = result - pn_mean
-            log.debug(
-                "apply_trace_corrections: Step B — P/N leak subtracted (%d sweeps, scale=%.3f).",
-                pn_arr.shape[0],
-                pn_scale,
-            )
-        else:
-            log.warning(
-                "apply_trace_corrections: Step B skipped — pn_traces length %d != data length %d.",
-                pn_arr.shape[1],
-                result.shape[0],
-            )
+        result = _apply_pn_subtraction(result, pn_traces, pn_scale)
 
     # ------------------------------------------------------------------
     # Step C — Pre-event Scalar Zeroing (median of pre-event window)
     # ------------------------------------------------------------------
     if pre_event_window_s is not None and time is not None and time.size == result.size:
-        t0, t1 = float(pre_event_window_s[0]), float(pre_event_window_s[1])
-        mask = (time >= t0) & (time < t1)
-        if np.any(mask):
-            floor_offset = float(np.median(result[mask]))
-            result = result - floor_offset
-            log.debug(
-                "apply_trace_corrections: Step C — noise floor zeroed (%.4f mV, window %.3f-%.3f s).",
-                floor_offset,
-                t0,
-                t1,
-            )
-        else:
-            log.warning(
-                "apply_trace_corrections: Step C skipped — no samples in window %.3f-%.3f s.",
-                t0,
-                t1,
-            )
+        result = _apply_noise_floor_zeroing(result, time, pre_event_window_s)
 
     # ------------------------------------------------------------------
-    # Step D — Signal Filtering
+    # Step D — Pre-filter Artifact Interpolation
+    # Linear interpolation across stimulus artifacts must occur AFTER
+    # baseline zeroing (Step C) and BEFORE filtering (Step E).  This
+    # ordering prevents Gibbs ringing: the filter operates on an already
+    # flat waveform without the sharp transient edges of the artifact.
+    # ------------------------------------------------------------------
+    if artifact_interp_steps:
+        for art in artifact_interp_steps:
+            onset = float(art.get("onset_time", 0.0))
+            duration_ms = float(art.get("duration_ms", 0.5))
+            from Synaptipy.core import signal_processor as _sp
+
+            result = _sp.blank_artifact(result, time, onset, duration_ms, method="linear")
+        log.debug(
+            "apply_trace_corrections: Step D — %d artifact interpolation step(s) applied.",
+            len(artifact_interp_steps),
+        )
+
+    # ------------------------------------------------------------------
+    # Step E — Signal Filtering
     # ------------------------------------------------------------------
     if filter_steps:
         pipeline = SignalProcessingPipeline()
         pipeline.set_steps(filter_steps)
         result = pipeline.process(result, fs, time_vector=time)
-        log.debug("apply_trace_corrections: Step D — %d filter step(s) applied.", len(filter_steps))
+        log.debug("apply_trace_corrections: Step E — %d filter step(s) applied.", len(filter_steps))
 
     return result
