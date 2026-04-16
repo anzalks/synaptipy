@@ -427,51 +427,81 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#full-annotated-example-synaptic-charge-transfer">9. Full Annotated Example - Synaptic Charge Transfer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#troubleshooting">10. Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#applying-global-themes-to-plugins">10. Applying Global Themes to Plugins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#how-the-theme-reaches-your-plugin">How the theme reaches your plugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#returning-styled-plot-data">Returning styled plot data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#listening-to-live-theme-changes-in-a-popup-window">Listening to live theme changes in a popup window</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#troubleshooting">11. Troubleshooting</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api_reference.html">Synaptipy API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="api_reference.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api_reference.html#core-components">Core Components</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#data-model">Data Model</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#recording">Recording</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.data_model">Data Model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.UndoStack"><code class="docutils literal notranslate"><span class="pre">UndoStack</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.Channel"><code class="docutils literal notranslate"><span class="pre">Channel</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.Recording"><code class="docutils literal notranslate"><span class="pre">Recording</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.Experiment"><code class="docutils literal notranslate"><span class="pre">Experiment</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#usage-example">Usage Example</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#file-readers">File Readers</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#neoadapter">NeoAdapter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.infrastructure.file_readers.neo_adapter">File Readers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter"><code class="docutils literal notranslate"><span class="pre">NeoAdapter</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id1">Usage Example</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#analysis">Analysis</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#input-resistance">Input Resistance</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#sag-ratio">Sag Ratio</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#spike-detection">Spike Detection</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#analysis-registry-plugin-interface">Analysis Registry (Plugin Interface)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#analysis-modules">Analysis Modules</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-1-passive-membrane-properties">Module 1 - Passive Membrane Properties</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-2-single-spike-analysis">Module 2 - Single Spike Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-3-firing-dynamics">Module 3 - Firing Dynamics</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-4-synaptic-events">Module 4 - Synaptic Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-5-evoked-responses-optogenetics">Module 5 - Evoked Responses (Optogenetics)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#analysis-registry">Analysis Registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#usage-example-registry">Usage Example - Registry</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#batch-processing">Batch Processing</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#batchanalysisengine">BatchAnalysisEngine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.analysis.batch_engine">Batch Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#output-design-principles">Output Design Principles</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine"><code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id2">Usage Example</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">Epoch Manager</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#signal-processing">Signal Processing</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#processingpipeline">ProcessingPipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.signal_processor">Signal Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.validate_sampling_rate"><code class="docutils literal notranslate"><span class="pre">validate_sampling_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.check_trace_quality"><code class="docutils literal notranslate"><span class="pre">check_trace_quality()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.bandpass_filter"><code class="docutils literal notranslate"><span class="pre">bandpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.lowpass_filter"><code class="docutils literal notranslate"><span class="pre">lowpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.highpass_filter"><code class="docutils literal notranslate"><span class="pre">highpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.notch_filter"><code class="docutils literal notranslate"><span class="pre">notch_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.comb_filter"><code class="docutils literal notranslate"><span class="pre">comb_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mode"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mean"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_mean()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_median"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_median()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_linear"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_linear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_region"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.blank_artifact"><code class="docutils literal notranslate"><span class="pre">blank_artifact()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.find_artifact_windows"><code class="docutils literal notranslate"><span class="pre">find_artifact_windows()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.compute_psd"><code class="docutils literal notranslate"><span class="pre">compute_psd()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.multi_harmonic_notch"><code class="docutils literal notranslate"><span class="pre">multi_harmonic_notch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.processing_pipeline">Processing Pipeline</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#plugin-system">Plugin System</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#pluginmanager">PluginManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.application.plugin_manager">Plugin System</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager"><code class="docutils literal notranslate"><span class="pre">PluginManager</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id3">Usage Example</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="api_reference.html#exporters">Exporters</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#nwb-exporter">NWB Exporter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.infrastructure.exporters.nwb_exporter">NWB Exporter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id4">Usage Example</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="api_reference.html#licensing">Licensing</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#integration-considerations">Integration Considerations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#alternatives-for-commercial-integration">Alternatives for Commercial Integration</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="api_reference.html#licensing">Licensing</a></li>
 </ul>
 </li>
 </ul>
@@ -1764,8 +1794,686 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 <h1 id="index">Index</h1>
 
 <div class="genindex-jumpbox">
+ <a href="#A"><strong>A</strong></a>
+ | <a href="#B"><strong>B</strong></a>
+ | <a href="#C"><strong>C</strong></a>
+ | <a href="#D"><strong>D</strong></a>
+ | <a href="#E"><strong>E</strong></a>
+ | <a href="#F"><strong>F</strong></a>
+ | <a href="#G"><strong>G</strong></a>
+ | <a href="#H"><strong>H</strong></a>
+ | <a href="#I"><strong>I</strong></a>
+ | <a href="#L"><strong>L</strong></a>
+ | <a href="#M"><strong>M</strong></a>
+ | <a href="#N"><strong>N</strong></a>
+ | <a href="#O"><strong>O</strong></a>
+ | <a href="#P"><strong>P</strong></a>
+ | <a href="#R"><strong>R</strong></a>
+ | <a href="#S"><strong>S</strong></a>
+ | <a href="#T"><strong>T</strong></a>
+ | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
  
 </div>
+<h2 id="A">A</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.adaptation_index">adaptation_index (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.add_manual_epoch">add_manual_epoch() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.add_step">add_step() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry">AnalysisRegistry (class in Synaptipy.core.analysis.registry)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.analyze_multi_sweep_spikes">analyze_multi_sweep_spikes() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.analyze_spikes_and_bursts">analyze_spikes_and_bursts() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.apply_ljp_correction">apply_ljp_correction() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.apply_trace_corrections">apply_trace_corrections() (in module Synaptipy.core.processing_pipeline)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="B">B</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.bandpass_filter">bandpass_filter() (in module Synaptipy.core.signal_processor)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine">BatchAnalysisEngine (class in Synaptipy.core.analysis.batch_engine)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.blank_artifact">blank_artifact() (in module Synaptipy.core.signal_processor)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="C">C</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_baseline_stats">calculate_baseline_stats() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.calculate_bursts_logic">calculate_bursts_logic() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_capacitance_cc">calculate_capacitance_cc() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_capacitance_vc">calculate_capacitance_vc() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_cc_series_resistance_fast">calculate_cc_series_resistance_fast() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_conductance">calculate_conductance() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.calculate_dvdt">calculate_dvdt() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.calculate_event_charge_dynamic">calculate_event_charge_dynamic() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.calculate_fi_curve">calculate_fi_curve() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.calculate_isi">calculate_isi() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_iv_curve">calculate_iv_curve() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.calculate_optogenetic_sync">calculate_optogenetic_sync() (in module Synaptipy.core.analysis.evoked_responses)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.calculate_paired_pulse_ratio">calculate_paired_pulse_ratio() (in module Synaptipy.core.analysis.evoked_responses)</a>
+
+      <ul>
+        <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.calculate_paired_pulse_ratio">(in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      </ul></li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_rin">calculate_rin() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_rmp">calculate_rmp() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_sag_ratio">calculate_sag_ratio() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.calculate_spike_features">calculate_spike_features() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_tau">calculate_tau() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.calculate_train_dynamics">calculate_train_dynamics() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.calculate_vc_transient_parameters">calculate_vc_transient_parameters() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.can_undo">can_undo (Synaptipy.core.data_model.Channel property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.can_undo">can_undo() (Synaptipy.core.data_model.UndoStack method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.cancel">cancel() (Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel">Channel (class in Synaptipy.core.data_model)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Recording.channel_names">channel_names (Synaptipy.core.data_model.Recording property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.check_trace_quality">check_trace_quality() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.clear">clear() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+
+      <ul>
+        <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.clear">(Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+        <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.clear">(Synaptipy.core.data_model.UndoStack method)</a>
+</li>
+        <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.clear">(Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
+</li>
+      </ul></li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.comb_filter">comb_filter() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.compute_local_pre_event_baseline">compute_local_pre_event_baseline() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.compute_psd">compute_psd() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.contains">contains() (Synaptipy.core.analysis.epoch_manager.Epoch method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager.create_plugin_directory">create_plugin_directory() (Synaptipy.application.plugin_manager.PluginManager class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.CurrentClampSeries">CurrentClampSeries (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.cv">cv (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.cv2">cv2 (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="D">D</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.DEFAULT_EPOCH_NAMES">DEFAULT_EPOCH_NAMES (Synaptipy.core.analysis.epoch_manager.EpochManager attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.depth">depth (Synaptipy.core.data_model.UndoStack property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.detect_events_baseline_peak_kinetics">detect_events_baseline_peak_kinetics() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.detect_events_template">detect_events_template() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.detect_events_threshold">detect_events_threshold() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.detect_minis_threshold">detect_minis_threshold() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.detect_spikes_threshold">detect_spikes_threshold() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.detect_threshold_kink">detect_threshold_kink() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.duration">duration (Synaptipy.core.analysis.epoch_manager.Epoch property)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="E">E</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.end_time">end_time (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch">Epoch (class in Synaptipy.core.analysis.epoch_manager)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.epoch_names">epoch_names (Synaptipy.core.analysis.epoch_manager.EpochManager property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.epoch_type">epoch_type (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager">EpochManager (class in Synaptipy.core.analysis.epoch_manager)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs">epochs (Synaptipy.core.analysis.epoch_manager.EpochManager property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.epochs_at_time">epochs_at_time() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.evoked_responses_module">evoked_responses_module() (in module Synaptipy.core.analysis.evoked_responses)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Experiment">Experiment (class in Synaptipy.core.data_model)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export">export() (Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs">extract_ttl_epochs() (in module Synaptipy.core.analysis.evoked_responses)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="F">F</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.failure_count">failure_count (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.find_artifact_windows">find_artifact_windows() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.find_quiescent_baseline_rms">find_quiescent_baseline_rms() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.find_stable_baseline">find_stable_baseline() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.firing_dynamics_module">firing_dynamics_module() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.fit_biexponential_decay">fit_biexponential_decay() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.from_ttl">from_ttl() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="G">G</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.get_analysis_info">get_analysis_info() (Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine static method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_averaged_current_data">get_averaged_current_data() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_averaged_data">get_averaged_data() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_averaged_time_vector">get_averaged_time_vector() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_consistent_samples">get_consistent_samples() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_current_data">get_current_data() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_data">get_data() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_data_bounds">get_data_bounds() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch">get_epoch() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.get_epoch_slices">get_epoch_slices() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_finite_data_bounds">get_finite_data_bounds() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.get_function">get_function() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.get_metadata">get_metadata() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.get_phase_plane_trajectory">get_phase_plane_trajectory() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager.get_plugin_files">get_plugin_files() (Synaptipy.application.plugin_manager.PluginManager class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_primary_data_label">get_primary_data_label() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_relative_averaged_time_vector">get_relative_averaged_time_vector() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_relative_time_vector">get_relative_time_vector() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.get_steps">get_steps() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter.get_supported_extensions">get_supported_extensions() (Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter.get_supported_file_filter">get_supported_file_filter() (Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.get_time_vector">get_time_vector() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="H">H</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.highpass_filter">highpass_filter() (in module Synaptipy.core.signal_processor)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="I">I</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.IntracellularElectrode">IntracellularElectrode (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.isis">isis (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="L">L</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.list_analysis">list_analysis() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.list_available_analyses">list_available_analyses() (Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine static method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.list_by_type">list_by_type() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.list_preprocessing">list_preprocessing() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.list_registered">list_registered() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager.load_plugins">load_plugins() (Synaptipy.application.plugin_manager.PluginManager class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.lowpass_filter">lowpass_filter() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.lv">lv (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="M">M</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.mark_core_snapshot">mark_core_snapshot() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Recording.max_trials">max_trials (Synaptipy.core.data_model.Recording property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.mean_isi_s">mean_isi_s (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.metadata">metadata (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
+</li>
+      <li>
+    module
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.application.plugin_manager">Synaptipy.application.plugin_manager</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.batch_engine">Synaptipy.core.analysis.batch_engine</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">Synaptipy.core.analysis.epoch_manager</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.evoked_responses">Synaptipy.core.analysis.evoked_responses</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.firing_dynamics">Synaptipy.core.analysis.firing_dynamics</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.passive_properties">Synaptipy.core.analysis.passive_properties</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.registry">Synaptipy.core.analysis.registry</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.single_spike">Synaptipy.core.analysis.single_spike</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.synaptic_events">Synaptipy.core.analysis.synaptic_events</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.data_model">Synaptipy.core.data_model</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.processing_pipeline">Synaptipy.core.processing_pipeline</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.core.signal_processor">Synaptipy.core.signal_processor</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.infrastructure.exporters.nwb_exporter">Synaptipy.infrastructure.exporters.nwb_exporter</a>
+</li>
+        <li><a href="api_reference.html#module-Synaptipy.infrastructure.file_readers.neo_adapter">Synaptipy.infrastructure.file_readers.neo_adapter</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.multi_harmonic_notch">multi_harmonic_notch() (in module Synaptipy.core.signal_processor)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="N">N</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.name">name (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter">NeoAdapter (class in Synaptipy.infrastructure.file_readers.neo_adapter)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.notch_filter">notch_filter() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Recording.num_channels">num_channels (Synaptipy.core.data_model.Recording property)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.num_samples">num_samples (Synaptipy.core.data_model.Channel property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.num_trials">num_trials (Synaptipy.core.data_model.Channel property)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter">NWBExporter (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.NWBFile">NWBFile (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.NWBHDF5IO">NWBHDF5IO (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="O">O</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.optical_latency_ms">optical_latency_ms (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult">OptoSyncResult (class in Synaptipy.core.analysis.evoked_responses)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="P">P</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.parameters">parameters (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+
+      <ul>
+        <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.parameters">(Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.passive_properties_module">passive_properties_module() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.PatchClampSeries">PatchClampSeries (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.phase_plane_analysis">phase_plane_analysis() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.phase_plane_analysis_wrapper">phase_plane_analysis_wrapper() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager">PluginManager (class in Synaptipy.application.plugin_manager)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.pop">pop() (Synaptipy.core.data_model.UndoStack method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.process">process() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack.push">push() (Synaptipy.core.data_model.UndoStack method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.push_undo">push_undo() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="R">R</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter.read_recording">read_recording() (Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Recording">Recording (class in Synaptipy.core.data_model)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.register">register() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.register_processor">register_processor() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager.reload_plugins">reload_plugins() (Synaptipy.application.plugin_manager.PluginManager class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.EpochManager.remove_epoch">remove_epoch() (Synaptipy.core.analysis.epoch_manager.EpochManager method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.remove_step_by_type">remove_step_by_type() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.reset_to_factory">reset_to_factory() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.responding_spikes">responding_spikes (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.response_probability">response_probability (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch">run_batch() (Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.run_burst_analysis_wrapper">run_burst_analysis_wrapper() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.run_capacitance_analysis_wrapper">run_capacitance_analysis_wrapper() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.run_event_detection_baseline_peak_wrapper">run_event_detection_baseline_peak_wrapper() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.run_event_detection_template_wrapper">run_event_detection_template_wrapper() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.run_event_detection_threshold_wrapper">run_event_detection_threshold_wrapper() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.run_excitability_analysis_wrapper">run_excitability_analysis_wrapper() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.run_iv_curve_wrapper">run_iv_curve_wrapper() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.run_opto_sync_wrapper">run_opto_sync_wrapper() (in module Synaptipy.core.analysis.evoked_responses)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.run_ppr_wrapper">run_ppr_wrapper() (in module Synaptipy.core.analysis.evoked_responses)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.run_rin_analysis_wrapper">run_rin_analysis_wrapper() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.run_rmp_analysis_wrapper">run_rmp_analysis_wrapper() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.run_sag_ratio_wrapper">run_sag_ratio_wrapper() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.run_spike_detection_wrapper">run_spike_detection_wrapper() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.passive_properties.run_tau_analysis_wrapper">run_tau_analysis_wrapper() (in module Synaptipy.core.analysis.passive_properties)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.run_train_dynamics_wrapper">run_train_dynamics_wrapper() (in module Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="S">S</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline.set_steps">set_steps() (Synaptipy.core.processing_pipeline.SignalProcessingPipeline method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.processing_pipeline.SignalProcessingPipeline">SignalProcessingPipeline (class in Synaptipy.core.processing_pipeline)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.single_spike.single_spike_module">single_spike_module() (in module Synaptipy.core.analysis.single_spike)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult.spike_count">spike_count (Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.spike_jitter_ms">spike_jitter_ms (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.epoch_manager.Epoch.start_time">start_time (Synaptipy.core.analysis.epoch_manager.Epoch attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.stimulus_count">stimulus_count (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.stimulus_offsets">stimulus_offsets (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.stimulus_onsets">stimulus_onsets (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_linear">subtract_baseline_linear() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mean">subtract_baseline_mean() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_median">subtract_baseline_median() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mode">subtract_baseline_mode() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_region">subtract_baseline_region() (in module Synaptipy.core.signal_processor)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.evoked_responses.OptoSyncResult.success_count">success_count (Synaptipy.core.analysis.evoked_responses.OptoSyncResult attribute)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.synaptic_events.synaptic_events_module">synaptic_events_module() (in module Synaptipy.core.analysis.synaptic_events)</a>
+</li>
+      <li>
+    Synaptipy.application.plugin_manager
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.application.plugin_manager">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.batch_engine
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.batch_engine">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.epoch_manager
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    Synaptipy.core.analysis.evoked_responses
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.evoked_responses">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.firing_dynamics
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.firing_dynamics">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.passive_properties
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.passive_properties">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.registry
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.registry">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.single_spike
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.single_spike">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.analysis.synaptic_events
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.analysis.synaptic_events">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.data_model
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.data_model">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.processing_pipeline
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.processing_pipeline">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.core.signal_processor
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.core.signal_processor">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.infrastructure.exporters.nwb_exporter
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.infrastructure.exporters.nwb_exporter">module</a>
+</li>
+      </ul></li>
+      <li>
+    Synaptipy.infrastructure.file_readers.neo_adapter
+
+      <ul>
+        <li><a href="api_reference.html#module-Synaptipy.infrastructure.file_readers.neo_adapter">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="T">T</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.firing_dynamics.TrainDynamicsResult">TrainDynamicsResult (class in Synaptipy.core.analysis.firing_dynamics)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="U">U</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.Channel.undo">undo() (Synaptipy.core.data_model.Channel method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.data_model.UndoStack">UndoStack (class in Synaptipy.core.data_model)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.unregister_plugins">unregister_plugins() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.registry.AnalysisRegistry.update_default_params">update_default_params() (Synaptipy.core.analysis.registry.AnalysisRegistry class method)</a>
+</li>
+      <li><a href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.update_performance_settings">update_performance_settings() (Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.core.signal_processor.validate_sampling_rate">validate_sampling_rate() (in module Synaptipy.core.signal_processor)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api_reference.html#Synaptipy.infrastructure.exporters.nwb_exporter.VoltageClampSeries">VoltageClampSeries (class in Synaptipy.infrastructure.exporters.nwb_exporter)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 
 
            </div>

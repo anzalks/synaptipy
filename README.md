@@ -192,6 +192,39 @@ To verify the installation, execute the comprehensive test suite:
 python -m pytest
 ```
 
+## Quick Start
+
+Get from installation to your first analysis in under 60 seconds:
+
+1. **Launch the application** from your terminal:
+   ```bash
+   synaptipy
+   ```
+
+2. **Load a recording** - drag and drop an `.abf`, `.nwb`, `.wcp`, or any
+   [supported file](#supported-file-formats) into the Explorer tab. The traces
+   render immediately with OpenGL-accelerated plotting.
+
+3. **Analyse** - click the **Analyser** tab. Select a channel, choose an
+   analysis (e.g., Spike Detection or Input Resistance), adjust parameters if
+   needed, and click **Run**. Results appear in the table below the plot and
+   can be exported to CSV.
+
+For headless / scripted use, the batch engine works without the GUI:
+
+```python
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from pathlib import Path
+
+engine = BatchAnalysisEngine()
+results = engine.run_batch(
+    [Path("recording.abf")],
+    [{"analysis": "spike_detection", "scope": "all_trials",
+      "params": {"threshold": -20.0, "refractory_ms": 2.0}}],
+)
+print(results)
+```
+
 ## Usage
 
 ### Graphical Interface

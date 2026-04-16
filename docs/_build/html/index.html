@@ -429,51 +429,81 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#full-annotated-example-synaptic-charge-transfer">9. Full Annotated Example - Synaptic Charge Transfer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#troubleshooting">10. Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#applying-global-themes-to-plugins">10. Applying Global Themes to Plugins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#how-the-theme-reaches-your-plugin">How the theme reaches your plugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#returning-styled-plot-data">Returning styled plot data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="extending_synaptipy.html#listening-to-live-theme-changes-in-a-popup-window">Listening to live theme changes in a popup window</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="extending_synaptipy.html#troubleshooting">11. Troubleshooting</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api_reference.html">Synaptipy API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="api_reference.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api_reference.html#core-components">Core Components</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#data-model">Data Model</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#recording">Recording</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.data_model">Data Model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.UndoStack"><code class="docutils literal notranslate"><span class="pre">UndoStack</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.Channel"><code class="docutils literal notranslate"><span class="pre">Channel</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.Recording"><code class="docutils literal notranslate"><span class="pre">Recording</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.data_model.Experiment"><code class="docutils literal notranslate"><span class="pre">Experiment</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#usage-example">Usage Example</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#file-readers">File Readers</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#neoadapter">NeoAdapter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.infrastructure.file_readers.neo_adapter">File Readers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter"><code class="docutils literal notranslate"><span class="pre">NeoAdapter</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id1">Usage Example</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#analysis">Analysis</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#input-resistance">Input Resistance</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#sag-ratio">Sag Ratio</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#spike-detection">Spike Detection</a></li>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#analysis-registry-plugin-interface">Analysis Registry (Plugin Interface)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#analysis-modules">Analysis Modules</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-1-passive-membrane-properties">Module 1 - Passive Membrane Properties</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-2-single-spike-analysis">Module 2 - Single Spike Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-3-firing-dynamics">Module 3 - Firing Dynamics</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-4-synaptic-events">Module 4 - Synaptic Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-5-evoked-responses-optogenetics">Module 5 - Evoked Responses (Optogenetics)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#analysis-registry">Analysis Registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#usage-example-registry">Usage Example - Registry</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#batch-processing">Batch Processing</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#batchanalysisengine">BatchAnalysisEngine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.analysis.batch_engine">Batch Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#output-design-principles">Output Design Principles</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine"><code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id2">Usage Example</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.analysis.epoch_manager">Epoch Manager</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#signal-processing">Signal Processing</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#processingpipeline">ProcessingPipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.signal_processor">Signal Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.validate_sampling_rate"><code class="docutils literal notranslate"><span class="pre">validate_sampling_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.check_trace_quality"><code class="docutils literal notranslate"><span class="pre">check_trace_quality()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.bandpass_filter"><code class="docutils literal notranslate"><span class="pre">bandpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.lowpass_filter"><code class="docutils literal notranslate"><span class="pre">lowpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.highpass_filter"><code class="docutils literal notranslate"><span class="pre">highpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.notch_filter"><code class="docutils literal notranslate"><span class="pre">notch_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.comb_filter"><code class="docutils literal notranslate"><span class="pre">comb_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mode"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mean"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_mean()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_median"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_median()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_linear"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_linear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_region"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.blank_artifact"><code class="docutils literal notranslate"><span class="pre">blank_artifact()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.find_artifact_windows"><code class="docutils literal notranslate"><span class="pre">find_artifact_windows()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.compute_psd"><code class="docutils literal notranslate"><span class="pre">compute_psd()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.core.signal_processor.multi_harmonic_notch"><code class="docutils literal notranslate"><span class="pre">multi_harmonic_notch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.core.processing_pipeline">Processing Pipeline</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#plugin-system">Plugin System</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#pluginmanager">PluginManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api_reference.html#module-Synaptipy.application.plugin_manager">Plugin System</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#Synaptipy.application.plugin_manager.PluginManager"><code class="docutils literal notranslate"><span class="pre">PluginManager</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id3">Usage Example</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="api_reference.html#exporters">Exporters</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="api_reference.html#nwb-exporter">NWB Exporter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#module-Synaptipy.infrastructure.exporters.nwb_exporter">NWB Exporter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api_reference.html#id4">Usage Example</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="api_reference.html#licensing">Licensing</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#integration-considerations">Integration Considerations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="api_reference.html#alternatives-for-commercial-integration">Alternatives for Commercial Integration</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="api_reference.html#licensing">Licensing</a></li>
 </ul>
 </li>
 </ul>
