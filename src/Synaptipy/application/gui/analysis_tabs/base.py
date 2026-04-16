@@ -112,6 +112,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # --- ADDED: Trial Filtering State ---
         self._filtered_indices: Optional[List[int]] = None
+        # Interleaved-trial spinboxes (created in _setup_data_group; initialised here
+        # so attribute access never raises AttributeError before setup completes)
+        self.interleaved_gap_spin: Optional[QtWidgets.QSpinBox] = None
+        self.interleaved_start_spin: Optional[QtWidgets.QSpinBox] = None
+        self.apply_interleaved_btn: Optional[QtWidgets.QPushButton] = None
         # --- END ADDED ---
 
         # --- ADDED: Preprocessing Widget Init ---
@@ -177,6 +182,31 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._update_plot_pens_only()
         else:
             self._plot_selected_data()
+
+    def _is_active_analysis_tab(self) -> bool:
+        """Return True only when this widget is active at every level of tab nesting.
+
+        At each ``QTabWidget`` ancestor, verifies that this widget is contained
+        within the currently selected page.  This handles the internal
+        ``QStackedWidget`` layer that QTabWidget inserts between the tab-widget
+        and its pages.
+
+        When no QTabWidget ancestor exists (standalone test widgets) the method
+        falls back to ``isVisible()``.
+        """
+        parent = self.parentWidget()
+        found_tab_widget = False
+        while parent is not None:
+            if isinstance(parent, QtWidgets.QTabWidget):
+                found_tab_widget = True
+                current_page = parent.currentWidget()
+                # self must be the current page or a descendant of it
+                if current_page is not self and (current_page is None or not current_page.isAncestorOf(self)):
+                    return False
+            parent = parent.parentWidget()
+        if not found_tab_widget:
+            return self.isVisible()
+        return True
 
     def showEvent(self, event) -> None:
         """Process any deferred analysis update accumulated while this tab was hidden."""
@@ -1625,6 +1655,41 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         else:
             layout.addWidget(pst_group)
 
+        # --- Group 3: Interleaved Trials (Every Nth) ---
+        il_group = QtWidgets.QGroupBox("Interleaved Trials (Every Nth)")
+        il_layout = QtWidgets.QVBoxLayout(il_group)
+        il_layout.setSpacing(6)
+
+        il_row = QtWidgets.QHBoxLayout()
+        il_row.addWidget(QtWidgets.QLabel("Gap:"))
+        self.interleaved_gap_spin = QtWidgets.QSpinBox()
+        self.interleaved_gap_spin.setRange(0, 9999)
+        self.interleaved_gap_spin.setValue(0)
+        self.interleaved_gap_spin.setToolTip(
+            "Number of trials to skip between selected ones.\n"
+            "0 = every trial, 1 = every 2nd trial, 4 = every 5th trial."
+        )
+        il_row.addWidget(self.interleaved_gap_spin)
+        il_row.addSpacing(8)
+        il_row.addWidget(QtWidgets.QLabel("Start:"))
+        self.interleaved_start_spin = QtWidgets.QSpinBox()
+        self.interleaved_start_spin.setRange(0, 9999)
+        self.interleaved_start_spin.setValue(0)
+        self.interleaved_start_spin.setToolTip("0-based index of the first trial to include.")
+        il_row.addWidget(self.interleaved_start_spin)
+        il_layout.addLayout(il_row)
+
+        il_btn_row = QtWidgets.QHBoxLayout()
+        self.apply_interleaved_btn = QtWidgets.QPushButton("Apply Interleaved")
+        self.apply_interleaved_btn.clicked.connect(self._on_apply_interleaved_trials)
+        il_btn_row.addWidget(self.apply_interleaved_btn)
+        il_layout.addLayout(il_btn_row)
+
+        if isinstance(layout, QtWidgets.QFormLayout):
+            layout.addRow(il_group)
+        else:
+            layout.addWidget(il_group)
+
         # Connect signals to trigger plotting when selection changes
         self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_data)
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_data)
@@ -1641,6 +1706,40 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._filtered_indices = None
 
         self._plot_selected_data()  # Reverts to single trial view
+
+    def _on_apply_interleaved_trials(self):
+        """Select every Nth trial (step = gap + 1) starting at start_index.
+
+        gap=0  -> step=1  (all trials)
+        gap=1  -> step=2  (every 2nd trial)
+        gap=4  -> step=5  (every 5th trial, e.g. 5 interleaved stimulus locations)
+
+        Populates ``_filtered_indices`` and refreshes the plot, mirroring
+        ExplorerTab._on_interleaved_selection_requested.
+        """
+        if not self._selected_item_recording:
+            return
+
+        first_ch = next(iter(self._selected_item_recording.channels.values()), None)
+        num_trials = getattr(first_ch, "num_trials", 0) if first_ch else 0
+        if num_trials == 0:
+            return
+
+        gap = self.interleaved_gap_spin.value()
+        start_index = max(0, self.interleaved_start_spin.value())
+        step = max(1, gap + 1)
+
+        selected = sorted(range(num_trials)[start_index::step])
+        if not selected:
+            return
+
+        # Mirror the selection into the text box so the user can see / copy it
+        self.trial_selection_input.blockSignals(True)
+        self.trial_selection_input.setText(",".join(str(i) for i in selected))
+        self.trial_selection_input.blockSignals(False)
+
+        self._filtered_indices = set(selected)
+        self._plot_selected_data()
 
     def _on_plot_filtered_trials(self):
         """
@@ -2325,7 +2424,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # currently the active one.
         sender = self.sender()
         _is_auto = (sender is self._analysis_debounce_timer) or isinstance(sender, QtCore.QTimer)
-        if _is_auto and not self.isVisible():
+        if _is_auto and not self._is_active_analysis_tab():
             self._pending_update = True
             log.debug(f"{self.__class__.__name__}: tab hidden — deferring auto analysis update")
             return

@@ -557,8 +557,8 @@ def calculate_paired_pulse_ratio(  # noqa: C901
     ],
     plots=[
         {"name": "Trace", "type": "trace", "show_events": True},
-        {"type": "vlines", "data": "stimulus_onsets", "color": "c"},
-        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "color": "y", "symbol": "d"},
+        {"type": "vlines", "data": "stimulus_onsets"},
+        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d"},
     ],
 )
 def run_opto_sync_wrapper(  # noqa: C901
@@ -699,7 +699,7 @@ def run_opto_sync_wrapper(  # noqa: C901
     label="Paired-Pulse Ratio",
     plots=[
         {"name": "Trace", "type": "trace"},
-        {"type": "vlines", "data": "_stim_onsets", "color": "c"},
+        {"type": "vlines", "data": "_stim_onsets"},
     ],
     ui_params=[
         {
