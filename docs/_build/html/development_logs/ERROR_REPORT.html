@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy Code Review - Error Report &mdash; Synaptipy 0.1.0 documentation</title>
+  <title>Synaptipy Code Review - Error Report &mdash; Synaptipy 0.1.0b6 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -14,9 +14,10 @@
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=130522b6" />
 
   
+    <link rel="shortcut icon" href="../_static/logo.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/documentation_options.js?v=2f6c07b9"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -39,6 +40,7 @@
           
           <a href="../index.html" class="icon icon-home">
             Synaptipy
+              <img src="../_static/logo.png" class="logo" alt="Logo"/>
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -64,7 +66,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#signal-preprocessing">2. Signal Preprocessing</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#digital-filters">2.1 Digital Filters</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#baseline-subtraction-methods">2.2 Baseline Subtraction Methods</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#trace-quality-assessment">2.3 Trace Quality Assessment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#artifact-blanking">2.3 Artifact Blanking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#trace-quality-assessment">2.4 Trace Quality Assessment</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#the-analyser-tab">3. The Analyser Tab</a><ul>
@@ -73,9 +76,20 @@
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#shared-controls">3.3 Shared Controls</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#popup-windows">3.4 Popup Windows</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#session-summary">3.5 Session Summary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#adding-your-own-analysis-tab">3.6 Adding Your Own Analysis Tab</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#bundled-example-plugins">Bundled Example Plugins</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#step-1-create-the-plugin-file">Step 1 - Create the plugin file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#step-2-write-your-analysis-function">Step 2 - Write your analysis function</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#step-3-define-parameter-widgets-ui-params">Step 3 - Define parameter widgets (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#step-4-define-plot-overlays-plots">Step 4 - Define plot overlays (<code class="docutils literal notranslate"><span class="pre">plots</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#step-5-control-what-shows-in-the-results-table">Step 5 - Control what shows in the results table</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#step-6-restart-and-use">Step 6 - Restart and use</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#tips">Tips</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#analysis-modules-detailed-reference">4. Analysis Modules — Detailed Reference</a><ul>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#analysis-modules-detailed-reference">4. Analysis Modules - Detailed Reference</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#baseline-rmp-analysis">4.1 Baseline / RMP Analysis</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#parameters">Parameters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#methods">Methods</a></li>
@@ -90,21 +104,21 @@
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id4">Visualization</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#event-detection-threshold-based">4.3 Event Detection — Threshold Based</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#event-detection-threshold-based">4.3 Event Detection - Threshold Based</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id5">Parameters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id6">Methods</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id7">Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id8">Visualization</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#event-detection-template-match-deconvolution">4.4 Event Detection — Template Match / Deconvolution</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#event-detection-template-match-deconvolution">4.4 Event Detection - Template Match / Deconvolution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id9">Parameters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id10">Methods</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id11">Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id12">Visualization</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#event-detection-baseline-peak-kinetics">4.5 Event Detection — Baseline Peak / Kinetics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#event-detection-baseline-peak-kinetics">4.5 Event Detection - Baseline Peak / Kinetics</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id13">Parameters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id14">Methods</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id15">Results</a></li>
@@ -172,6 +186,13 @@
 <li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id50">Visualization</a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#sag-ratio-i-h">4.15 Sag Ratio (I_h)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id51">Parameters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id52">Methods</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id53">Results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#id54">Visualization</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#batch-processing">5. Batch Processing</a><ul>
@@ -179,7 +200,17 @@
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#opening-the-batch-dialog">5.2 Opening the Batch Dialog</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#building-a-pipeline">5.3 Building a Pipeline</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#running-and-cancellation">5.4 Running and Cancellation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#output">5.5 Output</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#output-columns">5.5 Output Columns</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#metadata-columns-always-present-appear-first">Metadata columns (always present, appear first)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#analysis-result-columns-middle-alphabetically-sorted">Analysis result columns (middle, alphabetically sorted)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#array-valued-results">Array-valued results</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../tutorial/index.html#trailing-debug-columns">Trailing / debug columns</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#export-formats">5.6 Export Formats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#programmatic-headless-batch-usage">5.7 Programmatic / Headless Batch Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#pipeline-context-and-preprocessing">5.8 Pipeline Context and Preprocessing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#troubleshooting">5.9 Troubleshooting</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#the-exporter-tab">6. The Exporter Tab</a><ul>
@@ -195,14 +226,21 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#appendix-a-supported-file-formats">Appendix A: Supported File Formats</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#appendix-b-architecture">Appendix B: Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/index.html#appendix-b-architecture">Appendix B: Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial/index.html#adding-your-own-analysis-plugin-interface">Adding Your Own Analysis (Plugin Interface)</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../user_guide.html">Synaptipy User Guide</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#installation">Installation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#requirements">Requirements</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#standard-installation">Standard Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#standalone-application-recommended">Standalone Application (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#python-package-installation">Python Package Installation</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#developer-installation">Developer Installation</a></li>
 </ul>
 </li>
@@ -224,6 +262,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#using-the-analyser-tab">Using the Analyser Tab</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#input-resistance-conductance-analysis">Input Resistance/Conductance Analysis</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#baseline-rmp-analysis">Baseline/RMP Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#optogenetic-synchronization">Optogenetic Synchronization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#sag-ratio-ih-analysis">Sag Ratio (Ih) Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#additional-analysis-modules">Additional Analysis Modules</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#using-the-exporter-tab">Using the Exporter Tab</a><ul>
@@ -232,6 +273,11 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#advanced-options">Advanced Options</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#preferences">Preferences</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#enable-custom-plugins-hot-reload-mechanism">Enable Custom Plugins - Hot-Reload Mechanism</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide.html#included-example-plugins">Included Example Plugins</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#command-line-arguments">Command Line Arguments</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#logging-and-debugging">Logging and Debugging</a></li>
 </ul>
@@ -244,33 +290,221 @@
 </li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../algorithmic_definitions.html">Algorithmic Definitions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#baseline-resting-membrane-potential-rmp">1. Baseline / Resting Membrane Potential (RMP)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#input-resistance-r-text-in">2. Input Resistance (<span class="math notranslate nohighlight">\(R_{\text{in}}\)</span>)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#series-resistance-artifact-blanking">2.1 Series-Resistance Artifact Blanking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#peak-r-text-in-and-steady-state-r-text-in-i-h-correction">2.2 Peak <span class="math notranslate nohighlight">\(R_{\text{in}}\)</span> and Steady-State <span class="math notranslate nohighlight">\(R_{\text{in}}\)</span> (<span class="math notranslate nohighlight">\(I_h\)</span> correction)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#membrane-time-constant-tau">3. Membrane Time Constant (<span class="math notranslate nohighlight">\(\tau\)</span>)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#mono-exponential-model">3.1 Mono-exponential model</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#bi-exponential-model">3.2 Bi-exponential model</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#sag-ratio">4. Sag Ratio</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#ratio-form-default">4.1 Ratio form (default)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#percentage-form">4.2 Percentage form</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#rebound-depolarisation">4.3 Rebound depolarisation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#capacitance-c-m">5. Capacitance (<span class="math notranslate nohighlight">\(C_m\)</span>)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#current-clamp-mode">5.1 Current-clamp mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#voltage-clamp-mode">5.2 Voltage-clamp mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#spike-detection-and-action-potential-features">6. Spike Detection and Action Potential Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#threshold-crossing">6.1 Threshold crossing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#onset-detection-dv-dt-based">6.2 Onset detection (dV/dt-based)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#amplitude">6.3 Amplitude</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#half-width">6.4 Half-width</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#rise-time-10-90">6.5 Rise time (10-90%)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#decay-time-90-10">6.6 Decay time (90-10%)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#afterhyperpolarisation-ahp">6.7 Afterhyperpolarisation (AHP)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#afterdepolarisation-adp">6.8 Afterdepolarisation (ADP)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#maximum-and-minimum-dv-dt">6.9 Maximum and minimum dV/dt</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#absolute-peak-voltage-and-overshoot">6.10 Absolute Peak Voltage and Overshoot</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#event-detection">7. Event Detection</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#threshold-based-detection">7.1 Threshold-based detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#template-match-deconvolution">7.2 Template-match / deconvolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#baseline-peak-detection">7.3 Baseline-peak detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#local-pre-event-baseline-dynamic-amplitude-for-summating-events">7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#i-v-curve">8. I-V Curve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#burst-analysis">9. Burst Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#excitability-f-i-curve">10. Excitability (F-I Curve)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#phase-plane-analysis">11. Phase Plane Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#spike-train-dynamics">12. Spike Train Dynamics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#optogenetic-synchronisation">13. Optogenetic Synchronisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#signal-preprocessing">14. Signal Preprocessing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#digital-filters">14.1 Digital filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#baseline-subtraction">14.2 Baseline subtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#artifact-blanking">14.3 Artifact blanking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#trace-quality-assessment">14.4 Trace quality assessment</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#references">References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#advanced-biophysics-publication-audit">15. Advanced Biophysics (Publication Audit)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#voltage-clamp-series-resistance-and-true-membrane-capacitance">15.1 Voltage-Clamp Series Resistance and True Membrane Capacitance</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#dynamic-ap-threshold-via-maximum-curvature-d-2v-dt-2">15.2 Dynamic AP Threshold via Maximum Curvature (<span class="math notranslate nohighlight">\(d^2V/dt^2\)</span>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#separation-of-fast-ahp-and-medium-ahp">15.3 Separation of Fast AHP and Medium AHP</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#multi-kernel-dendritic-tolerance-in-template-matching">15.4 Multi-Kernel Dendritic Tolerance in Template Matching</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#peak-detection-is-then-applied-to-z-text-combined-at-the-user-specified-threshold-this-ensures-that-both-fast-somatic-narrow-and-slow-dendritic-broadened-events-cross-the-detection-threshold-without-requiring-the-user-to-re-tune-tau-text-decay-for-distal-inputs">Peak detection is then applied to <span class="math notranslate nohighlight">\(z_{\text{combined}}\)</span> at the user-specified
+threshold.  This ensures that both fast somatic (narrow) and slow dendritic
+(broadened) events cross the detection threshold, without requiring the user
+to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</span> for distal inputs.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#immutable-trace-correction-pipeline">16. Immutable Trace Correction Pipeline</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#step-a-liquid-junction-potential-ljp-subtraction">Step A - Liquid Junction Potential (LJP) Subtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#step-b-p-n-leak-subtraction">Step B - P/N Leak Subtraction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#step-c-pre-event-noise-floor-zeroing">Step C - Pre-Event Noise Floor Zeroing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#step-d-signal-filtering">Step D - Signal Filtering</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#pillar-analyser-architecture">17. 5-Pillar Analyser Architecture</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../nwb_mapping.html">NWB Export Mapping</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#container-mapping">Container Mapping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#series-class-selection">Series Class Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#si-unit-conversion">SI Unit Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#electrode-metadata">Electrode Metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#session-metadata">Session Metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#subject-metadata">Subject Metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#sweep-organisation">Sweep Organisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#limitations-and-future-work">Limitations and Future Work</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../nwb_mapping.html#programmatic-usage">Programmatic Usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../extending_synaptipy.html">Writing Custom Analysis Plugins for Synaptipy</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#overview-how-the-plugin-system-works">1. Overview - How the Plugin System Works</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#quick-start-your-first-plugin-in-5-minutes">2. Quick Start - Your First Plugin in 5 Minutes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#the-plugin-file-anatomy-of-a-custom-analysis">3. The Plugin File - Anatomy of a Custom Analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-1-pure-analysis-logic">3.1 Part 1: Pure Analysis Logic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#part-2-registry-wrapper">3.2 Part 2: Registry Wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#return-dict-conventions">3.3 Return Dict Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#defining-gui-parameters-ui-params">4. Defining GUI Parameters (<code class="docutils literal notranslate"><span class="pre">ui_params</span></code>)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#float-parameter">4.1 <code class="docutils literal notranslate"><span class="pre">float</span></code> Parameter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#int-parameter">4.2 <code class="docutils literal notranslate"><span class="pre">int</span></code> Parameter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#choice-combo-parameter">4.3 <code class="docutils literal notranslate"><span class="pre">choice</span></code> / <code class="docutils literal notranslate"><span class="pre">combo</span></code> Parameter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#bool-parameter">4.4 <code class="docutils literal notranslate"><span class="pre">bool</span></code> Parameter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#common-optional-fields">4.5 Common Optional Fields</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#conditional-visibility-visible-when">4.6 Conditional Visibility (<code class="docutils literal notranslate"><span class="pre">visible_when</span></code>)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#defining-plot-overlays-plots">5. Defining Plot Overlays (<code class="docutils literal notranslate"><span class="pre">plots</span></code>)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#hlines-horizontal-lines">5.1 <code class="docutils literal notranslate"><span class="pre">hlines</span></code> - Horizontal Lines</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#vlines-vertical-lines">5.2 <code class="docutils literal notranslate"><span class="pre">vlines</span></code> - Vertical Lines</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#markers-scatter-points">5.3 <code class="docutils literal notranslate"><span class="pre">markers</span></code> - Scatter Points</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#interactive-region-draggable-region">5.4 <code class="docutils literal notranslate"><span class="pre">interactive_region</span></code> - Draggable Region</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#threshold-line-draggable-threshold">5.5 <code class="docutils literal notranslate"><span class="pre">threshold_line</span></code> - Draggable Threshold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#overlay-fit-curve-overlay">5.6 <code class="docutils literal notranslate"><span class="pre">overlay_fit</span></code> - Curve Overlay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#popup-xy-popup-scatter-line-plot">5.7 <code class="docutils literal notranslate"><span class="pre">popup_xy</span></code> - Popup Scatter/Line Plot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#brackets-burst-event-brackets">5.8 <code class="docutils literal notranslate"><span class="pre">brackets</span></code> - Burst/Event Brackets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#event-markers-interactive-event-points">5.9 <code class="docutils literal notranslate"><span class="pre">event_markers</span></code> - Interactive Event Points</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#trace-base-trace-with-overlay">5.10 <code class="docutils literal notranslate"><span class="pre">trace</span></code> - Base Trace with Overlay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#fill-between-shaded-region-between-two-curves">5.11 <code class="docutils literal notranslate"><span class="pre">fill_between</span></code> - Shaded Region Between Two Curves</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#where-to-put-your-plugin-file">6. Where to Put Your Plugin File</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#option-a-built-in-examples-directory">Option A: Built-in Examples Directory</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../extending_synaptipy.html#included-example-plugins">Included Example Plugins</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#option-b-user-plugin-directory-recommended-for-personal-additions">Option B: User Plugin Directory (recommended for personal additions)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#option-c-built-in-module-for-core-contributors">Option C: Built-in Module (for core contributors)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#for-core-contributors-adding-a-built-in-analysis">7. For Core Contributors - Adding a Built-in Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#testing-your-plugin">8. Testing Your Plugin</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#unit-testing-the-logic-function">Unit-testing the logic function</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#integration-testing-the-registry-wrapper">Integration-testing the registry wrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#testing-the-template-shipped-with-synaptipy">Testing the template shipped with Synaptipy</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#full-annotated-example-synaptic-charge-transfer">9. Full Annotated Example - Synaptic Charge Transfer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#applying-global-themes-to-plugins">10. Applying Global Themes to Plugins</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#how-the-theme-reaches-your-plugin">How the theme reaches your plugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#returning-styled-plot-data">Returning styled plot data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#listening-to-live-theme-changes-in-a-popup-window">Listening to live theme changes in a popup window</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#troubleshooting">11. Troubleshooting</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../api_reference.html">Synaptipy API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../api_reference.html#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api_reference.html#core-components">Core Components</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#data-model">Data Model</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#recording">Recording</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#module-Synaptipy.core.data_model">Data Model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.data_model.UndoStack"><code class="docutils literal notranslate"><span class="pre">UndoStack</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.data_model.Channel"><code class="docutils literal notranslate"><span class="pre">Channel</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.data_model.Recording"><code class="docutils literal notranslate"><span class="pre">Recording</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.data_model.Experiment"><code class="docutils literal notranslate"><span class="pre">Experiment</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#usage-example">Usage Example</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#file-readers">File Readers</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#neoadapter">NeoAdapter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#module-Synaptipy.infrastructure.file_readers.neo_adapter">File Readers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.infrastructure.file_readers.neo_adapter.NeoAdapter"><code class="docutils literal notranslate"><span class="pre">NeoAdapter</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#id1">Usage Example</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#analysis">Analysis</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#resistance-analysis">Resistance Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#analysis-modules">Analysis Modules</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-1-passive-membrane-properties">Module 1 - Passive Membrane Properties</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-2-single-spike-analysis">Module 2 - Single Spike Analysis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-3-firing-dynamics">Module 3 - Firing Dynamics</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-4-synaptic-events">Module 4 - Synaptic Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-5-evoked-responses-optogenetics">Module 5 - Evoked Responses (Optogenetics)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#analysis-registry">Analysis Registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#usage-example-registry">Usage Example - Registry</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#module-Synaptipy.core.analysis.batch_engine">Batch Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#output-design-principles">Output Design Principles</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine"><code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#id2">Usage Example</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#epoch-manager">Epoch Manager</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#module-Synaptipy.core.signal_processor">Signal Processing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.validate_sampling_rate"><code class="docutils literal notranslate"><span class="pre">validate_sampling_rate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.check_trace_quality"><code class="docutils literal notranslate"><span class="pre">check_trace_quality()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.bandpass_filter"><code class="docutils literal notranslate"><span class="pre">bandpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.lowpass_filter"><code class="docutils literal notranslate"><span class="pre">lowpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.highpass_filter"><code class="docutils literal notranslate"><span class="pre">highpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.notch_filter"><code class="docutils literal notranslate"><span class="pre">notch_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.comb_filter"><code class="docutils literal notranslate"><span class="pre">comb_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mode"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_mean"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_mean()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_median"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_median()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_linear"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_linear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.subtract_baseline_region"><code class="docutils literal notranslate"><span class="pre">subtract_baseline_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.blank_artifact"><code class="docutils literal notranslate"><span class="pre">blank_artifact()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.find_artifact_windows"><code class="docutils literal notranslate"><span class="pre">find_artifact_windows()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.compute_psd"><code class="docutils literal notranslate"><span class="pre">compute_psd()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.core.signal_processor.multi_harmonic_notch"><code class="docutils literal notranslate"><span class="pre">multi_harmonic_notch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-Synaptipy.core.processing_pipeline">Processing Pipeline</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#module-Synaptipy.application.plugin_manager">Plugin System</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#Synaptipy.application.plugin_manager.PluginManager"><code class="docutils literal notranslate"><span class="pre">PluginManager</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#id3">Usage Example</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../api_reference.html#exporters">Exporters</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#nwb-exporter">NWB Exporter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#module-Synaptipy.infrastructure.exporters.nwb_exporter">NWB Exporter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api_reference.html#id4">Usage Example</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../api_reference.html#licensing">Licensing</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#integration-considerations">Integration Considerations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../api_reference.html#alternatives-for-commercial-integration">Alternatives for Commercial Integration</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="../api_reference.html#licensing">Licensing</a></li>
 </ul>
 </li>
 </ul>
@@ -284,6 +518,11 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#project-structure">Project Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#pillar-analyser-architecture">5-Pillar Analyser Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#immutable-trace-correction-pipeline">Immutable Trace Correction Pipeline</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#writing-custom-analysis-plugins">Writing Custom Analysis Plugins</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#development-workflow">Development Workflow</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#feature-development">Feature Development</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#code-review-process">Code Review Process</a></li>
@@ -291,10 +530,25 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#testing">Testing</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#running-tests">Running Tests</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#ci-test-matrix">CI Test Matrix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#writing-tests">Writing Tests</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#coding-standards">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#ci-behaviour-and-platform-specific-test-rules">CI Behaviour and Platform-Specific Test Rules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#analysis-registry-import-rule-do-not-import-only-registry-py">Analysis Registry import rule - DO NOT import only registry.py</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#editable-install-must-point-to-the-active-workspace">Editable install must point to the active workspace</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#why-local-macos-tests-always-exit-non-zero">Why local macOS tests always exit non-zero</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#gc-must-be-disabled-in-offscreen-mode">GC must be disabled in offscreen mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#processevents-before-addplot-in-offscreen-mode">processEvents() before addPlot() in offscreen mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#removepostedevents-must-skip-macos">removePostedEvents() must skip macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#enablemenu-false-in-offscreen-mode">enableMenu=False in offscreen mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#plot-teardown-order">Plot teardown order</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#coding-standards">Coding Standards</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#formatting-your-code">Formatting your code</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../developer_guide.html#license-compliance">License Compliance</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#license-requirements">License Requirements</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../developer_guide.html#adding-new-files">Adding New Files</a></li>
@@ -304,50 +558,24 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../development/index.html">Development Guides</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../development/styling_guide.html">Synaptipy Styling Guide</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html#overview">Overview</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html#key-components">Key Components</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#theme-mode-management">Theme Mode Management</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#qt-native-theming">Qt Native Theming</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#pyqtgraph-plot-styling">PyQtGraph Plot Styling</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#simple-widget-styling">Simple Widget Styling</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#theme-application">Theme Application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../development/index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../development/index.html#code-quality">Code Quality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../development/index.html#key-design-rules">Key Design Rules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../development/index.html#contributing">Contributing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html">Synaptipy Styling Guide</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#overview">Overview</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#key-components">Key Components</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#how-to-use">How to Use</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#best-practices">Best Practices</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#architecture-benefits">Architecture Benefits</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#migration-from-previous-system">Migration from Previous System</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html#how-to-use">How to Use</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#for-general-ui-elements">For General UI Elements</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#for-pyqtgraph-elements">For PyQtGraph Elements</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../development/styling_guide.html#for-theme-switching">For Theme Switching</a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html#best-practices">Best Practices</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html#architecture-benefits">Architecture Benefits</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../development/styling_guide.html#migration-from-previous-system">Migration from Previous System</a></li>
 </ul>
 </li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../decisions/index.html">Architecture &amp; Design Decisions</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html">AI Model Refactoring Guide for Synaptipy</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#introduction">Introduction</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#phase-1-unify-data-selection-and-plotting-in-baseanalysistab">Phase 1: Unify Data Selection and Plotting in <code class="docutils literal notranslate"><span class="pre">BaseAnalysisTab</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#step-1-1-modify-baseanalysistab-base-py">Step 1.1: Modify <code class="docutils literal notranslate"><span class="pre">BaseAnalysisTab</span></code> (<code class="docutils literal notranslate"><span class="pre">base.py</span></code>)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#step-1-2-refactor-subclass-tabs-e-g-rmp-tab-py-rin-tab-py">Step 1.2: Refactor Subclass Tabs (e.g., <code class="docutils literal notranslate"><span class="pre">rmp_tab.py</span></code>, <code class="docutils literal notranslate"><span class="pre">rin_tab.py</span></code>)</a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#phase-2-unify-analysis-execution-with-a-template-method">Phase 2: Unify Analysis Execution with a Template Method</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#step-2-1-modify-baseanalysistab-base-py">Step 2.1: Modify <code class="docutils literal notranslate"><span class="pre">BaseAnalysisTab</span></code> (<code class="docutils literal notranslate"><span class="pre">base.py</span></code>)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#step-2-2-refactor-subclass-tabs">Step 2.2: Refactor Subclass Tabs</a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#phase-3-implement-real-time-parameter-tuning">Phase 3: Implement Real-Time Parameter Tuning</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#step-3-1-add-a-debounce-timer-to-baseanalysistab">Step 3.1: Add a Debounce Timer to <code class="docutils literal notranslate"><span class="pre">BaseAnalysisTab</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#step-3-2-modify-subclass-tabs">Step 3.2: Modify Subclass Tabs</a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="../decisions/REFACTORING_GUIDE.html#phase-4-unify-results-management-future-direction">Phase 4: Unify Results Management (Future Direction)</a></li>
-</ul>
-</li>
 <li class="toctree-l2"><a class="reference internal" href="../decisions/LOG_ERROR_ANALYSIS.html">Log Error Analysis - All Errors from File Addition Onwards</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../decisions/LOG_ERROR_ANALYSIS.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../decisions/LOG_ERROR_ANALYSIS.html#error-1-method-name-mismatch-in-gather-analysis-parameters">Error 1: Method Name Mismatch in <code class="docutils literal notranslate"><span class="pre">_gather_analysis_parameters</span></code></a><ul>
@@ -512,6 +740,13 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#future-enhancements-optional">Future Enhancements (Optional)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#part-4-viewbox-signal-management-for-file-cycling-march-2026">Part 4: ViewBox Signal Management for File Cycling (March 2026)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#id9">Problem</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#root-causes">Root Causes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#solutions">Solutions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#id10">Impact</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#debugging">Debugging</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../decisions/RENDERING_OPTIMIZATIONS.html#conclusion">Conclusion</a></li>
 </ul>
@@ -520,35 +755,36 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../manuals/index.html">Manuals</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html">Cross-Platform Setup for Synaptipy</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#problem-solved">🎯 <strong>Problem Solved</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#new-solution-single-environment-approach">🚀 <strong>New Solution: Single Environment Approach</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#problem-statement">Problem Statement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#new-solution-single-environment-approach">New Solution: Single Environment Approach</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#what-changed"><strong>What Changed:</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#how-it-works"><strong>How It Works:</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#implementation-details">🔧 <strong>Implementation Details</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#implementation-details">Implementation Details</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#single-environment-file-environment-yml"><strong>1. Single Environment File (<code class="docutils literal notranslate"><span class="pre">environment.yml</span></code>)</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#clean-setup-py"><strong>2. Clean Setup.py</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#clean-pyproject-toml"><strong>3. Clean PyProject.toml</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#cross-platform-compatibility">🌍 <strong>Cross-Platform Compatibility</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#cross-platform-compatibility">Cross-Platform Compatibility</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#windows"><strong>Windows</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#macos"><strong>macOS</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#linux"><strong>Linux</strong></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#standalone-installers-recommended">Standalone Installers (Recommended)</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#installation-commands">📦 <strong>Installation Commands</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#installation-commands">Installation Commands</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#one-command-installation-recommended"><strong>One-Command Installation (Recommended)</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#manual-installation"><strong>Manual Installation</strong></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#custom-environment-name"><strong>Custom Environment Name</strong></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#benefits">✅ <strong>Benefits</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#testing">🧪 <strong>Testing</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#how-conda-handles-os-specific-packages">🔍 <strong>How Conda Handles OS-Specific Packages</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#file-structure">📝 <strong>File Structure</strong></a></li>
-<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#result">🎉 <strong>Result</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#benefits">Benefits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#testing">Testing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#how-conda-handles-os-specific-packages">How Conda Handles OS-Specific Packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#repository-structure">Repository Structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../manuals/CROSS_PLATFORM_SETUP.html#result">Result</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../manuals/MANUAL_TESTING_GUIDE.html">Manual Testing Guide for Performance Fixes</a><ul>
@@ -847,8 +1083,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#testing-recommendations">7. Testing Recommendations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#fixes-applied">Fixes Applied</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#fix-1-added-region-check-in-calculate-tau-line-1286-1288">✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fix-1-added-region-check-in-calculate-tau-line-1286-1288">Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#conclusion">Conclusion</a></li>
@@ -882,6 +1118,20 @@
 <li class="toctree-l3"><a class="reference internal" href="USER_EXPERIENCE_FIX.html#recommendations-for-future-tabs">Recommendations for Future Tabs</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html">Explorer X-Axis Shift Fix</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#overview">Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#symptoms">Symptoms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#root-causes">Root Causes</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#stale-viewbox-signals-from-deletelater-d-widgets">1. Stale ViewBox signals from <code class="docutils literal notranslate"><span class="pre">deleteLater()</span></code>’d widgets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#x-link-range-recalculation-from-screen-geometry">2. X-link range recalculation from screen geometry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#y-range-computed-from-trial-0-only">3. Y range computed from trial 0 only</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#deferred-initial-reset">Deferred Initial Reset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#files-modified">Files Modified</a></li>
+<li class="toctree-l3"><a class="reference internal" href="EXPLORER_XAXIS_SHIFT_FIX.html#verification">Verification</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="ANALYSER_TAB_REFACTORING.html">AnalyserTab Layout Refactoring</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="ANALYSER_TAB_REFACTORING.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ANALYSER_TAB_REFACTORING.html#changes-implemented">Changes Implemented</a><ul>
@@ -912,7 +1162,7 @@
 <li class="toctree-l3"><a class="reference internal" href="ANALYSER_TAB_REFACTORING.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html">Phase 2 &amp; 3 Refactoring - FINAL SUMMARY</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#issue-found-and-fixed">Issue Found and Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#problem">Problem</a></li>
 <li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#solution">Solution</a></li>
@@ -925,8 +1175,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#complete-implementation-summary">Complete Implementation Summary</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#phase-3-real-time-parameter-tuning">Phase 3: Real-Time Parameter Tuning</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_FINAL_SUMMARY.html#code-quality-verification">Code Quality Verification</a></li>
@@ -951,9 +1201,9 @@
 <li class="toctree-l2"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html">Synaptipy Analysis Module Refactoring - Implementation Summary</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#overview">Overview</a></li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phases-completed">Phases Completed</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">✅ Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">✅ Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">✅ Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-1-unify-data-selection-and-plotting-previously-completed">Phase 1: Unify Data Selection and Plotting (Previously Completed)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-2-template-method-pattern-for-analysis-execution-new">Phase 2: Template Method Pattern for Analysis Execution (NEW)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#phase-3-real-time-parameter-tuning-with-debounce-new">Phase 3: Real-Time Parameter Tuning with Debounce (NEW)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#implementation-statistics">Implementation Statistics</a><ul>
@@ -990,7 +1240,7 @@
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_IMPLEMENTATION_SUMMARY.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="REFACTORING_SUCCESS.html">✅ REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="REFACTORING_SUCCESS.html">REFACTORING PHASE 1 - COMPLETE SUCCESS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_SUCCESS.html#achievement-unlocked-100-test-pass-rate">Achievement Unlocked: 100% Test Pass Rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_SUCCESS.html#what-was-accomplished">What Was Accomplished</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="REFACTORING_SUCCESS.html#files-modified-5">Files Modified: 5</a></li>
@@ -1067,9 +1317,9 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#refactoring-implementation-plan">Refactoring Implementation Plan</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation ⏳</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-1-modify-baseanalysistab">Step 1: Modify BaseAnalysisTab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-2-refactor-rmp-tab">Step 2: Refactor RMP Tab</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#step-3-validation">Step 3: Validation</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#success-criteria">Success Criteria</a><ul>
@@ -1079,12 +1329,12 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#post-refactoring-results">Post-Refactoring Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-baseanalysistab-changes">After BaseAnalysisTab Changes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rmp-tab-refactoring">After RMP Tab Refactoring</a></li>
+<li class="toctree-l4"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#after-rin-tab-refactoring">After Rin Tab Refactoring</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="REFACTORING_TEST_RESULTS.html#summary-phase-1-complete">Summary: Phase 1 Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="ANALYSIS_FUNCTIONS_AND_FAILURE_POINTS.html">Analysis Functions, UI Elements, and Failure Points</a><ul>
@@ -1269,10 +1519,10 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html">Performance Optimizations - Implementation Summary</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#all-implementations-complete">✅ All Implementations Complete</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#all-implementations-complete">All Implementations Complete</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-1-force-opaque-trials-feature">Part 1: Force Opaque Trials Feature</a></li>
+<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#critical-bug-fix-pyqtgraph-downsampling-api">Critical Bug Fix: PyQtGraph Downsampling API</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="IMPLEMENTATION_SUMMARY.html#test-results">Test Results</a></li>
@@ -1307,23 +1557,23 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html">Final Performance Optimizations Implementation Report</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">✅ ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature ✅</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code> ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code> ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#all-specifications-fully-implemented">ALL SPECIFICATIONS FULLY IMPLEMENTED</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-1-force-opaque-trials-performance-feature">Part 1: Force Opaque Trials Performance Feature</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-1-src-synaptipy-shared-plot-customization-py">File 1: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/shared/plot_customization.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-2-src-synaptipy-application-gui-plot-customization-dialog-py">File 2: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/plot_customization_dialog.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-3-src-synaptipy-application-gui-main-window-py">File 3: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/main_window.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-2-interaction-debouncing">Part 2: Interaction Debouncing</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#file-src-synaptipy-application-gui-explorer-tab-py">File: <code class="docutils literal notranslate"><span class="pre">src/Synaptipy/application/gui/explorer_tab.py</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#part-3-testing-and-verification">Part 3: Testing and Verification</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#test-results">Test Results</a></li>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#manual-verification-checklist">Manual Verification Checklist</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix ✅</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#additional-bug-fix">Additional Bug Fix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#files-modified-summary">Files Modified Summary</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#implementation-files-4-files">Implementation Files (4 files)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="FINAL_IMPLEMENTATION_REPORT.html#test-files-2-files">Test Files (2 files)</a></li>
@@ -1340,8 +1590,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html">Final Verification Guide - Performance Optimizations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#quick-verification-checklist">Quick Verification Checklist</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">✅ Automated Tests Passed</a></li>
-<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#code-verification-complete">✅ Code Verification Complete</a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#automated-tests-passed">Automated Tests Passed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#code-verification-complete">Code Verification Complete</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#manual-testing-instructions">Manual Testing Instructions</a><ul>
@@ -1371,7 +1621,7 @@
 <li class="toctree-l3"><a class="reference internal" href="FINAL_VERIFICATION_GUIDE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASE1_COMPLETE.html">🎉 Phase 1 Refactoring COMPLETE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASE1_COMPLETE.html">Phase 1 Refactoring COMPLETE</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#files-refactored">Files Refactored</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#test-results">Test Results</a></li>
@@ -1390,10 +1640,10 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_COMPLETE.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html">🎉 PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html">PHASE 1 REFACTORING - COMPLETE &amp; TESTED</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#executive-summary">Executive Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#final-test-results">Final Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#complete-test-suite-28-28">Complete Test Suite: 28/28</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#issues-fixed">Issues Fixed</a><ul>
@@ -1406,8 +1656,8 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#architecture-before-vs-after">Architecture Before vs After</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication ❌</a></li>
-<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#before-massive-duplication">Before: Massive Duplication</a></li>
+<li class="toctree-l4"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#after-clean-centralized">After: Clean, Centralized</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#quality-metrics">Quality Metrics</a></li>
@@ -1427,7 +1677,7 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASE1_FINAL_SUMMARY.html#git-commit-message">Git Commit Message</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html">Phase 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#summary">Summary</a></li>
 <li class="toctree-l3"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#phase-2-template-method-pattern-for-analysis-execution">Phase 2: Template Method Pattern for Analysis Execution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#baseanalysistab-changes">BaseAnalysisTab Changes</a></li>
@@ -1465,15 +1715,15 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASE2_AND_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete ✅</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="PHASES_2_3_COMPLETE.html">Phases 2 &amp; 3 Refactoring Complete</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#summary">Summary</a></li>
-<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-2-template-method-pattern">Phase 2: Template Method Pattern</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#objectives">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#implementation">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#benefits">Benefits</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning ✅</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#phase-3-debounce-timer-for-real-time-parameter-tuning">Phase 3: Debounce Timer for Real-Time Parameter Tuning</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#id1">Objectives</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#id2">Implementation</a></li>
 <li class="toctree-l4"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#usage-pattern">Usage Pattern</a></li>
@@ -1495,15 +1745,15 @@
 <li class="toctree-l3"><a class="reference internal" href="PHASES_2_3_COMPLETE.html#conclusion">Conclusion</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="ALL_TESTS_PASSING.html">✅ ALL TESTS PASSING - ZERO ERRORS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ALL_TESTS_PASSING.html">ALL TESTS PASSING - ZERO ERRORS</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#comprehensive-verification-report">Comprehensive Verification Report</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#error-that-was-fixed">Error That Was Fixed</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#the-pre-existing-error-rin-tab-display-name-mismatch">The “Pre-Existing Error”: Rin Tab Display Name Mismatch</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#complete-test-results">Complete Test Results</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12 ✅</a></li>
-<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16 ✅</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#analysis-tab-tests-12-12">Analysis Tab Tests: 12/12</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ALL_TESTS_PASSING.html#other-gui-tests-16-16">Other GUI Tests: 16/16</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="ALL_TESTS_PASSING.html#verification-checklist">Verification Checklist</a></li>
@@ -1544,26 +1794,26 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="synaptipy-code-review-error-report">
+  <section class="tex2jax_ignore mathjax_ignore" id="synaptipy-code-review-error-report">
 <h1>Synaptipy Code Review - Error Report<a class="headerlink" href="#synaptipy-code-review-error-report" title="Link to this heading"></a></h1>
 <section id="summary">
 <h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
-<p><strong>Overall Status: ✅ GOOD</strong></p>
+<p><strong>Overall Status: GOOD</strong></p>
 <p>Comprehensive analysis of the codebase for logical, syntax, and UI errors.</p>
 </section>
 <hr class="docutils" />
 <section id="syntax-errors">
 <h2>1. Syntax Errors<a class="headerlink" href="#syntax-errors" title="Link to this heading"></a></h2>
-<p><strong>Status: ✅ NO ERRORS FOUND</strong></p>
+<p><strong>Status: NO ERRORS FOUND</strong></p>
 <p>All Python files compile successfully without syntax errors:</p>
 <ul class="simple">
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">explorer_tab.py</span></code></p></li>
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">main_window.py</span></code></p></li>
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">data_loader.py</span></code></p></li>
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">spike_tab.py</span></code></p></li>
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">rin_tab.py</span></code></p></li>
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">spike_analysis.py</span></code></p></li>
-<li><p>✅ <code class="docutils literal notranslate"><span class="pre">intrinsic_properties.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">explorer_tab.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">main_window.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">data_loader.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">spike_tab.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">rin_tab.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">spike_analysis.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">intrinsic_properties.py</span></code></p></li>
 </ul>
 </section>
 <hr class="docutils" />
@@ -1571,93 +1821,93 @@
 <h2>2. Logical Errors<a class="headerlink" href="#logical-errors" title="Link to this heading"></a></h2>
 <section id="spike-analysis-tab">
 <h3>2.1 Spike Analysis Tab<a class="headerlink" href="#spike-analysis-tab" title="Link to this heading"></a></h3>
-<p><strong>Status: ⚠️ POTENTIAL ISSUES</strong></p>
+<p><strong>Status:</strong> <strong>Warning:</strong> POTENTIAL ISSUES</p>
 <p><strong>Issue 1: Array indexing risk (Line 463)</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="bp">self</span><span class="o">.</span><span class="n">spike_markers_item</span><span class="o">.</span><span class="n">setData</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">spike_times</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">voltage</span><span class="p">[</span><span class="n">spike_indices</span><span class="p">])</span>
 </pre></div>
 </div>
 <ul class="simple">
 <li><p><strong>Risk</strong>: If <code class="docutils literal notranslate"><span class="pre">spike_indices</span></code> is empty, <code class="docutils literal notranslate"><span class="pre">voltage[spike_indices]</span></code> will return an empty array, which is fine</p></li>
-<li><p><strong>Status</strong>: ✅ SAFE - Empty array handling is correct</p></li>
+<li><p><strong>Status</strong>: SAFE - Empty array handling is correct</p></li>
 </ul>
 <p><strong>Issue 2: Feature list handling (Lines 435-450)</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">features_list</span> <span class="o">=</span> <span class="n">spike_analysis</span><span class="o">.</span><span class="n">calculate_spike_features</span><span class="p">(</span><span class="n">voltage</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">spike_indices</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">features_list</span><span class="p">:</span>
-    <span class="n">amplitudes</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">features_list</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">])]</span>
+ <span class="n">amplitudes</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">features_list</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;amplitude&#39;</span><span class="p">])]</span>
 </pre></div>
 </div>
 <ul class="simple">
 <li><p><strong>Risk</strong>: If all features are NaN, lists will be empty and <code class="docutils literal notranslate"><span class="pre">np.mean([])</span></code> will fail</p></li>
-<li><p><strong>Fix Needed</strong>: ⚠️ ADD GUARDS</p></li>
+<li><p><strong>Fix Needed:</strong> <strong>Warning:</strong> ADD GUARDS</p></li>
 </ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">amplitudes</span><span class="p">:</span>
-    <span class="c1"># calculate mean/std</span>
+ <span class="c1"># calculate mean/std</span>
 </pre></div>
 </div>
 <ul class="simple">
-<li><p><strong>Status</strong>: ✅ ALREADY FIXED - Guards are present (lines 443, 445, 447)</p></li>
+<li><p><strong>Status</strong>: ALREADY FIXED - Guards are present (lines 443, 445, 447)</p></li>
 </ul>
 <p><strong>Issue 3: ISI calculation (Lines 450-452)</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">isis</span> <span class="o">=</span> <span class="n">spike_analysis</span><span class="o">.</span><span class="n">calculate_isi</span><span class="p">(</span><span class="n">spike_times</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">isis</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-    <span class="n">results_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Mean ISI: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">isis</span><span class="p">)</span><span class="o">*</span><span class="mi">1000</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ± </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">isis</span><span class="p">)</span><span class="o">*</span><span class="mi">1000</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms</span><span class="se">\n</span><span class="s2">&quot;</span>
+ <span class="n">results_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Mean ISI: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">isis</span><span class="p">)</span><span class="o">*</span><span class="mi">1000</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ± </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">isis</span><span class="p">)</span><span class="o">*</span><span class="mi">1000</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ms</span><span class="se">\n</span><span class="s2">&quot;</span>
 </pre></div>
 </div>
 <ul class="simple">
-<li><p><strong>Status</strong>: ✅ SAFE - Correctly checks for empty ISI array</p></li>
+<li><p><strong>Status</strong>: SAFE - Correctly checks for empty ISI array</p></li>
 </ul>
 </section>
 <section id="resistance-intrinsic-properties-tab">
 <h3>2.2 Resistance/Intrinsic Properties Tab<a class="headerlink" href="#resistance-intrinsic-properties-tab" title="Link to this heading"></a></h3>
-<p><strong>Status: ⚠️ POTENTIAL ISSUES</strong></p>
+<p><strong>Status:</strong> <strong>Warning:</strong> POTENTIAL ISSUES</p>
 <p><strong>Issue 1: Tau calculation without region check (Lines 1284-1298)</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@QtCore</span><span class="o">.</span><span class="n">Slot</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_tau</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span> <span class="k">return</span>
-    <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
-    <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
-    
-    <span class="n">response_window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="o">.</span><span class="n">getRegion</span><span class="p">()</span>  <span class="c1"># ⚠️ Could be None</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span> <span class="k">return</span>
+ <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
+ <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
+
+ <span class="n">response_window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="o">.</span><span class="n">getRegion</span><span class="p">()</span> <span class="c1"># Could be None</span>
 </pre></div>
 </div>
 <ul class="simple">
 <li><p><strong>Risk</strong>: <code class="docutils literal notranslate"><span class="pre">self.response_region</span></code> could be None if regions aren’t initialized</p></li>
-<li><p><strong>Fix Needed</strong>: ⚠️ ADD GUARD</p></li>
+<li><p><strong>Fix Needed:</strong> <strong>Warning:</strong> ADD GUARD</p></li>
 </ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Tau: Region not available&quot;</span><span class="p">)</span>
-    <span class="k">return</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Tau: Region not available&quot;</span><span class="p">)</span>
+ <span class="k">return</span>
 </pre></div>
 </div>
 <ul class="simple">
-<li><p><strong>Status</strong>: ❌ ISSUE FOUND</p></li>
+<li><p><strong>Status</strong>: ISSUE FOUND</p></li>
 </ul>
 <p><strong>Issue 2: Sag calculation without region check (Lines 1301-1315)</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@QtCore</span><span class="o">.</span><span class="n">Slot</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_sag_ratio</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span> <span class="k">return</span>
-    <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
-    <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span> <span class="k">return</span>
+ <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
+ <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
 
-    <span class="n">baseline_window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">baseline_region</span><span class="o">.</span><span class="n">getRegion</span><span class="p">()</span>  <span class="c1"># ⚠️ Could be None</span>
-    <span class="n">response_window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="o">.</span><span class="n">getRegion</span><span class="p">()</span>  <span class="c1"># ⚠️ Could be None</span>
+ <span class="n">baseline_window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">baseline_region</span><span class="o">.</span><span class="n">getRegion</span><span class="p">()</span> <span class="c1"># Could be None</span>
+ <span class="n">response_window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="o">.</span><span class="n">getRegion</span><span class="p">()</span> <span class="c1"># Could be None</span>
 </pre></div>
 </div>
 <ul class="simple">
 <li><p><strong>Risk</strong>: Both regions could be None</p></li>
-<li><p><strong>Status</strong>: ❌ ISSUE FOUND</p></li>
+<li><p><strong>Status</strong>: ISSUE FOUND</p></li>
 </ul>
 <p><strong>Fix Required:</strong>
 Add guards before calling <code class="docutils literal notranslate"><span class="pre">.getRegion()</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">baseline_region</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">sag_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Sag Ratio: Regions not available&quot;</span><span class="p">)</span>
-    <span class="k">return</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">sag_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Sag Ratio: Regions not available&quot;</span><span class="p">)</span>
+ <span class="k">return</span>
 </pre></div>
 </div>
 </section>
 <section id="data-loader">
 <h3>2.3 Data Loader<a class="headerlink" href="#data-loader" title="Link to this heading"></a></h3>
-<p><strong>Status: ✅ NO ISSUES</strong></p>
+<p><strong>Status: NO ISSUES</strong></p>
 <ul class="simple">
 <li><p>Proper file validation</p></li>
 <li><p>Correct cache handling</p></li>
@@ -1666,7 +1916,7 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 </section>
 <section id="explorer-tab">
 <h3>2.4 Explorer Tab<a class="headerlink" href="#explorer-tab" title="Link to this heading"></a></h3>
-<p><strong>Status: ✅ NO ISSUES</strong></p>
+<p><strong>Status: NO ISSUES</strong></p>
 <ul class="simple">
 <li><p>Proper error handling with try/except blocks</p></li>
 <li><p>Null checks before accessing objects</p></li>
@@ -1679,7 +1929,7 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <h2>3. UI Errors<a class="headerlink" href="#ui-errors" title="Link to this heading"></a></h2>
 <section id="analysis-tabs">
 <h3>3.1 Analysis Tabs<a class="headerlink" href="#analysis-tabs" title="Link to this heading"></a></h3>
-<p><strong>Status: ⚠️ MINOR ISSUES</strong></p>
+<p><strong>Status:</strong> <strong>Warning:</strong> MINOR ISSUES</p>
 <p><strong>Issue 1: Missing null checks in result label updates</strong></p>
 <ul class="simple">
 <li><p>Lines 1296, 1313: Result labels updated without null checks</p></li>
@@ -1687,23 +1937,23 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <li><p><strong>Recommendation</strong>: Add checks before setting text</p></li>
 </ul>
 <p><strong>Issue 2: Feature display height (spike_tab.py Line 129)</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="bp">self</span><span class="o">.</span><span class="n">results_textedit</span><span class="o">.</span><span class="n">setFixedHeight</span><span class="p">(</span><span class="mi">150</span><span class="p">)</span>  <span class="c1"># ✅ Good - increased from 80</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="bp">self</span><span class="o">.</span><span class="n">results_textedit</span><span class="o">.</span><span class="n">setFixedHeight</span><span class="p">(</span><span class="mi">150</span><span class="p">)</span> <span class="c1"># Good - increased from 80</span>
 </pre></div>
 </div>
 <ul class="simple">
-<li><p><strong>Status</strong>: ✅ FIXED - Height is adequate for new features</p></li>
+<li><p><strong>Status</strong>: FIXED - Height is adequate for new features</p></li>
 </ul>
 </section>
 <section id="button-enable-states">
 <h3>3.2 Button Enable States<a class="headerlink" href="#button-enable-states" title="Link to this heading"></a></h3>
-<p><strong>Status</strong>: ⚠️ POTENTIAL ISSUE</p>
+<p><strong>Status</strong>: POTENTIAL ISSUE</p>
 <p><strong>Issue: Tau and Sag buttons visibility not controlled</strong></p>
 <ul class="simple">
 <li><p>Lines 1284, 1301: Buttons don’t check if they exist</p></li>
 <li><p><strong>Fix Needed</strong>: Add existence checks</p></li>
 </ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau_button</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">sag_button</span><span class="p">:</span>
-    <span class="k">return</span>
+ <span class="k">return</span>
 </pre></div>
 </div>
 <ul class="simple">
@@ -1712,7 +1962,7 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 </section>
 <section id="plot-widget-initialization">
 <h3>3.3 Plot Widget Initialization<a class="headerlink" href="#plot-widget-initialization" title="Link to this heading"></a></h3>
-<p><strong>Status</strong>: ✅ NO ISSUES</p>
+<p><strong>Status</strong>: NO ISSUES</p>
 <ul class="simple">
 <li><p>Plot widgets properly initialized</p></li>
 <li><p>Regions properly created with default values</p></li>
@@ -1724,16 +1974,16 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <h2>4. Error Handling<a class="headerlink" href="#error-handling" title="Link to this heading"></a></h2>
 <section id="exception-handling-coverage">
 <h3>4.1 Exception Handling Coverage<a class="headerlink" href="#exception-handling-coverage" title="Link to this heading"></a></h3>
-<p><strong>Status: ✅ GOOD</strong></p>
+<p><strong>Status: GOOD</strong></p>
 <ul class="simple">
-<li><p>✅ Spike tab: AttributeError, ValueError, Exception caught</p></li>
-<li><p>✅ Intrinsic properties: RuntimeError, Exception caught</p></li>
-<li><p>✅ Data loader: SynaptipyError, generic Exception caught</p></li>
+<li><p>Spike tab: AttributeError, ValueError, Exception caught</p></li>
+<li><p>Intrinsic properties: RuntimeError, Exception caught</p></li>
+<li><p>Data loader: SynaptipyError, generic Exception caught</p></li>
 </ul>
 </section>
 <section id="logging">
 <h3>4.2 Logging<a class="headerlink" href="#logging" title="Link to this heading"></a></h3>
-<p><strong>Status: ✅ GOOD</strong></p>
+<p><strong>Status: GOOD</strong></p>
 <ul class="simple">
 <li><p>All major operations logged</p></li>
 <li><p>Error messages are descriptive</p></li>
@@ -1775,16 +2025,16 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <h3>Fix 1: Add region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code><a class="headerlink" href="#fix-1-add-region-checks-in-calculate-tau" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@QtCore</span><span class="o">.</span><span class="n">Slot</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_tau</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span> 
-        <span class="k">return</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Tau: Regions not initialized&quot;</span><span class="p">)</span>
-        <span class="k">return</span>
-    
-    <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
-    <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
-    
-    <span class="c1"># ... rest of method</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span>
+ <span class="k">return</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Tau: Regions not initialized&quot;</span><span class="p">)</span>
+ <span class="k">return</span>
+
+ <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
+ <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
+
+ <span class="c1"># ... rest of method</span>
 </pre></div>
 </div>
 </section>
@@ -1792,25 +2042,25 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <h3>Fix 2: Add region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code><a class="headerlink" href="#fix-2-add-region-checks-in-calculate-sag-ratio" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@QtCore</span><span class="o">.</span><span class="n">Slot</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_sag_ratio</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span> 
-        <span class="k">return</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">baseline_region</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">sag_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Sag Ratio: Regions not initialized&quot;</span><span class="p">)</span>
-        <span class="k">return</span>
-    
-    <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
-    <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
-    
-    <span class="c1"># ... rest of method</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">:</span>
+ <span class="k">return</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">baseline_region</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">sag_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Sag Ratio: Regions not initialized&quot;</span><span class="p">)</span>
+ <span class="k">return</span>
+
+ <span class="n">time_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;time_vec&quot;</span><span class="p">]</span>
+ <span class="n">data_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_plot_data</span><span class="p">[</span><span class="s2">&quot;data_vec&quot;</span><span class="p">]</span>
+
+ <span class="c1"># ... rest of method</span>
 </pre></div>
 </div>
 </section>
 <section id="fix-3-add-button-existence-checks">
 <h3>Fix 3: Add button existence checks<a class="headerlink" href="#fix-3-add-button-existence-checks" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_calculate_tau</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau_button</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="p">:</span>
-        <span class="k">return</span>
-    <span class="c1"># ... rest of method</span>
+ <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau_button</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="p">:</span>
+ <span class="k">return</span>
+ <span class="c1"># ... rest of method</span>
 </pre></div>
 </div>
 </section>
@@ -1829,18 +2079,18 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <section id="fixes-applied">
 <h2>Fixes Applied<a class="headerlink" href="#fixes-applied" title="Link to this heading"></a></h2>
 <section id="fix-1-added-region-check-in-calculate-tau-line-1286-1288">
-<h3>✅ Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)<a class="headerlink" href="#fix-1-added-region-check-in-calculate-tau-line-1286-1288" title="Link to this heading"></a></h3>
+<h3>Fix 1: Added region check in <code class="docutils literal notranslate"><span class="pre">_calculate_tau()</span></code> (Line 1286-1288)<a class="headerlink" href="#fix-1-added-region-check-in-calculate-tau-line-1286-1288" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Tau: Regions not initialized&quot;</span><span class="p">)</span>
-    <span class="k">return</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">tau_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Tau: Regions not initialized&quot;</span><span class="p">)</span>
+ <span class="k">return</span>
 </pre></div>
 </div>
 </section>
 <section id="fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308">
-<h3>✅ Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)<a class="headerlink" href="#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308" title="Link to this heading"></a></h3>
+<h3>Fix 2: Added region checks in <code class="docutils literal notranslate"><span class="pre">_calculate_sag_ratio()</span></code> (Line 1306-1308)<a class="headerlink" href="#fix-2-added-region-checks-in-calculate-sag-ratio-line-1306-1308" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">baseline_region</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_region</span><span class="p">:</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">sag_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Sag Ratio: Regions not initialized&quot;</span><span class="p">)</span>
-    <span class="k">return</span>
+ <span class="bp">self</span><span class="o">.</span><span class="n">sag_result_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;Sag Ratio: Regions not initialized&quot;</span><span class="p">)</span>
+ <span class="k">return</span>
 </pre></div>
 </div>
 <p><strong>Status</strong>: All issues have been fixed and verified with linter.</p>
@@ -1849,14 +2099,14 @@ Add guards before calling <code class="docutils literal notranslate"><span class
 <hr class="docutils" />
 <section id="conclusion">
 <h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading"></a></h2>
-<p><strong>Overall Assessment: ✅ EXCELLENT</strong></p>
+<p><strong>Overall Assessment: EXCELLENT</strong></p>
 <p>The codebase is well-structured with proper error handling. All identified issues have been fixed:</p>
 <ul class="simple">
-<li><p>✅ All syntax checks pass</p></li>
-<li><p>✅ No linter errors</p></li>
-<li><p>✅ Logical flow is sound</p></li>
-<li><p>✅ Defensive programming practices applied</p></li>
-<li><p>✅ Error handling is comprehensive</p></li>
+<li><p>All syntax checks pass</p></li>
+<li><p>No linter errors</p></li>
+<li><p>Logical flow is sound</p></li>
+<li><p>Defensive programming practices applied</p></li>
+<li><p>Error handling is comprehensive</p></li>
 </ul>
 <p><strong>Status</strong>: Ready for production use.</p>
 </section>
@@ -1873,8 +2123,8 @@ Add guards before calling <code class="docutils literal notranslate"><span class
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2024, Anzal KS.
-      <span class="lastupdated">Last updated on Feb 24, 2026.
+    <p>&#169; Copyright 2024-2026, Anzal K Shahul.
+      <span class="lastupdated">Last updated on Apr 16, 2026.
       </span></p>
   </div>
 

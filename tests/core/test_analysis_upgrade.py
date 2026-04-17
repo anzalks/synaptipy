@@ -1,11 +1,12 @@
 # tests/core/test_analysis_upgrade.py
-import numpy as np
 from unittest.mock import MagicMock
+
+import numpy as np
+
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.excitability import calculate_fi_curve
-from Synaptipy.core.analysis.spike_analysis import run_spike_detection_wrapper
-from Synaptipy.core.analysis.burst_analysis import calculate_bursts_logic
-from Synaptipy.core.analysis.intrinsic_properties import run_rin_analysis_wrapper
+from Synaptipy.core.analysis.firing_dynamics import calculate_bursts_logic, calculate_fi_curve
+from Synaptipy.core.analysis.passive_properties import run_rin_analysis_wrapper
+from Synaptipy.core.analysis.single_spike import run_spike_detection_wrapper
 
 
 # --- 1. Batch Engine Update Tests ---
@@ -66,9 +67,9 @@ def test_calculate_fi_curve():
     def add_spike(s, idx):
         # 2 samples rise from 0 to 100
         # 2 samples fall from 100 to 0
-        s[idx - 2:idx] = np.linspace(0, 50, 2)
+        s[idx - 2 : idx] = np.linspace(0, 50, 2)
         s[idx] = 100
-        s[idx + 1:idx + 3] = np.linspace(50, 0, 2)
+        s[idx + 1 : idx + 3] = np.linspace(50, 0, 2)
 
     # Sweep 2: 2 spikes
     s2 = np.zeros_like(t)
@@ -111,13 +112,14 @@ def test_spike_shape_stats():
     data[peak_idx : peak_idx + 10] = np.linspace(20, -60, 10)  # Fall
 
     result = run_spike_detection_wrapper(data, t, 10000.0, threshold=0.0)
+    metrics = result["metrics"]
 
-    assert result["spike_count"] == 1
+    assert metrics["spike_count"] == 1
     # Check for stats keys
-    assert "amplitude_mean" in result
-    assert "half_width_mean" in result
+    assert "amplitude_mean" in metrics
+    assert "half_width_mean" in metrics
     # Since only 1 spike, std should be 0
-    assert result["amplitude_std"] == 0.0
+    assert metrics["amplitude_std"] == 0.0
 
 
 # --- 4. Burst Analysis Tests ---
@@ -151,15 +153,16 @@ def test_auto_windowing_rin():
 
     # Run wrapper with auto-detect
     result = run_rin_analysis_wrapper(data, t, 1000.0, current_amplitude=-50.0, auto_detect_pulse=True)
+    metrics = result["metrics"]
 
-    assert result["rin_mohm"] is not None
-    assert result["auto_detected"] is True
+    assert metrics["rin_mohm"] is not None
+    assert metrics["auto_detected"] is True
     # Check if calculated Rin is reasonable
     # V = -10 mV, I = -50 pA. R = V/I = -10 / -0.05 nA = 200 MOhm
-    assert np.isclose(result["rin_mohm"], 200.0, atol=1.0)
+    assert np.isclose(metrics["rin_mohm"], 200.0, atol=1.0)
     # Returned used-window keys should be present
-    assert "_used_baseline_start" in result
-    assert "_used_response_start" in result
+    assert "_used_baseline_start" in metrics
+    assert "_used_response_start" in metrics
 
 
 def test_auto_windowing_rin_fallback_to_spinbox_values():
@@ -172,7 +175,9 @@ def test_auto_windowing_rin_fallback_to_spinbox_values():
 
     # Provide explicit valid windows via kwargs (simulating the spinbox values)
     result = run_rin_analysis_wrapper(
-        data, t, 1000.0,
+        data,
+        t,
+        1000.0,
         current_amplitude=-50.0,
         auto_detect_pulse=True,
         baseline_start=0.0,
@@ -182,9 +187,9 @@ def test_auto_windowing_rin_fallback_to_spinbox_values():
     )
 
     # All-zero trace → delta_v = 0, but no "No data in windows" error
-    assert result.get("rin_error") != "No data in windows", (
-        "Fallback windows should avoid the 'No data in windows' error"
-    )
+    assert (
+        result["metrics"].get("rin_error") != "No data in windows"
+    ), "Fallback windows should avoid the 'No data in windows' error"
     # Rin = 0 / 0.05 = 0, which is technically valid (zero deflection)
     # The wrapper may return rin_mohm = 0 or None; what matters is no window error.
 
@@ -198,5 +203,5 @@ def test_rin_auto_detect_returns_used_window_keys():
     result = run_rin_analysis_wrapper(data, t, 1000.0, current_amplitude=-50.0, auto_detect_pulse=True)
 
     for key in ("_used_baseline_start", "_used_baseline_end", "_used_response_start", "_used_response_end"):
-        assert key in result, f"Expected '{key}' in result dict"
-        assert isinstance(result[key], float)
+        assert key in result["metrics"], f"Expected '{key}' in result['metrics']"
+        assert isinstance(result["metrics"][key], float)

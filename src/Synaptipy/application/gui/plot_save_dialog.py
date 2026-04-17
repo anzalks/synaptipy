@@ -9,10 +9,11 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
-from PySide6 import QtWidgets
 import logging
 import os
 from typing import Tuple
+
+from PySide6 import QtWidgets
 
 from Synaptipy.shared.constants import APP_NAME
 
@@ -242,8 +243,8 @@ def save_plot_as_image(plot_widget, file_path: str, format_type: str = "png") ->
             # Save as PDF using high-quality image conversion
             # This approach captures the plot as a high-quality image first, then converts to PDF
             try:
-                from PySide6.QtGui import QPainter
                 from PySide6.QtCore import QSizeF
+                from PySide6.QtGui import QPainter
                 from PySide6.QtPrintSupport import QPrinter
 
                 # Capture the plot as a high-quality pixmap

@@ -1,8 +1,10 @@
 """
 Fixtures for application/gui tests.
 """
-import pytest
+
 from unittest.mock import patch
+
+import pytest
 
 
 @pytest.fixture(scope="session")
@@ -19,8 +21,7 @@ def main_window(qapp):  # noqa: C901
     State modified by individual tests is reset by the reset_main_window_state
     autouse fixture defined in test_main_window.py.
     """
-    with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, \
-            patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
+    with patch("PySide6.QtWidgets.QFileDialog") as mock_dialog, patch("PySide6.QtWidgets.QMessageBox") as mock_msgbox:
 
         # Configure dialog to return cancel by default
         mock_dialog.return_value.exec.return_value = False
@@ -39,6 +40,7 @@ def main_window(qapp):  # noqa: C901
 
         # Wait for initialization
         from PySide6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if app:
             for _ in range(5):

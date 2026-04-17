@@ -1,9 +1,9 @@
 # Rendering Performance Optimizations
 
-**Date:** October 20, 2025  
-**Author:** Anzal K Shahul  
-**Branch:** zoom_customisation_from_system_theme  
-**Status:** ✅ COMPLETED
+**Date:** October 20, 2025
+**Author:** Anzal K Shahul
+**Branch:** zoom_customisation_from_system_theme
+**Status:** COMPLETED
 
 ---
 
@@ -26,17 +26,17 @@ Applied aggressive downsampling and view clipping to all plot items.
 
 **For every plot item created (trials and averages):**
 ```python
-plot_item.setDownsampling(mode='peak')  # Preserve spikes
-plot_item.setClipToView(True)           # Don't render outside view
+plot_item.setDownsampling(mode='peak') # Preserve spikes
+plot_item.setClipToView(True) # Don't render outside view
 plot_item.setAutoDownsample(ds_enabled) # Respect user checkbox
 log.debug(f"[_update_plot] Applied optimized downsampling...")
 ```
 
 ### Impact
-- ✅ **Faster zooming/panning** - Only visible data is rendered
-- ✅ **Lower memory usage** - Clipping reduces render pipeline load
-- ✅ **Spike preservation** - Peak mode preserves important features
-- ✅ **User control** - Respects downsample checkbox
+- **Faster zooming/panning** - Only visible data is rendered
+- **Lower memory usage** - Clipping reduces render pipeline load
+- **Spike preservation** - Peak mode preserves important features
+- **User control** - Respects downsample checkbox
 
 ---
 
@@ -54,18 +54,18 @@ Added a global "Force Opaque Trials" option that disables transparency for singl
 
 **Added global flag and functions (Lines 20-21, 545-557):**
 ```python
-_force_opaque_trials = False  # Global flag
+_force_opaque_trials = False # Global flag
 
 def set_force_opaque_trials(force_opaque: bool):
-    global _force_opaque_trials
-    _force_opaque_trials = force_opaque
-    log.info(f"Setting force_opaque_trials to: {_force_opaque_trials}")
-    manager = get_plot_customization_manager()
-    manager._pen_cache.clear()  # Force pen regeneration
-    _plot_signals.preferences_updated.emit()
+ global _force_opaque_trials
+ _force_opaque_trials = force_opaque
+ log.info(f"Setting force_opaque_trials to: {_force_opaque_trials}")
+ manager = get_plot_customization_manager()
+ manager._pen_cache.clear() # Force pen regeneration
+ _plot_signals.preferences_updated.emit()
 
 def get_force_opaque_trials() -> bool:
-    return _force_opaque_trials
+ return _force_opaque_trials
 ```
 
 **Modified get_single_trial_pen() (Lines 245-249):**
@@ -75,8 +75,8 @@ alpha = opacity / 100.0
 # PERFORMANCE: Override alpha if force opaque mode is enabled
 global _force_opaque_trials
 if _force_opaque_trials:
-    log.debug("[get_single_trial_pen] Performance mode ON: Forcing alpha to 1.0")
-    alpha = 1.0
+ log.debug("[get_single_trial_pen] Performance mode ON: Forcing alpha to 1.0")
+ alpha = 1.0
 ```
 
 **File 2:** `src/Synaptipy/application/gui/plot_customization_dialog.py`
@@ -92,11 +92,11 @@ performance_group = QtWidgets.QGroupBox("Performance")
 performance_layout = QtWidgets.QVBoxLayout(performance_group)
 
 self.force_opaque_checkbox = QtWidgets.QCheckBox(
-    "Force Opaque Single Trials (Faster Rendering)"
+ "Force Opaque Single Trials (Faster Rendering)"
 )
 self.force_opaque_checkbox.setToolTip(
-    "Check this to disable transparency for single trials.\n"
-    "This can significantly improve performance when many trials are overlaid."
+ "Check this to disable transparency for single trials.\n"
+ "This can significantly improve performance when many trials are overlaid."
 )
 from Synaptipy.shared.plot_customization import get_force_opaque_trials
 self.force_opaque_checkbox.setChecked(get_force_opaque_trials())
@@ -106,10 +106,10 @@ self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed)
 **Added handler method (Lines 487-494):**
 ```python
 def _on_force_opaque_changed(self, state):
-    is_checked = state == QtCore.Qt.CheckState.Checked.value
-    from Synaptipy.shared.plot_customization import set_force_opaque_trials
-    set_force_opaque_trials(is_checked)
-    log.info(f"Force opaque trials toggled to: {is_checked}")
+ is_checked = state == QtCore.Qt.CheckState.Checked.value
+ from Synaptipy.shared.plot_customization import set_force_opaque_trials
+ set_force_opaque_trials(is_checked)
+ log.info(f"Force opaque trials toggled to: {is_checked}")
 ```
 
 **File 3:** `src/Synaptipy/application/gui/main_window.py`
@@ -121,11 +121,11 @@ log.info(f"[_on_plot_preferences_updated] Refreshing plots. Force opaque state: 
 ```
 
 ### Impact
-- ✅ **2-5x faster** rendering in overlay mode with 20+ trials
-- ✅ **Eliminates alpha blending cost** - no GPU/CPU compositing overhead
-- ✅ **User-controlled** - checkbox in customization dialog
-- ✅ **Immediate effect** - plots update instantly when toggled
-- ✅ **Preserved data quality** - No data loss, only visual transparency
+- **2-5x faster** rendering in overlay mode with 20+ trials
+- **Eliminates alpha blending cost** - no GPU/CPU compositing overhead
+- **User-controlled** - checkbox in customization dialog
+- **Immediate effect** - plots update instantly when toggled
+- **Preserved data quality** - No data loss, only visual transparency
 
 ---
 
@@ -171,16 +171,16 @@ self._last_y_global_scroll_value = self.SCROLLBAR_MAX_RANGE // 2
 **Modified handlers to use debouncing (Lines 1632-1787):**
 ```python
 def _on_x_zoom_changed(self, value: int):
-    # Store value and start timer, DO NOT apply zoom directly
-    self._last_x_zoom_value = value
-    self._x_zoom_apply_timer.start()
-    log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
+ # Store value and start timer, DO NOT apply zoom directly
+ self._last_x_zoom_value = value
+ self._x_zoom_apply_timer.start()
+ log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
 
 def _on_x_scrollbar_changed(self, value: int):
-    if not self._updating_scrollbars:
-        self._last_x_scroll_value = value
-        self._x_scroll_apply_timer.start()
-        log.debug(f"[_on_x_scrollbar_changed] Debouncing X scroll: {value}")
+ if not self._updating_scrollbars:
+ self._last_x_scroll_value = value
+ self._x_scroll_apply_timer.start()
+ log.debug(f"[_on_x_scrollbar_changed] Debouncing X scroll: {value}")
 
 # Similar for _on_global_y_zoom_changed and _on_global_y_scrollbar_changed
 ```
@@ -188,29 +188,29 @@ def _on_x_scrollbar_changed(self, value: int):
 **Added debounced apply methods (Lines 1646-1692):**
 ```python
 def _apply_debounced_x_zoom(self):
-    """Apply X zoom after debounce delay."""
-    value = self._last_x_zoom_value
-    log.debug(f"[_apply_debounced_x_zoom] Applying X zoom: {value}")
-    # ... original zoom logic ...
+ """Apply X zoom after debounce delay."""
+ value = self._last_x_zoom_value
+ log.debug(f"[_apply_debounced_x_zoom] Applying X zoom: {value}")
+ # ... original zoom logic ...
 
 def _apply_debounced_x_scroll(self):
-    """Apply X scroll after debounce delay."""
-    # ... original scroll logic ...
+ """Apply X scroll after debounce delay."""
+ # ... original scroll logic ...
 
 def _apply_debounced_y_global_zoom(self):
-    """Apply global Y zoom after debounce delay."""
-    self._apply_global_y_zoom(self._last_y_global_zoom_value)
+ """Apply global Y zoom after debounce delay."""
+ self._apply_global_y_zoom(self._last_y_global_zoom_value)
 
 def _apply_debounced_y_global_scroll(self):
-    """Apply global Y scroll after debounce delay."""
-    self._apply_global_y_scroll(self._last_y_global_scroll_value)
+ """Apply global Y scroll after debounce delay."""
+ self._apply_global_y_scroll(self._last_y_global_scroll_value)
 ```
 
 ### Impact
-- ✅ **Smoother slider interactions** - No stutter during dragging
-- ✅ **Reduced CPU/GPU load** - Batch updates instead of continuous
-- ✅ **Better responsiveness** - Final position applied quickly after release
-- ✅ **Configurable delay** - 50ms provides good balance
+- **Smoother slider interactions** - No stutter during dragging
+- **Reduced CPU/GPU load** - Batch updates instead of continuous
+- **Better responsiveness** - Final position applied quickly after release
+- **Configurable delay** - 50ms provides good balance
 
 ---
 
@@ -234,9 +234,9 @@ def _apply_debounced_y_global_scroll(self):
 ============================= test session starts ==============================
 collected 74 items
 
-✅ 63 tests PASSED
-⏭️  6 tests SKIPPED (expected)
-⚠️  5 tests FAILED (pre-existing, unrelated to optimizations)
+ 63 tests PASSED
+ 6 tests SKIPPED (expected)
+ 5 tests FAILED (pre-existing, unrelated to optimizations)
 ```
 
 **No new failures introduced** - all optimizations working correctly!
@@ -246,22 +246,22 @@ collected 74 items
 ## Files Modified
 
 1. **`src/Synaptipy/application/gui/explorer_tab.py`**
-   - Lines 135-158: Added debounce timers
-   - Lines 1422-1462: Optimized downsampling for all plot items
-   - Lines 1632-1692: Modified handlers and added debounced apply methods
+ - Lines 135-158: Added debounce timers
+ - Lines 1422-1462: Optimized downsampling for all plot items
+ - Lines 1632-1692: Modified handlers and added debounced apply methods
 
 2. **`src/Synaptipy/shared/plot_customization.py`**
-   - Lines 20-21: Added global _force_opaque_trials flag
-   - Lines 245-249: Modified get_single_trial_pen() to respect flag
-   - Lines 545-557: Added setter/getter functions
+ - Lines 20-21: Added global _force_opaque_trials flag
+ - Lines 245-249: Modified get_single_trial_pen() to respect flag
+ - Lines 545-557: Added setter/getter functions
 
 3. **`src/Synaptipy/application/gui/plot_customization_dialog.py`**
-   - Line 45: Added checkbox attribute
-   - Lines 74-89: Added performance group UI
-   - Lines 487-494: Added checkbox handler
+ - Line 45: Added checkbox attribute
+ - Lines 74-89: Added performance group UI
+ - Lines 487-494: Added checkbox handler
 
 4. **`src/Synaptipy/application/gui/main_window.py`**
-   - Lines 278-280: Added force opaque logging
+ - Lines 278-280: Added force opaque logging
 
 ---
 
@@ -333,6 +333,65 @@ collected 74 items
 
 ---
 
+## Part 4: ViewBox Signal Management for File Cycling (March 2026)
+
+### Problem
+When cycling through files, the X-axis shifted right (not starting at 0) and Y-axis
+ranges were incorrect. This was particularly visible with multichannel recordings.
+
+### Root Causes
+1. **Stale ViewBox signals from `deleteLater()`'d widgets**: After
+ `rebuild_plots()` replaces the `GraphicsLayoutWidget`, old ViewBoxes survive
+ until the next event-loop iteration and emit `sigXRangeChanged` /
+ `sigYRangeChanged` / `sigResized` signals that corrupt new recording's ranges.
+2. **X-link range recalculation**: `linkedViewChanged()` recalculates X ranges
+ from screen-geometry pixel offsets between stacked ViewBoxes, producing
+ shifted ranges when Y-axis label widths differ.
+3. **Y range from trial 0 only**: `_compute_channel_y_range()` used only trial 0,
+ which may be at resting potential while other trials contain action potentials.
+
+### Solutions
+
+**ViewBox Signal Disconnection (`plot_canvas.py`):**
+```python
+# In rebuild_plots(), before clearing plot_items:
+for plot_item in self.plot_items.values():
+ vb = plot_item.getViewBox()
+ if vb:
+ vb.sigXRangeChanged.disconnect()
+ vb.sigYRangeChanged.disconnect()
+ vb.sigResized.disconnect()
+```
+
+**X-Link Blocking (`explorer_tab.py::_reset_view()`):**
+```python
+# Block link propagation while setting ranges
+for plot_item in self.plot_canvas.plot_items.values():
+ vb = plot_item.getViewBox()
+ vb.blockLink(True)
+
+# ... set X/Y ranges ...
+
+for plot_item in self.plot_canvas.plot_items.values():
+ vb = plot_item.getViewBox()
+ vb.blockLink(False)
+```
+
+**All-Trial Y Range (`explorer_tab.py::_compute_channel_y_range()`):**
+Samples up to 50 evenly-spaced trials to compute global min/max.
+
+**Deferred Initial Reset:**
+Generation-counter-protected `_deferred_initial_reset()` catches post-layout
+`sigResized` shifts for multichannel recordings.
+
+### Impact
+- X-axis always starts at 0 on first load and when cycling files
+- Y-range correctly spans all trial amplitudes in overlay mode
+- View state preservation (zoom/pan) unaffected - deferred reset only fires
+ for multichannel recordings without pending view restoration
+
+---
+
 ## Debugging
 
 If performance doesn't improve:
@@ -347,11 +406,13 @@ If performance doesn't improve:
 
 ## Conclusion
 
-These three optimizations work together to provide dramatic rendering performance improvements:
+These optimizations work together to provide dramatic rendering performance improvements:
 
 1. **Downsampling + Clipping** → Reduces data pipeline load
 2. **Force Opaque** → Eliminates alpha blending overhead
 3. **Debouncing** → Batches rapid UI interactions
+4. **ViewBox Signal Management** → Prevents stale signal corruption during file cycling
 
-Combined effect: **3-6x faster** rendering in typical use cases! 🚀
+Combined effect: **3-6x faster** rendering in typical use cases with correct
+axis ranges across all file-cycling scenarios.
 

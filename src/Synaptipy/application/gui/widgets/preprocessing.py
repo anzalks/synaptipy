@@ -2,9 +2,11 @@
 Preprocessing widget for signal analysis.
 Includes controls for Baseline Subtraction and Filtering (Notch, Bandpass, Lowpass, Highpass).
 """
+
 import logging
 
-from PySide6 import QtWidgets, QtCore, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
+
 from Synaptipy.shared.styling import style_button
 
 log = logging.getLogger(__name__)
@@ -44,49 +46,71 @@ class PreprocessingWidget(QtWidgets.QWidget):
         bl_type_layout = QtWidgets.QHBoxLayout()
         bl_type_layout.addWidget(QtWidgets.QLabel("Method:"))
         self.baseline_type_combo = QtWidgets.QComboBox()
-        self.baseline_type_combo.addItems(["None", "Mode", "Mean", "Median", "Linear Detrend", "Time Window"])
+        # "Time Window" removed from method list — it is now a separate parameter field.
+        self.baseline_type_combo.addItems(["None", "Mode", "Mean", "Median", "Linear Detrend"])
+        self.baseline_type_combo.setToolTip(
+            "Baseline correction method:\n"
+            "  None  – remove existing baseline correction\n"
+            "  Mode  – subtract the most-frequent amplitude value\n"
+            "  Mean  – subtract the mean of the selected time window\n"
+            "  Median – subtract the median of the selected time window\n"
+            "  Linear Detrend – fit and subtract a linear trend"
+        )
         self.baseline_type_combo.currentIndexChanged.connect(self._on_baseline_type_changed)
         bl_type_layout.addWidget(self.baseline_type_combo, 1)
         baseline_layout.addLayout(bl_type_layout)
 
-        # Baseline Param Stack
+        # Time Window — always-visible separate parameter row
+        tw_layout = QtWidgets.QHBoxLayout()
+        tw_layout.addWidget(QtWidgets.QLabel("Time Window:"))
+        self.bl_tw_start = QtWidgets.QLineEdit("0.0")
+        self.bl_tw_start.setValidator(QtGui.QDoubleValidator())
+        self.bl_tw_start.setMaximumWidth(60)
+        self.bl_tw_start.setToolTip("Baseline window start time (seconds). Used by Mode / Mean / Median methods.")
+        tw_layout.addWidget(self.bl_tw_start)
+        tw_layout.addWidget(QtWidgets.QLabel("–"))
+        self.bl_tw_end = QtWidgets.QLineEdit("0.05")
+        self.bl_tw_end.setValidator(QtGui.QDoubleValidator())
+        self.bl_tw_end.setMaximumWidth(60)
+        self.bl_tw_end.setToolTip("Baseline window end time (seconds). Used by Mode / Mean / Median methods.")
+        tw_layout.addWidget(self.bl_tw_end)
+        tw_layout.addWidget(QtWidgets.QLabel("s"))
+        tw_layout.addStretch()
+        baseline_layout.addLayout(tw_layout)
+
+        # Baseline Param Stack (method-specific extras, e.g. decimals for Mode)
         self.bl_param_stack = QtWidgets.QStackedWidget()
 
-        # Page 0: None
+        # Page 0: None (empty)
         self.bl_param_stack.addWidget(QtWidgets.QWidget())
 
-        # Page 1: Mode (Decimals)
-        self.page_bl_mode = self._create_param_page([
-            ("Decimals:", "1", "decimals")
-        ])
-        # Force integer validator for decimals
+        # Page 1: Mode — Decimals
+        self.page_bl_mode = self._create_param_page([("Decimals:", "1", "decimals")])
         if "decimals" in self.page_bl_mode.inputs:
             self.page_bl_mode.inputs["decimals"].setValidator(QtGui.QIntValidator())
+            self.page_bl_mode.inputs["decimals"].setToolTip("Rounding precision for mode histogram (integer).")
         self.bl_param_stack.addWidget(self.page_bl_mode)
 
-        # Page 2: Mean (No params)
+        # Page 2: Mean (no extras)
         self.bl_param_stack.addWidget(QtWidgets.QWidget())
 
-        # Page 3: Median (No params)
+        # Page 3: Median (no extras)
         self.bl_param_stack.addWidget(QtWidgets.QWidget())
 
-        # Page 4: Linear (No params)
+        # Page 4: Linear Detrend (no extras)
         self.bl_param_stack.addWidget(QtWidgets.QWidget())
-
-        # Page 5: Region (Start, End)
-        self.page_bl_region = self._create_param_page([
-            ("Start (s):", "0.0", "start_t"),
-            ("End (s):", "0.05", "end_t")
-        ])
-        self.bl_param_stack.addWidget(self.page_bl_region)
 
         baseline_layout.addWidget(self.bl_param_stack)
 
-        # Apply Baseline Button
+        # Apply Baseline Button — always enabled so "None" can be used to revert
         self.apply_baseline_btn = QtWidgets.QPushButton("Apply Baseline")
         style_button(self.apply_baseline_btn, style="secondary")
+        self.apply_baseline_btn.setToolTip(
+            "Apply the selected baseline correction.\n"
+            "Select 'None' and click Apply to remove an existing baseline correction."
+        )
         self.apply_baseline_btn.clicked.connect(self._on_baseline_apply_clicked)
-        self.apply_baseline_btn.setEnabled(False)
+        self.apply_baseline_btn.setEnabled(True)
         baseline_layout.addWidget(self.apply_baseline_btn)
 
         # Add baseline group first
@@ -102,6 +126,13 @@ class PreprocessingWidget(QtWidgets.QWidget):
         type_layout.addWidget(QtWidgets.QLabel("Filter:"))
         self.filter_type_combo = QtWidgets.QComboBox()
         self.filter_type_combo.addItems(["None", "Lowpass", "Highpass", "Bandpass", "Notch"])
+        self.filter_type_combo.setToolTip(
+            "Signal filter type:\n"
+            "  Lowpass  – remove frequencies above the cutoff (smooth slow signals)\n"
+            "  Highpass – remove frequencies below the cutoff (remove DC drift)\n"
+            "  Bandpass – keep frequencies between low and high cutoffs\n"
+            "  Notch    – remove a narrow frequency band (e.g. 50/60 Hz mains noise)"
+        )
         self.filter_type_combo.currentIndexChanged.connect(self._on_filter_type_changed)
         type_layout.addWidget(self.filter_type_combo, 1)
         filter_layout.addLayout(type_layout)
@@ -113,32 +144,35 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.param_stack.addWidget(QtWidgets.QWidget())
 
         # Page 1: Lowpass (Cutoff, Order)
-        self.page_lowpass = self._create_param_page([
-            ("Cutoff (Hz):", "1000", "cutoff"),
-            ("Order:", "5", "order")
-        ])
+        self.page_lowpass = self._create_param_page([("Cutoff (Hz):", "1000", "cutoff"), ("Order:", "5", "order")])
+        if hasattr(self.page_lowpass, "inputs"):
+            c = self.page_lowpass.inputs.get("cutoff")
+            if c:
+                c.setToolTip("Lowpass cutoff frequency in Hz. Signals above this are attenuated.")
+            o = self.page_lowpass.inputs.get("order")
+            if o:
+                o.setToolTip("Filter order (1-10). Higher order = steeper roll-off but more ringing.")
         self.param_stack.addWidget(self.page_lowpass)
 
         # Page 2: Highpass (Cutoff, Order)
-        self.page_highpass = self._create_param_page([
-            ("Cutoff (Hz):", "1", "cutoff"),
-            ("Order:", "5", "order")
-        ])
+        self.page_highpass = self._create_param_page([("Cutoff (Hz):", "1", "cutoff"), ("Order:", "5", "order")])
+        if hasattr(self.page_highpass, "inputs"):
+            c = self.page_highpass.inputs.get("cutoff")
+            if c:
+                c.setToolTip("Highpass cutoff frequency in Hz. Signals below this are attenuated.")
+            o = self.page_highpass.inputs.get("order")
+            if o:
+                o.setToolTip("Filter order (1-10). Higher order = steeper roll-off.")
         self.param_stack.addWidget(self.page_highpass)
 
         # Page 3: Bandpass
-        self.page_bandpass = self._create_param_page([
-            ("Low Cut (Hz):", "1", "low_cut"),
-            ("High Cut (Hz):", "300", "high_cut"),
-            ("Order:", "5", "order")
-        ])
+        self.page_bandpass = self._create_param_page(
+            [("Low Cut (Hz):", "1", "low_cut"), ("High Cut (Hz):", "300", "high_cut"), ("Order:", "5", "order")]
+        )
         self.param_stack.addWidget(self.page_bandpass)
 
         # Page 4: Notch
-        self.page_notch = self._create_param_page([
-            ("Freq (Hz):", "50", "freq"),
-            ("Q-Factor:", "30", "q_factor")
-        ])
+        self.page_notch = self._create_param_page([("Freq (Hz):", "50", "freq"), ("Q-Factor:", "30", "q_factor")])
         self.param_stack.addWidget(self.page_notch)
 
         filter_layout.addWidget(self.param_stack)
@@ -148,6 +182,9 @@ class PreprocessingWidget(QtWidgets.QWidget):
 
         self.apply_filter_btn = QtWidgets.QPushButton("Apply Filter")
         style_button(self.apply_filter_btn, style="secondary")
+        self.apply_filter_btn.setToolTip(
+            "Apply the selected filter to the trace. This step runs AFTER baseline correction."
+        )
         self.apply_filter_btn.clicked.connect(self._on_apply_filter_clicked)
         self.apply_filter_btn.setEnabled(False)
         btns_layout.addWidget(self.apply_filter_btn)
@@ -212,9 +249,9 @@ class PreprocessingWidget(QtWidgets.QWidget):
                 except ValueError:
                     log.warning(f"Invalid input for {name}: {line_edit.text()}")
                     from PySide6.QtWidgets import QMessageBox
+
                     QMessageBox.warning(
-                        self, "Invalid Input",
-                        f"'{line_edit.text()}' is not a valid number for {name}."
+                        self, "Invalid Input", f"'{line_edit.text()}' is not a valid number for {name}."
                     )
                     return
 
@@ -225,37 +262,56 @@ class PreprocessingWidget(QtWidgets.QWidget):
         log.debug("Reset preprocessing requested")
         self.preprocessing_reset_requested.emit()
 
+    def reset_ui(self):
+        """Reset all UI controls to their default ("None") state.
+
+        Called after a preprocessing reset so the widget visually reflects
+        that no preprocessing is active.
+        """
+        self.baseline_type_combo.setCurrentIndex(0)  # "None"
+        self.filter_type_combo.setCurrentIndex(0)  # "None"
+
     def _on_baseline_type_changed(self, index):
         self.bl_param_stack.setCurrentIndex(index)
-        self.apply_baseline_btn.setEnabled(index != 0)
+        # Apply button remains enabled at all times; selecting "None" + Apply removes the baseline.
 
-    def _on_baseline_apply_clicked(self):
-        method_map = {
-            1: "mode", 2: "mean", 3: "median", 4: "linear", 5: "region"
-        }
+    def _on_baseline_apply_clicked(self):  # noqa: C901
+        # method_map indices match the combo: 0=None, 1=Mode, 2=Mean, 3=Median, 4=Linear
+        method_map = {0: "none", 1: "mode", 2: "mean", 3: "median", 4: "linear"}
         idx = self.baseline_type_combo.currentIndex()
+
         if idx == 0:
+            # "None" selected — signal a baseline removal/revert
+            log.debug("Baseline removal requested (method=none)")
+            self.preprocessing_requested.emit({"type": "baseline", "method": "none"})
             return
 
         settings = {"type": "baseline", "method": method_map.get(idx, "mean")}
 
-        # Get params from current stack page
+        # Add time window parameters from the dedicated fields
+        try:
+            settings["start_t"] = float(self.bl_tw_start.text())
+        except ValueError:
+            settings["start_t"] = 0.0
+        try:
+            settings["end_t"] = float(self.bl_tw_end.text())
+        except ValueError:
+            settings["end_t"] = 0.05
+
+        # Get method-specific params from current stack page
         current_page = self.bl_param_stack.currentWidget()
         if hasattr(current_page, "inputs"):
             for name, line_edit in current_page.inputs.items():
                 try:
                     val = float(line_edit.text())
-                    # Special check for decimals (int)
                     if name == "decimals":
                         val = int(val)
                     settings[name] = val
                 except ValueError:
                     log.warning(f"Invalid input: {line_edit.text()}")
                     from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.warning(
-                        self, "Invalid Input",
-                        f"'{line_edit.text()}' is not a valid number."
-                    )
+
+                    QMessageBox.warning(self, "Invalid Input", f"'{line_edit.text()}' is not a valid number.")
                     return
 
         log.debug(f"Baseline requested: {settings}")
@@ -264,7 +320,8 @@ class PreprocessingWidget(QtWidgets.QWidget):
     def set_processing_state(self, is_processing: bool):
         """Enable/Disable controls during processing."""
         self.baseline_type_combo.setEnabled(not is_processing)
-        self.apply_baseline_btn.setEnabled(not is_processing and self.baseline_type_combo.currentIndex() != 0)
+        # Apply Baseline is always enabled (index 0 = "None" removes baseline)
+        self.apply_baseline_btn.setEnabled(not is_processing)
 
         self.apply_filter_btn.setEnabled(not is_processing and self.filter_type_combo.currentIndex() != 0)
         self.reset_btn.setEnabled(not is_processing)

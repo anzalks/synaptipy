@@ -12,8 +12,8 @@ authors:
   - family-names: "Shahul"
     given-names: "Anzal K"
     email: "anzal.ks@gmail.com"
-version: "0.1.0b1"
-date-released: "2026-02-25"
+version: "0.1.0b6"
+date-released: "2026-03-27"
 license: "AGPL-3.0-or-later"
 repository-code: "https://github.com/anzalks/synaptipy"
 keywords:
@@ -22,3 +22,8 @@ keywords:
   - neuroscience
   - signal-processing
   - data-visualization
+  - spike-detection
+  - synaptic-events
+  - optogenetics
+  - batch-analysis
+  - neurodata-without-borders

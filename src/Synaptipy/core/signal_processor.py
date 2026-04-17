@@ -4,8 +4,9 @@ Includes filtering and trace quality checks.
 """
 
 import logging
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
-from typing import Dict, Any, Optional
 
 
 def _get_scipy():
@@ -16,6 +17,7 @@ def _get_scipy():
     try:
         import scipy.signal as sig
         import scipy.stats as st
+
         return sig, st, True
     except ImportError:
         return None, None, False
@@ -38,9 +40,7 @@ def validate_sampling_rate(fs: float) -> bool:
         log.error("Sampling rate must be positive, got %s", fs)
         return False
     if fs < 100:
-        log.warning(
-            "Sampling rate is suspiciously low (<100 Hz). Are you using kHz instead of Hz?"
-        )
+        log.warning("Sampling rate is suspiciously low (<100 Hz). Are you using kHz instead of Hz?")
     return True
 
 
@@ -141,7 +141,7 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         lf_cutoff = 1.0 / nyq
         if 0 < lf_cutoff < 1 and len(detrended) > 30:
             try:
-                sos_lf = signal.butter(2, lf_cutoff, btype='low', output='sos')
+                sos_lf = signal.butter(2, lf_cutoff, btype="low", output="sos")
                 # Use sosfilt (forward-pass) instead of sosfiltfilt.
                 # sosfiltfilt calls sosfilt_zi → lfilter_zi → numpy.linalg.solve,
                 # which triggers a SIGBUS on macOS ARM with numpy 1.26.x +
@@ -282,7 +282,7 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
 
     try:
         # Use SOS format for numerical stability
-        sos = signal.butter(order, [low, high], btype="band", output='sos')
+        sos = signal.butter(order, [low, high], btype="band", output="sos")
         y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
@@ -327,7 +327,7 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
 
     try:
         # Use SOS format for numerical stability
-        sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output='sos')
+        sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output="sos")
         y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
@@ -372,7 +372,7 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
 
     try:
         # Use SOS format for numerical stability
-        sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output='sos')
+        sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output="sos")
         y = _sosfiltfilt_safe(sos, data)
         return y
     except Exception as e:
@@ -467,7 +467,7 @@ def comb_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarra
 
     try:
         # scipy.signal.iircomb removes harmonics of the base frequency
-        b, a = signal.iircomb(freq, Q, ftype='notch', fs=fs)
+        b, a = signal.iircomb(freq, Q, ftype="notch", fs=fs)
         # Convert to SOS for stability
         z, p, k = signal.tf2zpk(b, a)
         sos = signal.zpk2sos(z, p, k)
@@ -555,7 +555,7 @@ def subtract_baseline_linear(data: np.ndarray) -> np.ndarray:
         log.warning("Scipy not available. Cannot detrend.")
         return data
 
-    return signal.detrend(data, type='linear')
+    return signal.detrend(data, type="linear")
 
 
 def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, end_t: float) -> np.ndarray:
@@ -581,9 +581,82 @@ def subtract_baseline_region(data: np.ndarray, t: np.ndarray, start_t: float, en
     return data - baseline_offset
 
 
-def find_artifact_windows(
-    data: np.ndarray, fs: float, slope_threshold: float, padding_ms: float = 2.0
+def blank_artifact(
+    data: np.ndarray,
+    time_vector: np.ndarray,
+    onset_time: float,
+    duration_ms: float,
+    method: str = "hold",
 ) -> np.ndarray:
+    """
+    Suppress a stimulus artifact by replacing a time window.
+
+    Three interpolation modes are available:
+
+    * ``"hold"`` — replace the artifact window with the last pre-artifact
+      sample value (sample-and-hold).
+    * ``"zero"`` — set the artifact window to zero.
+    * ``"linear"`` — linearly interpolate between the pre- and
+      post-artifact boundary values.
+
+    Args:
+        data: 1-D signal array.
+        time_vector: 1-D time array (same length as *data*), in seconds.
+        onset_time: Start of the artifact window, in seconds.
+        duration_ms: Duration of the artifact window, in milliseconds.
+        method: Interpolation mode — ``"hold"``, ``"zero"``, or
+            ``"linear"``.  Default ``"hold"``.
+
+    Returns:
+        Copy of *data* with the artifact window replaced.
+
+    Raises:
+        ValueError: If *method* is not one of the recognised modes.
+    """
+    valid_methods = ("hold", "zero", "linear")
+    if method not in valid_methods:
+        raise ValueError(f"Unknown artifact blanking method '{method}'. " f"Choose from {valid_methods}.")
+
+    if data is None or len(data) == 0:
+        return data
+
+    result = data.copy()
+    duration_s = duration_ms / 1000.0
+    end_time = onset_time + duration_s
+
+    # Find sample indices for the artifact window
+    mask = (time_vector >= onset_time) & (time_vector < end_time)
+    if not np.any(mask):
+        return result
+
+    idx_start = int(np.argmax(mask))
+    idx_end = idx_start + int(np.sum(mask))
+
+    if method == "zero":
+        result[idx_start:idx_end] = 0.0
+
+    elif method == "hold":
+        hold_value = result[max(0, idx_start - 1)]
+        result[idx_start:idx_end] = hold_value
+
+    elif method == "linear":
+        pre_value = result[max(0, idx_start - 1)]
+        post_value = result[min(len(result) - 1, idx_end)]
+        n_samples = idx_end - idx_start
+        if n_samples > 0:
+            result[idx_start:idx_end] = np.linspace(pre_value, post_value, n_samples)
+
+    log.debug(
+        "Artifact blanked: onset=%.4fs, duration=%.2fms, method=%s, " "samples=%d",
+        onset_time,
+        duration_ms,
+        method,
+        idx_end - idx_start,
+    )
+    return result
+
+
+def find_artifact_windows(data: np.ndarray, fs: float, slope_threshold: float, padding_ms: float = 2.0) -> np.ndarray:
     """
     Identify time windows containing high-slope artifacts.
 
@@ -648,3 +721,119 @@ def find_artifact_windows(
         mask = ndimage.binary_dilation(mask, structure=structure)
 
     return mask
+
+
+# ---------------------------------------------------------------------------
+# Power Spectral Density
+# ---------------------------------------------------------------------------
+
+
+def compute_psd(
+    data: np.ndarray,
+    sampling_rate: float,
+    nperseg: Optional[int] = None,
+    window: str = "hann",
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute Power Spectral Density (PSD) using Welch's method.
+
+    Args:
+        data: 1D signal array.
+        sampling_rate: Sampling rate in Hz.
+        nperseg: FFT segment length. Defaults to ``min(len(data), 4096)``.
+        window: Window function name passed to :func:`scipy.signal.welch` (default ``"hann"``).
+
+    Returns:
+        Tuple ``(frequencies, psd)`` where *frequencies* is in Hz and *psd* is
+        in (data_units)^2/Hz.  Both arrays are 1-D float64.  On failure or
+        missing scipy an empty-array pair is returned.
+    """
+    scipy_signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        log.warning("Scipy not available. Cannot compute PSD.")
+        return np.array([]), np.array([])
+
+    if data is None or len(data) == 0:
+        return np.array([]), np.array([])
+
+    data = np.ascontiguousarray(data, dtype=np.float64)
+    seg = int(nperseg) if nperseg else min(len(data), 4096)
+    seg = max(seg, 2)  # welch requires at least 2 samples per segment
+
+    try:
+        freqs, psd = scipy_signal.welch(data, fs=sampling_rate, nperseg=seg, window=window)
+        return freqs.astype(np.float64), psd.astype(np.float64)
+    except Exception as exc:
+        log.error("PSD computation failed: %s", exc)
+        return np.array([]), np.array([])
+
+
+# ---------------------------------------------------------------------------
+# Multi-harmonic notch (convenience wrapper around comb_filter)
+# ---------------------------------------------------------------------------
+
+
+def multi_harmonic_notch(
+    data: np.ndarray,
+    fundamental_hz: float,
+    fs: float,
+    max_harmonics: Optional[int] = None,
+    Q: float = 30.0,
+) -> np.ndarray:
+    """Strip a fundamental frequency and its harmonics using cascaded notch filters.
+
+    Applies a discrete notch at *fundamental_hz*, *2 * fundamental_hz*,
+    *3 * fundamental_hz*, …, up to the Nyquist limit (or *max_harmonics*,
+    whichever comes first).
+
+    Prefer :func:`comb_filter` (IIR comb via :func:`scipy.signal.iircomb`) when
+    the scipy version supports it.  This function falls back to cascaded
+    :func:`notch_filter` calls, which is always available.
+
+    Args:
+        data: Input signal array.
+        fundamental_hz: Fundamental line-noise frequency to remove (e.g. 50 or 60).
+        fs: Sampling rate in Hz.
+        max_harmonics: Maximum number of harmonics to remove including the
+            fundamental.  ``None`` means remove all harmonics below Nyquist.
+        Q: Quality factor for each notch (higher = narrower).  Default 30.
+
+    Returns:
+        Filtered signal, or original data if filtering is impossible.
+    """
+    scipy_signal, _, has_scipy = _get_scipy()
+    if not has_scipy:
+        log.warning("Scipy not available. Cannot apply multi-harmonic notch.")
+        return data
+
+    if data is None or len(data) == 0:
+        return data
+
+    if fundamental_hz <= 0 or fs <= 0:
+        log.warning("Invalid fundamental_hz or fs for multi_harmonic_notch.")
+        return data
+
+    # Try the efficient IIR comb approach first.
+    nyq = 0.5 * fs
+    freq_norm = fundamental_hz / nyq
+    if 0 < freq_norm < 1:
+        try:
+            b, a = scipy_signal.iircomb(fundamental_hz, Q, ftype="notch", fs=fs)
+            z, p, k = scipy_signal.tf2zpk(b, a)
+            sos = scipy_signal.zpk2sos(z, p, k)
+            return _sosfiltfilt_safe(sos, data)
+        except Exception as exc:
+            log.debug("iircomb unavailable or failed (%s); falling back to cascaded notch.", exc)
+
+    # Cascaded notch fallback: apply a notch at each harmonic individually.
+    result = np.copy(data)
+    harmonic = 1
+    while True:
+        freq = harmonic * fundamental_hz
+        if freq >= nyq:
+            break
+        if max_harmonics is not None and harmonic > max_harmonics:
+            break
+        result = notch_filter(result, freq, Q, fs)
+        harmonic += 1
+
+    return result

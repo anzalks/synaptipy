@@ -1,11 +1,13 @@
-import pytest
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
 from PySide6 import QtWidgets
+
 from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture

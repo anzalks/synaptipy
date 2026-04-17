@@ -4,10 +4,12 @@
 Explorer Config Panel.
 Contains the Left Panel widgets: Display Options, Manual Limits, Channel List, File Info.
 """
+
 import logging
 from typing import Dict, Optional
 
-from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6 import QtCore, QtWidgets
+
 from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
@@ -27,7 +29,8 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
     show_selected_avg_toggled = QtCore.Signal(bool)
 
     # Trial Selection signals
-    trial_selection_requested = QtCore.Signal(int, int)  # gap, start_index
+    trial_selection_requested = QtCore.Signal(str)  # free-text range string
+    interleaved_selection_requested = QtCore.Signal(int, int)  # gap, start_index
     trial_selection_reset_requested = QtCore.Signal()
 
     # Channel signals
@@ -84,10 +87,27 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         layout.addLayout(pm_layout)
 
         # Downsample
-        self.downsample_cb = QtWidgets.QCheckBox("Auto Downsample Plot")
+        ds_layout = QtWidgets.QHBoxLayout()
+        self.downsample_cb = QtWidgets.QCheckBox("Downsample Plot")
         self.downsample_cb.setChecked(True)
         self.downsample_cb.toggled.connect(self.downsample_toggled.emit)
-        layout.addWidget(self.downsample_cb)
+        ds_layout.addWidget(self.downsample_cb)
+
+        ds_layout.addWidget(QtWidgets.QLabel("Factor:"))
+        self.downsample_factor_spin = QtWidgets.QSpinBox()
+        self.downsample_factor_spin.setRange(1, 1000)
+        self.downsample_factor_spin.setValue(10)
+        self.downsample_factor_spin.setToolTip("Downsampling factor (e.g., 10 means 1 in 10 samples are plotted)")
+        self.downsample_factor_spin.valueChanged.connect(
+            lambda _: self.downsample_toggled.emit(self.downsample_cb.isChecked())
+        )
+        self.downsample_factor_spin.setEnabled(True)
+        ds_layout.addWidget(self.downsample_factor_spin)
+
+        # Connect checkbox to enable/disable spinbox
+        self.downsample_cb.toggled.connect(self.downsample_factor_spin.setEnabled)
+
+        layout.addLayout(ds_layout)
 
         # Separator
         sep = QtWidgets.QFrame()
@@ -123,29 +143,60 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(group)
         layout.setSpacing(10)
 
-        # Input Row
+        # --- Free-text range selection ---
         in_layout = QtWidgets.QHBoxLayout()
-        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
-        self.nth_trial_input = QtWidgets.QLineEdit()
-        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
-        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        in_layout.addWidget(self.nth_trial_input)
-
-        in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
-        self.start_trial_input = QtWidgets.QLineEdit()
-        self.start_trial_input.setPlaceholderText("0")
-        self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        self.start_trial_input.setText("0")
-        in_layout.addWidget(self.start_trial_input)
-
+        in_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.trial_selection_input = QtWidgets.QLineEdit()
+        self.trial_selection_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        in_layout.addWidget(self.trial_selection_input)
         layout.addLayout(in_layout)
 
-        # Buttons
         self.plot_selected_btn = QtWidgets.QPushButton("Plot Selected")
         self.plot_selected_btn.clicked.connect(self._on_plot_selected_clicked)
-        self.plot_selected_btn.setToolTip("Filter trials to show only every Nth trial.")
+        self.plot_selected_btn.setToolTip("Plot only the trials listed above.")
         layout.addWidget(self.plot_selected_btn)
 
+        # Separator
+        sep = QtWidgets.QFrame()
+        sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        sep.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        layout.addWidget(sep)
+
+        # --- Interleaved / Every-Nth selection ---
+        layout.addWidget(QtWidgets.QLabel("Interleaved Trials (Every Nth):"))
+
+        nth_layout = QtWidgets.QHBoxLayout()
+
+        nth_layout.addWidget(QtWidgets.QLabel("Gap:"))
+        self.nth_gap_spin = QtWidgets.QSpinBox()
+        self.nth_gap_spin.setRange(0, 9999)
+        self.nth_gap_spin.setValue(0)
+        self.nth_gap_spin.setToolTip(
+            "Trials to skip between each selected trial.\n"
+            "0 = all trials, 1 = every 2nd, 4 = every 5th (for 5 interleaved stim locations)"
+        )
+        nth_layout.addWidget(self.nth_gap_spin)
+
+        nth_layout.addWidget(QtWidgets.QLabel("Start:"))
+        self.nth_start_spin = QtWidgets.QSpinBox()
+        self.nth_start_spin.setRange(0, 9999)
+        self.nth_start_spin.setValue(0)
+        self.nth_start_spin.setToolTip(
+            "Index of the first trial to select (0-based).\n"
+            "e.g. with Gap=4 Start=0 gives trials 0,5,10… Start=1 gives 1,6,11…"
+        )
+        nth_layout.addWidget(self.nth_start_spin)
+        layout.addLayout(nth_layout)
+
+        self.apply_interleaved_btn = QtWidgets.QPushButton("Apply Interleaved")
+        self.apply_interleaved_btn.clicked.connect(self._on_apply_interleaved_clicked)
+        self.apply_interleaved_btn.setToolTip(
+            "Select every Nth trial starting at the given index.\n"
+            "Use to isolate one stimulation-location group from interleaved recordings."
+        )
+        layout.addWidget(self.apply_interleaved_btn)
+
+        # --- Shared reset ---
         self.reset_selection_btn = QtWidgets.QPushButton("Reset Trial Selection")
         self.reset_selection_btn.clicked.connect(self.trial_selection_reset_requested.emit)
         self.reset_selection_btn.setToolTip("Reset to show all trials (raw data).")
@@ -245,21 +296,19 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
             self.channel_list_layout.addWidget(cb)
             self.channel_checkboxes[cid] = cb
 
+    def _on_apply_interleaved_clicked(self):
+        gap = self.nth_gap_spin.value()
+        start = self.nth_start_spin.value()
+        self.interleaved_selection_requested.emit(gap, start)
+
     def _on_plot_selected_clicked(self):
-        text = self.nth_trial_input.text().strip()
+        text = self.trial_selection_input.text().strip()
         if not text:
+            # Emit reset if empty
+            self.trial_selection_reset_requested.emit()
             return
 
-        text_start = self.start_trial_input.text().strip()
-
-        try:
-            n = int(text)
-            start_idx = int(text_start) if text_start else 0
-
-            if n >= 0 and start_idx >= 0:
-                self.trial_selection_requested.emit(n, start_idx)
-        except ValueError:
-            pass
+        self.trial_selection_requested.emit(text)
 
     def _update_visibility(self):
         # Toggle buttons based on mode if needed

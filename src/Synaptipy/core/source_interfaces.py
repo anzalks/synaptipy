@@ -1,5 +1,5 @@
 # src/Synaptipy/core/source_interfaces.py
-from typing import Protocol, Optional, Any, Dict
+from typing import Any, Dict, Optional, Protocol
 
 import numpy as np
 
@@ -15,9 +15,7 @@ class SourceHandle(Protocol):
         """Returns a string identifier for the source (e.g., file path)."""
         ...
 
-    def load_channel_data(
-        self, channel_id: str, trial_index: int
-    ) -> Optional[np.ndarray]:
+    def load_channel_data(self, channel_id: str, trial_index: int) -> Optional[np.ndarray]:
         """Loads data for a specific channel and trial index."""
         ...
 

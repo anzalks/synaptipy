@@ -1,10 +1,12 @@
 # tests/gui/test_metadata_driven_tab.py
+from unittest.mock import MagicMock
+
 import pytest
 from PySide6 import QtWidgets
+
 from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.application.gui.ui_generator import ParameterWidgetGenerator, FlexibleDoubleSpinBox
+from Synaptipy.application.gui.ui_generator import FlexibleDoubleSpinBox, ParameterWidgetGenerator
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from unittest.mock import MagicMock
 
 
 # Register a dummy analysis for testing - MOVED TO FIXTURE
@@ -88,6 +90,7 @@ def test_parameter_gathering(test_tab):
 # FlexibleDoubleSpinBox tests
 # ---------------------------------------------------------------------------
 
+
 def test_flexible_spinbox_is_subclass_of_double_spinbox(qtbot):
     """FlexibleDoubleSpinBox is-a QDoubleSpinBox (existing isinstance checks still pass)."""
     sb = FlexibleDoubleSpinBox()
@@ -138,6 +141,7 @@ def test_generated_float_widget_is_flexible(qtbot):
 # Param-based visibility tests
 # ---------------------------------------------------------------------------
 
+
 def test_param_based_visibility_in_generator(qtbot):
     """visible_when with 'param' key hides/shows dependent widgets correctly."""
     container = QtWidgets.QWidget()
@@ -178,12 +182,12 @@ def test_param_based_visibility_in_generator(qtbot):
 # Interactive mode spinbox disabling
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def rin_analysis_registered():
     """Ensure rin_analysis is registered (it is by default via imports)."""
-    # The rin_analysis is registered in intrinsic_properties via the @register decorator.
-    # Importing the module is enough.
-    import Synaptipy.core.analysis.intrinsic_properties  # noqa: F401
+    import Synaptipy.core.analysis.passive_properties  # noqa: F401
+
     yield
 
 
@@ -232,3 +236,33 @@ def test_manual_mode_enables_spinboxes(rin_tab):
             w = widgets.get(key)
             if w is not None and hasattr(w, "isReadOnly"):
                 assert not w.isReadOnly(), f"Widget '{key}' should be writable in Manual mode"
+
+
+# ---------------------------------------------------------------------------
+# Intrinsic analysis with missing data raises or returns gracefully
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "analysis_name",
+    ["tau_analysis", "sag_ratio_analysis", "rin_analysis"],
+)
+def test_intrinsic_analysis_with_empty_data_raises_or_returns(qtbot, monkeypatch, analysis_name):
+    """Tau, Sag, and Rin raise or return a dict (not crash silently) when data dict is empty."""
+    monkeypatch.setattr(
+        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
+        MagicMock(),
+    )
+    import Synaptipy.core.analysis.passive_properties  # noqa: F401
+
+    neo_adapter = MagicMock()
+    tab = MetadataDrivenAnalysisTab(analysis_name, neo_adapter)
+    qtbot.addWidget(tab)
+    params = {}
+    data = {}  # missing trace arrays
+    try:
+        out = tab._execute_core_analysis(params, data)
+        # If it returns rather than raising, it must be None or a dict
+        assert out is None or isinstance(out, dict), f"_execute_core_analysis returned unexpected type {type(out)!r}"
+    except (KeyError, ValueError, TypeError):
+        pass  # expected — missing data should yield a clear error, not a silent one

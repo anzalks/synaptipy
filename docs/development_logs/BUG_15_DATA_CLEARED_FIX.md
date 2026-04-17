@@ -1,7 +1,7 @@
 # Bug 15: `_current_plot_data` Cleared After Being Set
 
-**Date**: November 17, 2025  
-**Severity**: CRITICAL  
+**Date**: November 17, 2025
+**Severity**: CRITICAL
 **Impact**: All analysis tabs showed "Please load and plot data before running analysis" even after data was loaded
 
 ---
@@ -12,21 +12,21 @@ After refactoring, all analysis tabs (Event Detection, RMP, Spike) were showing 
 > **"Please load and plot data before running analysis."**
 
 Even though:
-- ✅ Files were successfully loaded
-- ✅ Data was successfully plotted (log shows "Successfully plotted Average from channel 0")
-- ✅ `_current_plot_data` was set by the base class
+- Files were successfully loaded
+- Data was successfully plotted (log shows "Successfully plotted Average from channel 0")
+- `_current_plot_data` was set by the base class
 
 ### Root Cause
 
 The refactoring introduced a **call order bug**:
 
 1. **Base class** (`base.py`):
-   - `_on_analysis_item_selected()` → calls `_populate_channel_and_source_comboboxes()`
-   - Which calls `_plot_selected_data()` → **sets `_current_plot_data`** ✅
-   - Then calls `_update_ui_for_selected_item()` (subclass method)
+ - `_on_analysis_item_selected()` → calls `_populate_channel_and_source_comboboxes()`
+ - Which calls `_plot_selected_data()` → **sets `_current_plot_data`**
+ - Then calls `_update_ui_for_selected_item()` (subclass method)
 
 2. **Subclasses** (Event Detection, RMP, Spike):
-   - `_update_ui_for_selected_item()` → **clears `_current_plot_data = None`** ❌
+ - `_update_ui_for_selected_item()` → **clears `_current_plot_data = None`**
 
 **Result**: Data was set, then immediately cleared, causing analysis to fail!
 
@@ -47,22 +47,22 @@ Removed the lines that clear `_current_plot_data` from `_update_ui_for_selected_
 **Before** (WRONG):
 ```python
 def _update_ui_for_selected_item(self):
-    log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
-    
-    # Clear previous results
-    self._current_plot_data = None  # ❌ This clears data that base class just set!
-    if self.mini_results_textedit:
-        self.mini_results_textedit.setText("")
+ log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
+
+ # Clear previous results
+ self._current_plot_data = None # This clears data that base class just set!
+ if self.mini_results_textedit:
+ self.mini_results_textedit.setText("")
 ```
 
 **After** (CORRECT):
 ```python
 def _update_ui_for_selected_item(self):
-    log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
-    
-    # Clear previous results (but NOT _current_plot_data - base class manages it)
-    if self.mini_results_textedit:  # ✅ No longer clearing _current_plot_data
-        self.mini_results_textedit.setText("")
+ log.debug(f"{self.get_display_name()}: Updating UI for selected item index {self._selected_item_index}")
+
+ # Clear previous results (but NOT _current_plot_data - base class manages it)
+ if self.mini_results_textedit: # No longer clearing _current_plot_data
+ self.mini_results_textedit.setText("")
 ```
 
 ---
@@ -84,12 +84,12 @@ During refactoring, the responsibility for managing `_current_plot_data` was mov
 
 ## Verification
 
-✅ All files compile without errors  
-✅ All tests pass (12/12)  
-✅ No linting issues  
-✅ Event Detection tab can now run analysis  
-✅ RMP tab can now run analysis  
-✅ Spike tab can now run analysis
+ All files compile without errors
+ All tests pass (12/12)
+ No linting issues
+ Event Detection tab can now run analysis
+ RMP tab can now run analysis
+ Spike tab can now run analysis
 
 ---
 
@@ -97,21 +97,21 @@ During refactoring, the responsibility for managing `_current_plot_data` was mov
 
 ### 1. Ownership of Data Structures
 When refactoring to move data management to a base class:
-- ✅ Clearly document which attributes are managed by base class
-- ✅ Remove all subclass code that manipulates those attributes
-- ✅ Add comments explaining the ownership
+- Clearly document which attributes are managed by base class
+- Remove all subclass code that manipulates those attributes
+- Add comments explaining the ownership
 
 ### 2. Call Order Matters
 When base class calls subclass methods:
-- ✅ Be aware of what data the base class sets before calling subclass
-- ✅ Don't clear data that was just set by the base class
-- ✅ Test the actual call order, not just individual methods
+- Be aware of what data the base class sets before calling subclass
+- Don't clear data that was just set by the base class
+- Test the actual call order, not just individual methods
 
 ### 3. Cleanup During Refactoring
 When removing old code:
-- ✅ Search for all references to moved attributes
-- ✅ Remove ALL code that manipulates those attributes
-- ✅ Don't leave "just in case" code that clears things
+- Search for all references to moved attributes
+- Remove ALL code that manipulates those attributes
+- Don't leave "just in case" code that clears things
 
 ---
 
@@ -129,7 +129,7 @@ Repeat for RMP and Spike tabs - all should work now!
 
 ---
 
-**Status**: ✅ FIXED AND VERIFIED
+**Status**: FIXED AND VERIFIED
 
 **Total Bugs Fixed**: 15
 

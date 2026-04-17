@@ -4,22 +4,28 @@
 Exporter for saving Recording data to the NWB:N 2.0 format.
 Utilizes metadata extracted by NeoAdapter and stored in data_model objects.
 """
+
 __author__ = "Anzal K Shahul"
 __copyright__ = "Copyright 2024-, Anzal K Shahul"
 __maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
 import logging
-from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 
 # Ensure pynwb is installed: pip install pynwb
 try:
     from pynwb import NWBHDF5IO, NWBFile
-    from pynwb.icephys import PatchClampSeries, IntracellularElectrode
+    from pynwb.icephys import (
+        CurrentClampSeries,
+        IntracellularElectrode,
+        PatchClampSeries,
+        VoltageClampSeries,
+    )
 
     PYNWB_AVAILABLE = True
 except ImportError:
@@ -28,35 +34,50 @@ except ImportError:
     # any of these classes would be instantiated.
     log_fallback = logging.getLogger(__name__)
     log_fallback.warning(
-        "pynwb library not found. NWB Export functionality will be disabled. "
-        "Install it with: pip install pynwb"
+        "pynwb library not found. NWB Export functionality will be disabled. " "Install it with: pip install pynwb"
     )
     PYNWB_AVAILABLE = False
 
     class NWBHDF5IO:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class NWBFile:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class PatchClampSeries:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
+
+    class CurrentClampSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
+
+    class VoltageClampSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class IntracellularElectrode:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
+
         def __init__(self, *args, **kwargs):
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
 
 # Import from our package structure using relative paths
 try:
-    from ...core.data_model import Recording, Channel
+    from ...core.data_model import Channel, Recording
     from ...shared.error_handling import ExportError
 except ImportError:
     # Fallback for standalone execution or if package structure isn't fully resolved
@@ -65,14 +86,17 @@ except ImportError:
 
     class Recording:  # type: ignore[no-redef]
         """Sentinel: package imports not resolved."""
+
         pass
 
     class Channel:  # type: ignore[no-redef]
         """Sentinel: package imports not resolved."""
+
         pass
 
     class ExportError(IOError):  # type: ignore[no-redef]
         """Sentinel: package imports not resolved."""
+
         pass
 
 
@@ -110,6 +134,20 @@ class NWBExporter:
             raise TypeError("Invalid 'recording' object provided to NWBExporter.")
         if not hasattr(recording, "channels") or not isinstance(recording.channels, dict):
             raise ValueError("Recording object is missing 'channels' dictionary or is not a dictionary.")
+
+        # --- Inject required metadata defaults for DANDI compliance ---
+        # Subject ID and Species are required by NWB/DANDI validators.
+        if not session_metadata.get("subject_id"):
+            session_metadata = dict(session_metadata)  # avoid mutating caller's dict
+            session_metadata.setdefault("subject_id", "unknown_subject")
+            log.warning("NWB export: 'subject_id' not provided; defaulting to 'unknown_subject'.")
+        if not session_metadata.get("species"):
+            session_metadata.setdefault("species", "unknown species")
+            log.warning("NWB export: 'species' not provided; defaulting to 'unknown species'.")
+        if not session_metadata.get("device_name"):
+            session_metadata = dict(session_metadata)
+            session_metadata.setdefault("device_name", "Amplifier")
+            log.warning("NWB export: 'device_name' not provided; defaulting to 'Amplifier'.")
 
         # --- Validate Metadata & Prepare NWBFile ---
         required_keys = ["session_description", "identifier", "session_start_time"]
@@ -260,38 +298,64 @@ class NWBExporter:
 
                     units = getattr(channel, "units", "unknown").lower()
 
-                    # Convert common units to SI for NWB (V, A) ?
-                    # PyNWB expects SI units generally (Volts, Amps).
-                    # !!! CRITICAL: Neo/Synaptipy usually keeps data in mV/pA.
-                    # We should ideally convert or set the unit string correctly.
-                    # If we set 'unit="mV"', PyNWB handles it? Yes, it accepts string units.
+                    # --- SI unit conversion and series class selection ---
+                    # NWB best practice: store data in SI (volts, amperes).
+                    # Synaptipy/Neo typically keeps data in mV or pA.
+                    # We convert to SI and record the conversion factor.
+                    export_data = trial_data.copy().astype(np.float64)
+                    conversion = 1.0
 
-                    final_units = getattr(channel, "units", "unknown")
+                    # Select the appropriate NWB series class based on
+                    # channel units, which indicate the clamp mode:
+                    #   voltage units (mV, V) → CurrentClampSeries
+                    #   current units (pA, nA, A) → VoltageClampSeries
+                    SeriesClass = PatchClampSeries  # fallback
 
-                    # Decide Class based on units if possible
-                    _SeriesClass = PatchClampSeries  # noqa: F841
-                    if "v" in units:  # likely Voltage -> CurrentClampSeries (records V)
-                        pass  # PyNWB structure is complex: CurrentClampSeries stores MEASURED VOLTAGE in 'data'
-                        # For simplicity/safety, sticking to parent PatchClampSeries is often better unless we are SURE
-                        # of clamp mode.
-                        # However, NWB guidelines prefer specific classes.
-                        # Let's stick to PatchClampSeries to avoid validation errors if we misuse the specific ones
-                        # without full clamp params (Series resistance etc)
+                    if units in ("mv", "millivolt", "millivolts"):
+                        export_data = export_data * 1e-3  # mV → V
+                        conversion = 1e-3
+                        final_units = "volts"
+                        SeriesClass = CurrentClampSeries
+                    elif units in ("v", "volt", "volts"):
+                        final_units = "volts"
+                        SeriesClass = CurrentClampSeries
+                    elif units in ("pa", "picoampere", "picoamperes"):
+                        export_data = export_data * 1e-12  # pA → A
+                        conversion = 1e-12
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    elif units in ("na", "nanoampere", "nanoamperes"):
+                        export_data = export_data * 1e-9  # nA → A
+                        conversion = 1e-9
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    elif units in ("a", "ampere", "amperes"):
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    else:
+                        final_units = getattr(channel, "units", "unknown")
+                        log.warning(
+                            "Unrecognised channel units '%s' for '%s'. " "Using generic PatchClampSeries.",
+                            units,
+                            channel.name,
+                        )
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
 
                     try:
-                        time_series = PatchClampSeries(
+                        series_kwargs = dict(
                             name=ts_name,
                             description=ts_desc,
-                            data=trial_data,
+                            data=export_data,
                             unit=final_units,
                             electrode=ic_electrode,
                             rate=float(channel_rate) if channel_rate else 1000.0,
                             starting_time=float(getattr(channel, "t_start", 0.0)),
-                            gain=1.0,  # Assumed data is already scaled
+                            gain=1.0,
                             sweep_number=np.uint64(trial_idx),
+                            conversion=conversion,
                         )
+                        time_series = SeriesClass(**series_kwargs)
                         nwbfile.add_acquisition(time_series)
                     except Exception as e_ts:
                         log.error(f"Failed to add series '{ts_name}': {e_ts}")
@@ -306,6 +370,30 @@ class NWBExporter:
             log.debug(f"Writing NWB to: {output_path}")
             with NWBHDF5IO(str(output_path), "w") as io:
                 io.write(nwbfile)
+
+            # --- pynwb post-write validation ---
+            # Validate the written file to flag DANDI-compliance issues.
+            # Done after the write so that container_source is already set
+            # on the nwbfile object (avoids "Cannot change container_source" error).
+            try:
+                from pynwb import validate as pynwb_validate
+
+                with NWBHDF5IO(str(output_path), "r") as _io_val:
+                    _validation_errors = pynwb_validate(io=_io_val)
+
+                if _validation_errors:
+                    err_lines = "\n  ".join(str(e) for e in _validation_errors)
+                    log.warning(
+                        "NWB validation found %d issue(s) — file may not be DANDI-compliant:\n  %s",
+                        len(_validation_errors),
+                        err_lines,
+                    )
+                else:
+                    log.info("NWB validation passed (0 errors).")
+            except ImportError:
+                log.debug("pynwb.validate not available; skipping post-write validation.")
+            except Exception as exc_val:
+                log.warning("NWB validation step raised an unexpected error: %s", exc_val)
 
             log.info("NWB export complete.")
 

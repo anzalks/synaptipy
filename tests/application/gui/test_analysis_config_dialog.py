@@ -1,5 +1,6 @@
 # tests/application/gui/test_analysis_config_dialog.py
 import pytest
+
 from Synaptipy.application.gui.analysis_config_dialog import AnalysisConfigDialog
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
@@ -17,13 +18,14 @@ def mock_registry(monkeypatch):
         "test_analysis": {
             "ui_params": [
                 {"name": "param1", "type": "float", "default": 1.0},
-                {"name": "param2", "type": "int", "default": 10}
+                {"name": "param2", "type": "int", "default": 10},
             ],
-            "type": "analysis"
+            "type": "analysis",
         }
     }
 
     import copy
+
     AnalysisRegistry._metadata = copy.deepcopy(test_meta)
     AnalysisRegistry._original_metadata = copy.deepcopy(test_meta)
 

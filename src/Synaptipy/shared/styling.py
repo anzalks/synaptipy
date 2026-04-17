@@ -9,13 +9,16 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
-from PySide6 import QtGui, QtCore, QtWidgets
-import pyqtgraph as pg
 import logging
+
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from .zoom_theme import (
     apply_theme_to_plot_widget,
-    apply_theme_with_custom_selection as customize_viewbox_selection_colors,
+)
+from .zoom_theme import apply_theme_with_custom_selection as customize_viewbox_selection_colors
+from .zoom_theme import (
     get_system_accent_color,
 )
 
@@ -217,7 +220,8 @@ def _configure_grid_z_order_safe(plot_widget):  # noqa: C901
 def get_grid_pen():
     """Get pen for grid lines."""
     try:
-        from .plot_customization import get_grid_pen as get_customized_grid_pen, is_grid_enabled
+        from .plot_customization import get_grid_pen as get_customized_grid_pen
+        from .plot_customization import is_grid_enabled
 
         if is_grid_enabled():
             return get_customized_grid_pen()

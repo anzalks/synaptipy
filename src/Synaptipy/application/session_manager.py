@@ -1,9 +1,10 @@
 # src/Synaptipy/application/session_manager.py
 
-from PySide6.QtCore import QObject, Signal
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from PySide6.QtCore import QObject, Signal
 
 # We import Recording only for type hinting if possible.
 from Synaptipy.core.data_model import Recording
@@ -25,6 +26,9 @@ class SessionManager(QObject):
     global_settings_changed = Signal(dict)  # Emits Dict[str, Any]
     preprocessing_settings_changed = Signal(object)  # Emits preprocessing settings dict or None
     file_context_changed = Signal(list, int)  # Emits file_list, current_index
+    # Emitted when performance preferences change (max_cpu_cores, max_ram_allocation_gb).
+    # Subscribers (e.g. BatchAnalysisEngine) can call update_performance_settings() immediately.
+    preferences_changed = Signal(dict)  # Emits performance settings dict
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -38,12 +42,23 @@ class SessionManager(QObject):
         super().__init__()
         self._current_recording: Optional[Recording] = None
         self._selected_analysis_items: List[Dict[str, Any]] = []
-        self._global_settings: Dict[str, Any] = {}
+        self._global_settings: Dict[str, Any] = {"liquid_junction_potential_mv": 0.0}
         self._preprocessing_settings: Optional[Dict[str, Any]] = None
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
+        self._performance_settings: Dict[str, Any] = {"max_cpu_cores": 1, "max_ram_allocation_gb": 4.0}
         self._initialized = True
         log.debug("SessionManager initialized.")
+
+    @property
+    def liquid_junction_potential_mv(self) -> float:
+        """Global Liquid Junction Potential correction (mV). Default 0.0."""
+        return float(self._global_settings.get("liquid_junction_potential_mv", 0.0))
+
+    @liquid_junction_potential_mv.setter
+    def liquid_junction_potential_mv(self, value: float) -> None:
+        """Set the global LJP correction and emit global_settings_changed."""
+        self.update_global_setting("liquid_junction_potential_mv", float(value))
 
     @property
     def current_recording(self) -> Optional[Recording]:
@@ -122,31 +137,31 @@ class SessionManager(QObject):
             return
 
         # Check if this is a slot-based settings dict or a single step
-        if 'baseline' in settings or 'filters' in settings:
+        if "baseline" in settings or "filters" in settings:
             # Already in slot format
             self._preprocessing_settings = settings
         else:
             # Single step format - merge into slots
-            step_type = settings.get('type')
+            step_type = settings.get("type")
             if self._preprocessing_settings is None:
                 self._preprocessing_settings = {}
 
-            if step_type == 'baseline':
-                self._preprocessing_settings['baseline'] = settings
-            elif step_type == 'filter':
+            if step_type == "baseline":
+                self._preprocessing_settings["baseline"] = settings
+            elif step_type == "filter":
                 # Multiple filters supported - keyed by method (lowpass, highpass, etc.)
-                filter_method = settings.get('method', 'unknown')
-                if 'filters' not in self._preprocessing_settings:
-                    self._preprocessing_settings['filters'] = {}
+                filter_method = settings.get("method", "unknown")
+                if "filters" not in self._preprocessing_settings:
+                    self._preprocessing_settings["filters"] = {}
                 # Same filter type replaces old one
-                self._preprocessing_settings['filters'][filter_method] = settings
+                self._preprocessing_settings["filters"][filter_method] = settings
             else:
                 log.warning(f"Unknown preprocessing step type: {step_type}")
                 return
 
         # Log current state
-        has_baseline = self._preprocessing_settings.get('baseline') is not None
-        filter_count = len(self._preprocessing_settings.get('filters', {}))
+        has_baseline = self._preprocessing_settings.get("baseline") is not None
+        filter_count = len(self._preprocessing_settings.get("filters", {}))
         log.debug(f"Preprocessing settings updated: baseline={has_baseline}, filters={filter_count}")
         self.preprocessing_settings_changed.emit(self._preprocessing_settings)
 
@@ -155,13 +170,13 @@ class SessionManager(QObject):
         if not self._preprocessing_settings:
             return
 
-        if slot_type == 'baseline' and 'baseline' in self._preprocessing_settings:
-            del self._preprocessing_settings['baseline']
-        elif slot_type == 'filter' and filter_method and 'filters' in self._preprocessing_settings:
-            if filter_method in self._preprocessing_settings['filters']:
-                del self._preprocessing_settings['filters'][filter_method]
-                if not self._preprocessing_settings['filters']:
-                    del self._preprocessing_settings['filters']
+        if slot_type == "baseline" and "baseline" in self._preprocessing_settings:
+            del self._preprocessing_settings["baseline"]
+        elif slot_type == "filter" and filter_method and "filters" in self._preprocessing_settings:
+            if filter_method in self._preprocessing_settings["filters"]:
+                del self._preprocessing_settings["filters"][filter_method]
+                if not self._preprocessing_settings["filters"]:
+                    del self._preprocessing_settings["filters"]
 
         if not self._preprocessing_settings:
             self._preprocessing_settings = None
@@ -178,10 +193,43 @@ class SessionManager(QObject):
         steps = []
         if self._preprocessing_settings:
             # Always apply baseline before filters
-            if 'baseline' in self._preprocessing_settings:
-                steps.append(self._preprocessing_settings['baseline'])
+            if "baseline" in self._preprocessing_settings:
+                steps.append(self._preprocessing_settings["baseline"])
             # Add all filters in sorted order for consistency
-            if 'filters' in self._preprocessing_settings:
-                for method in sorted(self._preprocessing_settings['filters'].keys()):
-                    steps.append(self._preprocessing_settings['filters'][method])
+            if "filters" in self._preprocessing_settings:
+                for method in sorted(self._preprocessing_settings["filters"].keys()):
+                    steps.append(self._preprocessing_settings["filters"][method])
         return steps
+
+    # ------------------------------------------------------------------
+    # Performance settings — pub/sub
+    # ------------------------------------------------------------------
+
+    @property
+    def performance_settings(self) -> Dict[str, Any]:
+        """Current performance settings (max_cpu_cores, max_ram_allocation_gb)."""
+        return dict(self._performance_settings)
+
+    @performance_settings.setter
+    def performance_settings(self, settings: Dict[str, Any]) -> None:
+        """Update performance settings and emit :attr:`preferences_changed`.
+
+        This is the *publisher* side of the pub/sub architecture.  Connecting
+        a :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`'s
+        :meth:`~BatchAnalysisEngine.update_performance_settings` slot to
+        :attr:`preferences_changed` keeps the engine in sync without restarts.
+
+        Args:
+            settings: Dict with any subset of ``"max_cpu_cores"`` (int) and
+                      ``"max_ram_allocation_gb"`` (float).
+        """
+        if not isinstance(settings, dict):
+            log.warning("performance_settings must be a dict, got %s.", type(settings).__name__)
+            return
+        self._performance_settings.update(settings)
+        log.debug("SessionManager: performance_settings updated: %s", self._performance_settings)
+        self.preferences_changed.emit(dict(self._performance_settings))
+
+    def emit_preferences_changed(self) -> None:
+        """Re-emit the current performance settings (e.g. on app start-up)."""
+        self.preferences_changed.emit(dict(self._performance_settings))

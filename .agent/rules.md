@@ -92,7 +92,16 @@ All analysis features must be split into two distinct parts:
 * **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures (0 errors allowed).
 * **Whitespace Hygiene**: Agents MUST inspect and fix all flake8 whitespace warnings (W293, W391, W504, etc.) before finishing a task. Codebase should be pristine.
 
-**2. Cross-Platform Compatibility (The "Windows" Rule)**
+**2. Mandatory Formatting and Test Gate (Zero-Tolerance)**
+* **Every Generation Cycle**: After writing or modifying any Python file, the Agent MUST automatically run:
+    1. `python -m black src/ tests/` — auto-format code
+    2. `python -m isort src/ tests/` — sort imports
+    3. `python -m flake8 src/ tests/` — verify linting compliance
+    4. `python scripts/run_tests.py` — execute full test suite
+* **Non-Negotiable Rule**: Do NOT stop generating or fixing until all four commands succeed with zero errors and all tests pass. If tests fail, automatically debug and fix regressions before moving on.
+* **Pre-Completion Checklist**: Before marking any task as complete, confirm that `scripts/run_tests.py` shows 100% pass rate.
+
+**3. Cross-Platform Compatibility (The "Windows" Rule)**
 * **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).
     * **Requirement**: ALWAYS use `pathlib.Path` (e.g., `Path("data") / filename`).
     * *Reason*: The CI pipeline runs on `windows-latest`, which will fail on hardcoded forward slashes.
@@ -160,6 +169,7 @@ All analysis features must be split into two distinct parts:
 *   **Lists**: Use `-` for unordered lists. Use `1.` only for genuinely ordered/sequential steps.
 *   **Inline code**: Wrap all command names, file paths, function names, class names, and identifiers in backticks.
 *   **No raw HTML** in Markdown files unless absolutely required (e.g., image sizing in .rst).
+*   **Typography Restriction**: NEVER use em dashes (`—`) or en dashes (`–`) in any prose, documentation, code, or changelogs. ALWAYS use standard ASCII hyphens (`-`). AI agents often default to em dashes when summarizing; you must actively avoid generating them.
 
 **5. Sphinx Build Compliance**
 *   **Zero Warnings Policy**: The Sphinx build (`make html` from `docs/`) MUST produce zero warnings. Any new documentation change must be validated by running the build.
@@ -173,7 +183,27 @@ All analysis features must be split into two distinct parts:
 *   **Consistent Terminology**: Use the exact project name `Synaptipy` (capital S, lowercase the rest) throughout. Do not use `SynaptiPy`, `synaptipy`, or `SYNAPTIPY` in prose (only in code/CLI contexts).
 *   **Cross-reference accuracy**: When one documentation file references another, verify the link target exists. Dead links are not acceptable.
 
-## VI. REFACTORING CONSTRAINTS
+## VI. UI ARCHITECTURE IMMUTABLE DIRECTIVES
+
+### RULE 1 - Strict 5-Pillar Analysis Tab Architecture
+All core analysis features MUST be rigidly mapped into exactly five UI subtabs:
+1. `Passive Properties`
+2. `Single Spike Kinetics`
+3. `Firing Dynamics`
+4. `Synaptic Events`
+5. `Evoked Responses`
+
+Any highly specialized or novel metric requested in the future MUST be implemented
+as a separate file in `examples/plugins/` and NEVER added to the core UI tabs.
+This rule is immutable: no exceptions are permitted without a documented architectural
+decision record approved by the lead developer.
+
+### RULE 2 - Popup Discipline
+Never trigger popup plots automatically upon file load. Analysis popups MUST ONLY
+trigger when the user explicitly navigates to the `Analyser` tab or clicks a
+dedicated plot button. Auto-popup on file load is forbidden without exception.
+
+## VII. REFACTORING CONSTRAINTS
 
 **1. "God Object" Prevention**
 *   **Class Limit**: No class should exceed **500 lines**. If it grows beyond, refactor into smaller, focused classes.

@@ -1,6 +1,6 @@
+from unittest.mock import MagicMock, patch  # noqa: F401
 
 import pytest
-from unittest.mock import MagicMock, patch  # noqa: F401
 from PySide6 import QtCore, QtWidgets  # noqa: F401
 
 from Synaptipy.application.gui.analyser_tab import AnalyserTab
@@ -40,7 +40,7 @@ def test_preprocessing_sync_after_confirmation(analyser_tab, session_manager, qt
     but ONLY if global preprocessing is already confirmed (which is the bug scenario).
     """
     # 1. Simulate initial confirmed state (e.g. user entered tab and accepted baseline)
-    initial_settings = {'baseline': {'method': 'mean'}}
+    initial_settings = {"baseline": {"method": "mean"}}
     analyser_tab._global_preprocessing_confirmed = True
     analyser_tab._global_preprocessing_settings = initial_settings
 
@@ -48,10 +48,7 @@ def test_preprocessing_sync_after_confirmation(analyser_tab, session_manager, qt
     assert analyser_tab.get_global_preprocessing() == initial_settings
 
     # 2. Simulate User adding a Filter in Explorer (updates SessionManager)
-    new_settings = {
-        'baseline': {'method': 'mean'},
-        'filters': {'notch': {'method': 'notch', 'freq': 50}}
-    }
+    new_settings = {"baseline": {"method": "mean"}, "filters": {"notch": {"method": "notch", "freq": 50}}}
 
     # Emit signal from SessionManager (simulating Explorer update)
     # The fix ensures AnalyserTab is listening to this signal
@@ -62,9 +59,9 @@ def test_preprocessing_sync_after_confirmation(analyser_tab, session_manager, qt
     current_settings = analyser_tab.get_global_preprocessing()
 
     assert current_settings is not None
-    assert 'filters' in current_settings
-    assert 'notch' in current_settings['filters']
-    assert current_settings['filters']['notch']['freq'] == 50
+    assert "filters" in current_settings
+    assert "notch" in current_settings["filters"]
+    assert current_settings["filters"]["notch"]["freq"] == 50
     assert current_settings == new_settings
 
 
@@ -76,7 +73,7 @@ def test_preprocessing_sync_before_confirmation(analyser_tab, session_manager, q
     analyser_tab._global_preprocessing_confirmed = False
     analyser_tab._global_preprocessing_settings = None
 
-    new_settings = {'baseline': {'method': 'mean'}}
+    new_settings = {"baseline": {"method": "mean"}}
 
     # Emit signal
     session_manager.preprocessing_settings = new_settings

@@ -1,14 +1,26 @@
 # src/Synaptipy/application/gui/analysis_worker.py
 # -*- coding: utf-8 -*-
 """
-Worker class for running analysis tasks in a background thread.
+Worker classes for running analysis tasks in background threads.
+
+Provides two worker types:
+
+* :class:`AnalysisWorker` — lightweight :class:`~PySide6.QtCore.QRunnable` for
+  arbitrary callables (existing API, unchanged).
+* :class:`BatchWorker` — :class:`~PySide6.QtCore.QThread` specialised for
+  :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine` batch runs.
+  Emits rich progress signals so the GUI remains 100% responsive.
 """
+
 import logging
-import traceback
 import sys
-from typing import Callable
+import traceback
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 from PySide6 import QtCore
+
+if TYPE_CHECKING:
+    from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 
 log = logging.getLogger(__name__)
 
@@ -65,3 +77,81 @@ class AnalysisWorker(QtCore.QRunnable):
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
             self.signals.finished.emit()  # Done
+
+
+# ---------------------------------------------------------------------------
+# BatchWorker — QThread for BatchAnalysisEngine
+# ---------------------------------------------------------------------------
+
+
+class BatchWorker(QtCore.QThread):
+    """QThread wrapper for :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`.
+
+    All signals are emitted on the **GUI thread** (Qt's cross-thread signal
+    delivery guarantee), so callers can safely update progress bars, log
+    widgets, and result tables without manual ``QMetaObject.invokeMethod`` calls.
+
+    Signals:
+        progress: ``(current: int, total: int, message: str)`` — fired for each
+            completed file, suitable for a :class:`~PySide6.QtWidgets.QProgressBar`.
+        batch_finished: ``pandas.DataFrame`` — the complete aggregated result table,
+            emitted once after all files are done (or after cancellation).
+        batch_error: ``str`` — error message if an unhandled exception escapes the
+            engine (individual file errors are captured inside the engine and end up
+            as error rows in *batch_finished*).
+    """
+
+    progress = QtCore.Signal(int, int, str)
+    batch_finished = QtCore.Signal(object)  # pandas.DataFrame
+    batch_error = QtCore.Signal(str)
+
+    def __init__(
+        self,
+        engine: "BatchAnalysisEngine",
+        files: List,
+        pipeline_config: List,
+        channel_filter: Optional[List[str]] = None,
+        parent: Optional[QtCore.QObject] = None,
+    ) -> None:
+        """
+        Initialise the batch worker.
+
+        Args:
+            engine: A configured :class:`BatchAnalysisEngine` instance.  Its
+                :attr:`~BatchAnalysisEngine.max_workers` attribute controls whether
+                the engine uses :class:`~concurrent.futures.ProcessPoolExecutor`
+                internally.
+            files: List of file paths or pre-loaded Recording objects.
+            pipeline_config: Analysis pipeline configuration (list of task dicts).
+            channel_filter: Optional list of channel names/IDs to restrict analysis to.
+            parent: Optional Qt parent object.
+        """
+        super().__init__(parent)
+        self._engine = engine
+        self._files = files
+        self._pipeline_config = pipeline_config
+        self._channel_filter = channel_filter
+
+    def run(self) -> None:
+        """Execute the batch run — called automatically by :meth:`QThread.start`."""
+        try:
+            df = self._engine.run_batch(
+                self._files,
+                self._pipeline_config,
+                progress_callback=self._on_progress,
+                channel_filter=self._channel_filter,
+            )
+            self.batch_finished.emit(df)
+        except Exception:  # noqa: BLE001
+            log.exception("BatchWorker: unhandled exception.")
+            self.batch_error.emit(traceback.format_exc())
+
+    def _on_progress(self, current: int, total: int, msg: str) -> None:
+        """Relay engine progress callbacks to the GUI via Qt signal."""
+        self.progress.emit(current, total, msg)
+
+    def cancel(self) -> None:
+        """Request the engine to stop after the current file completes."""
+        if self._engine is not None:
+            self._engine.cancel()
+            log.debug("BatchWorker: cancellation requested.")

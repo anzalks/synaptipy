@@ -1,0 +1,58 @@
+[
+  {
+    "name": "RMP (flat trace)",
+    "expected": -65.0,
+    "measured": -65.0010231224588,
+    "tolerance_pct": 1.0,
+    "unit": "mV",
+    "passed": true
+  },
+  {
+    "name": "Rin (step response)",
+    "expected": 200.0,
+    "measured": 200.0,
+    "tolerance_pct": 2.0,
+    "unit": "MOhm",
+    "passed": true
+  },
+  {
+    "name": "Spike count",
+    "expected": 4.0,
+    "measured": 4.0,
+    "tolerance_pct": 0.0,
+    "unit": "spikes",
+    "passed": true
+  },
+  {
+    "name": "Spike timing accuracy",
+    "expected": 0.0,
+    "measured": 0.04999999999999449,
+    "tolerance_pct": 100.0,
+    "unit": "ms",
+    "passed": true
+  },
+  {
+    "name": "Sag ratio",
+    "expected": 2.0,
+    "measured": 1.9999606718466614,
+    "tolerance_pct": 5.0,
+    "unit": "",
+    "passed": true
+  },
+  {
+    "name": "Artifact blanking (zero)",
+    "expected": 0.0,
+    "measured": 0.0,
+    "tolerance_pct": 0.0,
+    "unit": "mV",
+    "passed": true
+  },
+  {
+    "name": "Tau (exp decay)",
+    "expected": 0.03,
+    "measured": NaN,
+    "tolerance_pct": 15.0,
+    "unit": "s",
+    "passed": false
+  }
+]

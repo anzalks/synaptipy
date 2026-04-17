@@ -5,18 +5,19 @@ Tests for optogenetic synchronisation analysis, including the new
 multi-mode event-detection support (Spikes / Events (Threshold) /
 Events (Template)).
 """
+
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.optogenetics import (
+from Synaptipy.core.analysis.evoked_responses import (
     extract_ttl_epochs,
     run_opto_sync_wrapper,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ttl(sampling_rate: float, duration: float, onsets: list, pulse_duration: float = 0.01):
     """Create a synthetic TTL square-wave signal (0 / 5 V)."""
@@ -43,6 +44,7 @@ def _make_spikes_at(sampling_rate: float, duration: float, spike_times: list, am
 # ---------------------------------------------------------------------------
 # extract_ttl_epochs
 # ---------------------------------------------------------------------------
+
 
 class TestExtractTTLEpochs:
     def test_basic_onsets_offsets(self):
@@ -75,21 +77,21 @@ class TestExtractTTLEpochs:
 # run_opto_sync_wrapper – Spikes mode (default)
 # ---------------------------------------------------------------------------
 
+
 class TestOptoSyncWrapperSpikes:
     def test_returns_keys(self):
         sr = 10_000.0
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.2, 0.5, 0.8], pulse_duration=0.02)
         _, data = _make_spikes_at(sr, 1.0, spike_times=[0.205, 0.505, 0.805])
 
-        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes",
-                                       spike_threshold=-10.0)
+        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=-10.0)
 
-        assert "optical_latency_ms" in result
-        assert "response_probability" in result
-        assert "stimulus_count" in result
-        assert result["stimulus_count"] == 3
-        assert "event_times" in result
-        assert isinstance(result["event_times"], list)
+        assert "optical_latency_ms" in result["metrics"]
+        assert "response_probability" in result["metrics"]
+        assert "stimulus_count" in result["metrics"]
+        assert result["metrics"]["stimulus_count"] == 3
+        assert "event_times" in result["metrics"]
+        assert isinstance(result["metrics"]["event_times"], list)
 
     def test_response_probability_full(self):
         """All three stimuli get a response → probability == 1.0."""
@@ -98,10 +100,11 @@ class TestOptoSyncWrapperSpikes:
         # Spike 5 ms after each onset (within default 20 ms window)
         _, data = _make_spikes_at(sr, 1.0, spike_times=[0.205, 0.505, 0.805])
 
-        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes",
-                                       spike_threshold=-10.0, response_window_ms=20.0)
+        result = run_opto_sync_wrapper(
+            data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=-10.0, response_window_ms=20.0
+        )
 
-        assert result.get("response_probability") == pytest.approx(1.0, abs=0.01)
+        assert result["metrics"].get("response_probability") == pytest.approx(1.0, abs=0.01)
 
     def test_no_spikes(self):
         """No spikes → probability 0."""
@@ -109,16 +112,16 @@ class TestOptoSyncWrapperSpikes:
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.2, 0.5], pulse_duration=0.02)
         data = np.full_like(t, -65.0)  # flat – no spikes
 
-        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes",
-                                       spike_threshold=0.0)
+        result = run_opto_sync_wrapper(data, t, sr, ttl_data=ttl, event_detection_type="Spikes", spike_threshold=0.0)
 
         # Response probability should be 0
-        assert result.get("response_probability") == pytest.approx(0.0)
+        assert result["metrics"].get("response_probability") == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
 # run_opto_sync_wrapper – Events (Threshold) mode
 # ---------------------------------------------------------------------------
+
 
 class TestOptoSyncWrapperEventsThreshold:
     def test_returns_keys(self):
@@ -128,11 +131,13 @@ class TestOptoSyncWrapperEventsThreshold:
         data = np.zeros_like(t)
         for onset in [0.205, 0.505, 0.805]:
             idx = int(onset * sr)
-            width = int(0.010 * sr)   # 10 ms event
-            data[idx: idx + width] = np.linspace(0, -10, width)
+            width = int(0.010 * sr)  # 10 ms event
+            data[idx : idx + width] = np.linspace(0, -10, width)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Events (Threshold)",
             event_threshold=5.0,
@@ -141,9 +146,9 @@ class TestOptoSyncWrapperEventsThreshold:
             response_window_ms=40.0,
         )
 
-        assert "optical_latency_ms" in result
-        assert "stimulus_count" in result
-        assert result["stimulus_count"] == 3
+        assert "optical_latency_ms" in result["metrics"]
+        assert "stimulus_count" in result["metrics"]
+        assert result["metrics"]["stimulus_count"] == 3
 
     def test_event_count_key_present(self):
         sr = 10_000.0
@@ -151,20 +156,23 @@ class TestOptoSyncWrapperEventsThreshold:
         data = np.zeros_like(t)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Events (Threshold)",
             event_threshold=5.0,
         )
 
-        assert "event_count" in result
-        assert "event_times" in result
-        assert isinstance(result["event_times"], list)
+        assert "event_count" in result["metrics"]
+        assert "event_times" in result["metrics"]
+        assert isinstance(result["metrics"]["event_times"], list)
 
 
 # ---------------------------------------------------------------------------
 # run_opto_sync_wrapper – Events (Template) mode
 # ---------------------------------------------------------------------------
+
 
 class TestOptoSyncWrapperEventsTemplate:
     def test_returns_keys(self):
@@ -173,7 +181,9 @@ class TestOptoSyncWrapperEventsTemplate:
         data = np.zeros_like(t)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Events (Template)",
             template_tau_rise_ms=0.5,
@@ -182,8 +192,8 @@ class TestOptoSyncWrapperEventsTemplate:
             response_window_ms=30.0,
         )
 
-        assert "stimulus_count" in result
-        assert "event_count" in result
+        assert "stimulus_count" in result["metrics"]
+        assert "event_count" in result["metrics"]
 
     def test_unknown_type_falls_back_gracefully(self):
         """Unrecognised event_detection_type should not raise, just return no events."""
@@ -192,7 +202,9 @@ class TestOptoSyncWrapperEventsTemplate:
         data = np.zeros_like(t)
 
         result = run_opto_sync_wrapper(
-            data, t, sr,
+            data,
+            t,
+            sr,
             ttl_data=ttl,
             event_detection_type="Nonexistent Type",
         )
@@ -200,3 +212,94 @@ class TestOptoSyncWrapperEventsTemplate:
         # The analysis should complete (possibly with 0 events),
         # not raise an exception.
         assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# Failure-handling edge cases (Task 1 - adversarial tests)
+# ---------------------------------------------------------------------------
+
+
+class TestOptoSyncFailureHandling:
+    """Adversarial tests for 0% and 100% failure rates."""
+
+    def test_zero_percent_failure_rate(self):
+        """100 % success: all stimuli evoke a spike - Failure Count must be 0."""
+        from Synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
+
+        sr = 10_000.0
+        t, ttl = _make_ttl(sr, 1.0, onsets=[0.1, 0.4, 0.7], pulse_duration=0.02)
+        # Spike 5 ms after every onset
+        ap_times = np.array([0.105, 0.405, 0.705])
+        result = calculate_optogenetic_sync(ttl, ap_times, t, ttl_threshold=2.5, response_window_ms=20.0)
+
+        assert result.is_valid
+        assert result.stimulus_count == 3
+        assert result.success_count == 3
+        assert result.failure_count == 0
+        assert result.response_probability == pytest.approx(1.0)
+        # Latency and jitter must be finite (no NaN)
+        assert np.isfinite(result.optical_latency_ms)
+        assert np.isfinite(result.spike_jitter_ms)
+
+    def test_hundred_percent_failure_rate(self):
+        """0 % success: no spike detected after any stimulus."""
+        from Synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
+
+        sr = 10_000.0
+        t, ttl = _make_ttl(sr, 1.0, onsets=[0.1, 0.4, 0.7], pulse_duration=0.02)
+        # No spikes at all
+        ap_times = np.array([])
+        result = calculate_optogenetic_sync(ttl, ap_times, t, ttl_threshold=2.5, response_window_ms=20.0)
+
+        assert result.is_valid
+        assert result.stimulus_count == 3
+        assert result.success_count == 0
+        assert result.failure_count == 3
+        assert result.response_probability == pytest.approx(0.0)
+        # Latency and jitter must be NaN - not finite
+        assert np.isnan(result.optical_latency_ms)
+        assert np.isnan(result.spike_jitter_ms)
+
+    def test_partial_failure_rate(self):
+        """50% success: latency/jitter only computed over successful trials."""
+        from Synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
+
+        sr = 10_000.0
+        t, ttl = _make_ttl(sr, 1.0, onsets=[0.1, 0.5], pulse_duration=0.02)
+        # Only first stimulus gets a spike (10 ms latency)
+        ap_times = np.array([0.110])
+        result = calculate_optogenetic_sync(ttl, ap_times, t, ttl_threshold=2.5, response_window_ms=20.0)
+
+        assert result.is_valid
+        assert result.stimulus_count == 2
+        assert result.success_count == 1
+        assert result.failure_count == 1
+        assert result.response_probability == pytest.approx(0.5)
+        # Latency is valid (only calculated over the 1 successful trial)
+        assert np.isfinite(result.optical_latency_ms)
+
+    def test_wrapper_new_metric_keys(self):
+        """Wrapper dict must include Success Count, Failure Count, Response Probability (%)."""
+        sr = 10_000.0
+        t, ttl = _make_ttl(sr, 1.0, onsets=[0.2, 0.5], pulse_duration=0.02)
+        # One spike only (after first stimulus)
+        _, data = _make_spikes_at(sr, 1.0, spike_times=[0.205])
+
+        result = run_opto_sync_wrapper(
+            data,
+            t,
+            sr,
+            ttl_data=ttl,
+            event_detection_type="Spikes",
+            spike_threshold=-10.0,
+            response_window_ms=20.0,
+        )
+        metrics = result["metrics"]
+
+        assert "Success Count" in metrics
+        assert "Failure Count" in metrics
+        assert "Response Probability (%)" in metrics
+
+        assert metrics["Success Count"] == 1
+        assert metrics["Failure Count"] == 1
+        assert metrics["Response Probability (%)"] == pytest.approx(50.0, abs=1.0)

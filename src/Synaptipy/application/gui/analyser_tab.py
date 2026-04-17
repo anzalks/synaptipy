@@ -1,17 +1,18 @@
 # src/Synaptipy/application/gui/analyser_tab.py
 # (Keep imports: logging, pkgutil, importlib, Path, typing, PySide6, BaseAnalysisTab, ExplorerTab, Recording)
+import importlib
 import logging
 import pkgutil
-import importlib
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set
+from typing import Any, Dict, List, Optional, Set
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from Synaptipy.infrastructure.file_readers import NeoAdapter
-from .analysis_tabs.base import BaseAnalysisTab
 from Synaptipy.application.session_manager import SessionManager
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.shared.styling import style_button
+
+from .analysis_tabs.base import BaseAnalysisTab
 
 # from Synaptipy.application.gui.batch_dialog import BatchAnalysisDialog  # Imported locally to avoid circular imports?
 
@@ -124,23 +125,26 @@ class AnalyserTab(QtWidgets.QWidget):
         if settings is None:
             # Clear all
             self._global_preprocessing_settings = None
-        elif 'baseline' in settings or 'filters' in settings:
+            # Reset the confirmation flag so the popup can re-appear
+            # if preprocessing is later re-applied from the Explorer tab
+            self._global_preprocessing_confirmed = False
+        elif "baseline" in settings or "filters" in settings:
             # Already in slot format
             self._global_preprocessing_settings = settings
         else:
             # Single step - accumulate by type
-            step_type = settings.get('type')
+            step_type = settings.get("type")
             if self._global_preprocessing_settings is None:
                 self._global_preprocessing_settings = {}
 
-            if step_type == 'baseline':
-                self._global_preprocessing_settings['baseline'] = settings
-            elif step_type == 'filter':
-                filter_method = settings.get('method', 'unknown')
-                if 'filters' not in self._global_preprocessing_settings:
-                    self._global_preprocessing_settings['filters'] = {}
+            if step_type == "baseline":
+                self._global_preprocessing_settings["baseline"] = settings
+            elif step_type == "filter":
+                filter_method = settings.get("method", "unknown")
+                if "filters" not in self._global_preprocessing_settings:
+                    self._global_preprocessing_settings["filters"] = {}
                 # Same filter method replaces old one
-                self._global_preprocessing_settings['filters'][filter_method] = settings
+                self._global_preprocessing_settings["filters"][filter_method] = settings
 
         log.debug(f"Global preprocessing set: {self._global_preprocessing_settings is not None}")
 
@@ -407,8 +411,15 @@ class AnalyserTab(QtWidgets.QWidget):
             # Re-enable signals after all tabs are loaded
             self.sub_tab_widget.blockSignals(False)
         # --- NEW: Load Metadata-Driven Tabs for remaining registered analyses ---
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        # Import the full core.analysis package to trigger all @AnalysisRegistry.register
+        # decorators.  Importing only the registry sub-module (registry.py) is NOT
+        # enough — the individual analysis modules (basic_features, spike_analysis, …)
+        # must be executed so their decorators run and populate the registry.
+        # On Windows the import order never causes this package to be loaded earlier,
+        # so without this explicit import the registry is always empty at this point.
+        import Synaptipy.core.analysis  # noqa: F401 — side-effect: registers all built-in analyses
         from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
 
         registered_analyses = AnalysisRegistry.list_registered()
 
@@ -419,7 +430,36 @@ class AnalyserTab(QtWidgets.QWidget):
             if hasattr(tab, "get_covered_analysis_names"):
                 loaded_registry_names.update(tab.get_covered_analysis_names())
 
-        for analysis_name in registered_analyses:
+        # Enforce a fixed logical order for the core module tabs.
+        # Each entry is a MODULE-LEVEL aggregator tab that groups sub-analyses
+        # via a method_selector.  Child leaf registrations (e.g. spike_detection,
+        # phase_plane_analysis) are covered by get_covered_analysis_names() and
+        # must NOT appear here as standalone top-level tabs.
+        # The five pillars of the Synaptipy Analyser UI:
+        #   1. Passive Properties   → intrinsic membrane features
+        #   2. Spike Analysis       → single-spike kinetics & phase plane
+        #   3. Excitability         → firing dynamics & adaptation
+        #   4. Synaptic Events      → event detection methods
+        #   5. Evoked Responses     → optogenetics & paired-pulse
+        CORE_ORDER = [
+            "passive_properties",
+            "single_spike",
+            "firing_dynamics",
+            "synaptic_events",
+            "evoked_responses",
+        ]
+
+        def _tab_sort_key(name):
+            meta = AnalysisRegistry.get_metadata(name) or {}
+            has_selector = "method_selector" in meta
+            try:
+                core_rank = CORE_ORDER.index(name)
+            except ValueError:
+                # Not a core module: module-level non-core tabs before leaf tabs, then alpha
+                core_rank = len(CORE_ORDER) + (0 if has_selector else 1)
+            return (core_rank, name)
+
+        for analysis_name in sorted(registered_analyses, key=_tab_sort_key):
             if analysis_name not in loaded_registry_names:
                 log.debug(f"Loading metadata-driven tab for: {analysis_name}")
                 try:
@@ -429,6 +469,10 @@ class AnalyserTab(QtWidgets.QWidget):
                         settings_ref=self._settings,
                         parent=self,
                     )
+                    # Mark all names covered by this tab (self + method_selector children)
+                    # so they do not receive their own redundant tab.
+                    if hasattr(tab_instance, "get_covered_analysis_names"):
+                        loaded_registry_names.update(tab_instance.get_covered_analysis_names())
                     self.sub_tab_widget.addTab(tab_instance, tab_instance.get_display_name())
                     self._loaded_analysis_tabs.append(tab_instance)
 
@@ -450,6 +494,47 @@ class AnalyserTab(QtWidgets.QWidget):
                     log.debug(f"Injected global controls into first tab: {first_tab.get_display_name()}")
                 except Exception as e:
                     log.error(f"Failed to inject global controls into first tab: {e}", exc_info=True)
+
+    def rebuild_analysis_tabs(self):
+        """
+        Clear and rebuild the analysis sub-tabs after a plugin reload.
+
+        This method is called by the main window when the user toggles the
+        "Enable Custom Plugins" preference so that the UI reflects the new
+        registry state without requiring an application restart.
+        """
+        log.debug("Rebuilding analysis sub-tabs after plugin reload.")
+
+        # Mark every existing tab as unmounting so that any in-flight signals
+        # (e.g. debounce timers, currentChanged) exit quietly without popups.
+        for tab in self._loaded_analysis_tabs:
+            tab._unmounting = True
+
+        # Block signals on the tab widget so that iterative removeTab() calls
+        # do not emit currentChanged while half the tabs are already gone.
+        self.sub_tab_widget.blockSignals(True)
+        try:
+            while self.sub_tab_widget.count() > 0:
+                widget = self.sub_tab_widget.widget(0)
+                self.sub_tab_widget.removeTab(0)
+                if widget is not None:
+                    widget.deleteLater()
+        finally:
+            self.sub_tab_widget.blockSignals(False)
+
+        self._loaded_analysis_tabs = []
+
+        # Rebuild from the (now updated) registry
+        self._load_analysis_tabs()
+
+        # Re-apply current source items so the new tabs are populated
+        self.update_analysis_sources(self.session_manager.selected_analysis_items)
+
+        # Manually fire an update for the first tab so the screen refreshes.
+        if self.sub_tab_widget.count() > 0:
+            self._on_tab_changed(0)
+
+        log.debug("Analysis sub-tabs rebuilt successfully.")
 
     # --- Batch Analysis Handler ---
     @QtCore.Slot()
@@ -522,19 +607,21 @@ class AnalyserTab(QtWidgets.QWidget):
                         start_steps = []
                         if global_prep:
                             # Convert settings to steps
-                            if 'baseline' in global_prep:
+                            if "baseline" in global_prep:
                                 # Baseline is a step
                                 # Need to map 'method' to a registered function name
 
                                 # Assuming the 'method' key holds the registry name or something usable.
-                                start_steps.append({
-                                    "analysis": global_prep['baseline'].get("method_id", "baseline_subtraction"),
-                                    "scope": "all_trials",  # Preprocessing works on raw data usually?
-                                    "params": global_prep['baseline']
-                                })
+                                start_steps.append(
+                                    {
+                                        "analysis": global_prep["baseline"].get("method_id", "baseline_subtraction"),
+                                        "scope": "all_trials",  # Preprocessing works on raw data usually?
+                                        "params": global_prep["baseline"],
+                                    }
+                                )
 
-                            if 'filters' in global_prep:
-                                for method, settings in global_prep['filters'].items():
+                            if "filters" in global_prep:
+                                for method, settings in global_prep["filters"].items():
                                     # settings['method'] might be 'Lowpass'.
                                     # We need registered name 'lowpass_filter'.
                                     # This mapping is crucial.
@@ -546,17 +633,14 @@ class AnalyserTab(QtWidgets.QWidget):
                                     # But let's try to infer or use 'method_id' if present, else lowercase+underscore.
 
                                     analysis_name = settings.get(
-                                        "method_id", settings.get(
-                                            "method", "").lower().replace(
-                                            " ", "_"))
+                                        "method_id", settings.get("method", "").lower().replace(" ", "_")
+                                    )
                                     if "filter" not in analysis_name:
                                         analysis_name += "_filter"  # basic heuristic
 
-                                    start_steps.append({
-                                        "analysis": analysis_name,
-                                        "scope": "all_trials",
-                                        "params": settings
-                                    })
+                                    start_steps.append(
+                                        {"analysis": analysis_name, "scope": "all_trials", "params": settings}
+                                    )
 
                         if start_steps:
                             log.debug(f"Prepending {len(start_steps)} preprocessing steps to batch pipeline.")
@@ -741,10 +825,12 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Sync Zoom from Previous Tab ---
         if hasattr(self, "_last_active_tab") and self._last_active_tab and current_tab:
             try:
-                if (hasattr(self._last_active_tab, "plot_widget")
+                if (
+                    hasattr(self._last_active_tab, "plot_widget")
                     and self._last_active_tab.plot_widget
                     and hasattr(current_tab, "plot_widget")
-                        and current_tab.plot_widget):
+                    and current_tab.plot_widget
+                ):
 
                     # Sync X-Range (Time axis) only
                     # We assume X-axis is compatible (e.g. Time vs Time)
@@ -870,5 +956,6 @@ class AnalyserTab(QtWidgets.QWidget):
                 # self.window().statusBar().showMessage("Parameters reset.", 3000)
             else:
                 log.warning(f"Tab '{current_tab.get_display_name()}' does not support parameter reset.")
-                QtWidgets.QMessageBox.information(self, "Not Supported",
-                                                  f"Reset is not supported for {current_tab.get_display_name()}.")
+                QtWidgets.QMessageBox.information(
+                    self, "Not Supported", f"Reset is not supported for {current_tab.get_display_name()}."
+                )

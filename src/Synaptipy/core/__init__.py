@@ -7,7 +7,7 @@ electrophysiology concepts, independent of UI or infrastructure details.
 """
 
 # Expose the primary data model classes for easier import
-from .data_model import Recording, Channel, Experiment
+from .data_model import Channel, Experiment, Recording
 
 # Explicitly define the public API of this subpackage
 __all__ = [

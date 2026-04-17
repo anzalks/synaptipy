@@ -4,17 +4,51 @@
 - Python 3.10–3.12, PySide6 (Qt6), pyqtgraph, NumPy, SciPy
 - Tests use pytest + pytest-qt; CI runs on ubuntu/windows/macos × Python 3.10/3.11/3.12
 - Linting: `flake8 src/ tests/` with `.flake8` config (max-line-length=120, max-complexity=10)
+- Formatting: `black` (line-length=120, target-version=py310) and `isort` (profile=black)
+- CI enforces `black --check`, `isort --check`, and `flake8` — PRs that fail any of these are rejected
 
 ## Code style
 - Follow PEP 8; max line length 120 characters
+- All code must be formatted with `black` and imports sorted with `isort`
 - All public functions and classes must have docstrings
 - Use type hints throughout
 - Keep function complexity ≤ 10 (flake8 C901)
+- **Typography**: Strictly use standard hyphens (`-`). Never use em dashes (`—`) or en dashes (`–`) in code, documentation, or changelogs.
 
 ## Analysis registry pattern
 - New analysis functions are registered with `@AnalysisRegistry.register(name=..., ui_params=[...], plots=[...])`
 - `ui_params` entries drive the GUI automatically; use `visible_when: {"param": "...", "value": "..."}` for conditional visibility
 - Wrapper functions must return a plain `dict`; private keys (starting with `_`) are hidden from the results table
+
+### Registry import rule — DO NOT import only registry.py
+To populate the `AnalysisRegistry`, **import the full package**
+`import Synaptipy.core.analysis` (which triggers `__init__.py` → `from . import
+basic_features`, etc.).  **Never** rely on
+`from Synaptipy.core.analysis.registry import AnalysisRegistry` alone — that
+only imports the class and does NOT execute the analysis sub-modules' decorators.
+This was the root cause of the Windows bug where the Analyser tab showed 0 tabs
+while macOS showed 15 (on macOS the batch engine happened to be imported earlier
+via a different path, masking the issue).
+
+### Editable install must point to the active workspace
+`pip install -e .` stores the editable project location.  If the repo is cloned
+to a new directory, the old editable link still points to the previous path.
+Run `pip install -e .` from the new workspace to update.  Symptom: modules
+visible on disk (`capacitance.py`, `optogenetics.py`, `train_dynamics.py`) throw
+`ModuleNotFoundError` because Python resolves the package from the stale path.
+
+### Preprocessing reset must propagate globally
+`BaseAnalysisTab._handle_preprocessing_reset()` is connected to
+`PreprocessingWidget.preprocessing_reset_requested`.  When fired it must:
+1. Clear `_active_preprocessing_settings`, `_preprocessed_data`, and `pipeline`
+2. Call `preprocessing_widget.reset_ui()` to reset combo boxes to "None"
+3. Walk up to the parent `AnalyserTab` and call `set_global_preprocessing(None)`
+   so **all** sibling tabs also reset
+4. Clear `SessionManager().preprocessing_settings`
+5. Re-plot with raw data
+
+`apply_global_preprocessing(None)` (called on sibling tabs) must also call
+`preprocessing_widget.reset_ui()` so every tab's UI visually reflects the reset.
 
 ## CI / test rules — DO NOT VIOLATE
 
@@ -124,10 +158,115 @@ The mandatory sequence is:
      callbacks can fire; executing ensures AllViews/geometry caches stay consistent)
    - Win/Linux: `removePostedEvents()` (post-clear events already executed in step 3)
 
+## Explorer tab — GraphicsLayoutWidget rebuild rules
+
+### Fresh widget on every rebuild — DO NOT reuse via widget.clear()
+`ExplorerPlotCanvas.rebuild_plots()` creates a **new `GraphicsLayoutWidget`**
+and swaps it into the parent layout, then deletes the old widget via
+`deleteLater()`.  **Do not revert to calling `widget.clear()` + `addPlot()`
+on the same widget.**
+
+`widget.clear()` leaves Qt's internal scene graph in a broken state on Windows
+(PySide6 6.7.x + pyqtgraph 0.13.x).  Specifically:
+- `GraphicsLayout.removeItem()` calls `scene().removeItem()` for each PlotItem
+  and its border, then disconnects `geometryChanged`.
+- After clear, the viewport repaints once (showing nothing).
+- When new PlotItems are added, the scene tracks them but the viewport's
+  dirty-region heuristic (MinimalViewportUpdate) considers all regions clean
+  because the previous repaint covered the entire viewport.
+- Result: data items exist in the scene but are never painted — plots appear
+  blank despite `listDataItems()` confirming items are present.
+
+Switching to `FullViewportUpdate` mode partially helps but does not fix all
+cases (stale `PlotItem.autoBtn = None` callbacks from `PlotItem.close()`
+fire during `processEvents()` and crash).
+
+The only reliable fix is a fresh widget per rebuild cycle.  The performance
+cost is negligible (widget creation is < 5 ms).
+
+**Implementation checklist for rebuild_plots():**
+1. Find old widget's position in parent `QGridLayout`
+2. Clear Python refs (`plot_items`, `plot_widgets`, etc.) BEFORE deleting
+3. Create new widget via `SynaptipyPlotFactory.create_graphics_layout()`
+4. `removeWidget(old)` → `old.hide()` → `old.setParent(None)` → `old.deleteLater()`
+5. `addWidget(new, row, col, rspan, cspan)` at the same grid position
+6. Assign `self.widget = new`
+
+### Disable ViewBox auto-range in Explorer plots
+After creating each PlotItem in `rebuild_plots()`, call
+`plot_item.getViewBox().disableAutoRange()` **immediately**.  The Explorer
+manages view ranges explicitly via `_reset_view()`.
+
+If auto-range is left enabled (the pyqtgraph default), ViewBox queues a
+**deferred** `updateAutoRange()` callback (`QTimer.singleShot(0, ...)`) every
+time `plot_item.plot()` adds data.  These deferred callbacks fire *after*
+`_reset_view()` has already set the correct X/Y ranges, overriding them with
+a full-data auto-range.  Symptoms: data appears "shrunk" or the X-axis shows
+a much wider range than expected (e.g. −25 to +17 instead of 0 to 17).
+
+### Compute base_x_range from actual time vectors
+`_calculate_base_ranges()` must derive `base_x_range` from
+`channel.get_relative_time_vector(0)` (which always starts at 0), **not** from
+`recording.duration` alone.  Some ABF protocols set a negative `t_start` at the
+Neo level; `recording.duration` may reflect the full sweep length while the
+plotted time axis starts at 0.
+
+### Disconnect old ViewBox signals before widget replacement — DO NOT REMOVE
+`ExplorerPlotCanvas.rebuild_plots()` disconnects `sigXRangeChanged`,
+`sigYRangeChanged`, and `sigResized` on every old ViewBox **before** clearing
+`plot_items` and calling `deleteLater()` on the old widget.
+
+Without this, old ViewBoxes survive until the next event-loop iteration (Qt's
+`deleteLater()` semantics) and can still emit signals.  Those signals propagate
+through the canvas's `x_range_changed` → `_on_vb_x_range_changed` chain and
+corrupt the slider/scrollbar values for the NEW recording.  This was the root
+cause of the "X-axis shifted right" bug when cycling files.
+
+### _reset_view() must block X-link propagation — DO NOT REMOVE
+`_reset_view()` calls `vb.blockLink(True)` on **all** ViewBoxes before setting
+X/Y ranges, then `vb.blockLink(False)` after.  Without this,
+`linkedViewChanged()` recalculates X ranges from screen-geometry pixel offsets
+between stacked ViewBoxes (which differ due to Y-axis label widths), producing
+shifted X ranges.
+
+### Y range must span all trials, not just trial 0
+`_compute_channel_y_range()` samples up to 50 evenly-spaced trials (not only
+trial 0) to compute the global min/max.  Trial 0 may be at resting potential
+(−65 mV) while other trials contain action potentials (+40 mV); using only
+trial 0 produces a Y range too narrow for overlay mode.
+
+### Deferred initial reset uses generation counter
+`_deferred_initial_reset(generation)` is scheduled via `QTimer.singleShot(0, ...)`
+**only** for multichannel recordings and only when no view state restoration is
+pending.  It checks `generation == self._display_generation` to discard stale
+callbacks from previous file loads.  Without this guard, a deferred reset from
+file A can fire after file B has already been loaded, overwriting B's correct
+ranges.
+
+### Downsampling defaults — preserve signal fidelity
+- Always use `method="peak"` (never `"subsample"` which drops every Nth point
+  and loses spikes/transients).
+- `autoDownsampleThreshold` should be ≥ 5000 (pyqtgraph default).  Values
+  below 5000 visibly degrade electrophysiology traces at typical zoom levels.
+- `clipToView` should only be `True` when downsampling is enabled; otherwise
+  it clamps data outside the current viewport and defeats zoom-out.
+
 ## numpy / scipy rules
 - `np.searchsorted` only accepts `side="left"` or `side="right"` — not `"nearest"`.
   To find the nearest index use: insert with `"left"`, then compare `idx-1` vs `idx`.
 - Do not use deprecated numpy APIs (e.g. `np.bool`, `np.int` — use built-ins).
+
+## Mandatory formatting and test gate — DO NOT SKIP
+After **every** code change run these four commands in order and fix all errors
+before declaring done:
+```bash
+black src/ tests/
+isort src/ tests/
+flake8 src/ tests/
+python scripts/run_tests.py
+```
+Do not stop generating or fixing until all four commands succeed with zero
+errors and all tests pass.
 
 ## Testing rules
 - Every new analysis function needs a test in `tests/core/`

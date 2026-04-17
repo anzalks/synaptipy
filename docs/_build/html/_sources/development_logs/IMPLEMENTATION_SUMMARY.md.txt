@@ -1,29 +1,29 @@
 # Performance Optimizations - Implementation Summary
 
-**Date:** October 20, 2025  
-**Author:** Anzal (anzal.ks@gmail.com)  
+**Date:** October 20, 2025
+**Author:** Anzal (anzal.ks@gmail.com)
 **Branch:** zoom_customisation_from_system_theme
 
-## ✅ All Implementations Complete
+## All Implementations Complete
 
-### Part 1: Force Opaque Trials Feature ✅
+### Part 1: Force Opaque Trials Feature
 
 **Purpose:** Disable transparency for single trials to significantly improve rendering performance.
 
 **Files Modified:**
 1. `src/Synaptipy/shared/plot_customization.py`
-   - Added global flag `_force_opaque_trials` (line 21)
-   - Added `set_force_opaque_trials()` and `get_force_opaque_trials()` helpers (lines 23-35)
-   - Modified `get_single_trial_pen()` to override alpha when enabled (lines 260-263)
+ - Added global flag `_force_opaque_trials` (line 21)
+ - Added `set_force_opaque_trials()` and `get_force_opaque_trials()` helpers (lines 23-35)
+ - Modified `get_single_trial_pen()` to override alpha when enabled (lines 260-263)
 
 2. `src/Synaptipy/application/gui/plot_customization_dialog.py`
-   - Added Performance GroupBox with checkbox (lines 75-89)
-   - Added `_on_force_opaque_changed()` handler (lines 487-494)
+ - Added Performance GroupBox with checkbox (lines 75-89)
+ - Added `_on_force_opaque_changed()` handler (lines 487-494)
 
 3. `src/Synaptipy/application/gui/main_window.py`
-   - Enhanced `_on_plot_preferences_updated()` with logging (lines 278-280)
+ - Enhanced `_on_plot_preferences_updated()` with logging (lines 278-280)
 
-### Part 2: Interaction Debouncing ✅
+### Part 2: Interaction Debouncing
 
 **Purpose:** Eliminate choppy slider/scrollbar behavior by debouncing rapid UI events.
 
@@ -32,17 +32,17 @@
 **Changes:**
 - Added 4 debounce timers in `__init__()` (lines 136-158)
 - Modified signal handlers to only store values and start timers:
-  - `_on_x_zoom_changed()` (lines 1632-1636)
-  - `_on_x_scrollbar_changed()` (lines 1638-1644)
-  - `_on_global_y_zoom_changed()` (lines 1805-1809)
-  - `_on_global_y_scrollbar_changed()` (lines 1829-1835)
+ - `_on_x_zoom_changed()` (lines 1632-1636)
+ - `_on_x_scrollbar_changed()` (lines 1638-1644)
+ - `_on_global_y_zoom_changed()` (lines 1805-1809)
+ - `_on_global_y_scrollbar_changed()` (lines 1829-1835)
 - Created debounced apply methods:
-  - `_apply_debounced_x_zoom()` (lines 1646-1661)
-  - `_apply_debounced_x_scroll()` (lines 1663-1678)
-  - `_apply_debounced_y_global_zoom()` (lines 1680-1685)
-  - `_apply_debounced_y_global_scroll()` (lines 1687-1692)
+ - `_apply_debounced_x_zoom()` (lines 1646-1661)
+ - `_apply_debounced_x_scroll()` (lines 1663-1678)
+ - `_apply_debounced_y_global_zoom()` (lines 1680-1685)
+ - `_apply_debounced_y_global_scroll()` (lines 1687-1692)
 
-### Critical Bug Fix: PyQtGraph Downsampling API ✅
+### Critical Bug Fix: PyQtGraph Downsampling API
 
 **Issue:** Application crashed when loading files due to incorrect `setDownsampling()` API usage.
 
@@ -57,9 +57,9 @@
 
 ## Test Results
 
-**All Performance Optimization Tests:** ✅ 18/18 PASS (100%)
-- `test_plot_customization.py`: 10/10 ✅
-- `test_styling.py`: 8/8 ✅
+**All Performance Optimization Tests:** 18/18 PASS (100%)
+- `test_plot_customization.py`: 10/10
+- `test_styling.py`: 8/8
 
 **Overall Test Suite:** 64/68 tests pass (94.1%)
 - 3 pre-existing failures in `test_main_window.py` (unrelated to our changes)
@@ -67,14 +67,14 @@
 ## Files Modified Summary
 
 ### Implementation Files (5 files)
-1. ✅ `src/Synaptipy/shared/plot_customization.py` - Force opaque implementation
-2. ✅ `src/Synaptipy/application/gui/plot_customization_dialog.py` - UI controls
-3. ✅ `src/Synaptipy/application/gui/main_window.py` - Logging enhancement
-4. ✅ `src/Synaptipy/application/gui/explorer_tab.py` - Debouncing + downsampling fix
+1. `src/Synaptipy/shared/plot_customization.py` - Force opaque implementation
+2. `src/Synaptipy/application/gui/plot_customization_dialog.py` - UI controls
+3. `src/Synaptipy/application/gui/main_window.py` - Logging enhancement
+4. `src/Synaptipy/application/gui/explorer_tab.py` - Debouncing + downsampling fix
 
 ### Test Files (2 files)
-5. ✅ `tests/shared/test_plot_customization.py` - Updated for 'opacity' terminology
-6. ✅ `tests/shared/test_styling.py` - Updated for dynamic grid alpha
+5. `tests/shared/test_plot_customization.py` - Updated for 'opacity' terminology
+6. `tests/shared/test_styling.py` - Updated for dynamic grid alpha
 
 ## Performance Improvements
 
@@ -103,10 +103,10 @@
 2. Use zoom sliders (X or Y axis)
 3. Move sliders rapidly - should feel smooth, not choppy
 4. Check logs for debouncing messages:
-   ```
-   DEBUG: [_on_x_zoom_changed] Debouncing X zoom: 45
-   DEBUG: [_apply_debounced_x_zoom] Applying X zoom: 45
-   ```
+ ```
+ DEBUG: [_on_x_zoom_changed] Debouncing X zoom: 45
+ DEBUG: [_apply_debounced_x_zoom] Applying X zoom: 45
+ ```
 
 ### Verifying the Downsampling Fix
 1. Launch application
@@ -145,10 +145,10 @@ INFO: [_update_plot] Plot update complete for 4 channels.
 ## Technical Notes
 
 ### Core Functionality Preserved
-- ✅ Existing zoom/pan mechanisms unchanged
-- ✅ Plot customization system intact
-- ✅ Data loading and caching unaffected
-- ✅ All signal/slot connections maintained
+- Existing zoom/pan mechanisms unchanged
+- Plot customization system intact
+- Data loading and caching unaffected
+- All signal/slot connections maintained
 
 ### API Compatibility
 The downsampling fix ensures compatibility with PyQtGraph 0.13.x by using the correct parameter names:
@@ -157,8 +157,8 @@ The downsampling fix ensures compatibility with PyQtGraph 0.13.x by using the co
 
 ## Ready for Production
 
-**Status:** ✅ All implementations complete and tested  
-**Next Steps:** 
+**Status:** All implementations complete and tested
+**Next Steps:**
 1. Test application manually with the instructions above
 2. Merge to main branch after verification
 3. Update CHANGELOG.md if needed

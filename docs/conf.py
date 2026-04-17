@@ -49,17 +49,18 @@ for _mod in _MOCK_MODULES:
 # Project information
 # ---------------------------------------------------------------------------
 project = "Synaptipy"
-copyright = "2024, Anzal K Shahul"
+copyright = "2024-2026, Anzal K Shahul"
 author = "Anzal K Shahul"
 
 # Retrieve version from the package itself
 try:
     from Synaptipy import __version__ as _version  # noqa: E402
+
     release = _version
-    version = ".".join(_version.split(".")[:2])
+    version = _version
 except Exception:
-    version = "0.1"
-    release = "0.1.0"
+    version = "0.1.0b6"
+    release = "0.1.0b6"
 
 # ---------------------------------------------------------------------------
 # General configuration
@@ -68,16 +69,16 @@ extensions = [
     # Core
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
-    "sphinx.ext.napoleon",          # Google / NumPy docstring support
-    "sphinx.ext.viewcode",          # Add [source] links
-    "sphinx.ext.intersphinx",       # Cross-references to external docs
-    "sphinx.ext.todo",              # .. todo:: directives
-    "sphinx.ext.coverage",          # Coverage checks
+    "sphinx.ext.napoleon",  # Google / NumPy docstring support
+    "sphinx.ext.viewcode",  # Add [source] links
+    "sphinx.ext.intersphinx",  # Cross-references to external docs
+    "sphinx.ext.todo",  # .. todo:: directives
+    "sphinx.ext.coverage",  # Coverage checks
+    "sphinx.ext.mathjax",  # Render LaTeX math in HTML output
     # Third-party
-    "myst_parser",                   # Parse .md files with MyST
-    "sphinx_autodoc_typehints",     # Render type hints in autodoc
-    "sphinx_copybutton",            # Copy-button on code blocks
-    "sphinx_design",                # Cards, grids, tabs, etc.
+    "myst_parser",  # Parse .md files with MyST
+    "sphinx_copybutton",  # Copy-button on code blocks
+    "sphinx_design",  # Cards, grids, tabs, etc.
 ]
 
 # Autosummary: generate stub files automatically
@@ -99,7 +100,7 @@ autodoc_default_options = {
     "show-inheritance": True,
     "member-order": "bysource",
 }
-autodoc_typehints = "description"
+autodoc_typehints = "none"
 autodoc_typehints_description_target = "documented"
 autoclass_content = "both"
 
@@ -107,11 +108,16 @@ autoclass_content = "both"
 myst_enable_extensions = [
     "colon_fence",
     "deflist",
+    "dollarmath",
     "fieldlist",
     "html_image",
     "tasklist",
 ]
 myst_heading_anchors = 3
+# Suppress false-positive warnings for same-page #anchor links in ToC lists.
+# MyST validates '#anchor' hrefs as cross-document references during parse before
+# heading IDs are assigned; the links are correct in the rendered HTML.
+suppress_warnings = ["myst.xref_missing"]
 
 # Source suffixes
 source_suffix = {
@@ -131,7 +137,14 @@ intersphinx_mapping = {
 master_doc = "index"
 
 # Patterns to exclude from documentation build
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    ".agent/*",
+    ".github/*",
+    "decisions/REFACTORING_GUIDE.md",
+]
 
 # Pygments syntax highlighting style
 pygments_style = "sphinx"
@@ -140,7 +153,7 @@ pygments_style = "sphinx"
 highlight_language = "none"
 
 # ---------------------------------------------------------------------------
-# HTML output options – ReadTheDocs theme
+# HTML output options - ReadTheDocs theme
 # ---------------------------------------------------------------------------
 html_theme = "sphinx_rtd_theme"
 

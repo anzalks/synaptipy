@@ -4,23 +4,26 @@
 Exporter Tab widget for the Synaptipy GUI. Provides UI for exporting data,
 using sub-tabs for different formats (e.g., NWB, CSV).
 """
+
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
-import pandas as pd  # Added missing import
 
+import pandas as pd  # Added missing import
 from PySide6 import QtCore, QtGui, QtWidgets
+
+from Synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
+from Synaptipy.application.session_manager import SessionManager
 
 # Assuming these are correctly structured now
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.exporters import NWBExporter
-from Synaptipy.shared.error_handling import SynaptipyError, ExportError
-from .nwb_dialog import NwbMetadataDialog  # Need the metadata dialog
 from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
-from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
+from Synaptipy.shared.error_handling import ExportError, SynaptipyError
+
+from .nwb_dialog import NwbMetadataDialog  # Need the metadata dialog
 
 try:
     import tzlocal
@@ -457,76 +460,146 @@ class ExporterTab(QtWidgets.QWidget):
             index.row() for index in self.analysis_results_table.selectedIndexes() if index.column() == 0
         ]  # Only count one selection per row
 
-    def _do_export_analysis_results(self):
-        """Exports the selected analysis results to a CSV file."""
-        # Get the output file path
-        output_path = self.analysis_results_path_edit.text().strip()
+    @staticmethod
+    def _flatten_result(res: dict) -> dict:  # noqa: C901
+        """Flatten a single result dict, expanding nested objects/dicts."""
+        flat_res = dict(res)
+        # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
+        if isinstance(flat_res.get("metrics"), dict):
+            for k, v in flat_res.pop("metrics").items():
+                if k not in flat_res:
+                    flat_res[k] = v
+        nested_obj = flat_res.get("result")
+        if hasattr(nested_obj, "__dict__"):
+            for k, v in nested_obj.__dict__.items():
+                if k not in flat_res:
+                    flat_res[k] = v
+        if isinstance(flat_res.get("summary_stats"), dict):
+            for k, v in flat_res["summary_stats"].items():
+                if k not in flat_res:
+                    flat_res[k] = v
+        if isinstance(flat_res.get("parameters"), dict):
+            for k, v in flat_res["parameters"].items():
+                if k not in flat_res:
+                    flat_res[k] = v
+        return flat_res
 
-        # If no path set, prompt for one
+    @staticmethod
+    def _convert_result_val(val):
+        """Convert a single DataFrame cell value to a CSV-safe scalar."""
+        import numpy as np
+
+        if val is None:
+            return np.nan
+        if hasattr(val, "tolist") and callable(getattr(val, "tolist")):
+            try:
+                return str(val.tolist())
+            except Exception:
+                pass
+        if hasattr(val, "item") and callable(getattr(val, "item")):
+            try:
+                return val.item()
+            except Exception:
+                pass
+        if isinstance(val, (list, tuple)):
+            return np.nan if len(val) == 0 else str(val)
+        return val
+
+    def _write_tidy_csvs(self, processed_results: list, output_path: str) -> Path:
+        """Write per-analysis-type CSVs; return the final output path."""
+        import shutil
+        import tempfile
+        import zipfile
+
+        import numpy as np
+
+        df = pd.json_normalize(processed_results, sep=".")
+        df = df.apply(lambda col: col.map(self._convert_result_val))
+        df = df.replace(r"^\s*$", np.nan, regex=True)
+        df = df.replace(["NaN", "Na", "None", "NA", "N/A", "<NA>"], np.nan)
+
+        out_p = Path(output_path)
+        grouped = df.groupby("analysis_type") if "analysis_type" in df.columns else [("Results", df)]
+        if out_p.is_dir():
+            output_dir = out_p
+            zip_path = None
+        else:
+            output_dir = Path(tempfile.mkdtemp())
+            zip_path = out_p.with_suffix(".zip") if out_p.suffix.lower() == ".csv" else out_p
+
+        csv_files = []
+        for analysis_type, group_df in grouped:
+            cleaned_df = group_df.dropna(axis=1, how="all")
+            safe_name = str(analysis_type).replace(" ", "_").replace("/", "_")
+            csv_filepath = output_dir / f"{safe_name}.csv"
+            cleaned_df.to_csv(csv_filepath, index=False, na_rep="")
+            csv_files.append(csv_filepath)
+
+        if zip_path is not None:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for f in csv_files:
+                    zf.write(f, f.name)
+            shutil.rmtree(output_dir, ignore_errors=True)
+            return zip_path
+        return output_dir
+
+    def _do_export_analysis_results(self):
+        """Exports the selected analysis results to a CSV or JSON file."""
+        output_path = self.analysis_results_path_edit.text().strip()
         if not output_path:
             self._browse_analysis_results_output_path()
             output_path = self.analysis_results_path_edit.text().strip()
-
-        # If still no path (user cancelled), return
         if not output_path:
             return
 
-        # Get selected indices
         selected_indices = set(self._get_selected_results_indices())
         if not selected_indices:
             QtWidgets.QMessageBox.warning(self, "Export Error", "Please select at least one result to export.")
             return
 
-        # Access the main window to get the saved analysis results
         main_window = self.window()
         if not hasattr(main_window, "saved_analysis_results"):
             QtWidgets.QMessageBox.critical(self, "Export Error", "Cannot access analysis results.")
             return
 
         all_results = main_window.saved_analysis_results
-
-        # Filter for selected results
         results_to_export = [all_results[i] for i in sorted(selected_indices) if i < len(all_results)]
-
         if not results_to_export:
             QtWidgets.QMessageBox.warning(self, "Export Error", "No valid results selected for export.")
             return
 
         try:
-            # Create DataFrame
-            df = pd.DataFrame(results_to_export)
+            processed_results = [self._flatten_result(r) for r in results_to_export]
+            df = pd.DataFrame(processed_results)
 
             if output_path.lower().endswith(".json"):
-                # JSON Export
                 df.to_json(output_path, orient="records", indent=2, default_handler=str)
                 log.debug(f"Exported analysis results to JSON: {output_path}")
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
             else:
-                # CSV Export (Default)
-                # Flatten or stringify complex columns for CSV if needed, but pandas usually handles basic types.
-                # For complex types like arrays, we might want to stringify them explicitly if pandas doesn't.
-                # But for now, let's rely on pandas default behavior or string conversion.
-                df.to_csv(output_path, index=False)
-                log.debug(f"Exported analysis results to CSV: {output_path}")
-
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
+                final_path = self._write_tidy_csvs(processed_results, output_path)
+                log.debug(f"Exported analysis results to: {final_path}")
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{final_path}")
 
         except Exception as e:
-            log.error(f"Failed to export analysis results: {e}", exc_info=True)
-            QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to export results:\n{e}")
-            success = self._csv_exporter.export_analysis_results(results_to_export, Path(output_path))
+            log.error(f"Modern tidy export failed, attempting legacy fallback: {e}", exc_info=True)
 
+            # Fallback to legacy exporter
+            success = self._csv_exporter.export_analysis_results(results_to_export, Path(output_path))
             if success:
-                # Show success message
                 QtWidgets.QMessageBox.information(
                     self,
                     "Export Successful",
-                    f"Successfully exported {len(results_to_export)} analysis results to:\n{output_path}",
+                    f"Successfully exported {len(results_to_export)} analysis results "
+                    f"using legacy format to:\n{output_path}",
                 )
-
                 self._status_bar.showMessage(
-                    f"Exported {len(results_to_export)} analysis results to {Path(output_path).name}", 5000
+                    f"Exported {len(results_to_export)} analysis results to {Path(output_path).name}",
+                    5000,
                 )
             else:
                 QtWidgets.QMessageBox.critical(
-                    self, "Export Error", "Failed to export analysis results to CSV. Check logs for details."
+                    self,
+                    "Export Error",
+                    f"Failed to export results. Both modern and legacy exporters failed.\n\nFirst Error: {e}",
                 )
