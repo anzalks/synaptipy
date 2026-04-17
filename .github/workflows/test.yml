@@ -43,7 +43,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install flake8 'black~=26.1' 'isort~=8.0' pytest pytest-qt pytest-mock pytest-cov nbval
+        pip install flake8 'black~=26.1' 'isort~=8.0' pytest pytest-qt pytest-mock pytest-cov nbval matplotlib
         pip install -e .
 
     - name: Check formatting with black and isort
@@ -90,7 +90,7 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        xvfb-run python -m pytest --nbval-lax examples/ -v --tb=short 2>&1 | tail -40
+        xvfb-run python -m pytest --nbval-lax --maxfail=1 examples/ -v --tb=short
 
     - name: Coverage Comment
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
