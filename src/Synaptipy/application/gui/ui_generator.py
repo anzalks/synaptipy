@@ -3,9 +3,11 @@
 """
 Helper module to generate UI widgets from metadata parameters.
 """
+
 import logging
-from typing import Dict, Any, List, Optional
-from PySide6 import QtWidgets, QtGui
+from typing import Any, Dict, List, Optional
+
+from PySide6 import QtGui, QtWidgets
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +93,8 @@ class ParameterWidgetGenerator:
             if widget:
                 widget.deleteLater()
         self.widgets.clear()
+        self.visibility_map.clear()
+        self.callbacks.clear()
 
     def _create_widget_for_param(self, param: Dict[str, Any]):
         """Create and add a widget for a single parameter."""
@@ -145,10 +149,10 @@ class ParameterWidgetGenerator:
                 "widget": widget,
                 # We might need to track the label widget too if we want to hide it
                 "label": label if isinstance(label, QtWidgets.QWidget) else None,
-                "rule": param["visible_when"]
+                "rule": param["visible_when"],
             }
 
-    def update_visibility(self, context: Dict[str, Any]):
+    def update_visibility(self, context: Dict[str, Any]):  # noqa: C901
         """
         Update widget visibility based on context.
 
@@ -184,13 +188,17 @@ class ParameterWidgetGenerator:
             else:
                 continue  # rule cannot be evaluated — leave as-is
 
-            # Use FormLayout to hide the row (Label + Widget)
-            if isinstance(self.layout, QtWidgets.QFormLayout):
-                self.layout.setRowVisible(widget, is_visible)
-            else:
-                widget.setVisible(is_visible)
-                if info["label"]:
-                    info["label"].setVisible(is_visible)
+            try:
+                # Use FormLayout to hide the row (Label + Widget)
+                if isinstance(self.layout, QtWidgets.QFormLayout):
+                    self.layout.setRowVisible(widget, is_visible)
+                else:
+                    widget.setVisible(is_visible)
+                    if info["label"]:
+                        info["label"].setVisible(is_visible)
+            except RuntimeError:
+                # Widget was deleted during a UI rebuild — skip silently.
+                continue
 
     def _on_param_changed(self):
         """Trigger registered callbacks."""

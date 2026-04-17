@@ -1,18 +1,19 @@
-import pytest
-from pathlib import Path
-import uuid
-from datetime import datetime, timezone
-import numpy as np
-
 # Make sure src is importable
 import sys
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
-from Synaptipy.infrastructure.exporters import NWBExporter  # noqa: E402
-from Synaptipy.core.data_model import Recording, Channel  # noqa: E402
-from Synaptipy.shared.error_handling import ExportError  # noqa: E402
 from unittest.mock import patch  # noqa: E402
+
+from Synaptipy.core.data_model import Channel, Recording  # noqa: E402
+from Synaptipy.infrastructure.exporters import NWBExporter  # noqa: E402
+from Synaptipy.shared.error_handling import ExportError  # noqa: E402
 
 
 # Fixture for a sample recording object (can reuse from test_data_model or create new)

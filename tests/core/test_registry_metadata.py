@@ -1,4 +1,5 @@
 import pytest
+
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 
@@ -53,7 +54,9 @@ def test_spike_detection_metadata():
     """Test that spike_detection has the correct metadata (integration test)."""
     # Re-import to ensure registration runs after clear()
     import importlib
-    import Synaptipy.core.analysis.spike_analysis as sa
+
+    import Synaptipy.core.analysis.single_spike as sa
+
     importlib.reload(sa)
 
     metadata = AnalysisRegistry.get_metadata("spike_detection")
@@ -69,3 +72,90 @@ def test_spike_detection_metadata():
     threshold_param = next(p for p in ui_params if p["name"] == "threshold")
     assert threshold_param["type"] == "float"
     assert threshold_param["default"] == -20.0
+
+
+# ---------------------------------------------------------------------------
+# Regression test for Windows analysis-tab population bug
+# ---------------------------------------------------------------------------
+# Root cause: analyser_tab._load_analysis_tabs() called
+#   ``from Synaptipy.core.analysis.registry import AnalysisRegistry``
+# which only imports the registry *class* — it does NOT import the package
+# __init__.py, so the ``from . import basic_features`` (etc.) lines in
+# core/analysis/__init__.py were never executed and the registry remained
+# empty.  On macOS the batch engine happened to be imported earlier via a
+# different path, masking the bug.
+# The fix imports ``Synaptipy.core.analysis`` (the full package) immediately
+# before calling list_registered().
+# ---------------------------------------------------------------------------
+
+EXPECTED_BUILTIN_ANALYSES = {
+    "rmp_analysis",
+    "spike_detection",
+    "rin_analysis",
+    "tau_analysis",
+    "iv_curve_analysis",
+    "sag_ratio_analysis",
+    "event_detection_threshold",
+    "event_detection_deconvolution",
+    "event_detection_baseline_peak",
+    "phase_plane_analysis",
+    "burst_analysis",
+    "excitability_analysis",
+    "capacitance_analysis",
+    "optogenetic_sync",
+    "train_dynamics",
+}
+
+
+def test_full_package_import_populates_registry():
+    """Regression test: importing only registry.py leaves the registry empty;
+    the full Synaptipy.core.analysis package must be imported to trigger all
+    @AnalysisRegistry.register decorators.
+
+    The autouse clear_registry fixture has already cleared the registry before
+    this test runs.  We reload every built-in analysis submodule explicitly to
+    re-execute their decorators (the modules are already in sys.modules so a
+    plain import is a no-op), then verify all 15 expected analyses are present.
+    This matches the mechanism in startup_manager._begin_loading() and in
+    analyser_tab._load_analysis_tabs() added to fix the Windows bug.
+    """
+    import importlib
+
+    import Synaptipy.core.analysis.evoked_responses as m4
+    import Synaptipy.core.analysis.firing_dynamics as m2
+    import Synaptipy.core.analysis.passive_properties as m0
+    import Synaptipy.core.analysis.single_spike as m1
+    import Synaptipy.core.analysis.synaptic_events as m3
+
+    for module in (m0, m1, m2, m3, m4):
+        importlib.reload(module)
+
+    registered = set(AnalysisRegistry.list_registered())
+    missing = EXPECTED_BUILTIN_ANALYSES - registered
+    assert not missing, (
+        f"Registry is missing built-in analyses after reloading all analysis modules.\n"
+        f"Missing: {sorted(missing)}\n"
+        f"Present: {sorted(registered)}\n"
+        "This is the Windows regression: importing only registry.py is not enough."
+    )
+
+
+def test_registry_only_import_does_not_populate():
+    """Verify that importing only the registry module (as the old analyser_tab code did)
+    does NOT register any built-in analyses.  The autouse fixture already cleared the
+    registry, so we just check it is still empty after a registry-only re-import."""
+    import importlib
+
+    import Synaptipy.core.analysis.registry as reg_mod
+
+    importlib.reload(reg_mod)
+
+    registered = AnalysisRegistry.list_registered()
+    # Registry class itself never registers anything; only analysis modules do.
+    # Any entries here were added by other tests that run before this fixture
+    # clears — but the autouse fixture guarantees a clean slate.
+    builtin_overlap = set(registered) & EXPECTED_BUILTIN_ANALYSES
+    assert not builtin_overlap, (
+        f"Expected empty registry after registry-only import, "
+        f"but found built-in analyses: {sorted(builtin_overlap)}"
+    )

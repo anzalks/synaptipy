@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Synaptipy"
-version = "0.1.0b1"
+version = "0.1.0b6"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
@@ -40,7 +40,7 @@ dependencies = [
     "scipy>=1.13.0",
     "pandas>=2.3.0",
     "pyqtgraph>=0.13.0",
-    "pyside6==6.7.3",
+    "pyside6>=6.7.0",
     "neo>=0.14.0",
     "pynwb>=3.1.0",
     "h5py>=3.14.0",
@@ -66,8 +66,11 @@ dev = [
     "pytest-mock",
     "pytest-cov",
     "flake8",
-    "black",
-    "isort",
+    "black~=26.1",
+    "isort~=8.0",
+    "pyinstaller>=6.5.0",
+    "pillow>=10.2.0",
+    "icnsutil>=1.1.0",
 ]
 docs = [
     "sphinx>=7.2.0",
@@ -101,7 +104,33 @@ norecursedirs = [".verify_venv", ".git", "__pycache__", "*.egg-info"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --cov=Synaptipy.core --cov-report=term-missing"
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["Synaptipy"]
+
+[tool.coverage.run]
+source = ["src/Synaptipy/core"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 0
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
 ]

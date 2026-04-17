@@ -15,14 +15,17 @@ from the AnalysisRegistry.  It also provides built-in support for:
 * **Popup plots**: secondary plot windows for I-V curves, phase-plane loops, etc.
 * **Result-aware h-lines**: horizontal lines positioned by result dict keys.
 """
+
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
 import numpy as np
-from PySide6 import QtWidgets, QtCore
 import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.shared.plot_customization import get_hv_line_pen, get_scatter_pen_and_brush
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +48,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """
         self.analysis_name = analysis_name
         self.metadata = AnalysisRegistry.get_metadata(analysis_name)
+        # Stable module-level identity - never overwritten by method-selector switching.
+        self._module_name: str = analysis_name
+        self._module_metadata: Dict[str, Any] = AnalysisRegistry.get_metadata(analysis_name)
         self.param_widgets: Dict[str, QtWidgets.QWidget] = {}
         self._popup_windows = []
         self._interactive_regions = {}
@@ -80,17 +86,52 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         super().__init__(neo_adapter, settings_ref, parent)
         self._setup_ui()
         self._setup_interactive_regions()
+        # Module-level aggregator entries have no ui_params of their own;
+        # immediately prime the first sub-analysis so the tab is non-blank.
+        if self._method_map and not self.metadata.get("ui_params"):
+            self._on_method_selector_changed()
+
+    @property
+    def response_region(self):
+        """
+        Plot region used for response/baseline window analyses (interactive
+        LinearRegionItems or the green restrict-analysis region from the base tab).
+        """
+        interactive = getattr(self, "_interactive_regions", None) or {}
+        for key in ("response_start", "response_start_s", "baseline_start", "baseline_start_s"):
+            region = interactive.get(key)
+            if region is not None:
+                return region
+        if interactive:
+            return next(iter(interactive.values()))
+        return getattr(self, "analysis_region", None)
+
+    def _trace_package_ready(self, data: Any) -> bool:
+        """True if *data* is the plot trace dict (``data`` / ``time`` arrays) used by core analysis."""
+        if not isinstance(data, dict):
+            return False
+        arr = data.get("data")
+        tim = data.get("time")
+        if arr is None or tim is None:
+            return False
+        try:
+            if len(arr) == 0 or len(tim) == 0:
+                return False
+        except TypeError:
+            return False
+        return True
 
     def get_registry_name(self) -> str:
-        return self.analysis_name
+        # Always return the original module/aggregator name, not the active sub-method.
+        return self._module_name
 
     def get_display_name(self) -> str:
-        # Use label from metadata if available, else format the name
-        return self.metadata.get("label", self.analysis_name.replace("_", " ").title())
+        # Use the module-level label, which is stable across method-selector changes.
+        return self._module_metadata.get("label", self._module_name.replace("_", " ").title())
 
     def get_covered_analysis_names(self) -> List[str]:
         """Return all registry names this tab covers (including method selector alternatives)."""
-        names = [self.analysis_name]
+        names = [self._module_name]
         names.extend(self._method_map.values())
         return list(set(names))
 
@@ -185,7 +226,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.results_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.results_table.setAlternatingRowColors(True)
-        self.results_table.setMaximumHeight(200)
+        self.results_table.setMinimumHeight(250)
         self.results_layout.addRow(self.results_table)
 
         control_layout.addWidget(results_group)
@@ -277,9 +318,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._secondary_channel_combobox = QtWidgets.QComboBox()
             self._secondary_channel_combobox.setToolTip(tooltip)
             self._secondary_channel_combobox.setEnabled(False)
-            self._secondary_channel_combobox.currentIndexChanged.connect(
-                self._on_param_changed
-            )
+            self._secondary_channel_combobox.currentIndexChanged.connect(self._on_param_changed)
             layout.addRow(label, self._secondary_channel_combobox)
 
         # --- Region selection mode (Interactive / Manual) ---
@@ -294,10 +333,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             ("response_steady_start_s", "response_steady_end_s"),
         ]
         ui_param_names = {p.get("name") for p in self.metadata.get("ui_params", [])}
-        has_regions = any(
-            s in ui_param_names and e in ui_param_names
-            for s, e in region_param_names
-        )
+        has_regions = any(s in ui_param_names and e in ui_param_names for s, e in region_param_names)
         if has_regions:
             self._region_mode_combo = QtWidgets.QComboBox()
             self._region_mode_combo.addItems(["Interactive", "Manual"])
@@ -305,12 +341,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 "Interactive: drag regions on the plot to set windows.\n"
                 "Manual: type start/end values in the spinboxes directly."
             )
-            self._region_mode_combo.currentIndexChanged.connect(
-                self._on_region_mode_changed
-            )
+            self._region_mode_combo.currentIndexChanged.connect(self._on_region_mode_changed)
             layout.addRow("Region Mode:", self._region_mode_combo)
 
-    def _on_method_selector_changed(self):
+    def _on_method_selector_changed(self):  # noqa: C901
         """Handle switching between analysis methods via the method combo box."""
         if not self.method_combobox:
             return
@@ -330,6 +364,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # Re-setup interactive regions for the new parameter set
         self._setup_interactive_regions()
+
+        # Show/hide the secondary channel row based on the new sub-analysis metadata
+        if hasattr(self, "_secondary_channel_combobox") and self._secondary_channel_combobox is not None:
+            sec_cfg = self.metadata.get("requires_secondary_channel")
+            show_sec = bool(sec_cfg and isinstance(sec_cfg, dict))
+            try:
+                if hasattr(self, "permanent_params_layout"):
+                    self.permanent_params_layout.setRowVisible(self._secondary_channel_combobox, show_sec)
+            except RuntimeError:
+                pass
 
         # Clear previous results
         if self.results_table:
@@ -361,8 +405,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             if ptype == "event_markers":
                 self._event_markers_item = pg.ScatterPlotItem(
-                    size=10, pen=pg.mkPen(None),
-                    brush=pg.mkBrush(255, 0, 0, 150))
+                    size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)
+                )
                 self.plot_widget.addItem(self._event_markers_item)
                 self._event_markers_item.setVisible(False)
                 self._event_markers_item.setZValue(100)
@@ -372,8 +416,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif ptype == "threshold_line":
                 param_key = pcfg.get("param", "threshold")
                 self._threshold_line = pg.InfiniteLine(
-                    angle=0, movable=True,
-                    pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine))
+                    angle=0, movable=True, pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine)
+                )
                 self.plot_widget.addItem(self._threshold_line)
                 self._threshold_line.setZValue(90)
 
@@ -390,8 +434,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self._threshold_line.sigPositionChangeFinished.connect(_on_threshold_dragged)
 
             elif ptype == "artifact_overlay":
-                self._artifact_curve_item = pg.PlotCurveItem(
-                    pen=pg.mkPen(color=(60, 179, 113, 200), width=3))
+                self._artifact_curve_item = pg.PlotCurveItem(pen=pg.mkPen(color=(60, 179, 113, 200), width=3))
                 self.plot_widget.addItem(self._artifact_curve_item)
                 self._artifact_curve_item.setVisible(False)
                 self._artifact_curve_item.setZValue(80)
@@ -422,7 +465,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 region = pg.LinearRegionItem(
                     values=[start_w.value(), end_w.value()],
                     brush=pg.mkBrush(*color_tuple, 50),
-                    pen=pg.mkPen(*color_tuple, 200)
+                    pen=pg.mkPen(*color_tuple, 200),
                 )
                 self.plot_widget.addItem(region)
                 self._interactive_regions[start_key] = region
@@ -692,7 +735,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         else:
             log.warning(
                 "Could not load data from secondary channel '%s' trial %d.",
-                sec_chan_id, trial_index,
+                sec_chan_id,
+                trial_index,
             )
 
     def _on_channel_changed(self, index=None):
@@ -724,8 +768,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             # Fetch channel object
             channel = None
-            if (channel_name and self._selected_item_recording
-                    and channel_name in self._selected_item_recording.channels):
+            if (
+                channel_name
+                and self._selected_item_recording
+                and channel_name in self._selected_item_recording.channels
+            ):
                 channel = self._selected_item_recording.channels[channel_name]
 
             if channel:
@@ -736,12 +783,20 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         context["clamp_mode"] = "voltage_clamp" if is_voltage_clamp else "current_clamp"
 
         # Update generator
-        self.param_generator.update_visibility(context)
+        try:
+            self.param_generator.update_visibility(context)
+        except RuntimeError:
+            pass  # UI is being torn down or rebuilt — safe to ignore
 
     def _on_data_plotted(self):
-        """Hook called after data is plotted — re-add persistent items then trigger analysis."""
+        """Hook called after data is plotted - re-add persistent items then trigger analysis.
+
+        Uses the debounce timer so the visibility gate in ``_trigger_analysis``
+        recognises this as an automatic trigger and defers when the tab is hidden.
+        """
         self._ensure_custom_items_on_plot()
-        self._trigger_analysis()
+        if self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     def _on_param_changed(self):
         """Handle parameter changes."""
@@ -760,8 +815,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             is_voltage_clamp = False
             if self.signal_channel_combobox:
                 channel_name = self.signal_channel_combobox.currentData()
-                if (channel_name and self._selected_item_recording
-                        and channel_name in self._selected_item_recording.channels):
+                if (
+                    channel_name
+                    and self._selected_item_recording
+                    and channel_name in self._selected_item_recording.channels
+                ):
                     ch = self._selected_item_recording.channels[channel_name]
                     units = ch.units or "V"
                     if "A" in units or "amp" in units.lower():
@@ -821,7 +879,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Run the registered analysis function."""
         func = AnalysisRegistry.get_function(self.analysis_name)
         if not func:
-            raise ValueError(f"Analysis function '{self.analysis_name}' not found.")
+            # The analysis was unregistered (e.g. plugin hot-reload in progress).
+            # Return None so the caller exits quietly without showing an error popup.
+            log.debug(f"_execute_core_analysis: '{self.analysis_name}' not in registry — skipping silently.")
+            return None
 
         # Check if the analysis requires all trials
         metadata = AnalysisRegistry.get_metadata(self.analysis_name)
@@ -880,14 +941,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 # Call the function with single arrays
                 results = func(voltage, time, fs, **params)
 
-            # If results is a list (like spikes), wrap it?
-            # Or if it's a dict, pass it through.
+            # Normalise: wrap non-dict returns; flatten metrics nesting from new 5-module format
             if isinstance(results, list):
-                return {"list_results": results}
+                return {"module_used": self.analysis_name, "metrics": {"list_results": results}}
             elif isinstance(results, dict):
-                return results
+                # If returned dict already has module_used/metrics, pass through
+                if "module_used" in results or "metrics" in results:
+                    return results
+                # Wrap legacy flat dict in standard payload
+                return {"module_used": self.analysis_name, "metrics": results}
             else:
-                return {"result": results}
+                return {"module_used": self.analysis_name, "metrics": {"result": results}}
 
         except Exception as e:
             log.error(f"Analysis execution failed: {e}")
@@ -902,15 +966,28 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return
 
         try:
+            # Flatten nested {"module_used": ..., "metrics": {...}} schema for display
+            display_source = results
+            if isinstance(results, dict) and "metrics" in results:
+                display_source = results["metrics"]
+
+            # Also flatten legacy {"result": {...}} single-key wrappers
+            if isinstance(display_source, dict) and list(display_source.keys()) == ["result"]:
+                inner = display_source["result"]
+                if isinstance(inner, dict):
+                    display_source = inner
+                elif hasattr(inner, "__dict__"):
+                    display_source = inner.__dict__
+
             # robust extraction of items
             items = []
-            if isinstance(results, dict):
-                items = list(results.items())
-            elif hasattr(results, "__dict__"):
-                items = [(k, v) for k, v in results.__dict__.items() if not k.startswith("_")]
+            if isinstance(display_source, dict):
+                items = list(display_source.items())
+            elif hasattr(display_source, "__dict__"):
+                items = [(k, v) for k, v in display_source.__dict__.items() if not k.startswith("_")]
             else:
                 # Fallback
-                items = [("Result", str(results))]
+                items = [("Result", str(display_source))]
 
             # Filter out complex objects like arrays for the simple table view
             display_items = []
@@ -920,20 +997,27 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     if str(k).startswith("_"):
                         continue
 
+                    # Skip complex iterables entirely
+                    if isinstance(v, (list, np.ndarray, dict)):
+                        continue
+
                     # Sanitize Key
                     key_str = str(k).replace("_", " ").title()
 
-                    # Sanitize Value
-                    if isinstance(v, (np.ndarray, list, dict)) and not isinstance(v, (float, int, str, bool)):
-                        # Skip large arrays or complex nested dicts in the summary table
-                        # or show a summary string
-                        if isinstance(v, (list, np.ndarray)):
-                            val_str = f"{type(v).__name__} (len={len(v)})"
+                    # Sanitize Value: format floats to 3 decimal places
+                    if isinstance(v, float):
+                        if np.isnan(v) or np.isinf(v):
+                            val_str = str(v)
                         else:
-                            val_str = str(type(v))
-                    elif isinstance(v, float):
-                        val_str = f"{v:.4g}"
+                            val_str = f"{v:.3f}"
+                    elif isinstance(v, bool):
+                        val_str = str(v)
+                    elif isinstance(v, int):
+                        val_str = str(v)
+                    elif isinstance(v, str):
+                        val_str = v
                     else:
+                        # Unknown scalar type — stringify
                         val_str = str(v)
 
                     display_items.append((key_str, val_str))
@@ -957,7 +1041,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self.results_table.setRowCount(1)
 
         # --- Sync Rin spinboxes if auto-detect was used and returned window values ---
-        if isinstance(results, dict) and results.get("auto_detected") and hasattr(self, "param_generator"):
+        # Check both flat and nested metrics format
+        _results_flat = results.get("metrics", results) if isinstance(results, dict) else results
+        if isinstance(_results_flat, dict) and _results_flat.get("auto_detected") and hasattr(self, "param_generator"):
             spinbox_map = {
                 "_used_baseline_start": "baseline_start",
                 "_used_baseline_end": "baseline_end",
@@ -966,7 +1052,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             }
             widgets = self.param_generator.widgets
             for result_key, param_key in spinbox_map.items():
-                val = results.get(result_key)
+                val = _results_flat.get(result_key)
                 if val is not None and param_key in widgets:
                     w = widgets[param_key]
                     was_read_only = getattr(w, "isReadOnly", lambda: False)()
@@ -1010,8 +1096,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self.plot_widget.removeItem(item)
         self._dynamic_plot_items.clear()
 
-        # Normalise result structure
-        if isinstance(results, dict) and "result" in results:
+        # Normalise result structure – support both new {"module_used", "metrics"} and legacy formats
+        if isinstance(results, dict) and "metrics" in results:
+            result_item = results["metrics"]
+        elif isinstance(results, dict) and "result" in results:
             result_item = results["result"]
         else:
             result_item = results
@@ -1069,6 +1157,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif plot_type == "overlay_fit":
                 self._viz_overlay_fit(plot_cfg, result_item)
 
+            # --- shaded fill-between two curves ---
+            # Pass full results so top-level private array keys (_int_x etc.) are found
+            elif plot_type == "fill_between":
+                self._viz_fill_between(plot_cfg, results)
+
             # trace — optional spike markers overlay
             elif plot_type == "trace":
                 if plot_cfg.get("show_spikes") and self._current_plot_data:
@@ -1080,8 +1173,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         valid = valid[(valid >= 0) & (valid < len(data_arr))]
                         if len(valid) > 0:
                             scatter = pg.ScatterPlotItem(
-                                x=time_arr[valid], y=data_arr[valid],
-                                size=8, pen=pg.mkPen(None),
+                                x=time_arr[valid],
+                                y=data_arr[valid],
+                                size=8,
+                                pen=pg.mkPen(None),
                                 brush=pg.mkBrush(255, 0, 0, 180),
                             )
                             scatter.setZValue(50)
@@ -1102,11 +1197,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         prev = np.clip(idx - 1, 0, len(time_arr) - 1)
                         idx = np.where(
                             np.abs(time_arr[prev] - ev_arr) < np.abs(time_arr[idx] - ev_arr),
-                            prev, idx,
+                            prev,
+                            idx,
                         )
                         scatter = pg.ScatterPlotItem(
-                            x=time_arr[idx], y=data_arr[idx],
-                            size=10, pen=pg.mkPen(None),
+                            x=time_arr[idx],
+                            y=data_arr[idx],
+                            size=10,
+                            pen=pg.mkPen(None),
                             brush=pg.mkBrush(255, 165, 0, 200),
                             symbol="t",
                         )
@@ -1131,12 +1229,38 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _viz_markers(self, cfg, result):
         x_key = cfg.get("x")
         y_key = cfg.get("y")
-        x_data = self._val(result, x_key, [])
-        y_data = self._val(result, y_key, [])
-        if hasattr(x_data, '__len__') and hasattr(y_data, '__len__') and len(x_data) > 0 and len(y_data) > 0:
-            color = cfg.get("color", "r")
-            scatter = pg.ScatterPlotItem(x=x_data, y=y_data, size=10,
-                                         pen=pg.mkPen(None), brush=pg.mkBrush(color))
+        x_data = self._val(result, x_key)
+        if x_data is None and isinstance(result, dict) and "metrics" in result:
+            x_data = result["metrics"].get(x_key)
+        y_data = self._val(result, y_key)
+        if y_data is None and isinstance(result, dict) and "metrics" in result:
+            y_data = result["metrics"].get(y_key)
+        if x_data is None:
+            x_data = []
+        if y_data is None:
+            y_data = []
+        if hasattr(x_data, "__len__") and hasattr(y_data, "__len__") and len(x_data) > 0 and len(y_data) > 0:
+            try:
+                x_arr = np.asarray(x_data, dtype=float)
+                y_arr = np.asarray(y_data, dtype=float)
+                valid = ~(np.isnan(x_arr) | np.isnan(y_arr))
+                x_arr, y_arr = x_arr[valid], y_arr[valid]
+                if len(x_arr) == 0:
+                    return
+            except (ValueError, TypeError):
+                return
+            color = cfg.get("color")
+            symbol = cfg.get("symbol", "o")
+            if color is None:
+                scatter_pen, scatter_brush = get_scatter_pen_and_brush()
+                scatter_size = 10
+            else:
+                scatter_pen = pg.mkPen(None)
+                scatter_brush = pg.mkBrush(color)
+                scatter_size = 10
+            scatter = pg.ScatterPlotItem(
+                x=x_arr, y=y_arr, size=scatter_size, symbol=symbol, pen=scatter_pen, brush=scatter_brush
+            )
             self.plot_widget.addItem(scatter)
             self._dynamic_plot_items.append(scatter)
 
@@ -1154,30 +1278,40 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         color = cfg.get("color", "r")
         for burst_spikes in bursts:
             if len(burst_spikes) >= 2:
-                item = pg.PlotCurveItem([burst_spikes[0], burst_spikes[-1]], [y_offset, y_offset],
-                                        pen=pg.mkPen(color, width=3))
+                item = pg.PlotCurveItem(
+                    [burst_spikes[0], burst_spikes[-1]], [y_offset, y_offset], pen=pg.mkPen(color, width=3)
+                )
                 self.plot_widget.addItem(item)
                 self._dynamic_plot_items.append(item)
                 if self._current_plot_data:
                     tv = self._current_plot_data["time"]
                     vv = self._current_plot_data["data"]
                     si = np.clip(np.searchsorted(tv, burst_spikes), 0, len(vv) - 1)
-                    scatter = pg.ScatterPlotItem(x=burst_spikes, y=vv[si], size=8,
-                                                 pen=pg.mkPen(None), brush=pg.mkBrush(color))
+                    scatter = pg.ScatterPlotItem(
+                        x=burst_spikes, y=vv[si], size=8, pen=pg.mkPen(None), brush=pg.mkBrush(color)
+                    )
                     self.plot_widget.addItem(scatter)
                     self._dynamic_plot_items.append(scatter)
 
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
         vals = self._val(result, data_key, [])
-        color = cfg.get("color", "b")
+        color = cfg.get("color")
         if isinstance(vals, (int, float)):
             vals = [vals]
         for x in vals:
-            if x is not None and not np.isnan(x):
-                line = pg.InfiniteLine(pos=x, angle=90, pen=pg.mkPen(color, width=2, style=QtCore.Qt.DashLine))
-                self.plot_widget.addItem(line)
-                self._dynamic_plot_items.append(line)
+            try:
+                if x is None or not np.isfinite(float(x)):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            if color is None:
+                pen = get_hv_line_pen()
+            else:
+                pen = pg.mkPen(color, width=2, style=QtCore.Qt.DashLine)
+            line = pg.InfiniteLine(pos=float(x), angle=90, pen=pen)
+            self.plot_widget.addItem(line)
+            self._dynamic_plot_items.append(line)
 
     def _viz_hlines(self, cfg, result):
         data_keys = cfg.get("data", [])
@@ -1187,37 +1321,61 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         styles = cfg.get("styles", ["solid"] * len(data_keys))
         for idx, key in enumerate(data_keys):
             y = self._val(result, key)
-            if y is not None and not np.isnan(y):
-                s = styles[idx] if idx < len(styles) else "solid"
-                ps = QtCore.Qt.DashLine if s == "dash" else QtCore.Qt.SolidLine
-                line = pg.InfiniteLine(pos=y, angle=0, pen=pg.mkPen(color, width=2, style=ps))
-                self.plot_widget.addItem(line)
-                self._dynamic_plot_items.append(line)
+            try:
+                if y is None or not np.isfinite(float(y)):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            s = styles[idx] if idx < len(styles) else "solid"
+            ps = QtCore.Qt.DashLine if s == "dash" else QtCore.Qt.SolidLine
+            line = pg.InfiniteLine(pos=float(y), angle=0, pen=pg.mkPen(color, width=2, style=ps))
+            self.plot_widget.addItem(line)
+            self._dynamic_plot_items.append(line)
 
     def _viz_interactive_region(self, cfg):
         if getattr(self, "_interactive_region_created", False):
             return
         param_keys = cfg.get("data", ["baseline_start", "baseline_end"])
-        color = cfg.get("color", "g")
-        region = pg.LinearRegionItem(values=[0, 0.1], bounds=[0, None], movable=True)
-        region.setBrush(pg.mkBrush(color))
+        # Read initial values from param widgets if available
+        start_val = 0.0
+        end_val = 0.1
+        if hasattr(self, "param_generator") and len(param_keys) >= 2:
+            widgets = self.param_generator.widgets
+            if param_keys[0] in widgets:
+                start_val = float(widgets[param_keys[0]].value())
+            if param_keys[1] in widgets:
+                end_val = float(widgets[param_keys[1]].value())
+        region = pg.LinearRegionItem(
+            values=[start_val, end_val],
+            orientation="vertical",
+            brush=pg.mkBrush(50, 50, 200, 50),
+            pen=pg.mkPen(50, 50, 200, 150),
+            movable=True,
+        )
         self.plot_widget.addItem(region)
         self._dynamic_plot_items.append(region)
         self._interactive_region_created = True
 
         def on_region_changed():
             mn, mx = region.getRegion()
-            if hasattr(self, "param_generator"):
-                self.param_generator.set_params({param_keys[0]: mn, param_keys[1]: mx})
+            if hasattr(self, "param_generator") and len(param_keys) >= 2:
+                widgets = self.param_generator.widgets
+                if param_keys[0] in widgets:
+                    widgets[param_keys[0]].setValue(mn)
+                if param_keys[1] in widgets:
+                    widgets[param_keys[1]].setValue(mx)
                 self._on_param_changed()
-        region.sigRegionChanged.connect(on_region_changed)
+
+        region.sigRegionChangeFinished.connect(on_region_changed)
 
     def _viz_event_markers(self, cfg, result):
         """Update interactive event markers from result."""
+        # Unwrap _result_obj stored inside a metrics dict
+        if isinstance(result, dict) and "_result_obj" in result:
+            result = result["_result_obj"]
         is_obj = hasattr(result, "event_indices")
         event_indices = (
-            result.event_indices if is_obj
-            else (result.get("event_indices") if isinstance(result, dict) else None)
+            result.event_indices if is_obj else (result.get("event_indices") if isinstance(result, dict) else None)
         )
 
         if event_indices is not None:
@@ -1280,14 +1438,124 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         y_data = self._val(result, y_key)
         if x_data is None or y_data is None:
             return
-        if not hasattr(x_data, '__len__') or len(x_data) == 0:
+        try:
+            x_arr = np.asarray(x_data, dtype=float)
+            y_arr = np.asarray(y_data, dtype=float)
+        except (ValueError, TypeError):
+            return
+        if len(x_arr) < 2 or len(y_arr) < 2:
+            return
+        if np.all(np.isnan(x_arr)) or np.all(np.isnan(y_arr)):
             return
         color = cfg.get("color", "r")
         width = cfg.get("width", 2)
         pen = pg.mkPen(color, width=width, style=QtCore.Qt.PenStyle.SolidLine)
-        curve = pg.PlotCurveItem(x=np.array(x_data), y=np.array(y_data), pen=pen)
+        curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
+
+    # ------------------------------------------------------------------
+    # fill_between helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_fill_y2(self, y2_data, y1_len: int) -> np.ndarray:
+        """Convert the y2 config value (array, scalar, or None) to a NumPy array."""
+        if y2_data is None:
+            return np.zeros(y1_len)
+        try:
+            y2_scalar = float(y2_data)
+            return np.full(y1_len, y2_scalar)
+        except (TypeError, ValueError):
+            pass
+        try:
+            return np.asarray(y2_data, dtype=float)
+        except (ValueError, TypeError):
+            return np.zeros(y1_len)
+
+    def _resolve_fill_brush(self, cfg):
+        """Return a QBrush from the ``brush`` (RGBA tuple) or ``color`` key in cfg."""
+        brush_spec = cfg.get("brush")
+        color_spec = cfg.get("color")
+        if brush_spec is not None:
+            return pg.mkBrush(*brush_spec)
+        if color_spec is not None:
+            if isinstance(color_spec, (list, tuple)):
+                return pg.mkBrush(*color_spec)
+            return pg.mkBrush(color_spec)
+        return pg.mkBrush(0, 100, 255, 100)
+
+    def _prepare_fill_arrays(self, x_data, y1_data, y2_data):
+        """Validate, convert, and NaN-filter arrays for fill_between.
+
+        Returns a ``(x_arr, y1_arr, y2_arr)`` triple or ``None`` when the
+        arrays are invalid or entirely NaN.
+        """
+        try:
+            x_arr = np.asarray(x_data, dtype=float)
+            y1_arr = np.asarray(y1_data, dtype=float)
+        except (ValueError, TypeError):
+            return None
+        if len(x_arr) < 2 or len(y1_arr) < 2 or len(x_arr) != len(y1_arr):
+            return None
+        y2_arr = self._resolve_fill_y2(y2_data, len(y1_arr))
+        valid = ~(np.isnan(x_arr) | np.isnan(y1_arr) | np.isnan(y2_arr))
+        if not np.any(valid):
+            return None
+        x_arr, y1_arr, y2_arr = x_arr[valid], y1_arr[valid], y2_arr[valid]
+        if len(x_arr) < 2:
+            return None
+        return x_arr, y1_arr, y2_arr
+
+    def _val_with_metrics(self, result, key):
+        """Extract *key* from *result* directly, then fall back to result['metrics']."""
+        if key is None:
+            return None
+        val = self._val(result, key)
+        if val is None and isinstance(result, dict):
+            val = result.get("metrics", {}).get(key)
+        return val
+
+    def _viz_fill_between(self, cfg, result):
+        """Draw a shaded region between two curves (y1 and y2) along a shared x axis.
+
+        The ``result`` dict is searched directly then inside ``result['metrics']``
+        so both flat and nested ``{"module_used", "metrics"}`` schemas are supported.
+
+        Config keys:
+            x     -- key for the shared x-axis array (required)
+            y1    -- key for the upper/primary curve array (required)
+            y2    -- key for the lower/baseline curve, or a scalar (default 0.0)
+            brush -- (r, g, b, a) tuple for the fill colour (takes precedence)
+            color -- colour string or tuple (used when ``brush`` is not set)
+        """
+        if not self.plot_widget:
+            return
+
+        x_data = self._val_with_metrics(result, cfg.get("x"))
+        y1_data = self._val_with_metrics(result, cfg.get("y1"))
+        y2_data = self._val_with_metrics(result, cfg.get("y2"))
+
+        if x_data is None or y1_data is None:
+            log.debug("_viz_fill_between: missing x or y1 data, skipping.")
+            return
+
+        arrays = self._prepare_fill_arrays(x_data, y1_data, y2_data)
+        if arrays is None:
+            log.debug("_viz_fill_between: arrays invalid or all-NaN, skipping.")
+            return
+
+        x_arr, y1_arr, y2_arr = arrays
+        brush = self._resolve_fill_brush(cfg)
+        pen_none = pg.mkPen(None)
+
+        curve1 = pg.PlotCurveItem(x=x_arr, y=y1_arr, pen=pen_none)
+        curve2 = pg.PlotCurveItem(x=x_arr, y=y2_arr, pen=pen_none)
+        fill = pg.FillBetweenItem(curve1, curve2, brush=brush)
+
+        # Only add fill to the plot; curve1/curve2 are kept alive via
+        # _dynamic_plot_items so FillBetweenItem can reference their data.
+        self.plot_widget.addItem(fill)
+        self._dynamic_plot_items.extend([curve1, curve2, fill])
 
     def _viz_popup_xy(self, cfg, result):
         """Show scatter + optional regression line in a popup."""
@@ -1312,7 +1580,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._popup_plot = self.create_popup_plot(title, x_label, y_label)
             self._popup_curves["scatter"] = self._popup_plot.plot(pen=None, symbol="o", symbolBrush="b")
             self._popup_curves["fit"] = self._popup_plot.plot(
-                pen=pg.mkPen("r", width=2, style=QtCore.Qt.PenStyle.DashLine))
+                pen=pg.mkPen("r", width=2, style=QtCore.Qt.PenStyle.DashLine)
+            )
 
         self._popup_curves["scatter"].setData(px, py)
 
@@ -1331,11 +1600,20 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         else:
             self._popup_curves["fit"].setData([], [])
 
-    def _viz_popup_phase(self, cfg, result):
+    def _viz_popup_phase(self, cfg, result):  # noqa: C901
         """Show dV/dt vs V phase-plane in a popup with threshold + max markers."""
         voltage = self._val(result, "voltage")
         dvdt = self._val(result, "dvdt")
         if voltage is None or dvdt is None:
+            return
+        try:
+            voltage = np.asarray(voltage, dtype=float)
+            dvdt = np.asarray(dvdt, dtype=float)
+        except (ValueError, TypeError):
+            return
+        if len(voltage) == 0 or len(dvdt) == 0:
+            return
+        if np.all(np.isnan(voltage)) or np.all(np.isnan(dvdt)):
             return
 
         if self._popup_plot is None:
@@ -1343,9 +1621,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._popup_plot = self.create_popup_plot(title, "Voltage (mV)", "dV/dt (V/s)")
             self._popup_curves["phase"] = self._popup_plot.plot(pen="b", name="Phase Loop")
             self._popup_curves["thresh_marker"] = self._popup_plot.plot(
-                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold")
+                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"
+            )
             self._popup_curves["max_marker"] = self._popup_plot.plot(
-                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt")
+                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt"
+            )
 
         min_len = min(len(voltage), len(dvdt))
         self._popup_curves["phase"].setData(np.array(voltage)[:min_len], np.array(dvdt)[:min_len])

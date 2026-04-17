@@ -7,67 +7,139 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0b1] - 2026-02-25
+## [0.1.0b6] - 2026-03-27
 
-> **Beta nightly release.** Core GUI, all 14 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
+### Changed
+
+- Bumped package version to 0.1.0b6.
+- Documentation: standalone installer links point to the GitHub releases page so beta/pre-release assets are visible (not only `/releases/latest`); filename examples updated to v0.1.0b6.
 
 ### Fixed
 
-**Analysis Module Bug Fixes**
-- **Tau (Time Constant)**: Added exponential fit overlay plot — `calculate_tau` now returns
-  fit curve data (`fit_time`, `fit_values`) alongside `tau_ms`, and the registration
-  includes `overlay_fit` plot metadata so the fit curve is drawn on the main trace
-- **Excitability (F-I Curve)**: Added `popup_xy` plot metadata to show F-I Curve popup
-  (Frequency vs Current) after multi-trial analysis
-- **Spike Train Dynamics**: Added ISI popup plot — wrapper now returns `isi_numbers` and
-  `isi_ms` arrays, and registration includes `popup_xy` plot metadata
-- **Optogenetic Synchronization**: Added secondary channel selector (`requires_secondary_channel`
-  metadata) so users can pick a dedicated TTL/trigger channel instead of falling back to
-  the voltage trace; added stimulus onset vertical line markers to the plot
-- **Event Detection (Template Match)**: Lowered default threshold from 4.0 SD to 3.0 SD
-  for better sensitivity; added `direction` parameter to UI so users can switch polarity;
-  fixed time-axis reconstruction to use actual `time` array instead of synthesising from
-  sampling rate (fixes event time accuracy when data doesn't start at t=0)
-- **Event Detection (Threshold)**: Fixed noise-floor guard that could override user threshold —
-  the 2-SD noise guard now only activates when the user's threshold is below 1 SD, otherwise
-  the user's explicit threshold is honoured
-- Added `overlay_fit` visualisation type to `MetadataDrivenAnalysisTab` for drawing
-  analysis fit curves on the main plot
-- Added `_inject_secondary_channel_data` to `MetadataDrivenAnalysisTab` for loading
-  data from a user-selected secondary channel and passing it to analysis functions
+- `README.md` and `docs/manuals/CROSS_PLATFORM_SETUP.md`: updated installer filename examples from `v0.1.0b5` to `v0.1.0b6`.
+- `docs/index.rst`: replaced em-dashes with standard hyphens; fixed `sphinx-design` grid card indentation from 1-space to 3-space (resolves 12 RST warnings about `grid-item` children).
+- `docs/tutorial/index.md`: replaced 124 em/en-dashes with standard hyphens; corrected 5 ToC anchor links to match MyST-generated section IDs.
+- `docs/extending_synaptipy.md`: replaced 43 em/en-dashes with standard hyphens; corrected 15 ToC anchor links to match MyST-generated section IDs.
+- `docs/conf.py`: added `suppress_warnings = ["myst.xref_missing"]` to suppress false-positive warnings for same-page `#anchor` links in ToC lists (MyST validates these as cross-document references before heading IDs are assigned at parse time; the rendered HTML is correct).
+- Sphinx docs build: reduced warnings from 31 to 0; build now exits clean with zero warnings.
 
-**Publication Readiness Audit — Error Handling & Robustness**
+
+## [0.1.0b1] - 2026-03-03
+
+> **First beta release.** Core GUI, all 15 analysis modules, batch processing, NWB export, and plugin interface are functional. Issued as a pre-release for wider testing before a stable 0.1.0 tag.
+
+### Added
+
+- **Sag Ratio Standalone Analysis**: Promoted `sag_ratio_analysis` from an inline
+ computation within `rin_analysis` to its own registered analysis plugin (15th
+ built-in module). Provides dedicated UI controls for baseline, peak, and
+ steady-state windows, Savitzky-Golay smoothing, and rebound depolarisation
+ measurement. Results: `sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`,
+ `v_baseline`, `rebound_depolarization`.
+- **Documentation**: Updated tutorial (§4.15), algorithmic definitions (§4),
+ API reference, user guide, developer guide, README, and extending guide to
+ reflect the new standalone sag ratio analysis and 15 built-in modules.
+- **Deferred Initial Reset for Multichannel**: Generation-counter-protected
+ `_deferred_initial_reset()` catches post-layout `sigResized` shifts for
+ multichannel recordings without interfering with view state restoration.
+- **Custom Analysis Plugin Documentation**: Comprehensive guide (`extending_synaptipy.md`) for writing analysis plugins without modifying source code
+- **Plugin Template**: Ready-to-copy template at `src/Synaptipy/templates/plugin_template.py` with inline comments for all parameter types and plot overlays
+- **Plugin Tests**: 16 tests validating plugin template logic, PluginManager loading, and wrapper conventions
+- **Tutorial Section 3.6**: Step-by-step "Adding Your Own Analysis Tab" section in the user tutorial under the Analyser Tab
+- **Stress Tests**: File cycling stress tests for plot canvas rebuild stability (100 iterations)
+- **Explorer Debounce**: Debounce timer for file navigation to prevent rapid teardown cycles
+- Regression tests for registry population (`test_registry_metadata.py`)
+- Regression tests for preprocessing reset propagation (`test_preprocessing_reset.py`)
+- Developer documentation for registry import rule, editable install, and
+ preprocessing reset propagation (copilot-instructions.md, developer_guide.md)
+
+### Fixed
+
+- **Explorer X-Axis Shift on File Cycling**: Fixed bug where the X-axis would
+ shift right (not starting at 0) when cycling through files, especially with
+ multichannel recordings. Root cause: old ViewBoxes scheduled for
+ `deleteLater()` continued to emit `sigXRangeChanged` / `sigYRangeChanged` /
+ `sigResized` signals after the widget was replaced, corrupting slider and
+ scrollbar values for the new recording. Fix: explicitly disconnect all
+ ViewBox signals in `ExplorerPlotCanvas.rebuild_plots()` before clearing plot
+ items.
+- **Explorer X-Link Range Corruption**: Fixed multichannel X-range corruption
+ caused by `linkedViewChanged()` recalculating ranges from screen-geometry
+ pixel offsets between stacked ViewBoxes. `_reset_view()` now blocks link
+ propagation via `ViewBox.blockLink(True)` while setting ranges, then unblocks.
+- **Overlay Mode Y-Range Too Narrow**: Fixed `_compute_channel_y_range()` to
+ compute Y range from all trials (sampling up to 50 evenly spaced) instead of
+ only trial 0. Previously, if trial 0 was at resting potential but other
+ trials contained action potentials, the Y range was too narrow to display
+ the full signal.
+- **Flaky Qt Tests**: Added `processEvents()` calls in 3 test files to resolve non-deterministic offscreen failures caused by stale deferred ViewBox geometry callbacks
+- **Explorer Plot Layout**: Fixed Windows Explorer plot view state preservation during file cycling
+- **Lint Errors**: Resolved all flake8 CI failures in `analysis_formatter` and `exporter_tab`
+- **CSV Export**: Updated tidy per-type CSV export for batch results
+- **Windows Analysis Loading**: Fixed registry import bug where `AnalysisRegistry` remained
+ empty on Windows because only `registry.py` was imported (not the full
+ `Synaptipy.core.analysis` package that triggers `@register` decorators). Added
+ `import Synaptipy.core.analysis` in `analyser_tab.py` and `startup_manager.py`.
+- **Preprocessing Reset**: Connected the `preprocessing_reset_requested` signal in
+ `BaseAnalysisTab` and added `_handle_preprocessing_reset()` handler. Added
+ `reset_ui()` method to `PreprocessingWidget`. Reset now propagates globally to
+ all sibling analysis tabs via `AnalyserTab.set_global_preprocessing(None)`.
+
+**Analysis Module Bug Fixes**
+- **Tau (Time Constant)**: Added exponential fit overlay plot - `calculate_tau` now returns
+ fit curve data (`fit_time`, `fit_values`) alongside `tau_ms`, and the registration
+ includes `overlay_fit` plot metadata so the fit curve is drawn on the main trace
+- **Excitability (F-I Curve)**: Added `popup_xy` plot metadata to show F-I Curve popup
+ (Frequency vs Current) after multi-trial analysis
+- **Spike Train Dynamics**: Added ISI popup plot - wrapper now returns `isi_numbers` and
+ `isi_ms` arrays, and registration includes `popup_xy` plot metadata
+- **Optogenetic Synchronization**: Added secondary channel selector (`requires_secondary_channel`
+ metadata) so users can pick a dedicated TTL/trigger channel instead of falling back to
+ the voltage trace; added stimulus onset vertical line markers to the plot
+- **Event Detection (Template Match)**: Lowered default threshold from 4.0 SD to 3.0 SD
+ for better sensitivity; added `direction` parameter to UI so users can switch polarity;
+ fixed time-axis reconstruction to use actual `time` array instead of synthesising from
+ sampling rate (fixes event time accuracy when data doesn't start at t=0)
+- **Event Detection (Threshold)**: Fixed noise-floor guard that could override user threshold -
+ the 2-SD noise guard now only activates when the user's threshold is below 1 SD, otherwise
+ the user's explicit threshold is honoured
+- Added `overlay_fit` visualisation type to `MetadataDrivenAnalysisTab` for drawing
+ analysis fit curves on the main plot
+- Added `_inject_secondary_channel_data` to `MetadataDrivenAnalysisTab` for loading
+ data from a user-selected secondary channel and passing it to analysis functions
+
+**Publication Readiness Audit - Error Handling & Robustness**
 - Replaced ~25 silent `except: pass` blocks with diagnostic `log.debug()` calls across 15 files
 - Added logging to error-swallowing blocks in neo_adapter, analysis_formatter, explorer_tab,
-  plot_canvas (widgets & explorer), analysis_plot_manager, main_window, startup_manager,
-  zoom_theme, plot_customization, and analysis_tabs/base
+ plot_canvas (widgets & explorer), analysis_plot_manager, main_window, startup_manager,
+ zoom_theme, plot_customization, and analysis_tabs/base
 - Added docstrings to NWB exporter fallback sentinel classes
 - Removed trailing `pass` statements and dead placeholder code from explorer_tab,
-  shortcut_manager, main_window, file_io_controller, data_loader, and base analysis tab
+ shortcut_manager, main_window, file_io_controller, data_loader, and base analysis tab
 - Cleaned up duplicate comment in base analysis tab error handler
 - Removed unnecessary `pass` after `log.debug` in theme_manager
 
-**Publication Readiness Audit — Code Quality**
+**Publication Readiness Audit - Code Quality**
 - Fixed unused variable `param_key` in metadata_driven analysis tab
 - Fixed unused variable `dt` in optogenetics wrapper
 - Replaced long conditional expressions with readable intermediate variables in
-  optogenetics.py and train_dynamics.py
+ optogenetics.py and train_dynamics.py
 - Rewrote conversational docstring in optogenetics wrapper with proper Args/Returns format
 - Fixed all flake8 violations: trailing whitespace, missing blank lines, line length, W391
 - Cleaned up CLI placeholder module with proper docstrings (removed 50 lines of dead scaffolding)
 - Removed stale `CSVExporter` comments from exporters `__init__.py`
 
-**Publication Readiness Audit — Package Structure**
+**Publication Readiness Audit - Package Structure**
 - Populated `__all__` exports in `application/controllers/__init__.py` (9 symbols)
 - Populated `__all__` exports in `application/gui/analysis_tabs/__init__.py` (3 symbols)
 - Added `__all__` and module docstring to `application/gui/explorer/__init__.py`
 
-**Publication Readiness Audit — CI/CD**
+**Publication Readiness Audit - CI/CD**
 - Added Python 3.12 to CI test matrix (now tests 3.10, 3.11, 3.12)
 - Added `pytest-cov` coverage reporting to CI (`--cov=Synaptipy --cov-report=term-missing`)
 - Added coverage XML artifact upload for ubuntu/3.11 builds
 
-**Publication Readiness Audit — Scientific Accuracy**
+**Publication Readiness Audit - Scientific Accuracy**
 - Fixed line-noise detection baseline overlap in `signal_processor.py`
 - Fixed max/min dV/dt zeroing bias in `spike_analysis.py` (sentinel values)
 - Fixed AHP depth sign convention in `spike_analysis.py`
@@ -78,14 +150,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dV/dt unit conversion documentation in `phase_plane.py`
 - Removed duplicate dictionary keys in spike detection registry
 
-**Publication Readiness Audit — Code Quality**
+**Publication Readiness Audit - Code Quality**
 - Removed redundant imports, unused variables, and duplicate function definitions
 - Added edge-case handling for empty spike indices
 - Added docstring for `_find_stable_baseline_segment`
 - Converted unresolvable TODO to NOTE (async limitation in batch load)
 - Standardized all flake8 compliance to max-line-length 120
 
-**Publication Readiness Audit — CI/CD & Infrastructure**
+**Publication Readiness Audit - CI/CD & Infrastructure**
 - Made flake8 lint failures blocking in CI (removed `--exit-zero`)
 - Added `pytest-cov` to CI dependencies
 - Aligned Python version floor to 3.10 in pyproject.toml, environment.yml, README
@@ -135,11 +207,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for various file formats via the Neo library
 - Explorer tab for viewing and navigating data files
 - Analyzer tab with:
-  - Input Resistance/Conductance calculation
-  - Baseline/RMP analysis
+ - Input Resistance/Conductance calculation
+ - Baseline/RMP analysis
 - Exporter tab with:
-  - NWB export functionality
-  - CSV export for analysis results
+ - NWB export functionality
+ - CSV export for analysis results
 - Comprehensive test suite with pytest fixtures
 - Command-line interface for running the application
 - Released under GNU Affero General Public License Version 3 (AGPL-3.0)

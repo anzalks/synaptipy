@@ -10,11 +10,13 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
-from typing import Optional, Any
-from PySide6 import QtCore, QtWidgets
+from typing import Any, Optional
+
 import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 
 from .plot_customization import get_plot_customization_manager
+from .viewbox import SynaptipyViewBox
 
 log = logging.getLogger(__name__)
 
@@ -47,8 +49,8 @@ class SynaptipyPlotFactory:
             Configured PlotWidget
         """
         try:
-            # Create the plot widget
-            plot_widget = pg.PlotWidget(parent=parent)
+            # Create the plot widget with custom ViewBox (left=pan, right=rect-zoom)
+            plot_widget = pg.PlotWidget(parent=parent, viewBox=SynaptipyViewBox())
 
             # Set background immediately
             plot_widget.setBackground(background)
@@ -56,11 +58,14 @@ class SynaptipyPlotFactory:
             # Configure view box
             viewbox = plot_widget.getViewBox()
             if viewbox:
-                if mouse_mode == "rect":
-                    viewbox.setMouseMode(pg.ViewBox.RectMode)
-                elif mouse_mode == "pan":
-                    viewbox.setMouseMode(pg.ViewBox.PanMode)
                 viewbox.mouseEnabled = True
+
+            # Windows Fix: Explicitly set SizePolicy and Minimum Size
+            size_policy = QtWidgets.QSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
+            )
+            plot_widget.setSizePolicy(size_policy)
+            plot_widget.setMinimumHeight(50)
 
             # Defer grid configuration to prevent Windows issues
             if enable_grid:
@@ -94,6 +99,14 @@ class SynaptipyPlotFactory:
         try:
             widget = pg.GraphicsLayoutWidget(parent=parent)
             widget.setBackground(background)
+
+            # Windows Fix: Explicitly set SizePolicy and Minimum Size
+            size_policy = QtWidgets.QSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
+            )
+            widget.setSizePolicy(size_policy)
+            widget.setMinimumHeight(50)
+
             log.debug("Created GraphicsLayoutWidget successfully")
             return widget
         except Exception as e:
@@ -146,7 +159,7 @@ class SynaptipyPlotFactory:
 
                 # Enable grid safely with error handling
                 try:
-                    from .plot_customization import is_grid_enabled, get_grid_pen
+                    from .plot_customization import get_grid_pen, is_grid_enabled
 
                     if is_grid_enabled():
                         grid_pen = get_grid_pen()

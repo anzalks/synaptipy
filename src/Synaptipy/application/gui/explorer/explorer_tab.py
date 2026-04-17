@@ -4,38 +4,41 @@
 Explorer Tab widget for the Synaptipy GUI.
 Refactored modular version.
 """
+
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
-from PySide6 import QtCore, QtWidgets, QtGui
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
 
-# --- Synaptipy Imports ---
-from Synaptipy.core.data_model import Recording
-from Synaptipy.infrastructure.file_readers import NeoAdapter
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.application.gui.analysis_worker import AnalysisWorker
-from Synaptipy.shared.data_cache import DataCache
-
-# --- Components ---
-from .sidebar import ExplorerSidebar
-from .config_panel import ExplorerConfigPanel
-from .plot_canvas import ExplorerPlotCanvas
-from .y_controls import ExplorerYControls
-from .toolbar import ExplorerToolbar
-from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
-from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
+from Synaptipy.application.controllers.file_io_controller import FileIOController
 
 # --- Live Analysis ---
 from Synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
-from Synaptipy.application.controllers.file_io_controller import FileIOController
 from Synaptipy.application.controllers.shortcut_manager import ShortcutManager
-from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
-from Synaptipy.core.signal_processor import check_trace_quality
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.application.session_manager import SessionManager
+
+# --- Synaptipy Imports ---
+from Synaptipy.core.data_model import Recording
+from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 from Synaptipy.core.results import SpikeTrainResult
-import pyqtgraph as pg
+from Synaptipy.core.signal_processor import check_trace_quality
+from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+from Synaptipy.shared.data_cache import DataCache
+
+from .config_panel import ExplorerConfigPanel
+from .plot_canvas import ExplorerPlotCanvas
+
+# --- Components ---
+from .sidebar import ExplorerSidebar
+from .toolbar import ExplorerToolbar
+from .y_controls import ExplorerYControls
 
 # Configure Logger
 log = logging.getLogger(__name__)
@@ -87,13 +90,20 @@ class ExplorerTab(QtWidgets.QWidget):
         # Caching
         self._data_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}
         self._average_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
-        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = {}  # NEW: Cache for processed data
+        self._processed_cache: Dict[str, Dict[int, Tuple[np.ndarray, np.ndarray]]] = (
+            {}
+        )  # Cache: cid -> trial_idx -> (t, data)
+        # Reusable PlotDataItems for CYCLE_SINGLE mode (avoids alloc/scene-insert per trial)
+        self._reusable_single_items: Dict[str, Any] = {}  # cid -> PlotDataItem
+        self._reusable_avg_items: Dict[str, Any] = {}  # cid -> PlotDataItem (average line)
         # Pipeline for processing
         self.pipeline = SignalProcessingPipeline()
         # Active settings for on-the-fly processing
         self._active_preprocessing_settings: Optional[Dict[str, Any]] = None
         self._cache_dirty: bool = False
         self._is_loading: bool = False
+        self._is_rebuilding: bool = False  # Guard: prevents _update_plot during rebuild
+        self._display_generation: int = 0  # Monotonically increasing counter for _deferred_initial_reset
 
         # Limits State
         self.base_x_range: Optional[Tuple[float, float]] = None
@@ -107,6 +117,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self._setup_layout()
         self._connect_signals()
 
+        # Global Manual Trial Cache (Cross-File)
+        self.global_manual_trials: List[dict] = []
+
         # Initial State
         self._update_all_ui_state()
 
@@ -115,8 +128,24 @@ class ExplorerTab(QtWidgets.QWidget):
         self._pending_view_state: Optional[Dict[str, Tuple[Tuple[float, float], Tuple[float, float]]]] = None
         self._pending_trial_params: Optional[Tuple[int, int]] = None
 
+        # Debounce timer for rapid file navigation (Prev/Next buttons).
+        # When the user clicks rapidly, each click just updates the target and
+        # restarts this 50 ms single-shot timer.  Only the last click triggers
+        # an actual load, preventing a queue of teardown/rebuild cycles that
+        # would pile up in the Qt event loop and can cause SIGBUS on macOS or
+        # access-violations on Windows.
+        self._file_nav_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._file_nav_timer.setSingleShot(True)
+        self._file_nav_timer.setInterval(50)  # 50 ms — imperceptible to user
+        self._file_nav_timer.timeout.connect(self._execute_pending_file_nav)
+        # Pending navigation target: (filepath, file_list, index)
+        self._pending_nav_target: Optional[tuple] = None
+
     def closeEvent(self, event):
         """Cleanup resources."""
+        # Stop the debounce timer so it cannot fire after the widget dies.
+        if hasattr(self, "_file_nav_timer"):
+            self._file_nav_timer.stop()
         if hasattr(self, "live_controller"):
             self.live_controller.cleanup()
         super().closeEvent(event)
@@ -127,11 +156,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.toolbar = ExplorerToolbar()
 
         # Instantiate FileIOController
-        self.file_io = FileIOController(
-            self,
-            QtCore.QSettings(APP_NAME, SETTINGS_SECTION),
-            self.neo_adapter
-        )
+        self.file_io = FileIOController(self, QtCore.QSettings(APP_NAME, SETTINGS_SECTION), self.neo_adapter)
 
         self.sidebar = ExplorerSidebar(self.neo_adapter, self.file_io)
         self.y_controls = ExplorerYControls()
@@ -236,8 +261,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Row 0: Labels
         zoom_controls_layout.addWidget(self.toolbar.x_zoom_lbl, 0, 0, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        zoom_controls_layout.addWidget(self.y_controls.global_y_lbl, 0, 1,
-                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(
+            self.y_controls.global_y_lbl, 0, 1, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         # Row 1: Sliders
         zoom_controls_layout.addWidget(self.toolbar.x_zoom_slider, 1, 0)
@@ -245,15 +271,17 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Row 2: Checkboxes
         zoom_controls_layout.addWidget(self.toolbar.lock_zoom_cb, 2, 0, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        zoom_controls_layout.addWidget(self.y_controls.y_lock_checkbox, 2, 1,
-                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(
+            self.y_controls.y_lock_checkbox, 2, 1, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         # Row 3: Individual Y Sliders (if any)
         zoom_controls_layout.addWidget(self.y_controls.individual_y_sliders_container, 3, 1)
 
         # Row 0-3 (Spanning) Col 2: Reset View Button
-        zoom_controls_layout.addWidget(self.toolbar.reset_btn, 0, 2, 4, 1,
-                                       alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        zoom_controls_layout.addWidget(
+            self.toolbar.reset_btn, 0, 2, 4, 1, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         zoom_controls_layout.setColumnStretch(0, 1)
         zoom_controls_layout.setColumnStretch(1, 1)
@@ -306,6 +334,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.config_panel.show_selected_avg_toggled.connect(self._toggle_plot_selected_average)
 
         self.config_panel.trial_selection_requested.connect(self._on_trial_selection_requested)
+        self.config_panel.interleaved_selection_requested.connect(self._on_interleaved_selection_requested)
         self.config_panel.trial_selection_reset_requested.connect(self._on_trial_selection_reset_requested)
         self.config_panel.channel_visibility_changed.connect(self._on_channel_visibility_changed)
 
@@ -331,6 +360,11 @@ class ExplorerTab(QtWidgets.QWidget):
         # Plot Canvas
         self.plot_canvas.x_range_changed.connect(self._on_vb_x_range_changed)
         self.plot_canvas.y_range_changed.connect(self._on_vb_y_range_changed)
+
+        # Global plot-customization signal — propagate pen/brush changes to Explorer canvas
+        from Synaptipy.shared.plot_customization import get_plot_customization_signals
+
+        get_plot_customization_signals().preferences_updated.connect(self.update_plot_pens)
 
         # Analysis Buttons
         self.add_analysis_btn.clicked.connect(self._add_selection_to_analysis_set)
@@ -366,7 +400,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 # Convert ms -> s carefully to avoid ZeroDivision if 0 (though spinbox usually has min)
                 "refractory_period": self.config_panel.refractory_spin.value() / 1000.0,
                 "channel_id": target_cid,
-                "trial_index": self.current_trial_index
+                "trial_index": self.current_trial_index,
             }
 
             self.live_controller.request_analysis(params)
@@ -374,57 +408,63 @@ class ExplorerTab(QtWidgets.QWidget):
         except Exception as e:
             log.error(f"Failed to prepare live analysis request: {e}")
 
-    def _on_live_analysis_finished(self, result: SpikeTrainResult):
-        """Handle new analysis result: Draw Red Dots."""
-        # 1. Check if result matches current view context?
-        # (Controller cancels old ones, but we should verify channel/trial if possible,
-        # but parameters dict has it).
+    def _resolve_peak_y_values(
+        self,
+        cid: str,
+        trial_idx: int,
+        spike_times: np.ndarray,
+        spike_indices: Optional[np.ndarray],
+        threshold: float,
+    ) -> tuple:
+        """Return (x_vals, y_vals) for scatter dots at true biological peaks.
 
+        Looks up the actual trace amplitude at each detected spike index.
+        Falls back to the threshold level when trace data is unavailable.
+        """
+        x_vals = spike_times
+        if spike_indices is not None and len(spike_indices) > 0:
+            trace_data: Optional[np.ndarray] = None
+            if cid in self._processed_cache and trial_idx in self._processed_cache.get(cid, {}):
+                _, trace_data = self._processed_cache[cid][trial_idx]
+            elif cid in self._data_cache and trial_idx in self._data_cache.get(cid, {}):
+                _, trace_data = self._data_cache[cid][trial_idx]
+            if trace_data is not None:
+                valid_mask = spike_indices < len(trace_data)
+                y_vals = trace_data[spike_indices[valid_mask].astype(int)]
+                return spike_times[valid_mask], y_vals
+        return x_vals, np.full(len(x_vals), float(threshold))
+
+    def _on_live_analysis_finished(self, result: SpikeTrainResult):
+        """Handle new analysis result: draw scatter dots on true biological peaks."""
         cid = result.parameters.get("channel_id")
         trial_idx = result.parameters.get("trial_index")
 
-        # Verify context match to avoid flashing wrong dots
         if trial_idx != self.current_trial_index:
             return
 
         item_key = f"spikes_{cid}"
 
-        # 2. Update Plot
-        # We need to access the plot item.
-        if cid in self.plot_canvas.channel_plots:
-            plot_item = self.plot_canvas.channel_plots[cid]
+        if cid not in self.plot_canvas.channel_plots:
+            return
 
-            # Remove old scatter if stored
-            # We need a place to store the scatter item reference.
-            # We can store it in a dict on ExplorerTab: self.active_scatter_items = {}
-            if not hasattr(self, "active_scatter_items"):
-                self.active_scatter_items = {}
+        plot_item = self.plot_canvas.channel_plots[cid]
 
-            if item_key in self.active_scatter_items:
-                plot_item.removeItem(self.active_scatter_items[item_key])
+        if not hasattr(self, "active_scatter_items"):
+            self.active_scatter_items = {}
 
-            if result.spike_times is not None and len(result.spike_times) > 0:
-                # Get Y-values for the dots. trace[spike_indices]
-                # But we only have times/indices. We need the data again?
-                # Or we can just plot at Threshold level?
-                # Plotting at Threshold level is good for visualization.
-                threshold = result.parameters.get("threshold", 0)
+        if item_key in self.active_scatter_items:
+            plot_item.removeItem(self.active_scatter_items[item_key])
 
-                # Or better: plot on the trace?
-                # To plot on trace, we need data.
-                # Let's plot at Threshold for now as it shows the crossing clearly.
-                y_vals = np.full(len(result.spike_times), threshold)
-
-                scatter = pg.ScatterPlotItem(
-                    x=result.spike_times,
-                    y=y_vals,
-                    pen=pg.mkPen(None),
-                    brush=pg.mkBrush('r'),
-                    size=10,
-                    pxMode=True
-                )
-                plot_item.addItem(scatter)
-                self.active_scatter_items[item_key] = scatter
+        if result.spike_times is not None and len(result.spike_times) > 0:
+            threshold = result.parameters.get("threshold", 0)
+            x_vals, y_vals = self._resolve_peak_y_values(
+                cid, trial_idx, result.spike_times, result.spike_indices, threshold
+            )
+            scatter = pg.ScatterPlotItem(
+                x=x_vals, y=y_vals, pen=pg.mkPen(None), brush=pg.mkBrush("r"), size=10, pxMode=True
+            )
+            plot_item.addItem(scatter)
+            self.active_scatter_items[item_key] = scatter
 
     # --- File Loading ---
     @staticmethod
@@ -469,7 +509,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if preserve_state:
             # Check manual Lock Zoom checkbox
             is_zoom_locked = False
-            if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'lock_zoom_cb'):
+            if hasattr(self, "toolbar") and hasattr(self.toolbar, "lock_zoom_cb"):
                 is_zoom_locked = self.toolbar.lock_zoom_cb.isChecked()
 
             if is_zoom_locked:
@@ -500,7 +540,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # We wrap the loading function to also include quality check
         worker = AnalysisWorker(self._load_and_check_quality, self.neo_adapter, filepath)
         worker.signals.result.connect(self._on_file_load_success)
-        worker.signals.error.connect(self._on_file_load_error)
+        worker.signals.error.connect(lambda err: self._on_file_load_error(err, filepath))
         worker.signals.finished.connect(self._finalize_loading_state)
 
         self.status_bar.showMessage(f"Loading '{filepath.name}'...")
@@ -529,6 +569,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     # memory-mapped files (ABF etc.) cause SIGBUS in
                     # scipy LAPACK on macOS if memory is not aligned.
                     import numpy as _np
+
                     data = _np.ascontiguousarray(data, dtype=_np.float64)
                     metrics = check_trace_quality(data, first_ch.sampling_rate)
             except Exception as e:
@@ -557,6 +598,9 @@ class ExplorerTab(QtWidgets.QWidget):
     def _display_recording(self, recording: Recording):  # noqa: C901
         if not recording:
             return
+        # Bump generation counter so any pending _deferred_initial_reset from a
+        # previous display pass is recognised as stale and skipped.
+        self._display_generation += 1
         self.current_recording = recording
         self.max_trials_current_recording = getattr(recording, "max_trials", 0)
 
@@ -564,6 +608,8 @@ class ExplorerTab(QtWidgets.QWidget):
         self._data_cache.clear()
         self._average_cache.clear()
         self._processed_cache.clear()
+        self._reusable_single_items.clear()
+        self._reusable_avg_items.clear()
         self._cache_dirty: bool = False
         self.current_trial_index = 0
         self.selected_trial_indices.clear()
@@ -582,16 +628,29 @@ class ExplorerTab(QtWidgets.QWidget):
         # If it is populated, we use only those.
         self.selected_trial_indices = set()
 
-        # Rebuild Components
-        self.plot_canvas.rebuild_plots(recording)
-        self.config_panel.rebuild(recording)
-        self.y_controls.rebuild(recording)
+        # Rebuild Components — block intermediate _update_plot() calls.
+        # config_panel.rebuild() creates channel checkboxes with setChecked(True)
+        # which emits toggled → _on_channel_visibility_changed → _update_plot().
+        # These premature calls capture degenerate view state from empty plots
+        # and restore it, overriding the freshly plotted data's auto-range.
+        self._is_rebuilding = True
+        try:
+            self.plot_canvas.rebuild_plots(recording)
+            self.config_panel.rebuild(recording)
+            self.y_controls.rebuild(recording)
+        finally:
+            self._is_rebuilding = False
 
         # Calculate Base Ranges
         self._calculate_base_ranges()
 
-        # Initial Plot
-        self._update_plot()
+        # Initial plot: skip view-state restoration for one update so auto-range
+        # can run on the newly plotted data.
+        self._plot_update_fresh = True
+        try:
+            self._update_plot()
+        finally:
+            self._plot_update_fresh = False
         self._reset_view()
 
         # --- Restore State if Pending ---
@@ -623,15 +682,12 @@ class ExplorerTab(QtWidgets.QWidget):
         if self._pending_trial_params:
             log.debug(f"Restoring trial selection params: {self._pending_trial_params}")
             try:
-                n_gap, start_idx = self._pending_trial_params
                 # Re-apply selection logic (this will update selected_trial_indices and trigger plot update)
-                self._on_trial_selection_requested(n_gap, start_index=start_idx)
+                self._on_trial_selection_requested(self._pending_trial_params)
                 # Note: _on_trial_selection_requested calls _update_plot, so we might redraw twice, but safe.
             except Exception as e:
                 log.warning(f"Failed to restore trial selection: {e}")
                 self._auto_select_trials()  # Fallback
-            finally:
-                self._pending_trial_params = None
         else:
             self._auto_select_trials()
 
@@ -640,25 +696,114 @@ class ExplorerTab(QtWidgets.QWidget):
         self.sidebar.sync_to_file(recording.source_file)
         self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'", 5000)
 
+        # Final scene update: FullViewportUpdate mode (set in rebuild_plots)
+        # ensures the viewport repaints on scene changes.  A single deferred
+        # update() catches any late geometry recalculations from Qt's layout.
+        #
+        # Multi-channel X-axis fix: after the first layout pass, pyqtgraph's
+        # sigResized → linkedViewChanged can shift X ranges because it
+        # recalculates them from screen-geometry pixel positions (the "line
+        # them up" branch).  A deferred _reset_view() re-applies the base
+        # ranges once the layout has fully stabilised.
+        #
+        # Only needed for multi-channel (X-linked) recordings.  For single-
+        # channel recordings there is no X-link, so no linkedViewChanged
+        # interference.  Also skip when a deliberate view state is being
+        # restored (lock-zoom cycling) to avoid overwriting the user's zoom.
+        n_channels = len(recording.channels) if recording and recording.channels else 0
+        if self.plot_canvas.widget and n_channels > 1 and not restored_view:
+            gen = self._display_generation
+            QtCore.QTimer.singleShot(0, lambda g=gen: self._deferred_initial_reset(g))
+        elif self.plot_canvas.widget:
+            QtCore.QTimer.singleShot(0, self.plot_canvas.widget.update)
+
+    def _deferred_initial_reset(self, generation: int):
+        """Re-apply base ranges after the first Qt layout pass.
+
+        *generation* is the display-generation counter captured at schedule
+        time.  If a new _display_recording call has incremented the counter
+        since then (or the user has zoomed/panned), this callback is stale
+        and must be skipped to avoid overwriting deliberate changes.
+
+        When a new GraphicsLayoutWidget is created for multi-channel data,
+        pyqtgraph's ``sigResized`` fires on each ViewBox once the layout
+        geometry is established.  For X-linked ViewBoxes this triggers
+        ``linkedViewChanged`` which recalculates the X range from
+        screen-geometry pixel offsets (the *line them up* branch).  Even a
+        1-pixel difference in ViewBox width between stacked rows shifts the
+        X origin away from 0.  Re-applying the base ranges here — after all
+        deferred layout events have been processed — guarantees the X axis
+        starts at 0 for every channel.
+        """
+        if generation != self._display_generation:
+            return  # stale callback from a previous display pass
+        if not self.current_recording or not self.plot_canvas.channel_plots:
+            return
+        self._reset_view()
+        if self.plot_canvas.widget:
+            self.plot_canvas.widget.update()
+
     def _calculate_base_ranges(self):
         self.base_y_ranges = {}
-        self.base_x_range = (0, self.current_recording.duration) if self.current_recording.duration else (0, 1)
+        self.base_x_range = self._compute_base_x_range()
 
         for cid, channel in self.current_recording.channels.items():
-            # Estimate Y range from random trial or global min/max
-            # Simple approach: get data from trial 0
+            self.base_y_ranges[cid] = self._compute_channel_y_range(channel)
+
+    def _compute_base_x_range(self):
+        """Compute X range from actual time vectors (always start at 0)."""
+        x_max = None
+        for channel in self.current_recording.channels.values():
             try:
-                d = channel.get_data(0)
-                if d is not None:
-                    mn, mx = np.min(d), np.max(d)
-                    diff = mx - mn
-                    if diff == 0:
-                        diff = 1.0
-                    self.base_y_ranges[cid] = (mn - diff * 0.1, mx + diff * 0.1)
-                else:
-                    self.base_y_ranges[cid] = (-1, 1)
+                t = channel.get_relative_time_vector(0)
+                if t is not None and len(t) > 0:
+                    t_end = float(t[-1])
+                    if x_max is None or t_end > x_max:
+                        x_max = t_end
             except Exception:
-                self.base_y_ranges[cid] = (-1, 1)
+                pass
+        if x_max is None:
+            x_max = self.current_recording.duration if self.current_recording.duration else 1.0
+        return (0.0, x_max)
+
+    def _compute_channel_y_range(self, channel):
+        """Compute Y range from ALL trials with 10% margin.
+
+        Using only trial 0 gave a deceptively narrow range when the first
+        trial held only resting-potential values while later trials contained
+        action potentials.  In Overlay All + Avg mode the full Y extent is
+        visible, so the base range must cover every trial.
+
+        To keep the cost bounded on files with thousands of trials, we sample
+        at most 50 evenly-spaced trials.
+        """
+        try:
+            n_trials = channel.num_trials or 1
+            # Sample at most 50 trials, evenly spaced
+            if n_trials <= 50:
+                indices = range(n_trials)
+            else:
+                step = max(1, n_trials // 50)
+                indices = range(0, n_trials, step)
+
+            global_mn = None
+            global_mx = None
+            for idx in indices:
+                d = channel.get_data(idx)
+                if d is not None and len(d) > 0:
+                    trial_mn = float(np.min(d))
+                    trial_mx = float(np.max(d))
+                    if global_mn is None or trial_mn < global_mn:
+                        global_mn = trial_mn
+                    if global_mx is None or trial_mx > global_mx:
+                        global_mx = trial_mx
+
+            if global_mn is not None and global_mx is not None:
+                diff = global_mx - global_mn if (global_mx - global_mn) != 0 else 1.0
+                return (global_mn - diff * 0.1, global_mx + diff * 0.1)
+        except Exception:
+            pass
+        return (-1, 1)
 
     def get_current_recording(self) -> Optional[Recording]:
         return self.current_recording
@@ -696,32 +841,47 @@ class ExplorerTab(QtWidgets.QWidget):
         """Updates all plot items based on current selection/data state."""
         if not self.current_recording:
             return
-        # Handle styling updates if needed (omitted for brevity)
         self._update_plot()
         if self.plot_canvas.widget:
-            self.plot_canvas.widget.update()
+            try:
+                self.plot_canvas.widget.viewport().update()
+            except Exception:
+                self.plot_canvas.widget.update()
 
     def _update_plot(self):  # noqa: C901
-        """Standard plot update."""
+        """Standard plot update.
+
+        For the first plot after loading a recording, callers set
+        ``_plot_update_fresh`` True around a single call so view-state
+        save/restore is skipped and auto-range can fill the viewport.
+        """
+        fresh = getattr(self, "_plot_update_fresh", False)
+        # Guard: skip intermediate calls triggered by checkbox toggled
+        # signals during config_panel.rebuild() inside _display_recording.
+        if getattr(self, "_is_rebuilding", False):
+            return
+
         if not self.current_recording or not self.plot_canvas.channel_plots:
             return
 
-        # Disable updates
-        if self.plot_canvas.widget:
-            self.plot_canvas.widget.setUpdatesEnabled(False)
-        try:
-            # Clear existing items
-            # Clear existing items robustly
-            for cid in self.plot_canvas.channel_plots.keys():
-                self.plot_canvas.clear_plot_items(cid)
+        # 0. Preserve View State before updating plot items (skip on fresh display)
+        view_state = {}
+        if not fresh:
+            for cid, plot in self.plot_canvas.channel_plots.items():
+                if plot.isVisible():
+                    view_state[cid] = plot.viewRange()
 
-            # Reset tracking lists
-            self.plot_canvas.channel_plot_data_items.clear()
+        try:
+            # Hidden channels: clear plot items (same end state as full clear + redraw).
+            # Visible channels keep pooled PlotDataItems for setData reuse.
+            for _cid, _plot in self.plot_canvas.channel_plots.items():
+                if not _plot or not _plot.isVisible():
+                    self.plot_canvas.clear_plot_items(_cid)
+
             self.plot_canvas.selected_average_plot_items.clear()
 
-            # Re-init dict keys
-            for cid in self.plot_canvas.channel_plots.keys():
-                self.plot_canvas.channel_plot_data_items[cid] = []
+            # Per-channel count of PlotDataItems used after each pass (for pooling + hide).
+            channel_items_used: Dict[str, int] = {}
 
             # --- Update Single Source of Truth for Live Analysis ---
             # We push the PROCESSED data of the 'primary' (first visible) channel to DataCache.
@@ -745,38 +905,32 @@ class ExplorerTab(QtWidgets.QWidget):
 
                         # Push to Cache
                         DataCache.get_instance().set_active_trace(
-                            proc_data,
-                            fs,
-                            metadata={"channel_id": primary_cid, "trial_index": self.current_trial_index}
+                            proc_data, fs, metadata={"channel_id": primary_cid, "trial_index": self.current_trial_index}
                         )
                     except Exception as e:
                         log.warning(f"Failed to push active trace to DataCache: {e}")
             else:
                 DataCache.get_instance().clear_active_trace()
 
-            # 0. Preserve View State if possible
-            view_state = {}
-            for cid, plot in self.plot_canvas.channel_plots.items():
-                if plot.isVisible():
-                    view_state[cid] = plot.viewRange()
-
             # --- PLOT SETTINGS ---
             ds_enabled = self.config_panel.downsample_cb.isChecked()
-            # Force aggressive threshold if enabled (e.g. 3000 points) to prevent freezes
-            ds_avg_threshold = 3000
+            ds_factor = (
+                self.config_panel.downsample_factor_spin.value()
+                if hasattr(self.config_panel, "downsample_factor_spin")
+                else 10
+            )
             ds_method = "peak"
-            clip_view = True
 
             # Function to apply common item settings
             def _apply_item_opts(item, is_ds):
                 if hasattr(item, "setDownsampling"):
-                    item.setDownsampling(auto=is_ds, method=ds_method)
+                    item.setDownsampling(ds=ds_factor if is_ds else 1, auto=False, method=ds_method)
                 if hasattr(item, "opts"):
-                    item.opts["autoDownsample"] = is_ds
-                    if is_ds:
-                        item.opts["autoDownsampleThreshold"] = ds_avg_threshold
+                    item.opts["autoDownsample"] = False
+                    item.opts["downsample"] = ds_factor if is_ds else 1
+                    item.opts["downsampleMethod"] = ds_method
                 if hasattr(item, "setClipToView"):
-                    item.setClipToView(clip_view)
+                    item.setClipToView(True)
 
             # Get Pens
             from Synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
@@ -790,7 +944,30 @@ class ExplorerTab(QtWidgets.QWidget):
                 if not plot_item or not plot_item.isVisible():
                     continue
 
-                self.plot_canvas.channel_plot_data_items[cid] = []
+                if cid not in self.plot_canvas.channel_plot_data_items:
+                    self.plot_canvas.channel_plot_data_items[cid] = []
+                existing_items = self.plot_canvas.channel_plot_data_items[cid]
+                item_index = 0
+
+                def _emit_line(t, data, pen, name=None, z_value=None):
+                    nonlocal item_index
+                    if item_index < len(existing_items):
+                        line = existing_items[item_index]
+                        line.setData(x=t, y=data)
+                        line.setPen(pen)
+                        if name is not None and hasattr(line, "opts"):
+                            line.opts["name"] = name
+                        line.show()
+                    else:
+                        if name is not None:
+                            line = plot_item.plot(t, data, pen=pen, name=name)
+                        else:
+                            line = plot_item.plot(t, data, pen=pen)
+                        existing_items.append(line)
+                    if z_value is not None:
+                        line.setZValue(z_value)
+                    _apply_item_opts(line, ds_enabled)
+                    item_index += 1
 
                 if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
                     # Plot Single Trial
@@ -809,11 +986,12 @@ class ExplorerTab(QtWidgets.QWidget):
                                     log.error(f"Error processing trial {self.current_trial_index}: {e}")
 
                             if data is not None and t is not None:
-                                item = plot_item.plot(
-                                    t, data, pen=current_trial_pen, name=f"Trial {self.current_trial_index+1}"
+                                _emit_line(
+                                    t,
+                                    data,
+                                    current_trial_pen,
+                                    name=f"Trial {self.current_trial_index + 1}",
                                 )
-                                _apply_item_opts(item, ds_enabled)
-                                self.plot_canvas.channel_plot_data_items[cid].append(item)
                         except Exception as e:
                             log.error(f"Error plotting trial {self.current_trial_index} for {cid}: {e}")
 
@@ -828,10 +1006,6 @@ class ExplorerTab(QtWidgets.QWidget):
 
                     for trial_idx in trials_to_plot:
                         try:
-                            # Skip extensive background plotting if too many trials?
-                            # For now, plot all but use subsample for speed if DS enabled
-                            bg_ds_method = "subsample" if ds_enabled else "peak"
-
                             data = channel.get_data(trial_idx)
                             t = channel.get_relative_time_vector(trial_idx)
 
@@ -845,16 +1019,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                     log.error(f"Error processing trial {trial_idx}: {e}")
 
                             if data is not None and t is not None:
-                                item = plot_item.plot(t, data, pen=current_trial_pen)
-
-                                # Apply background optimizations
-                                item.setDownsampling(auto=ds_enabled, method=bg_ds_method)
-                                item.opts["autoDownsample"] = ds_enabled
-                                if ds_enabled:
-                                    item.opts["autoDownsampleThreshold"] = ds_avg_threshold
-                                item.setClipToView(clip_view)
-
-                                self.plot_canvas.channel_plot_data_items[cid].append(item)
+                                _emit_line(t, data, current_trial_pen)
                         except Exception as e:
                             log.debug(f"Skipped trial plot for channel {cid}: {e}")
 
@@ -875,15 +1040,95 @@ class ExplorerTab(QtWidgets.QWidget):
                                 log.error(f"Error processing average for {cid}: {e}")
 
                         if avg_data is not None and avg_t is not None:
-                            item = plot_item.plot(avg_t, avg_data, pen=avg_pen, name="Average")
-                            _apply_item_opts(item, ds_enabled)
-                            item.setZValue(10)
-                            self.plot_canvas.channel_plot_data_items[cid].append(item)
+                            _emit_line(avg_t, avg_data, avg_pen, name="Average", z_value=10)
                     except Exception as e:
                         log.error(f"Error plotting avg for {cid}: {e}")
 
-            # Restore View State — guard against XLink cascade on multi-channel
-            if view_state:
+                channel_items_used[cid] = item_index
+
+            # -------------------------------------------------------------
+            # Plot Global Manual Average (If Checked)
+            # -------------------------------------------------------------
+            if self.config_panel.show_avg_btn.isChecked() and self.global_manual_trials:
+                for cid, channel in self.current_recording.channels.items():
+                    plot_item = self.plot_canvas.channel_plots.get(cid)
+                    if not plot_item or not plot_item.isVisible():
+                        continue
+
+                    if cid not in self.plot_canvas.channel_plot_data_items:
+                        self.plot_canvas.channel_plot_data_items[cid] = []
+                    existing_items = self.plot_canvas.channel_plot_data_items[cid]
+                    item_index = channel_items_used.get(cid, 0)
+
+                    sum_data = None
+                    count = 0
+                    ref_t = None
+                    fs = channel.sampling_rate
+
+                    for item in self.global_manual_trials:
+                        raw_data = item["raw_traces"].get(cid)
+                        time_vec = item["time_vectors"].get(cid)
+
+                        if raw_data is not None and time_vec is not None:
+                            try:
+                                proc_data = self.pipeline.process(raw_data, fs, time_vector=time_vec)
+                                if sum_data is None:
+                                    sum_data = np.zeros_like(proc_data)
+                                    ref_t = time_vec
+                                min_len = min(len(sum_data), len(proc_data))
+                                sum_data[:min_len] += proc_data[:min_len]
+                                count += 1
+                            except Exception as e:
+                                log.error(f"Error processing cached trace for average: {e}")
+
+                    if count > 0 and sum_data is not None and ref_t is not None:
+                        avg_data = sum_data / count
+                        try:
+
+                            def _emit_global_line(t, data, pen, name=None, z_value=None):
+                                nonlocal item_index
+                                if item_index < len(existing_items):
+                                    line = existing_items[item_index]
+                                    line.setData(x=t, y=data)
+                                    line.setPen(pen)
+                                    if name is not None and hasattr(line, "opts"):
+                                        line.opts["name"] = name
+                                    line.show()
+                                else:
+                                    if name is not None:
+                                        line = plot_item.plot(t, data, pen=pen, name=name)
+                                    else:
+                                        line = plot_item.plot(t, data, pen=pen)
+                                    existing_items.append(line)
+                                if z_value is not None:
+                                    line.setZValue(z_value)
+                                _apply_item_opts(line, ds_enabled)
+                                item_index += 1
+
+                            # Use standard avg_pen for manual global average overlay
+                            _emit_global_line(
+                                ref_t[: len(avg_data)],
+                                avg_data,
+                                avg_pen,
+                                name="Global Average",
+                                z_value=20,
+                            )
+                        except Exception as e:
+                            log.error(f"Error plotting manual avg for {cid}: {e}")
+
+                    channel_items_used[cid] = item_index
+
+            # Hide pooled PlotDataItems not used this frame (per visible channel).
+            for _cid, _n in channel_items_used.items():
+                _items = self.plot_canvas.channel_plot_data_items.get(_cid, [])
+                _j = _n
+                while _j < len(_items):
+                    _items[_j].hide()
+                    _j += 1
+
+            # Restore View State — guard against XLink cascade on multi-channel.
+            # Skip when 'fresh' to let auto-range show all data.
+            if view_state and not fresh:
                 self._updating_viewranges = True
                 try:
                     for cid, state in view_state.items():
@@ -893,9 +1138,20 @@ class ExplorerTab(QtWidgets.QWidget):
                             plot.setYRange(state[1][0], state[1][1], padding=0)
                 finally:
                     self._updating_viewranges = False
+
+            # Log diagnostic summary (visible at WARNING level in terminal)
+            total_items = sum(len(v) for v in self.plot_canvas.channel_plot_data_items.values())
+            log.info(
+                "[PLOT-DIAG] _update_plot done: channels=%d, total_items=%d, " "mode=%s, fresh=%s",
+                len(self.plot_canvas.channel_plots),
+                total_items,
+                "cycle" if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE else "overlay",
+                fresh,
+            )
         finally:
+            # Nudge the viewport to repaint after items have been added.
             if self.plot_canvas.widget:
-                self.plot_canvas.widget.setUpdatesEnabled(True)
+                self.plot_canvas.widget.update()
 
     def _clear_data_cache(self):
         self._data_cache.clear()
@@ -931,36 +1187,29 @@ class ExplorerTab(QtWidgets.QWidget):
             avg_pen = get_average_pen()
             trial_pen = get_single_trial_pen()
 
-            # Disable updates during batch operation
+            # Update existing plot item pens
+            for cid, items in self.plot_canvas.channel_plot_data_items.items():
+                if not items:
+                    continue
+
+                # Optimization: Skip hidden plots
+                plot_widget = self.plot_canvas.channel_plots.get(cid)
+                if not plot_widget or not plot_widget.isVisible():
+                    continue
+
+                for item in items:
+                    try:
+                        # Check if this is an average plot
+                        if hasattr(item, "name") and item.name() == "Average":
+                            item.setPen(avg_pen)
+                        else:
+                            item.setPen(trial_pen)
+                    except Exception as e:
+                        log.debug(f"Could not update pen for plot item: {e}")
+
+            # Single repaint after all pens updated
             if self.plot_canvas.widget:
-                self.plot_canvas.widget.setUpdatesEnabled(False)
-
-            try:
-                # Update existing plot item pens
-                for cid, items in self.plot_canvas.channel_plot_data_items.items():
-                    if not items:
-                        continue
-
-                    # Optimization: Skip hidden plots
-                    # The expensive setPen operation is avoided for all items in hidden plots
-                    plot_widget = self.plot_canvas.channel_plots.get(cid)
-                    if not plot_widget or not plot_widget.isVisible():
-                        continue
-
-                    for item in items:
-                        try:
-                            # Check if this is an average plot
-                            if hasattr(item, "name") and item.name() == "Average":
-                                item.setPen(avg_pen)
-                            else:
-                                item.setPen(trial_pen)
-                        except Exception as e:
-                            log.debug(f"Could not update pen for plot item: {e}")
-            finally:
-                # Re-enable updates and force single repaint
-                if self.plot_canvas.widget:
-                    self.plot_canvas.widget.setUpdatesEnabled(True)
-                    self.plot_canvas.widget.update()
+                self.plot_canvas.widget.update()
 
         except Exception as e:
             log.warning(f"Failed to update plot pens: {e}")
@@ -1001,8 +1250,12 @@ class ExplorerTab(QtWidgets.QWidget):
                 pass
         self.status_bar.showMessage(f"Error loading {filepath.name}", 5000)
 
-        error_msg = str(error)
-        log.error(f"File load error: {error_msg}", exc_info=True)
+        if isinstance(error, tuple) and len(error) == 3:
+            error_msg = str(error[1])
+        else:
+            error_msg = str(error)
+
+        log.error(f"File load error: {error_msg}")
 
         # Special Handling for Unit Error (Safety Check)
         if "Critical Safety: Sampling Rate" in error_msg and "dangerously low" in error_msg:
@@ -1013,7 +1266,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 "This often means the file was recorded in kHz but read as Hz.\n"
                 "Do you want to auto-convert it to Hz (multiply by 1000)?",
                 QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.Cancel,
-                QtWidgets.QMessageBox.StandardButton.Yes
+                QtWidgets.QMessageBox.StandardButton.Yes,
             )
 
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
@@ -1024,9 +1277,8 @@ class ExplorerTab(QtWidgets.QWidget):
                 return
 
         QtWidgets.QMessageBox.critical(
-            self,
-            "Load Error",
-            f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}")
+            self, "Load Error", f"Failed to load file:\n{filepath.name}\n\nError: {error_msg}"
+        )
 
     def _finalize_loading_state(self):
         self._is_loading = False
@@ -1147,22 +1399,39 @@ class ExplorerTab(QtWidgets.QWidget):
             self.analysis_set_label.setToolTip("Analysis set is empty.")
 
     def _prev_file_folder(self):
+        """Navigate to the previous file, debounced to avoid rapid teardown loops."""
         if self.current_file_index > 0:
-            self.load_recording_data(
-                self.file_list[self.current_file_index - 1],
+            new_index = self.current_file_index - 1
+            self._pending_nav_target = (
+                self.file_list[new_index],
                 self.file_list,
-                self.current_file_index - 1,
-                preserve_state=True,  # Preserve Zoom/Selection
+                new_index,
             )
+            self._file_nav_timer.start()  # restart coalesces rapid clicks
 
     def _next_file_folder(self):
+        """Navigate to the next file, debounced to avoid rapid teardown loops."""
         if self.current_file_index < len(self.file_list) - 1:
-            self.load_recording_data(
-                self.file_list[self.current_file_index + 1],
+            new_index = self.current_file_index + 1
+            self._pending_nav_target = (
+                self.file_list[new_index],
                 self.file_list,
-                self.current_file_index + 1,
-                preserve_state=True,  # Preserve Zoom/Selection
+                new_index,
             )
+            self._file_nav_timer.start()  # restart coalesces rapid clicks
+
+    def _execute_pending_file_nav(self):
+        """Slot called by the debounce timer: load the last-requested file."""
+        if self._pending_nav_target is None:
+            return
+        filepath, file_list, index = self._pending_nav_target
+        self._pending_nav_target = None
+        self.load_recording_data(
+            filepath,
+            file_list,
+            index,
+            preserve_state=True,
+        )
 
     def _prev_trial(self):
         if self.current_trial_index > 0:
@@ -1177,36 +1446,62 @@ class ExplorerTab(QtWidgets.QWidget):
             self._update_all_ui_state()
 
     def _reset_view(self):
+        """Reset plot ranges to base ranges and reset UI controls."""
         # Block x/y range signal cascade while setting ranges on XLinked plots.
-        # Without this, setXRange on one plot propagates via XLink to all others
-        # and each fires sigXRangeChanged -> _on_vb_x_range_changed.  With 4
-        # linked channels that's 16+ re-entrant signal emissions -> SIGBUS.
         prev = self._updating_viewranges
         self._updating_viewranges = True
         try:
+            base_x = self.base_x_range
+
+            # Collect ViewBoxes and block X-link propagation *before* setting
+            # any ranges.  pyqtgraph's linkedViewChanged recalculates the
+            # linked view's X range from screen-geometry pixel offsets (see
+            # ViewBox.linkedViewChanged → "line them up" branch).  For
+            # vertically stacked multi-channel plots this can shift the X
+            # origin away from 0 when the ViewBoxes have even a 1-pixel
+            # difference in position or width during the initial layout pass.
+            viewboxes = []
             for cid, plot in self.plot_canvas.channel_plots.items():
-                base_x = self.base_x_range
+                vb = plot.getViewBox()
+                if vb:
+                    vb.blockLink(True)
+                    viewboxes.append(vb)
+
+            for cid, plot in self.plot_canvas.channel_plots.items():
                 base_y = self.base_y_ranges.get(cid)
-                if base_x and base_y and plot.isVisible():
-                    plot.setXRange(*base_x, padding=0)
-                    plot.setYRange(*base_y, padding=0)
+                if not (base_x and base_y and plot.isVisible()):
+                    continue
+                vb = plot.getViewBox()
+                # Disable auto-range so the explicit ranges stick.
+                if vb:
+                    vb.disableAutoRange()
+                plot.setXRange(*base_x, padding=0)
+                plot.setYRange(*base_y, padding=0)
+
+            # Unblock links now that all ranges are consistent.
+            for vb in viewboxes:
+                vb.blockLink(False)
         finally:
             self._updating_viewranges = prev
 
+        self._reset_zoom_scroll_controls()
+
+    def _reset_zoom_scroll_controls(self):
+        """Reset all zoom sliders and scrollbars to their default positions."""
         # Reset X Controls
-        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'x_zoom_slider'):
+        if hasattr(self, "toolbar") and hasattr(self.toolbar, "x_zoom_slider"):
             self.toolbar.x_zoom_slider.blockSignals(True)
             self.toolbar.x_zoom_slider.setValue(self.toolbar.SLIDER_DEFAULT_VALUE)
             self.toolbar.x_zoom_slider.blockSignals(False)
 
-        if hasattr(self, 'x_scrollbar'):
+        if hasattr(self, "x_scrollbar"):
             self.x_scrollbar.blockSignals(True)
             self.x_scrollbar.setValue(5000)
             self.x_scrollbar.blockSignals(False)
 
         # Reset Y Controls
-        if hasattr(self, 'y_controls'):
-            if hasattr(self.y_controls, 'global_y_slider'):
+        if hasattr(self, "y_controls"):
+            if hasattr(self.y_controls, "global_y_slider"):
                 self.y_controls.global_y_slider.blockSignals(True)
                 self.y_controls.global_y_slider.setValue(self.y_controls.SLIDER_DEFAULT_VALUE)
                 self.y_controls.global_y_slider.blockSignals(False)
@@ -1274,6 +1569,7 @@ class ExplorerTab(QtWidgets.QWidget):
             # Apply scroll direction inversion based on user preference
             try:
                 from Synaptipy.shared.scroll_settings import is_scroll_inverted
+
                 if is_scroll_inverted():
                     scroll_ratio = 1.0 - scroll_ratio
             except ImportError:
@@ -1356,22 +1652,22 @@ class ExplorerTab(QtWidgets.QWidget):
             return
 
         # Store settings for UI state tracking - merge with existing
-        step_type = settings.get('type')
+        step_type = settings.get("type")
         if self._active_preprocessing_settings is None:
             self._active_preprocessing_settings = {}
 
         # Store in slot format (baseline slot + filters dict keyed by method)
-        if step_type == 'baseline':
-            self._active_preprocessing_settings['baseline'] = settings
+        if step_type == "baseline":
+            self._active_preprocessing_settings["baseline"] = settings
             # Pipeline: remove old baseline, add new
-            self.pipeline.remove_step_by_type('baseline')
+            self.pipeline.remove_step_by_type("baseline")
             self.pipeline.add_step(settings)
-        elif step_type == 'filter':
-            filter_method = settings.get('method', 'unknown')
-            if 'filters' not in self._active_preprocessing_settings:
-                self._active_preprocessing_settings['filters'] = {}
+        elif step_type == "filter":
+            filter_method = settings.get("method", "unknown")
+            if "filters" not in self._active_preprocessing_settings:
+                self._active_preprocessing_settings["filters"] = {}
             # Same filter method replaces old one
-            self._active_preprocessing_settings['filters'][filter_method] = settings
+            self._active_preprocessing_settings["filters"][filter_method] = settings
             # Pipeline: rebuild from all filters to ensure correct order
             self._rebuild_pipeline_from_settings()
 
@@ -1393,12 +1689,12 @@ class ExplorerTab(QtWidgets.QWidget):
         self.pipeline.clear()
         if self._active_preprocessing_settings:
             # Baseline first
-            if 'baseline' in self._active_preprocessing_settings:
-                self.pipeline.add_step(self._active_preprocessing_settings['baseline'])
+            if "baseline" in self._active_preprocessing_settings:
+                self.pipeline.add_step(self._active_preprocessing_settings["baseline"])
             # Then all filters in sorted order
-            if 'filters' in self._active_preprocessing_settings:
-                for method in sorted(self._active_preprocessing_settings['filters'].keys()):
-                    self.pipeline.add_step(self._active_preprocessing_settings['filters'][method])
+            if "filters" in self._active_preprocessing_settings:
+                for method in sorted(self._active_preprocessing_settings["filters"].keys()):
+                    self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
     def _on_preprocessing_complete_legacy(self, result_data):
         pass  # Removed legacy worker method
@@ -1505,9 +1801,9 @@ class ExplorerTab(QtWidgets.QWidget):
             return
         self._updating_viewranges = True
         try:
-            scroll_val = self.y_controls.global_y_scrollbar.value()
+            global_scroll_val = self.y_controls.global_y_scrollbar.value()
 
-            # Apply to ALL visible channels
+            # Apply to ALL visible channels, preserving each channel's own scroll position
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
                     continue
@@ -1516,11 +1812,13 @@ class ExplorerTab(QtWidgets.QWidget):
                 if not plot or not plot.isVisible():
                     continue
 
+                # Use the channel's individual scrollbar if available; fall back to global
+                sb = self.y_controls.individual_y_scrollbars.get(cid)
+                scroll_val = sb.value() if sb is not None else global_scroll_val
+
                 new_min, new_max = self._calculate_visible_range(base_range[0], base_range[1], value, scroll_val)
                 plot.setYRange(new_min, new_max, padding=0)
-
-                # ALSO Update individual controls to match global
-                self.y_controls.set_individual_scrollbar(cid, scroll_val)
+                # Do NOT overwrite individual scrollbar — preserve each channel's scroll offset
 
         finally:
             self._updating_viewranges = False
@@ -1532,7 +1830,7 @@ class ExplorerTab(QtWidgets.QWidget):
         try:
             zoom_val = self.y_controls.global_y_slider.value()
             # Silence excessive logging or only log if changed significantly
-        # log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
+            # log.debug(f"Applying Global Y Scroll: val={value}, zoom={zoom_val}")
 
             for cid, base_range in self.base_y_ranges.items():
                 if not base_range:
@@ -1677,14 +1975,15 @@ class ExplorerTab(QtWidgets.QWidget):
                         continue
                     other_plot = self.plot_canvas.get_plot(other_cid)
                     if other_plot and other_plot.isVisible():
-                        nm, nM = self._calculate_visible_range(other_base[0], other_base[1], z, s)
-                        other_plot.setYRange(nm, nM, padding=0)
-                        # Also update their individual scrollbars
-                        self.y_controls.set_individual_scrollbar(other_cid, s)
-
-                        # And page steps
+                        # Preserve each channel's own independent Y-center: fetch
+                        # the other channel's current scrollbar value instead of
+                        # broadcasting the source channel's scroll position (s).
                         other_sb = self.y_controls.individual_y_scrollbars.get(other_cid)
-                        if other_sb:
+                        other_s = other_sb.value() if other_sb is not None else s
+                        nm, nM = self._calculate_visible_range(other_base[0], other_base[1], z, other_s)
+                        other_plot.setYRange(nm, nM, padding=0)
+                        # Update their individual scrollbars (unchanged: they already hold other_s)
+                        if other_sb is not None:
                             other_sb.setPageStep(page_step)
 
         except Exception as e:
@@ -1725,14 +2024,14 @@ class ExplorerTab(QtWidgets.QWidget):
                     "plot_mode": self.current_plot_mode,
                     "current_trial_index": self.current_trial_index,
                     "selected_trial_indices": self.selected_trial_indices,
-                    "show_average": self.config_panel.show_avg_btn.isChecked()
+                    "show_average": self.config_panel.show_avg_btn.isChecked(),
                 }
 
                 exporter = PlotExporter(
                     recording=self.current_recording,
                     plot_canvas_widget=self.plot_canvas.widget,
                     plot_canvas_wrapper=self.plot_canvas,
-                    config=export_config
+                    config=export_config,
                 )
 
                 try:
@@ -1741,36 +2040,41 @@ class ExplorerTab(QtWidgets.QWidget):
                 except Exception as e:
                     self.status_bar.showMessage(f"Error saving plot: {e}", 3000)
 
-    def _on_trial_selection_requested(self, n, start_index=0):
-        """Filter trials to every Nth trial, starting from start_index."""
+    def _on_trial_selection_requested(self, selection_text: str):
         if not self.current_recording:
             return
 
-        self.max_trials_current_recording = getattr(self.current_recording, "max_trials", 0)
-        all_indices = range(self.max_trials_current_recording)
+        # Use first channel as reference for trial count
+        ch0 = next(iter(self.current_recording.channels.values()), None)
+        num_trials = getattr(ch0, "num_trials", 0) if ch0 else 0
 
-        # Select every Nth (Gap Logic: Step = N + 1)
-        # 0 -> Step 1 (All)
-        # 1 -> Step 2 (Every 2nd)
-        step = n + 1
+        self.selected_trial_indices.clear()
 
-        # Validate Start Index
-        if start_index < 0:
-            start_index = 0
+        if num_trials > 0 and selection_text:
+            from Synaptipy.shared.utils import parse_trial_selection_string
 
-        # Slicing: [start:stop:step]
-        self.selected_trial_indices = set(all_indices[start_index::step])
+            parsed = parse_trial_selection_string(selection_text, num_trials)
+            self.selected_trial_indices = parsed
 
-        log.info(
-            f"Filtering trials: Start={start_index}, Gap={n} (Step={step}) -> "
-            f"{len(self.selected_trial_indices)} trials selected."
-        )
+            if not self.selected_trial_indices:
+                log.warning("Invalid trial selection string or no matching trials.")
+                self.status_bar.showMessage("Invalid trial selection string.", 3000)
 
-        # Store params for preservation
-        self._current_trial_selection_params = (n, start_index)
+        # Always store string for restoration
+        self._current_trial_selection_params = selection_text
 
+        # Propagate text back to UI if we restored this programmatically
+        if self.config_panel.trial_selection_input.text() != selection_text:
+            self.config_panel.trial_selection_input.blockSignals(True)
+            self.config_panel.trial_selection_input.setText(selection_text if selection_text else "")
+            self.config_panel.trial_selection_input.blockSignals(False)
+
+        # Remove forced mode swap - user prefers to cycle while building an average.
+        # Ensure the selected label is updated to remove the "None" state visually on load.
         self.config_panel.update_selection_label(self.selected_trial_indices)
+
         self._update_plot()
+        self._update_all_ui_state()
 
     def _on_trial_selection_reset_requested(self):
         """Reset trial selection to show all (raw data)."""
@@ -1780,20 +2084,108 @@ class ExplorerTab(QtWidgets.QWidget):
         self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
 
+    def _on_interleaved_selection_requested(self, gap: int, start_index: int):
+        """Select every Nth trial (step = gap + 1) starting at start_index.
+
+        gap=0  -> step=1 (all trials)
+        gap=1  -> step=2 (every 2nd trial)
+        gap=4  -> step=5 (every 5th trial, e.g. 5 interleaved stim locations)
+        """
+        if not self.current_recording:
+            return
+
+        ch0 = next(iter(self.current_recording.channels.values()), None)
+        num_trials = getattr(ch0, "num_trials", 0) if ch0 else 0
+
+        step = max(1, gap + 1)
+        if start_index < 0:
+            start_index = 0
+
+        self.selected_trial_indices = set(range(num_trials)[start_index::step])
+        log.info(
+            "Interleaved trial selection: start=%d, gap=%d, step=%d -> %d trials selected.",
+            start_index,
+            gap,
+            step,
+            len(self.selected_trial_indices),
+        )
+
+        # Store as free-text string so state-preservation round-trips correctly
+        sorted_indices = sorted(self.selected_trial_indices)
+        self._current_trial_selection_params = ",".join(str(i) for i in sorted_indices)
+
+        self.config_panel.update_selection_label(self.selected_trial_indices)
+        self._update_plot()
+        self._update_all_ui_state()
+
     def _apply_manual_limits_from_dict(self, limits):
         pass  # Deprecated
 
     def _toggle_select_current_trial(self):
-        if self.current_trial_index in self.selected_trial_indices:
-            self.selected_trial_indices.discard(self.current_trial_index)
+        if not self.current_recording:
+            return
+
+        current_path = self.current_recording.source_file
+        idx = self.current_trial_index
+
+        # Check if already in global set
+        existing_idx = None
+        for i, item in enumerate(self.global_manual_trials):
+            if item["path"] == current_path and item["trial_index"] == idx:
+                existing_idx = i
+                break
+
+        if existing_idx is not None:
+            # Remove it
+            self.global_manual_trials.pop(existing_idx)
         else:
-            self.selected_trial_indices.add(self.current_trial_index)
-        self._update_all_ui_state()
+            # Add it: extract raw data for all plotted channels
+            raw_traces = {}
+            time_vectors = {}
+            for cid, channel in self.current_recording.channels.items():
+                d = channel.get_data(idx)
+                t = channel.get_relative_time_vector(idx)
+                if d is not None and t is not None:
+                    raw_traces[cid] = d
+                    time_vectors[cid] = t
+
+            if raw_traces:
+                self.global_manual_trials.append(
+                    {"path": current_path, "trial_index": idx, "raw_traces": raw_traces, "time_vectors": time_vectors}
+                )
+
+        self._update_global_avg_label()
+
+        # Update plot if the global average is currently being shown
+        if self.config_panel.show_avg_btn.isChecked():
+            self._update_plot()
 
     def _clear_avg_selection(self):
-        self.selected_trial_indices.clear()
-        self._update_all_ui_state()
-        self._toggle_plot_selected_average(False)
+        self.global_manual_trials.clear()
+        self._update_global_avg_label()
+
+        if self.config_panel.show_avg_btn.isChecked():
+            self.config_panel.show_avg_btn.setChecked(False)  # Triggers update_plot
+        else:
+            self._update_plot()
+
+    def _update_global_avg_label(self):
+        if not self.global_manual_trials:
+            self.config_panel.selected_label.setText("Selected: None")
+            return
+
+        from collections import defaultdict
+
+        file_map = defaultdict(list)
+        for item in self.global_manual_trials:
+            file_map[item["path"].stem].append(item["trial_index"])
+
+        parts = []
+        for fname, indices in file_map.items():
+            idx_str = ", ".join(map(str, sorted(indices)))
+            parts.append(f"{fname} ({idx_str})")
+
+        self.config_panel.selected_label.setText("Selected: " + "; ".join(parts))
 
     def _toggle_plot_selected_average(self, show):
         # Logic to show/hide overlay

@@ -4,44 +4,44 @@ Welcome to Synaptipy's Documentation
 ======================================
 
 .. image:: https://img.shields.io/badge/source-GitHub-181717?logo=github&logoColor=white
-   :target: https://github.com/anzalks/synaptipy
-   :alt: GitHub repository
+ :target: https://github.com/anzalks/synaptipy
+ :alt: GitHub repository
 
 .. image:: https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white
-   :target: https://www.python.org/
-   :alt: Python 3.10+
+ :target: https://www.python.org/
+ :alt: Python 3.10+
 
 .. image:: https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
-   :target: https://github.com/anzalks/synaptipy
-   :alt: Platform: Windows | macOS | Linux
+ :target: https://github.com/anzalks/synaptipy
+ :alt: Platform: Windows | macOS | Linux
 
 .. image:: https://img.shields.io/badge/license-AGPL--3.0-blue
-   :target: https://github.com/anzalks/synaptipy/blob/main/LICENSE
-   :alt: License: AGPL-3.0
+ :target: https://github.com/anzalks/synaptipy/blob/main/LICENSE
+ :alt: License: AGPL-3.0
 
 .. image:: https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg?branch=main
-   :target: https://github.com/anzalks/synaptipy/actions/workflows/test.yml
-   :alt: CI status
+ :target: https://github.com/anzalks/synaptipy/actions/workflows/test.yml
+ :alt: CI status
 
 .. image:: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml/badge.svg?branch=main
-   :target: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml
-   :alt: Docs build
+ :target: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml
+ :alt: Docs build
 
 .. image:: https://readthedocs.org/projects/synaptipy/badge/?version=latest
-   :target: https://synaptipy.readthedocs.io/en/latest/
-   :alt: Documentation Status
+ :target: https://synaptipy.readthedocs.io/en/latest/
+ :alt: Documentation Status
 
 .. image:: https://img.shields.io/badge/code%20style-flake8-black
-   :target: https://flake8.pycqa.org/
-   :alt: Code style: flake8
+ :target: https://flake8.pycqa.org/
+ :alt: Code style: flake8
 
 .. image:: https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white
-   :target: https://github.com/anzalks/synaptipy
-   :alt: Collaborators Welcome
+ :target: https://github.com/anzalks/synaptipy
+ :alt: Collaborators Welcome
 
 .. image:: https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange
-   :target: https://github.com/anzalks/synaptipy/releases
-   :alt: Release
+ :target: https://github.com/anzalks/synaptipy/releases
+ :alt: Release
 
 |
 
@@ -49,13 +49,15 @@ Synaptipy is a cross-platform, open-source electrophysiology visualisation and a
 The primary focus is whole-cell patch-clamp and intracellular recordings; however, any
 electrophysiology signal whose file format is supported by the
 `Neo <https://neo.readthedocs.io>`_ I/O library can be loaded, visualised, and processed
-— including extracellular and multi-channel recordings.
+- including extracellular and multi-channel recordings.
 
 Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
-14 built-in analysis modules spanning intrinsic membrane properties, action potential
+15 built-in analysis modules spanning intrinsic membrane properties, action potential
 characterisation, synaptic event detection, and optogenetics, a composable batch processing
 engine, and an extensible plugin interface that allows custom analysis routines to be
-integrated without modifying the core package. File I/O is handled through
+integrated without modifying the core package. Three example plugins ship with
+the application and are loadable via a single checkbox in Preferences.
+File I/O is handled through
 `Neo <https://neo.readthedocs.io>`_, supporting over 30 acquisition formats including
 Axon ABF, WinWCP, CED/Spike2, Intan, Igor Pro, NWB, Open Ephys, and more.
 NWB export is provided via `PyNWB <https://pynwb.readthedocs.io>`_.
@@ -69,8 +71,8 @@ Collaborations, bug reports, and pull requests are welcome.
       :link: tutorial/index
       :link-type: doc
 
-      A full walkthrough of every feature — Explorer, Analyser, Batch
-      Processing, and Exporter — with the maths behind each analysis module.
+      A full walkthrough of every feature - Explorer, Analyser, Batch
+      Processing, and Exporter - with the maths behind each analysis module.
 
    .. grid-item-card:: User Guide
       :link: user_guide
@@ -95,6 +97,30 @@ Collaborations, bug reports, and pull requests are welcome.
 
 .. grid:: 2
 
+   .. grid-item-card:: Algorithmic Definitions
+      :link: algorithmic_definitions
+      :link-type: doc
+
+      Formal mathematical definitions for every analysis metric - suitable
+      for citation in manuscripts and peer review.
+
+   .. grid-item-card:: NWB Export Mapping
+      :link: nwb_mapping
+      :link-type: doc
+
+      How Synaptipy maps electrophysiology data to NWB 2.x containers,
+      including electrode metadata and unit conventions.
+
+.. grid:: 2
+
+   .. grid-item-card:: Writing Plugins
+      :link: extending_synaptipy
+      :link-type: doc
+
+      Add custom analysis routines without modifying source code -
+      complete reference for ``ui_params``, ``plots``, return-dict
+      conventions, and three bundled example plugins.
+
    .. grid-item-card:: Source on GitHub
       :link: https://github.com/anzalks/synaptipy
       :link-type: url
@@ -110,30 +136,33 @@ Collaborations, bug reports, and pull requests are welcome.
 ----
 
 .. toctree::
-   :maxdepth: 2
-   :caption: User Documentation
-   :hidden:
+ :maxdepth: 2
+ :caption: User Documentation
+ :hidden:
 
-   tutorial/index
-   user_guide
-   api_reference
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Developer Documentation
-   :hidden:
-
-   developer_guide
-   development/index
-   decisions/index
-   manuals/index
+ tutorial/index
+ user_guide
+ algorithmic_definitions
+ nwb_mapping
+ extending_synaptipy
+ api_reference
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Development Logs
-   :hidden:
+ :maxdepth: 2
+ :caption: Developer Documentation
+ :hidden:
 
-   development_logs/index
+ developer_guide
+ development/index
+ decisions/index
+ manuals/index
+
+.. toctree::
+ :maxdepth: 1
+ :caption: Development Logs
+ :hidden:
+
+ development_logs/index
 
 Indices and Tables
 ==================

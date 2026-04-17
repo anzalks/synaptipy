@@ -5,7 +5,9 @@ Shortcut Manager.
 Stateless router for keyboard shortcuts.
 Strictly maps Keys -> Controller Actions.
 """
+
 import logging
+
 from PySide6 import QtCore, QtGui
 
 log = logging.getLogger(__name__)

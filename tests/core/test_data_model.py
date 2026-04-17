@@ -1,6 +1,8 @@
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
+
 from Synaptipy.core.data_model import Channel, Recording
 
 # Sample data for testing

@@ -4,7 +4,7 @@
 
 Previously, Synaptipy had OS-specific dependencies that caused installation failures on different platforms:
 - **Windows**: Required ucrt, vc, vs2015_runtime packages
-- **macOS**: Required libcxx, libobjc, libtapi packages  
+- **macOS**: Required libcxx, libobjc, libtapi packages
 - **Linux**: Required libstdcxx-ng, libgcc-ng, libgomp packages
 
 ## New Solution: Single Environment Approach
@@ -20,15 +20,15 @@ Previously, Synaptipy had OS-specific dependencies that caused installation fail
 ```yaml
 # Single environment.yml handles all OSes
 dependencies:
-  # Cross-platform packages (work everywhere)
-  - python>=3.10
-  - qt>=6.7
-  - pyside6>=6.7
-  
-  # OS-specific packages (conda handles automatically)
-  # Windows: ucrt, vc, vs2015_runtime, libclang13, libwinpthread
-  # macOS: libcxx, libcxxabi, libobjc, libtapi, llvm-tools
-  # Linux: libstdcxx-ng, libgcc-ng, libgomp, libgfortran-ng, libgfortran5
+ # Cross-platform packages (work everywhere)
+ - python>=3.10
+ - qt>=6.7
+ - pyside6>=6.7
+
+ # OS-specific packages (conda handles automatically)
+ # Windows: ucrt, vc, vs2015_runtime, libclang13, libwinpthread
+ # macOS: libcxx, libcxxabi, libobjc, libtapi, llvm-tools
+ # Linux: libstdcxx-ng, libgcc-ng, libgomp, libgfortran-ng, libgfortran5
 ```
 
 ## Implementation Details
@@ -79,6 +79,21 @@ dependencies:
 - libgfortran-ng=14.0.4
 - libgfortran5=14.0.4
 ```
+### Standalone Installers (Recommended)
+
+The easiest way to use Synaptipy is to download the standalone application. No Python environment setup is required.
+
+[Download the Beta Release Here](https://github.com/anzalks/Synaptipy/releases)
+
+Please download the appropriate file for your system:
+
+* **Windows:** Download `Synaptipy_Setup_v0.1.0b6.exe` and follow the installation wizard.
+* **macOS:** Download `Synaptipy_v0.1.0b6.dmg`. Open the file and drag the Synaptipy application into your Applications folder.
+* **Linux:** Download `Synaptipy-v0.1.0b6-x86_64.AppImage`. You must make the file executable before running it. You can do this by right-clicking the file, navigating to Properties -> Permissions, and checking "Allow executing file as program", or via terminal: `chmod +x Synaptipy-v0.1.0b6-x86_64.AppImage`.
+
+**Troubleshooting Notes:**
+* **macOS:** Because the application is not currently signed via the Apple Developer Program, macOS Gatekeeper may block it the first time you try to open it. To bypass this, right-click (or Control-click) the Synaptipy app in your Applications folder and select "Open" from the context menu.
+* **Linux:** AppImages require FUSE (Filesystem in Userspace) to run. If the application fails to launch silently on newer distributions (like Ubuntu 22.04 or later), you likely need to install `libfuse2`. You can install it via your terminal using: `sudo apt install libfuse2`.
 
 ## Installation Commands
 
@@ -134,11 +149,11 @@ No manual intervention is required.
 
 ```
 synaptipy/
-├── environment.yml          # Single cross-platform environment
-├── setup.py                 # Simple setup script
-├── pyproject.toml           # Clean package configuration
-├── install.py               # Simple installation script
-└── README.md                # Updated documentation
+ environment.yml # Single cross-platform environment
+ setup.py # Simple setup script
+ pyproject.toml # Clean package configuration
+ install.py # Simple installation script
+ README.md # Updated documentation
 ```
 
 The following files are no longer present in the repository:

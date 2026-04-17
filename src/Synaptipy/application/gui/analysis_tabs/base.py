@@ -7,36 +7,34 @@ and provides common functionality like selecting the analysis target item.
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
 """
+
 import logging
-from typing import Optional, List, Dict, Any, Tuple
-from pathlib import Path
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from PySide6 import QtWidgets, QtCore, QtGui
-import pyqtgraph as pg
 import numpy as np
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
 
-# Use absolute path to import NeoAdapter and Recording
-from Synaptipy.core.data_model import Recording
-from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.application.controllers.analysis_plot_manager import AnalysisPlotManager
-from Synaptipy.shared.styling import (
-    style_button,
-)
-from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
-from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
 
 # NEW: Unified Plotting & Pipeline
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
+from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+
+# Use absolute path to import NeoAdapter and Recording
+from Synaptipy.core.data_model import Recording
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
-from Synaptipy.application.gui.analysis_worker import AnalysisWorker
-from Synaptipy.shared.plot_customization import (
-    get_average_pen,
-    get_single_trial_pen,
-    get_plot_customization_signals
-)
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.plot_customization import get_average_pen, get_plot_customization_signals, get_single_trial_pen
 from Synaptipy.shared.plot_exporter import PlotExporter
-from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
+from Synaptipy.shared.styling import (
+    style_button,
+)
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self,
         neo_adapter: NeoAdapter,
         settings_ref: Optional[QtCore.QSettings] = None,
-        parent: Optional[QtWidgets.QWidget] = None
+        parent: Optional[QtWidgets.QWidget] = None,
     ):
         """
         Initialize the base analysis tab.
@@ -89,6 +87,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # --- END ADDED ---
         # --- ADDED: Save Button ---
         self.save_button: Optional[QtWidgets.QPushButton] = None
+        # Saved Results list widget (populated by _setup_save_button)
+        self._saved_results_list: Optional[QtWidgets.QListWidget] = None
         # --- END ADDED ---
         # --- ADDED: Zoom Sync Manager ---
         self.zoom_sync: Optional[PlotZoomSyncManager] = None
@@ -112,12 +112,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # --- ADDED: Trial Filtering State ---
         self._filtered_indices: Optional[List[int]] = None
+        # Interleaved-trial spinboxes (created in _setup_data_group; initialised here
+        # so attribute access never raises AttributeError before setup completes)
+        self.interleaved_gap_spin: Optional[QtWidgets.QSpinBox] = None
+        self.interleaved_start_spin: Optional[QtWidgets.QSpinBox] = None
+        self.apply_interleaved_btn: Optional[QtWidgets.QPushButton] = None
         # --- END ADDED ---
 
         # --- ADDED: Preprocessing Widget Init ---
         # Initialize early so it's available for layout placement by subclasses
         self.preprocessing_widget = PreprocessingWidget()
         self.preprocessing_widget.preprocessing_requested.connect(self._handle_preprocessing_request)
+        self.preprocessing_widget.preprocessing_reset_requested.connect(self._handle_preprocessing_reset)
         # --- END ADDED ---
 
         # --- Scrollbar State (initialised early so signal handlers
@@ -159,6 +165,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._popup_windows: List[QtWidgets.QWidget] = []  # Track popup windows for cleanup
         self._analysis_thread: Optional[QtCore.QThread] = None  # Track analysis thread for cleanup
 
+        # --- PHASE 6: Visibility gating ---
+        # When a file is loaded in the Explorer while this tab is hidden, we
+        # defer the analysis update and process it lazily on next showEvent.
+        self._pending_update: bool = False
+
         log.debug(f"Initializing BaseAnalysisTab: {self.__class__.__name__}")
 
         # Connect Customization Signals
@@ -171,6 +182,39 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._update_plot_pens_only()
         else:
             self._plot_selected_data()
+
+    def _is_active_analysis_tab(self) -> bool:
+        """Return True only when this widget is active at every level of tab nesting.
+
+        At each ``QTabWidget`` ancestor, verifies that this widget is contained
+        within the currently selected page.  This handles the internal
+        ``QStackedWidget`` layer that QTabWidget inserts between the tab-widget
+        and its pages.
+
+        When no QTabWidget ancestor exists (standalone test widgets) the method
+        falls back to ``isVisible()``.
+        """
+        parent = self.parentWidget()
+        found_tab_widget = False
+        while parent is not None:
+            if isinstance(parent, QtWidgets.QTabWidget):
+                found_tab_widget = True
+                current_page = parent.currentWidget()
+                # self must be the current page or a descendant of it
+                if current_page is not self and (current_page is None or not current_page.isAncestorOf(self)):
+                    return False
+            parent = parent.parentWidget()
+        if not found_tab_widget:
+            return self.isVisible()
+        return True
+
+    def showEvent(self, event) -> None:
+        """Process any deferred analysis update accumulated while this tab was hidden."""
+        super().showEvent(event)
+        if getattr(self, "_pending_update", False):
+            self._pending_update = False
+            log.debug(f"{self.__class__.__name__}: processing deferred update on showEvent")
+            self._trigger_analysis()
 
     # --- ADDED: Method to set global controls (Removed duplicate) ---
     # The actual implementation is further down in the file.
@@ -208,7 +252,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _reset_plot_view(self) -> None:
         """Reset the plot view to default range."""
-        if self.plot_widget:
+        vb = self.plot_widget.getViewBox() if self.plot_widget else None
+        if vb is not None:
+            # Clear any hard limits that could constrain the reset, then
+            # enable auto-range so the ViewBox immediately snaps back to the
+            # full bounding rect of all visible plot items.
+            vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
+            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+        elif self.plot_widget:
             self.plot_widget.autoRange()
 
     def _save_plot(self):
@@ -238,14 +289,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     "plot_mode": "Analysis",  # Custom mode string
                     "selected_trial_indices": self._filtered_indices or "All",
                     "channel": self.signal_channel_combobox.currentText() if self.signal_channel_combobox else "",
-                    "data_source": self.data_source_combobox.currentText() if self.data_source_combobox else ""
+                    "data_source": self.data_source_combobox.currentText() if self.data_source_combobox else "",
                 }
 
                 exporter = PlotExporter(
                     recording=self._selected_item_recording,
                     plot_canvas_widget=self.plot_widget,
                     plot_canvas_wrapper=None,  # Analysis tabs don't use PlotCanvas wrapper same way
-                    config=export_config
+                    config=export_config,
                 )
 
                 try:
@@ -329,18 +380,24 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._is_preprocessing = True
 
         # Store settings in slot format - merge with existing
-        step_type = settings.get('type')
+        step_type = settings.get("type")
         if self._active_preprocessing_settings is None:
             self._active_preprocessing_settings = {}
 
-        if step_type == 'baseline':
-            self._active_preprocessing_settings['baseline'] = settings
-        elif step_type == 'filter':
-            filter_method = settings.get('method', 'unknown')
-            if 'filters' not in self._active_preprocessing_settings:
-                self._active_preprocessing_settings['filters'] = {}
+        if step_type == "baseline":
+            if settings.get("method") == "none":
+                # "None" selected — remove baseline step and revert
+                self._active_preprocessing_settings.pop("baseline", None)
+                if not self._active_preprocessing_settings:
+                    self._active_preprocessing_settings = None
+            else:
+                self._active_preprocessing_settings["baseline"] = settings
+        elif step_type == "filter":
+            filter_method = settings.get("method", "unknown")
+            if "filters" not in self._active_preprocessing_settings:
+                self._active_preprocessing_settings["filters"] = {}
             # Same filter method replaces old one
-            self._active_preprocessing_settings['filters'][filter_method] = settings
+            self._active_preprocessing_settings["filters"][filter_method] = settings
 
         # Rebuild pipeline from all settings
         self._rebuild_pipeline_from_settings()
@@ -388,24 +445,28 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if settings is None:
             # Reset all preprocessing
             self._active_preprocessing_settings = None
+            self._preprocessed_data = None
             self.pipeline.clear()
-        elif 'baseline' in settings or 'filters' in settings:
+            # Reset the PreprocessingWidget UI so combos show "None"
+            if self.preprocessing_widget:
+                self.preprocessing_widget.reset_ui()
+        elif "baseline" in settings or "filters" in settings:
             # Slot-based format - apply all steps
             self._active_preprocessing_settings = settings
             self._rebuild_pipeline_from_settings()
         else:
             # Single step format - accumulate by type
-            step_type = settings.get('type')
+            step_type = settings.get("type")
             if self._active_preprocessing_settings is None:
                 self._active_preprocessing_settings = {}
 
-            if step_type == 'baseline':
-                self._active_preprocessing_settings['baseline'] = settings
-            elif step_type == 'filter':
-                filter_method = settings.get('method', 'unknown')
-                if 'filters' not in self._active_preprocessing_settings:
-                    self._active_preprocessing_settings['filters'] = {}
-                self._active_preprocessing_settings['filters'][filter_method] = settings
+            if step_type == "baseline":
+                self._active_preprocessing_settings["baseline"] = settings
+            elif step_type == "filter":
+                filter_method = settings.get("method", "unknown")
+                if "filters" not in self._active_preprocessing_settings:
+                    self._active_preprocessing_settings["filters"] = {}
+                self._active_preprocessing_settings["filters"][filter_method] = settings
 
             self._rebuild_pipeline_from_settings()
 
@@ -419,17 +480,61 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             except Exception as e:
                 log.error(f"Failed to re-plot after global preprocessing: {e}")
 
+    def _handle_preprocessing_reset(self):
+        """Handle the Reset Preprocessing button click.
+
+        Clears all preprocessing state (pipeline, cached data, settings),
+        resets the PreprocessingWidget UI controls to their default state,
+        notifies the parent AnalyserTab to propagate the reset globally,
+        and re-plots with raw data.
+        """
+        log.debug(f"{self.__class__.__name__}: Preprocessing reset requested.")
+
+        # 1. Clear local state
+        self._active_preprocessing_settings = None
+        self._preprocessed_data = None
+        self.pipeline.clear()
+
+        # 2. Reset the PreprocessingWidget UI controls (combos back to "None")
+        if self.preprocessing_widget:
+            self.preprocessing_widget.reset_ui()
+
+        # 3. Notify parent AnalyserTab to propagate reset to all sibling tabs
+        #    and update SessionManager
+        parent_analyser = self.parent()
+        while parent_analyser is not None:
+            if hasattr(parent_analyser, "set_global_preprocessing"):
+                parent_analyser.set_global_preprocessing(None)
+                log.debug("Notified parent AnalyserTab about preprocessing reset.")
+                break
+            parent_analyser = parent_analyser.parent()
+
+        # 4. Update SessionManager directly as well
+        try:
+            from Synaptipy.application.session_manager import SessionManager
+
+            SessionManager().preprocessing_settings = None
+        except Exception as e:
+            log.warning(f"Could not clear SessionManager preprocessing: {e}")
+
+        # 5. Re-plot with raw data if data is loaded
+        if self._selected_item_recording is not None:
+            try:
+                self._plot_selected_data()
+            except Exception as e:
+                log.error(f"Failed to re-plot after preprocessing reset: {e}")
+
     def _rebuild_pipeline_from_settings(self):
         """Rebuild pipeline from current slot-based settings."""
         self.pipeline.clear()
         if self._active_preprocessing_settings:
             # Baseline first
-            if 'baseline' in self._active_preprocessing_settings:
-                self.pipeline.add_step(self._active_preprocessing_settings['baseline'])
+            if "baseline" in self._active_preprocessing_settings:
+                self.pipeline.add_step(self._active_preprocessing_settings["baseline"])
             # Then all filters in sorted order for consistency
-            if 'filters' in self._active_preprocessing_settings:
-                for method in sorted(self._active_preprocessing_settings['filters'].keys()):
-                    self.pipeline.add_step(self._active_preprocessing_settings['filters'][method])
+            if "filters" in self._active_preprocessing_settings:
+                for method in sorted(self._active_preprocessing_settings["filters"].keys()):
+                    self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
     def _on_preprocessing_complete(self, result_data):
         """
@@ -448,16 +553,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Legacy Handling for async if needed:
         if self._preprocessed_data is None:
             self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
-        self._preprocessed_data['data'] = result_data
+        self._preprocessed_data["data"] = result_data
 
         if self._current_plot_data:
-            self._current_plot_data['data'] = result_data
+            self._current_plot_data["data"] = result_data
 
         if self.plot_widget:
             self.plot_widget.clear()
-            time = self._current_plot_data.get('time')
+            time = self._current_plot_data.get("time")
             if time is not None:
-                self.plot_widget.plot(time, result_data, pen='k')
+                self.plot_widget.plot(time, result_data, pen="k")
                 self._update_plot_pens_only()
                 self._on_data_plotted()
 
@@ -533,8 +638,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Restore labels
         self.plot_widget.setLabel("bottom", "Time", units="s")
-        self.plot_widget.setLabel("left", self._current_plot_data.get("channel_name", ""),
-                                  units=self._current_plot_data.get("units", ""))
+        self.plot_widget.setLabel(
+            "left", self._current_plot_data.get("channel_name", ""), units=self._current_plot_data.get("units", "")
+        )
 
         # Auto-range to fit new data
         self.auto_range_plot()
@@ -578,7 +684,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         try:
             # Get current pens from customization manager
-            from Synaptipy.shared.plot_customization import get_single_trial_pen, get_average_pen, get_grid_pen
+            from Synaptipy.shared.plot_customization import get_average_pen, get_grid_pen, get_single_trial_pen
 
             single_trial_pen = get_single_trial_pen()
             average_pen = get_average_pen()
@@ -586,7 +692,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
             # Update pens for existing plot data items
             # Accessing items on PlotItem directly
-            items = self.plot_widget.items if hasattr(self.plot_widget, 'items') else []
+            items = self.plot_widget.items if hasattr(self.plot_widget, "items") else []
             for item in items:
                 if isinstance(item, pg.PlotDataItem):
                     # Determine which pen to apply based on item properties or name
@@ -628,18 +734,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.setLabel("left", "Amplitude")
         self.plot_widget.setLabel("bottom", "Time", units="s")
 
-        # Standard interaction mode
+        # Left mouse button pans; right mouse button zooms via SynaptipyViewBox.
         vb = self.plot_widget.getViewBox()
         if vb:
-            vb.setMouseMode(pg.ViewBox.RectMode)
+            pass  # Mouse mode is handled by SynaptipyViewBox (injected in add_plot).
 
         # Add windows signal protection? handled by new canvas?
         # Base canvas handles signal protection if needed, but we can verify.
         # For now, rely on canvas.
 
         self.analysis_region = pg.LinearRegionItem(
-            values=[0, 0], orientation=pg.LinearRegionItem.Vertical,
-            brush=pg.mkBrush(0, 255, 0, 50), movable=True
+            values=[0, 0], orientation=pg.LinearRegionItem.Vertical, brush=pg.mkBrush(0, 255, 0, 50), movable=True
         )
         self.analysis_region.setVisible(False)
         self.analysis_region.setZValue(-10)  # Behind data traces
@@ -820,7 +925,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     # --- ADDED: Method to setup save button ---
     def _setup_save_button(self, layout: QtWidgets.QLayout, alignment=QtCore.Qt.AlignmentFlag.AlignCenter):
-        """Adds a standard 'Save Result' button to the layout and connects it."""
+        """Adds a standard 'Save Result' button and a 'Saved Results' list to the layout."""
         self.save_button = QtWidgets.QPushButton(f"Save {self.get_display_name()} Result")
         self.save_button.setIcon(QtGui.QIcon.fromTheme("document-save"))  # Optional icon
         self.save_button.setToolTip(
@@ -837,7 +942,30 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             layout.addWidget(self.save_button, 0, alignment)
         else:
             layout.addWidget(self.save_button)
-        log.debug(f"{self.__class__.__name__}: Save button setup.")
+
+        # Saved results tracking list
+        saved_group = QtWidgets.QGroupBox("Saved Results")
+        saved_group.setToolTip("Results saved during this session. Each entry shows analysis type, file, and time.")
+        saved_inner = QtWidgets.QVBoxLayout(saved_group)
+        saved_inner.setContentsMargins(4, 4, 4, 4)
+
+        self._saved_results_list = QtWidgets.QListWidget()
+        self._saved_results_list.setMaximumHeight(120)
+        self._saved_results_list.setToolTip(
+            "Saved results for this analysis tab.\n" "Double-click an entry to copy the save path to the clipboard."
+        )
+        self._saved_results_list.itemDoubleClicked.connect(self._on_saved_result_double_clicked)
+        saved_inner.addWidget(self._saved_results_list)
+
+        layout.addWidget(saved_group)
+        log.debug(f"{self.__class__.__name__}: Save button and saved-results list set up.")
+
+    def _on_saved_result_double_clicked(self, item: QtWidgets.QListWidgetItem):
+        """Copy the item text to the clipboard when double-clicked."""
+        try:
+            QtWidgets.QApplication.clipboard().setText(item.text())
+        except Exception:
+            pass
 
     # --- END ADDED ---
 
@@ -908,9 +1036,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         try:
+            from PySide6.QtWidgets import QFileDialog
+
             from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
             from Synaptipy.shared.plot_exporter import PlotExporter
-            from PySide6.QtWidgets import QFileDialog
 
             # Generate default filename based on tab name
             default_filename = f"{self.__class__.__name__.lower().replace('tab', '')}_plot"
@@ -931,7 +1060,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     # 3. Export
                     exporter = PlotExporter(
                         recording=self._selected_item_recording,  # Can be None as wrapper is None
-                        plot_canvas_widget=self.plot_widget
+                        plot_canvas_widget=self.plot_widget,
                     )
 
                     success = exporter.export(filename, fmt, dpi)
@@ -988,7 +1117,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def auto_range_plot(self):
         """Auto-range the plot to fit all data."""
         log.debug(f"[ANALYSIS-BASE] Auto-ranging plot for {self.__class__.__name__}")
-        if self.zoom_sync:
+        vb = self.plot_widget.getViewBox() if self.plot_widget else None
+        if vb is not None:
+            # Clear any hard view-limits, enable auto-range mode, then also
+            # call autoRange() immediately so the extent is applied synchronously
+            # (required in offscreen/headless test environments where paint events
+            # are not dispatched, causing enableAutoRange-only updates to be deferred
+            # indefinitely).
+            log.debug("[ANALYSIS-BASE] Using enableAutoRange + immediate autoRange for full-data reset")
+            vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
+            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+            vb.autoRange()
+        elif self.zoom_sync:
             log.debug("[ANALYSIS-BASE] Using zoom sync auto-range")
             self.zoom_sync.auto_range()
         elif self.plot_widget:
@@ -1175,6 +1315,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if not global_settings:
             try:
                 from Synaptipy.application.session_manager import SessionManager
+
                 session_settings = SessionManager.instance().preprocessing_settings
                 if session_settings:
                     global_settings = session_settings
@@ -1223,14 +1364,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             specific_data = self._get_specific_result_data()
             if specific_data is not None:
                 self._request_save_result(specific_data)
-                # Provide visual feedback to the user
+                # Provide visual feedback in the status label
                 if hasattr(self, "status_label") and self.status_label:
                     self.status_label.setText("Status: Results saved successfully")
+                # Append entry to the saved results list widget
+                self._append_to_saved_results_list(specific_data)
             else:
                 log.warning("Save requested, but _get_specific_result_data returned None.")
                 QtWidgets.QMessageBox.warning(self, "Save Error", "No valid result available to save.")
-
-                # Disable the save button as a precaution
                 self._set_save_button_enabled(False)
         except NotImplementedError:
             log.error(
@@ -1240,6 +1381,29 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         except Exception as e:
             log.error(f"Error getting specific result data in {self.__class__.__name__}: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Save Error", f"Error preparing result for saving:\n{e}")
+
+    def _append_to_saved_results_list(self, result_data: Dict[str, Any]):
+        """Append a summary entry to the visible Saved Results list widget."""
+        if not hasattr(self, "_saved_results_list") or self._saved_results_list is None:
+            return
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%H:%M:%S")
+        fname = ""
+        if self._selected_item_recording and self._selected_item_recording.source_file:
+            fname = self._selected_item_recording.source_file.name
+        label = f"[{ts}] {self.get_display_name()}"
+        if fname:
+            label += f"  |  {fname}"
+        # Include the first numeric result value if available
+        for v in result_data.values():
+            if isinstance(v, (int, float)):
+                label += f"  =  {round(v, 4)}"
+                break
+        item = QtWidgets.QListWidgetItem(label)
+        item.setToolTip(str(result_data))
+        self._saved_results_list.addItem(item)
+        self._saved_results_list.scrollToBottom()
 
     # --- END ADDED ---
 
@@ -1345,7 +1509,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _toggle_analysis_region(self, state):
         """Toggle visibility of the analysis region."""
-        visible = (state == QtCore.Qt.CheckState.Checked.value)
+        visible = state == QtCore.Qt.CheckState.Checked.value
         if self.analysis_region and self.plot_widget:
             if visible:
                 # Add if not already added (check items list or just try add)
@@ -1427,7 +1591,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Signal Channel Selection
         self.signal_channel_combobox = QtWidgets.QComboBox()
-        self.signal_channel_combobox.setToolTip("Select the signal channel to plot and analyze.")
+        self.signal_channel_combobox.setToolTip(
+            "Select the recording channel to analyse.\n" "Channels are labelled by name, ID, and physical units."
+        )
         self.signal_channel_combobox.setEnabled(False)
 
         hbox1 = QtWidgets.QHBoxLayout()
@@ -1437,7 +1603,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Data Source Selection (Trial vs Average)
         self.data_source_combobox = QtWidgets.QComboBox()
-        self.data_source_combobox.setToolTip("Select specific trial or average trace.")
+        self.data_source_combobox.setToolTip(
+            "Select which data to analyse:\n"
+            "  Average Trace – mean of all (or selected) trials\n"
+            "  Trial N       – a specific individual sweep"
+        )
         self.data_source_combobox.setEnabled(False)
 
         hbox2 = QtWidgets.QHBoxLayout()
@@ -1452,27 +1622,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             layout.addWidget(data_group)
 
         # --- Group 2: Plot Selected Trials ---
-        # User requested consistency with Explorer Tab filtering
+        # User requested consistency with Explorer Tab filtering and specific subsets
         pst_group = QtWidgets.QGroupBox("Plot Selected Trials")
         pst_layout = QtWidgets.QVBoxLayout(pst_group)
         pst_layout.setSpacing(10)
 
         # Input Row
         in_layout = QtWidgets.QHBoxLayout()
-        in_layout.addWidget(QtWidgets.QLabel("Trial Gap (Skip N):"))
-        self.nth_trial_input = QtWidgets.QLineEdit()
-        self.nth_trial_input.setPlaceholderText("e.g. 0=All, 1=Every 2nd")
-        self.nth_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        self.nth_trial_input.returnPressed.connect(self._on_plot_filtered_trials)
-        in_layout.addWidget(self.nth_trial_input)
-
-        in_layout.addWidget(QtWidgets.QLabel("Start Trial:"))
-        self.start_trial_input = QtWidgets.QLineEdit()
-        self.start_trial_input.setPlaceholderText("0")
-        self.start_trial_input.setValidator(QtGui.QIntValidator(0, 9999))
-        self.start_trial_input.setText("0")
-        self.start_trial_input.returnPressed.connect(self._on_plot_filtered_trials)
-        in_layout.addWidget(self.start_trial_input)
+        in_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.trial_selection_input = QtWidgets.QLineEdit()
+        self.trial_selection_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        self.trial_selection_input.returnPressed.connect(self._on_plot_filtered_trials)
+        in_layout.addWidget(self.trial_selection_input)
 
         pst_layout.addLayout(in_layout)
 
@@ -1494,6 +1655,41 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         else:
             layout.addWidget(pst_group)
 
+        # --- Group 3: Interleaved Trials (Every Nth) ---
+        il_group = QtWidgets.QGroupBox("Interleaved Trials (Every Nth)")
+        il_layout = QtWidgets.QVBoxLayout(il_group)
+        il_layout.setSpacing(6)
+
+        il_row = QtWidgets.QHBoxLayout()
+        il_row.addWidget(QtWidgets.QLabel("Gap:"))
+        self.interleaved_gap_spin = QtWidgets.QSpinBox()
+        self.interleaved_gap_spin.setRange(0, 9999)
+        self.interleaved_gap_spin.setValue(0)
+        self.interleaved_gap_spin.setToolTip(
+            "Number of trials to skip between selected ones.\n"
+            "0 = every trial, 1 = every 2nd trial, 4 = every 5th trial."
+        )
+        il_row.addWidget(self.interleaved_gap_spin)
+        il_row.addSpacing(8)
+        il_row.addWidget(QtWidgets.QLabel("Start:"))
+        self.interleaved_start_spin = QtWidgets.QSpinBox()
+        self.interleaved_start_spin.setRange(0, 9999)
+        self.interleaved_start_spin.setValue(0)
+        self.interleaved_start_spin.setToolTip("0-based index of the first trial to include.")
+        il_row.addWidget(self.interleaved_start_spin)
+        il_layout.addLayout(il_row)
+
+        il_btn_row = QtWidgets.QHBoxLayout()
+        self.apply_interleaved_btn = QtWidgets.QPushButton("Apply Interleaved")
+        self.apply_interleaved_btn.clicked.connect(self._on_apply_interleaved_trials)
+        il_btn_row.addWidget(self.apply_interleaved_btn)
+        il_layout.addLayout(il_btn_row)
+
+        if isinstance(layout, QtWidgets.QFormLayout):
+            layout.addRow(il_group)
+        else:
+            layout.addWidget(il_group)
+
         # Connect signals to trigger plotting when selection changes
         self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_data)
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_data)
@@ -1503,22 +1699,54 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug(f"{self.__class__.__name__}: Data selection UI setup complete")
 
     def _reset_trial_filtering(self):
-        """Reset trial filter inputs and plot filtered trials default (all?). No, maybe just clears overlay."""
-        self.nth_trial_input.clear()
-        self.start_trial_input.setText("0")
+        """Reset trial filter inputs and plot filtered trials default."""
+        self.trial_selection_input.clear()
 
         # Clear filter state
         self._filtered_indices = None
 
         self._plot_selected_data()  # Reverts to single trial view
 
+    def _on_apply_interleaved_trials(self):
+        """Select every Nth trial (step = gap + 1) starting at start_index.
+
+        gap=0  -> step=1  (all trials)
+        gap=1  -> step=2  (every 2nd trial)
+        gap=4  -> step=5  (every 5th trial, e.g. 5 interleaved stimulus locations)
+
+        Populates ``_filtered_indices`` and refreshes the plot, mirroring
+        ExplorerTab._on_interleaved_selection_requested.
+        """
+        if not self._selected_item_recording:
+            return
+
+        first_ch = next(iter(self._selected_item_recording.channels.values()), None)
+        num_trials = getattr(first_ch, "num_trials", 0) if first_ch else 0
+        if num_trials == 0:
+            return
+
+        gap = self.interleaved_gap_spin.value()
+        start_index = max(0, self.interleaved_start_spin.value())
+        step = max(1, gap + 1)
+
+        selected = sorted(range(num_trials)[start_index::step])
+        if not selected:
+            return
+
+        # Mirror the selection into the text box so the user can see / copy it
+        self.trial_selection_input.blockSignals(True)
+        self.trial_selection_input.setText(",".join(str(i) for i in selected))
+        self.trial_selection_input.blockSignals(False)
+
+        self._filtered_indices = set(selected)
+        self._plot_selected_data()
+
     def _on_plot_filtered_trials(self):
         """
         Parse inputs and plot filtered trials.
         Replica of ExplorerTab logic.
         """
-        text_gap = self.nth_trial_input.text().strip()
-        text_start = self.start_trial_input.text().strip()
+        selection_text = self.trial_selection_input.text().strip()
 
         if not self._selected_item_recording:
             return
@@ -1530,49 +1758,32 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if num_trials == 0:
             return
 
-        start_idx = 0
+        selected_indices = []
+        if selection_text:
+            from Synaptipy.shared.utils import parse_trial_selection_string
 
-        try:
-            if text_gap:
-                gap = int(text_gap)
-            else:
-                gap = 0  # Default to All (Gap 0)
-            start_idx = int(text_start) if text_start else 0
-        except ValueError:
-            log.warning("Invalid input for trial selection.")
+            parsed = parse_trial_selection_string(selection_text, num_trials)
+            selected_indices = sorted(list(parsed))
+
+            if not selected_indices:
+                log.warning("Invalid input for trial selection or no matches.")
+                QtWidgets.QMessageBox.information(
+                    self, "Trial Selection", "No trials matched your criteria or invalid format."
+                )
+                self._filtered_indices = None
+                self._plot_selected_data()
+                return
+        else:
+            # Empty String means un-filter
+            self._filtered_indices = None
+            self._plot_selected_data()
             return
 
-        selected_indices = []
-        # Gap Logic: Step = Gap + 1
-        # Gap 0 -> Step 1 (All)
-        # Gap 1 -> Step 2 (Every 2nd)
-        step = gap + 1
+        log.info(f"Trial Selection: '{selection_text}' -> Found {len(selected_indices)} trials.")
 
-        # Guard against zero step (shouldn't happen with gap >= 0)
-        if step < 1:
-            step = 1
-
-        for i in range(start_idx, num_trials, step):
-            selected_indices.append(i)
-
-        log.info(
-            f"Trial Selection: Gap={gap} (Step={step}), Start={start_idx} -> Found {len(selected_indices)} trials."
-        )
-
-        if selected_indices:
-            # Store state and redraw using main loop
-            self._filtered_indices = set(selected_indices)
-            self._plot_selected_data()
-        else:
-            log.warning("No trials matched selection criteria (Indices empty).")
-            # FIX: Clear previous filter so we don't show old data
-            self._filtered_indices = None
-            QtWidgets.QMessageBox.information(self, "Trial Selection", "No trials matched your criteria.")
-            # Refresh plot (revert to default/all?)
-            self._plot_selected_data()
-
-            # Refresh plot (revert to default/all?)
-            self._plot_selected_data()
+        # Store state and redraw using main loop
+        self._filtered_indices = set(selected_indices)
+        self._plot_selected_data()
 
     # --- Plot Navigation Controls (Below Plot) ---
     def _setup_plot_navigation_controls(self, layout: QtWidgets.QVBoxLayout):
@@ -1653,7 +1864,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.setTitle(f"{channel.name} - Selected Trials ({len(trial_indices)})")
 
         # Color cycle
-        colors = ['r', 'g', 'b', 'c', 'm', 'y']
+        colors = ["r", "g", "b", "c", "m", "y"]
 
         for i, trial_idx in enumerate(sorted(list(trial_indices))):
             data = channel.get_data(trial_idx)
@@ -1735,7 +1946,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         for i in range(num_trials):
             self.data_source_combobox.addItem(f"Trial {i + 1}", userData=i)
 
-        # 3. Set Initial Selection based on item_type
+        # 4. Cross-File Average (always available for multi-file workflows)
+        self.data_source_combobox.addItem("Cross-File Average", userData="cross_file_average")
+
+        # 4. Set Initial Selection based on item_type
         if item_type == "Current Trial" and item_trial_index is not None and 0 <= item_trial_index < num_trials:
             # Find and select the specific trial
             index = self.data_source_combobox.findData(item_trial_index)
@@ -1797,6 +2011,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.clear()
             return
 
+        # Cross-File Average is computed on-demand when analysis runs;
+        # just update the title and preserve the existing plot.
+        if data_source == "cross_file_average":
+            if self.plot_widget:
+                self.plot_widget.setTitle("Cross-File Average - Run analysis to compute")
+            return
+
         if not self._selected_item_recording or chan_id not in self._selected_item_recording.channels:
             log.error(f"{self.__class__.__name__}: Channel {chan_id} not found in recording")
             self.plot_widget.clear()
@@ -1848,7 +2069,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 data_source=data_source,
                 preprocessing_settings=self._active_preprocessing_settings,
                 filtered_indices=self._filtered_indices if hasattr(self, "_filtered_indices") else None,
-                process_callback=self._pipeline_process_adapter
+                process_callback=self._pipeline_process_adapter,
             )
 
             if not plot_package:
@@ -1903,9 +2124,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                                     # Apply any preprocessing if active
                                     if self._active_preprocessing_settings:
                                         processed = self.pipeline.process(
-                                            trial_data,
-                                            plot_package.sampling_rate,
-                                            trial_time
+                                            trial_data, plot_package.sampling_rate, trial_time
                                         )
                                         if processed is not None:
                                             trial_data = processed
@@ -1919,14 +2138,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
                 # Plot the average on top
                 self.plot_widget.plot(
-                    plot_package.main_time, plot_package.main_data,
-                    pen=avg_pen, name=plot_package.label
+                    plot_package.main_time, plot_package.main_data, pen=avg_pen, name=plot_package.label
                 )
             else:
                 # Single trial selected - just plot it
                 self.plot_widget.plot(
-                    plot_package.main_time, plot_package.main_data,
-                    pen=trial_pen, name=plot_package.label
+                    plot_package.main_time, plot_package.main_data, pen=trial_pen, name=plot_package.label
                 )
 
             self.plot_widget.setLabel("bottom", "Time", units="s")
@@ -2002,9 +2219,184 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.analysis_region.setVisible(True)
         pass  # Default implementation does nothing
 
+    # --- Cross-File Average ---
+
+    def _extract_per_file_trace(
+        self, item: Dict[str, Any], parsed_trials: List[int], channel_idx: int
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Load one analysis item and return its averaged trace for the requested
+        trials.  Returns ``None`` if the file cannot be loaded, does not have
+        the channel, or does not contain all requested trials.
+
+        Args:
+            item:          Single entry from ``_analysis_items``.
+            parsed_trials: 0-based trial indices to average within the file.
+            channel_idx:   0-based channel position (sorted by channel-id).
+
+        Returns:
+            ``(time_array, averaged_data)`` or ``None``.
+        """
+        path = item.get("path")
+        if not path:
+            return None
+        try:
+            recording = self.neo_adapter.read_recording(path)
+            if recording is None:
+                log.debug(f"Cross-file avg: could not load {path}")
+                return None
+
+            channels_sorted = sorted(recording.channels.items())
+            if channel_idx >= len(channels_sorted):
+                log.debug(f"Cross-file avg: {path.name} has fewer channels than index {channel_idx} - skipping")
+                return None
+
+            _, channel = channels_sorted[channel_idx]
+
+            file_traces: List[np.ndarray] = []
+            file_times: List[np.ndarray] = []
+            for trial_idx in parsed_trials:
+                trial_data = channel.get_data(trial_idx)
+                trial_time = channel.get_relative_time_vector(trial_idx)
+                if trial_data is None or trial_time is None:
+                    raise ValueError(f"Trial {trial_idx} returned None data in {path.name}")
+                file_traces.append(trial_data)
+                file_times.append(trial_time)
+
+            if not file_traces:
+                return None
+
+            min_file_len = min(len(t) for t in file_traces)
+            file_avg = np.mean(np.array([t[:min_file_len] for t in file_traces]), axis=0)
+            return file_times[0][:min_file_len], file_avg
+
+        except (IndexError, ValueError) as e:
+            log.debug(f"Cross-file avg: skipping {path}: {e}")
+            return None
+
+    def _get_cross_file_average(
+        self, parsed_trials: List[int], channel_idx: int
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
+        """
+        Compute the grand average of specified trials across all loaded files.
+
+        Delegates per-file extraction to ``_extract_per_file_trace``.  Files
+        that fail silently are excluded so the average denominator stays
+        scientifically correct.  All valid per-file averages are truncated to
+        the shortest array before the grand average is formed.
+
+        Args:
+            parsed_trials: Ordered list of 0-based trial indices to extract.
+            channel_idx:   Position of the target channel (0-based, sorted by
+                           channel-id) shared across files.
+
+        Returns:
+            Tuple ``(time_array, grand_average, n_files)`` where *n_files* is
+            the number of files that contributed.  Returns ``(None, None, 0)``
+            when no valid traces could be obtained.
+        """
+        valid_traces: List[np.ndarray] = []
+        valid_times: List[np.ndarray] = []
+
+        for item in self._analysis_items:
+            result = self._extract_per_file_trace(item, parsed_trials, channel_idx)
+            if result is not None:
+                file_time, file_avg = result
+                valid_traces.append(file_avg)
+                valid_times.append(file_time)
+
+        if not valid_traces:
+            return None, None, 0
+
+        # Align all per-file averages to the minimum length before grand averaging
+        min_len = min(len(t) for t in valid_traces)
+        truncated_traces = np.array([t[:min_len] for t in valid_traces])
+        truncated_time = valid_times[0][:min_len]
+
+        grand_average = np.mean(truncated_traces, axis=0)
+        return truncated_time, grand_average, len(valid_traces)
+
+    def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
+        """
+        Compute the cross-file grand average, apply preprocessing, plot the
+        result, and run the registered analysis function on it.
+
+        Called by ``_trigger_analysis`` when "Cross-File Average" is active.
+
+        Args:
+            params: Parameters gathered from ``_gather_analysis_parameters``.
+        """
+        if not self.signal_channel_combobox:
+            return
+
+        channel_idx = self.signal_channel_combobox.currentIndex()
+
+        # Determine which trials to extract; fall back to trial 0
+        parsed_trials: List[int] = [0]
+        if hasattr(self, "trial_selection_input") and self.trial_selection_input:
+            sel_text = self.trial_selection_input.text().strip()
+            if sel_text and self._selected_item_recording:
+                first_ch = next(iter(self._selected_item_recording.channels.values()), None)
+                n_ref = getattr(first_ch, "num_trials", 1) if first_ch else 1
+                from Synaptipy.shared.utils import parse_trial_selection_string
+
+                parsed = sorted(parse_trial_selection_string(sel_text, n_ref))
+                if parsed:
+                    parsed_trials = parsed
+
+        time_arr, grand_avg, n_files = self._get_cross_file_average(parsed_trials, channel_idx)
+
+        if time_arr is None or grand_avg is None or n_files == 0:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Cross-File Average",
+                "No valid data could be extracted for the cross-file average.\n"
+                "Ensure all loaded files share the selected channel and trial index.",
+            )
+            return
+
+        # Apply preprocessing pipeline to the grand average
+        fs = self._current_plot_data.get("sampling_rate", 1.0) if self._current_plot_data else 1.0
+        processed = grand_avg.copy()
+        if self._active_preprocessing_settings and self.pipeline:
+            result = self.pipeline.process(grand_avg, fs, time_arr)
+            if result is not None:
+                processed = result
+
+        # Build data dict compatible with _execute_core_analysis
+        chan_name = self.signal_channel_combobox.currentText() if self.signal_channel_combobox else ""
+        units = self._current_plot_data.get("units", "") if self._current_plot_data else ""
+        cross_data: Dict[str, Any] = {
+            "data": processed,
+            "time": time_arr,
+            "raw_data": grand_avg.copy(),
+            "raw_time": time_arr.copy(),
+            "data_source": "cross_file_average",
+            "sampling_rate": fs,
+            "channel_name": chan_name,
+            "units": units,
+        }
+
+        # Plot the cross-file average
+        if self.plot_widget:
+            self.plot_widget.clear()
+            avg_pen = get_average_pen()
+            self.plot_widget.plot(time_arr, processed, pen=avg_pen, name="Cross-File Average")
+            self.plot_widget.setTitle(f"Cross-File Average (N={n_files} files)")
+            self.plot_widget.setLabel("bottom", "Time", units="s")
+            self.plot_widget.setLabel("left", chan_name, units=units)
+            self.auto_range_plot()
+
+        # Run the registered analysis on the grand average
+        results = self._execute_core_analysis(params, cross_data)
+        if results is None:
+            return
+
+        self._on_analysis_result(results)
+
     # --- PHASE 2: Template Method Pattern ---
     @QtCore.Slot()
-    def _trigger_analysis(self):
+    def _trigger_analysis(self):  # noqa: C901
         """
         Template method that orchestrates the analysis workflow.
         This method should NOT be overridden by subclasses.
@@ -2019,7 +2411,55 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         7. Enable save button
         8. Handle errors and restore cursor
         """
+        # Tab is in the process of being removed — exit silently.
+        if getattr(self, "_unmounting", False):
+            return
+
+        # Visibility gate: when this tab is hidden and the trigger is automatic
+        # (debounce timer fired in response to a SessionManager signal such as
+        # "new file loaded"), defer the work rather than running analysis in the
+        # background or spawning popups that steal focus from the Explorer.
+        # Manual user actions (button click) intentionally bypass this gate so
+        # the user still gets immediate feedback even if the tab is not
+        # currently the active one.
+        sender = self.sender()
+        _is_auto = (sender is self._analysis_debounce_timer) or isinstance(sender, QtCore.QTimer)
+        if _is_auto and not self._is_active_analysis_tab():
+            self._pending_update = True
+            log.debug(f"{self.__class__.__name__}: tab hidden — deferring auto analysis update")
+            return
+
         log.debug(f"{self.__class__.__name__}: Triggering analysis")
+
+        # --- Cross-File Average Intercept ---
+        # When this mode is active, data comes from all loaded files rather
+        # than from _current_plot_data (which reflects only the selected file).
+        if self.data_source_combobox is not None and self.data_source_combobox.currentData() == "cross_file_average":
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+            self._last_analysis_result = None
+            try:
+                params = self._gather_analysis_parameters()
+                if params:
+                    # Inject restricted analysis window if active
+                    if (
+                        getattr(self, "restrict_analysis_checkbox", None)
+                        and self.restrict_analysis_checkbox.isChecked()
+                        and getattr(self, "analysis_region", None)
+                    ):
+                        min_t, max_t = self.analysis_region.getRegion()
+                        params["t_start"] = min_t
+                        params["t_end"] = max_t
+                    self._execute_cross_file_average_analysis(params)
+            except Exception as e:
+                log.error(f"{self.__class__.__name__}: Cross-file analysis failed: {e}", exc_info=True)
+                QtWidgets.QMessageBox.critical(
+                    self, "Analysis Error", f"An error occurred during cross-file analysis:\n{str(e)}"
+                )
+                self._set_save_button_enabled(False)
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+            return
+        # --- End Cross-File Average Intercept ---
 
         # Validate data
         # Validate data
@@ -2047,9 +2487,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 return
 
             # --- INJECT GLOBAL ANALYSIS WINDOW ---
-            if getattr(self, "restrict_analysis_checkbox", None) and \
-               self.restrict_analysis_checkbox.isChecked() and \
-               getattr(self, "analysis_region", None):
+            if (
+                getattr(self, "restrict_analysis_checkbox", None)
+                and self.restrict_analysis_checkbox.isChecked()
+                and getattr(self, "analysis_region", None)
+            ):
                 min_t, max_t = self.analysis_region.getRegion()
                 params["t_start"] = min_t
                 params["t_end"] = max_t
@@ -2062,9 +2504,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # BUG 1 FIX: Check if results is None before proceeding
             if results is None:
                 log.warning(f"{self.__class__.__name__}: Analysis returned None")
-                QtWidgets.QMessageBox.warning(
-                    self, "Analysis Failed", "Analysis could not be completed. Please check your parameters and data."
-                )
+                # If the tab is being torn down (hot-reload), stay silent.
+                if not getattr(self, "_unmounting", False):
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Analysis Failed",
+                        "Analysis could not be completed. Please check your parameters and data.",
+                    )
                 self._set_save_button_enabled(False)
                 return
 
@@ -2114,10 +2560,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._analysis_thread.quit()
             self._analysis_thread.wait()
 
-    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:
+    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:  # noqa: C901
         """
         Create a separate popup window with a PlotWidget.
-        The window is tracked and will be closed when the tab is cleaned up.
+        The window includes Export Data and Save Plot buttons and is tracked
+        for cleanup when the tab is closed.
 
         Args:
             title: Window title.
@@ -2130,10 +2577,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Create a new window (QMainWindow or QWidget)
         popup = QtWidgets.QMainWindow(self)  # Parented to self so it closes with app, but we track it too
         popup.setWindowTitle(title)
-        popup.resize(600, 400)
+        popup.resize(600, 440)
 
         # Prevent window from being destroyed when closed - it will just hide
-        # User can restore it via View > Show Analysis Popup Windows
         popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         # Create central widget and layout
@@ -2150,7 +2596,82 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if y_label:
             plot_widget.setLabel("left", y_label)
 
-        layout.addWidget(plot_widget)
+        layout.addWidget(plot_widget, stretch=1)
+
+        # --- Button row: Reset View | Save Plot | Export Data ---
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.addStretch()
+
+        reset_btn = QtWidgets.QPushButton("Reset View")
+        reset_btn.setToolTip("Reset zoom and pan to fit all data in this popup.")
+        style_button(reset_btn)
+        reset_btn.clicked.connect(lambda: plot_widget.autoRange())
+        btn_layout.addWidget(reset_btn)
+
+        save_plot_btn = QtWidgets.QPushButton("Save Plot")
+        save_plot_btn.setToolTip("Save this plot as an image file (PNG, PDF, SVG).")
+        style_button(save_plot_btn)
+
+        def _save_popup_plot():
+            try:
+                from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+                from Synaptipy.shared.plot_exporter import PlotExporter
+
+                dialog = PlotExportDialog(popup)
+                if dialog.exec():
+                    cfg = dialog.get_settings()
+                    fmt = cfg["format"]
+                    dpi = cfg["dpi"]
+                    filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+                        popup,
+                        "Save Plot",
+                        str(Path.home() / f"{title.lower().replace(' ', '_')}.{fmt}"),
+                        f"Images (*.{fmt})",
+                    )
+                    if filename:
+                        exporter = PlotExporter(recording=None, plot_canvas_widget=plot_widget)
+                        exporter.export(filename, fmt, dpi)
+            except Exception as exc:
+                log.error(f"Popup plot save error: {exc}")
+                QtWidgets.QMessageBox.critical(popup, "Save Error", str(exc))
+
+        save_plot_btn.clicked.connect(_save_popup_plot)
+        btn_layout.addWidget(save_plot_btn)
+
+        export_btn = QtWidgets.QPushButton("Export Data")
+        export_btn.setToolTip("Export the plotted data values as a CSV file.")
+        style_button(export_btn)
+
+        def _export_popup_data():
+            try:
+                filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    popup,
+                    "Export Data",
+                    str(Path.home() / f"{title.lower().replace(' ', '_')}_data.csv"),
+                    "CSV Files (*.csv)",
+                )
+                if not filename:
+                    return
+                import csv
+
+                with open(filename, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.writer(fh)
+                    writer.writerow(["x", "y"])
+                    for item in plot_widget.getPlotItem().items:
+                        if hasattr(item, "getData"):
+                            xs, ys = item.getData()
+                            if xs is not None and ys is not None:
+                                for x, y in zip(xs, ys):
+                                    writer.writerow([x, y])
+            except Exception as exc:
+                log.error(f"Popup data export error: {exc}")
+                QtWidgets.QMessageBox.critical(popup, "Export Error", str(exc))
+
+        export_btn.clicked.connect(_export_popup_data)
+        btn_layout.addWidget(export_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
 
         # Show and track
         popup.show()
@@ -2369,9 +2890,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # Default pen for unselected (faded)
             unselected_pen = pg.mkPen((150, 150, 150, 50), width=1)
             # Selected pen
-            selected_pen = pg.mkPen('b', width=2)
+            selected_pen = pg.mkPen("b", width=2)
 
-            reset = (segment_index == -1)
+            reset = segment_index == -1
             base_trial_pen = get_single_trial_pen()
 
             # Access underlying PlotItem items if using Canvas

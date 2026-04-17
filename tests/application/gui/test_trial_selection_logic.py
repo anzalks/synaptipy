@@ -1,12 +1,14 @@
 import sys
 import unittest
-import numpy as np
 from unittest.mock import MagicMock
+
+import numpy as np
 from PySide6 import QtWidgets
+
+from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 
 # Mock imports if needed, but we can import directly
 from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 
 
 class TestTrialSelection(unittest.TestCase):
@@ -31,9 +33,7 @@ class TestTrialSelection(unittest.TestCase):
         cls.neo_adapter = MagicMock()
         cls.nwb_exporter = MagicMock()
         cls.status_bar = QtWidgets.QStatusBar()
-        cls.explorer = ExplorerTab(
-            cls.neo_adapter, cls.nwb_exporter, cls.status_bar
-        )
+        cls.explorer = ExplorerTab(cls.neo_adapter, cls.nwb_exporter, cls.status_bar)
 
     def setUp(self):
         # Rebuild recording data (pure Python, no Qt objects)
@@ -62,12 +62,12 @@ class TestTrialSelection(unittest.TestCase):
         self.assertEqual(len(self.explorer.selected_trial_indices), 0)
 
         # Request gap=1 -> step=2 (Every 2nd: 0, 2, 4, 6, 8)
-        self.explorer._on_trial_selection_requested(1)
+        self.explorer._on_trial_selection_requested("0, 2, 4, 6, 8")
         expected = {0, 2, 4, 6, 8}
         self.assertEqual(self.explorer.selected_trial_indices, expected)
 
         # Request gap=2 -> step=3 (Every 3rd: 0, 3, 6, 9)
-        self.explorer._on_trial_selection_requested(2)
+        self.explorer._on_trial_selection_requested("0, 3, 6, 9")
         expected = {0, 3, 6, 9}
         self.assertEqual(self.explorer.selected_trial_indices, expected)
 
@@ -83,12 +83,12 @@ class TestTrialSelection(unittest.TestCase):
         self.assertAlmostEqual(avg_sel[0], 4.0)
 
     def test_reset_selection(self):
-        self.explorer._on_trial_selection_requested(2)
+        self.explorer._on_trial_selection_requested("0, 3, 6, 9")
         self.assertNotEqual(len(self.explorer.selected_trial_indices), 0)
 
         self.explorer._on_trial_selection_reset_requested()
         self.assertEqual(len(self.explorer.selected_trial_indices), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

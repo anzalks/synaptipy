@@ -1,8 +1,8 @@
 # Interaction Debouncing Implementation - Complete
 
-**Author:** Anzal  
-**Email:** anzal.ks@gmail.com  
-**Repository:** https://github.com/anzalks/Synaptipy  
+**Author:** Anzal K Shahul
+**Email:** anzal.ks@gmail.com
+**Repository:** https://github.com/anzalks/Synaptipy
 **Date:** October 21, 2025
 
 ## Executive Summary
@@ -27,8 +27,8 @@ Implemented a debounce timer pattern for all interactive controls:
 
 ```
 User Input → Signal Handler → Store Value → Start Timer (50ms)
-                                                ↓ (after 50ms of no input)
-                                          Apply Changes → Update Plot
+ ↓ (after 50ms of no input)
+ Apply Changes → Update Plot
 ```
 
 This reduces redraws from ~100+/second to ~1-2/second during rapid adjustments.
@@ -51,35 +51,35 @@ This reduces redraws from ~100+/second to ~1-2/second during rapid adjustments.
 ```python
 timer = QtCore.QTimer()
 timer.setSingleShot(True)
-timer.setInterval(50)  # 50ms delay
+timer.setInterval(50) # 50ms delay
 timer.timeout.connect(self._apply_debounced_[control])
 ```
 
 #### Signal Handler Pattern
 ```python
 def _on_[control]_changed(self, value: int):
-    self._last_[control]_value = value
-    self._[control]_apply_timer.start()
-    log.debug(f"[_on_[control]_changed] Debouncing: {value}")
+ self._last_[control]_value = value
+ self._[control]_apply_timer.start()
+ log.debug(f"[_on_[control]_changed] Debouncing: {value}")
 ```
 
 #### Apply Method Pattern
 ```python
 def _apply_debounced_[control](self):
-    value = self._last_[control]_value
-    log.debug(f"[_apply_debounced_[control]] Applying: {value}")
-    
-    # Guards
-    if self.manual_limits_enabled or self._updating_viewranges:
-        return
-    
-    # Full inline logic (no delegation)
-    self._updating_viewranges = True
-    try:
-        # Apply changes to ViewBox
-        # Update scrollbars if needed
-    finally:
-        self._updating_viewranges = False
+ value = self._last_[control]_value
+ log.debug(f"[_apply_debounced_[control]] Applying: {value}")
+
+ # Guards
+ if self.manual_limits_enabled or self._updating_viewranges:
+ return
+
+ # Full inline logic (no delegation)
+ self._updating_viewranges = True
+ try:
+ # Apply changes to ViewBox
+ # Update scrollbars if needed
+ finally:
+ self._updating_viewranges = False
 ```
 
 ## Files Modified
@@ -98,15 +98,15 @@ self._last_individual_y_scroll_values: Dict[str, int] = {}
 #### Lines 1629-1638: X-axis handlers updated
 ```python
 def _on_x_zoom_changed(self, value: int):
-    self._last_x_zoom_value = value
-    self._x_zoom_apply_timer.start()
-    log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
+ self._last_x_zoom_value = value
+ self._x_zoom_apply_timer.start()
+ log.debug(f"[_on_x_zoom_changed] Debouncing X zoom: {value}")
 
 def _on_x_scrollbar_changed(self, value: int):
-    if not self._updating_scrollbars:
-        self._last_x_scroll_value = value
-        self._x_scroll_apply_timer.start()
-        log.debug(f"[_on_x_scrollbar_changed] Debouncing X scroll: {value}")
+ if not self._updating_scrollbars:
+ self._last_x_scroll_value = value
+ self._x_scroll_apply_timer.start()
+ log.debug(f"[_on_x_scrollbar_changed] Debouncing X scroll: {value}")
 ```
 
 #### Lines 1640-1672: X-axis apply methods
@@ -120,15 +120,15 @@ Replaced delegation to helper methods with full inline logic:
 #### Lines 1799-1826: Y global handlers updated
 ```python
 def _on_global_y_zoom_changed(self, value: int):
-    self._last_y_global_zoom_value = value
-    self._y_global_zoom_apply_timer.start()
-    log.debug(f"[_on_global_y_zoom_changed] Debouncing Global Y zoom: {value}")
+ self._last_y_global_zoom_value = value
+ self._y_global_zoom_apply_timer.start()
+ log.debug(f"[_on_global_y_zoom_changed] Debouncing Global Y zoom: {value}")
 
 def _on_global_y_scrollbar_changed(self, value: int):
-    if not self._updating_scrollbars:
-        self._last_y_global_scroll_value = value
-        self._y_global_scroll_apply_timer.start()
-        log.debug(f"[_on_global_y_scrollbar_changed] Debouncing Global Y scroll: {value}")
+ if not self._updating_scrollbars:
+ self._last_y_global_scroll_value = value
+ self._y_global_scroll_apply_timer.start()
+ log.debug(f"[_on_global_y_scrollbar_changed] Debouncing Global Y scroll: {value}")
 ```
 
 #### Lines 1935-2036: Individual Y controls (NEW)
@@ -141,7 +141,7 @@ def _on_global_y_scrollbar_changed(self, value: int):
 
 ### 2. `README.md`
 
-Added "⚡ Performance Optimizations" section (Lines 91-111):
+Added " Performance Optimizations" section (Lines 91-111):
 - Describes interaction debouncing
 - Lists plot rendering optimizations
 - Documents expected performance characteristics
@@ -174,28 +174,28 @@ platform darwin -- Python 3.11.13, pytest-8.4.1, pluggy-1.6.0
 PySide6 6.9.2 -- Qt runtime 6.9.2 -- Qt compiled 6.9.2
 collected 74 items
 
-tests/application/gui/test_exporter_tab.py ....                          [  5%]
-tests/application/gui/test_main_window.py ............                   [ 21%]
-tests/application/gui/test_rin_tab.py .....                              [ 28%]
-tests/core/test_data_model.py .........                                  [ 40%]
-tests/infrastructure/exporters/test_nwb_exporter.py .s.                  [ 44%]
-tests/infrastructure/file_readers/test_neo_adapter.py .........          [ 56%]
-tests/shared/test_constants.py ....                                      [ 62%]
-tests/shared/test_data_cache.py ..........                               [ 75%]
-tests/shared/test_plot_customization.py ..........                       [ 89%]
-tests/shared/test_styling.py ........                                    [100%]
+tests/application/gui/test_exporter_tab.py .... [ 5%]
+tests/application/gui/test_main_window.py ............ [ 21%]
+tests/application/gui/test_rin_tab.py ..... [ 28%]
+tests/core/test_data_model.py ......... [ 40%]
+tests/infrastructure/exporters/test_nwb_exporter.py .s. [ 44%]
+tests/infrastructure/file_readers/test_neo_adapter.py ......... [ 56%]
+tests/shared/test_constants.py .... [ 62%]
+tests/shared/test_data_cache.py .......... [ 75%]
+tests/shared/test_plot_customization.py .......... [ 89%]
+tests/shared/test_styling.py ........ [100%]
 
 ======================== 73 passed, 1 skipped in 31.63s ========================
 ```
 
-**Result**: ✅ All tests pass, zero regressions
+**Result**: All tests pass, zero regressions
 
 ### Linter Status
 ```
 No linter errors found.
 ```
 
-**Result**: ✅ Clean code, no linter issues
+**Result**: Clean code, no linter issues
 
 ## Technical Design Decisions
 
@@ -311,12 +311,12 @@ Testing:
 - No linter errors
 - Backwards compatible (no API changes)
 
-Author: Anzal <anzal.ks@gmail.com>
+Author: Anzal K Shahul <anzal.ks@gmail.com>
 ```
 
 ## Conclusion
 
 The interaction debouncing implementation is complete, tested, and ready for use. The changes eliminate UI lag while maintaining full functionality and passing all automated tests. The code is well-documented, maintainable, and extensible for future performance optimizations.
 
-**Status**: ✅ COMPLETE AND VERIFIED
+**Status**: COMPLETE AND VERIFIED
 

@@ -1,0 +1,126 @@
+name: Installer CI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }} Installer
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: Synaptipy-Linux.AppImage
+            artifact_path: dist/*.AppImage
+          - os: windows-latest
+            artifact_name: Synaptipy_Setup.exe
+            artifact_path: Synaptipy_Setup_*.exe
+          - os: macos-latest
+            artifact_name: Synaptipy.dmg
+            artifact_path: dist/*.dmg
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" -r requirements.txt
+
+      - name: Build ICNS and ICO
+        run: python scripts/build_icons.py
+
+      - name: Build with PyInstaller
+        run: pyinstaller synaptipy.spec
+
+      - name: Package for Windows
+        if: runner.os == 'Windows'
+        run: |
+          $VERSION = (Select-String -Path pyproject.toml -Pattern '^version = "(.*)"$').Matches.Groups[1].Value
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/dMyAppVersion=$VERSION" installer\windows_setup.iss
+        shell: powershell
+
+      - name: Package for macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install create-dmg
+          VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          create-dmg \
+            --volname "Synaptipy Installer" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "Synaptipy.app" 200 190 \
+            --hide-extension "Synaptipy.app" \
+            --app-drop-link 600 185 \
+            "dist/Synaptipy_${VERSION}.dmg" \
+            "dist/Synaptipy.app"
+
+      - name: Package for Linux (AppImage)
+        if: runner.os == 'Linux'
+        run: |
+          VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          
+          # 1. Create the AppDir structure required by AppImage
+          mkdir -p AppDir/usr/bin
+          
+          # 2. Copy the PyInstaller output into the AppDir
+          cp -r dist/Synaptipy/* AppDir/usr/bin/
+          
+          # 3. Copy the desktop file and icon to the root of AppDir
+          cp installer/linux/synaptipy.desktop AppDir/
+          cp src/Synaptipy/resources/icons/logo.png AppDir/synaptipy.png
+          
+          # 4. Create the standard AppRun symlink pointing to our binary
+          cd AppDir
+          ln -s usr/bin/Synaptipy AppRun
+          cd ..
+          
+          # 5. Download the official AppImage packaging tool
+          wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+          
+          # 6. Build the AppImage (using --appimage-extract-and-run to run it in CI environments seamlessly)
+          ./appimagetool --appimage-extract-and-run AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+
+  release:
+    name: Upload to Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+
+      - name: Upload binaries to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          files: |
+            dist-artifacts/*/*.AppImage
+            dist-artifacts/*/*.exe
+            dist-artifacts/*/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,8 @@
-
 import sys
+
 import pytest
 from PySide6 import QtCore, QtWidgets  # noqa: F401
+
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
 
@@ -28,10 +29,11 @@ def reset_canvas(plot_canvas):
     """
     plot_canvas.clear_plots()
     yield
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         return
     try:
         from PySide6.QtCore import QCoreApplication
+
         QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass

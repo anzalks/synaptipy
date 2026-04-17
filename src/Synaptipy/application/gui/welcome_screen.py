@@ -11,7 +11,10 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 from pathlib import Path
+
 from PySide6 import QtCore, QtGui, QtWidgets
+
+from Synaptipy import __version__
 
 log = logging.getLogger(__name__)
 
@@ -165,7 +168,7 @@ class WelcomeScreen(QtWidgets.QWidget):
         main_layout.addStretch()
 
         # Version info at bottom
-        version_label = QtWidgets.QLabel("Version 0.1.0")
+        version_label = QtWidgets.QLabel(f"Version {__version__}")
         # Use system font styling for consistency
         font = version_label.font()
         font.setPointSize(10)

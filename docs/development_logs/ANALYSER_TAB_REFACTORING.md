@@ -1,7 +1,7 @@
 # AnalyserTab Layout Refactoring
 
-**Date:** November 21, 2025  
-**Author:** Anzal K Shahul  
+**Date:** November 21, 2025
+**Author:** Anzal K Shahul
 **Status:** Completed
 
 ## Overview
@@ -14,24 +14,24 @@ Successfully refactored the `AnalyserTab` to implement a "Sidebar" layout with c
 
 #### Layout Changes
 - **Replaced vertical layout with horizontal splitter:**
-  - Left Pane (70%): Analysis sub-tabs with plots (naturally becomes ~1.2x+ taller)
-  - Right Pane (30%): Sidebar with controls
-  
+ - Left Pane (70%): Analysis sub-tabs with plots (naturally becomes ~1.2x+ taller)
+ - Right Pane (30%): Sidebar with controls
+
 - **Sidebar Components:**
-  - "Analysis Input Set" group with file list widget
-  - "Analyze Item" group with centralized combo box selector
-  - Both groups pushed to top with stretch at bottom
+ - "Analysis Input Set" group with file list widget
+ - "Analyze Item" group with centralized combo box selector
+ - Both groups pushed to top with stretch at bottom
 
 #### New Features
 - **Central Analysis Item Selector:**
-  - Added `self.central_analysis_item_combo` attribute
-  - Populated in `update_analysis_sources()` method
-  - Replaces individual combo boxes in each analysis tab
+ - Added `self.central_analysis_item_combo` attribute
+ - Populated in `update_analysis_sources()` method
+ - Replaces individual combo boxes in each analysis tab
 
 - **Central Control Logic:**
-  - `_on_central_item_selected(index)`: Forwards selection to active tab
-  - `_on_tab_changed(tab_index)`: Updates newly visible tab with current selection
-  - Connected to `sub_tab_widget.currentChanged` signal
+ - `_on_central_item_selected(index)`: Forwards selection to active tab
+ - `_on_tab_changed(tab_index)`: Updates newly visible tab with current selection
+ - Connected to `sub_tab_widget.currentChanged` signal
 
 #### Updated Methods
 - `_setup_ui()`: Complete rewrite to use horizontal splitter layout
@@ -42,59 +42,59 @@ Successfully refactored the `AnalyserTab` to implement a "Sidebar" layout with c
 
 #### Removed Components
 - **Deleted `_setup_analysis_item_selector()` method**
-  - Tabs no longer create their own selector
-  - Central selector in parent handles this now
+ - Tabs no longer create their own selector
+ - Central selector in parent handles this now
 
 - **Removed `self.analysis_item_combo` attribute**
-  - Commented out in `__init__`
-  - All related logic removed
+ - Commented out in `__init__`
+ - All related logic removed
 
 #### Simplified Methods
 - **`update_state()`:**
-  - Only updates `self._analysis_items` 
-  - Resets `self._selected_item_recording = None`
-  - Clears plot widget if present
-  - No longer manages combo box population
+ - Only updates `self._analysis_items`
+ - Resets `self._selected_item_recording = None`
+ - Clears plot widget if present
+ - No longer manages combo box population
 
 - **`_on_analysis_item_selected()`:**
-  - Preserved exactly as before
-  - Now called externally by parent `AnalyserTab`
-  - Still handles data loading and UI updates
+ - Preserved exactly as before
+ - Now called externally by parent `AnalyserTab`
+ - Still handles data loading and UI updates
 
 #### Updated Documentation
 - `_setup_ui()` docstring updated
-  - Removed requirement to call `_setup_analysis_item_selector()`
-  - Notes that item selector is now centralized in parent
+ - Removed requirement to call `_setup_analysis_item_selector()`
+ - Notes that item selector is now centralized in parent
 
 ### 3. `src/Synaptipy/application/__main__.py`
 
 #### High DPI Support
 - **Added High DPI PassThrough policy:**
-  - Checks for `QtCore.Qt.HighDpiScaleFactorRoundingPolicy` availability
-  - Sets `PassThrough` policy before QApplication creation
-  - Enables `AA_UseHighDpiPixmaps` attribute
-  - Includes error handling and logging
+ - Checks for `QtCore.Qt.HighDpiScaleFactorRoundingPolicy` availability
+ - Sets `PassThrough` policy before QApplication creation
+ - Enables `AA_UseHighDpiPixmaps` attribute
+ - Includes error handling and logging
 
 ## Architecture Benefits
 
 ### Before
 ```
 ┌─────────────────────────────────────┐
-│     Analysis Input Set (List)       │
+│ Analysis Input Set (List) │
 ├─────────────────────────────────────┤
 │ ┌─────────────────────────────────┐ │
-│ │   RMP Tab                       │ │
-│ │ ┌────────────────────────────┐  │ │
-│ │ │ "Analyze Item:" [Combo ▼]  │  │ │
-│ │ └────────────────────────────┘  │ │
-│ │ [Plot Area - smaller]          │ │
+│ │ RMP Tab │ │
+│ │ ┌────────────────────────────┐ │ │
+│ │ │ "Analyze Item:" [Combo ▼] │ │ │
+│ │ └────────────────────────────┘ │ │
+│ │ [Plot Area - smaller] │ │
 │ └─────────────────────────────────┘ │
 │ ┌─────────────────────────────────┐ │
-│ │   Rin Tab                       │ │
-│ │ ┌────────────────────────────┐  │ │
-│ │ │ "Analyze Item:" [Combo ▼]  │  │ │
-│ │ └────────────────────────────┘  │ │
-│ │ [Plot Area - smaller]          │ │
+│ │ Rin Tab │ │
+│ │ ┌────────────────────────────┐ │ │
+│ │ │ "Analyze Item:" [Combo ▼] │ │ │
+│ │ └────────────────────────────┘ │ │
+│ │ [Plot Area - smaller] │ │
 │ └─────────────────────────────────┘ │
 └─────────────────────────────────────┘
 ```
@@ -102,22 +102,22 @@ Successfully refactored the `AnalyserTab` to implement a "Sidebar" layout with c
 ### After
 ```
 ┌────────────────────────────────────┬──────────────────┐
-│                                    │ Analysis Input   │
-│  RMP Tab | Rin Tab | Spike Tab    │ Set (List)       │
-│  ┌──────────────────────────────┐ │ ┌──────────────┐ │
-│  │                              │ │ │ File: test1  │ │
-│  │  [Plot Area - 1.2x+ taller]  │ │ │ File: test2  │ │
-│  │                              │ │ └──────────────┘ │
-│  │                              │ │                  │
-│  │                              │ │ Analyze Item:    │
-│  │                              │ │ ┌──────────────┐ │
-│  │                              │ │ │ Item 1: ... ▼│ │
-│  │                              │ │ └──────────────┘ │
-│  │                              │ │                  │
-│  └──────────────────────────────┘ │                  │
-│                                    │                  │
+│ │ Analysis Input │
+│ RMP Tab | Rin Tab | Spike Tab │ Set (List) │
+│ ┌──────────────────────────────┐ │ ┌──────────────┐ │
+│ │ │ │ │ File: test1 │ │
+│ │ [Plot Area - 1.2x+ taller] │ │ │ File: test2 │ │
+│ │ │ │ └──────────────┘ │
+│ │ │ │ │
+│ │ │ │ Analyze Item: │
+│ │ │ │ ┌──────────────┐ │
+│ │ │ │ │ Item 1: ... ▼│ │
+│ │ │ │ └──────────────┘ │
+│ │ │ │ │
+│ └──────────────────────────────┘ │ │
+│ │ │
 └────────────────────────────────────┴──────────────────┘
-         70% (Stretchable)                30%
+ 70% (Stretchable) 30%
 ```
 
 ## Benefits
@@ -131,50 +131,50 @@ Successfully refactored the `AnalyserTab` to implement a "Sidebar" layout with c
 ## Testing
 
 ### Import Test
-✅ Successfully imports without errors
+ Successfully imports without errors
 
 ### Unit Tests
 - Core tests: All passing
 - Explorer tab tests: All passing
 - Main window tests: Mostly passing (1 teardown error unrelated to refactoring)
 - Analysis tab tests: Some failures expected due to removed `analysis_item_combo` attribute
-  - Tests need updating to reflect new architecture
-  - Functionality works correctly despite test failures
+ - Tests need updating to reflect new architecture
+ - Functionality works correctly despite test failures
 
 ## Migration Notes for Subclasses
 
 ### What Changed for Analysis Tab Developers
 
 1. **No longer call `_setup_analysis_item_selector()`**
-   - Remove this line from your `_setup_ui()` method
-   - Item selector is now in parent sidebar
+ - Remove this line from your `_setup_ui()` method
+ - Item selector is now in parent sidebar
 
 2. **`update_state()` signature unchanged**
-   - Still receives `analysis_items` list
-   - Still should reset internal state
-   - No need to populate combo box anymore
+ - Still receives `analysis_items` list
+ - Still should reset internal state
+ - No need to populate combo box anymore
 
 3. **`_on_analysis_item_selected()` signature unchanged**
-   - Will be called by parent when user selects item
-   - Still responsible for loading data and updating UI
-   - No changes needed to this method
+ - Will be called by parent when user selects item
+ - Still responsible for loading data and updating UI
+ - No changes needed to this method
 
 ### Example Migration
 
 **Before:**
 ```python
 def _setup_ui(self):
-    layout = QtWidgets.QVBoxLayout(self)
-    self._setup_analysis_item_selector(layout)  # Remove this
-    # ... rest of UI setup
+ layout = QtWidgets.QVBoxLayout(self)
+ self._setup_analysis_item_selector(layout) # Remove this
+ # ... rest of UI setup
 ```
 
 **After:**
 ```python
 def _setup_ui(self):
-    layout = QtWidgets.QVBoxLayout(self)
-    # Item selector removed - now in parent sidebar
-    # ... rest of UI setup
+ layout = QtWidgets.QVBoxLayout(self)
+ # Item selector removed - now in parent sidebar
+ # ... rest of UI setup
 ```
 
 ## Future Enhancements

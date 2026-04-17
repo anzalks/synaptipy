@@ -1,12 +1,14 @@
 import sys
-import pytest
-import numpy as np
 from unittest.mock import MagicMock
+
+import numpy as np
+import pytest
 from PySide6 import QtWidgets
+
 from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture(scope="session")
@@ -35,10 +37,11 @@ def drain_qt_events_between_tests():
     macOS, so this local fixture mirrors that behaviour.
     """
     yield
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         return
     try:
         from PySide6.QtCore import QCoreApplication
+
         QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass
@@ -84,9 +87,17 @@ def test_explorer_plotting(explorer_tab, qtbot):
     assert "ch1" in explorer_tab.plot_canvas.channel_plots
     assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) > 0
 
+    # Pooling: overlay mode should not allocate new PlotDataItems on redraw
+    overlay_pool = len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"])
+    explorer_tab._update_plot()
+    assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) == overlay_pool
+
     # Test Trial Cycling
     explorer_tab.current_plot_mode = explorer_tab.PlotMode.CYCLE_SINGLE
     explorer_tab._update_plot()
+    cycle_pool = len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"])
+    explorer_tab._update_plot()
+    assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) == cycle_pool
 
     assert explorer_tab.current_trial_index == 0
     explorer_tab._next_trial()

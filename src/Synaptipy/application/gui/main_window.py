@@ -4,35 +4,38 @@
 Main Window for the Synaptipy GUI application using a tabbed interface.
 Manages overall window structure, menu, status bar, tabs, and core adapters.
 """
+
 import logging
-import sys
 import os
-from pathlib import Path
-from typing import List, Dict, Any
+import sys
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List
 
 from PySide6 import QtCore, QtGui, QtWidgets
+
+from Synaptipy.application.controllers.file_io_controller import FileIOController
+from Synaptipy.application.session_manager import SessionManager
 
 # --- Synaptipy Imports / Dummies ---
 # --- Synaptipy Imports ---
 from Synaptipy.core.data_model import Recording
-from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.infrastructure.exporters import NWBExporter
-from Synaptipy.shared.error_handling import SynaptipyError, ExportError
+from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.error_handling import ExportError, SynaptipyError
 
 # Import the new DataLoader for background file loading
 from ..data_loader import DataLoader
-from Synaptipy.application.controllers.file_io_controller import FileIOController
+from .about_dialog import AboutDialog
+from .analyser_tab import AnalyserTab
 
 # --- Tab Imports ---
 # Use RELATIVE imports for tabs and dialogs within the gui package
 from .explorer import ExplorerTab
-from .analyser_tab import AnalyserTab
 from .exporter_tab import ExporterTab
 from .nwb_dialog import NwbMetadataDialog
 from .plot_customization_dialog import PlotCustomizationDialog
-from Synaptipy.application.session_manager import SessionManager
 
 try:
     import tzlocal  # Optional, for local timezone handling
@@ -202,6 +205,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_popup_windows_action = view_menu.addAction("Show Analysis &Popup Windows...")
         self.show_popup_windows_action.setToolTip("Show or restore any analysis popup windows (F-I curve, etc.)")
         self.show_popup_windows_action.triggered.connect(self._show_popup_windows)
+
+        # --- Help Menu ---
+        help_menu = menu_bar.addMenu("&Help")
+        self.about_action = help_menu.addAction("&About Synaptipy...")
+        self.about_action.setToolTip("Show version and citation information")
+        self.about_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.about_action.triggered.connect(self._show_about_dialog)
 
         log.debug("Menu bar and status bar setup complete.")
 
@@ -416,22 +426,53 @@ class MainWindow(QtWidgets.QMainWindow):
             log.error(f"Failed to show plot customization dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open plot customization:\n{e}")
 
+    def _show_about_dialog(self) -> None:
+        """Show the About Synaptipy dialog (Help -> About)."""
+        try:
+            import Synaptipy
+
+            version = getattr(Synaptipy, "__version__", "unknown")
+        except Exception:
+            version = "unknown"
+        dialog = AboutDialog(version=version, parent=self)
+        dialog.exec()
+
     def _show_preferences(self):
         """Show the preferences dialog."""
         try:
             from .preferences_dialog import PreferencesDialog
 
             dialog = PreferencesDialog(self)
+            dialog.sigPluginsToggled.connect(self._on_plugins_toggled)
             dialog.exec()
             log.debug("Preferences dialog closed")
         except Exception as e:
             log.error(f"Failed to show preferences dialog: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open preferences:\n{e}")
 
+    @QtCore.Slot(bool)
+    def _on_plugins_toggled(self, enabled: bool):
+        """Hot-reload plugins and rebuild Analyser tabs when the user toggles the plugin setting."""
+        log.info(f"Plugin setting changed to {enabled}. Hot-reloading plugins...")
+        try:
+            from Synaptipy.application.plugin_manager import PluginManager
+
+            PluginManager.reload_plugins()
+        except Exception as e:
+            log.error(f"Failed to reload plugins: {e}")
+
+        if hasattr(self, "analyser_tab") and self.analyser_tab:
+            try:
+                self.analyser_tab.rebuild_analysis_tabs()
+                log.info("Analyser tabs rebuilt after plugin toggle.")
+            except Exception as e:
+                log.error(f"Failed to rebuild analyser tabs: {e}")
+
     def _show_analysis_config(self):
         """Show the global analysis configuration dialog."""
         try:
             from .analysis_config_dialog import AnalysisConfigDialog
+
             dialog = AnalysisConfigDialog(self)
             if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
                 # If accepted, we might want to notify active tabs to refresh if they are using defaults
@@ -810,14 +851,15 @@ class MainWindow(QtWidgets.QMainWindow):
             if available_geometry:
                 current_geometry = self.geometry()
                 # Check if window is mostly off-screen
-                visible_width = min(current_geometry.right(), available_geometry.right()) - \
-                    max(current_geometry.left(), available_geometry.left())
-                visible_height = min(current_geometry.bottom(), available_geometry.bottom()) - \
-                    max(current_geometry.top(), available_geometry.top())
+                visible_width = min(current_geometry.right(), available_geometry.right()) - max(
+                    current_geometry.left(), available_geometry.left()
+                )
+                visible_height = min(current_geometry.bottom(), available_geometry.bottom()) - max(
+                    current_geometry.top(), available_geometry.top()
+                )
 
                 # If less than 50% visible, reset to fit screen
-                if visible_width < current_geometry.width() * 0.5 or \
-                   visible_height < current_geometry.height() * 0.5:
+                if visible_width < current_geometry.width() * 0.5 or visible_height < current_geometry.height() * 0.5:
                     log.warning("Restored geometry doesn't fit current screen. Adjusting...")
                     # Resize to fit available screen (70% of screen)
                     new_width = min(current_geometry.width(), int(available_geometry.width() * 0.8))

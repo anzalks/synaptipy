@@ -20,11 +20,11 @@ Usage:
     log.debug("This is a log message")
 """
 
+import logging
 import os
 import sys
-import logging
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Default log directory is in the user's home directory
 DEFAULT_LOG_DIR = Path.home() / ".synaptipy" / "logs"

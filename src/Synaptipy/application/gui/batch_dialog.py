@@ -8,14 +8,15 @@ across multiple files using a pipeline-based approach.
 
 Author: Anzal K Shahul <anzal.ks@gmail.com>
 """
-import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 
-from PySide6 import QtCore, QtWidgets
-import pandas as pd
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import numpy as np
+import pandas as pd
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from Synaptipy.core.analysis.registry import AnalysisRegistry
@@ -210,7 +211,9 @@ class AddStepDialog(QtWidgets.QDialog):
 
         scope_options = [
             ("average", "Average Trace", "Analyze the averaged trace across all trials"),
+            ("selected_trials_average", "Average Selected", "Analyze the average of explicit trials (e.g. 0, 2, 4)"),
             ("all_trials", "All Trials", "Analyze each trial separately"),
+            ("selected_trials", "Selected Trials", "Analyze specific trials separately"),
             ("first_trial", "First Trial Only", "Analyze only the first trial"),
             ("specific_trial", "Specific Trial", "Analyze a specific trial index"),
             ("channel_set", "Channel Set", "Analyze all trials together (e.g. F-I Curve)"),
@@ -240,6 +243,18 @@ class AddStepDialog(QtWidgets.QDialog):
         self.trial_index_layout.addStretch()
         self.trial_index_group.setVisible(False)
         layout.addWidget(self.trial_index_group)
+
+        # Selected Trials Input (Hidden by default)
+        self.selected_trials_group = QtWidgets.QWidget()
+        self.selected_trials_layout = QtWidgets.QHBoxLayout(self.selected_trials_group)
+        self.selected_trials_layout.setContentsMargins(0, 0, 0, 0)
+        self.selected_trials_input = QtWidgets.QLineEdit()
+        self.selected_trials_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        self.selected_trials_input.setToolTip("Subset of trials to analyze")
+        self.selected_trials_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.selected_trials_layout.addWidget(self.selected_trials_input)
+        self.selected_trials_group.setVisible(False)
+        layout.addWidget(self.selected_trials_group)
 
         # Parameters Section
         params_group = QtWidgets.QGroupBox("Parameters")
@@ -337,6 +352,7 @@ class AddStepDialog(QtWidgets.QDialog):
         """Show/hide trial index input based on scope selection."""
         scope_id = button.property("scope_id")
         self.trial_index_group.setVisible(scope_id == "specific_trial")
+        self.selected_trials_group.setVisible(scope_id in ("selected_trials", "selected_trials_average"))
 
     def _add_legacy_parameter_widgets(self, analysis_name: str):
         """Fallback for analysis types not yet migrated to metadata system."""
@@ -408,6 +424,8 @@ class AddStepDialog(QtWidgets.QDialog):
         # Add trial index if specific trial scope
         if selected_scope == "specific_trial":
             params["trial_index"] = self.trial_index_spin.value()
+        elif selected_scope in ("selected_trials", "selected_trials_average"):
+            params["trial_indices"] = self.selected_trials_input.text().strip()
 
         for name, widget in self.param_widgets.items():
             if name.startswith("_"):
@@ -551,31 +569,32 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         pipeline_group = QtWidgets.QGroupBox("Analysis Pipeline")
         pipeline_layout = QtWidgets.QVBoxLayout(pipeline_group)
 
-        # Pipeline steps container with scroll
-        self.pipeline_scroll = QtWidgets.QScrollArea()
-        self.pipeline_scroll.setWidgetResizable(True)
-        self.pipeline_scroll.setMinimumHeight(150)
-        self.pipeline_scroll.setMaximumHeight(200)
+        # Pipeline steps container with list widget to support drag and drop
+        self.pipeline_list = QtWidgets.QListWidget()
+        self.pipeline_list.setMinimumHeight(150)
+        self.pipeline_list.setMaximumHeight(200)
+        self.pipeline_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.pipeline_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+        self.pipeline_list.model().rowsMoved.connect(self._on_pipeline_reordered)
 
-        self.pipeline_container = QtWidgets.QWidget()
-        self.pipeline_container_layout = QtWidgets.QVBoxLayout(self.pipeline_container)
-        self.pipeline_container_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.pipeline_container_layout.setSpacing(4)
+        # Placeholder behavior via empty state
+        self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+        self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)  # Make non-selectable/draggable
+        self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
 
-        # Placeholder label
-        self.empty_pipeline_label = QtWidgets.QLabel("No analysis steps added. Click 'Add Step' to begin.")
-        self.empty_pipeline_label.setStyleSheet("color: gray; font-style: italic;")
-        self.empty_pipeline_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.pipeline_container_layout.addWidget(self.empty_pipeline_label)
-
-        self.pipeline_scroll.setWidget(self.pipeline_container)
-        pipeline_layout.addWidget(self.pipeline_scroll)
+        pipeline_layout.addWidget(self.pipeline_list)
 
         # Pipeline buttons
         pipeline_btn_layout = QtWidgets.QHBoxLayout()
 
         add_step_btn = QtWidgets.QPushButton("+ Add Step")
         add_step_btn.setToolTip("Add an analysis step to the pipeline")
+
+        available_count = len(AnalysisRegistry.list_registered())
+        if available_count == 0:
+            add_step_btn.setEnabled(False)
+            add_step_btn.setText("No Analyses Registered")
+
         add_step_btn.clicked.connect(self._on_add_step)
         pipeline_btn_layout.addWidget(add_step_btn)
 
@@ -631,7 +650,8 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         # ==== Action Buttons ====
         button_layout = QtWidgets.QHBoxLayout()
 
-        self.export_btn = QtWidgets.QPushButton("Export to CSV...")
+        self.export_btn = QtWidgets.QPushButton("Export Results...")
+        self.export_btn.setToolTip("Export results to CSV, Excel, or JSON")
         self.export_btn.setEnabled(False)
         self.export_btn.clicked.connect(self._on_export)
         button_layout.addWidget(self.export_btn)
@@ -658,19 +678,49 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 self._add_pipeline_step(step_config)
 
     def _add_pipeline_step(self, step_config: Dict[str, Any]):
-        """Add a step to the pipeline."""
-        # Hide empty label
-        self.empty_pipeline_label.setVisible(False)
+        """Add a step to the pipeline list."""
+        # Remove empty state placeholder if it exists
+        if self.pipeline_list.count() == 1 and self.pipeline_list.item(0).flags() == QtCore.Qt.ItemFlag.NoItemFlags:
+            self.pipeline_list.takeItem(0)
 
         # Create step widget
         step_index = len(self.pipeline_steps)
-        step_widget = PipelineStepWidget(step_config, step_index, self.pipeline_container)
-        step_widget.remove_requested.connect(self._on_remove_step)
+        step_widget = PipelineStepWidget(step_config, step_index, self)
 
-        self.pipeline_container_layout.addWidget(step_widget)
+        # Connect remove requested signal
+        step_widget.remove_requested.connect(lambda w=step_widget: self._on_remove_step(w))
+
+        # Add to ListWidget
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(step_widget.sizeHint())
+
+        # Store dict reference in user data to track reordering
+        item.setData(QtCore.Qt.ItemDataRole.UserRole, step_config)
+
+        self.pipeline_list.addItem(item)
+        self.pipeline_list.setItemWidget(item, step_widget)
+
         self.pipeline_steps.append(step_config)
 
         log.debug(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
+
+    def _on_pipeline_reordered(self, sourceParent, sourceStart, sourceEnd, destinationParent, destinationRow):
+        """Handle user drag-and-drop reordering."""
+        self.pipeline_steps.clear()
+
+        # Re-build internal steps array from accurate visual list order
+        for i in range(self.pipeline_list.count()):
+            item = self.pipeline_list.item(i)
+            step_config = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if step_config:
+                self.pipeline_steps.append(step_config)
+
+            # Optionally update step index label on the widget
+            widget = self.pipeline_list.itemWidget(item)
+            if widget and hasattr(widget, "update_index"):
+                widget.update_index(i)
+
+        log.debug(f"Pipeline reordered. New count: {len(self.pipeline_steps)}")
 
     def _on_add_files(self):
         """Open file dialog to add files to the list."""
@@ -690,7 +740,10 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
             if added_count > 0:
                 # Update group box title
-                self.findChild(QtWidgets.QGroupBox).setTitle(f"Files to Process ({len(self.files)} files)")
+                for gb in self.findChildren(QtWidgets.QGroupBox):
+                    if gb.title().startswith("Files to Process"):
+                        gb.setTitle(f"Files to Process ({len(self.files)} files)")
+                        break
 
     def _on_remove_files(self):
         """Remove selected files from list."""
@@ -704,42 +757,37 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 self.files.remove(path)
             self.files_list.takeItem(self.files_list.row(item))
 
-        # Update group box title
-        # Use findChild approach or better, store reference to groupbox in init
-        # For now, simplistic approach since we know the structure, but finding by title is risky if title changes.
-        # But we just want to update the displayed count.
-        # Let's just find all GroupBoxes and update the one starting with "Files"
         for gb in self.findChildren(QtWidgets.QGroupBox):
             if gb.title().startswith("Files to Process"):
                 gb.setTitle(f"Files to Process ({len(self.files)} files)")
                 break
 
     def _on_remove_step(self, step_widget: PipelineStepWidget):
-        """Remove a step from the pipeline."""
-        # Find and remove the step
+        """Remove a step from the pipeline list."""
         step_config = step_widget.get_config()
+
+        # Find item in list widget and remove
+        for i in range(self.pipeline_list.count()):
+            item = self.pipeline_list.item(i)
+            if item.data(QtCore.Qt.ItemDataRole.UserRole) == step_config:
+                self.pipeline_list.takeItem(i)
+                break
+
         if step_config in self.pipeline_steps:
             self.pipeline_steps.remove(step_config)
 
-        # Remove widget
-        self.pipeline_container_layout.removeWidget(step_widget)
-        step_widget.deleteLater()
-
-        # Re-index remaining steps
-        self._reindex_steps()
-
         # Show empty label if no steps
-        if not self.pipeline_steps:
-            self.empty_pipeline_label.setVisible(True)
-
-    def _reindex_steps(self):
-        """Re-index all step widgets after removal."""
-        for i in range(self.pipeline_container_layout.count()):
-            item = self.pipeline_container_layout.itemAt(i)
-            if item and item.widget() and isinstance(item.widget(), PipelineStepWidget):
-                # We'd need to update the step index display
-                # For simplicity, we'll recreate the widgets
-                pass
+        if self.pipeline_list.count() == 0:
+            self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+            self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
+        else:
+            # Reindex remaining updates visuals
+            for i in range(self.pipeline_list.count()):
+                item = self.pipeline_list.item(i)
+                widget = self.pipeline_list.itemWidget(item)
+                if widget and hasattr(widget, "update_index"):
+                    widget.update_index(i)
 
     def _on_clear_pipeline(self):
         """Clear all pipeline steps."""
@@ -755,14 +803,12 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         )
 
         if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-            # Remove all step widgets
-            while self.pipeline_container_layout.count() > 1:  # Keep the empty label
-                item = self.pipeline_container_layout.takeAt(1)
-                if item and item.widget():
-                    item.widget().deleteLater()
-
+            self.pipeline_list.clear()
             self.pipeline_steps.clear()
-            self.empty_pipeline_label.setVisible(True)
+
+            self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+            self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
 
     def _on_run(self):
         """Start the batch analysis."""
@@ -872,15 +918,19 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             self.results_info_label.setText("No results to display")
             return
 
+        # Filter out private/internal columns for display
+        display_cols = [c for c in df.columns if not c.startswith("_")]
+        display_df = df[display_cols]
+
         # Setup table
-        self.results_table.setRowCount(min(100, len(df)))  # Limit display rows
-        self.results_table.setColumnCount(len(df.columns))
-        self.results_table.setHorizontalHeaderLabels(df.columns.tolist())
+        self.results_table.setRowCount(min(100, len(display_df)))
+        self.results_table.setColumnCount(len(display_df.columns))
+        self.results_table.setHorizontalHeaderLabels(display_df.columns.tolist())
 
         # Populate table
-        for row_idx in range(min(100, len(df))):
-            for col_idx, col_name in enumerate(df.columns):
-                value = df.iloc[row_idx, col_idx]
+        for row_idx in range(min(100, len(display_df))):
+            for col_idx, col_name in enumerate(display_df.columns):
+                value = display_df.iloc[row_idx, col_idx]
                 # Handle arrays/lists safely
                 if isinstance(value, (list, np.ndarray)):
                     # For arrays, show summary or short representation
@@ -906,7 +956,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         # Resize columns to content
         self.results_table.resizeColumnsToContents()
-        if not getattr(self, '_result_click_connected', False):
+        if not getattr(self, "_result_click_connected", False):
             self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
             self._result_click_connected = True
 
@@ -933,8 +983,16 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 if analysis_name:
                     params["analysis_name"] = analysis_name
                 # Include any numeric result columns as context
-                skip_keys = {"file_path", "file", "source_file", "channel",
-                             "trial_index", "analysis", "status", "error"}
+                skip_keys = {
+                    "file_path",
+                    "file",
+                    "source_file",
+                    "channel",
+                    "trial_index",
+                    "analysis",
+                    "status",
+                    "error",
+                }
                 for key, val in record.items():
                     if key not in skip_keys and val is not None:
                         try:
@@ -949,7 +1007,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             log.error(f"Error handling row click: {e}")
 
     def _on_export(self):
-        """Export results to CSV."""
+        """Export results to CSV, Excel (.xlsx), or JSON with full metadata."""
         if self.result_df is None or self.result_df.empty:
             QtWidgets.QMessageBox.warning(self, "No Results", "No results available to export.")
             return
@@ -959,27 +1017,72 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         default_name = f"batch_analysis_{timestamp}.csv"
 
         file_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Results", default_name, "CSV Files (*.csv);;JSON Files (*.json);;All Files (*)"
+            self,
+            "Export Results",
+            default_name,
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;JSON Files (*.json);;All Files (*)",
         )
 
         if file_path:
             try:
+                # Prepare export DataFrame — strip private/raw columns for tabular formats
+                export_df = self.result_df.copy()
+                private_cols = [c for c in export_df.columns if c.startswith("_")]
+                export_df_clean = export_df.drop(columns=private_cols, errors="ignore")
+
                 if file_path.lower().endswith(".json"):
-                    # JSON Export
-                    # Use orient='records' for a list of dicts, which is standard
-                    # Use default_handler=str to handle non-serializable types (like some numpy objects)
-                    # although pandas handles most numpy types well.
-                    self.result_df.to_json(file_path, orient="records", indent=2, default_handler=str)
+                    # JSON Export — keep arrays as lists for programmatic consumption
+                    # Convert numpy types to native Python for JSON serialisation
+                    json_df = export_df.copy()
+                    for col in json_df.columns:
+                        json_df[col] = json_df[col].apply(lambda v: v.tolist() if isinstance(v, np.ndarray) else v)
+                    json_df.to_json(file_path, orient="records", indent=2, default_handler=str)
                     log.debug(f"Exported batch results to JSON: {file_path}")
+
+                elif file_path.lower().endswith(".xlsx"):
+                    # Excel Export — requires openpyxl
+                    try:
+                        export_df_clean.to_excel(file_path, index=False, sheet_name="Batch Results")
+                        log.debug(f"Exported batch results to Excel: {file_path}")
+                    except ImportError:
+                        # openpyxl not installed — fall back to CSV
+                        csv_path = file_path.replace(".xlsx", ".csv")
+                        self._write_csv_with_header(export_df_clean, csv_path)
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Excel Not Available",
+                            f"openpyxl is not installed. Results saved as CSV instead:\n{csv_path}",
+                        )
+                        return
+
                 else:
-                    # CSV Export (Default)
-                    self.result_df.to_csv(file_path, index=False)
-                    log.debug(f"Exported batch results to CSV: {file_path}")
+                    # CSV Export with metadata header
+                    self._write_csv_with_header(export_df_clean, file_path)
 
                 QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{file_path}")
             except Exception as e:
                 log.error(f"Failed to export results: {e}", exc_info=True)
                 QtWidgets.QMessageBox.critical(self, "Export Failed", f"Failed to export results:\n{str(e)}")
+
+    def _write_csv_with_header(self, df: pd.DataFrame, file_path: str):
+        """Write CSV with a comment header block for reproducibility."""
+        # Build metadata header lines
+        header_lines = [
+            "# Synaptipy Batch Analysis Export",
+            f"# Exported: {datetime.now().isoformat()}",
+            f"# Files processed: {len(self.files)}",
+        ]
+        if self.pipeline_steps:
+            analyses = [s.get("analysis", "?") for s in self.pipeline_steps]
+            header_lines.append(f"# Pipeline: {' -> '.join(analyses)}")
+        header_lines.append(f"# Rows: {len(df)}")
+        header_lines.append("#")
+
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            for line in header_lines:
+                f.write(line + "\n")
+            df.to_csv(f, index=False)
+        log.debug(f"Exported batch results to CSV: {file_path}")
 
     def closeEvent(self, event):
         """Handle dialog close."""
@@ -1036,17 +1139,6 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                     metadata = AnalysisRegistry.get_metadata(registry_key)
                     label = metadata.get("label")
 
-                    # If label is generic or not helpful for ExporterTab matching, use specific overrides
-                    # ExporterTab expects specific strings to format values correctly
-                    if registry_key == "spike_detection":
-                        label = "Spike Detection (Threshold)"
-                    elif registry_key == "rmp_analysis":
-                        label = "Baseline Analysis"
-                    elif registry_key == "rin_analysis":
-                        label = "Input Resistance/Conductance"
-                    elif registry_key.startswith("event_detection"):
-                        label = "Event Detection"
-
                     if label:
                         result_data["analysis_type"] = label
                     else:
@@ -1067,7 +1159,9 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                 scope = result_data["scope"]
                 if scope == "average":
                     result_data["data_source_used"] = "Average"
-                elif scope in ["specific_trial", "all_trials", "first_trial"]:
+                elif scope == "selected_trials_average":
+                    result_data["data_source_used"] = "Selected Average"
+                elif scope in ["specific_trial", "all_trials", "first_trial", "selected_trials"]:
                     result_data["data_source_used"] = "Trial"
                 elif scope == "channel_set":
                     result_data["data_source_used"] = "Channel Set"

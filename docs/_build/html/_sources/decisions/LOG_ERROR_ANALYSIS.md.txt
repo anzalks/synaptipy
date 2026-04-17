@@ -1,7 +1,7 @@
 # Log Error Analysis - All Errors from File Addition Onwards
 
-**Date**: November 17, 2025  
-**Author**: Anzal  
+**Date**: November 17, 2025
+**Author**: Anzal K Shahul
 **Analysis Scope**: All errors that occurred when adding files to analysis
 
 ---
@@ -37,7 +37,7 @@ method_baseline = "Baseline + Peak + Kinetics"
 self.mini_method_combobox.addItems([method_threshold, method_deconv, method_baseline])
 
 # Logic Check (line 767) - WRONG:
-elif selected_method == "Baseline + Peak":  # Missing "+ Kinetics"
+elif selected_method == "Baseline + Peak": # Missing "+ Kinetics"
 ```
 
 ### Impact
@@ -50,18 +50,18 @@ elif selected_method == "Baseline + Peak":  # Missing "+ Kinetics"
 ```python
 # Line 767 - CORRECTED:
 elif selected_method == "Baseline + Peak + Kinetics":
-    params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()
-    params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()
-    params['step_size_ms'] = self.mini_step_size_spinbox.value()
-    params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()
-    params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()
+ params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()
+ params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()
+ params['step_size_ms'] = self.mini_step_size_spinbox.value()
+ params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()
+ params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()
 ```
 
 ### Verification
-- ✅ String now matches UI definition exactly
-- ✅ Parameters gathered correctly when method is selected
-- ✅ All files compile successfully
-- ✅ No linter errors
+- String now matches UI definition exactly
+- Parameters gathered correctly when method is selected
+- All files compile successfully
+- No linter errors
 
 ---
 
@@ -90,8 +90,8 @@ Copy-paste error or incomplete refactoring when renaming the detection method. S
 method_baseline = "Baseline + Peak + Kinetics"
 
 # Logic Check (line 825) - WRONG:
-elif selected_method == "Baseline + Peak":  # Missing "+ Kinetics"
-    # This block never executes for the intended method
+elif selected_method == "Baseline + Peak": # Missing "+ Kinetics"
+ # This block never executes for the intended method
 ```
 
 ### Impact
@@ -105,24 +105,24 @@ elif selected_method == "Baseline + Peak":  # Missing "+ Kinetics"
 ```python
 # Line 825 - CORRECTED:
 elif selected_method == "Baseline + Peak + Kinetics":
-    bl_duration_ms = params.get('bl_duration_ms')
-    peak_duration_ms = params.get('peak_duration_ms')
-    step_size_ms = params.get('step_size_ms')
-    baseline_threshold = params.get('baseline_threshold')
-    peak_threshold_factor = params.get('peak_threshold_factor')
-    
-    peak_indices, event_details, stats = ed.detect_events_baseline_peak(
-        signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
-        step_size_ms, baseline_threshold, peak_threshold_factor
-    )
+ bl_duration_ms = params.get('bl_duration_ms')
+ peak_duration_ms = params.get('peak_duration_ms')
+ step_size_ms = params.get('step_size_ms')
+ baseline_threshold = params.get('baseline_threshold')
+ peak_threshold_factor = params.get('peak_threshold_factor')
+
+ peak_indices, event_details, stats = ed.detect_events_baseline_peak(
+ signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
+ step_size_ms, baseline_threshold, peak_threshold_factor
+ )
 ```
 
 ### Verification
-- ✅ String now matches UI definition exactly
-- ✅ Analysis executes correctly for the detection method
-- ✅ Users receive results instead of error messages
-- ✅ All files compile successfully
-- ✅ No linter errors
+- String now matches UI definition exactly
+- Analysis executes correctly for the detection method
+- Users receive results instead of error messages
+- All files compile successfully
+- No linter errors
 
 ---
 
@@ -159,7 +159,7 @@ voltage_vec = data.get('data') or data.get('voltage')
 
 ### Stack Trace (Expected)
 ```
-ValueError: The truth value of an array with more than one element is ambiguous. 
+ValueError: The truth value of an array with more than one element is ambiguous.
 Use a.any() or a.all()
 ```
 
@@ -172,11 +172,11 @@ voltage_vec = data.get('data') if data.get('data') is not None else data.get('vo
 This explicitly checks for `None` rather than relying on boolean evaluation of the array itself.
 
 ### Verification
-- ✅ No more ambiguous boolean errors
-- ✅ Correctly falls back to alternate key names
-- ✅ Backward compatibility maintained
-- ✅ Analysis executes without runtime errors
-- ✅ All tests pass (12/12)
+- No more ambiguous boolean errors
+- Correctly falls back to alternate key names
+- Backward compatibility maintained
+- Analysis executes without runtime errors
+- All tests pass (12/12)
 
 ---
 
@@ -202,16 +202,16 @@ When adding cleanup code for signal disconnection (to fix a "Failed to disconnec
 
 ```python
 # In _reset_ui_and_state_for_new_file() (lines 709-723):
-for i in range(len(self.plot_widgets)):  # ❌ Crashes here - attribute doesn't exist
-    checkbox = self.findChild(QtWidgets.QCheckBox, f"channel_checkbox_{i}")
-    if checkbox:
-        try:
-            checkbox.stateChanged.disconnect(self._trigger_plot_update)
-        except (TypeError, RuntimeError) as e:
-            log.debug(f"Signal for checkbox {i} was not connected or already disconnected: {e}")
-            pass
+for i in range(len(self.plot_widgets)): # Crashes here - attribute doesn't exist
+ checkbox = self.findChild(QtWidgets.QCheckBox, f"channel_checkbox_{i}")
+ if checkbox:
+ try:
+ checkbox.stateChanged.disconnect(self._trigger_plot_update)
+ except (TypeError, RuntimeError) as e:
+ log.debug(f"Signal for checkbox {i} was not connected or already disconnected: {e}")
+ pass
 
-self.plot_widgets.clear()  # ❌ Would crash here too
+self.plot_widgets.clear() # Would crash here too
 ```
 
 ### Impact
@@ -224,20 +224,20 @@ self.plot_widgets.clear()  # ❌ Would crash here too
 ### Fix Applied
 ```python
 # In __init__ method (line 107):
-# --- Display State Collections --- 
+# --- Display State Collections ---
 self.channel_plots: Dict[str, pg.PlotItem] = {}
 self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
 self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
 self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
-self.plot_widgets: List[pg.PlotWidget] = []  # ✅ Initialize list for dynamic plot widgets
+self.plot_widgets: List[pg.PlotWidget] = [] # Initialize list for dynamic plot widgets
 ```
 
 ### Verification
-- ✅ File compiles without errors
-- ✅ No linting errors
-- ✅ All tests pass (12/12)
-- ✅ Application now loads files without crashing
-- ✅ No AttributeError when accessing plot_widgets
+- File compiles without errors
+- No linting errors
+- All tests pass (12/12)
+- Application now loads files without crashing
+- No AttributeError when accessing plot_widgets
 
 ---
 
@@ -247,64 +247,64 @@ self.plot_widgets: List[pg.PlotWidget] = []  # ✅ Initialize list for dynamic p
 All six errors fall into several categories:
 
 1. **Errors 1 & 2**: UI-to-logic string mismatch
-   - UI defines one string, logic checks for a different string
-   - Classic copy-paste or incomplete refactoring issue
-   - Easy to miss in code review without comprehensive testing
+ - UI defines one string, logic checks for a different string
+ - Classic copy-paste or incomplete refactoring issue
+ - Easy to miss in code review without comprehensive testing
 
 2. **Error 3**: NumPy boolean evaluation anti-pattern
-   - Common mistake when working with NumPy arrays
-   - Python's `or` operator doesn't work as expected with arrays
-   - Requires explicit `None` checking
+ - Common mistake when working with NumPy arrays
+ - Python's `or` operator doesn't work as expected with arrays
+ - Requires explicit `None` checking
 
 ### Prevention Strategies
 
 1. **Use constants for string literals**:
-   ```python
-   # Define once at module level
-   METHOD_BASELINE_PEAK_KINETICS = "Baseline + Peak + Kinetics"
-   
-   # Use everywhere
-   self.mini_method_combobox.addItem(METHOD_BASELINE_PEAK_KINETICS)
-   if selected_method == METHOD_BASELINE_PEAK_KINETICS:
-   ```
+ ```python
+ # Define once at module level
+ METHOD_BASELINE_PEAK_KINETICS = "Baseline + Peak + Kinetics"
+
+ # Use everywhere
+ self.mini_method_combobox.addItem(METHOD_BASELINE_PEAK_KINETICS)
+ if selected_method == METHOD_BASELINE_PEAK_KINETICS:
+ ```
 
 2. **Use helper functions for NumPy fallbacks**:
-   ```python
-   def get_with_fallback(data_dict, primary_key, fallback_key):
-       """Get value from dict with fallback, safe for numpy arrays."""
-       value = data_dict.get(primary_key)
-       return value if value is not None else data_dict.get(fallback_key)
-   ```
+ ```python
+ def get_with_fallback(data_dict, primary_key, fallback_key):
+ """Get value from dict with fallback, safe for numpy arrays."""
+ value = data_dict.get(primary_key)
+ return value if value is not None else data_dict.get(fallback_key)
+ ```
 
 3. **Add unit tests for all UI option paths**:
-   - Test each combobox option explicitly
-   - Verify parameters are gathered correctly
-   - Verify analysis executes successfully
+ - Test each combobox option explicitly
+ - Verify parameters are gathered correctly
+ - Verify analysis executes successfully
 
 ---
 
 ## Testing Results
 
 All fixes verified through:
-- ✅ Syntax checking (py_compile)
-- ✅ Linter checking (no errors)
-- ✅ Unit tests (12/12 passing)
-- ✅ File compilation verification
+- Syntax checking (py_compile)
+- Linter checking (no errors)
+- Unit tests (12/12 passing)
+- File compilation verification
 
 ```bash
 # Test Results:
 ============================= test session starts ==============================
-tests/application/gui/test_rmp_tab.py::test_rmp_tab_init PASSED          [  8%]
+tests/application/gui/test_rmp_tab.py::test_rmp_tab_init PASSED [ 8%]
 tests/application/gui/test_rmp_tab.py::test_has_data_selection_widgets PASSED [ 16%]
-tests/application/gui/test_rmp_tab.py::test_mode_selection PASSED        [ 25%]
+tests/application/gui/test_rmp_tab.py::test_mode_selection PASSED [ 25%]
 tests/application/gui/test_rmp_tab.py::test_interactive_region_exists PASSED [ 33%]
-tests/application/gui/test_rmp_tab.py::test_save_button_exists PASSED    [ 41%]
+tests/application/gui/test_rmp_tab.py::test_save_button_exists PASSED [ 41%]
 tests/application/gui/test_rmp_tab.py::test_update_state_with_items PASSED [ 50%]
 tests/application/gui/test_rmp_tab.py::test_baseline_result_storage PASSED [ 58%]
-tests/application/gui/test_rin_tab.py::test_rin_tab_init PASSED          [ 66%]
-tests/application/gui/test_rin_tab.py::test_mode_selection PASSED        [ 75%]
+tests/application/gui/test_rin_tab.py::test_rin_tab_init PASSED [ 66%]
+tests/application/gui/test_rin_tab.py::test_mode_selection PASSED [ 75%]
 tests/application/gui/test_rin_tab.py::test_interactive_calculation PASSED [ 83%]
-tests/application/gui/test_rin_tab.py::test_manual_calculation PASSED    [ 91%]
+tests/application/gui/test_rin_tab.py::test_manual_calculation PASSED [ 91%]
 tests/application/gui/test_rin_tab.py::test_get_specific_result_data PASSED [100%]
 
 ============================== 12 passed in 0.63s ==============================
@@ -346,11 +346,11 @@ Copy-paste error or incomplete implementation. The parameter gathering code was 
 ### Fix Applied
 ```python
 # Before (WRONG):
-params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value()  # Doesn't exist!
-params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value()  # Doesn't exist!
-params['step_size_ms'] = self.mini_step_size_spinbox.value()  # Doesn't exist!
-params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value()  # Doesn't exist!
-params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value()  # Doesn't exist!
+params['bl_duration_ms'] = self.mini_baseline_dur_spinbox.value() # Doesn't exist!
+params['peak_duration_ms'] = self.mini_peak_dur_spinbox.value() # Doesn't exist!
+params['step_size_ms'] = self.mini_step_size_spinbox.value() # Doesn't exist!
+params['baseline_threshold'] = self.mini_baseline_threshold_spinbox.value() # Doesn't exist!
+params['peak_threshold_factor'] = self.mini_peak_threshold_spinbox.value() # Doesn't exist!
 
 # After (CORRECT):
 params['direction'] = self.mini_direction_combo.currentText()
@@ -360,10 +360,10 @@ params['peak_prominence_factor'] = self.mini_baseline_prominence_spinbox.value()
 ```
 
 ### Verification
-- ✅ All referenced attributes now exist
-- ✅ Parameters match UI widgets
-- ✅ Parameters match function signature
-- ✅ No AttributeError
+- All referenced attributes now exist
+- Parameters match UI widgets
+- Parameters match function signature
+- No AttributeError
 
 ---
 
@@ -393,14 +393,14 @@ ed.detect_events_baseline_peak(...)
 
 # What actually exists:
 ed.detect_events_baseline_peak_kinetics(
-    data, sample_rate,
-    direction='negative',
-    baseline_window_s=0.5,
-    baseline_step_s=0.1,
-    threshold_sd_factor=3.0,
-    filter_freq_hz=None,
-    min_event_separation_ms=5.0,
-    peak_prominence_factor=None
+ data, sample_rate,
+ direction='negative',
+ baseline_window_s=0.5,
+ baseline_step_s=0.1,
+ threshold_sd_factor=3.0,
+ filter_freq_hz=None,
+ min_event_separation_ms=5.0,
+ peak_prominence_factor=None
 ) -> Tuple[np.ndarray, Dict[str, Any], Optional[List[Dict[str, Any]]]]
 ```
 
@@ -415,8 +415,8 @@ ed.detect_events_baseline_peak_kinetics(
 ```python
 # Before (WRONG):
 peak_indices, event_details, stats = ed.detect_events_baseline_peak(
-    signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
-    step_size_ms, baseline_threshold, peak_threshold_factor
+ signal_data, sample_rate, bl_duration_ms, peak_duration_ms,
+ step_size_ms, baseline_threshold, peak_threshold_factor
 )
 
 # After (CORRECT):
@@ -430,20 +430,20 @@ prominence_param = peak_prominence_factor if peak_prominence_factor > 0 else Non
 
 # Correct function name and parameter order
 peak_indices, stats, event_details = ed.detect_events_baseline_peak_kinetics(
-    signal_data, sample_rate,
-    direction=direction,
-    filter_freq_hz=filter_freq_param,
-    peak_prominence_factor=prominence_param
+ signal_data, sample_rate,
+ direction=direction,
+ filter_freq_hz=filter_freq_param,
+ peak_prominence_factor=prominence_param
 )
 ```
 
 ### Verification
-- ✅ Function name matches actual implementation
-- ✅ Parameters match function signature
-- ✅ Return values in correct order
-- ✅ Optional parameters handled correctly (0 → None)
-- ✅ Uses default values for baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms
-- ✅ No AttributeError
+- Function name matches actual implementation
+- Parameters match function signature
+- Return values in correct order
+- Optional parameters handled correctly (0 → None)
+- Uses default values for baseline_window_s, baseline_step_s, threshold_sd_factor, min_event_separation_ms
+- No AttributeError
 
 ---
 
@@ -451,11 +451,11 @@ peak_indices, stats, event_details = ed.detect_events_baseline_peak_kinetics(
 
 | Bug # | Location | Error Type | Severity | Status |
 |-------|----------|------------|----------|--------|
-| 7 | event_detection_tab.py:767 | String mismatch | HIGH | ✅ FIXED |
-| 8 | event_detection_tab.py:825 | String mismatch | CRITICAL | ✅ FIXED |
-| 9 | rmp_tab.py:915 | NumPy boolean ambiguity | HIGH | ✅ FIXED |
-| 10 | event_detection_tab.py:768-772 | Non-existent attributes | CRITICAL | ✅ FIXED |
-| 11 | event_detection_tab.py:832 | Non-existent function | CRITICAL | ✅ FIXED |
+| 7 | event_detection_tab.py:767 | String mismatch | HIGH | FIXED |
+| 8 | event_detection_tab.py:825 | String mismatch | CRITICAL | FIXED |
+| 9 | rmp_tab.py:915 | NumPy boolean ambiguity | HIGH | FIXED |
+| 10 | event_detection_tab.py:768-772 | Non-existent attributes | CRITICAL | FIXED |
+| 11 | event_detection_tab.py:832 | Non-existent function | CRITICAL | FIXED |
 
 ---
 
@@ -472,20 +472,20 @@ peak_indices, stats, event_details = ed.detect_events_baseline_peak_kinetics(
 ## Conclusion
 
 All errors identified in the log from file addition onwards have been successfully fixed. The Event Detection tab's "Baseline + Peak + Kinetics" method will now:
-- ✅ Access only existing UI widget attributes
-- ✅ Call the correct analysis function with proper parameters
-- ✅ Execute without AttributeError crashes
+- Access only existing UI widget attributes
+- Call the correct analysis function with proper parameters
+- Execute without AttributeError crashes
 
 The Baseline Analysis tab will:
-- ✅ Handle data format fallbacks without NumPy boolean errors
-- ✅ Work with both 'data' and 'voltage' dictionary keys
+- Handle data format fallbacks without NumPy boolean errors
+- Work with both 'data' and 'voltage' dictionary keys
 
 The Explorer tab will:
-- ✅ Load files without crashing on missing attributes
-- ✅ Properly initialize all required UI state collections
+- Load files without crashing on missing attributes
+- Properly initialize all required UI state collections
 
-**Total Bugs Fixed**: 6 (Bugs 7-12)  
-**Severity**: 4 CRITICAL, 2 HIGH  
-**Status**: ✅ **ALL ERRORS RESOLVED**
+**Total Bugs Fixed**: 6 (Bugs 7-12)
+**Severity**: 4 CRITICAL, 2 HIGH
+**Status**: **ALL ERRORS RESOLVED**
 
 

@@ -6,6 +6,7 @@ Scroll Settings Module for Synaptipy.
 Manages scroll direction preferences with persistence via QSettings.
 Provides unified scroll behavior across the application.
 """
+
 import logging
 from enum import Enum
 from typing import Optional
@@ -19,13 +20,15 @@ log = logging.getLogger(__name__)
 
 class ScrollDirection(Enum):
     """Scroll direction modes."""
-    NATURAL = "natural"      # macOS style: scroll up = content goes up
-    INVERTED = "inverted"    # Traditional: scroll up = content goes down
-    SYSTEM = "system"        # Follow OS setting
+
+    NATURAL = "natural"  # macOS style: scroll up = content goes up
+    INVERTED = "inverted"  # Traditional: scroll up = content goes down
+    SYSTEM = "system"  # Follow OS setting
 
 
 class ScrollSettingsSignals(QtCore.QObject):
     """Signals for scroll settings changes."""
+
     direction_changed = QtCore.Signal(str)
 
 

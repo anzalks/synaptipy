@@ -1,7 +1,8 @@
-import logging
 import datetime
+import logging
+
 import numpy as np
-from neo.rawio.winwcprawio import WinWcpRawIO, HeaderReader, AnalysisDescription
+from neo.rawio.winwcprawio import AnalysisDescription, HeaderReader, WinWcpRawIO
 
 log = logging.getLogger(__name__)
 

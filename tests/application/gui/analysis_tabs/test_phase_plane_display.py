@@ -4,12 +4,14 @@ Tests for Phase Plane analysis via MetadataDrivenAnalysisTab.
 Validates that the generic metadata-driven tab correctly handles
 popup phase-plane plots and result display for phase plane analysis.
 """
-import pytest
+
 from unittest.mock import MagicMock
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+
+import pytest
 
 # Ensure the analysis modules are imported so registrations are active
 import Synaptipy.core.analysis  # noqa: F401
+from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 
 
 @pytest.fixture(scope="session")

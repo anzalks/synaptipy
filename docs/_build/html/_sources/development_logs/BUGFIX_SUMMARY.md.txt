@@ -1,15 +1,15 @@
 # Critical Performance and Data-Loading Bug Fixes
 
-**Date:** October 20, 2025  
-**Author:** Anzal  
-**Branch:** zoom_customisation_from_system_theme  
-**Status:** ✅ COMPLETED (Phase 1 & 2)
+**Date:** October 20, 2025
+**Author:** Anzal K Shahul
+**Branch:** zoom_customisation_from_system_theme
+**Status:** COMPLETED (Phase 1 & 2)
 
 ---
 
 ## Overview
 
-**Phase 1:** Three critical bug fixes for performance and data loading.  
+**Phase 1:** Three critical bug fixes for performance and data loading.
 **Phase 2:** Comprehensive performance overhaul addressing architectural flaws.
 
 ### Phase 1 Fixes (Initial)
@@ -35,7 +35,7 @@ The function `get_plot_pens()` was creating a new `PlotCustomizationManager()` i
 Modified line 555 to use the global singleton instance instead of creating new instances.
 
 ### Code Change
-**File:** `src/Synaptipy/shared/plot_customization.py`  
+**File:** `src/Synaptipy/shared/plot_customization.py`
 **Line:** 555
 
 ```python
@@ -47,10 +47,10 @@ manager = get_plot_customization_manager()
 ```
 
 ### Impact
-- ✅ Eliminates thousands of disk reads
-- ✅ Uses cached singleton instance
-- ✅ Dramatically improves UI responsiveness
-- ✅ Reduces memory overhead
+- Eliminates thousands of disk reads
+- Uses cached singleton instance
+- Dramatically improves UI responsiveness
+- Reduces memory overhead
 
 ---
 
@@ -63,10 +63,10 @@ The `update_plot_pens()` function was calling `get_plot_pens()` inside a nested 
 Refactored to fetch pens **once** before the loop and apply them directly using cached references.
 
 ### Code Change
-**File:** `src/Synaptipy/application/gui/explorer_tab.py`  
+**File:** `src/Synaptipy/application/gui/explorer_tab.py`
 **Lines:** 2759-2793
 
-**Before:** Called `get_plot_pens(is_average, trial_index)` for every plot item  
+**Before:** Called `get_plot_pens(is_average, trial_index)` for every plot item
 **After:** Call `get_average_pen()` and `get_single_trial_pen()` once, then reuse
 
 ```python
@@ -76,19 +76,19 @@ trial_pen = get_single_trial_pen()
 
 # Apply pre-fetched pens (inside loop)
 for channel_id, plot_items in self.channel_plot_data_items.items():
-    for item in plot_items:
-        is_average = 'avg' in item.opts.get('name', '')
-        if is_average:
-            item.setPen(avg_pen)  # Simple pointer assignment
-        else:
-            item.setPen(trial_pen)
+ for item in plot_items:
+ is_average = 'avg' in item.opts.get('name', '')
+ if is_average:
+ item.setPen(avg_pen) # Simple pointer assignment
+ else:
+ item.setPen(trial_pen)
 ```
 
 ### Impact
-- ✅ Reduces hundreds of function calls to just **2**
-- ✅ Pen objects are fetched once and reused
-- ✅ Dramatic performance improvement for plot updates
-- ✅ Graphics view explicitly updated to reflect changes
+- Reduces hundreds of function calls to just **2**
+- Pen objects are fetched once and reused
+- Dramatic performance improvement for plot updates
+- Graphics view explicitly updated to reflect changes
 
 ---
 
@@ -108,42 +108,42 @@ Enhanced the data loading logic with:
 4. **Explicit data extraction** using `np.array(anasig.magnitude).ravel()`
 
 ### Code Change
-**File:** `src/Synaptipy/infrastructure/file_readers/neo_adapter.py`  
+**File:** `src/Synaptipy/infrastructure/file_readers/neo_adapter.py`
 **Lines:** 276-322 (Stage 2: Data Aggregation)
 
 ```python
 # Stage 2: Aggregate data into the discovered channels.
 for seg_idx, segment in enumerate(block.segments):
-    log.debug(f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals")
-    
-    # Critical fix: Iterate through ALL analogsignals by index
-    for anasig_idx, anasig in enumerate(segment.analogsignals):
-        # Extract channel ID using multiple fallback methods
-        anasig_id = None
-        if hasattr(anasig, 'annotations') and 'channel_id' in anasig.annotations:
-            anasig_id = str(anasig.annotations['channel_id'])
-        elif hasattr(anasig, 'channel_index') and anasig.channel_index is not None:
-            anasig_id = str(anasig.channel_index)
-        elif hasattr(anasig, 'array_annotations') and 'channel_id' in anasig.array_annotations:
-            anasig_id = str(anasig.array_annotations['channel_id'][0])
-        else:
-            # Use the signal's position in the list as the channel ID
-            anasig_id = str(anasig_idx)
-        
-        map_key = f"id_{anasig_id}"
-        
-        # Extract and append the signal data for THIS specific channel
-        signal_data = np.array(anasig.magnitude).ravel()
-        channel_metadata_map[map_key]['data_trials'].append(signal_data)
-        log.debug(f"Appended {len(signal_data)} samples to channel '{anasig_id}' from segment {seg_idx}")
+ log.debug(f"Processing segment {seg_idx} with {len(segment.analogsignals)} analogsignals")
+
+ # Critical fix: Iterate through ALL analogsignals by index
+ for anasig_idx, anasig in enumerate(segment.analogsignals):
+ # Extract channel ID using multiple fallback methods
+ anasig_id = None
+ if hasattr(anasig, 'annotations') and 'channel_id' in anasig.annotations:
+ anasig_id = str(anasig.annotations['channel_id'])
+ elif hasattr(anasig, 'channel_index') and anasig.channel_index is not None:
+ anasig_id = str(anasig.channel_index)
+ elif hasattr(anasig, 'array_annotations') and 'channel_id' in anasig.array_annotations:
+ anasig_id = str(anasig.array_annotations['channel_id'][0])
+ else:
+ # Use the signal's position in the list as the channel ID
+ anasig_id = str(anasig_idx)
+
+ map_key = f"id_{anasig_id}"
+
+ # Extract and append the signal data for THIS specific channel
+ signal_data = np.array(anasig.magnitude).ravel()
+ channel_metadata_map[map_key]['data_trials'].append(signal_data)
+ log.debug(f"Appended {len(signal_data)} samples to channel '{anasig_id}' from segment {seg_idx}")
 ```
 
 ### Impact
-- ✅ **All channels** now receive their correct data
-- ✅ Multi-channel recordings display properly
-- ✅ Robust channel ID extraction with multiple fallbacks
-- ✅ Enhanced debug logging for troubleshooting
-- ✅ Works across different file formats (ABF, WCP, etc.)
+- **All channels** now receive their correct data
+- Multi-channel recordings display properly
+- Robust channel ID extraction with multiple fallbacks
+- Enhanced debug logging for troubleshooting
+- Works across different file formats (ABF, WCP, etc.)
 
 ---
 
@@ -152,16 +152,16 @@ for seg_idx, segment in enumerate(block.segments):
 ### Syntax Check
 ```bash
 python -m py_compile src/Synaptipy/shared/plot_customization.py \
-                      src/Synaptipy/application/gui/explorer_tab.py \
-                      src/Synaptipy/infrastructure/file_readers/neo_adapter.py
+ src/Synaptipy/application/gui/explorer_tab.py \
+ src/Synaptipy/infrastructure/file_readers/neo_adapter.py
 ```
-**Result:** ✅ All files compile successfully
+**Result:** All files compile successfully
 
 ### Test Suite
 ```bash
 python scripts/run_tests.py
 ```
-**Result:** ✅ 63 tests passed, 6 skipped
+**Result:** 63 tests passed, 6 skipped
 - 5 pre-existing test failures unrelated to our fixes
 - No new failures introduced by the fixes
 
@@ -205,11 +205,11 @@ python scripts/run_tests.py
 - [ ] Verify correct channel names and data
 
 ### Expected Behavior
-- ✅ Plot customization changes apply instantly without lag
-- ✅ All channels in multi-channel files display data
-- ✅ Each channel shows its own unique waveform
-- ✅ Channel names match file header metadata
-- ✅ UI remains responsive during all operations
+- Plot customization changes apply instantly without lag
+- All channels in multi-channel files display data
+- Each channel shows its own unique waveform
+- Channel names match file header metadata
+- UI remains responsive during all operations
 
 ---
 
@@ -242,10 +242,10 @@ Modified the data flow to pass the pre-loaded `Recording` object directly from `
 - Legacy path: Uses `_load_and_display_file()` for file cycling
 
 ### Impact
-- ✅ **50% reduction** in file loading time (eliminated duplicate read)
-- ✅ UI remains responsive during initial file load
-- ✅ Background thread benefits fully utilized
-- ✅ File cycling still works correctly
+- **50% reduction** in file loading time (eliminated duplicate read)
+- UI remains responsive during initial file load
+- Background thread benefits fully utilized
+- File cycling still works correctly
 
 ---
 
@@ -262,21 +262,21 @@ Modified `_update_plot()` to respect the current plot mode and only plot the act
 
 ```python
 if self.current_plot_mode == self.PlotMode.CYCLE_SINGLE:
-    # Plot ONLY the current trial
-    trial_idx = self.current_trial_index
-    if 0 <= trial_idx < channel.num_trials:
-        # Plot single trial...
+ # Plot ONLY the current trial
+ trial_idx = self.current_trial_index
+ if 0 <= trial_idx < channel.num_trials:
+ # Plot single trial...
 else: # OVERLAY_AVG mode
-    # Plot all trials + average
-    for i in range(channel.num_trials):
-        # Plot each trial...
+ # Plot all trials + average
+ for i in range(channel.num_trials):
+ # Plot each trial...
 ```
 
 ### Impact
-- ✅ **Instant plot updates** in single-trial mode regardless of file size
-- ✅ Memory usage reduced for large files
-- ✅ Smooth trial navigation with Prev/Next buttons
-- ✅ No performance degradation for overlay mode
+- **Instant plot updates** in single-trial mode regardless of file size
+- Memory usage reduced for large files
+- Smooth trial navigation with Prev/Next buttons
+- No performance degradation for overlay mode
 
 ---
 
@@ -294,19 +294,19 @@ Modified `_create_channel_ui()` to link all plot X-axes to the first plot using 
 ```python
 first_plot_item = None
 for i, chan_key in enumerate(channel_keys):
-    plot_item = self.graphics_layout_widget.addPlot(row=i, col=0)
-    
-    if first_plot_item is None:
-        first_plot_item = plot_item
-    else:
-        plot_item.setXLink(first_plot_item)
+ plot_item = self.graphics_layout_widget.addPlot(row=i, col=0)
+
+ if first_plot_item is None:
+ first_plot_item = plot_item
+ else:
+ plot_item.setXLink(first_plot_item)
 ```
 
 ### Impact
-- ✅ Synchronized X-axis zoom across all channel plots
-- ✅ Synchronized X-axis panning across all channel plots
-- ✅ Improved multi-channel data inspection workflow
-- ✅ Y-axes remain independent for per-channel scaling
+- Synchronized X-axis zoom across all channel plots
+- Synchronized X-axis panning across all channel plots
+- Improved multi-channel data inspection workflow
+- Y-axes remain independent for per-channel scaling
 
 ---
 

@@ -1,12 +1,13 @@
 import numpy as np
+
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 
 
 def test_pipeline_add_remove_clear():
     pipeline = SignalProcessingPipeline()
 
-    step1 = {'type': 'baseline', 'method': 'mean'}
-    step2 = {'type': 'filter', 'method': 'lowpass', 'cutoff': 100}
+    step1 = {"type": "baseline", "method": "mean"}
+    step2 = {"type": "filter", "method": "lowpass", "cutoff": 100}
 
     pipeline.add_step(step1)
     pipeline.add_step(step2)
@@ -17,10 +18,10 @@ def test_pipeline_add_remove_clear():
     assert steps[1] == step2
 
     # Test Remove
-    pipeline.remove_step_by_type('baseline')
+    pipeline.remove_step_by_type("baseline")
     steps = pipeline.get_steps()
     assert len(steps) == 1
-    assert steps[0]['type'] == 'filter'
+    assert steps[0]["type"] == "filter"
 
     # Test Clear
     pipeline.clear()
@@ -41,7 +42,7 @@ def test_pipeline_processing_order():
     # Baseline Mean -> then user adds 5 (can't do that easily).
 
     # Let's check Baseline Mean
-    pipeline.add_step({'type': 'baseline', 'method': 'mean'})
+    pipeline.add_step({"type": "baseline", "method": "mean"})
     processed_1 = pipeline.process(data, fs)
     expected_1 = data - 5.0
     np.testing.assert_array_almost_equal(processed_1, expected_1)
@@ -71,8 +72,8 @@ def test_pipeline_integration():
     raw_data = clean_sig + noise + dc_offset
 
     # 2. Add ops: Baseline (remove DC) -> Lowpass (remove noise)
-    pipeline.add_step({'type': 'baseline', 'method': 'mean'})
-    pipeline.add_step({'type': 'filter', 'method': 'lowpass', 'cutoff': 100, 'order': 4})
+    pipeline.add_step({"type": "baseline", "method": "mean"})
+    pipeline.add_step({"type": "filter", "method": "lowpass", "cutoff": 100, "order": 4})
 
     processed = pipeline.process(raw_data, fs, t)
 
@@ -96,7 +97,7 @@ def test_empty_pipeline():
 def test_region_baseline_no_time_vector():
     """Test handling of region baseline when time vector is missing."""
     pipeline = SignalProcessingPipeline()
-    pipeline.add_step({'type': 'baseline', 'method': 'region', 'start_t': 0, 'end_t': 1})
+    pipeline.add_step({"type": "baseline", "method": "region", "start_t": 0, "end_t": 1})
 
     data = np.array([10, 10, 10])
     # Should warn and return original data loop, effectively doing nothing or crashing?

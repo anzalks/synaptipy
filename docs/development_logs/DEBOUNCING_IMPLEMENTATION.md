@@ -1,7 +1,7 @@
 # Interaction Debouncing Implementation
 
-**Author:** Anzal K Shahul  
-**Email:** anzal.ks@gmail.com  
+**Author:** Anzal K Shahul
+**Email:** anzal.ks@gmail.com
 **Date:** October 21, 2025
 
 ## Overview

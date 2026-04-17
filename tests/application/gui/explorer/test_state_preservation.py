@@ -1,14 +1,16 @@
-
-import pytest
-from unittest.mock import MagicMock
+import sys
 from pathlib import Path
-from PySide6 import QtWidgets
+from unittest.mock import MagicMock
+
 import numpy as np
+import pytest
+from PySide6 import QtWidgets
+from PySide6.QtCore import QCoreApplication
 
 from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.core.data_model import Channel, Recording
 from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.core.data_model import Recording, Channel
+from Synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture(scope="session")
@@ -36,6 +38,10 @@ def reset_explorer_tab_state(explorer_tab):
     explorer_tab._current_trial_selection_params = None
     explorer_tab.selected_trial_indices = set()
     explorer_tab._is_loading = False
+    # Reset file-nav debounce state introduced in the debounce PR.
+    explorer_tab._pending_nav_target = None
+    if hasattr(explorer_tab, "_file_nav_timer"):
+        explorer_tab._file_nav_timer.stop()
     try:
         explorer_tab.toolbar.lock_zoom_cb.setChecked(False)
     except Exception:
@@ -46,8 +52,17 @@ def reset_explorer_tab_state(explorer_tab):
     # rather than processEvents: the former cancels queued events (safe, no code
     # executed) while the latter executes them and can cause re-entrant crashes
     # on Windows in offscreen mode with PySide6 >= 6.7.
+    #
+    # macOS guard: pyqtgraph keeps live state in its AllViews registry and
+    # geometry caches via posted events between tests.  Discarding them on macOS
+    # corrupts that state and causes the next rebuild_plots() to segfault or
+    # mis-render.  This mirrors the documented rule from copilot-instructions.md
+    # and the behaviour of all other per-test drain fixtures in this repo.
+    if sys.platform == "darwin":
+        return
     try:
         from PySide6.QtCore import QCoreApplication
+
         QCoreApplication.removePostedEvents(None, 0)
     except Exception:
         pass
@@ -111,13 +126,15 @@ def test_preserve_state_on_cycle(explorer_tab):
     target_y_range = (-5.0, 5.0)
     plot_a.setXRange(*target_x_range, padding=0)
     plot_a.setYRange(*target_y_range, padding=0)
+    # Let Qt process deferred geometry callbacks so the ViewBox
+    # actually commits the requested range before we capture it.
+    QCoreApplication.processEvents()
     explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
 
     # Set Trial Selection (Every 2nd trial)
-    gap_n = 1  # Every 2nd
-    start_idx = 0
-    explorer_tab._on_trial_selection_requested(gap_n, start_idx)
-    assert explorer_tab._current_trial_selection_params == (gap_n, start_idx)
+    selection_str = "0, 2, 4, 6, 8"
+    explorer_tab._on_trial_selection_requested(selection_str)
+    assert explorer_tab._current_trial_selection_params == selection_str
 
     # 3. Simulate Cycling to File B (preserve_state=True)
     rec_b = create_mock_recording("FileB.wcp")
@@ -134,7 +151,7 @@ def test_preserve_state_on_cycle(explorer_tab):
     assert abs(captured_x[0] - target_x_range[0]) < 0.01
     assert abs(captured_x[1] - target_x_range[1]) < 0.01
 
-    assert explorer_tab._pending_trial_params == (gap_n, start_idx)
+    assert explorer_tab._pending_trial_params == selection_str
 
     # 4. Simulate Load Completion (RESTORE)
     # This calls _display_recording -> _update_plot
@@ -142,6 +159,12 @@ def test_preserve_state_on_cycle(explorer_tab):
 
     # 5. Verify State Restored
     plot_b = explorer_tab.plot_canvas.channel_plots["ch1"]  # Might be new object
+
+    # Let Qt settle deferred geometry callbacks from rebuild_plots()
+    # before checking viewRange().  This is an inline processEvents (not
+    # a drain fixture) so it only runs events while the session-scoped
+    # widget is alive — safe on all platforms.
+    QCoreApplication.processEvents()
 
     # Verify View Range
     view_range_x = plot_b.viewRange()[0]
@@ -153,7 +176,7 @@ def test_preserve_state_on_cycle(explorer_tab):
     assert abs(view_range_y[0] - target_y_range[0]) < 0.01
 
     # Verify Trial Params restored
-    assert explorer_tab._current_trial_selection_params == (gap_n, start_idx)
+    assert explorer_tab._current_trial_selection_params == selection_str
     # Check selection indices were recalculated (max trials 10, skip 1 -> 5 selected)
     assert len(explorer_tab.selected_trial_indices) == 5
 
@@ -167,7 +190,7 @@ def test_no_preserve_state_default(explorer_tab):
 
     plot_a = explorer_tab.plot_canvas.channel_plots["ch1"]
     plot_a.setXRange(0.2, 0.4, padding=0)
-    explorer_tab._on_trial_selection_requested(1, 0)
+    explorer_tab._on_trial_selection_requested("0, 2, 4, 6, 8")
 
     # 2. Load File B WITHOUT preserve_state
     rec_b = create_mock_recording("FileB.wcp")
@@ -182,6 +205,8 @@ def test_no_preserve_state_default(explorer_tab):
 
     # 4. Verify Reset
     plot_b = explorer_tab.plot_canvas.channel_plots["ch1"]
+    # Let deferred geometry callbacks settle before checking viewRange().
+    QCoreApplication.processEvents()
     view_range_x = plot_b.viewRange()[0]
 
     # Should be default range (0 to duration=1.0)
@@ -203,8 +228,9 @@ def test_preserve_state_on_sidebar_selection(explorer_tab):
     plot_a = explorer_tab.plot_canvas.channel_plots["ch1"]
     plot_a.isVisible = MagicMock(return_value=True)
     plot_a.setXRange(0.2, 0.4, padding=0)
+    QCoreApplication.processEvents()
     explorer_tab.toolbar.lock_zoom_cb.setChecked(True)
-    explorer_tab._on_trial_selection_requested(1, 0)  # Gap 1
+    explorer_tab._on_trial_selection_requested("0, 2, 4, 6, 8")  # Gap 1
 
     # 2. Emit Signal from Sidebar (simulate user double-click)
     rec_b = create_mock_recording("FileB.wcp")
@@ -217,10 +243,10 @@ def test_preserve_state_on_sidebar_selection(explorer_tab):
     # Since we mocked the thread pool, load_recording_data runs but worker start is instant/mocked.
     # But checking _pending_view_state confirms preserve_state=True was passed.
     assert explorer_tab._pending_view_state is not None
-    assert explorer_tab._pending_trial_params == (1, 0)
+    assert explorer_tab._pending_trial_params == "0, 2, 4, 6, 8"
 
     # 4. Finish Load
     explorer_tab._display_recording(rec_b)
 
     # 5. Verify Restored
-    assert explorer_tab._current_trial_selection_params == (1, 0)
+    assert explorer_tab._current_trial_selection_params == "0, 2, 4, 6, 8"

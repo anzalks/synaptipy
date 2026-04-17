@@ -22,7 +22,7 @@ TUTORIAL_CONTENT = """# Synaptipy User Tutorial and Documentation
 
 Synaptipy is a comprehensive electrophysiology visualization and analysis suite for
 patch-clamp and intracellular recording data. Built on Python and Qt6, it provides
-high-performance signal visualization, 14 dedicated analysis modules, a batch
+high-performance signal visualization, 15 dedicated analysis modules, a batch
 processing engine, and standards-compliant data export. This tutorial covers every
 feature of the application in detail, including the mathematical methods used under
 the hood.
@@ -161,7 +161,7 @@ Computed on file load; shown as a traffic-light badge with tooltip:
 
 ![Analyser Tab](screenshots/analyser_tab.png)
 
-The central analysis engine. All 14 analysis sub-tabs are auto-built from registry
+The central analysis engine. All 15 analysis sub-tabs are auto-built from registry
 metadata — parameter widgets, interactive plots, and result tables are generated
 automatically.
 
@@ -711,7 +711,7 @@ Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
 
 ### 5.3 Building a Pipeline
 
-1. **Add Step** — select from all 14 registered analyses.
+1. **Add Step** — select from all 15 registered analyses.
 2. **Scope** — Average, All Trials, First Trial, Specific Trial, or Channel Set.
 3. Configure **Parameters** with auto-generated widgets.
 4. Optionally prepend **Preprocessing Steps** (filter / baseline-subtract).

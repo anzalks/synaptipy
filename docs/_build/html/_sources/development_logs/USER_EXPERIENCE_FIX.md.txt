@@ -1,7 +1,7 @@
 # User Experience Fix: Better Error Messages
 
-**Date**: November 17, 2025  
-**Issue**: Generic error messages after refactoring  
+**Date**: November 17, 2025
+**Issue**: Generic error messages after refactoring
 **Impact**: Users couldn't understand why analysis was failing
 
 ---
@@ -41,42 +41,42 @@ Updated `_execute_core_analysis` in `rin_tab.py` to set user-friendly status mes
 ```python
 # Before:
 if not delta_i_pa or np.isclose(delta_i_pa, 0.0):
-    log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
-    return None  # ❌ No user feedback
+ log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
+ return None # No user feedback
 
 # After:
 if not delta_i_pa or np.isclose(delta_i_pa, 0.0):
-    log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
-    self.status_label.setText("Status: Please provide a non-zero ΔI value.")  # ✅ Clear message
-    return None
+ log.warning("_execute_core_analysis: Missing or zero delta_i_pa")
+ self.status_label.setText("Status: Please provide a non-zero ΔI value.") # Clear message
+ return None
 ```
 
 **Change 2** - Missing ΔV value (line 1290):
 ```python
 # Before:
 if not delta_v_mv or np.isclose(delta_v_mv, 0.0):
-    log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
-    return None  # ❌ No user feedback
+ log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
+ return None # No user feedback
 
 # After:
 if not delta_v_mv or np.isclose(delta_v_mv, 0.0):
-    log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
-    self.status_label.setText("Status: Please provide a non-zero ΔV value.")  # ✅ Clear message
-    return None
+ log.warning("_execute_core_analysis: Missing or zero delta_v_mv")
+ self.status_label.setText("Status: Please provide a non-zero ΔV value.") # Clear message
+ return None
 ```
 
 **Change 3** - Missing windows (line 1248):
 ```python
 # Before:
 if not baseline_window or not response_window:
-    log.warning("_execute_core_analysis: Missing baseline/response windows")
-    return None  # ❌ No user feedback
+ log.warning("_execute_core_analysis: Missing baseline/response windows")
+ return None # No user feedback
 
 # After:
 if not baseline_window or not response_window:
-    log.warning("_execute_core_analysis: Missing baseline/response windows")
-    self.status_label.setText("Status: Please set baseline and response windows.")  # ✅ Clear message
-    return None
+ log.warning("_execute_core_analysis: Missing baseline/response windows")
+ self.status_label.setText("Status: Please set baseline and response windows.") # Clear message
+ return None
 ```
 
 ---
@@ -84,18 +84,18 @@ if not baseline_window or not response_window:
 ## User Experience Comparison
 
 ### Before Fix
-1. User adds file to analysis ✅
-2. User clicks in Rin tab ✅
-3. User tries to run analysis ❌
+1. User adds file to analysis
+2. User clicks in Rin tab
+3. User tries to run analysis
 4. **Popup**: "Analysis could not be completed. Please check your parameters and data."
-5. User: *"What parameter? What's wrong?"* 😕
+5. User: *"What parameter? What's wrong?"*
 
 ### After Fix
-1. User adds file to analysis ✅
-2. User clicks in Rin tab ✅
-3. User tries to run analysis ❌
+1. User adds file to analysis
+2. User clicks in Rin tab
+3. User tries to run analysis
 4. **Status Label**: "Status: Please provide a non-zero ΔI value."
-5. User: *"Oh, I need to enter the ΔI value!"* ✅
+5. User: *"Oh, I need to enter the ΔI value!"*
 
 ---
 
@@ -141,11 +141,11 @@ The specific status messages are the **first line of defense**, and the generic 
 
 ## Verification
 
-✅ All tests pass (12/12)  
-✅ File compiles without errors  
-✅ No linting issues  
-✅ User-friendly error messages now display  
-✅ Generic popup still appears as fallback
+ All tests pass (12/12)
+ File compiles without errors
+ No linting issues
+ User-friendly error messages now display
+ Generic popup still appears as fallback
 
 ---
 
@@ -159,5 +159,5 @@ When implementing `_execute_core_analysis` in any analysis tab:
 
 ---
 
-**Status**: ✅ FIXED AND VERIFIED
+**Status**: FIXED AND VERIFIED
 
