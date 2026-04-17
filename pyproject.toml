@@ -53,6 +53,7 @@ dev = [
     "pytest-qt>=4.0.0",
     "pytest-mock",
     "pytest-cov",
+    "nbval",
     "flake8",
     "black~=26.1",
     "isort~=8.0",

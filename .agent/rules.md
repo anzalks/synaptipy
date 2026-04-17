@@ -219,6 +219,11 @@ dedicated plot button. Auto-popup on file load is forbidden without exception.
 * **Requirement**: Use the `SourceHandle` protocol (`src/Synaptipy/core/source_interfaces.py`) for abstract data access.
 * *Reason*: Decouples the core domain from specific I/O libraries (Neo), enabling easier testing and future library swaps.
 
+## VIII. NATIVE CI/CD & TELEMETRY
+
+### RULE 3 - Native CI/CD & Telemetry
+Never integrate third-party coverage dashboards or telemetry services (e.g., Codecov, Coveralls). All test coverage reporting, metrics, and CI analytics MUST remain strictly native to GitHub via standard Actions and PR comments.
+
 **4. Test Canonicalization**
 *   **Forbidden**: Standalone `verify_*.py` scripts for testing. All tests must be discoverable by `pytest`.
 *   **Requirement**: All test files must reside in `tests/` and follow `test_*.py` naming.
