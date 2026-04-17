@@ -1,1 +1,1 @@
-
+"""Infrastructure tests package."""

@@ -1,1 +1,1 @@
-
+"""Application tests package."""
