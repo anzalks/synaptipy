@@ -97,3 +97,35 @@ jobs:
       uses: py-cov-action/python-coverage-comment-action@v3
       with:
         GITHUB_TOKEN: ${{ github.token }}
+
+    # Push coverage badge endpoint.json to the data branch so the README
+    # badge resolves on every branch, not only after merging to main.
+    - name: Push coverage badge data
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        COVERAGE=$(python -m coverage report --format=total 2>/dev/null || echo "0")
+        if   [ "$COVERAGE" -ge 90 ]; then COLOR="brightgreen"
+        elif [ "$COVERAGE" -ge 75 ]; then COLOR="green"
+        elif [ "$COVERAGE" -ge 60 ]; then COLOR="yellow"
+        else COLOR="red"
+        fi
+        printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' \
+          "$COVERAGE" "$COLOR" > /tmp/endpoint.json
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
+        git fetch origin python-coverage-comment-action-data 2>/dev/null || true
+        if git ls-remote --exit-code --heads origin python-coverage-comment-action-data; then
+          git checkout -B python-coverage-comment-action-data \
+            origin/python-coverage-comment-action-data
+        else
+          git checkout --orphan python-coverage-comment-action-data
+          git rm -rf . --quiet || true
+        fi
+        cp /tmp/endpoint.json ./endpoint.json
+        git add endpoint.json
+        git diff --cached --quiet || \
+          git commit -m "chore: update coverage badge data [skip ci]"
+        git push origin python-coverage-comment-action-data
+        git checkout -
