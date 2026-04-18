@@ -113,6 +113,7 @@ jobs:
         fi
         printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' \
           "$COVERAGE" "$COLOR" > /tmp/endpoint.json
+        ORIG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git config user.name "github-actions[bot]"
         git fetch origin python-coverage-comment-action-data 2>/dev/null || true
@@ -128,4 +129,4 @@ jobs:
         git diff --cached --quiet || \
           git commit -m "chore: update coverage badge data [skip ci]"
         git push origin python-coverage-comment-action-data
-        git checkout -
+        git checkout "$ORIG_BRANCH"
