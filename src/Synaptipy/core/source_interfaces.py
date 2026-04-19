@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Protocol
 import numpy as np
 
 
-class SourceHandle(Protocol):
+class SourceHandle(Protocol):  # pragma: no cover
     """
     Abstract interface for a data source (e.g., file on disk, network stream).
     Decouples the core domain from specific I/O libraries like Neo.
