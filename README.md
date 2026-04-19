@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/anzalks/synaptipy)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![CI](https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
-[![Text Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/anzalks/synaptipy/python-coverage-comment-action-data/endpoint.json)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
+[![Core Test Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/anzalks/synaptipy/python-coverage-comment-action-data/endpoint.json)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
 [![Docs](https://github.com/anzalks/synaptipy/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/anzalks/synaptipy/actions/workflows/docs.yml)
 [![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
 [![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
