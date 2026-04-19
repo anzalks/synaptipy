@@ -98,21 +98,22 @@ jobs:
       with:
         GITHUB_TOKEN: ${{ github.token }}
 
-    # Push coverage badge endpoint.json to the data branch so the README
-    # badge resolves on every branch, not only after merging to main.
+    # Push core text coverage badge endpoint.json to the data branch so the
+    # README badge resolves on every branch, not only after merging to main.
     - name: Push coverage badge data
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        COVERAGE=$(python -m coverage report --format=total 2>/dev/null || echo "0")
-        if   [ "$COVERAGE" -ge 90 ]; then COLOR="brightgreen"
-        elif [ "$COVERAGE" -ge 75 ]; then COLOR="green"
-        elif [ "$COVERAGE" -ge 60 ]; then COLOR="yellow"
+        python -m pytest tests/core/ -q --cov=Synaptipy.core --cov-report=term --cov-report=xml
+        CORE_COVERAGE=$(python -m coverage report --format=total 2>/dev/null || echo "0")
+        if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="brightgreen"
+        elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="green"
+        elif [ "$CORE_COVERAGE" -ge 60 ]; then COLOR="yellow"
         else COLOR="red"
         fi
-        printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}\n' \
-          "$COVERAGE" "$COLOR" > /tmp/endpoint.json
+        printf '{"schemaVersion":1,"label":"text coverage","message":"%s%%","color":"%s"}\n' \
+          "$CORE_COVERAGE" "$COLOR" > /tmp/endpoint.json
         ORIG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git config user.name "github-actions[bot]"
