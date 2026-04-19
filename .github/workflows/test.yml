@@ -98,7 +98,7 @@ jobs:
       with:
         GITHUB_TOKEN: ${{ github.token }}
 
-    # Push core text coverage badge endpoint.json to the data branch so the
+    # Push core test coverage badge endpoint.json to the data branch so the
     # README badge resolves on every branch, not only after merging to main.
     - name: Push coverage badge data
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
@@ -112,7 +112,7 @@ jobs:
         elif [ "$CORE_COVERAGE" -ge 60 ]; then COLOR="yellow"
         else COLOR="red"
         fi
-        printf '{"schemaVersion":1,"label":"text coverage","message":"%s%%","color":"%s"}\n' \
+        printf '{"schemaVersion":1,"label":"core test coverage","message":"%s%%","color":"%s"}\n' \
           "$CORE_COVERAGE" "$COLOR" > /tmp/endpoint.json
         ORIG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
         git config user.email "github-actions[bot]@users.noreply.github.com"
