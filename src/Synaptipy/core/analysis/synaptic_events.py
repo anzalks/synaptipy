@@ -69,13 +69,16 @@ def find_quiescent_baseline_rms(
 
     for i in range(0, n - window_samples + 1, step_samples):
         chunk = data[i : i + window_samples]
-        var = float(np.var(chunk))
+        # Detrend each chunk to remove slow drift before computing variance so
+        # that only high-frequency thermal noise is assessed.
+        chunk_detrended = signal.detrend(chunk, type="linear")
+        var = float(np.var(chunk_detrended))
         if var < min_var:
             min_var = var
             best_start = i
 
     best_end = best_start + window_samples
-    quiescent_chunk = data[best_start:best_end]
+    quiescent_chunk = signal.detrend(data[best_start:best_end], type="linear")
     rms = float(np.sqrt(np.mean(quiescent_chunk**2)))
     return rms, (best_start, best_end)
 
@@ -353,7 +356,19 @@ def _fit_p1_decay_residual(
     global_baseline: float,
     sample_rate: float,
 ) -> Tuple[float, float]:
-    """Fit mono-exp decay to P1 tail; return (residual_at_p2, tau_p1_ms)."""
+    """Fit P1 decay tail; attempt bi-exponential first, fall back to mono-exp.
+
+    A bi-exponential model captures both fast and slow decay components
+    (e.g., AMPA fast-deactivation + NMDA slow-deactivation) and yields a
+    more accurate residual estimate at P2 onset when two components are
+    present.  If bi-exp optimisation fails to converge, the function falls
+    back gracefully to a mono-exponential fit.
+
+    Returns:
+        Tuple of (residual_at_p2, tau_dominant_ms) where ``tau_dominant_ms``
+        is the amplitude-weighted mean time constant for the bi-exp case or
+        the single tau for the mono-exp case.
+    """
     nan = float("nan")
     max_decay_samples = min(int(0.2 * sample_rate), int((s2_t - time[peak1_idx]) * sample_rate) - 1)
     decay_end_idx = min(peak1_idx + max(4, max_decay_samples), len(data) - 1)
@@ -363,12 +378,54 @@ def _fit_p1_decay_residual(
 
     t_decay = time[peak1_idx:decay_end_idx] - time[peak1_idx]
     i_decay = data[peak1_idx:decay_end_idx] - global_baseline
+    t_at_s2 = s2_t - time[peak1_idx]
 
+    A0 = float(i_decay[0]) if i_decay.size > 0 else 1.0
+    tau_guess = float(t_decay[-1] / 3.0) if t_decay[-1] > 0 else 0.01
+
+    # ------------------------------------------------------------------
+    # Attempt 1: bi-exponential  A_f*exp(-t/tau_f) + A_s*exp(-t/tau_s)
+    # ------------------------------------------------------------------
+    def _bi_exp_ppr(t, A_f, tau_f, A_s, tau_s):
+        return A_f * np.exp(-t / tau_f) + A_s * np.exp(-t / tau_s)
+
+    if len(t_decay) >= 8:
+        tau_fast_guess = tau_guess * 0.2
+        tau_slow_guess = tau_guess
+        p0_bi = [A0 * 0.6, tau_fast_guess, A0 * 0.4, tau_slow_guess]
+        bounds_bi = (
+            [-np.inf, 1e-5, -np.inf, 1e-4],
+            [np.inf, tau_guess * 2.0, np.inf, 2.0],
+        )
+        try:
+            popt_bi, _ = curve_fit(
+                _bi_exp_ppr,
+                t_decay,
+                i_decay,
+                p0=p0_bi,
+                bounds=bounds_bi,
+                maxfev=4000,
+            )
+            A_f, tau_f, A_s, tau_s = popt_bi
+            residual_at_p2 = float(_bi_exp_ppr(t_at_s2, *popt_bi))
+            # Amplitude-weighted dominant tau for reporting
+            total_amp = abs(A_f) + abs(A_s)
+            if total_amp > 0:
+                tau_dominant_ms = (abs(A_f) * tau_f + abs(A_s) * tau_s) / total_amp * 1000.0
+            else:
+                tau_dominant_ms = tau_guess * 1000.0
+            log.debug("PPR: bi-exp decay fit converged (tau_f=%.2f ms, tau_s=%.2f ms).", tau_f * 1000, tau_s * 1000)
+            return residual_at_p2, float(tau_dominant_ms)
+        except (RuntimeError, ValueError):
+            log.debug("PPR: bi-exp decay fit did not converge; falling back to mono-exp.")
+
+    # ------------------------------------------------------------------
+    # Attempt 2 (fallback): mono-exponential  A*exp(-t/tau)
+    # ------------------------------------------------------------------
     def _mono_exp_ppr(t, A, tau):
         return A * np.exp(-t / tau)
 
-    tau_guess = float(t_decay[-1] / 3.0) if t_decay[-1] > 0 else 0.01
-    p0 = [float(i_decay[0]) if i_decay.size > 0 else 1.0, tau_guess]
+    p0 = [A0, tau_guess]
     try:
         popt, _ = curve_fit(
             _mono_exp_ppr,
@@ -379,7 +436,6 @@ def _fit_p1_decay_residual(
             maxfev=2000,
         )
         tau_p1_ms = float(popt[1]) * 1000.0
-        t_at_s2 = s2_t - time[peak1_idx]
         residual_at_p2 = float(_mono_exp_ppr(t_at_s2, *popt))
         return residual_at_p2, tau_p1_ms
     except (RuntimeError, ValueError):

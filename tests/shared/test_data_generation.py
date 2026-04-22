@@ -214,37 +214,66 @@ def make_rc_passive_trace(
     duration_s: float = 0.3,
     step_start_s: float = 0.05,
     step_end_s: float = 0.25,
+    pipette_tau_ms: float = 0.3,
+    pipette_rs_mohm: float = 10.0,
 ) -> tuple:
-    """Generate a mathematically pure RC-circuit voltage trace.
+    """Generate a realistic RC-circuit voltage trace with pipette capacitance.
 
-    The voltage response is a monoexponential approach to a new steady state:
+    The voltage response now includes two components:
 
-        V(t) = V_ss * (1 - exp(-t / tau))
+    1. **Fast pipette transient**: a small, fast exponential kick at step onset
+       that reflects the pipette / series resistance before the membrane begins
+       to charge (time constant *pipette_tau_ms*, amplitude
+       ``I * pipette_rs_mohm``).
+    2. **Membrane charging**: the main monoexponential approach to steady state
+       ``V_ss = I * R_in`` with time constant ``tau = R_in * C_m``.
 
-    where ``V_ss = I * R_in`` and ``tau = R_in * C_m``.
+    This produces a "messier" trace that exercises robust tau-fitting code
+    while keeping analytically known ground-truth constants.
+
+    Args:
+        rin_mohm:        Input resistance (MOhm).
+        tau_ms:          Membrane time constant (ms).
+        step_amplitude_pa: Injected current step (pA).
+        baseline_mv:     Pre-step voltage (mV).
+        sampling_rate:   Samples per second.
+        duration_s:      Total trace duration (s).
+        step_start_s:    Onset time of the current step (s).
+        step_end_s:      Offset time of the current step (s).
+        pipette_tau_ms:  Time constant for the fast pipette transient (ms).
+        pipette_rs_mohm: Series / access resistance that drives the fast
+                         artifact (MOhm). Must be < rin_mohm.
 
     Returns:
         (voltage, time, known_constants) where known_constants is a dict with
-        keys ``rin_mohm``, ``tau_ms``, ``cm_pf``, ``delta_v_mv``.
+        keys ``rin_mohm``, ``tau_ms``, ``cm_pf``, ``delta_v_mv``,
+        ``pipette_rs_mohm``, ``pipette_tau_ms``.
     """
-    cm_pf = tau_ms / rin_mohm * 1e6  # tau = RC → C = tau / R  [pF = ms / MOhm]
+    # Clamp pipette Rs so it is always less than Rin
+    pipette_rs_mohm = min(pipette_rs_mohm, rin_mohm * 0.3)
+    cm_pf = tau_ms / rin_mohm * 1e6  # tau = RC -> C = tau / R  [pF = ms / MOhm]
 
     n = int(duration_s * sampling_rate)
     t = np.arange(n) / sampling_rate
     v = np.full(n, baseline_mv)
 
-    # Voltage steady-state during step: ΔV = I(pA) * R(MOhm) / 1000 → mV
-    delta_v_mv = step_amplitude_pa * rin_mohm / 1000.0  # pA * MOhm / 1000 = mV
+    # Voltage steady-state during step: DeltaV = I(pA) * R(MOhm) / 1000 -> mV
+    delta_v_mv = step_amplitude_pa * rin_mohm / 1000.0
     tau_s = tau_ms / 1000.0
+    pipette_tau_s = pipette_tau_ms / 1000.0
+    pipette_amp_mv = step_amplitude_pa * pipette_rs_mohm / 1000.0
 
     idx_on = int(step_start_s * sampling_rate)
     idx_off = int(step_end_s * sampling_rate)
 
     for i in range(idx_on, idx_off):
         dt = (i - idx_on) / sampling_rate
-        v[i] = baseline_mv + delta_v_mv * (1.0 - np.exp(-dt / tau_s))
+        membrane_component = delta_v_mv * (1.0 - np.exp(-dt / tau_s))
+        # Fast pipette transient decays quickly on top of the membrane charge
+        pipette_component = pipette_amp_mv * np.exp(-dt / pipette_tau_s)
+        v[i] = baseline_mv + membrane_component + pipette_component
 
-    # Off transient: return toward baseline
+    # Off transient: return toward baseline (membrane component dominates)
     v_at_off = v[idx_off - 1]
     for i in range(idx_off, n):
         dt = (i - idx_off) / sampling_rate
@@ -258,6 +287,8 @@ def make_rc_passive_trace(
         "step_amplitude_pa": step_amplitude_pa,
         "step_start_s": step_start_s,
         "step_end_s": step_end_s,
+        "pipette_rs_mohm": pipette_rs_mohm,
+        "pipette_tau_ms": pipette_tau_ms,
     }
     return v, t, known
 
@@ -431,50 +462,84 @@ def make_biexponential_epsc(
 def make_ppr_evoked_trace(
     r1_amp_mv: float = -5.0,
     r2_amp_mv: float = -5.0,
-    tau_decay_ms: float = 40.0,
+    tau_fast_ms: float = 10.0,
+    tau_slow_ms: float = 60.0,
+    fast_fraction: float = 0.4,
     stim1_s: float = 0.1,
     stim2_s: float = 0.2,
     baseline_mv: float = -65.0,
     sampling_rate: float = 10000.0,
     duration_s: float = 0.5,
 ) -> tuple:
-    """Generate a paired-pulse trace with a mathematically exact residual decay.
+    """Generate a paired-pulse trace with a bi-exponential residual decay.
 
-    Each event is modelled as a monoexponential decay of amplitude *r_amp_mv*.
-    The second event is placed on top of the still-decaying tail of the first,
-    so the exact residual at stim2 is analytically known.
+    Each synaptic event is modelled as a **bi-exponential decay**::
+
+        V_event(t) = A * [f * exp(-t/tau_fast) + (1-f) * exp(-t/tau_slow)]
+
+    where *f* is the ``fast_fraction``.  Using two components better reflects
+    the mixture of fast (AMPA) and slow (NMDA / mGluR) conductances seen in
+    biological EPSP/IPSPs.  The exact residual at stim2 is analytically known
+    from the bi-exponential expression.
+
+    Args:
+        r1_amp_mv:    Peak amplitude of the first response (mV).
+        r2_amp_mv:    Peak amplitude of the second response (mV).
+        tau_fast_ms:  Fast decay time constant (ms).
+        tau_slow_ms:  Slow decay time constant (ms).
+        fast_fraction: Fraction of amplitude carried by the fast component
+                       (0 < fast_fraction < 1).
+        stim1_s:      Time of first stimulus (s).
+        stim2_s:      Time of second stimulus (s).
+        baseline_mv:  Resting potential (mV).
+        sampling_rate: Samples per second.
+        duration_s:   Total trace duration (s).
 
     Returns:
         (voltage, time, known_constants) where known_constants includes
-        ``r1_amp_mv``, ``r2_amp_mv``, ``residual_at_stim2_mv``,
-        ``naive_ppr`` (= r2/r1), and ``tau_decay_ms``.
+        ``r1_amp_mv``, ``r2_amp_mv``, ``tau_fast_ms``, ``tau_slow_ms``,
+        ``fast_fraction``, ``residual_at_stim2_mv``, ``naive_ppr``,
+        and ``isi_ms``.
     """
     n = int(duration_s * sampling_rate)
     t = np.arange(n) / sampling_rate
     v = np.full(n, baseline_mv)
 
-    tau_s = tau_decay_ms / 1000.0
+    tau_f_s = tau_fast_ms / 1000.0
+    tau_s_s = tau_slow_ms / 1000.0
+    slow_fraction = 1.0 - fast_fraction
+
+    def _bi_decay(amp, dt_arr):
+        """Evaluate bi-exponential decay for an array of time offsets."""
+        return amp * (fast_fraction * np.exp(-dt_arr / tau_f_s) + slow_fraction * np.exp(-dt_arr / tau_s_s))
+
     idx1 = int(stim1_s * sampling_rate)
     idx2 = int(stim2_s * sampling_rate)
 
     # First event
-    for i in range(idx1, n):
-        dt = (i - idx1) / sampling_rate
-        v[i] += r1_amp_mv * np.exp(-dt / tau_s)
+    dt1 = (np.arange(n - idx1)) / sampling_rate
+    v[idx1:] += _bi_decay(r1_amp_mv, dt1)
 
     # Second event added on top
-    for i in range(idx2, n):
-        dt = (i - idx2) / sampling_rate
-        v[i] += r2_amp_mv * np.exp(-dt / tau_s)
+    dt2 = (np.arange(n - idx2)) / sampling_rate
+    v[idx2:] += _bi_decay(r2_amp_mv, dt2)
 
-    # Exact residual of event-1 at stim2 onset
+    # Exact residual of event-1 at stim2 onset (analytical)
     isi_s = stim2_s - stim1_s
-    residual_at_stim2 = r1_amp_mv * np.exp(-isi_s / tau_s)
+    residual_at_stim2 = float(
+        r1_amp_mv * (fast_fraction * np.exp(-isi_s / tau_f_s) + slow_fraction * np.exp(-isi_s / tau_s_s))
+    )
+
+    # Legacy compatibility: expose a single tau_decay_ms as the amplitude-weighted mean
+    tau_decay_ms = fast_fraction * tau_fast_ms + slow_fraction * tau_slow_ms
 
     known = {
         "r1_amp_mv": r1_amp_mv,
         "r2_amp_mv": r2_amp_mv,
+        "tau_fast_ms": tau_fast_ms,
+        "tau_slow_ms": tau_slow_ms,
         "tau_decay_ms": tau_decay_ms,
+        "fast_fraction": fast_fraction,
         "stim1_s": stim1_s,
         "stim2_s": stim2_s,
         "residual_at_stim2_mv": residual_at_stim2,

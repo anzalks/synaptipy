@@ -732,10 +732,13 @@ class TestGroundTruthEvokedPPR:
 
         r1 = -5.0  # mV
         tau = 40.0  # ms
+        # Use tau as the slow component; fast component set to 10 ms (faster artifact)
         v, t, known = make_ppr_evoked_trace(
             r1_amp_mv=r1,
             r2_amp_mv=-5.0,
-            tau_decay_ms=tau,
+            tau_fast_ms=10.0,
+            tau_slow_ms=tau,
+            fast_fraction=0.0,  # pure mono-exp (fast_fraction=0 -> only slow component)
             stim1_s=0.1,
             stim2_s=0.2,
             sampling_rate=10000.0,

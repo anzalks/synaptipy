@@ -184,15 +184,26 @@ following stimulus offset.
 
 ## 5. Capacitance ($C_m$)
 
-**Module:** `capacitance.py` · **Registry name:** `capacitance_analysis`
+**Module:** `passive_properties.py` · **Registry name:** `capacitance_analysis`
 
 ### 5.1 Current-clamp mode
 
+The preferred formula accounts for the series (access) resistance $R_s$,
+which acts in series with $R_{\text{in}}$ and therefore carries part of the
+RC time constant:
+
 $$
-C_m \;(\text{pF}) = \frac{\tau \;(\text{ms})}{R_{\text{in}} \;(\text{M}\Omega)}
+C_m \;(\text{pF}) = \frac{\tau \;(\text{ms})}{R_{\text{in}} - R_s \;(\text{M}\Omega)}
 $$
 
-Both $\tau$ and $R_{\text{in}}$ are computed from the same trace.
+When $R_s$ is not available (e.g. the fast artifact window is too short to
+resolve), the approximation $C_m = \tau / R_{\text{in}}$ is used and a
+warning is logged, since this over-estimates $C_m$ by a factor of
+$R_{\text{in}} / (R_{\text{in}} - R_s)$.
+
+Both $\tau$ and $R_{\text{in}}$ are computed from the same hyperpolarising
+current-step trace.  $R_s$ is estimated via `calculate_cc_series_resistance_fast`
+(see Section 5.3).
 
 ### 5.2 Voltage-clamp mode
 
@@ -203,6 +214,21 @@ $$
 where $Q = \int_0^T \bigl( I(t) - I_{\text{ss}} \bigr) \, dt$ is the charge
 transfer of the capacitive transient, computed via trapezoidal integration
 (`scipy.integrate.trapezoid`).
+
+### 5.3 Current-clamp series resistance ($R_s^{\text{CC}}$)
+
+The fast resistive voltage artifact at current-step onset, measured within
+a **0.1 ms** window immediately after the step, reflects the series resistance
+before the membrane has had time to charge:
+
+$$
+R_s^{\text{CC}} \;(\text{M}\Omega)
+= \frac{|\Delta V_{\text{fast}} \;(\text{mV})|}{|I_{\text{step}} \;(\text{pA})|} \times 10^3
+$$
+
+The artifact window is intentionally kept to 0.1 ms (down from a previous
+0.5 ms default) to avoid bleeding into the membrane-charging phase, which
+would artifactually inflate the $R_s$ estimate.
 
 ---
 
@@ -690,6 +716,37 @@ Peak detection is then applied to $z_{\text{combined}}$ at the user-specified
 threshold.  This ensures that both fast somatic (narrow) and slow dendritic
 (broadened) events cross the detection threshold, without requiring the user
 to re-tune $\tau_{\text{decay}}$ for distal inputs.
+
+### 15.5 PPR Residual Fitting - Bi-Exponential Upgrade
+
+The P1 decay tail is now first fitted with a **bi-exponential** model before
+falling back to a mono-exponential.  Bi-exponential fits capture mixed
+conductance kinetics (e.g. AMPA fast-deactivation + NMDA slow-deactivation):
+
+$$
+I_{\text{decay}}(t) = A_f \exp\!\left(-t / \tau_f\right) + A_s \exp\!\left(-t / \tau_s\right)
+$$
+
+The fitting uses `scipy.optimize.curve_fit` with `maxfev=4000`.  If convergence
+fails (typically when fewer than 8 samples span the decay window), the
+implementation falls back to the mono-exponential $A \exp(-t/\tau)$.
+
+The reported dominant $\tau$ for the bi-exponential case is the
+**amplitude-weighted mean time constant**:
+
+$$
+\tau_{\text{dominant}} = \frac{|A_f| \tau_f + |A_s| \tau_s}{|A_f| + |A_s|}
+$$
+
+### 15.6 Noise Floor Detrending in Quiescent Baseline RMS
+
+`find_quiescent_baseline_rms` applies `scipy.signal.detrend(chunk, type="linear")`
+to each candidate window **before** computing variance.  This removes slow
+drift (electrode drift, drug wash-in ramps) from the variance estimate so
+that only high-frequency thermal noise is captured.  Without detrending, a
+recording with a slowly drifting baseline can report an inflated RMS noise
+floor that suppresses legitimate small-amplitude events.
+
 ---
 
 ## 16. Immutable Trace Correction Pipeline
