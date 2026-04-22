@@ -399,3 +399,222 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     def set_main_plot(self, plot_id: str):
         if plot_id in self.plot_items:
             self._main_plot_id = plot_id
+
+    # ------------------------------------------------------------------
+    # Scrollbar synchronisation (Phase 3 delegation)
+    # ------------------------------------------------------------------
+
+    def setup_scrollbars(self, layout, plot_id: Optional[str] = None):
+        """Create X and Y scrollbars and wire them to the ViewBox of *plot_id*.
+
+        The scrollbars are inserted into *layout* around the canvas widget:
+        - X scrollbar is appended below the entire layout.
+        - Y scrollbar is placed to the right of the canvas in a new
+          :class:`~PySide6.QtWidgets.QHBoxLayout` that replaces the direct
+          ``addWidget(self.widget)`` call.
+
+        Call this method **after** the canvas widget has already been added to
+        *layout* — or instead of adding it directly, as this method adds both
+        the canvas widget and the scrollbars.
+
+        Args:
+            layout: :class:`~PySide6.QtWidgets.QVBoxLayout` that receives the
+                    canvas and scrollbar widgets.
+            plot_id: Key of the plot whose ViewBox to synchronise.  Defaults
+                     to the canvas's *main_plot*.
+        """
+        from PySide6 import QtWidgets  # noqa: PLC0415
+
+        target_plot = self.plot_items.get(plot_id) if plot_id else self.main_plot
+        vb = target_plot.getViewBox() if target_plot else None
+
+        # --- Scrollbar state ---
+        self._base_x_range: Optional[tuple] = None
+        self._base_y_range: Optional[tuple] = None
+        self._x_scroll_updating: bool = False
+        self._y_scroll_updating: bool = False
+
+        # --- Y scrollbar (right of plot) ---
+        from PySide6.QtCore import Qt  # noqa: PLC0415
+
+        self._x_scrollbar = QtWidgets.QScrollBar(Qt.Orientation.Horizontal)
+        self._x_scrollbar.setRange(0, 10000)
+        self._x_scrollbar.setFixedHeight(15)
+        self._x_scrollbar.setValue(5000)
+        self._x_scrollbar.setPageStep(10000)
+
+        self._y_scrollbar = QtWidgets.QScrollBar(Qt.Orientation.Vertical)
+        self._y_scrollbar.setRange(0, 10000)
+        self._y_scrollbar.setFixedWidth(15)
+        self._y_scrollbar.setValue(5000)
+        self._y_scrollbar.setPageStep(10000)
+
+        # Row with canvas + Y scrollbar
+        plot_row = QtWidgets.QHBoxLayout()
+        plot_row.addWidget(self.widget, stretch=1)
+        plot_row.addWidget(self._y_scrollbar)
+        layout.addLayout(plot_row, stretch=1)
+
+        # X scrollbar below
+        layout.addWidget(self._x_scrollbar)
+
+        # Connect scrollbar value changes
+        self._x_scrollbar.valueChanged.connect(self._on_x_scrollbar_changed)
+        self._y_scrollbar.valueChanged.connect(self._on_y_scrollbar_changed)
+
+        # Connect ViewBox range signals
+        if vb:
+            vb.sigXRangeChanged.connect(self._on_viewbox_x_range_changed)
+            vb.sigYRangeChanged.connect(self._on_viewbox_y_range_changed)
+
+    def set_data_ranges(
+        self,
+        x_range: Optional[tuple] = None,
+        y_range: Optional[tuple] = None,
+    ) -> None:
+        """Update the base data ranges used to scale scrollbar positions.
+
+        Args:
+            x_range: ``(x_min, x_max)`` of the full data extent, or ``None``
+                     to leave the current X range unchanged.
+            y_range: ``(y_min, y_max)`` of the full data extent, or ``None``
+                     to leave the current Y range unchanged.
+        """
+        if x_range is not None:
+            self._base_x_range = x_range
+        if y_range is not None:
+            self._base_y_range = y_range
+
+    def _on_x_scrollbar_changed(self, value: int) -> None:
+        """Pan the main plot horizontally when the X scrollbar moves."""
+        if getattr(self, "_x_scroll_updating", False):
+            return
+        base = getattr(self, "_base_x_range", None)
+        if not base:
+            return
+        target = self.main_plot
+        if not target:
+            return
+        vb = target.getViewBox()
+        if not vb:
+            return
+        self._x_scroll_updating = True
+        try:
+            x_range = vb.viewRange()[0]
+            visible_span = x_range[1] - x_range[0]
+            total_min, total_max = base
+            total_span = total_max - total_min
+            if total_span <= 0 or visible_span >= total_span:
+                return
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if min_center >= max_center:
+                return
+            scroll_ratio = value / 10000.0
+            center = min_center + (max_center - min_center) * scroll_ratio
+            target.setXRange(center - visible_span / 2, center + visible_span / 2, padding=0)
+        finally:
+            self._x_scroll_updating = False
+
+    def _on_viewbox_x_range_changed(self, vb, x_range) -> None:
+        """Update X scrollbar when the ViewBox X range changes."""
+        if getattr(self, "_x_scroll_updating", False):
+            return
+        base = getattr(self, "_base_x_range", None)
+        if not base:
+            return
+        sb = getattr(self, "_x_scrollbar", None)
+        if not sb:
+            return
+        self._x_scroll_updating = True
+        try:
+            x_min, x_max = x_range
+            total_min, total_max = base
+            total_span = total_max - total_min
+            if total_span <= 0:
+                return
+            visible_span = x_max - x_min
+            center = (x_min + x_max) / 2
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if max_center <= min_center:
+                scroll_val = 5000
+            else:
+                ratio = (center - min_center) / (max_center - min_center)
+                scroll_val = int(max(0.0, min(1.0, ratio)) * 10000)
+            page_step = max(1, int(max(0.0, min(1.0, visible_span / total_span)) * 10000))
+            sb.blockSignals(True)
+            sb.setValue(scroll_val)
+            sb.setPageStep(page_step)
+            sb.blockSignals(False)
+        except Exception as exc:
+            log.debug("Error updating x-scrollbar: %s", exc)
+        finally:
+            self._x_scroll_updating = False
+
+    def _on_y_scrollbar_changed(self, value: int) -> None:
+        """Pan the main plot vertically when the Y scrollbar moves."""
+        if getattr(self, "_y_scroll_updating", False):
+            return
+        base = getattr(self, "_base_y_range", None)
+        if not base:
+            return
+        target = self.main_plot
+        if not target:
+            return
+        vb = target.getViewBox()
+        if not vb:
+            return
+        self._y_scroll_updating = True
+        try:
+            y_range = vb.viewRange()[1]
+            visible_span = y_range[1] - y_range[0]
+            total_min, total_max = base
+            total_span = total_max - total_min
+            if total_span <= 0 or visible_span >= total_span:
+                return
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if min_center >= max_center:
+                return
+            scroll_ratio = 1.0 - (value / 10000.0)
+            center = min_center + (max_center - min_center) * scroll_ratio
+            target.setYRange(center - visible_span / 2, center + visible_span / 2, padding=0)
+        finally:
+            self._y_scroll_updating = False
+
+    def _on_viewbox_y_range_changed(self, vb, y_range) -> None:
+        """Update Y scrollbar when the ViewBox Y range changes."""
+        if getattr(self, "_y_scroll_updating", False):
+            return
+        base = getattr(self, "_base_y_range", None)
+        if not base:
+            return
+        sb = getattr(self, "_y_scrollbar", None)
+        if not sb:
+            return
+        self._y_scroll_updating = True
+        try:
+            y_min, y_max = y_range
+            total_min, total_max = base
+            total_span = total_max - total_min
+            if total_span <= 0:
+                return
+            visible_span = y_max - y_min
+            center = (y_min + y_max) / 2
+            min_center = total_min + visible_span / 2
+            max_center = total_max - visible_span / 2
+            if max_center <= min_center:
+                scroll_val = 5000
+            else:
+                ratio = (center - min_center) / (max_center - min_center)
+                scroll_val = int((1.0 - max(0.0, min(1.0, ratio))) * 10000)
+            page_step = max(1, int(max(0.0, min(1.0, visible_span / total_span)) * 10000))
+            sb.blockSignals(True)
+            sb.setValue(scroll_val)
+            sb.setPageStep(page_step)
+            sb.blockSignals(False)
+        except Exception as exc:
+            log.debug("Error updating y-scrollbar: %s", exc)
+        finally:
+            self._y_scroll_updating = False

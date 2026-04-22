@@ -18,14 +18,19 @@ import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from Synaptipy.application.controllers.analysis_plot_manager import AnalysisPlotManager
-from Synaptipy.application.gui.analysis_worker import AnalysisWorker
+from Synaptipy.application.gui.dialogs.export_manager import ExportManager
 from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
+from Synaptipy.application.services.data_loader_service import DataLoaderService
 
 # NEW: Unified Plotting & Pipeline
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
 
 # Use absolute path to import NeoAdapter and Recording
+from Synaptipy.core.analysis.cross_file_utils import (
+    extract_per_file_trace,
+    get_cross_file_average,
+)
 from Synaptipy.core.data_model import Recording
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 from Synaptipy.infrastructure.file_readers import NeoAdapter
@@ -126,14 +131,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.preprocessing_widget.preprocessing_reset_requested.connect(self._handle_preprocessing_reset)
         # --- END ADDED ---
 
-        # --- Scrollbar State (initialised early so signal handlers
-        #     never encounter missing attributes) ---
-        self._x_scrollbar: Optional[QtWidgets.QScrollBar] = None
-        self._x_scroll_updating: bool = False
-        self._base_x_range: Optional[Tuple[float, float]] = None
-        self._y_scrollbar: Optional[QtWidgets.QScrollBar] = None
-        self._y_scroll_updating: bool = False
-        self._base_y_range: Optional[Tuple[float, float]] = None
+        # --- Scrollbar State ---
+        # Scrollbar widgets and base ranges now live inside SynaptipyPlotCanvas
+        # (Phase 3).  Properties on this class forward to canvas._x_scrollbar etc.
+        # before the canvas is created, the properties return None / False safely.
 
         # --- PHASE 1: Data Selection and Plotting ---
         self.signal_channel_combobox: Optional[QtWidgets.QComboBox] = None
@@ -152,9 +153,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._analysis_debounce_timer.setSingleShot(True)
         self._analysis_debounce_timer.timeout.connect(self._trigger_analysis)
 
-        # --- PHASE 2: Threading ---
-        self.thread_pool = QtCore.QThreadPool()
-        log.debug(f"BaseAnalysisTab initialized with ThreadPool max count: {self.thread_pool.maxThreadCount()}")
+        # --- PHASE 2: Threading (delegated to DataLoaderService) ---
+        self._data_loader = DataLoaderService(neo_adapter, parent=self)
+        self._data_loader.recording_loaded.connect(self._on_item_load_success)
+        self._data_loader.load_failed.connect(self._on_item_load_error)
+        self._data_loader.load_finished.connect(self._on_item_load_finished)
+        log.debug(
+            "BaseAnalysisTab: DataLoaderService ready (max threads: %d)",
+            self._data_loader.thread_pool.maxThreadCount(),
+        )
+
+        # --- PHASE 4: Export delegation (Phase 4 of CoI refactor) ---
+        self.export_manager = ExportManager(parent=self)
 
         # --- PHASE 4: Session Accumulation ---
         self._accumulated_results: List[Dict[str, Any]] = []
@@ -182,6 +192,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._update_plot_pens_only()
         else:
             self._plot_selected_data()
+
+    @property
+    def thread_pool(self) -> QtCore.QThreadPool:
+        """Backward-compatible accessor for the underlying QThreadPool.
+
+        Delegates to the :class:`DataLoaderService` so callers that held a
+        direct reference to ``self.thread_pool`` continue to work unchanged.
+        """
+        return self._data_loader.thread_pool
 
     def _is_active_analysis_tab(self) -> bool:
         """Return True only when this widget is active at every level of tab nesting.
@@ -722,10 +741,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     # --- ADDED: Method to setup plot area ---
     def _setup_plot_area(self, layout: QtWidgets.QLayout, stretch_factor: int = 1):
-        """Adds a SynaptipyPlotCanvas to the provided layout."""
+        """Adds a SynaptipyPlotCanvas to the provided layout.
+
+        Scrollbar creation, state management, and ViewBox synchronisation are
+        delegated to :meth:`SynaptipyPlotCanvas.setup_scrollbars` (Phase 3).
+        ``BaseAnalysisTab`` retains backward-compatible proxy attributes
+        ``_x_scrollbar``, ``_y_scrollbar``, ``_base_x_range``, and
+        ``_base_y_range`` that forward to the canvas object.
+        """
         log.debug(f"[ANALYSIS-BASE] Setting up plot area for {self.__class__.__name__}")
 
-        # Usage of SynaptipyPlotCanvas
+        # Create canvas
         self.plot_canvas = SynaptipyPlotCanvas(parent=self)
 
         # Add the main analysis plot item
@@ -734,15 +760,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.setLabel("left", "Amplitude")
         self.plot_widget.setLabel("bottom", "Time", units="s")
 
-        # Left mouse button pans; right mouse button zooms via SynaptipyViewBox.
-        vb = self.plot_widget.getViewBox()
-        if vb:
-            pass  # Mouse mode is handled by SynaptipyViewBox (injected in add_plot).
-
-        # Add windows signal protection? handled by new canvas?
-        # Base canvas handles signal protection if needed, but we can verify.
-        # For now, rely on canvas.
-
+        # Analysis region (LinearRegionItem for windowed analysis)
         self.analysis_region = pg.LinearRegionItem(
             values=[0, 0], orientation=pg.LinearRegionItem.Vertical, brush=pg.mkBrush(0, 255, 0, 50), movable=True
         )
@@ -751,35 +769,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.addItem(self.analysis_region)
         self.analysis_region.sigRegionChanged.connect(self._on_region_changed)
 
-        # --- Layout: plot + Y scrollbar side by side, X scrollbar below ---
-        plot_row_layout = QtWidgets.QHBoxLayout()
-        plot_row_layout.addWidget(self.plot_canvas.widget, stretch=1)
+        # Delegate scrollbar layout + ViewBox wiring to the canvas (Phase 3)
+        self.plot_canvas.setup_scrollbars(layout, plot_id="main_analysis_plot")
 
-        # Y scrollbar (vertical panning when zoomed)
-        self._y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Vertical)
-        self._y_scrollbar.setRange(0, 10000)
-        self._y_scrollbar.setFixedWidth(15)
-        self._y_scrollbar.setValue(5000)
-        self._y_scrollbar.setPageStep(10000)
-        self._y_scrollbar.valueChanged.connect(self._on_y_scrollbar_changed)
-        plot_row_layout.addWidget(self._y_scrollbar)
-
-        layout.addLayout(plot_row_layout, stretch=stretch_factor)
         log.debug(f"[ANALYSIS-BASE] Added plot widget to layout for {self.__class__.__name__}")
-
-        # --- X Scrollbar for panning when zoomed ---
-        self._x_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Horizontal)
-        self._x_scrollbar.setRange(0, 10000)
-        self._x_scrollbar.setFixedHeight(15)
-        self._x_scrollbar.setValue(5000)
-        self._x_scrollbar.setPageStep(10000)
-        self._x_scrollbar.valueChanged.connect(self._on_x_scrollbar_changed)
-        layout.addWidget(self._x_scrollbar)
-
-        # Connect view range changes to update scrollbars
-        if vb:
-            vb.sigXRangeChanged.connect(self._on_viewbox_x_range_changed)
-            vb.sigYRangeChanged.connect(self._on_viewbox_y_range_changed)
 
         # Add Plot Navigation Controls (Prev/Next Trial)
         self._setup_plot_navigation_controls(layout)
@@ -787,139 +780,68 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Add Toolbar below the plot
         self._setup_toolbar(layout)
 
-        # Initialize zoom synchronization manager (with the new canvas setup)
-        # ZoomSyncManager expects a PlotWidget or we adapt it?
-        # It calls widget.getViewBox(). If we pass SynaptipyPlotCanvas.widget, it might fail?
-        # PlotZoomSyncManager takes 'plot_widget' usually.
-        # If we pass the PlotItem (self.plot_widget), it might work if it uses getViewBox().
-        # Let's check `_setup_zoom_sync` implementation below.
-
+        # Initialize zoom synchronization manager
         self._setup_zoom_sync()
 
         log.debug(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
 
-    def _on_x_scrollbar_changed(self, value):
-        """Pan the plot horizontally when the scrollbar is dragged."""
-        if self._x_scroll_updating or not self._base_x_range:
-            return
-        self._x_scroll_updating = True
-        try:
-            vb = self.plot_widget.getViewBox()
-            if not vb:
-                return
-            x_range = vb.viewRange()[0]
-            visible_span = x_range[1] - x_range[0]
-            total_min, total_max = self._base_x_range
-            total_span = total_max - total_min
-            if total_span <= 0 or visible_span >= total_span:
-                return
-            # Map scrollbar value (0-10000) to center position
-            min_center = total_min + visible_span / 2
-            max_center = total_max - visible_span / 2
-            if min_center >= max_center:
-                return
-            scroll_ratio = value / 10000.0
-            center = min_center + (max_center - min_center) * scroll_ratio
-            new_min = center - visible_span / 2
-            new_max = center + visible_span / 2
-            self.plot_widget.setXRange(new_min, new_max, padding=0)
-        finally:
-            self._x_scroll_updating = False
+    # ------------------------------------------------------------------
+    # Scrollbar proxy properties and high-level range setter (Phase 3)
+    #
+    # All scrollbar state (widgets, base ranges, updating flags) now lives
+    # inside ``SynaptipyPlotCanvas``.  The properties below keep existing
+    # code in ``_plot_selected_data`` and subclasses working without change.
+    # ------------------------------------------------------------------
 
-    def _on_viewbox_x_range_changed(self, vb, x_range):
-        """Update scrollbar position/size when the plot view range changes."""
-        if self._x_scroll_updating or not self._base_x_range:
-            return
-        self._x_scroll_updating = True
-        try:
-            x_min, x_max = x_range
-            total_min, total_max = self._base_x_range
-            total_span = total_max - total_min
-            if total_span <= 0:
-                return
-            visible_span = x_max - x_min
-            # Calculate scrollbar position
-            center = (x_min + x_max) / 2
-            min_center = total_min + visible_span / 2
-            max_center = total_max - visible_span / 2
-            if max_center <= min_center:
-                scroll_val = 5000
-            else:
-                scroll_ratio = (center - min_center) / (max_center - min_center)
-                scroll_ratio = max(0.0, min(1.0, scroll_ratio))
-                scroll_val = int(scroll_ratio * 10000)
-            # Calculate page step (thumb size proportional to visible fraction)
-            ratio = max(0.0, min(1.0, visible_span / total_span))
-            page_step = max(1, int(ratio * 10000))
-            self._x_scrollbar.blockSignals(True)
-            self._x_scrollbar.setValue(scroll_val)
-            self._x_scrollbar.setPageStep(page_step)
-            self._x_scrollbar.blockSignals(False)
-        except Exception as e:
-            log.debug(f"Error updating x-scrollbar: {e}")
-        finally:
-            self._x_scroll_updating = False
+    @property
+    def _x_scrollbar(self):
+        """Proxy to canvas scrollbar (backward compatibility)."""
+        return getattr(self.plot_canvas, "_x_scrollbar", None)
 
-    def _on_y_scrollbar_changed(self, value):
-        """Pan the plot vertically when the Y scrollbar is dragged."""
-        if self._y_scroll_updating or not self._base_y_range:
-            return
-        self._y_scroll_updating = True
-        try:
-            vb = self.plot_widget.getViewBox()
-            if not vb:
-                return
-            y_range = vb.viewRange()[1]
-            visible_span = y_range[1] - y_range[0]
-            total_min, total_max = self._base_y_range
-            total_span = total_max - total_min
-            if total_span <= 0 or visible_span >= total_span:
-                return
-            min_center = total_min + visible_span / 2
-            max_center = total_max - visible_span / 2
-            if min_center >= max_center:
-                return
-            # Invert: scrollbar value 0 = top of data, 10000 = bottom
-            scroll_ratio = 1.0 - (value / 10000.0)
-            center = min_center + (max_center - min_center) * scroll_ratio
-            new_min = center - visible_span / 2
-            new_max = center + visible_span / 2
-            self.plot_widget.setYRange(new_min, new_max, padding=0)
-        finally:
-            self._y_scroll_updating = False
+    @property
+    def _y_scrollbar(self):
+        """Proxy to canvas scrollbar (backward compatibility)."""
+        return getattr(self.plot_canvas, "_y_scrollbar", None)
 
-    def _on_viewbox_y_range_changed(self, vb, y_range):
-        """Update Y scrollbar position/size when the plot view range changes."""
-        if self._y_scroll_updating or not self._base_y_range:
-            return
-        self._y_scroll_updating = True
-        try:
-            y_min, y_max = y_range
-            total_min, total_max = self._base_y_range
-            total_span = total_max - total_min
-            if total_span <= 0:
-                return
-            visible_span = y_max - y_min
-            center = (y_min + y_max) / 2
-            min_center = total_min + visible_span / 2
-            max_center = total_max - visible_span / 2
-            if max_center <= min_center:
-                scroll_val = 5000
-            else:
-                scroll_ratio = (center - min_center) / (max_center - min_center)
-                scroll_ratio = max(0.0, min(1.0, scroll_ratio))
-                # Invert for scrollbar (0=top, 10000=bottom)
-                scroll_val = int((1.0 - scroll_ratio) * 10000)
-            ratio = max(0.0, min(1.0, visible_span / total_span))
-            page_step = max(1, int(ratio * 10000))
-            self._y_scrollbar.blockSignals(True)
-            self._y_scrollbar.setValue(scroll_val)
-            self._y_scrollbar.setPageStep(page_step)
-            self._y_scrollbar.blockSignals(False)
-        except Exception as e:
-            log.debug(f"Error updating y-scrollbar: {e}")
-        finally:
-            self._y_scroll_updating = False
+    @property
+    def _base_x_range(self):
+        """Proxy to canvas base X range (backward compatibility)."""
+        return getattr(self.plot_canvas, "_base_x_range", None)
+
+    @_base_x_range.setter
+    def _base_x_range(self, value):
+        if self.plot_canvas is not None:
+            self.plot_canvas._base_x_range = value
+
+    @property
+    def _base_y_range(self):
+        """Proxy to canvas base Y range (backward compatibility)."""
+        return getattr(self.plot_canvas, "_base_y_range", None)
+
+    @_base_y_range.setter
+    def _base_y_range(self, value):
+        if self.plot_canvas is not None:
+            self.plot_canvas._base_y_range = value
+
+    @property
+    def _x_scroll_updating(self):
+        return getattr(self.plot_canvas, "_x_scroll_updating", False)
+
+    @_x_scroll_updating.setter
+    def _x_scroll_updating(self, value):
+        if self.plot_canvas is not None:
+            self.plot_canvas._x_scroll_updating = value
+
+    @property
+    def _y_scroll_updating(self):
+        return getattr(self.plot_canvas, "_y_scroll_updating", False)
+
+    @_y_scroll_updating.setter
+    def _y_scroll_updating(self, value):
+        if self.plot_canvas is not None:
+            self.plot_canvas._y_scroll_updating = value
+
+    # --- END Scrollbar proxies ---
 
     # --- END ADDED ---
 
@@ -1028,58 +950,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug(f"[ANALYSIS-BASE] Reset view triggered for {self.__class__.__name__}")
 
     def _on_save_plot_clicked(self):
-        """Handle save plot button click."""
+        """Handle save plot button click (delegates to ExportManager)."""
         log.debug(f"[ANALYSIS-BASE] Save plot clicked for {self.__class__.__name__}")
-
         if not self.plot_widget:
             log.warning("[ANALYSIS-BASE] No plot widget available for saving")
             return
-
-        try:
-            from PySide6.QtWidgets import QFileDialog
-
-            from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
-            from Synaptipy.shared.plot_exporter import PlotExporter
-
-            # Generate default filename based on tab name
-            default_filename = f"{self.__class__.__name__.lower().replace('tab', '')}_plot"
-
-            # 1. Config Dialog
-            dialog = PlotExportDialog(self)
-            if dialog.exec():
-                settings = dialog.get_settings()
-                fmt = settings["format"]
-                dpi = settings["dpi"]
-
-                # 2. File Dialog
-                filename, _ = QFileDialog.getSaveFileName(
-                    self, "Save Plot", str(Path.home() / f"{default_filename}.{fmt}"), f"Images (*.{fmt})"
-                )
-
-                if filename:
-                    # 3. Export
-                    exporter = PlotExporter(
-                        recording=self._selected_item_recording,  # Can be None as wrapper is None
-                        plot_canvas_widget=self.plot_widget,
-                    )
-
-                    success = exporter.export(filename, fmt, dpi)
-
-                    if success:
-                        log.debug(f"[ANALYSIS-BASE] Plot saved successfully for {self.__class__.__name__}")
-                        if hasattr(self, "status_label") and self.status_label:
-                            self.status_label.setText(f"Status: Plot saved to {Path(filename).name}")
-                    else:
-                        log.warning(f"[ANALYSIS-BASE] Plot save failed for {self.__class__.__name__}")
-            else:
-                log.debug("[ANALYSIS-BASE] Plot save cancelled")
-
-        except Exception as e:
-            log.error(f"[ANALYSIS-BASE] Failed to save plot for {self.__class__.__name__}: {e}")
-            # Show error message to user
-            from PySide6.QtWidgets import QMessageBox
-
-            QMessageBox.critical(self, "Save Error", f"Failed to save plot:\n{str(e)}")
+        self.export_manager.save_plot(
+            self.plot_widget,
+            self.__class__.__name__,
+            self._selected_item_recording,
+            self,
+        )
 
     def _setup_zoom_sync(self):
         """Initialize the zoom synchronization manager for reset functionality only."""
@@ -1109,10 +990,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         pass
 
     def set_data_ranges(self, x_range: Tuple[float, float], y_range: Tuple[float, float]):
-        """Set the base data ranges for zoom/scroll calculations. Call this when plotting new data."""
+        """Set the base data ranges for zoom/scroll calculations.
+
+        Delegates to :meth:`SynaptipyPlotCanvas.set_data_ranges` (Phase 3)
+        so the canvas scrollbar sync uses up-to-date extents.  Also notifies
+        the zoom sync manager for reset-view accuracy.
+        """
+        if self.plot_canvas is not None:
+            self.plot_canvas.set_data_ranges(x_range, y_range)
         if self.zoom_sync:
             self.zoom_sync.set_base_ranges(x_range, y_range)
-            log.debug(f"Data ranges set: X={x_range}, Y={y_range}")
+        log.debug(f"Data ranges set: X={x_range}, Y={y_range}")
 
     def auto_range_plot(self):
         """Auto-range the plot to fit all data."""
@@ -1251,21 +1139,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.plot_widget:
             self.plot_widget.clear()
 
-        # Define the loading task
-        def load_task(path):
-            if not path:
-                return None
-            return self.neo_adapter.read_recording(path)
-
-        # Launch Worker
-        worker = AnalysisWorker(load_task, item_path)
-        worker.signals.result.connect(self._on_item_load_success)
-        worker.signals.error.connect(self._on_item_load_error)
-        # We can also connect finished to restore cursor
-        worker.signals.finished.connect(self._on_item_load_finished)
-
+        # Delegate async load to DataLoaderService (signals already connected in __init__)
         log.debug(f"{self.__class__.__name__}: Starting async load for {item_path}")
-        self.thread_pool.start(worker)
+        self._data_loader.load_recording(item_path)
 
     def _on_item_load_success(self, recording: Optional[Recording]):
         """Callback when async loading completes successfully."""
@@ -2153,12 +2029,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             if len(plot_package.main_time) > 0 and len(plot_package.main_data) > 0:
                 x_range = (float(np.min(plot_package.main_time)), float(np.max(plot_package.main_time)))
                 y_range = (float(np.min(plot_package.main_data)), float(np.max(plot_package.main_data)))
-                self.set_data_ranges(x_range, y_range)
-                # Update base x/y ranges for scrollbar panning.
-                # Expand _base_y_range to cover ALL plotted traces
-                # (including background trial curves) so the Y
-                # scrollbar thumb scales correctly.
-                self._base_x_range = x_range
+                # Expand y_range to cover ALL plotted traces so the Y scrollbar
+                # thumb scales correctly (including background trial curves).
                 all_y_min, all_y_max = y_range
                 for item in self.plot_widget.listDataItems():
                     _, y_data = item.getData()
@@ -2169,7 +2041,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                             all_y_min = item_min
                         if item_max > all_y_max:
                             all_y_max = item_max
-                self._base_y_range = (all_y_min, all_y_max)
+                self.set_data_ranges(x_range, (all_y_min, all_y_max))
 
             # 6. Store State (including raw data for efficient preprocessing)
             self._current_plot_data = {
@@ -2224,10 +2096,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _extract_per_file_trace(
         self, item: Dict[str, Any], parsed_trials: List[int], channel_idx: int
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """
-        Load one analysis item and return its averaged trace for the requested
-        trials.  Returns ``None`` if the file cannot be loaded, does not have
-        the channel, or does not contain all requested trials.
+        """Delegate to :func:`~Synaptipy.core.analysis.cross_file_utils.extract_per_file_trace`.
+
+        Thin wrapper so existing call-sites and tests on the tab object
+        continue to work without modification.
 
         Args:
             item:          Single entry from ``_analysis_items``.
@@ -2237,53 +2109,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         Returns:
             ``(time_array, averaged_data)`` or ``None``.
         """
-        path = item.get("path")
-        if not path:
-            return None
-        try:
-            recording = self.neo_adapter.read_recording(path)
-            if recording is None:
-                log.debug(f"Cross-file avg: could not load {path}")
-                return None
-
-            channels_sorted = sorted(recording.channels.items())
-            if channel_idx >= len(channels_sorted):
-                log.debug(f"Cross-file avg: {path.name} has fewer channels than index {channel_idx} - skipping")
-                return None
-
-            _, channel = channels_sorted[channel_idx]
-
-            file_traces: List[np.ndarray] = []
-            file_times: List[np.ndarray] = []
-            for trial_idx in parsed_trials:
-                trial_data = channel.get_data(trial_idx)
-                trial_time = channel.get_relative_time_vector(trial_idx)
-                if trial_data is None or trial_time is None:
-                    raise ValueError(f"Trial {trial_idx} returned None data in {path.name}")
-                file_traces.append(trial_data)
-                file_times.append(trial_time)
-
-            if not file_traces:
-                return None
-
-            min_file_len = min(len(t) for t in file_traces)
-            file_avg = np.mean(np.array([t[:min_file_len] for t in file_traces]), axis=0)
-            return file_times[0][:min_file_len], file_avg
-
-        except (IndexError, ValueError) as e:
-            log.debug(f"Cross-file avg: skipping {path}: {e}")
-            return None
+        return extract_per_file_trace(item, parsed_trials, channel_idx, self.neo_adapter)
 
     def _get_cross_file_average(
         self, parsed_trials: List[int], channel_idx: int
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
-        """
-        Compute the grand average of specified trials across all loaded files.
+        """Delegate to :func:`~Synaptipy.core.analysis.cross_file_utils.get_cross_file_average`.
 
-        Delegates per-file extraction to ``_extract_per_file_trace``.  Files
-        that fail silently are excluded so the average denominator stays
-        scientifically correct.  All valid per-file averages are truncated to
-        the shortest array before the grand average is formed.
+        Thin wrapper so existing call-sites and tests on the tab object
+        continue to work without modification.
 
         Args:
             parsed_trials: Ordered list of 0-based trial indices to extract.
@@ -2295,26 +2129,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             the number of files that contributed.  Returns ``(None, None, 0)``
             when no valid traces could be obtained.
         """
-        valid_traces: List[np.ndarray] = []
-        valid_times: List[np.ndarray] = []
-
-        for item in self._analysis_items:
-            result = self._extract_per_file_trace(item, parsed_trials, channel_idx)
-            if result is not None:
-                file_time, file_avg = result
-                valid_traces.append(file_avg)
-                valid_times.append(file_time)
-
-        if not valid_traces:
-            return None, None, 0
-
-        # Align all per-file averages to the minimum length before grand averaging
-        min_len = min(len(t) for t in valid_traces)
-        truncated_traces = np.array([t[:min_len] for t in valid_traces])
-        truncated_time = valid_times[0][:min_len]
-
-        grand_average = np.mean(truncated_traces, axis=0)
-        return truncated_time, grand_average, len(valid_traces)
+        return get_cross_file_average(
+            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+        )
 
     def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
         """
@@ -2560,11 +2377,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._analysis_thread.quit()
             self._analysis_thread.wait()
 
-    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:  # noqa: C901
-        """
-        Create a separate popup window with a PlotWidget.
-        The window includes Export Data and Save Plot buttons and is tracked
-        for cleanup when the tab is closed.
+    def create_popup_plot(self, title: str, x_label: str = None, y_label: str = None) -> pg.PlotWidget:
+        """Create a popup window with a PlotWidget (delegates to ExportManager).
+
+        The popup is tracked in ``self._popup_windows`` for cleanup.
 
         Args:
             title: Window title.
@@ -2572,111 +2388,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             y_label: Label for Y axis.
 
         Returns:
-            pg.PlotWidget: The plot widget in the new window.
+            The pyqtgraph PlotWidget embedded in the new window.
         """
-        # Create a new window (QMainWindow or QWidget)
-        popup = QtWidgets.QMainWindow(self)  # Parented to self so it closes with app, but we track it too
-        popup.setWindowTitle(title)
-        popup.resize(600, 440)
-
-        # Prevent window from being destroyed when closed - it will just hide
-        popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
-
-        # Create central widget and layout
-        central_widget = QtWidgets.QWidget()
-        popup.setCentralWidget(central_widget)
-        layout = QtWidgets.QVBoxLayout(central_widget)
-
-        # Create PlotWidget using Factory (§II.3 Visualization Safety)
-        from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
-
-        plot_widget = SynaptipyPlotFactory.create_plot_widget(parent=central_widget)
-        if x_label:
-            plot_widget.setLabel("bottom", x_label)
-        if y_label:
-            plot_widget.setLabel("left", y_label)
-
-        layout.addWidget(plot_widget, stretch=1)
-
-        # --- Button row: Reset View | Save Plot | Export Data ---
-        btn_layout = QtWidgets.QHBoxLayout()
-        btn_layout.addStretch()
-
-        reset_btn = QtWidgets.QPushButton("Reset View")
-        reset_btn.setToolTip("Reset zoom and pan to fit all data in this popup.")
-        style_button(reset_btn)
-        reset_btn.clicked.connect(lambda: plot_widget.autoRange())
-        btn_layout.addWidget(reset_btn)
-
-        save_plot_btn = QtWidgets.QPushButton("Save Plot")
-        save_plot_btn.setToolTip("Save this plot as an image file (PNG, PDF, SVG).")
-        style_button(save_plot_btn)
-
-        def _save_popup_plot():
-            try:
-                from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
-                from Synaptipy.shared.plot_exporter import PlotExporter
-
-                dialog = PlotExportDialog(popup)
-                if dialog.exec():
-                    cfg = dialog.get_settings()
-                    fmt = cfg["format"]
-                    dpi = cfg["dpi"]
-                    filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-                        popup,
-                        "Save Plot",
-                        str(Path.home() / f"{title.lower().replace(' ', '_')}.{fmt}"),
-                        f"Images (*.{fmt})",
-                    )
-                    if filename:
-                        exporter = PlotExporter(recording=None, plot_canvas_widget=plot_widget)
-                        exporter.export(filename, fmt, dpi)
-            except Exception as exc:
-                log.error(f"Popup plot save error: {exc}")
-                QtWidgets.QMessageBox.critical(popup, "Save Error", str(exc))
-
-        save_plot_btn.clicked.connect(_save_popup_plot)
-        btn_layout.addWidget(save_plot_btn)
-
-        export_btn = QtWidgets.QPushButton("Export Data")
-        export_btn.setToolTip("Export the plotted data values as a CSV file.")
-        style_button(export_btn)
-
-        def _export_popup_data():
-            try:
-                filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-                    popup,
-                    "Export Data",
-                    str(Path.home() / f"{title.lower().replace(' ', '_')}_data.csv"),
-                    "CSV Files (*.csv)",
-                )
-                if not filename:
-                    return
-                import csv
-
-                with open(filename, "w", newline="", encoding="utf-8") as fh:
-                    writer = csv.writer(fh)
-                    writer.writerow(["x", "y"])
-                    for item in plot_widget.getPlotItem().items:
-                        if hasattr(item, "getData"):
-                            xs, ys = item.getData()
-                            if xs is not None and ys is not None:
-                                for x, y in zip(xs, ys):
-                                    writer.writerow([x, y])
-            except Exception as exc:
-                log.error(f"Popup data export error: {exc}")
-                QtWidgets.QMessageBox.critical(popup, "Export Error", str(exc))
-
-        export_btn.clicked.connect(_export_popup_data)
-        btn_layout.addWidget(export_btn)
-
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
-
-        # Show and track
-        popup.show()
+        popup, plot_widget = self.export_manager.create_popup_plot(title, x_label, y_label, self)
         self._popup_windows.append(popup)
-
         return plot_widget
 
     # --- ADDED: Helper for Saving Results ---
