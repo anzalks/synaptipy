@@ -11,6 +11,7 @@ from Synaptipy.infrastructure.exporters.csv_exporter import (
     CSVExporter,
     _build_tidy_row,
     _get_dependency_versions,
+    _sanitize_csv_value,
     _tidy_get_meta,
     _tidy_row_to_long,
 )
@@ -283,3 +284,140 @@ def test_export_tidy_provenance_written(exporter, simple_results, tmp_path):
     exporter.export_tidy(simple_results, out)
     prov = tmp_path / "tidy_prov_provenance.json"
     assert prov.exists()
+
+
+# ---------------------------------------------------------------------------
+# _sanitize_csv_value
+# ---------------------------------------------------------------------------
+
+
+def test_sanitize_csv_value_none_returns_nan():
+    import math
+
+    result = _sanitize_csv_value(None)
+    assert math.isnan(result)
+
+
+def test_sanitize_csv_value_numpy_float32_no_wrapper():
+    val = np.float32(-65.303456)
+    result = _sanitize_csv_value(val)
+    assert isinstance(result, float)
+    result_str = str(result)
+    assert "np.float32" not in result_str
+    assert "float32" not in result_str
+
+
+def test_sanitize_csv_value_numpy_float64_rounded():
+    val = np.float64(0.6666666666666666)
+    result = _sanitize_csv_value(val)
+    assert isinstance(result, float)
+    # Should be rounded to ~6 sig figs
+    assert abs(result - 0.666667) < 1e-5
+
+
+def test_sanitize_csv_value_plain_float_rounded():
+    result = _sanitize_csv_value(15.099999999999891)
+    assert isinstance(result, float)
+    assert abs(result - 15.1) < 1e-4
+
+
+def test_sanitize_csv_value_numpy_int():
+    val = np.int32(42)
+    result = _sanitize_csv_value(val)
+    assert result == 42
+    assert isinstance(result, int)
+
+
+def test_sanitize_csv_value_list_of_numpy_floats_no_wrapper():
+    lst = [np.float32(-65.3), np.float32(-64.1), np.float32(-66.0)]
+    result = _sanitize_csv_value(lst)
+    assert isinstance(result, str)
+    assert "np.float32" not in result
+    assert "float32" not in result
+
+
+def test_sanitize_csv_value_numpy_array_no_wrapper():
+    arr = np.array([-65.3, -64.1, -66.0], dtype=np.float32)
+    result = _sanitize_csv_value(arr)
+    assert isinstance(result, str)
+    assert "np.float32" not in result
+    assert "float32" not in result
+
+
+def test_sanitize_csv_value_large_array_truncated():
+    from Synaptipy.infrastructure.exporters.csv_exporter import _MAX_ARRAY_PREVIEW
+
+    arr = list(range(_MAX_ARRAY_PREVIEW + 5))
+    result = _sanitize_csv_value(arr)
+    assert "total" in result
+    assert str(_MAX_ARRAY_PREVIEW + 5) in result
+
+
+def test_sanitize_csv_value_empty_list_returns_nan():
+    import math
+
+    result = _sanitize_csv_value([])
+    assert math.isnan(result)
+
+
+def test_sanitize_csv_value_zero():
+    assert _sanitize_csv_value(0.0) == 0.0
+    assert _sanitize_csv_value(np.float64(0.0)) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# export_analysis_results — private key exclusion
+# ---------------------------------------------------------------------------
+
+
+def test_export_analysis_results_skips_private_keys(exporter, tmp_path):
+    results = [
+        {
+            "analysis_type": "burst",
+            "source_file_name": "f.abf",
+            "_result_obj": object(),
+            "burst_count": 3,
+        }
+    ]
+    out = tmp_path / "private_keys.csv"
+    ok = exporter.export_analysis_results(results, out)
+    assert ok is True
+    content = out.read_text()
+    assert "_result_obj" not in content
+    assert "burst_count" in content
+
+
+def test_export_analysis_results_numpy_array_no_wrapper(exporter, tmp_path):
+    results = [
+        {
+            "analysis_type": "rmp",
+            "source_file_name": "f.abf",
+            "baseline_voltages": [np.float32(-65.3), np.float32(-64.1)],
+        }
+    ]
+    out = tmp_path / "array_clean.csv"
+    ok = exporter.export_analysis_results(results, out)
+    assert ok is True
+    content = out.read_text()
+    assert "np.float32" not in content
+    assert "float32" not in content
+
+
+def test_export_analysis_results_response_probability_pct_column(exporter, tmp_path):
+    """response_probability_pct (not 'Response Probability (%)') is the canonical column name."""
+    results = [
+        {
+            "analysis_type": "evoked_responses",
+            "source_file_name": "f.abf",
+            "module_used": "evoked_responses",
+            "metrics": {
+                "response_probability": 0.75,
+                "response_probability_pct": 75.0,
+            },
+        }
+    ]
+    out = tmp_path / "resp_prob.csv"
+    ok = exporter.export_analysis_results(results, out)
+    assert ok is True
+    content = out.read_text()
+    assert "Response Probability (%)" not in content

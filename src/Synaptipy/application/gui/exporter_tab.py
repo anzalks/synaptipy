@@ -487,23 +487,9 @@ class ExporterTab(QtWidgets.QWidget):
     @staticmethod
     def _convert_result_val(val):
         """Convert a single DataFrame cell value to a CSV-safe scalar."""
-        import numpy as np
+        from Synaptipy.infrastructure.exporters.csv_exporter import _sanitize_csv_value
 
-        if val is None:
-            return np.nan
-        if hasattr(val, "tolist") and callable(getattr(val, "tolist")):
-            try:
-                return str(val.tolist())
-            except Exception:
-                pass
-        if hasattr(val, "item") and callable(getattr(val, "item")):
-            try:
-                return val.item()
-            except Exception:
-                pass
-        if isinstance(val, (list, tuple)):
-            return np.nan if len(val) == 0 else str(val)
-        return val
+        return _sanitize_csv_value(val)
 
     def _write_tidy_csvs(self, processed_results: list, output_path: str) -> Path:
         """Write per-analysis-type CSVs; return the final output path."""
@@ -514,6 +500,11 @@ class ExporterTab(QtWidgets.QWidget):
         import numpy as np
 
         df = pd.json_normalize(processed_results, sep=".")
+
+        # Drop private/internal columns (prefixed with '_') before any further processing.
+        private_cols = [c for c in df.columns if str(c).startswith("_") or str(c).split(".")[0].startswith("_")]
+        df = df.drop(columns=private_cols, errors="ignore")
+
         df = df.apply(lambda col: col.map(self._convert_result_val))
         df = df.replace(r"^\s*$", np.nan, regex=True)
         df = df.replace(["NaN", "Na", "None", "NA", "N/A", "<NA>"], np.nan)
