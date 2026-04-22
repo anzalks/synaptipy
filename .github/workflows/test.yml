@@ -131,3 +131,111 @@ jobs:
           git commit -m "chore: update coverage badge data [skip ci]"
         git push origin python-coverage-comment-action-data
         git checkout "$ORIG_BRANCH"
+
+  # ---------------------------------------------------------------------------
+  # Minimum-viable slot: oldest supported Python + pinned lower-bound versions.
+  # Purpose: catch regressions where newer feature syntax or APIs are used that
+  # are not available on the project's stated minimum version.
+  # ---------------------------------------------------------------------------
+  minimum-viable:
+    name: Minimum-viable (Python 3.10, lower-bound deps)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install Linux display dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+          libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
+          libxcb-xfixes0 libegl1 libxcb-cursor0
+
+    - name: Install minimum-bound dependencies
+      # Install exact lower-bound versions to verify the code works at the
+      # stated minimum rather than only at the latest patch release.
+      run: |
+        python -m pip install --upgrade pip
+        pip install \
+          "numpy==2.0.0" \
+          "scipy==1.13.0" \
+          "neo==0.14.0" \
+          "pyqtgraph==0.13.0" \
+          "pyside6==6.7.3" \
+          "pandas==2.3.0"
+        pip install flake8 pytest pytest-qt pytest-mock pytest-cov
+        pip install -e .
+
+    - name: Lint (syntax + undefined names only)
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: Run core and GUI tests
+      env:
+        QT_QPA_PLATFORM: offscreen
+      run: |
+        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Bleeding-edge slot: latest Python + unconstrained upgrades.
+  # Purpose: early warning when upstream packages release breaking changes.
+  # Failures here are expected and informational only (continue-on-error).
+  # ---------------------------------------------------------------------------
+  bleeding-edge:
+    name: Bleeding-edge (Python 3.12, latest deps)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Linux display dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+          libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
+          libxcb-xfixes0 libegl1 libxcb-cursor0
+
+    - name: Install and upgrade all scientific dependencies
+      # Start from requirements.txt then force-upgrade the scientific stack
+      # to whatever pip resolves as latest.  pyside6 is intentionally excluded
+      # from the upgrade because the 6.7.3 pin is required for stability.
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install --upgrade numpy scipy neo pyqtgraph pandas
+        pip install flake8 pytest pytest-qt pytest-mock pytest-cov
+        pip install -e .
+
+    - name: Report installed versions
+      run: |
+        python -c "import numpy, scipy, neo, pyqtgraph, pandas; \
+          print('numpy', numpy.__version__); \
+          print('scipy', scipy.__version__); \
+          print('neo', neo.__version__); \
+          print('pyqtgraph', pyqtgraph.__version__); \
+          print('pandas', pandas.__version__)"
+
+    - name: Lint (syntax + undefined names only)
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: Run core and GUI tests
+      env:
+        QT_QPA_PLATFORM: offscreen
+      run: |
+        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short
