@@ -15,7 +15,6 @@ import pytest
 
 from Synaptipy.application.services.data_loader_service import DataLoaderService
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

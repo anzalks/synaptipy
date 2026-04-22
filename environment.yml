@@ -15,14 +15,14 @@ dependencies:
   
   # Python packages via pip (compatible versions)
   - pip:
-      - numpy>=2.0.0
-      - scipy>=1.13.0
+      - numpy>=2.0.0,<3.0.0
+      - scipy>=1.13.0,<2.0.0
       - attrs>=25.0.0
       - h5py>=3.14.0
       - hdmf>=4.1.0
       - jsonschema>=4.25.0
       - jsonschema-specifications>=2025.0
-      - neo>=0.14.0
+      - neo>=0.14.0,<1.0.0
       - packaging>=25.0
       - pandas>=2.3.0
       - platformdirs>=4.3.0
@@ -38,7 +38,7 @@ dependencies:
       - typing-extensions>=4.14.0
       - tzdata>=2025.0
       - tzlocal>=5.3.0
-      - pyqtgraph>=0.13.0
+      - pyqtgraph>=0.13.0,<1.0.0
       - pyside6==6.7.3
       - pytest>=7.0.0
       - pytest-qt>=4.0.0

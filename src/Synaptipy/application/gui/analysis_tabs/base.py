@@ -20,11 +20,11 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from Synaptipy.application.controllers.analysis_plot_manager import AnalysisPlotManager
 from Synaptipy.application.gui.dialogs.export_manager import ExportManager
 from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
-from Synaptipy.application.services.data_loader_service import DataLoaderService
 
 # NEW: Unified Plotting & Pipeline
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from Synaptipy.application.services.data_loader_service import DataLoaderService
 
 # Use absolute path to import NeoAdapter and Recording
 from Synaptipy.core.analysis.cross_file_utils import (
@@ -2129,9 +2129,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             the number of files that contributed.  Returns ``(None, None, 0)``
             when no valid traces could be obtained.
         """
-        return get_cross_file_average(
-            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
-        )
+        return get_cross_file_average(self._analysis_items, parsed_trials, channel_idx, self.neo_adapter)
 
     def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
         """

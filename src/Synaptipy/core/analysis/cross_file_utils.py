@@ -70,9 +70,7 @@ def extract_per_file_trace(
             trial_data = channel.get_data(trial_idx)
             trial_time = channel.get_relative_time_vector(trial_idx)
             if trial_data is None or trial_time is None:
-                raise ValueError(
-                    f"Trial {trial_idx} returned None data in {getattr(path, 'name', path)}"
-                )
+                raise ValueError(f"Trial {trial_idx} returned None data in {getattr(path, 'name', path)}")
             file_traces.append(trial_data)
             file_times.append(trial_time)
 
@@ -80,9 +78,7 @@ def extract_per_file_trace(
             return None
 
         min_file_len = min(len(t) for t in file_traces)
-        file_avg = np.mean(
-            np.array([t[:min_file_len] for t in file_traces]), axis=0
-        )
+        file_avg = np.mean(np.array([t[:min_file_len] for t in file_traces]), axis=0)
         return file_times[0][:min_file_len], file_avg
 
     except (IndexError, ValueError) as exc:
