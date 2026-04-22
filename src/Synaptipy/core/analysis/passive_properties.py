@@ -813,13 +813,13 @@ def calculate_tau(  # noqa: C901
                 popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
             except RuntimeError:
                 log.warning("Optimal parameters not found for Tau (mono exponential fit).")
-                return {"tau_ms": float(np.nan), "fit_time": [], "fit_values": []}
+                return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": []}
 
             tau_ms = popt[2] * 1000
             fit_values = _exp_growth(t_fit, *popt)
             fit_time = (t_fit + fit_start_time).tolist()
             log.debug("Calculated Tau (mono): %.3f ms", tau_ms)
-            return {"tau_ms": tau_ms, "fit_time": fit_time, "fit_values": fit_values.tolist()}
+            return {"tau_ms": tau_ms, "_fit_time": fit_time, "_fit_values": fit_values.tolist()}
 
         elif model == "bi":
             if len(t_fit) < 6:
@@ -847,8 +847,8 @@ def calculate_tau(  # noqa: C901
                     "amplitude_fast": nan,
                     "amplitude_slow": nan,
                     "V_ss": nan,
-                    "fit_time": [],
-                    "fit_values": [],
+                    "_fit_time": [],
+                    "_fit_values": [],
                 }
 
             V_ss_fit, A_fast, tau_fast, A_slow, tau_slow = popt
@@ -864,8 +864,8 @@ def calculate_tau(  # noqa: C901
                 "amplitude_fast": A_fast,
                 "amplitude_slow": A_slow,
                 "V_ss": V_ss_fit,
-                "fit_time": fit_time,
-                "fit_values": fit_values.tolist(),
+                "_fit_time": fit_time,
+                "_fit_values": fit_values.tolist(),
             }
             log.debug(
                 "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms",
@@ -1681,7 +1681,7 @@ def run_rin_analysis_wrapper(  # noqa: C901
     label="Tau (Time Constant)",
     plots=[
         {"name": "Trace", "type": "trace"},
-        {"type": "overlay_fit", "x": "fit_time", "y": "fit_values", "color": "r", "width": 2, "label": "Exp Fit"},
+        {"type": "overlay_fit", "x": "_fit_time", "y": "_fit_values", "color": "r", "width": 2, "label": "Exp Fit"},
         {
             "type": "trace_overlay",
             "start_time": "_baseline_start_s",
@@ -1790,8 +1790,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                         "amplitude_slow": result["amplitude_slow"],
                         "tau_model": model,
                         "parameters": params,
-                        "fit_time": result.get("fit_time", []),
-                        "fit_values": result.get("fit_values", []),
+                        "_fit_time": result.get("_fit_time", []),
+                        "_fit_values": result.get("_fit_values", []),
                     }
                 )
             elif isinstance(result, dict) and "tau_ms" in result:
@@ -1800,8 +1800,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                         "tau_ms": result["tau_ms"],
                         "tau_model": model,
                         "parameters": params,
-                        "fit_time": result.get("fit_time", []),
-                        "fit_values": result.get("fit_values", []),
+                        "_fit_time": result.get("_fit_time", []),
+                        "_fit_values": result.get("_fit_values", []),
                     }
                 )
             else:

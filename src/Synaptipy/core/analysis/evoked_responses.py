@@ -680,7 +680,7 @@ def run_opto_sync_wrapper(  # noqa: C901
         "metrics": {
             "optical_latency_ms": result.optical_latency_ms,
             "response_probability": result.response_probability,
-            "Response Probability (%)": resp_prob_pct,
+            "response_probability_pct": resp_prob_pct,
             "spike_jitter_ms": result.spike_jitter_ms,
             "stimulus_count": result.stimulus_count,
             "Success Count": result.success_count,
