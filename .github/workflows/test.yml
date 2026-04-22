@@ -165,9 +165,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install \
           "numpy==2.0.0" \
-          "scipy==1.13.0" \
+          "scipy==1.14.0" \
           "neo==0.14.0" \
-          "pyqtgraph==0.13.0" \
+          "pyqtgraph==0.13.3" \
           "pyside6==6.7.3" \
           "pandas==2.3.0"
         pip install flake8 pytest pytest-qt pytest-mock pytest-cov
