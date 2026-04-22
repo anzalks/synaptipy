@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Semantic version bounds**: All scientific dependencies (`numpy`, `scipy`, `neo`, `pyqtgraph`)
+  now carry upper-bound constraints (`<3.0.0`, `<2.0.0`, `<1.0.0`, `<1.0.0`) in
+  `requirements.txt`, `pyproject.toml`, and `environment.yml` so breaking major-version
+  upgrades are blocked until explicitly tested and approved.
+- **Golden master integration tests** (`tests/core/test_golden_master.py`): 10 tests that
+  freeze exact floating-point outputs from `passive_properties` calculations (RMP, Rin,
+  tau, AP peak) against the three bundled ABF data files. Any silent math regression
+  caused by a dependency upgrade will fail these tests immediately.
+- **Headless visual regression tests** (`tests/gui/test_headless_visuals.py`): 11 tests
+  that verify `SynaptipyPlotCanvas` correctly manages `PlotDataItem` and
+  `LinearRegionItem` counts in offscreen mode. Catches rendering regressions introduced
+  by pyqtgraph API changes.
+- **CI matrix jobs**: Two new GitHub Actions jobs in `.github/workflows/test.yml`:
+  - `minimum-viable`: Python 3.10 with exact lower-bound versions (numpy==2.0.0,
+    scipy==1.13.0, neo==0.14.0, pyqtgraph==0.13.0) to ensure the stated minimums work.
+  - `bleeding-edge`: Python 3.12 with all upgradable deps updated to latest
+    (`continue-on-error: true`) to give early warning of upcoming breakage.
+
 ## [0.1.0b6] - 2026-03-27
 
 ### Changed
