@@ -12,7 +12,8 @@ after verifying the new outputs are scientifically correct.
 Run only these tests:
     pytest tests/core/test_golden_master.py -v
 
-Skip automatically when example data files are absent (CI without data).
+ABF-dependent tests skip automatically when example data files are absent.
+Deterministic synthetic tests still run to guard core math paths in CI.
 """
 
 import pathlib
@@ -74,6 +75,44 @@ def rec_0022(neo_adapter):
 def _ch0(rec):
     """Return the first channel of a Recording."""
     return list(rec.channels.values())[0]
+
+
+def _make_synaptic_trace(sampling_rate: float = 10_000.0, duration_s: float = 2.0):
+    """Deterministic synthetic trace with 10 negative biexponential events."""
+    t = np.arange(0.0, duration_s, 1.0 / sampling_rate)
+    rng = np.random.default_rng(12345)
+    data = rng.normal(0.0, 0.12, t.size)
+
+    kt = np.arange(0.0, 0.05, 1.0 / sampling_rate)
+    kernel = -(np.exp(-kt / 0.008) - np.exp(-kt / 0.001))
+    kernel /= np.max(np.abs(kernel))
+    kernel *= 8.0
+
+    for onset in [0.2, 0.38, 0.56, 0.74, 0.92, 1.10, 1.28, 1.46, 1.64, 1.82]:
+        idx = int(onset * sampling_rate)
+        end = min(data.size, idx + kernel.size)
+        data[idx:end] += kernel[: end - idx]
+
+    return data, t, sampling_rate
+
+
+def _make_opto_trace(sampling_rate: float = 10_000.0, duration_s: float = 1.0):
+    """Deterministic synthetic trace for opto latency/jitter golden values."""
+    t = np.arange(0.0, duration_s, 1.0 / sampling_rate)
+    ttl = np.zeros_like(t)
+    stimulus_onsets = [0.15, 0.35, 0.55, 0.75]
+    for onset in stimulus_onsets:
+        s = int(onset * sampling_rate)
+        e = int((onset + 0.01) * sampling_rate)
+        ttl[s:e] = 5.0
+
+    data = np.full_like(t, -65.0)
+    # Fixed post-stimulus event times -> fixed latency/jitter golden values.
+    for spike_time in [0.154, 0.356, 0.555, 0.757]:
+        idx = int(spike_time * sampling_rate)
+        data[idx] = -5.0
+
+    return data, t, ttl, stimulus_onsets, sampling_rate
 
 
 # ---------------------------------------------------------------------------
@@ -230,3 +269,170 @@ class TestGoldenMaster0021:
         assert pytest.approx(ap_peak, rel=1e-4) == 42.6971435546875
         # Sanity: last trial mean is depolarised relative to rest
         assert float(np.mean(d)) > -65.0, "Last trial mean should be depolarised"
+
+
+# ---------------------------------------------------------------------------
+# Expanded Golden-Master Lie Detector: 5 primary analysis pipelines
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(_MISSING_DATA, reason=_SKIP_REASON)
+class TestGoldenMasterPrimaryPipelinesABF:
+    """ABF-backed golden values for passive, single-spike, and firing dynamics."""
+
+    def test_passive_wrappers_rmp_rin_cm_sag(self, rec_0019):
+        """Passive wrapper outputs should remain stable across dependency updates."""
+        from Synaptipy.core.analysis.passive_properties import (
+            run_capacitance_analysis_wrapper,
+            run_rin_analysis_wrapper,
+            run_rmp_analysis_wrapper,
+            run_sag_ratio_wrapper,
+        )
+
+        ch = _ch0(rec_0019)
+        data = ch.get_data(0)
+        time = ch.get_relative_time_vector(0)
+        sampling_rate = float(ch.sampling_rate)
+
+        rmp = run_rmp_analysis_wrapper(data, time, sampling_rate, baseline_start=0.0, baseline_end=0.15)
+        rin = run_rin_analysis_wrapper(
+            data,
+            time,
+            sampling_rate,
+            current_amplitude=-20.0,
+            auto_detect_pulse=False,
+            baseline_start=0.0,
+            baseline_end=0.19,
+            response_start=0.2,
+            response_end=0.3,
+        )
+        cm = run_capacitance_analysis_wrapper(
+            data,
+            time,
+            sampling_rate,
+            mode="Current-Clamp",
+            current_amplitude_pa=-20.0,
+            baseline_start_s=0.0,
+            baseline_end_s=0.19,
+            response_start_s=0.2,
+            response_end_s=0.3,
+        )
+        sag = run_sag_ratio_wrapper(
+            data,
+            time,
+            sampling_rate,
+            baseline_start=0.0,
+            baseline_end=0.19,
+            peak_window_start=0.2,
+            peak_window_end=0.23,
+            ss_window_start=0.27,
+            ss_window_end=0.3,
+        )
+
+        assert pytest.approx(rmp["metrics"]["rmp_mv"], rel=1e-3) == -65.21163940429688
+        assert pytest.approx(rin["metrics"]["rin_mohm"], rel=1e-3) == 73.80752563476562
+        assert pytest.approx(cm["metrics"]["capacitance_pf"], rel=1e-3) == 795.8314483676529
+        assert pytest.approx(sag["metrics"]["sag_ratio"], rel=1e-3) == 0.6329649948769828
+
+    def test_single_spike_wrapper_threshold_max_dvdt_half_width(self, rec_0021):
+        """Single-spike kinetic features should remain stable on the last sweep."""
+        from Synaptipy.core.analysis.single_spike import run_spike_detection_wrapper
+
+        ch = _ch0(rec_0021)
+        last_idx = ch.num_trials - 1
+        data = ch.get_data(last_idx)
+        time = ch.get_relative_time_vector(last_idx)
+        sampling_rate = float(ch.sampling_rate)
+
+        result = run_spike_detection_wrapper(
+            data,
+            time,
+            sampling_rate,
+            threshold=-20.0,
+            refractory_period=0.002,
+            dvdt_threshold=20.0,
+        )
+        metrics = result["metrics"]
+
+        assert metrics["spike_count"] == 12
+        assert pytest.approx(float(metrics["spike_times"][0]), rel=1e-3) == 0.07475
+        assert pytest.approx(metrics["ap_threshold_mean"], rel=1e-3) == -13.583119710286459
+        assert pytest.approx(metrics["max_dvdt_mean"], rel=1e-3) == 256.05010986328125
+        assert pytest.approx(metrics["half_width_mean"], rel=1e-3) == 0.7067198666588714
+
+    def test_firing_dynamics_fi_curve_spike_count_and_adaptation(self, rec_0021):
+        """F-I extractor should preserve spike counts and first finite adaptation ratio."""
+        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+
+        ch = _ch0(rec_0021)
+        sweeps = [ch.get_data(i) for i in range(ch.num_trials)]
+        times = [ch.get_relative_time_vector(i) for i in range(ch.num_trials)]
+
+        fi = calculate_fi_curve(
+            sweeps=sweeps,
+            time_vectors=times,
+            current_steps=list(range(ch.num_trials)),
+            threshold=-20.0,
+            refractory_ms=2.0,
+        )
+
+        assert fi["spike_counts"][-1] == 12
+        first_finite_adaptation = next(v for v in fi["adaptation_ratios"] if np.isfinite(v))
+        assert pytest.approx(first_finite_adaptation, rel=1e-3) == 1.6642066420664208
+
+
+class TestGoldenMasterPrimaryPipelinesSynthetic:
+    """Deterministic synthetic golden values for synaptic and evoked pipelines."""
+
+    def test_synaptic_threshold_event_detection_count_amplitude_tau(self):
+        """Threshold event detector should preserve event count, amplitude, and kinetics."""
+        from Synaptipy.core.analysis.synaptic_events import run_event_detection_threshold_wrapper
+
+        data, time, sampling_rate = _make_synaptic_trace()
+        result = run_event_detection_threshold_wrapper(
+            data,
+            time,
+            sampling_rate,
+            threshold=4.0,
+            direction="negative",
+            refractory_period=0.03,
+            rolling_baseline_window_ms=50.0,
+            use_quiescent_noise_floor=True,
+            quiescent_window_ms=20.0,
+        )
+        metrics = result["metrics"]
+
+        assert metrics["event_count"] == 10
+        assert pytest.approx(metrics["mean_local_amplitude"], rel=1e-3) == 4.742394087490832
+        assert pytest.approx(metrics["tau_mono_ms"], rel=1e-3) == 3.9788918575712935
+        assert pytest.approx(metrics["mean_event_charge"], rel=1e-3) == -0.02025645611362655
+
+    def test_evoked_opto_latency_jitter_and_integrated_charge(self):
+        """Opto wrapper latency/jitter and AUC proxy should remain numerically stable."""
+        from Synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
+
+        data, time, ttl, onsets, sampling_rate = _make_opto_trace()
+        result = run_opto_sync_wrapper(
+            data,
+            time,
+            sampling_rate,
+            ttl_data=ttl,
+            event_detection_type="Spikes",
+            spike_threshold=-10.0,
+            response_window_ms=20.0,
+        )
+        metrics = result["metrics"]
+
+        assert pytest.approx(metrics["optical_latency_ms"], rel=1e-3) == 5.500000000000005
+        assert pytest.approx(metrics["spike_jitter_ms"], rel=1e-3) == 1.1180339887498958
+        assert pytest.approx(metrics["response_probability"], rel=1e-3) == 1.0
+
+        # Integrated charge proxy: baseline-subtracted AUC in each 20 ms post-stimulus window.
+        auc_values = []
+        for onset in onsets:
+            response_mask = (time >= onset) & (time < onset + 0.02)
+            baseline_mask = (time >= onset - 0.01) & (time < onset)
+            baseline = float(np.mean(data[baseline_mask]))
+            auc_values.append(float(np.trapezoid(data[response_mask] - baseline, time[response_mask])))
+
+        assert pytest.approx(float(np.mean(auc_values)), rel=1e-3) == 0.005999999999999964
