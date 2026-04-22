@@ -180,6 +180,17 @@ class PlotCustomizationManager:
                 "width": default_width,
                 "line_style": "dash",  # 'solid', 'dash', 'dot', 'dashdot'
             },
+            # --- Visual validation overlays (Phase 10) ---
+            "trace_overlay": {
+                "color": "#00cfff",  # Cyan - highlights analyzed regions on the raw trace
+                "width": 3,
+                "opacity": 60,  # Semi-transparent so underlying trace is still visible
+            },
+            "event_fit_overlay": {
+                "color": "#ff9900",  # Amber - fitted curves hugging detected events
+                "width": 2,
+                "opacity": 80,
+            },
         }
 
     def _load_user_preferences(self):  # noqa: C901
@@ -788,6 +799,30 @@ def save_plot_preferences():
 def get_plot_customization_signals():
     """Get the global plot customization signals."""
     return _plot_signals
+
+
+def get_trace_overlay_pen():
+    """Get the pen for trace region highlight overlays."""
+    mgr = get_plot_customization_manager()
+    prefs = mgr.defaults.get("trace_overlay", {})
+    import pyqtgraph as pg
+    from PySide6.QtGui import QColor
+
+    color = QColor(prefs.get("color", "#00cfff"))
+    color.setAlpha(max(0, min(255, int(prefs.get("opacity", 60) / 100.0 * 255))))
+    return pg.mkPen(color=color, width=int(prefs.get("width", 3)))
+
+
+def get_event_fit_overlay_pen():
+    """Get the pen for event bi-exponential fit curve overlays."""
+    mgr = get_plot_customization_manager()
+    prefs = mgr.defaults.get("event_fit_overlay", {})
+    import pyqtgraph as pg
+    from PySide6.QtGui import QColor
+
+    color = QColor(prefs.get("color", "#ff9900"))
+    color.setAlpha(max(0, min(255, int(prefs.get("opacity", 80) / 100.0 * 255))))
+    return pg.mkPen(color=color, width=int(prefs.get("width", 2)))
 
 
 def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:

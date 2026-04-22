@@ -563,6 +563,75 @@ return {
 }
 ```
 
+### 5.12 `trace_overlay` - Highlight a Region on the Raw Trace
+
+Draw a semi-transparent coloured segment directly on top of the raw trace to
+highlight an analysed time window (e.g. a baseline region or a response
+integration window).
+
+```python
+{
+    "type": "trace_overlay",
+    "start_time": "_baseline_start_s",   # result key for start time (s)
+    "end_time": "_baseline_end_s",       # result key for end time (s)
+    "color": "#00cfff",                  # hex or name (default from preferences)
+    "width": 3,                          # pen width in pixels
+    "opacity": 60,                       # 0-100%; 100 = fully opaque
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `start_time` | str or float | Result key or literal float giving the region start (s). |
+| `end_time` | str or float | Result key or literal float giving the region end (s). |
+| `color` | str | Colour string or hex code.  Falls back to the **Trace Overlay** preference if omitted. |
+| `width` | int | Pen width (pixels, default 3). |
+| `opacity` | int | 0-100 (default 60). Can be overridden by the user via **Plot Preferences > Trace Overlay**. |
+
+The overlay only renders when the time region lies within the currently plotted
+time axis, and uses `self._current_plot_data` to obtain the raw trace samples.
+
+### 5.13 `event_fit_overlay` - Overlay Fitted Event Decay Curves
+
+Plot fitted curves (e.g. bi-exponential EPSP decays) hugging each detected
+event on the raw trace.  Supports both single-event (1-D arrays) and
+multi-event (list of arrays) data.
+
+```python
+{
+    "type": "event_fit_overlay",
+    "times_key": "_event_fit_times",    # result key for fit time array(s)
+    "values_key": "_event_fit_values",  # result key for fit value array(s)
+    "color": "#ff9900",                 # amber by default
+    "width": 2,
+    "opacity": 80,
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `times_key` | str | Result key for fit time array (1-D `ndarray`) or list of arrays (one per event). |
+| `values_key` | str | Result key for fit value array or list of arrays. |
+| `color` | str | Colour (falls back to **Event Fit Overlay** preference). |
+| `width` | int | Pen width (default 2). |
+| `opacity` | int | 0-100 (default 80). |
+
+**Example return dict** for a PPR decay fit:
+
+```python
+return {
+    "module_used": "evoked_responses",
+    "metrics": {
+        "decay_tau_ms": tau_ms,
+        "_ppr_fit_times": fit_time_array.tolist(),   # absolute time (s)
+        "_ppr_fit_values": fit_value_array.tolist(),  # fitted current/voltage
+    },
+}
+```
+
+The user can customise both overlay types via
+**Edit > Plot Preferences > Trace Overlay** and **Event Fit Overlay** tabs.
+
 ---
 
 ## 6. Where to Put Your Plugin File

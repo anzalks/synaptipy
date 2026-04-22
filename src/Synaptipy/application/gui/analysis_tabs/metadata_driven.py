@@ -1157,6 +1157,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif plot_type == "overlay_fit":
                 self._viz_overlay_fit(plot_cfg, result_item)
 
+            # --- trace region highlight overlay ---
+            elif plot_type == "trace_overlay":
+                self._viz_trace_overlay(plot_cfg, result_item)
+
+            # --- event bi-exponential fit curve ---
+            elif plot_type == "event_fit_overlay":
+                self._viz_event_fit_overlay(plot_cfg, result_item)
+
             # --- shaded fill-between two curves ---
             # Pass full results so top-level private array keys (_int_x etc.) are found
             elif plot_type == "fill_between":
@@ -1556,6 +1564,130 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # _dynamic_plot_items so FillBetweenItem can reference their data.
         self.plot_widget.addItem(fill)
         self._dynamic_plot_items.extend([curve1, curve2, fill])
+
+    def _viz_trace_overlay(self, cfg, result):
+        """Draw a semi-transparent line segment over the raw trace to highlight an analyzed region.
+
+        The overlay spans from ``start_time`` to ``end_time`` on the x-axis.
+        Both keys reference float values (seconds) stored in *result*.
+
+        Config keys:
+            start_time -- result key (or literal float) for the region start (s).
+            end_time   -- result key (or literal float) for the region end (s).
+            color      -- pen colour string or (r, g, b) tuple.  Defaults to
+                          the ``trace_overlay`` theme colour.
+            width      -- pen width in pixels (default 3).
+            opacity    -- opacity 0-100 (default 60).
+        """
+        if not self.plot_widget or not self._current_plot_data:
+            return
+
+        start = self._val(result, cfg.get("start_time"))
+        end = self._val(result, cfg.get("end_time"))
+
+        # Allow literal scalar values in cfg
+        if start is None:
+            start = cfg.get("start_time")
+        if end is None:
+            end = cfg.get("end_time")
+
+        if start is None or end is None:
+            return
+
+        try:
+            start = float(start)
+            end = float(end)
+        except (TypeError, ValueError):
+            return
+
+        time_arr = self._current_plot_data["time"]
+        data_arr = self._current_plot_data["data"]
+        mask = (time_arr >= start) & (time_arr <= end)
+        if not np.any(mask):
+            return
+
+        from Synaptipy.shared.plot_customization import get_plot_customization_manager
+
+        mgr = get_plot_customization_manager()
+        overlay_prefs = mgr.defaults.get("trace_overlay", {})
+
+        color = cfg.get("color") or overlay_prefs.get("color", "#00cfff")
+        width = int(cfg.get("width", overlay_prefs.get("width", 3)))
+        opacity = int(cfg.get("opacity", overlay_prefs.get("opacity", 60)))
+        alpha = max(0, min(255, int(opacity / 100.0 * 255)))
+
+        pen = pg.mkPen(color=pg.mkColor(color), width=width)
+        pen.setColor(pg.mkColor(color))
+        # Apply alpha channel via QColor
+        qcolor = pg.mkColor(color)
+        qcolor.setAlpha(alpha)
+        pen = pg.mkPen(color=qcolor, width=width)
+
+        curve = pg.PlotCurveItem(x=time_arr[mask], y=data_arr[mask], pen=pen)
+        curve.setZValue(60)
+        self.plot_widget.addItem(curve)
+        self._dynamic_plot_items.append(curve)
+
+    def _viz_event_fit_overlay(self, cfg, result):
+        """Overlay fitted event curves (e.g. bi-exponential EPSP fits) on the raw trace.
+
+        The result dict must contain arrays of times and fitted values keyed by
+        *times_key* and *values_key* respectively.  Multiple events are supported
+        when both arrays are lists-of-arrays (one per event).
+
+        Config keys:
+            times_key  -- result key for fit time arrays (required).
+            values_key -- result key for fit value arrays (required).
+            color      -- pen colour.  Defaults to ``event_fit_overlay`` theme colour.
+            width      -- pen width in pixels (default 2).
+            opacity    -- opacity 0-100 (default 80).
+        """
+        if not self.plot_widget:
+            return
+
+        times_key = cfg.get("times_key", "_event_fit_times")
+        values_key = cfg.get("values_key", "_event_fit_values")
+
+        fit_times = self._val(result, times_key)
+        fit_values = self._val(result, values_key)
+
+        if fit_times is None or fit_values is None:
+            return
+
+        from Synaptipy.shared.plot_customization import get_plot_customization_manager
+
+        mgr = get_plot_customization_manager()
+        overlay_prefs = mgr.defaults.get("event_fit_overlay", {})
+
+        color = cfg.get("color") or overlay_prefs.get("color", "#ff9900")
+        width = int(cfg.get("width", overlay_prefs.get("width", 2)))
+        opacity = int(cfg.get("opacity", overlay_prefs.get("opacity", 80)))
+        alpha = max(0, min(255, int(opacity / 100.0 * 255)))
+
+        qcolor = pg.mkColor(color)
+        qcolor.setAlpha(alpha)
+        pen = pg.mkPen(color=qcolor, width=width)
+
+        # Normalise to list of arrays (handle both single and multi-event cases)
+        if isinstance(fit_times, np.ndarray) and fit_times.ndim == 1:
+            fit_times_list = [fit_times]
+            fit_values_list = [fit_values]
+        else:
+            fit_times_list = list(fit_times)
+            fit_values_list = list(fit_values)
+
+        for t_arr, v_arr in zip(fit_times_list, fit_values_list):
+            try:
+                t_arr = np.asarray(t_arr, dtype=float)
+                v_arr = np.asarray(v_arr, dtype=float)
+            except (TypeError, ValueError):
+                continue
+            if t_arr.size < 2:
+                continue
+            curve = pg.PlotCurveItem(x=t_arr, y=v_arr, pen=pen)
+            curve.setZValue(65)
+            self.plot_widget.addItem(curve)
+            self._dynamic_plot_items.append(curve)
 
     def _viz_popup_xy(self, cfg, result):
         """Show scatter + optional regression line in a popup."""
