@@ -460,8 +460,12 @@ def validate_tau(report: ValidationReport) -> None:
     tau_measured_raw = result
     if tau_measured_raw is None:
         tau_measured = float("nan")
+    elif isinstance(tau_measured_raw, dict):
+        # calculate_tau returns {"tau_ms": ..., "_fit_time": ..., "_fit_values": ...}
+        tau_ms_val = tau_measured_raw.get("tau_ms", float("nan"))
+        tau_measured = float(tau_ms_val) / 1000.0
     elif isinstance(tau_measured_raw, (int, float)):
-        # tau is returned in ms by calculate_tau — convert to seconds
+        # Legacy scalar return path
         tau_measured = float(tau_measured_raw) / 1000.0
     else:
         tau_measured = float("nan")

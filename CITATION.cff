@@ -1,17 +1,23 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "Synaptipy"
+title: "SynaptiPy: An Open-Source Electrophysiology Visualization and Analysis Suite"
 abstract: >-
-  Synaptipy is a high-performance electrophysiology visualization
-  and analysis suite built on Python and Qt6. It provides tools for
-  loading, visualizing, and analyzing patch clamp and intracellular
-  recordings, with support for batch processing and multiple file
-  formats via the Neo library.
+  SynaptiPy is an open-source, cross-platform software suite for the
+  visualization and automated analysis of patch-clamp electrophysiology
+  data. It provides experimental neuroscientists with a unified graphical
+  interface and a programmatic backend supporting over 30 file formats via
+  the Neo I/O library, covering analyses from passive membrane properties
+  and action potential kinetics to synaptic event detection. All extracted
+  metrics are returned as tidy tabular data directly traceable to their
+  source file, channel, and trial, enabling reproducible statistical
+  workflows without post-processing.
 authors:
   - family-names: "Shahul"
     given-names: "Anzal K"
     email: "anzal.ks@gmail.com"
+    orcid: "https://orcid.org/0009-0006-9932-7944"
+    affiliation: "Institute Neurosciences Cellulaires Et Intégratives (INCI), Centre National de la Recherche Scientifique (CNRS) / University of Strasbourg, Strasbourg, France"
 version: "0.1.0b6"
 date-released: "2026-03-27"
 license: "AGPL-3.0-or-later"
