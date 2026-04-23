@@ -384,6 +384,10 @@ def calculate_paired_pulse_ratio(  # noqa: C901
         t_at_stim2_ms = (stim2_onset_s - time[i_fit0]) * 1000.0
         residual_at_stim2 = float(_mono_exp(t_at_stim2_ms, *popt)) - bl1
         out["residual_at_stim2"] = residual_at_stim2
+        # Store fitted curve arrays for visual overlay (private keys, hidden from results table)
+        t_fit_abs = time[i_fit0:i_fit1]
+        out["_ppr_fit_times"] = t_fit_abs.tolist()
+        out["_ppr_fit_values"] = [float(_mono_exp(tv, *popt)) for tv in t_fit]
     except Exception as exc:
         log.warning("PPR decay fit failed: %s", exc)
         out["ppr_error"] = f"Decay fit failed: {exc}"
@@ -676,7 +680,7 @@ def run_opto_sync_wrapper(  # noqa: C901
         "metrics": {
             "optical_latency_ms": result.optical_latency_ms,
             "response_probability": result.response_probability,
-            "Response Probability (%)": resp_prob_pct,
+            "response_probability_pct": resp_prob_pct,
             "spike_jitter_ms": result.spike_jitter_ms,
             "stimulus_count": result.stimulus_count,
             "Success Count": result.success_count,
@@ -701,6 +705,22 @@ def run_opto_sync_wrapper(  # noqa: C901
     plots=[
         {"name": "Trace", "type": "trace"},
         {"type": "vlines", "data": "_stim_onsets"},
+        {
+            "type": "trace_overlay",
+            "start_time": "_baseline_start_s",
+            "end_time": "_baseline_end_s",
+            "color": "#00cfff",
+            "width": 3,
+            "opacity": 50,
+        },
+        {
+            "type": "event_fit_overlay",
+            "times_key": "_ppr_fit_times",
+            "values_key": "_ppr_fit_values",
+            "color": "#ff9900",
+            "width": 2,
+            "opacity": 85,
+        },
     ],
     ui_params=[
         {
@@ -817,6 +837,10 @@ def run_ppr_wrapper(
             "decay_tau_ms": result["decay_tau_ms"],
             "ppr_error": result["ppr_error"],
             "_stim_onsets": [stim1_onset_s, stim2_onset_s],
+            "_baseline_start_s": stim1_onset_s - baseline_window_ms / 1000.0,
+            "_baseline_end_s": stim1_onset_s,
+            "_ppr_fit_times": result.get("_ppr_fit_times"),
+            "_ppr_fit_values": result.get("_ppr_fit_values"),
         },
     }
 

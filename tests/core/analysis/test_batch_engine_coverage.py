@@ -11,6 +11,7 @@ from typing import Any, List
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 import Synaptipy.core.analysis  # noqa: F401 – populate registry
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine, _worker_process_file
@@ -72,6 +73,10 @@ class TestNegativeMaxWorkers:
         engine = BatchAnalysisEngine(max_workers=-1)
         assert engine.max_workers == multiprocessing.cpu_count()
 
+    def test_zero_max_workers_clamped_to_one(self):
+        engine = BatchAnalysisEngine(max_workers=0)
+        assert engine.max_workers == 1
+
 
 # ---------------------------------------------------------------------------
 # 2. Parallel branch (lines 478-481, 353-441)
@@ -118,6 +123,167 @@ class TestParallelBranch:
         df = engine.run_batch(recs, pipeline, progress_callback=_cb)
         # Should stop early but not crash
         assert isinstance(df, type(df))  # just a DataFrame
+
+    def test_single_file_does_not_enter_parallel_branch(self, monkeypatch):
+        engine = BatchAnalysisEngine(max_workers=4)
+        rec = _make_recording()
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+        called = {"parallel": False}
+
+        def _unexpected(*args, **kwargs):
+            called["parallel"] = True
+            raise AssertionError("parallel branch should not be used for a single file")
+
+        monkeypatch.setattr(engine, "_run_batch_parallel", _unexpected)
+        df = engine.run_batch([rec], pipeline)
+        assert not called["parallel"]
+        assert not df.empty
+
+
+class _FakeFuture:
+    def __init__(self, *, result=None, exception=None):
+        self._result = result
+        self._exception = exception
+
+    def result(self):
+        if self._exception is not None:
+            raise self._exception
+        return self._result
+
+
+class _FakeExecutor:
+    def __init__(self, submitted_futures):
+        self._submitted_futures = list(submitted_futures)
+        self.submitted = []
+        self.shutdown_calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def submit(self, func, *args, **kwargs):
+        self.submitted.append((func, args, kwargs))
+        return self._submitted_futures.pop(0)
+
+    def shutdown(self, wait=True, cancel_futures=False):
+        self.shutdown_calls.append({"wait": wait, "cancel_futures": cancel_futures})
+
+
+class TestParallelPathTasks:
+    def _patch_parallel(self, monkeypatch, futures):
+        holder = {}
+
+        def _executor_factory(**kwargs):
+            holder["executor"] = _FakeExecutor(futures)
+            return holder["executor"]
+
+        monkeypatch.setattr(
+            "Synaptipy.core.analysis.batch_engine.ProcessPoolExecutor",
+            _executor_factory,
+        )
+        monkeypatch.setattr(
+            "Synaptipy.core.analysis.batch_engine.as_completed",
+            lambda future_to_idx: list(future_to_idx.keys()),
+        )
+        monkeypatch.setattr(
+            "Synaptipy.core.analysis.batch_engine.multiprocessing.get_context",
+            lambda mode: object(),
+        )
+        return holder
+
+    def test_parallel_path_task_success(self, monkeypatch):
+        engine = BatchAnalysisEngine(max_workers=2)
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+        rows = [
+            {
+                "file_name": "file1.abf",
+                "file_path": "/tmp/file1.abf",
+                "channel": "Vm",
+                "analysis": "rmp_analysis",
+                "scope": "first_trial",
+                "rmp_mv": -65.0,
+            }
+        ]
+        holder = self._patch_parallel(monkeypatch, [_FakeFuture(result=rows)])
+
+        df = engine._run_batch_parallel([Path("/tmp/file1.abf")], pipeline, None, None)
+
+        assert len(holder["executor"].submitted) == 1
+        assert not df.empty
+        assert "batch_timestamp" in df.columns
+
+    def test_parallel_worker_failure_adds_error_row(self, monkeypatch):
+        engine = BatchAnalysisEngine(max_workers=2)
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+        holder = self._patch_parallel(monkeypatch, [_FakeFuture(exception=RuntimeError("worker exploded"))])
+        append_calls = []
+        monkeypatch.setattr(
+            engine,
+            "_append_batch_error_log",
+            lambda file_name, file_path, exc: append_calls.append((file_name, file_path, str(exc))),
+        )
+
+        df = engine._run_batch_parallel([Path("/tmp/file1.abf")], pipeline, None, None)
+
+        assert len(holder["executor"].submitted) == 1
+        assert len(append_calls) == 1
+        assert "error" in df.columns
+        assert "worker exploded" in df.iloc[0]["error"]
+
+    def test_parallel_cancelled_after_first_future(self, monkeypatch):
+        engine = BatchAnalysisEngine(max_workers=2)
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+        futures = [
+            _FakeFuture(result=[{"file_name": "f1.abf", "file_path": "/tmp/f1.abf", "analysis": "a", "scope": "s"}]),
+            _FakeFuture(result=[{"file_name": "f2.abf", "file_path": "/tmp/f2.abf", "analysis": "a", "scope": "s"}]),
+        ]
+        holder = self._patch_parallel(monkeypatch, futures)
+        progress_messages = []
+
+        def _progress(current, total, msg):
+            progress_messages.append(msg)
+            if current == 1:
+                engine.cancel()
+
+        df = engine._run_batch_parallel([Path("/tmp/f1.abf"), Path("/tmp/f2.abf")], pipeline, _progress, None)
+
+        assert holder["executor"].shutdown_calls
+        assert holder["executor"].shutdown_calls[-1] == {"wait": False, "cancel_futures": True}
+        assert any("Batch cancelled" in msg for msg in progress_messages)
+        assert len(df) == 1
+
+    def test_parallel_inline_recording_failure_adds_error_row(self, monkeypatch):
+        engine = BatchAnalysisEngine(max_workers=2)
+        rec = _make_recording()
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+        self._patch_parallel(monkeypatch, [])
+        monkeypatch.setattr(
+            engine,
+            "_run_batch_sequential",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("inline exploded")),
+        )
+
+        df = engine._run_batch_parallel([rec], pipeline, None, None)
+
+        assert len(df) == 1
+        assert "inline exploded" in df.iloc[0]["error"]
+
+    def test_parallel_cancelled_with_no_rows_returns_empty_df(self, monkeypatch):
+        engine = BatchAnalysisEngine(max_workers=2)
+        rec = _make_recording()
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+        self._patch_parallel(monkeypatch, [])
+        engine._cancelled = True
+
+        monkeypatch.setattr(
+            engine, "_run_batch_sequential", lambda *args, **kwargs: pytest.fail("should not process inline")
+        )
+
+        df = engine._run_batch_parallel([rec], pipeline, None, None)
+
+        assert df.empty
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +447,31 @@ class TestProcessTaskExceptionToErrorRow:
         assert "error" in df.columns
 
 
+class TestSequentialFileLevelErrorHandling:
+    def test_file_level_exception_appends_error_row_and_log(self, monkeypatch):
+        engine = BatchAnalysisEngine()
+        rec = _make_recording()
+        pipeline = [{"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}]
+
+        class BrokenChannels(dict):
+            def items(self):
+                raise RuntimeError("channels exploded")
+
+        rec.channels = BrokenChannels({"ch0": _make_channel()})
+        append_calls = []
+        monkeypatch.setattr(
+            engine,
+            "_append_batch_error_log",
+            lambda file_name, file_path, exc: append_calls.append((file_name, file_path, str(exc))),
+        )
+
+        df = engine._run_batch_sequential([rec], pipeline, None, None)
+
+        assert len(append_calls) == 1
+        assert len(df) == 1
+        assert "channels exploded" in df.iloc[0]["error"]
+
+
 # ---------------------------------------------------------------------------
 # 9. _process_task: context adaptation (lines 702-703, 728-772)
 # ---------------------------------------------------------------------------
@@ -338,6 +529,49 @@ class TestProcessTaskContextAdaptation:
         task = {"analysis": "rmp_analysis", "scope": "first_trial", "params": {}}
         results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
         assert isinstance(results, list)
+
+    def test_context_average_fallback_when_mean_fails(self, monkeypatch):
+        ctx = self._ctx("all_trials", [DATA.copy()], [T.copy()])
+        task = {"analysis": "rmp_analysis", "scope": "average", "params": {}}
+
+        def _boom(*args, **kwargs):
+            raise ValueError("mean failed")
+
+        monkeypatch.setattr(np, "mean", _boom)
+        self.channel.get_averaged_data = MagicMock(return_value=DATA.copy())
+        self.channel.get_relative_averaged_time_vector = MagicMock(return_value=T.copy())
+
+        results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
+
+        assert isinstance(results, list)
+        self.channel.get_averaged_data.assert_called_once()
+
+    def test_context_selected_average_fallback_when_parse_fails(self, monkeypatch):
+        ctx = self._ctx("all_trials", [DATA.copy(), DATA.copy()], [T.copy(), T.copy()])
+        task = {
+            "analysis": "rmp_analysis",
+            "scope": "selected_trials_average",
+            "params": {"trial_indices": "broken"},
+        }
+        parse_calls = {"count": 0}
+
+        def _parse_once_then_recover(*args, **kwargs):
+            parse_calls["count"] += 1
+            if parse_calls["count"] == 1:
+                raise ValueError("bad selection")
+            return {0, 1}
+
+        monkeypatch.setattr(
+            "Synaptipy.shared.utils.parse_trial_selection_string",
+            _parse_once_then_recover,
+        )
+        self.channel.get_averaged_data = MagicMock(return_value=DATA.copy())
+        self.channel.get_relative_averaged_time_vector = MagicMock(return_value=T.copy())
+
+        results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
+
+        assert isinstance(results, list)
+        self.channel.get_averaged_data.assert_called_once_with(trial_indices=[0, 1])
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +637,62 @@ class TestProcessTaskScopeLoading:
         ctx = {"scope": "specific_trial", "data": DATA.copy(), "time": T.copy()}
         results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
         assert isinstance(results, list)
+
+    def test_selected_trials_execution_returns_current_shape(self):
+        @AnalysisRegistry.register("_test_selected_trials_exec")
+        def _selected_trials_exec(data, time, sampling_rate, **kwargs):
+            return {"data_kind": type(data).__name__, "sample_count": len(data)}
+
+        try:
+            task = {
+                "analysis": "_test_selected_trials_exec",
+                "scope": "selected_trials",
+                "params": {"trial_indices": "0,2"},
+            }
+            results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, self.empty_ctx)
+            assert len(results) == 1
+            assert results[0]["data_kind"] == "list"
+            assert "trial_index" not in results[0]
+        finally:
+            AnalysisRegistry._registry.pop("_test_selected_trials_exec", None)
+            AnalysisRegistry._metadata.pop("_test_selected_trials_exec", None)
+
+    def test_unregistered_analysis_returns_error_row(self):
+        task = {"analysis": "definitely_missing_analysis", "scope": "first_trial", "params": {}}
+        results, updated = self.engine._process_task(task, self.channel, "Vm", self.file_path, self.empty_ctx)
+        assert updated is None
+        assert len(results) == 1
+        assert "not registered" in results[0]["error"]
+
+    def test_no_data_available_returns_error_row(self):
+        empty_channel = MagicMock(spec=Channel)
+        empty_channel.sampling_rate = FS
+        empty_channel.units = "mV"
+        empty_channel.num_trials = 0
+        empty_channel.get_data.return_value = None
+        empty_channel.get_relative_time_vector.return_value = T.copy()
+        task = self._task("first_trial")
+
+        results, updated = self.engine._process_task(task, empty_channel, "Vm", self.file_path, self.empty_ctx)
+
+        assert updated is None
+        assert len(results) == 1
+        assert results[0]["error"] == "No data available"
+
+    def test_standard_analysis_failure_returns_error_row(self):
+        @AnalysisRegistry.register("_test_analysis_failure")
+        def _analysis_failure(data, time, sampling_rate, **kwargs):
+            raise RuntimeError("analysis boom")
+
+        try:
+            task = {"analysis": "_test_analysis_failure", "scope": "first_trial", "params": {}}
+            results, updated = self.engine._process_task(task, self.channel, "Vm", self.file_path, self.empty_ctx)
+            assert updated is None
+            assert len(results) == 1
+            assert "Analysis failed" in results[0]["error"]
+        finally:
+            AnalysisRegistry._registry.pop("_test_analysis_failure", None)
+            AnalysisRegistry._metadata.pop("_test_analysis_failure", None)
 
 
 # ---------------------------------------------------------------------------
@@ -563,3 +853,11 @@ class TestWorkerProcessFile:
         except Exception:
             # Some file-load errors may propagate; that's acceptable
             pass
+
+
+class TestSanitiseNumpyValues:
+    def test_integer_ndarray_uses_count_summary_and_stash(self):
+        summary, stash = BatchAnalysisEngine._sanitise_ndarray("ints", np.arange(6, dtype=int))
+        assert summary == "n=6"
+        assert stash is not None
+        assert stash[0] == "_ints_raw"

@@ -50,8 +50,8 @@ class TestTauMonoModel:
         assert result is not None
         assert isinstance(result, dict)
         assert "tau_ms" in result
-        assert "fit_time" in result
-        assert "fit_values" in result
+        assert "_fit_time" in result
+        assert "_fit_values" in result
         # Should recover ~20ms within 5ms tolerance
         assert abs(result["tau_ms"] - 20.0) < 5.0
 

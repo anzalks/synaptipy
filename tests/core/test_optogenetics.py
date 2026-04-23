@@ -279,7 +279,7 @@ class TestOptoSyncFailureHandling:
         assert np.isfinite(result.optical_latency_ms)
 
     def test_wrapper_new_metric_keys(self):
-        """Wrapper dict must include Success Count, Failure Count, Response Probability (%)."""
+        """Wrapper dict must include Success Count, Failure Count, response_probability_pct."""
         sr = 10_000.0
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.2, 0.5], pulse_duration=0.02)
         # One spike only (after first stimulus)
@@ -298,8 +298,8 @@ class TestOptoSyncFailureHandling:
 
         assert "Success Count" in metrics
         assert "Failure Count" in metrics
-        assert "Response Probability (%)" in metrics
+        assert "response_probability_pct" in metrics
 
         assert metrics["Success Count"] == 1
         assert metrics["Failure Count"] == 1
-        assert metrics["Response Probability (%)"] == pytest.approx(50.0, abs=1.0)
+        assert metrics["response_probability_pct"] == pytest.approx(50.0, abs=1.0)

@@ -27,6 +27,76 @@ from Synaptipy.core.data_model import Recording
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# CSV value sanitisation
+# ---------------------------------------------------------------------------
+
+_SIG_FIGS = 6
+_MAX_ARRAY_PREVIEW = 10
+
+
+def _round_sig(x: float, sig: int = _SIG_FIGS) -> float:
+    """Round *x* to *sig* significant figures.  Returns *x* unchanged if not finite."""
+    if x == 0.0:
+        return 0.0
+    import math
+
+    magnitude = math.floor(math.log10(abs(x)))
+    factor = 10 ** (sig - 1 - magnitude)
+    return round(x * factor) / factor
+
+
+def _sanitize_elem(val: Any) -> Any:
+    """Convert a single scalar *val* to a CSV-safe Python native type."""
+    if isinstance(val, (np.floating,)):
+        f = float(val)
+        return _round_sig(f) if np.isfinite(f) else f
+    if isinstance(val, (np.integer,)):
+        return int(val)
+    if isinstance(val, float):
+        return _round_sig(val) if np.isfinite(val) else val
+    return val
+
+
+def _sanitize_csv_value(val: Any) -> Any:
+    """Convert *val* to a CSV-safe Python scalar or compact string.
+
+    Rules:
+    * ``None`` → ``np.nan``
+    * numpy scalars → native Python float/int, rounded to ``_SIG_FIGS`` sig-figs
+    * plain ``float`` → rounded to ``_SIG_FIGS`` sig-figs
+    * numpy arrays / lists → cleaned string, no ``np.float32(…)`` wrappers;
+      arrays longer than ``_MAX_ARRAY_PREVIEW`` are truncated with a count note
+    * everything else → unchanged
+    """
+    if val is None:
+        return np.nan
+
+    # numpy scalar
+    if isinstance(val, (np.floating, np.integer)):
+        return _sanitize_elem(val)
+
+    # plain Python float
+    if isinstance(val, float):
+        return _sanitize_elem(val)
+
+    # numpy array → convert to list then fall through
+    if isinstance(val, np.ndarray):
+        val = val.tolist()
+
+    # list / tuple
+    if isinstance(val, (list, tuple)):
+        if len(val) == 0:
+            return np.nan
+        clean = [_sanitize_elem(v) for v in val]
+        if len(clean) > _MAX_ARRAY_PREVIEW:
+            preview = clean[:_MAX_ARRAY_PREVIEW]
+            return f"{preview} ... ({len(clean)} total)"
+        return str(clean)
+
+    return val
+
+
+# ---------------------------------------------------------------------------
 # Dependency version helpers
 # ---------------------------------------------------------------------------
 
@@ -368,32 +438,6 @@ class CSVExporter:
 
             import pandas as pd
 
-            # Helper function to convert numpy values to Python native types
-            def convert_value(val):
-                """Convert numpy types to Python native types for CSV compatibility."""
-                if pd.isna(val):
-                    return ""
-
-                # Convert numpy arrays to lists
-                if hasattr(val, "tolist") and callable(getattr(val, "tolist")):
-                    try:
-                        return str(val.tolist())
-                    except (ValueError, AttributeError):
-                        return str(val)
-
-                # Convert numpy scalar types to native Python types
-                if hasattr(val, "item") and callable(getattr(val, "item")):
-                    try:
-                        return val.item()
-                    except (ValueError, AttributeError):
-                        return str(val)
-
-                # Handle other types
-                if isinstance(val, (list, tuple)):
-                    return str(val)
-
-                return val
-
             # Process each result to handle nested dictionaries
             flat_results = []
             for result in results:
@@ -402,15 +446,18 @@ class CSVExporter:
 
                 # Process each key-value pair in the result dictionary
                 for key, value in result.items():
+                    # Skip private/internal keys (used by GUI but not useful in CSV)
+                    if key.startswith("_"):
+                        continue
                     if isinstance(value, dict):
                         # For nested dictionaries (like summary_stats or parameters)
                         for nested_key, nested_value in value.items():
                             flat_key = f"{key}.{nested_key}"
                             if flat_key in ordered_fields:
-                                flat_result[flat_key] = convert_value(nested_value)
+                                flat_result[flat_key] = _sanitize_csv_value(nested_value)
                     else:
                         if key in ordered_fields:
-                            flat_result[key] = convert_value(value)
+                            flat_result[key] = _sanitize_csv_value(value)
 
                 flat_results.append(flat_result)
 

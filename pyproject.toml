@@ -36,12 +36,12 @@ Documentation = "https://synaptipy.readthedocs.io/en/latest/"
 Changelog = "https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"
 Source = "https://github.com/anzalks/synaptipy"
 dependencies = [
-    "numpy>=2.0.0",
-    "scipy>=1.13.0",
+    "numpy>=2.0.0,<3.0.0",
+    "scipy>=1.14.0,<2.0.0",
     "pandas>=2.3.0",
-    "pyqtgraph>=0.13.0",
-    "pyside6>=6.7.0",
-    "neo>=0.14.0",
+    "pyqtgraph>=0.13.3,<1.0.0",
+    "pyside6==6.7.3",
+    "neo>=0.14.0,<1.0.0",
     "pynwb>=3.1.0",
     "h5py>=3.14.0",
     "hdmf>=4.1.0",
