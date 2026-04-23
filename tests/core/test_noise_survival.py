@@ -77,7 +77,9 @@ def ppr_arrays():
     v_clean, t, known = make_ppr_evoked_trace(
         r1_amp_mv=-5.0,
         r2_amp_mv=-5.0,
-        tau_decay_ms=40.0,
+        tau_fast_ms=10.0,
+        tau_slow_ms=40.0,
+        fast_fraction=0.0,
         sampling_rate=SAMPLING_RATE,
     )
     variants = make_noisy_variants(v_clean, SAMPLING_RATE, pink_rms=0.15, hum_amplitude=0.1)

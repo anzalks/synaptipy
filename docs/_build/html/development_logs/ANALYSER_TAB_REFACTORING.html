@@ -265,6 +265,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#optogenetic-synchronization">Optogenetic Synchronization</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#sag-ratio-ih-analysis">Sag Ratio (Ih) Analysis</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../user_guide.html#additional-analysis-modules">Additional Analysis Modules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide.html#visual-validation-overlays">Visual Validation Overlays</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../user_guide.html#using-the-exporter-tab">Using the Exporter Tab</a><ul>
@@ -311,6 +312,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#capacitance-c-m">5. Capacitance (<span class="math notranslate nohighlight">\(C_m\)</span>)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#current-clamp-mode">5.1 Current-clamp mode</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#voltage-clamp-mode">5.2 Voltage-clamp mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#current-clamp-series-resistance-r-s-text-cc">5.3 Current-clamp series resistance (<span class="math notranslate nohighlight">\(R_s^{\text{CC}}\)</span>)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#spike-detection-and-action-potential-features">6. Spike Detection and Action Potential Features</a><ul>
@@ -352,12 +354,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#dynamic-ap-threshold-via-maximum-curvature-d-2v-dt-2">15.2 Dynamic AP Threshold via Maximum Curvature (<span class="math notranslate nohighlight">\(d^2V/dt^2\)</span>)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#separation-of-fast-ahp-and-medium-ahp">15.3 Separation of Fast AHP and Medium AHP</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#multi-kernel-dendritic-tolerance-in-template-matching">15.4 Multi-Kernel Dendritic Tolerance in Template Matching</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#ppr-residual-fitting-bi-exponential-upgrade">15.5 PPR Residual Fitting - Bi-Exponential Upgrade</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#peak-detection-is-then-applied-to-z-text-combined-at-the-user-specified-threshold-this-ensures-that-both-fast-somatic-narrow-and-slow-dendritic-broadened-events-cross-the-detection-threshold-without-requiring-the-user-to-re-tune-tau-text-decay-for-distal-inputs">Peak detection is then applied to <span class="math notranslate nohighlight">\(z_{\text{combined}}\)</span> at the user-specified
-threshold.  This ensures that both fast somatic (narrow) and slow dendritic
-(broadened) events cross the detection threshold, without requiring the user
-to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</span> for distal inputs.</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../algorithmic_definitions.html#immutable-trace-correction-pipeline">16. Immutable Trace Correction Pipeline</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#step-a-liquid-junction-potential-ljp-subtraction">Step A - Liquid Junction Potential (LJP) Subtraction</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../algorithmic_definitions.html#step-b-p-n-leak-subtraction">Step B - P/N Leak Subtraction</a></li>
@@ -411,6 +411,8 @@ to re-tune <span class="math notranslate nohighlight">\(\tau_{\text{decay}}\)</s
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#event-markers-interactive-event-points">5.9 <code class="docutils literal notranslate"><span class="pre">event_markers</span></code> - Interactive Event Points</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#trace-base-trace-with-overlay">5.10 <code class="docutils literal notranslate"><span class="pre">trace</span></code> - Base Trace with Overlay</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#fill-between-shaded-region-between-two-curves">5.11 <code class="docutils literal notranslate"><span class="pre">fill_between</span></code> - Shaded Region Between Two Curves</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#trace-overlay-highlight-a-region-on-the-raw-trace">5.12 <code class="docutils literal notranslate"><span class="pre">trace_overlay</span></code> - Highlight a Region on the Raw Trace</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../extending_synaptipy.html#event-fit-overlay-overlay-fitted-event-decay-curves">5.13 <code class="docutils literal notranslate"><span class="pre">event_fit_overlay</span></code> - Overlay Fitted Event Decay Curves</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../extending_synaptipy.html#where-to-put-your-plugin-file">6. Where to Put Your Plugin File</a><ul>
@@ -2072,7 +2074,7 @@ python<span class="w"> </span>-m<span class="w"> </span>Synaptipy
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024-2026, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Apr 16, 2026.
+      <span class="lastupdated">Last updated on Apr 22, 2026.
       </span></p>
   </div>
 

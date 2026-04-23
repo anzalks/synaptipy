@@ -286,10 +286,15 @@ valid ranges, and conditional visibility based on clamp mode.
 **Intrinsic Properties tab:**
 - **Tau (Time Constant)** - Single or bi-exponential fit to the voltage decay
   after a current step. Returns tau in ms with an overlay of the fitted curve.
+  A **cyan trace overlay** automatically highlights the 5 ms baseline window
+  immediately before the step onset for at-a-glance verification.
 - **I-V Curve** - Current-voltage relationship across multi-trial step protocols.
   Fits aggregate Rin from the slope and opens a popup I-V scatter plot.
 - **Capacitance** - Membrane capacitance from Tau/Rin (current-clamp) or
-  capacitive-transient integration (voltage-clamp).
+  capacitive-transient integration (voltage-clamp).  In current-clamp mode the
+  series resistance ($R_s$) is automatically estimated from the fast voltage
+  artifact at step onset (0.1 ms window) and used in the corrected formula
+  $C_m = \tau / (R_{\text{in}} - R_s)$.
 
 **Spike Analysis tab:**
 - **Phase Plane** - dV/dt vs. voltage trajectory for AP initiation dynamics.
@@ -308,6 +313,28 @@ valid ranges, and conditional visibility based on clamp mode.
 **Synaptic Events tab:**
 - **Event Detection (Template Match)** - Parametric deconvolution against a
   double-exponential template for miniature event detection. Configurable
+
+### Visual Validation Overlays
+
+Several analysis sub-tabs draw semi-transparent overlays directly on top of the
+raw trace to assist with visual validation of the analysis windows and fitted
+curves.  These overlays are rendered entirely in pyqtgraph and do not affect the
+underlying data.
+
+| Overlay type | Where it appears | Default colour |
+|---|---|---|
+| **Trace overlay** (cyan) | Baseline region highlighted before the stimulus | Cyan (#00cfff) |
+| **Event fit overlay** (amber) | Bi-exponential or mono-exponential decay fits on the P1 tail in PPR | Amber (#ff9900) |
+
+**Customising overlay appearance:**
+
+1. Open **Edit > Plot Preferences** (or the settings toolbar button).
+2. Switch to the **Trace Overlay** tab to adjust the highlight colour, line
+   width, and opacity with a slider.
+3. Switch to the **Event Fit Overlay** tab to adjust the fitted-curve colour,
+   width, and opacity.
+
+All overlay settings are persisted via QSettings and restored across sessions.
   rise/decay tau, threshold in SD, and direction.
 - **Event Detection (Baseline Peak)** - Direct baseline-to-peak amplitude
   detection with kinetics estimation for evoked or spontaneous events.

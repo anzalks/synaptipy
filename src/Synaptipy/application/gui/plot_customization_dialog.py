@@ -75,6 +75,8 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self._create_selection_windows_tab()
         self._create_auc_fill_tab()
         self._create_hv_lines_tab()
+        self._create_trace_overlay_tab()
+        self._create_event_fit_overlay_tab()
 
         # --- Performance Option ---
         performance_group = QtWidgets.QGroupBox("Performance")
@@ -434,6 +436,88 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         layout.addStretch()
         self.tab_widget.addTab(tab, "H/V Lines")
 
+    def _create_trace_overlay_tab(self):
+        """Create tab for trace region highlight overlay styling."""
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        color_group = QtWidgets.QGroupBox("Color")
+        cl = QtWidgets.QHBoxLayout(color_group)
+        self.trace_overlay_color_combo = QtWidgets.QComboBox()
+        self._populate_color_combo(self.trace_overlay_color_combo)
+        cl.addWidget(QtWidgets.QLabel("Overlay Color:"))
+        cl.addWidget(self.trace_overlay_color_combo)
+        cl.addStretch()
+        layout.addWidget(color_group)
+
+        width_group = QtWidgets.QGroupBox("Line Width")
+        wl = QtWidgets.QHBoxLayout(width_group)
+        self.trace_overlay_width_combo = QtWidgets.QComboBox()
+        self._populate_width_combo(self.trace_overlay_width_combo)
+        wl.addWidget(QtWidgets.QLabel("Width (pts):"))
+        wl.addWidget(self.trace_overlay_width_combo)
+        wl.addStretch()
+        layout.addWidget(width_group)
+
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        ol = QtWidgets.QHBoxLayout(opacity_group)
+        self.trace_overlay_opacity_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.trace_overlay_opacity_slider.setRange(0, 100)
+        self.trace_overlay_opacity_slider.setValue(60)
+        self.trace_overlay_opacity_label = QtWidgets.QLabel("60%")
+        self.trace_overlay_opacity_slider.valueChanged.connect(
+            lambda v: self.trace_overlay_opacity_label.setText(f"{v}%")
+        )
+        ol.addWidget(QtWidgets.QLabel("Opacity:"))
+        ol.addWidget(self.trace_overlay_opacity_slider)
+        ol.addWidget(self.trace_overlay_opacity_label)
+        ol.addStretch()
+        layout.addWidget(opacity_group)
+
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "Trace Overlay")
+
+    def _create_event_fit_overlay_tab(self):
+        """Create tab for event fit curve overlay styling."""
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        color_group = QtWidgets.QGroupBox("Color")
+        cl = QtWidgets.QHBoxLayout(color_group)
+        self.event_fit_overlay_color_combo = QtWidgets.QComboBox()
+        self._populate_color_combo(self.event_fit_overlay_color_combo)
+        cl.addWidget(QtWidgets.QLabel("Fit Curve Color:"))
+        cl.addWidget(self.event_fit_overlay_color_combo)
+        cl.addStretch()
+        layout.addWidget(color_group)
+
+        width_group = QtWidgets.QGroupBox("Line Width")
+        wl = QtWidgets.QHBoxLayout(width_group)
+        self.event_fit_overlay_width_combo = QtWidgets.QComboBox()
+        self._populate_width_combo(self.event_fit_overlay_width_combo)
+        wl.addWidget(QtWidgets.QLabel("Width (pts):"))
+        wl.addWidget(self.event_fit_overlay_width_combo)
+        wl.addStretch()
+        layout.addWidget(width_group)
+
+        opacity_group = QtWidgets.QGroupBox("Opacity")
+        ol = QtWidgets.QHBoxLayout(opacity_group)
+        self.event_fit_overlay_opacity_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.event_fit_overlay_opacity_slider.setRange(0, 100)
+        self.event_fit_overlay_opacity_slider.setValue(80)
+        self.event_fit_overlay_opacity_label = QtWidgets.QLabel("80%")
+        self.event_fit_overlay_opacity_slider.valueChanged.connect(
+            lambda v: self.event_fit_overlay_opacity_label.setText(f"{v}%")
+        )
+        ol.addWidget(QtWidgets.QLabel("Opacity:"))
+        ol.addWidget(self.event_fit_overlay_opacity_slider)
+        ol.addWidget(self.event_fit_overlay_opacity_label)
+        ol.addStretch()
+        layout.addWidget(opacity_group)
+
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "Event Fit Overlay")
+
     def _populate_line_style_combo(self, combo: QtWidgets.QComboBox):
         """Populate a line-style combo box."""
         for name, val in [("Solid", "solid"), ("Dash", "dash"), ("Dot", "dot"), ("Dash-Dot", "dashdot")]:
@@ -528,6 +612,18 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
             self._set_combo_value(self.hv_lines_opacity_combo, hvl.get("opacity", 80))
             self._set_combo_value(self.hv_lines_style_combo, hvl.get("line_style", "dash"))
 
+            # Trace overlay preferences
+            tov = self.current_preferences.get("trace_overlay", {})
+            self._set_combo_value(self.trace_overlay_color_combo, tov.get("color", "#00cfff"))
+            self._set_combo_value(self.trace_overlay_width_combo, tov.get("width", 3))
+            self.trace_overlay_opacity_slider.setValue(int(tov.get("opacity", 60)))
+
+            # Event fit overlay preferences
+            efo = self.current_preferences.get("event_fit_overlay", {})
+            self._set_combo_value(self.event_fit_overlay_color_combo, efo.get("color", "#ff9900"))
+            self._set_combo_value(self.event_fit_overlay_width_combo, efo.get("width", 2))
+            self.event_fit_overlay_opacity_slider.setValue(int(efo.get("opacity", 80)))
+
             log.debug("Current preferences loaded into UI")
         except Exception as e:
             log.error(f"Failed to load current preferences: {e}")
@@ -610,6 +706,30 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         )
         self.hv_lines_style_combo.currentIndexChanged.connect(
             lambda: self._update_advanced("hv_lines", "line_style", self.hv_lines_style_combo.currentData())
+        )
+        # Trace overlay controls
+        self.trace_overlay_color_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("trace_overlay", "color", self.trace_overlay_color_combo.currentData())
+        )
+        self.trace_overlay_width_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced("trace_overlay", "width", self.trace_overlay_width_combo.currentData())
+        )
+        self.trace_overlay_opacity_slider.valueChanged.connect(
+            lambda v: self._update_advanced("trace_overlay", "opacity", v)
+        )
+        # Event fit overlay controls
+        self.event_fit_overlay_color_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced(
+                "event_fit_overlay", "color", self.event_fit_overlay_color_combo.currentData()
+            )
+        )
+        self.event_fit_overlay_width_combo.currentIndexChanged.connect(
+            lambda: self._update_advanced(
+                "event_fit_overlay", "width", self.event_fit_overlay_width_combo.currentData()
+            )
+        )
+        self.event_fit_overlay_opacity_slider.valueChanged.connect(
+            lambda v: self._update_advanced("event_fit_overlay", "opacity", v)
         )
 
     def _update_advanced(self, group: str, key: str, value: Any):

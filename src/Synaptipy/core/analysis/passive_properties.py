@@ -493,7 +493,7 @@ def calculate_cc_series_resistance_fast(
     time_vector: np.ndarray,
     step_onset_time: float,
     current_step_pa: float,
-    artifact_window_ms: float = 0.5,
+    artifact_window_ms: float = 0.1,
     tau_ms: Optional[float] = None,
     rin_mohm: Optional[float] = None,
 ) -> Dict[str, Any]:
@@ -813,13 +813,13 @@ def calculate_tau(  # noqa: C901
                 popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
             except RuntimeError:
                 log.warning("Optimal parameters not found for Tau (mono exponential fit).")
-                return {"tau_ms": float(np.nan), "fit_time": [], "fit_values": []}
+                return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": []}
 
             tau_ms = popt[2] * 1000
             fit_values = _exp_growth(t_fit, *popt)
             fit_time = (t_fit + fit_start_time).tolist()
             log.debug("Calculated Tau (mono): %.3f ms", tau_ms)
-            return {"tau_ms": tau_ms, "fit_time": fit_time, "fit_values": fit_values.tolist()}
+            return {"tau_ms": tau_ms, "_fit_time": fit_time, "_fit_values": fit_values.tolist()}
 
         elif model == "bi":
             if len(t_fit) < 6:
@@ -847,8 +847,8 @@ def calculate_tau(  # noqa: C901
                     "amplitude_fast": nan,
                     "amplitude_slow": nan,
                     "V_ss": nan,
-                    "fit_time": [],
-                    "fit_values": [],
+                    "_fit_time": [],
+                    "_fit_values": [],
                 }
 
             V_ss_fit, A_fast, tau_fast, A_slow, tau_slow = popt
@@ -864,8 +864,8 @@ def calculate_tau(  # noqa: C901
                 "amplitude_fast": A_fast,
                 "amplitude_slow": A_slow,
                 "V_ss": V_ss_fit,
-                "fit_time": fit_time,
-                "fit_values": fit_values.tolist(),
+                "_fit_time": fit_time,
+                "_fit_values": fit_values.tolist(),
             }
             log.debug(
                 "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms",
@@ -985,15 +985,54 @@ def calculate_sag_ratio(  # noqa: C901
 # ---------------------------------------------------------------------------
 
 
-def calculate_capacitance_cc(tau_ms: float, rin_mohm: float) -> Optional[float]:
-    """
-    Calculate Cell Capacitance (Cm) from Current-Clamp data.
+def calculate_capacitance_cc(
+    tau_ms: float,
+    rin_mohm: float,
+    rs_mohm: Optional[float] = None,
+) -> Optional[float]:
+    """Calculate Cell Capacitance (Cm) from Current-Clamp data.
 
-    Cm = tau / Rin  (tau in ms, Rin in MOhm -> Cm in pF)
+    When *rs_mohm* is provided, the series resistance is subtracted from the
+    input resistance before computing capacitance, giving the corrected formula::
+
+        Cm = tau / (Rin - Rs)
+
+    Without *rs_mohm* (or when ``rs_mohm`` is ``None``), the simpler
+    approximation ``Cm = tau / Rin`` is used and a warning is logged to remind
+    the caller that the result may be over-estimated.
+
+    Args:
+        tau_ms:   Membrane time constant (ms).
+        rin_mohm: Input resistance (MOhm).
+        rs_mohm:  Series (access) resistance (MOhm), optional.
+
+    Returns:
+        Membrane capacitance in pF, or ``None`` when inputs are invalid.
     """
     if rin_mohm <= 0 or not np.isfinite(rin_mohm) or tau_ms <= 0:
         return None
-    cm_nf = tau_ms / rin_mohm
+    if rs_mohm is not None and np.isfinite(rs_mohm) and rs_mohm >= 0.0:
+        effective_r = rin_mohm - rs_mohm
+        if effective_r <= 0:
+            log.warning(
+                "calculate_capacitance_cc: Rs (%.1f MOhm) >= Rin (%.1f MOhm); " "falling back to Cm = tau / Rin.",
+                rs_mohm,
+                rin_mohm,
+            )
+            effective_r = rin_mohm
+        else:
+            log.debug(
+                "calculate_capacitance_cc: using Rs-corrected formula " "Cm = tau / (Rin - Rs) with Rs=%.1f MOhm.",
+                rs_mohm,
+            )
+    else:
+        log.warning(
+            "calculate_capacitance_cc: rs_mohm not provided; "
+            "using Cm = tau / Rin which may over-estimate Cm. "
+            "Pass rs_mohm for a more accurate result."
+        )
+        effective_r = rin_mohm
+    cm_nf = tau_ms / effective_r
     return cm_nf * 1000.0
 
 
@@ -1642,7 +1681,15 @@ def run_rin_analysis_wrapper(  # noqa: C901
     label="Tau (Time Constant)",
     plots=[
         {"name": "Trace", "type": "trace"},
-        {"type": "overlay_fit", "x": "fit_time", "y": "fit_values", "color": "r", "width": 2, "label": "Exp Fit"},
+        {"type": "overlay_fit", "x": "_fit_time", "y": "_fit_values", "color": "r", "width": 2, "label": "Exp Fit"},
+        {
+            "type": "trace_overlay",
+            "start_time": "_baseline_start_s",
+            "end_time": "_baseline_end_s",
+            "color": "#00cfff",
+            "width": 3,
+            "opacity": 50,
+        },
     ],
     ui_params=[
         {
@@ -1718,6 +1765,9 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             "model": model,
             "tau_bounds": tau_bounds,
         }
+        # Baseline overlay: region before the stimulus onset (5 ms window)
+        _baseline_start_s = max(0.0, stim_start_time - 0.005)
+        _baseline_end_s = stim_start_time
 
         def _with_tau_fit_error(out: Dict[str, Any]) -> Dict[str, Any]:
             if model == "bi":
@@ -1740,8 +1790,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                         "amplitude_slow": result["amplitude_slow"],
                         "tau_model": model,
                         "parameters": params,
-                        "fit_time": result.get("fit_time", []),
-                        "fit_values": result.get("fit_values", []),
+                        "_fit_time": result.get("_fit_time", []),
+                        "_fit_values": result.get("_fit_values", []),
                     }
                 )
             elif isinstance(result, dict) and "tau_ms" in result:
@@ -1750,8 +1800,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                         "tau_ms": result["tau_ms"],
                         "tau_model": model,
                         "parameters": params,
-                        "fit_time": result.get("fit_time", []),
-                        "fit_values": result.get("fit_values", []),
+                        "_fit_time": result.get("_fit_time", []),
+                        "_fit_values": result.get("_fit_values", []),
                     }
                 )
             else:
@@ -1763,6 +1813,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         else:
             metrics = {"tau_ms": None, "tau_error": "Tau calculation failed", "parameters": params}
 
+        metrics["_baseline_start_s"] = _baseline_start_s
+        metrics["_baseline_end_s"] = _baseline_end_s
         return {"module_used": "passive_properties", "metrics": metrics}
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
@@ -1996,14 +2048,34 @@ def run_capacitance_analysis_wrapper(
         else:
             tau_ms = tau_result
 
-        cm_pf = calculate_capacitance_cc(tau_ms, rin_result.value)
+        # Attempt to derive Rs (CC) for the corrected Cm formula.
+        step_onset = resp_window[0]
+        current_amplitude = kwargs.get("current_amplitude_pa", -100.0)
+        rs_result = calculate_cc_series_resistance_fast(
+            data,
+            time,
+            step_onset,
+            current_amplitude,
+            tau_ms=tau_ms,
+            rin_mohm=rin_result.value,
+        )
+        rs_mohm = rs_result.get("rs_cc_mohm")
+        if isinstance(rs_mohm, float) and not np.isfinite(rs_mohm):
+            rs_mohm = None
+
+        cm_pf = calculate_capacitance_cc(tau_ms, rin_result.value, rs_mohm=rs_mohm)
         if cm_pf is None:
             return {"module_used": "passive_properties", "metrics": {"error": "Failed to calculate Cm from Tau/Rin"}}
 
-        return {
-            "module_used": "passive_properties",
-            "metrics": {"capacitance_pf": cm_pf, "tau_ms": tau_ms, "rin_mohm": rin_result.value, "mode": mode},
+        metrics: Dict[str, Any] = {
+            "capacitance_pf": cm_pf,
+            "tau_ms": tau_ms,
+            "rin_mohm": rin_result.value,
+            "mode": mode,
         }
+        if rs_mohm is not None:
+            metrics["rs_cc_mohm"] = rs_mohm
+        return {"module_used": "passive_properties", "metrics": metrics}
 
     elif mode == "Voltage-Clamp":
         voltage_step = kwargs.get("voltage_step_mv", -5.0)
