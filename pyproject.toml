@@ -28,13 +28,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
-
-[project.urls]
-Homepage = "https://github.com/anzalks/synaptipy"
-Documentation = "https://synaptipy.readthedocs.io/en/latest/"
-"Bug Tracker" = "https://github.com/anzalks/synaptipy/issues"
-Changelog = "https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"
-Source = "https://github.com/anzalks/synaptipy"
 dependencies = [
     "numpy>=2.0.0,<3.0.0",
     "scipy>=1.14.0,<2.0.0",
@@ -58,6 +51,13 @@ dependencies = [
 ]
 
 # Runtime deps above; test/docs extras below
+
+[project.urls]
+Homepage = "https://github.com/anzalks/synaptipy"
+Documentation = "https://synaptipy.readthedocs.io/en/latest/"
+"Bug Tracker" = "https://github.com/anzalks/synaptipy/issues"
+Changelog = "https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"
+Source = "https://github.com/anzalks/synaptipy"
 
 [project.optional-dependencies]
 dev = [
