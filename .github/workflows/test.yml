@@ -63,9 +63,9 @@ jobs:
         QT_QPA_PLATFORM: offscreen
       run: |
         if [ "$RUNNER_OS" == "Linux" ]; then
-          xvfb-run python -m pytest -p faulthandler --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+          xvfb-run python -m pytest -p faulthandler --cov=src/Synaptipy --cov-report=term-missing --cov-report=xml
         else
-          python -m pytest -p faulthandler --cov=Synaptipy --cov-report=term-missing --cov-report=xml
+          python -m pytest -p faulthandler --cov=src/Synaptipy --cov-report=term-missing --cov-report=xml
         fi
 
     # High-DPI scaling check — runs a focused subset of plot tests with
@@ -105,7 +105,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        python -m pytest tests/core/ -q --cov=Synaptipy.core --cov-report=term --cov-report=xml
+        python -m pytest tests/core/ -q --cov=src/Synaptipy/core --cov-report=term --cov-report=xml
         CORE_COVERAGE=$(python -m coverage report --format=total 2>/dev/null || echo "0")
         if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="brightgreen"
         elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="green"
