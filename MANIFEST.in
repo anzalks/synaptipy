@@ -1,0 +1,25 @@
+# Include top-level prose / metadata files in the sdist
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CITATION.cff
+include requirements.txt
+include environment.yml
+
+# Include examples and docs source
+recursive-include examples *
+recursive-include docs *.md *.rst *.py *.png *.svg *.jpg *.css
+
+# Include all package resource files that are not Python source
+recursive-include src/Synaptipy/resources *
+recursive-include src/Synaptipy/templates *
+
+# Exclude compiled artefacts and IDE folders
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store
+prune build
+prune dist
+prune .git
+prune .github
+prune verification_output
