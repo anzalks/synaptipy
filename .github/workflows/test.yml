@@ -77,7 +77,7 @@ jobs:
         QT_QPA_PLATFORM: offscreen
         QT_SCALE_FACTOR: "2"
       run: |
-        xvfb-run python -m pytest -p faulthandler \
+        xvfb-run python -m pytest -p faulthandler --no-cov \
           tests/application/gui/widgets/ \
           tests/gui/ \
           -v --tb=short -q 2>&1 | tail -30
@@ -90,7 +90,7 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        xvfb-run python -m pytest --nbval-lax --maxfail=1 examples/ -v --tb=short
+        xvfb-run python -m pytest --no-cov --nbval-lax --maxfail=1 examples/ -v --tb=short
 
     - name: Coverage Comment
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
