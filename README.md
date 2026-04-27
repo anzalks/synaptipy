@@ -27,6 +27,14 @@ When you are ready to scale up, the same analysis pipeline runs automatically ac
 
 ## Quick Start - from install to first result in 3 steps
 
+---
+
+# For Experimentalists
+
+*No Python required. Point-and-click GUI for wet-lab patch-clamp analysis.*
+
+---
+
 ### Step 1: Download and install
 
 **No Python needed.** Download the pre-compiled application for your operating system from the [Releases page](https://github.com/anzalks/Synaptipy/releases):
@@ -146,6 +154,14 @@ Any format supported by Neo but not listed above can be added via the `IODict` i
 ---
 
 ## Installing from source (developers and power users)
+
+---
+
+# For Computational Modelers
+
+*Python API, headless batch processing, plugin development, and technical architecture.*
+
+---
 
 If you want to use Synaptipy programmatically, write custom plugins, or contribute to development, install from source:
 

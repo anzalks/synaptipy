@@ -220,6 +220,8 @@ current-step trace.  $R_s$ is estimated via `calculate_cc_series_resistance_fast
 
 ### 5.2 Voltage-clamp mode
 
+*(Rs and Cm derivation follows Hamill et al., 1981; see §15.1 for full equations.)*
+
 $$
 C_m = \frac{Q}{\Delta V}
 $$
@@ -270,6 +272,8 @@ refractory period between crossings. The peak is the local maximum within
 
 ### 6.2 Onset detection (dV/dt-based)
 
+*(See also §15.2 for the full maximum-curvature method; cited in Sekerli et al., 2004.)*
+
 The action potential onset is defined as the first point where
 
 $$
@@ -315,6 +319,8 @@ $$
 on the falling phase of the action potential.
 
 ### 6.7 Afterhyperpolarisation (AHP)
+
+*(Savitzky-Golay smoothing applied to AHP waveforms; filter derivation in Savitzky & Golay, 1964.)*
 
 $$
 \text{AHP depth} = V_{\text{threshold}} - V_{\text{AHP,min}}
@@ -639,13 +645,75 @@ For stimulus artefact suppression, three interpolation modes are available:
 
 ## References
 
-- Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996). Comparison
- of discharge variability in vitro and in vivo in cat visual cortex neurons.
- *Journal of Neurophysiology*, 75(5), 1806-1814.
-- Shinomoto, S., Shima, K., & Tanji, J. (2003). Differences in spiking
- patterns among cortical neurons. *Neural Computation*, 15(12), 2823-2842.
+### Spike detection and AP threshold
 
----
+- **Sekerli, M., Del Negro, C. A., Lee, R. H., & Bhatt, D. L. (2004).** Estimating
+  action potential thresholds from neuronal time-series: new metrics and evaluation of
+  methodologies. *IEEE Transactions on Biomedical Engineering*, 51(9), 1665-1672.
+  [doi:10.1109/TBME.2004.827827](https://doi.org/10.1109/TBME.2004.827827)
+  - **Used in:** §6.2 (onset detection via $d^2V/dt^2$ maximum curvature) and
+    §15.2 (dynamic AP threshold fallback).
+
+- **Henze, D. A., & Buzsaki, G. (2001).** Action potential threshold of hippocampal
+  pyramidal cells in vivo is increased by recent spiking activity. *Neuroscience*,
+  105(1), 121-130.
+  [doi:10.1016/S0306-4522(01)00167-1](https://doi.org/10.1016/S0306-4522(01)00167-1)
+  - **Used in:** motivation for per-spike dynamic threshold (§15.2).
+
+### Patch-clamp methodology
+
+- **Hamill, O. P., Marty, A., Neher, E., Sakmann, B., & Sigworth, F. J. (1981).**
+  Improved patch-clamp techniques for high-resolution current recording from cells and
+  cell-free membrane patches. *Pflugers Archiv*, 391(2), 85-100.
+  [doi:10.1007/BF00656997](https://doi.org/10.1007/BF00656997)
+  - **Used in:** series-resistance measurement (§5.2, §15.1) and whole-cell
+    capacitance estimation.
+
+- **Neher, E., & Sakmann, B. (1976).** Single-channel currents recorded from membrane
+  of denervated frog muscle fibres. *Nature*, 260(5554), 799-802.
+  [doi:10.1038/260799a0](https://doi.org/10.1038/260799a0)
+  - Foundation for whole-cell patch-clamp passive-property analysis.
+
+### Signal processing
+
+- **Savitzky, A., & Golay, M. J. E. (1964).** Smoothing and differentiation of data
+  by simplified least squares procedures. *Analytical Chemistry*, 36(8), 1627-1639.
+  [doi:10.1021/ac60214a047](https://doi.org/10.1021/ac60214a047)
+  - **Used in:** Savitzky-Golay smoothing of AHP waveforms (§6.7), dV/dt
+    computation (§6.9, §15.2).
+
+- **Virtanen, P., Gommers, R., Oliphant, T. E., et al. (2020).** SciPy 1.0:
+  Fundamental algorithms for scientific computing in Python. *Nature Methods*, 17,
+  261-272. [doi:10.1038/s41592-019-0686-2](https://doi.org/10.1038/s41592-019-0686-2)
+  - Provides `scipy.optimize.curve_fit` used in tau (§3), capacitance (§5.2),
+    and PPR decay fitting (§15.5).
+
+### Spike-train statistics
+
+- **Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996).** Comparison
+  of discharge variability in vitro and in vivo in cat visual cortex neurons.
+  *Journal of Neurophysiology*, 75(5), 1806-1814.
+  [doi:10.1152/jn.1996.75.5.1806](https://doi.org/10.1152/jn.1996.75.5.1806)
+  - **Used in:** CV and CV2 computation (§12).
+
+- **Shinomoto, S., Shima, K., & Tanji, J. (2003).** Differences in spiking
+  patterns among cortical neurons. *Neural Computation*, 15(12), 2823-2842.
+  [doi:10.1162/089976603322518759](https://doi.org/10.1162/089976603322518759)
+  - **Used in:** local variation (LV) metric (§12).
+
+### NWB / FAIR data
+
+- **Rubel, O., Tritt, A., Ly, R., et al. (2022).** The Neurodata Without Borders
+  ecosystem for neurophysiological data science. *eLife*, 11:e78362.
+  [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362)
+  - Standard used for NWB export and FAIR metadata compliance.
+
+- **Garcia, S., Guarino, D., Jaillet, F., et al. (2014).** Neo: an object model
+  for handling electrophysiology data in multiple formats. *Frontiers in
+  Neuroinformatics*, 8, 10.
+  [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010)
+  - Provides the I/O layer for all supported file formats.
+
 
 ## 15. Advanced Biophysics (Publication Audit)
 
@@ -682,6 +750,8 @@ function falls back to the charge-integral (AUC) method for $C_m$ while still
 reporting the Ohm's-law $R_s$.
 
 ### 15.2 Dynamic AP Threshold via Maximum Curvature ($d^2V/dt^2$)
+
+*(Method described in Sekerli et al., 2004; dynamic threshold motivated by Henze & Buzsaki, 2001.)*
 
 A fixed dV/dt threshold fails during spike trains because Na$^+$ channel
 inactivation progressively slows the AP upstroke.  The physiological onset is

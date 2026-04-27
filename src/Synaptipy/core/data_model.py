@@ -492,6 +492,12 @@ class Recording:
         self.subject_id: Optional[str] = None
         self.cell_id: Optional[str] = None
 
+        # Recording temperature in degrees Celsius.  Downstream tools can use
+        # this value to apply Q10 kinetic scaling when comparing across labs or
+        # temperature conditions.  Defaults to 22.0 (room temperature) when not
+        # explicitly set by the file reader or the experimenter.
+        self.recording_temperature: float = 22.0
+
         # --- Lazy Loading Support ---
         # --- Lazy Loading Support ---
         self.source_handle: Optional[SourceHandle] = None  # Decoupled handle for lazy loading
