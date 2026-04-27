@@ -294,6 +294,10 @@
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#licensing">Licensing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#troubleshooting">Troubleshooting</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#common-issues">Common Issues</a></li>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#biological-troubleshooting">Biological Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="user_guide.html#analysis-parameter-reference">Analysis Parameter Reference</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#getting-help">Getting Help</a></li>
 </ul>
 </li>
@@ -356,7 +360,14 @@
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#trace-quality-assessment">14.4 Trace quality assessment</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#references">References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#references">References</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#spike-detection-and-ap-threshold">Spike detection and AP threshold</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#patch-clamp-methodology">Patch-clamp methodology</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#signal-processing">Signal processing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#spike-train-statistics">Spike-train statistics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#nwb-fair-data">NWB / FAIR data</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#advanced-biophysics-publication-audit">15. Advanced Biophysics (Publication Audit)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#voltage-clamp-series-resistance-and-true-membrane-capacitance">15.1 Voltage-Clamp Series Resistance and True Membrane Capacitance</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#dynamic-ap-threshold-via-maximum-curvature-d-2v-dt-2">15.2 Dynamic AP Threshold via Maximum Curvature (<span class="math notranslate nohighlight">\(d^2V/dt^2\)</span>)</a></li>
@@ -3470,7 +3481,7 @@ This is the subscriber side of the pub/sub <code class="docutils literal notrans
 
 <dl class="py method">
 <dt class="sig sig-object py" id="Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch">
-<span class="sig-name descname"><span class="pre">run_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">files</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipeline_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress_callback</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/batch_engine.html#BatchAnalysisEngine.run_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">run_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">files</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipeline_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress_callback</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rs_tolerance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/analysis/batch_engine.html#BatchAnalysisEngine.run_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine.run_batch" title="Link to this definition"></a></dt>
 <dd><p>Run analysis on a list of files/recordings using a flexible pipeline configuration.</p>
 <p>When <code class="xref py py-attr docutils literal notranslate"><span class="pre">max_workers</span></code> &gt; 1 <strong>and</strong> <em>files</em> contains at least two items, the
 file-level loop is distributed across worker processes via
@@ -3484,6 +3495,10 @@ blocked in either mode — callers should wrap this in a
 <li><p><strong>pipeline_config</strong> – List of task dictionaries.</p></li>
 <li><p><strong>progress_callback</strong> – Optional callback (current, total, status_msg).</p></li>
 <li><p><strong>channel_filter</strong> – Optional list of channel names/IDs to process.</p></li>
+<li><p><strong>rs_tolerance</strong> – Maximum fractional increase in series resistance compared
+to the first valid Rs measurement before a sweep is flagged with
+<code class="docutils literal notranslate"><span class="pre">rs_qc_warning</span></code>.  Default 0.20 (20 %).  Set to <code class="docutils literal notranslate"><span class="pre">float('inf')</span></code>
+to disable the check.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>

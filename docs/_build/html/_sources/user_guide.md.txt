@@ -582,6 +582,95 @@ For the full license text, see the LICENSE file in the root of the Synaptipy rep
  - Ensure write permissions for the target directory
  - For NWB exports, verify all required metadata is provided
 
+### Biological Troubleshooting
+
+These scenarios describe what analysis outputs mean in terms of patch-clamp
+physiology, not just software errors.
+
+**"Tau returns NaN after a current step"**
+
+A failed exponential fit almost always means one of:
+1. The patch is leaky - the cell membrane has not sealed properly (seal
+   resistance below ~1 GOhm), so the voltage decays non-exponentially.
+2. The cell has not fully charged - the current step is too short for the
+   membrane RC to reach steady-state. Increase the step duration (>5 x tau,
+   typically 200-500 ms for neurons).
+3. The fit window includes the stimulus artifact - check that
+   **Baseline End** is placed after the artifact but before the voltage
+   plateau, and that **Fit Start** skips the initial capacitive transient.
+4. Access resistance is too high (>30 MOhm for whole-cell) - the series
+   resistance is limiting current delivery, making the apparent decay
+   multi-exponential. Compensate or replace the pipette.
+
+**"Input resistance (Rin) is abnormally low (< 50 MOhm for a cortical neuron)"**
+
+- The holding current is wrong: the cell may be partially clamped at an
+  unphysiological potential. Check your resting Vm before stepping.
+- Shunt conductance: an imperfect seal or damaged membrane adds parallel
+  conductance that reduces apparent Rin. Check seal resistance.
+- The step amplitude is too large - nonlinear I-V conductances (Ih, inward
+  rectifier K+) are activated. Use small hyperpolarising steps (5-20 pA).
+
+**"Spike threshold is reported as NaN"**
+
+The d2V/dt2 AP onset detector returns NaN when:
+- The dV/dt at the detected threshold point is outside the biological range
+  (> 300 V/s indicates a digital artifact; < 2 V/s indicates a noise
+  crossing rather than a true AP upstroke).
+- The rising phase of the AP is shorter than 0.2 ms (photo-electric artifact
+  or electrical transient picked up from the stimulator).
+- Increase filtering (Savitzky-Golay smoothing) or reduce the onset lookback
+  window if thresholds are unreliable on noisy recordings.
+
+**"Synaptic charge (AUC) is negative or much larger than expected"**
+
+- Check that the baseline method is set to **Pre-Window (Local 10 ms)**.
+  A global baseline corrupts the measurement when holding current drifts
+  during long recording epochs.
+- Verify the search window does not include the stimulus artifact. Set
+  **Search Window Start** at least 2 ms after the stimulus.
+- If the cell is in voltage-clamp, check the polarity: PSCs are downward
+  (negative) in the standard convention. Use **Detection Method: Negative Peak**
+  for IPSCs or **Absolute Peak** when sign is uncertain.
+
+**"Opto-jitter is impossibly short (< 1 ms)"**
+
+This almost always means the photo-electric artifact from the LED or laser
+shutter is being detected as a spike. Set the **Artifact Blanking Window**
+to at least 1-2 ms. Genuine monosynaptic latencies are 2-5 ms for direct
+ChR2-expressing targets; disynaptic latencies are 8-15 ms.
+
+**"Rs QC warning in batch output: Series resistance destabilized"**
+
+The Rs warning appears when the series resistance increased by more than
+20% (default) compared to the first sweep. This typically means:
+- The pipette tip clogged partially during the recording.
+- The gigaohm seal broke down gradually.
+Sweeps flagged with `rs_qc_warning` should be excluded from analysis. The
+default threshold (20%) can be adjusted via the `rs_tolerance` parameter
+in `BatchAnalysisEngine.run_batch()`.
+
+---
+
+## Analysis Parameter Reference
+
+The table below explains every common parameter in biological terms so you
+can choose values that match your experimental design.
+
+| Parameter | Unit | Biological meaning | Typical range |
+|---|---|---|---|
+| `prominence` | mV or pA | Minimum height of an event above the local baseline. Prevents noise peaks from being counted as real spikes or synaptic events. | 5-30 mV (spikes); 5-50 pA (PSCs) |
+| `width` | ms | Minimum duration of an event at half-maximum. Excludes electrical transients that are far narrower than real APs (0.5-2 ms) or PSCs (2-20 ms). | 0.3-1.0 ms (spikes); 2-10 ms (PSCs) |
+| `threshold` | mV or pA | Voltage (or current) level a trace must cross to be counted as an event. Set just above the noise floor. | -20 mV (spikes); 3 x noise RMS (PSCs) |
+| `refractory_period` | ms | Minimum inter-event interval. Prevents double-counting the same AP or the same PSC. Should be slightly shorter than the fastest real inter-event interval in your data. | 2-5 ms (spikes); 5-20 ms (PSCs) |
+| `baseline_window` | ms or s | Duration of the pre-event window used to measure the resting level. Shorter windows (10 ms) track slow holding-current drift more accurately than long windows. | 5-20 ms |
+| `onset_lookback` | ms | How far before each spike peak to search for the AP onset (threshold crossing). Should span the full AP upstroke plus noise margin. | 2-5 ms |
+| `smoothing` | ms | Width of the Savitzky-Golay smoothing kernel applied to the trace before differentiation (dV/dt). Increase for noisy recordings; decrease to preserve fast upstroke kinetics. | 0.1-0.5 ms |
+| `step_onset_time` | s | Time of the voltage or current step command. Auto-detected from the stimulus derivative; override if auto-detection fails. | Protocol-dependent |
+| `voltage_step_mv` | mV | Amplitude of the VC command step. Required for Rs and Cm calculation. Use the actual command amplitude, not the measured response. | -10 to -5 mV (typical access resistance protocol) |
+| `blanking_window` | ms | Duration after a TTL stimulus to ignore. Prevents the photo-electric artifact from the LED from being misclassified as a spike. | 1-2 ms |
+| `rs_tolerance` | fraction | Maximum fractional increase in series resistance before a sweep is flagged as unstable. 0.20 = flag sweeps where Rs has increased by >20% compared to Sweep 1. | 0.10-0.30 |
+
 ### Getting Help
 
 If you encounter issues not covered here:

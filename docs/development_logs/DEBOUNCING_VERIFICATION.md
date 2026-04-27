@@ -30,15 +30,15 @@ All handlers now follow the pattern:
 def _on_[control]_changed(self, value):
  self._last_[control]_value = value
  self._[control]_apply_timer.start()
- log.debug("[_on_[control]_changed] Debouncing: {value}")
+ log.debug("[_on_CONTROL_changed] Debouncing: {value}")
 ```
 
 #### 3. Apply Methods (Lines 1640-1734, 1962-2036)
 All apply methods contain full inline logic:
 ```python
-def _apply_debounced_[control](self):
- value = self._last_[control]_value
- log.debug("[_apply_debounced_[control]] Applying: {value}")
+def _apply_debounced_CONTROL(self):
+ value = self._last_CONTROL_value
+ log.debug("[_apply_debounced_CONTROL] Applying: {value}")
  # Full logic here (no delegation to helpers)
  # Guards: manual_limits_enabled, _updating_viewranges, etc.
  # Apply changes with try/finally for cleanup

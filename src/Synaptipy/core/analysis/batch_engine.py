@@ -784,32 +784,38 @@ class BatchAnalysisEngine:
 
             # Adaptation: If we have 'all_trials' data but need 'average'
             elif context["scope"] == "all_trials" and scope == "average":
-                # Compute average from cached trials
-                # context['data'] is list of arrays
+                # Compute average from cached trials.  Guard against mixed-protocol
+                # files where trials can have different sample counts.
                 try:
-                    import numpy as np
-
-                    # Assume equal length for averaging - simplified for now
-                    # In production, check lengths or align
                     if len(context["data"]) > 0:
-                        data = np.mean(context["data"], axis=0)  # Only works if all same shape
-                        time = context["time"][0]  # Use first time vector
+                        lengths = {len(a) for a in context["data"]}
+                        if len(lengths) > 1:
+                            raise ValueError(
+                                f"Cannot average trials with mismatched lengths "
+                                f"{sorted(lengths)} in {file_path.name}/{channel_name}. "
+                                "Ensure all sweeps in a batch file use the same protocol "
+                                "duration."
+                            )
+                        data = np.mean(np.array(context["data"]), axis=0)
+                        time = context["time"][0]
                     else:
                         log.warning("Context data empty, cannot average.")
                 except Exception as e:
-                    log.warning(f"Could not compute average from context: {e}. Reloading from source.")
+                    log.warning(
+                        "Could not average trials from context (%s/%s): %s. Reloading from source.",
+                        file_path.name,
+                        channel_name,
+                        e,
+                    )
 
             # Adaptation: If we have 'all_trials' data but need 'selected_trials_average'
             elif context["scope"] == "all_trials" and scope == "selected_trials_average":
                 try:
-                    import numpy as np
-
                     # Extract list of indices from task params, or default to all
                     trial_indices_str = params.get("trial_indices", "")
                     if trial_indices_str:
                         from Synaptipy.shared.utils import parse_trial_selection_string
 
-                        # context['data'] length should be num_trials if it was 'all_trials'
                         parsed_indices = parse_trial_selection_string(trial_indices_str, len(context["data"]))
                         selected_indices = sorted(list(parsed_indices))
                     else:
@@ -817,12 +823,24 @@ class BatchAnalysisEngine:
 
                     if selected_indices:
                         selected_data = [context["data"][i] for i in selected_indices if i < len(context["data"])]
-                        data = np.mean(selected_data, axis=0)  # Average only selected
-                        time = context["time"][0]  # Use first time vector
+                        lengths = {len(a) for a in selected_data}
+                        if len(lengths) > 1:
+                            raise ValueError(
+                                f"Cannot average selected trials with mismatched lengths "
+                                f"{sorted(lengths)} in {file_path.name}/{channel_name}. "
+                                "Ensure all selected sweeps use the same protocol duration."
+                            )
+                        data = np.mean(np.array(selected_data), axis=0)
+                        time = context["time"][0]
                     else:
                         log.warning("No valid trials selected for averaging from context.")
                 except Exception as e:
-                    log.warning(f"Could not compute selected average from context: {e}. Reloading from source.")
+                    log.warning(
+                        "Could not average selected trials from context (%s/%s): %s. Reloading from source.",
+                        file_path.name,
+                        channel_name,
+                        e,
+                    )
 
         # If data is still None, load from channel
         if data is None:
