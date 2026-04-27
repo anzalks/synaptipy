@@ -11,6 +11,8 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 import time
+import urllib.error
+import urllib.request
 from typing import Optional
 
 from PySide6 import QtCore, QtWidgets
@@ -19,6 +21,74 @@ from .gui.main_window import MainWindow
 from .gui.welcome_screen import WelcomeScreen
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Version checker — runs once at startup, never blocks the UI
+# ---------------------------------------------------------------------------
+
+_RELEASES_API_URL = "https://api.github.com/repos/anzalks/synaptipy/releases/latest"
+
+
+class VersionCheckerWorker(QtCore.QThread):
+    """Background thread that queries the GitHub Releases API once at startup.
+
+    Emits :attr:`update_available` with the latest release tag when the
+    remote version is strictly newer than the running version according to
+    simple tuple comparison on dot-separated version strings.
+
+    The HTTP request uses ``timeout=3`` seconds.  Any network error
+    (offline rig, firewall, DNS failure, timeout, rate-limit, malformed
+    response) is caught silently and the thread exits without logging at
+    WARNING or ERROR level - wet-lab machines are frequently airgapped.
+
+    Signals:
+        update_available: ``str`` -- the latest release tag (e.g. ``"0.2.0"``).
+    """
+
+    update_available = QtCore.Signal(str)
+
+    def __init__(self, current_version: str, parent: Optional[QtCore.QObject] = None) -> None:
+        super().__init__(parent)
+        self._current_version = current_version
+
+    def run(self) -> None:
+        """Fetch the latest release tag and compare versions."""
+        import json
+
+        try:
+            req = urllib.request.Request(
+                _RELEASES_API_URL,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": f"Synaptipy/{self._current_version}",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode())
+        except ConnectionError:
+            return  # offline / DNS failure -- silent
+        except TimeoutError:
+            return  # request took longer than 3 s -- silent
+        except Exception:
+            return  # rate-limit, SSL, malformed response, etc. -- silent
+
+        try:
+            tag = data.get("tag_name", "").lstrip("v")
+            if tag and self._is_newer(tag, self._current_version.lstrip("v")):
+                self.update_available.emit(tag)
+        except Exception:
+            return  # malformed tag string -- silent
+
+    @staticmethod
+    def _is_newer(remote: str, local: str) -> bool:
+        """Return ``True`` if *remote* is strictly newer than *local*."""
+        try:
+            r = tuple(int(x) for x in remote.split("."))
+            lo = tuple(int(x) for x in local.split("."))
+            return r > lo
+        except ValueError:
+            return False
 
 
 class StartupManager(QtCore.QObject):
@@ -182,8 +252,24 @@ class StartupManager(QtCore.QObject):
 
                 log.debug("Successfully transitioned to main window")
 
+                # Start background version check — done after show() so the
+                # main-thread event loop is fully running when the signal fires.
+                self._start_version_check()
+
             except Exception as e:
                 log.error(f"Transition to main window failed: {e}", exc_info=True)
+
+    def _start_version_check(self) -> None:
+        """Launch :class:`VersionCheckerWorker` once the main window is visible."""
+        try:
+            from Synaptipy import __version__
+
+            self._version_checker = VersionCheckerWorker(current_version=__version__, parent=self)
+            if self.main_window and hasattr(self.main_window, "show_update_banner"):
+                self._version_checker.update_available.connect(self.main_window.show_update_banner)
+            self._version_checker.start()
+        except Exception as exc:
+            log.debug("Could not start version checker: %s", exc)
 
     def is_loading_complete(self) -> bool:
         """Check if loading is complete."""

@@ -22,11 +22,12 @@ import faulthandler
 import logging
 import os
 import sys
+import traceback
 
 # Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
 import warnings
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 # --- Import Core Components ---
 from Synaptipy.application.startup_manager import StartupManager
@@ -54,6 +55,96 @@ def parse_arguments():
     parser.add_argument("--log-dir", type=str, help="Custom directory for log files")
     parser.add_argument("--log-file", type=str, help="Custom log filename")
     return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# Graceful crash reporter
+# ---------------------------------------------------------------------------
+
+
+class CrashReportDialog(QtWidgets.QDialog):
+    """Non-modal dialog shown when an unhandled Python exception escapes to the
+    top level.  Displays the full traceback in a read-only text area and
+    provides a one-click "Copy to Clipboard" button so the user can paste the
+    report directly into a GitHub Issue.
+    """
+
+    _GITHUB_ISSUES_URL = "https://github.com/anzalks/synaptipy/issues/new"
+
+    def __init__(self, traceback_text: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Synaptipy — Unexpected Error")
+        self.setMinimumSize(680, 420)
+        self._traceback_text = traceback_text
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # ---- Header ----
+        header = QtWidgets.QLabel(
+            "<b>An unexpected error occurred.</b><br>"
+            "The error details are shown below. "
+            "Please click <i>Copy to Clipboard</i> and paste them into a "
+            "<a href='{url}'>GitHub Issue</a> so we can fix this.".format(url=self._GITHUB_ISSUES_URL)
+        )
+        header.setWordWrap(True)
+        header.setOpenExternalLinks(True)
+        layout.addWidget(header)
+
+        # ---- Traceback ----
+        self._text_area = QtWidgets.QPlainTextEdit()
+        self._text_area.setReadOnly(True)
+        self._text_area.setPlainText(self._traceback_text)
+        font = QtGui.QFont("Courier New", 9)
+        font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
+        self._text_area.setFont(font)
+        layout.addWidget(self._text_area)
+
+        # ---- Buttons ----
+        btn_box = QtWidgets.QDialogButtonBox()
+        copy_btn = btn_box.addButton("Copy to Clipboard", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        close_btn = btn_box.addButton(QtWidgets.QDialogButtonBox.StandardButton.Close)
+        copy_btn.clicked.connect(self._copy_to_clipboard)
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(btn_box)
+
+    def _copy_to_clipboard(self) -> None:
+        QtWidgets.QApplication.clipboard().setText(self._traceback_text)
+
+
+def _install_excepthook() -> None:
+    """Replace ``sys.excepthook`` with a GUI-aware crash reporter.
+
+    When an unhandled exception propagates to the top of the event loop,
+    the default hook prints to stderr and silently exits.  Our replacement
+    logs the traceback, then pops up a ``CrashReportDialog`` so the user
+    can copy the error into a GitHub Issue.
+
+    The hook is intentionally *not* installed for ``SystemExit`` and
+    ``KeyboardInterrupt`` so normal shutdown and Ctrl-C still work.
+    """
+
+    def _excepthook(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, (SystemExit, KeyboardInterrupt)):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+
+        tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        log.critical("Unhandled exception:\n%s", tb_str)
+
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            try:
+                dlg = CrashReportDialog(tb_str)
+                dlg.exec()
+            except Exception:
+                # If the dialog itself fails, fall back to stderr
+                sys.__excepthook__(exc_type, exc_value, exc_tb)
+        else:
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _excepthook
 
 
 def run_gui():  # noqa: C901
@@ -114,6 +205,11 @@ def run_gui():  # noqa: C901
     # This fixes issues where European locales force comma separators in spinboxes
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
     log.debug("Forced application locale to English/US (dot decimal separator)")
+
+    # Install the GUI-aware crash reporter so unhandled exceptions show a
+    # dialog with a "Copy to Clipboard" button instead of silently exiting.
+    _install_excepthook()
+    log.debug("Crash-report excepthook installed.")
 
     # Create startup manager and begin loading process
     try:
