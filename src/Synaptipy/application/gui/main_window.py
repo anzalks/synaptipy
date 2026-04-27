@@ -35,6 +35,7 @@ from .explorer import ExplorerTab
 from .exporter_tab import ExporterTab
 from .nwb_dialog import NwbMetadataDialog
 from .plot_customization_dialog import PlotCustomizationDialog
+from .welcome_screen import DemoDownloadBanner
 
 try:
     import tzlocal  # Optional, for local timezone handling
@@ -138,6 +139,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Initial UI State ---
         self.status_bar.showMessage("Ready. Open a file using File > Open...", 5000)
         self._update_menu_state()
+        self._refresh_demo_action_state()
         log.info("MainWindow initialization complete.")
         # Notify listeners that initialization is complete
         try:
@@ -212,6 +214,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.about_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.about_action.triggered.connect(self._show_about_dialog)
 
+        self.check_updates_action = help_menu.addAction("Check for &Updates...")
+        self.check_updates_action.setToolTip("Check GitHub Releases for a newer version of Synaptipy")
+        self.check_updates_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.check_updates_action.triggered.connect(self._check_for_updates_manual)
+
+        help_menu.addSeparator()
+        self.demo_data_action = help_menu.addAction("Download &Demo Data...")
+        self.demo_data_action.setToolTip(
+            "Download example ABF/WCP recordings to ~/Documents/SynaptiPy_Demo/ and open in Explorer"
+        )
+        self.demo_data_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.demo_data_action.triggered.connect(self._show_demo_download_banner)
+
         log.debug("Menu bar and status bar setup complete.")
 
         # Connect to plot customization signals
@@ -279,9 +294,111 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self.analyser_tab, "load_file_requested"):
             self.analyser_tab.load_file_requested.connect(self._on_analyser_load_file_request)
 
+        # --- Demo banner + update banner + tab widget packed into the central container ---
+        self._demo_banner = DemoDownloadBanner(parent=self)
+        self._demo_banner.file_ready.connect(self._on_demo_file_ready)
+        # Hide by default; shown via Help menu or _show_demo_download_banner()
+        self._demo_banner.setVisible(False)
+
+        # Update-available banner (hidden until VersionCheckerWorker fires)
+        self._update_banner = QtWidgets.QFrame(self)
+        self._update_banner.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self._update_banner.setStyleSheet(
+            "QFrame { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; }"
+        )
+        _ub_layout = QtWidgets.QHBoxLayout(self._update_banner)
+        _ub_layout.setContentsMargins(12, 4, 12, 4)
+        self._update_banner_label = QtWidgets.QLabel()
+        self._update_banner_label.setOpenExternalLinks(True)
+        _ub_layout.addWidget(self._update_banner_label)
+        _ub_layout.addStretch()
+        _ub_dismiss = QtWidgets.QPushButton("Dismiss")
+        _ub_dismiss.setFlat(True)
+        _ub_dismiss.clicked.connect(lambda: self._update_banner.setVisible(False))
+        _ub_layout.addWidget(_ub_dismiss)
+        self._update_banner.setVisible(False)
+
+        central = QtWidgets.QWidget()
+        central_layout = QtWidgets.QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self._update_banner)
+        central_layout.addWidget(self._demo_banner)
+        central_layout.addWidget(self.tab_widget)
+
         # --- Set Central Widget ---
-        self.setCentralWidget(self.tab_widget)
+        self.setCentralWidget(central)
         log.debug("Tabs setup complete.")
+
+    def _show_demo_download_banner(self) -> None:
+        """Show (or reveal if already visible) the demo download banner."""
+        if hasattr(self, "_demo_banner"):
+            self._demo_banner.setVisible(True)
+            self._demo_banner.raise_()
+
+    def _on_demo_file_ready(self, dest_path: object) -> None:
+        """Load the downloaded demo file into the Explorer Tab and hide the banner."""
+        path = Path(str(dest_path))
+        log.info("Loading demo file: %s", path)
+        # Disable the Help menu action so it is not shown again this session.
+        if hasattr(self, "demo_data_action"):
+            self.demo_data_action.setEnabled(False)
+            self.demo_data_action.setToolTip("Demo data already downloaded to ~/Documents/SynaptiPy_Demo/")
+        try:
+            self.load_request.emit(path, False)
+            self.tab_widget.setCurrentWidget(self.explorer_tab)
+            self.status_bar.showMessage(f"Loaded demo file: {path.name}", 5000)
+        except Exception as exc:
+            log.error("Failed to load demo file %s: %s", path, exc)
+
+    def _refresh_demo_action_state(self) -> None:
+        """Disable the Demo Data menu item if all demo files are already present."""
+        try:
+            from .welcome_screen import _DEMO_DEST_DIR, _DEMO_FILES
+
+            if all((_DEMO_DEST_DIR / f).exists() for f in _DEMO_FILES):
+                self.demo_data_action.setEnabled(False)
+                self.demo_data_action.setToolTip("Demo data already downloaded to ~/Documents/SynaptiPy_Demo/")
+        except Exception as exc:
+            log.debug("Could not check demo file state: %s", exc)
+
+    def _check_for_updates_manual(self) -> None:
+        """Manually trigger a version check and report the result via status bar or banner."""
+        try:
+            from Synaptipy import __version__
+            from Synaptipy.application.startup_manager import VersionCheckerWorker
+
+            self.status_bar.showMessage("Checking for updates...", 4000)
+            # Keep a reference so Python does not GC the thread before it finishes.
+            self._manual_version_checker = VersionCheckerWorker(__version__, parent=self)
+            self._manual_version_checker.update_available.connect(self.show_update_banner)
+            self._manual_version_checker.finished.connect(self._on_version_check_done)
+            self._manual_version_checker.start()
+        except Exception as exc:
+            log.warning("Could not start version check: %s", exc)
+
+    def _on_version_check_done(self) -> None:
+        """Show 'up to date' status message if the update banner was not shown."""
+        if hasattr(self, "_update_banner") and not self._update_banner.isVisible():
+            self.status_bar.showMessage("You are on the latest version.", 5000)
+
+    def show_update_banner(self, latest_version: str) -> None:
+        """Show a non-intrusive update-available banner below the menu bar.
+
+        Called from :class:`~Synaptipy.application.startup_manager.VersionCheckerWorker`
+        via a cross-thread Qt signal when a newer release is detected.
+
+        Args:
+            latest_version: The latest release tag string (e.g. ``"0.2.0"``).
+        """
+        if not hasattr(self, "_update_banner"):
+            return
+        release_url = f"https://github.com/anzalks/synaptipy/releases/tag/v{latest_version}"
+        self._update_banner_label.setText(
+            f"Update Available: <b>v{latest_version}</b> &mdash; " f'<a href="{release_url}">View release notes</a>'
+        )
+        self._update_banner.setVisible(True)
+        log.info("Update banner shown: v%s available.", latest_version)
 
     def _update_menu_state(self):
         """Updates the enabled state of menu actions based on application state."""

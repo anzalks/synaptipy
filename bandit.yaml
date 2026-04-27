@@ -1,0 +1,33 @@
+# bandit.yaml — Bandit static security analysis configuration for Synaptipy.
+#
+# Run via CI:  bandit -r src/Synaptipy/ -c bandit.yaml
+# Only HIGH-severity findings fail the CI step (see test.yml security job).
+#
+# Skipped test IDs are documented below with the rationale for each skip so
+# reviewers can audit them without re-reading the source.
+
+skips:
+  # B101 – assert_used: pytest and internal guard assertions use `assert`.
+  # Asserts are never relied upon for security-sensitive control flow.
+  - B101
+
+  # B105/B106/B107 – hardcoded_password_string/funcarg/default: Several
+  # NWB metadata defaults (e.g. experimenter="Unknown") look like passwords
+  # to the heuristic but contain no credentials.
+  - B105
+  - B106
+  - B107
+
+  # B311 – random: numpy.random and Python random are used for synthetic
+  # test data only; they are never used for cryptographic operations.
+  - B311
+
+  # B404 – import_subprocess: subprocess is called exactly once in the
+  # benchmark runner (scripts/), never in the application core.
+  - B404
+
+  # B603/B607 – subprocess_without_shell_equals_true / start_process_with_partial_path:
+  # Same subprocess call as above — arguments are hard-coded constants, not
+  # user-supplied strings, so shell injection is not possible.
+  - B603
+  - B607

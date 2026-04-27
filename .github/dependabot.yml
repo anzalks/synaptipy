@@ -1,0 +1,42 @@
+# .github/dependabot.yml — Automated dependency update configuration.
+#
+# Dependabot opens weekly pull requests to keep pip and GitHub Actions
+# dependencies current.  Security-impacting updates are flagged automatically
+# by GitHub's vulnerability database.
+#
+# pip updates are scoped to the repo root (where pyproject.toml lives).
+# PySide6 is intentionally excluded from automatic pip upgrades because the
+# 6.7.3 pin is required for stability (see copilot-instructions.md).
+
+version: 2
+updates:
+  # ---------------------------------------------------------------------------
+  # Python / pip dependencies
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    ignore:
+      # PySide6 6.7.3 is pinned for stability (6.10.x causes offscreen crashes).
+      # Do not widen this pin without updating conftest.py and the CI matrix.
+      - dependency-name: "pyside6"
+        versions: ["*"]
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions (CI workflow) dependencies
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"

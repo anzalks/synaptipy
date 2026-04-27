@@ -184,6 +184,41 @@ jobs:
         xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short
 
   # ---------------------------------------------------------------------------
+  # Security: Bandit static analysis for HIGH-severity vulnerabilities.
+  # Scoped to a single matrix slot to keep CI time cheap.
+  # Fails if any HIGH-severity issue is found (B2/B3 SAST checks).
+  # LOW / MEDIUM findings are reported but do not block the build.
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security scan (Bandit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Bandit
+      run: python -m pip install --upgrade pip bandit
+
+    - name: Run Bandit (fail on HIGH severity)
+      # --severity-level high  -> exit code 1 only when HIGH issues are found
+      # --confidence-level low -> report all confidence levels
+      # -c bandit.yaml         -> project-level skip list (documented in bandit.yaml)
+      # --format txt           -> human-readable output in CI logs
+      run: |
+        bandit -r src/Synaptipy/ \
+          -c bandit.yaml \
+          --severity-level high \
+          --confidence-level low \
+          --format txt
+
+  # ---------------------------------------------------------------------------
   # Bleeding-edge slot: latest Python + unconstrained upgrades.
   # Purpose: early warning when upstream packages release breaking changes.
   # Failures here are expected and informational only (continue-on-error).

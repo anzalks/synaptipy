@@ -11,6 +11,7 @@ This guide provides detailed instructions for installing, configuring, and using
 - [Getting Started](#getting-started)
  - [Running the Application](#running-the-application)
  - [User Interface Overview](#user-interface-overview)
+ - [Quick Start with Demo Data](#quick-start-with-demo-data)
 - [Loading Data](#loading-data)
  - [Supported File Formats](#supported-file-formats)
  - [Opening Files](#opening-files)
@@ -100,6 +101,34 @@ The Synaptipy interface consists of three main tabs:
 1. **Explorer Tab**: View and navigate through data files, with interactive plotting
 2. **Analyser Tab**: Perform various analyses on the loaded data
 3. **Exporter Tab**: Export data and results to different formats
+
+### Quick Start with Demo Data
+
+If you have no recordings to hand, Synaptipy can download a set of curated
+example files automatically.
+
+1. Open **Help > Download Demo Data...**  A banner appears below the menu bar.
+2. Click **Download Demo Data**.  Synaptipy downloads five example recordings
+   from the public repository to `~/Documents/SynaptiPy_Demo/`:
+
+   | File | Format | Description |
+   |------|--------|-------------|
+   | `2023_04_11_0018.abf` | ABF v2 | Whole-cell current-clamp, step protocol |
+   | `2023_04_11_0019.abf` | ABF v2 | Whole-cell current-clamp, ramp protocol |
+   | `2023_04_11_0021.abf` | ABF v2 | Voltage-clamp, IV curve |
+   | `2023_04_11_0022.abf` | ABF v2 | Optogenetic stimulation protocol |
+   | `240326_003.wcp` | WinWCP | WinWCP current-clamp recording |
+
+3. Once all files are downloaded the banner closes automatically and the
+   first ABF file opens in the **Explorer Tab**.
+4. The **Help > Download Demo Data...** menu item is disabled for the rest of
+   the session (and on future launches if the files are already present).
+
+:::{note}
+The download requires an internet connection.  Files already present on disk
+are never re-downloaded.  If a download is interrupted, partially written
+files are cleaned up so the next attempt starts fresh.
+:::
 
 ## Loading Data
 
@@ -479,6 +508,27 @@ Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access 
 | **Scroll Behavior** | Choose Natural, Inverted, or System scroll direction for plots. |
 | **Appearance** | Switch between Light, Dark, or System color theme. |
 | **Enable Custom Plugins** | When checked, Synaptipy loads Python plugins from `~/.synaptipy/plugins/` and `examples/plugins/`. See below for the hot-reload mechanism. |
+
+### Checking for Updates
+
+Synaptipy performs a silent version check in the background each time it
+starts.  If a newer release is found on
+[GitHub Releases](https://github.com/anzalks/synaptipy/releases) a
+non-intrusive yellow banner appears below the menu bar showing the new version
+number and a link to the release notes.  The banner can be dismissed with the
+**Dismiss** button.
+
+You can also trigger a manual check at any time via **Help > Check for
+Updates...**.  The status bar reports the outcome:
+
+- *"Checking for updates..."* - check in progress.
+- *"You are on the latest version."* - no newer release found.
+- Yellow banner - a newer version is available (click the link to open the
+  release page in your browser).
+
+The check is a single lightweight request to the GitHub Releases API
+(`api.github.com`).  If your machine is offline or behind a firewall the
+check fails silently - no error message is shown and no data is sent.
 
 #### Enable Custom Plugins - Hot-Reload Mechanism
 

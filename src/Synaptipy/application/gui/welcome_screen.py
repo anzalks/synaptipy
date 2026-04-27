@@ -2,15 +2,26 @@
 """
 Welcome Screen with Loading Progress for Synaptipy
 
-This module provides a welcome screen that displays during application startup,
-showing a loading bar and current loading status to improve user experience.
+This module provides two public components:
+
+1. :class:`WelcomeScreen` — startup splash screen shown while the application
+   loads.
+2. :class:`DemoDataDownloader` — background ``QThread`` that downloads a demo
+   ABF recording from the repository and saves it to
+   ``~/Documents/SynaptiPy_Demo/``.
+3. :class:`DemoDownloadBanner` — compact widget with a "Download Demo Data"
+   button that wraps :class:`DemoDataDownloader`.  Embed it in any window to
+   offer instant onboarding for first-time users.
 
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
 """
 
 import logging
+import urllib.error
+import urllib.request
 from pathlib import Path
+from typing import Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -255,3 +266,212 @@ class WelcomeScreen(QtWidgets.QWidget):
     def is_complete(self) -> bool:
         """Check if loading is complete."""
         return self._current_step >= self._total_steps
+
+
+# ---------------------------------------------------------------------------
+# Demo data download — background thread + UI banner
+# ---------------------------------------------------------------------------
+
+#: Base URL for the demo data files hosted in the repository.
+_DEMO_BASE_URL = "https://raw.githubusercontent.com/anzalks/synaptipy/main/examples/data/"
+
+#: All example data files to be downloaded.  The first ``.abf`` entry is
+#: opened automatically in the Explorer Tab once the download completes.
+_DEMO_FILES = [
+    "2023_04_11_0018.abf",
+    "2023_04_11_0019.abf",
+    "2023_04_11_0021.abf",
+    "2023_04_11_0022.abf",
+    "240326_003.wcp",
+]
+
+#: Destination folder inside the user's Documents directory.
+_DEMO_DEST_DIR = Path.home() / "Documents" / "SynaptiPy_Demo"
+
+
+class DemoDataDownloader(QtCore.QThread):
+    """Background thread that downloads the demo ABF recording.
+
+    Signals:
+        download_finished: Emitted with the local :class:`~pathlib.Path` of the
+            saved file when the download succeeds.
+        download_failed: Emitted with a human-readable error message on failure.
+        download_progress: ``(bytes_received: int, total_bytes: int)`` — emitted
+            periodically during the download.  ``total_bytes`` may be ``-1`` if
+            the server does not send ``Content-Length``.
+    """
+
+    download_finished = QtCore.Signal(object)  # Path
+    download_failed = QtCore.Signal(str)
+    download_progress = QtCore.Signal(int, int)
+
+    def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
+        super().__init__(parent)
+
+    def run(self) -> None:
+        """Download all demo files.  Called automatically by :meth:`QThread.start`."""
+        dest_dir = _DEMO_DEST_DIR
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.download_failed.emit(f"Cannot create destination folder: {exc}")
+            return
+
+        # If every file is already present skip the download entirely.
+        first = self._all_files_present(dest_dir)
+        if first is not None:
+            log.debug("All demo files already present — skipping download.")
+            self.download_finished.emit(first)
+            return
+
+        first, error = self._download_all(dest_dir)
+        if error:
+            self.download_failed.emit(error)
+            return
+
+        log.info("All demo files downloaded to %s", dest_dir)
+        self.download_finished.emit(first)
+
+    def _all_files_present(self, dest_dir: Path) -> Optional[Path]:
+        """Return the first ABF path if every demo file exists, else ``None``."""
+        first_abf: Optional[Path] = None
+        for fname in _DEMO_FILES:
+            if not (dest_dir / fname).exists():
+                return None
+            if first_abf is None and fname.endswith(".abf"):
+                first_abf = dest_dir / fname
+        return first_abf
+
+    def _download_all(self, dest_dir: Path) -> tuple:
+        """Download every file in :data:`_DEMO_FILES` sequentially.
+
+        Returns:
+            ``(first_abf_path, None)`` on full success, or
+            ``(None, error_message)`` on the first failure (partial files
+            are cleaned up).
+        """
+        first_abf: Optional[Path] = None
+        for idx, fname in enumerate(_DEMO_FILES):
+            dest_file = dest_dir / fname
+            self.download_progress.emit(idx, len(_DEMO_FILES))
+            err = self._do_download(dest_file, _DEMO_BASE_URL + fname)
+            if err:
+                self._cleanup_partial(dest_dir)
+                return None, err
+            if first_abf is None and fname.endswith(".abf"):
+                first_abf = dest_file
+        self.download_progress.emit(len(_DEMO_FILES), len(_DEMO_FILES))
+        return first_abf, None
+
+    def _cleanup_partial(self, dest_dir: Path) -> None:
+        """Remove any partially downloaded demo files."""
+        for fname in _DEMO_FILES:
+            fp = dest_dir / fname
+            if fp.exists():
+                fp.unlink(missing_ok=True)
+
+    def _do_download(self, dest_file: Path, url: str) -> Optional[str]:
+        """Stream *url* into *dest_file*.
+
+        Returns:
+            ``None`` on success, or an error string on failure.
+        """
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Synaptipy-DemoDownloader/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                with dest_file.open("wb") as fh:
+                    while True:
+                        data = response.read(8192)
+                        if not data:
+                            break
+                        fh.write(data)
+            return None
+        except urllib.error.URLError as exc:
+            return f"Network error: {exc.reason}"
+        except Exception as exc:
+            return str(exc)
+
+
+class DemoDownloadBanner(QtWidgets.QFrame):
+    """Compact banner widget offering one-click demo data download.
+
+    Embeds a :class:`DemoDataDownloader` thread and exposes a
+    ``file_ready`` signal so the parent window can load the file into the
+    Explorer Tab automatically.
+
+    Signals:
+        file_ready: Emitted with the local :class:`~pathlib.Path` once the demo
+            file is successfully downloaded (or was already present).
+    """
+
+    file_ready = QtCore.Signal(object)  # pathlib.Path
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("DemoDownloadBanner")
+        self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self._worker: Optional[DemoDataDownloader] = None
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+
+        icon_label = QtWidgets.QLabel("Get started instantly:")
+        layout.addWidget(icon_label)
+
+        self._download_btn = QtWidgets.QPushButton("Download Demo Data")
+        self._download_btn.setToolTip(
+            "Downloads all example ABF/WCP recordings to ~/Documents/SynaptiPy_Demo/ "
+            "and opens the first file in the Explorer Tab."
+        )
+        self._download_btn.clicked.connect(self._start_download)
+        layout.addWidget(self._download_btn)
+
+        self._progress_bar = QtWidgets.QProgressBar()
+        self._progress_bar.setVisible(False)
+        self._progress_bar.setMinimum(0)
+        self._progress_bar.setMaximum(0)  # indeterminate until we know Content-Length
+        self._progress_bar.setFixedWidth(200)
+        layout.addWidget(self._progress_bar)
+
+        self._status_label = QtWidgets.QLabel()
+        self._status_label.setVisible(False)
+        layout.addWidget(self._status_label)
+
+        layout.addStretch()
+
+    def _start_download(self) -> None:
+        """Start the background download."""
+        self._download_btn.setEnabled(False)
+        self._progress_bar.setVisible(True)
+        self._status_label.setText("Downloading…")
+        self._status_label.setVisible(True)
+
+        self._worker = DemoDataDownloader(parent=self)
+        self._worker.download_progress.connect(self._on_progress)
+        self._worker.download_finished.connect(self._on_finished)
+        self._worker.download_failed.connect(self._on_failed)
+        self._worker.start()
+
+    def _on_progress(self, files_done: int, total_files: int) -> None:
+        if total_files > 0:
+            self._progress_bar.setMaximum(total_files)
+            self._progress_bar.setValue(files_done)
+        self._status_label.setText(f"Downloading… {files_done}/{total_files} files")
+
+    def _on_finished(self, dest_path: object) -> None:
+        """Hide the entire banner on success — demo data is now on disk."""
+        self._progress_bar.setVisible(False)
+        self.file_ready.emit(dest_path)
+        # Hide the banner permanently; user can access files from Explorer.
+        self.setVisible(False)
+
+    def _on_failed(self, error_msg: str) -> None:
+        self._progress_bar.setVisible(False)
+        self._status_label.setText(f"Download failed: {error_msg}")
+        self._download_btn.setEnabled(True)
+        log.error("Demo data download failed: %s", error_msg)
