@@ -138,6 +138,8 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
             # This prevents HF noise from inflating the polyfit slope estimate.
             dt_base = float(window_time[1] - window_time[0]) if len(window_time) > 1 else 1e-4
             smooth_n = max(3, int(round(0.050 / dt_base)))  # ~50 ms in samples
+            # Cap at 1/3 of baseline length to prevent boundary artefacts on short protocols
+            smooth_n = min(smooth_n, max(3, len(baseline_data) // 3))
             if smooth_n < len(baseline_data):
                 kernel = np.ones(smooth_n) / smooth_n
                 smoothed = np.convolve(baseline_data, kernel, mode="valid")

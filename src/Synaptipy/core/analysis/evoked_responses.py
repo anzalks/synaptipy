@@ -399,27 +399,30 @@ def calculate_paired_pulse_ratio(  # noqa: C901
 
         # ── Mono-exponential fallback ──
         if _popt is None:
-            if polarity == "negative":
-                popt_mono, _ = curve_fit(
-                    _mono_exp,
-                    t_fit,
-                    y_fit,
-                    p0=[-a0, tau0, bl1],
-                    bounds=([-amp_bound, 0.1, bl1 - abs(r1_amp) * 2], [0.0, tau0 * 50, bl1 + abs(r1_amp)]),
-                    maxfev=3000,
-                )
-            else:
-                popt_mono, _ = curve_fit(
-                    _mono_exp,
-                    t_fit,
-                    y_fit,
-                    p0=[a0, tau0, bl1],
-                    bounds=([0.0, 0.1, bl1 - abs(r1_amp)], [amp_bound, tau0 * 50, bl1 + abs(r1_amp) * 2]),
-                    maxfev=3000,
-                )
-            tau_ms = float(popt_mono[1])
-            _fit_func = _mono_exp
-            _popt = popt_mono
+            try:
+                if polarity == "negative":
+                    popt_mono, _ = curve_fit(
+                        _mono_exp,
+                        t_fit,
+                        y_fit,
+                        p0=[-a0, tau0, bl1],
+                        bounds=([-amp_bound, 0.1, bl1 - abs(r1_amp) * 2], [0.0, tau0 * 50, bl1 + abs(r1_amp)]),
+                        maxfev=3000,
+                    )
+                else:
+                    popt_mono, _ = curve_fit(
+                        _mono_exp,
+                        t_fit,
+                        y_fit,
+                        p0=[a0, tau0, bl1],
+                        bounds=([0.0, 0.1, bl1 - abs(r1_amp)], [amp_bound, tau0 * 50, bl1 + abs(r1_amp) * 2]),
+                        maxfev=3000,
+                    )
+                tau_ms = float(popt_mono[1])
+                _fit_func = _mono_exp
+                _popt = popt_mono
+            except (RuntimeError, ValueError) as _mono_exc:
+                log.debug("PPR mono-exp fallback failed (%s); tau_ms stays NaN.", _mono_exc)
 
         out["decay_tau_ms"] = tau_ms
         residual_at_stim2 = float(_fit_func(t_at_stim2_ms, *_popt)) - bl1

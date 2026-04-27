@@ -253,6 +253,15 @@ def calculate_spike_features(  # noqa: C901
     at_edge = (d2vdt2_peak_rel == 0) | (d2vdt2_peak_rel >= lookback_samples - 1)
     thresh_indices = np.where(at_edge, dvdt_thresh_indices, thresh_indices_d2)
     ap_thresholds = data[thresh_indices]
+
+    # Biological QC on fallback-detected thresholds: flag as NaN when the
+    # per-spike peak rising rate exceeds 300 V/s (artifact ceiling) or the
+    # threshold-to-peak rising phase is shorter than 0.2 ms (false detection).
+    # onset_max_dvdt is in mV/s; 300 V/s = 300_000 mV/s.
+    rising_phase_s = (spike_indices - thresh_indices) * dt
+    artifact_flag = at_edge & ((onset_max_dvdt > 300_000.0) | (rising_phase_s < 0.0002))
+    ap_thresholds = np.where(artifact_flag, np.nan, ap_thresholds)
+
     peak_vals = data[spike_indices]
     amplitudes = peak_vals - ap_thresholds
 
@@ -392,10 +401,16 @@ def calculate_spike_features(  # noqa: C901
     window_length = int(0.005 / dt)
     if window_length % 2 == 0:
         window_length += 1
-    if window_length < 5:
-        window_length = 5
+    window_length = max(5, window_length)
+    # Cap to trace width; if cap makes it even, step down to next odd so the
+    # Savitzky-Golay constraint (window > polyorder=3) is preserved.
+    n_cols = ahp_waveforms.shape[1]
+    max_win = n_cols if n_cols % 2 == 1 else max(1, n_cols - 1)
+    window_length = min(window_length, max_win)
+    if window_length % 2 == 0:
+        window_length = max(1, window_length - 1)
 
-    if ahp_waveforms.shape[1] >= window_length:
+    if ahp_waveforms.shape[1] >= window_length and window_length >= 5:
         smoothed_ahp = savgol_filter(ahp_waveforms, window_length, 3, axis=1)
     else:
         smoothed_ahp = ahp_waveforms

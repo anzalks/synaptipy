@@ -160,8 +160,8 @@ class NWBExporter:
             log.warning("NWB export: 'species' not provided; defaulting to 'unknown species'.")
         if not session_metadata.get("device_name"):
             session_metadata = dict(session_metadata)
-            session_metadata.setdefault("device_name", "Amplifier")
-            log.warning("NWB export: 'device_name' not provided; defaulting to 'Amplifier'.")
+            session_metadata.setdefault("device_name", "Generic Amplifier")
+            log.warning("NWB export: 'device_name' not provided; defaulting to 'Generic Amplifier'.")
 
         # --- Validate Metadata & Prepare NWBFile ---
         required_keys = ["session_description", "identifier", "session_start_time"]
@@ -235,7 +235,9 @@ class NWBExporter:
 
             # --- Device ---
             # Prefer metadata from dialog, fallback to recording metadata, then defaults
-            dev_name = session_metadata.get("device_name") or recording.metadata.get("device_name") or "Amplifier"
+            dev_name = (
+                session_metadata.get("device_name") or recording.metadata.get("device_name") or "Generic Amplifier"
+            )
             dev_descr = (
                 session_metadata.get("device_description")
                 or recording.metadata.get("device_description")
@@ -252,7 +254,7 @@ class NWBExporter:
 
             # --- Electrode Defaults ---
             # Defaults from dialog
-            elec_desc_def = session_metadata.get("electrode_description_default", "Intracellular Electrode")
+            elec_desc_def = session_metadata.get("electrode_description_default", "Recording Pipette")
             elec_loc_def = session_metadata.get("electrode_location_default", "Unknown")
             elec_filt_def = session_metadata.get("electrode_filtering_default", "unknown")
 
