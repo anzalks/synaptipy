@@ -100,6 +100,7 @@ def calculate_synaptic_charge(
     baseline_method: str = "Pre-Window",
     detection_method: str = "Absolute Peak",
     pre_window_duration: float = 0.05,
+    local_baseline_window_ms: float = 10.0,
 ) -> Dict[str, Any]:
     """
     Compute synaptic charge using peak-to-baseline zero-crossing integration.
@@ -107,6 +108,10 @@ def calculate_synaptic_charge(
     The algorithm:
     1. Slice the trace to ``[window_start, window_end]``.
     2. Calculate the baseline (Pre-Window average or Global mean).
+       When ``baseline_method`` is ``"Pre-Window"`` a *local dynamic* baseline
+       is computed from the ``local_baseline_window_ms`` immediately preceding
+       the search window.  Using a short local window (default 10 ms) avoids
+       slow holding-current drift being counted as synaptic charge.
     3. Subtract the baseline.
     4. Find the peak (largest absolute amplitude, or most-negative).
     5. Walk backward and forward from the peak to find zero-crossing bounds.
@@ -121,7 +126,14 @@ def calculate_synaptic_charge(
         window_end: End of the search window in seconds.
         baseline_method: "Pre-Window" or "Global".
         detection_method: "Absolute Peak" or "Negative Peak".
-        pre_window_duration: Duration of the pre-window baseline period (s).
+        pre_window_duration: Legacy parameter — duration of the full pre-window
+            baseline period (s).  Superseded by ``local_baseline_window_ms``
+            for the Pre-Window method.
+        local_baseline_window_ms: Duration (ms) of the dynamic local baseline
+            window immediately preceding the search window.  A short window
+            (default 10 ms) tracks slow holding-current drift and prevents it
+            from inflating the measured charge.  Used when
+            ``baseline_method == "Pre-Window"``.
 
     Returns:
         Dict following ``{"module_used": ..., "metrics": {...}}`` schema, or
@@ -134,7 +146,11 @@ def calculate_synaptic_charge(
 
     # ---- 1. Compute baseline ----
     if baseline_method == "Pre-Window":
-        pre_start = max(time[0], window_start - pre_window_duration)
+        # Local dynamic baseline: use a short window (local_baseline_window_ms)
+        # immediately before the search window onset.  This tracks slow holding-
+        # current drift so that only the fast synaptic charge is integrated.
+        local_win_s = max(1e-4, local_baseline_window_ms / 1000.0)
+        pre_start = max(time[0], window_start - local_win_s)
         pre_end = window_start
         pre_mask = (time >= pre_start) & (time < pre_end)
         pre_slice = data[pre_mask]
@@ -263,7 +279,22 @@ def calculate_synaptic_charge(
             "min": 0.001,
             "max": 10.0,
             "decimals": 4,
-            "tooltip": "Duration of the baseline period immediately before the search window.",
+            "tooltip": "Legacy: full pre-window duration used for Global baseline. Ignored by the local dynamic baseline.",
+            "visible_when": {"param": "baseline_method", "value": "Global"},
+        },
+        {
+            "name": "local_baseline_window_ms",
+            "label": "Local Baseline Window (ms):",
+            "type": "float",
+            "default": 10.0,
+            "min": 0.5,
+            "max": 500.0,
+            "decimals": 1,
+            "tooltip": (
+                "Duration (ms) of the window immediately before the search window used to "
+                "compute the local dynamic baseline. A short window (default 10 ms) "
+                "subtracts slow holding-current drift before integrating charge."
+            ),
             "visible_when": {"param": "baseline_method", "value": "Pre-Window"},
         },
     ],
@@ -311,4 +342,5 @@ def run_synaptic_charge_wrapper(
         baseline_method=kwargs.get("baseline_method", "Pre-Window"),
         detection_method=kwargs.get("detection_method", "Absolute Peak"),
         pre_window_duration=kwargs.get("pre_window_duration", 0.05),
+        local_baseline_window_ms=float(kwargs.get("local_baseline_window_ms", 10.0)),
     )

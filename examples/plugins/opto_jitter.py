@@ -43,6 +43,7 @@ def calculate_opto_jitter(
     search_start: float,
     search_end: float,
     spike_threshold: float,
+    blanking_window: float = 1.0,
 ) -> Dict[str, Any]:
     """
     Compute per-sweep spike latencies from TTL onset and return jitter.
@@ -53,10 +54,13 @@ def calculate_opto_jitter(
 
     The algorithm:
     1. Detect TTL onset (first crossing of ``ttl_threshold`` from below).
-    2. Within ``[ttl_onset + search_start, ttl_onset + search_end]`` find the
-       first sample where ``data`` exceeds ``spike_threshold``.
-    3. Convert the sample offset to milliseconds.
-    4. Report the mean latency, standard deviation (jitter), and the
+    2. Apply ``blanking_window`` to skip the first ``blanking_window`` ms
+       after each TTL onset.  This prevents the microsecond photo-electric
+       artifact from being misclassified as a spike.
+    3. Within ``[ttl_onset + max(search_start, blanking_window/1000), ttl_onset + search_end]``
+       find the first sample where ``data`` exceeds ``spike_threshold``.
+    4. Convert the sample offset to milliseconds.
+    5. Report the mean latency, standard deviation (jitter), and the
        per-sweep latency array.
 
     Args:
@@ -71,6 +75,10 @@ def calculate_opto_jitter(
         search_end: End of the spike-search window relative to TTL onset
             (seconds).
         spike_threshold: Voltage threshold (mV) for spike detection.
+        blanking_window: Duration (ms) immediately following the TTL onset
+            during which any signal change is ignored (photo-electric artifact
+            blanking).  Default 1.0 ms.  The effective search window start
+            is ``max(search_start, blanking_window / 1000)``.
 
     Returns:
         Dict with result keys or ``{"error": ...}`` on failure.
@@ -90,7 +98,11 @@ def calculate_opto_jitter(
         return {"error": f"Shape mismatch: data {data.shape} vs TTL {secondary_data.shape}"}
 
     dt = 1.0 / sampling_rate
-    search_start_samples = int(round(search_start * sampling_rate))
+    # Blanking window: enforce that the effective search start is at least
+    # blanking_window ms after the TTL to skip the photo-electric artifact.
+    blanking_s = max(0.0, blanking_window / 1000.0)
+    effective_search_start_s = max(search_start, blanking_s)
+    search_start_samples = int(round(effective_search_start_s * sampling_rate))
     search_end_samples = int(round(search_end * sampling_rate))
 
     latencies_ms = []
@@ -137,8 +149,7 @@ def calculate_opto_jitter(
         n_failures = n_sweeps - n_detected
         return {
             "error": (
-                f"Too few sweeps with detected spikes ({n_detected}/{n_sweeps}) "
-                "to compute jitter - need at least 2."
+                f"Too few sweeps with detected spikes ({n_detected}/{n_sweeps}) " "to compute jitter - need at least 2."
             ),
             # Include partial counts even on failure so batch engines can aggregate.
             "metrics": {
@@ -212,6 +223,20 @@ def calculate_opto_jitter(
             "tooltip": "End of the spike-search window relative to TTL onset",
         },
         {
+            "name": "blanking_window",
+            "label": "Artifact Blanking Window (ms):",
+            "type": "float",
+            "default": 1.0,
+            "min": 0.0,
+            "max": 50.0,
+            "decimals": 2,
+            "tooltip": (
+                "Duration (ms) immediately after the TTL onset to ignore. "
+                "Prevents the microsecond photo-electric artifact from being "
+                "misclassified as an ultra-fast biological response."
+            ),
+        },
+        {
             "name": "spike_threshold",
             "label": "Spike Threshold (mV):",
             "type": "float",
@@ -260,4 +285,5 @@ def run_opto_jitter_wrapper(
         search_start=float(kwargs.get("search_start", 0.001)),
         search_end=float(kwargs.get("search_end", 0.05)),
         spike_threshold=float(kwargs.get("spike_threshold", -20.0)),
+        blanking_window=float(kwargs.get("blanking_window", 1.0)),
     )

@@ -446,6 +446,7 @@ class BatchAnalysisEngine:
         pipeline_config: List[Dict[str, Any]],
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         channel_filter: Optional[List[str]] = None,
+        rs_tolerance: float = 0.20,
     ) -> pd.DataFrame:
         """
         Run analysis on a list of files/recordings using a flexible pipeline configuration.
@@ -461,6 +462,10 @@ class BatchAnalysisEngine:
             pipeline_config: List of task dictionaries.
             progress_callback: Optional callback (current, total, status_msg).
             channel_filter: Optional list of channel names/IDs to process.
+            rs_tolerance: Maximum fractional increase in series resistance compared
+                to the first valid Rs measurement before a sweep is flagged with
+                ``rs_qc_warning``.  Default 0.20 (20 %).  Set to ``float('inf')``
+                to disable the check.
 
         Returns:
             pandas DataFrame containing aggregated results with metadata.
@@ -480,7 +485,7 @@ class BatchAnalysisEngine:
             )
             return self._run_batch_parallel(files, pipeline_config, progress_callback, channel_filter)
 
-        return self._run_batch_sequential(files, pipeline_config, progress_callback, channel_filter)
+        return self._run_batch_sequential(files, pipeline_config, progress_callback, channel_filter, rs_tolerance)
 
     def _run_batch_sequential(  # noqa: C901
         self,
@@ -488,6 +493,7 @@ class BatchAnalysisEngine:
         pipeline_config: List[Dict[str, Any]],
         progress_callback: Optional[Callable[[int, int, str], None]],
         channel_filter: Optional[List[str]],
+        rs_tolerance: float = 0.20,
     ) -> pd.DataFrame:
         """Sequential (single-process) batch processing — the original implementation."""
         results_list = []
@@ -586,6 +592,11 @@ class BatchAnalysisEngine:
                         "time": None,  # The time (array or list)
                     }
 
+                    # Series-resistance stability tracker: reset for each new channel.
+                    # rs_reference_mohm stores the Rs from the first valid sweep so
+                    # all subsequent sweeps can be checked for drift.
+                    rs_reference_mohm: Optional[float] = None
+
                     # Process each task in the pipeline
                     for task in pipeline_config:
                         if self._cancelled:
@@ -611,6 +622,48 @@ class BatchAnalysisEngine:
                                     res.setdefault(mk, mv)
                                 # Sanitise for export (arrays → summaries, aliases)
                                 self._sanitise_result_for_export(res)
+
+                            # --- Series-Resistance Stability QC ---
+                            # Track rs_mohm across trials.  If Rs increases by more
+                            # than rs_tolerance relative to Sweep 1, flag the row with
+                            # a warning so analysts can exclude unstable patches.
+                            for res in task_results:
+                                rs_val = res.get("rs_mohm")
+                                if rs_val is None:
+                                    continue
+                                try:
+                                    rs_float = float(rs_val)
+                                except (TypeError, ValueError):
+                                    continue
+                                if rs_float != rs_float:  # NaN guard
+                                    continue
+                                if rs_reference_mohm is None:
+                                    rs_reference_mohm = rs_float
+                                    log.debug(
+                                        "Rs reference %.2f MOhm set for %s / %s.",
+                                        rs_float,
+                                        file_name,
+                                        channel_name,
+                                    )
+                                elif rs_float > rs_reference_mohm * (1.0 + rs_tolerance):
+                                    delta_pct = (rs_float - rs_reference_mohm) / rs_reference_mohm * 100.0
+                                    log.warning(
+                                        "Series resistance destabilized: Rs=%.2f MOhm "
+                                        "(ref=%.2f MOhm, +%.1f%%) in %s / %s trial %s "
+                                        "(tolerance=%.0f%%).",
+                                        rs_float,
+                                        rs_reference_mohm,
+                                        delta_pct,
+                                        file_name,
+                                        channel_name,
+                                        res.get("trial_index", "?"),
+                                        rs_tolerance * 100.0,
+                                    )
+                                    res["rs_qc_warning"] = (
+                                        f"Series resistance destabilized: "
+                                        f"Rs={rs_float:.1f} MOhm (ref={rs_reference_mohm:.1f} "
+                                        f"MOhm, +{delta_pct:.1f}%)"
+                                    )
 
                             # Extend results list with all results from this task
                             results_list.extend(task_results)

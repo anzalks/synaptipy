@@ -219,6 +219,23 @@ class NWBExporter:
             if hasattr(recording, "protocol_name") and recording.protocol_name:
                 notes_list.append(f"Protocol: {recording.protocol_name}")
 
+            # Recording temperature for FAIR / Q10 compliance.
+            # Precedence: explicit session_metadata > recording attribute > recording.metadata dict.
+            rec_temp = (
+                session_metadata.get("recording_temperature")
+                or getattr(recording, "recording_temperature", None)
+                or recording.metadata.get("recording_temperature")
+                or 22.0
+            )
+            try:
+                rec_temp = float(rec_temp)
+            except (TypeError, ValueError):
+                rec_temp = 22.0
+            notes_list.append(
+                f"Recording temperature: {rec_temp:.1f} degC "
+                "(account for Q10 kinetic scaling when comparing across preparations)"
+            )
+
             notes_combined = "\n".join(notes_list)
 
             nwbfile = NWBFile(
