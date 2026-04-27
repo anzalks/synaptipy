@@ -2129,7 +2129,60 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             the number of files that contributed.  Returns ``(None, None, 0)``
             when no valid traces could be obtained.
         """
-        return get_cross_file_average(self._analysis_items, parsed_trials, channel_idx, self.neo_adapter)
+        time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
+            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+        )
+        if has_unequal and n_files > 0:
+            log.warning(
+                "Cross-file average: files have unequal trace lengths. "
+                "Shorter traces are NaN-padded; N decreases toward the end of the average."
+            )
+        return time_arr, grand_avg, n_files
+
+    def _determine_cross_file_trials(self) -> List[int]:
+        """Return the ordered list of 0-based trial indices for cross-file averaging.
+
+        Reads the trial-selection text widget when present; falls back to
+        ``[0]`` when the widget is absent or its text cannot be parsed.
+
+        Returns:
+            Sorted list of 0-based trial indices.
+        """
+        parsed_trials: List[int] = [0]
+        if not (hasattr(self, "trial_selection_input") and self.trial_selection_input):
+            return parsed_trials
+        sel_text = self.trial_selection_input.text().strip()
+        if not (sel_text and self._selected_item_recording):
+            return parsed_trials
+        first_ch = next(iter(self._selected_item_recording.channels.values()), None)
+        n_ref = getattr(first_ch, "num_trials", 1) if first_ch else 1
+        from Synaptipy.shared.utils import parse_trial_selection_string
+
+        parsed = sorted(parse_trial_selection_string(sel_text, n_ref))
+        if parsed:
+            parsed_trials = parsed
+        return parsed_trials
+
+    def _build_unequal_length_warning(self, parsed_trials: List[int], channel_idx: int, n_files: int) -> str:
+        """Return a warning string when cross-file traces have unequal lengths.
+
+        Args:
+            parsed_trials: Trial indices being averaged.
+            channel_idx:   Channel position (0-based).
+            n_files:       Number of files that contributed to the average.
+
+        Returns:
+            Non-empty warning string when lengths differ, empty string otherwise.
+        """
+        try:
+            _, _, _, has_unequal = get_cross_file_average(
+                self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+            )
+            if has_unequal and n_files > 0:
+                return " [WARNING: traces of unequal length - N decreases toward end]"
+        except Exception:
+            pass
+        return ""
 
     def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
         """
@@ -2147,19 +2200,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         channel_idx = self.signal_channel_combobox.currentIndex()
 
         # Determine which trials to extract; fall back to trial 0
-        parsed_trials: List[int] = [0]
-        if hasattr(self, "trial_selection_input") and self.trial_selection_input:
-            sel_text = self.trial_selection_input.text().strip()
-            if sel_text and self._selected_item_recording:
-                first_ch = next(iter(self._selected_item_recording.channels.values()), None)
-                n_ref = getattr(first_ch, "num_trials", 1) if first_ch else 1
-                from Synaptipy.shared.utils import parse_trial_selection_string
-
-                parsed = sorted(parse_trial_selection_string(sel_text, n_ref))
-                if parsed:
-                    parsed_trials = parsed
+        parsed_trials = self._determine_cross_file_trials()
 
         time_arr, grand_avg, n_files = self._get_cross_file_average(parsed_trials, channel_idx)
+        _unequal_warn_msg = self._build_unequal_length_warning(parsed_trials, channel_idx, n_files)
 
         if time_arr is None or grand_avg is None or n_files == 0:
             QtWidgets.QMessageBox.warning(
@@ -2197,7 +2241,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.clear()
             avg_pen = get_average_pen()
             self.plot_widget.plot(time_arr, processed, pen=avg_pen, name="Cross-File Average")
-            self.plot_widget.setTitle(f"Cross-File Average (N={n_files} files)")
+            title = f"Cross-File Average (N={n_files} files){_unequal_warn_msg}"
+            self.plot_widget.setTitle(title)
             self.plot_widget.setLabel("bottom", "Time", units="s")
             self.plot_widget.setLabel("left", chan_name, units=units)
             self.auto_range_plot()

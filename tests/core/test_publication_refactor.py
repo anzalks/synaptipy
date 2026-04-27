@@ -68,12 +68,16 @@ class TestTauMonoModel:
         assert result is not None
 
         # Set bounds that EXCLUDE the true tau (tau=10ms but max=5ms)
-        # Fit should still converge to the boundary
+        # Fit should either respect the upper bound OR be rejected by the R² QC gate
+        # (forcing bounds away from the true value degrades fit quality below the 0.95
+        # threshold, so NaN is the expected result when the fit cannot be recovered).
         result_tight = calculate_tau(
             voltage, t, stim_start_time=0.0, fit_duration=0.08, model="mono", tau_bounds=(0.001, 0.005)
         )
         if result_tight is not None:
-            assert result_tight["tau_ms"] <= 5.0 + 0.1  # Should respect upper bound
+            tau_val = result_tight["tau_ms"]
+            if not np.isnan(tau_val):
+                assert tau_val <= 5.0 + 0.1  # Should respect upper bound if converged
 
 
 class TestTauBiModel:

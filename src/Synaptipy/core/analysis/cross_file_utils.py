@@ -91,13 +91,15 @@ def get_cross_file_average(
     parsed_trials: List[int],
     channel_idx: int,
     neo_adapter: Any,
-) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int, bool]:
     """Compute the grand average of specified trials across all loaded files.
 
     Delegates per-file extraction to :func:`extract_per_file_trace`.  Files
     that fail silently are excluded so the average denominator stays
-    scientifically correct.  All valid per-file averages are truncated to the
-    shortest array before the grand average is formed.
+    scientifically correct.  Per-file averages of unequal length are
+    **padded with NaN** rather than truncated, so the statistical *N*
+    decreases smoothly at the end of shorter recordings instead of producing
+    an artificial variance step.
 
     Args:
         items:         List of analysis-item dicts, each containing at least a
@@ -108,9 +110,12 @@ def get_cross_file_average(
         neo_adapter:   Adapter with a ``read_recording(path)`` method.
 
     Returns:
-        Tuple ``(time_array, grand_average, n_files)`` where *n_files* is the
-        number of files that contributed.  Returns ``(None, None, 0)`` when no
-        valid traces could be obtained.
+        Tuple ``(time_array, grand_average, n_files, has_unequal_lengths)``
+        where *n_files* is the number of files that contributed and
+        *has_unequal_lengths* is ``True`` when the contributing traces had
+        different sample counts (caller should warn the user).
+        Returns ``(None, None, 0, False)`` when no valid traces could be
+        obtained.
     """
     valid_traces: List[np.ndarray] = []
     valid_times: List[np.ndarray] = []
@@ -123,11 +128,24 @@ def get_cross_file_average(
             valid_times.append(file_time)
 
     if not valid_traces:
-        return None, None, 0
+        return None, None, 0, False
 
-    min_len = min(len(t) for t in valid_traces)
-    truncated_traces = np.array([t[:min_len] for t in valid_traces])
-    truncated_time = valid_times[0][:min_len]
+    lengths = [len(t) for t in valid_traces]
+    has_unequal_lengths = len(set(lengths)) > 1
+    max_len = max(lengths)
 
-    grand_average = np.mean(truncated_traces, axis=0)
-    return truncated_time, grand_average, len(valid_traces)
+    # Pad shorter arrays with NaN so that nanmean produces a smoothly
+    # decreasing N rather than an artificial variance step at the truncation
+    # point.
+    padded = np.full((len(valid_traces), max_len), np.nan)
+    for i, trace in enumerate(valid_traces):
+        padded[i, : len(trace)] = trace
+
+    grand_average = np.nanmean(padded, axis=0)
+
+    # Reference time vector: longest available (NaN-padded region has no
+    # valid data anyway, but callers need the full axis for plotting).
+    longest_idx = int(np.argmax(lengths))
+    reference_time = valid_times[longest_idx]
+
+    return reference_time, grand_average, len(valid_traces), has_unequal_lengths

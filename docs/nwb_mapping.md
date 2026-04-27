@@ -141,6 +141,59 @@ For example, `Vm_trial_000`, `Vm_trial_001`, etc.
 
 ---
 
+## Per-Analysis-Module PyNWB Class Mapping
+
+The table below documents which PyNWB classes are used (or will be used in
+the planned embedded-analysis export) for each of the 15 analysis modules.
+The **Trace export** column reflects the class used when writing raw data
+in the current exporter.  The **Planned analysis object** column documents
+the target container for embedding computed metrics in future releases.
+
+| # | Analysis Module | Registry Name | Trace Export Class | Planned Analysis NWB Object |
+|---|----------------|--------------|-------------------|----------------------------|
+| 1 | Baseline / RMP | `rmp_analysis` | `CurrentClampSeries` | `ProcessingModule` ("ecephys") - scalar `TimeSeries` for RMP per sweep |
+| 2 | Input Resistance (Rin) | `rin_analysis` | `CurrentClampSeries` | `ProcessingModule` - `NWBDataInterface` storing delta-V, delta-I, Rin (MOhm) |
+| 3 | Membrane Time Constant (Tau) | `tau_analysis` | `CurrentClampSeries` | `ProcessingModule` - `TimeSeries` overlay of exponential fit; scalar tau_ms |
+| 4 | Sag Ratio (Ih) | `sag_ratio_analysis` | `CurrentClampSeries` | `ProcessingModule` - scalars V_peak, V_ss, sag_ratio, rebound |
+| 5 | Capacitance (Cm) | `capacitance_analysis` | `CurrentClampSeries` (CC) / `VoltageClampSeries` (VC) | `ProcessingModule` - scalars Cm_pF, Rs_MOhm via `NWBDataInterface` |
+| 6 | Spike Detection | `spike_detection` | `CurrentClampSeries` | `Units` table (`pynwb.misc.Units`) - spike_times column |
+| 7 | Single-Spike Features | `single_spike_features` | `CurrentClampSeries` | `Units` table - columns for threshold_mv, amplitude_mv, half_width_ms, fAHP, mAHP |
+| 8 | Paired-Pulse Ratio (PPR) | `ppr_analysis` | `CurrentClampSeries` / `VoltageClampSeries` | `ProcessingModule` - scalars R1, R2, PPR, decay_tau_ms |
+| 9 | Event Detection | `event_detection_threshold` / `event_detection_deconvolution` | `CurrentClampSeries` | `ProcessingModule` - `TimeSeries` of event times and amplitudes |
+| 10 | I-V Curve | `iv_curve_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays delta_V, delta_I; scalar Rin_aggregate, R2 |
+| 11 | Burst Analysis | `burst_analysis` | `CurrentClampSeries` | `ProcessingModule` - burst times, durations, intra-burst frequency |
+| 12 | F-I Curve / Excitability | `excitability_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays firing_rate, current_step; scalars rheobase, fi_slope |
+| 13 | Phase Plane | `phase_plane_analysis` | `CurrentClampSeries` | `ProcessingModule` - 2-D `TimeSeries` (V vs dV/dt) for each sweep |
+| 14 | Spike Train Dynamics | `train_dynamics` | `CurrentClampSeries` | `Units` table plus `ProcessingModule` scalars CV, CV2, LV, adaptation_index |
+| 15 | Optogenetic Synchronisation | `optogenetic_sync` | `CurrentClampSeries` + `VoltageClampSeries` (opto channel) | `ProcessingModule` - scalars latency_ms, jitter_ms, response_probability |
+
+### Notes on icephys best-practice containers
+
+When `IntracellularRecordingsTable` support is added (planned), the above
+`ProcessingModule` approach will be complemented by structured sweep-level
+tables following the NWB icephys extension hierarchy:
+
+```
+NWBFile
+ |- intracellular_recordings (IntracellularRecordingsTable)
+ |   |- row per sweep: electrode ref, stimulus series, response series
+ |- icephys_simultaneous_recordings (SimultaneousRecordingsTable)
+ |- icephys_sequential_recordings (SequentialRecordingsTable)
+ \- icephys_repetitions (RepetitionsTable)
+```
+
+The relevant PyNWB classes are:
+- `pynwb.icephys.IntracellularRecordingsTable`
+- `pynwb.icephys.SimultaneousRecordingsTable`
+- `pynwb.icephys.SequentialRecordingsTable`
+- `pynwb.icephys.RepetitionsTable`
+- `pynwb.icephys.ExperimentalConditionsTable`
+
+Spike times will be stored in `pynwb.misc.Units` which is the NWB standard
+for sorted or unsorted spike times across all clamp modes.
+
+---
+
 ## Programmatic Usage
 
 ```python

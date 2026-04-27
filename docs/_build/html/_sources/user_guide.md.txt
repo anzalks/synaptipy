@@ -370,6 +370,106 @@ for full details on what is included and planned.
 
 ## Advanced Options
 
+### Reproducibility: How GUI Adjustments Serialize to the Batch Engine
+
+A key design goal of Synaptipy is that any parameter tweak made interactively
+in the GUI produces an identical result when replayed by the headless
+`BatchAnalysisEngine`.  This section explains the serialization pathway.
+
+#### Parameter capture
+
+Every widget in an analysis tab (spin-boxes, check-boxes, combo-boxes,
+draggable region handles) corresponds to one entry in the tab's
+`ui_params` list, which is declared alongside the
+`@AnalysisRegistry.register(...)` decorator for that analysis function.  The
+parameter name, type, and current value are stored together.
+
+When the user clicks **Run Analysis**, the tab calls
+`_gather_analysis_parameters()`, which iterates over every `ui_params` entry
+and reads the current widget value.  The result is a plain Python dictionary:
+
+```python
+# Example parameter dict for the Tau analysis tab
+params = {
+    "stim_start_time": 0.200,   # s  (from a QDoubleSpinBox)
+    "fit_duration":    0.300,   # s
+    "model":           "mono",  # (from a QComboBox)
+    "artifact_blanking_ms": 0.5,
+}
+```
+
+#### Interactive region handles
+
+Draggable baseline or fit windows rendered as `pyqtgraph.LinearRegionItem`
+objects are two-way linked to the corresponding spin-box pair via Qt signals.
+Dragging the region emits `sigRegionChangeFinished`, which updates the
+spin-box values.  Conversely, typing in a spin-box moves the region.
+At the moment of analysis, the spin-box values - not the graphical object
+positions - are read into the parameter dictionary.  The graphical object is
+therefore only a visual convenience; the canonical parameter value is always
+the spin-box number.
+
+#### SessionManager serialization
+
+`SessionManager` (a singleton) stores:
+
+```python
+# Simplified SessionManager state
+{
+    "active_analysis": "tau_analysis",
+    "preprocessing_settings": { "lowpass_hz": 2000 },
+    "analysis_params": {
+        "tau_analysis": {
+            "stim_start_time": 0.200,
+            "fit_duration":    0.300,
+            "model":           "mono",
+        },
+        ...
+    }
+}
+```
+
+These dictionaries are serialized to JSON when the user saves a session file
+(**File - Save Session**).  Loading a session file restores them, so every
+tab shows the same parameter values as when the session was saved.
+
+#### Batch engine replay
+
+The `BatchAnalysisEngine` accepts a list of file paths plus a parameter
+dictionary in exactly the same format produced by `_gather_analysis_parameters()`:
+
+```python
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+import Synaptipy.core.analysis  # populates the registry
+
+engine = BatchAnalysisEngine()
+results = engine.run(
+    file_paths=["cell_01.abf", "cell_02.abf"],
+    analysis_name="tau_analysis",
+    params={
+        "stim_start_time": 0.200,
+        "fit_duration":    0.300,
+        "model":           "mono",
+        "artifact_blanking_ms": 0.5,
+    },
+    channel_index=0,
+    trial_indices=[0, 1, 2],
+)
+```
+
+Because both paths invoke the same registered wrapper function with the same
+parameter dictionary, the batch result is mathematically identical to the
+GUI result - provided the same preprocessing pipeline is applied.
+
+#### Preprocessing pipeline
+
+Preprocessing settings (filters, baseline subtraction) are stored in
+`SessionManager().preprocessing_settings` as a nested dictionary and can be
+passed to the engine via the `preprocessing_settings` argument of
+`BatchAnalysisEngine.run()`.  The engine applies the identical
+`ProcessingPipeline` that the GUI uses, ensuring the batch trace matches the
+trace the user visually validated.
+
 ### Preferences
 
 Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access the application settings:

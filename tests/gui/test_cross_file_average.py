@@ -113,8 +113,8 @@ class TestGetCrossFileAverage:
         assert len(time_out) == 100
         np.testing.assert_allclose(avg_out, 3.0)  # mean(2, 4) == 3
 
-    def test_mismatched_lengths_truncated(self, analysis_tab):
-        """Arrays of different lengths are truncated to the shortest."""
+    def test_mismatched_lengths_nan_padded(self, analysis_tab):
+        """Arrays of different lengths are NaN-padded to the longest; nanmean used."""
         t_long = np.linspace(0, 1, 200)
         t_short = np.linspace(0, 0.5, 80)
         d_long = np.ones(200) * 1.0
@@ -134,8 +134,12 @@ class TestGetCrossFileAverage:
         _, avg_out, n = analysis_tab._get_cross_file_average([0], 0)
 
         assert n == 2
-        assert len(avg_out) == 80  # truncated to shortest
-        np.testing.assert_allclose(avg_out, 2.0)  # mean(1, 3)
+        # Result length equals the longest trace
+        assert len(avg_out) == 200
+        # First 80 samples: both files contribute, mean(1, 3) == 2
+        np.testing.assert_allclose(avg_out[:80], 2.0)
+        # Remaining 120 samples: only the long file contributes, nanmean == 1
+        np.testing.assert_allclose(avg_out[80:], 1.0)
 
     def test_missing_trial_skipped(self, analysis_tab):
         """File missing the requested trial is silently skipped."""

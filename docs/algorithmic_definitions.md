@@ -230,6 +230,19 @@ The artifact window is intentionally kept to 0.1 ms (down from a previous
 0.5 ms default) to avoid bleeding into the membrane-charging phase, which
 would artifactually inflate the $R_s$ estimate.
 
+> **Sampling-rate dependency and stability warning.**  This calculation
+> resolves a 0.1 ms window to detect the fast resistive jump.
+> At 10 kHz sampling the window contains only **one sample**, making the
+> estimate highly unstable (a single noisy sample determines the entire
+> $R_s^{\text{CC}}$ value).  At 20 kHz the window contains two samples;
+> at 50 kHz, five samples.
+> For reliable $R_s^{\text{CC}}$ and derived $C_m$ values, recordings
+> should be sampled at $\ge 20$ kHz.  At 10 kHz, the VC transient method
+> (Section 5.2) is more robust and should be preferred.
+> The instability propagates directly into $C_m$ via
+> $C_m = \tau / (R_{\text{in}} - R_s)$: an unreliable $R_s$ estimate
+> can produce $C_m$ values that are biologically implausible.
+
 ---
 
 ## 6. Spike Detection and Action Potential Features
@@ -767,6 +780,38 @@ $$
 The LJP arises from the electrochemical potential difference between the patch
 pipette solution and the bath.  Correcting it is mandatory for any
 voltage-dependent analysis (AP threshold, RMP, I-V curve).
+
+> **Biophysical limitations of post-hoc LJP subtraction.**  Subtracting
+> a scalar LJP from a recorded voltage trace corrects the *reported*
+> membrane potential for passive properties (RMP, $R_{\text{in}}$, $\tau$).
+> However, it does **not** retroactively correct the driving forces that
+> voltage-gated channels experienced during the recording itself.
+>
+> During the experiment, the actual transmembrane voltage at every time
+> point was $V_{\text{recorded}}(t) + V_{\text{patch}}$, where
+> $V_{\text{patch}}$ includes the uncorrected LJP offset.  Ion channels
+> that gate as a function of voltage (Na$^+$, K$^+$, Ca$^{2+}$ channels)
+> activated, inactivated, and determined their driving forces at these
+> uncorrected voltages.  Therefore:
+>
+> 1. **AP threshold and waveform** are minimally affected by small
+>    LJPs ($< 5$ mV) because the absolute voltage error is the same
+>    at every sample and threshold detection is differential.
+>    Larger LJPs ($> 10$ mV) produce systematic errors in
+>    reported threshold and half-width.
+> 2. **Current amplitudes and conductances** computed from $I = g(V - E_\text{rev})$
+>    use the corrected $V$ but the reversal potential $E_\text{rev}$ was
+>    set relative to the uncorrected voltage during the experiment.  Post-hoc
+>    LJP correction changes the apparent driving force and therefore alters
+>    any reported conductance derived from current measurements.
+> 3. **Pharmacological and modulation studies** that depend on absolute
+>    channel open probability at a specified voltage should account for
+>    the LJP when comparing across preparations or to published data.
+>
+> In summary: post-hoc LJP subtraction is the accepted standard for
+> reporting passive membrane properties in the literature, but its
+> limitation must be acknowledged in any analysis that draws conclusions
+> about the voltage-dependence of active conductances.
 
 ### Step B - P/N Leak Subtraction
 

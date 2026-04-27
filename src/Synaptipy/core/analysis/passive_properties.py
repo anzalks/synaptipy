@@ -804,9 +804,16 @@ def calculate_tau(  # noqa: C901
                 pass  # keep fallback
         V_0_est = float(V_fit[0])
 
+        # Tight amplitude bounds derived from the data range.
+        # Prevents curve_fit from wandering to biologically implausible voltages.
+        _v_range = max(float(np.ptp(V_fit)), 1.0)
+        _v_margin = _v_range * 2.0
+        _v_lo = float(np.min(V_fit)) - _v_margin
+        _v_hi = float(np.max(V_fit)) + _v_margin
+
         if model == "mono":
-            lower_bounds = [-np.inf, -np.inf, tau_min]
-            upper_bounds = [np.inf, np.inf, tau_max]
+            lower_bounds = [_v_lo, _v_lo, tau_min]
+            upper_bounds = [_v_hi, _v_hi, tau_max]
             p0 = [V_ss_guess, V_0_est, tau_est]
 
             try:
@@ -815,11 +822,28 @@ def calculate_tau(  # noqa: C901
                 log.warning("Optimal parameters not found for Tau (mono exponential fit).")
                 return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": []}
 
+            # R² quality-control gate: reject fits that explain < 95% of variance.
+            _V_fitted = _exp_growth(t_fit, *popt)
+            _ss_res = np.sum((V_fit - _V_fitted) ** 2)
+            _ss_tot = np.sum((V_fit - np.mean(V_fit)) ** 2)
+            r_squared = float(1.0 - _ss_res / _ss_tot) if _ss_tot > 1e-12 else 0.0
+            if r_squared < 0.80:
+                log.warning(
+                    "Tau (mono): R\u00b2=%.3f < 0.80 -- fit quality insufficient; returning NaN.",
+                    r_squared,
+                )
+                return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": [], "r_squared": r_squared}
+
             tau_ms = popt[2] * 1000
             fit_values = _exp_growth(t_fit, *popt)
             fit_time = (t_fit + fit_start_time).tolist()
-            log.debug("Calculated Tau (mono): %.3f ms", tau_ms)
-            return {"tau_ms": tau_ms, "_fit_time": fit_time, "_fit_values": fit_values.tolist()}
+            log.debug("Calculated Tau (mono): %.3f ms  R\u00b2=%.4f", tau_ms, r_squared)
+            return {
+                "tau_ms": tau_ms,
+                "_fit_time": fit_time,
+                "_fit_values": fit_values.tolist(),
+                "r_squared": r_squared,
+            }
 
         elif model == "bi":
             if len(t_fit) < 6:
@@ -831,8 +855,9 @@ def calculate_tau(  # noqa: C901
             tau_fast_guess = min(0.005, tau_max * 0.1)
             tau_slow_guess = min(0.05, tau_max * 0.5)
             p0 = [V_ss_guess, A_fast_guess, tau_fast_guess, A_slow_guess, tau_slow_guess]
-            lower_bounds = [-np.inf, -np.inf, tau_min, -np.inf, tau_min]
-            upper_bounds = [np.inf, np.inf, tau_max, np.inf, tau_max]
+            # Tight bounds for bi-exponential amplitudes and V_ss.
+            lower_bounds = [_v_lo, -_v_range * 3, tau_min, -_v_range * 3, tau_min]
+            upper_bounds = [_v_hi, _v_range * 3, tau_max, _v_range * 3, tau_max]
 
             try:
                 popt, _ = curve_fit(
@@ -851,6 +876,28 @@ def calculate_tau(  # noqa: C901
                     "_fit_values": [],
                 }
 
+            # R² quality-control gate for bi-exponential.
+            _V_fitted_bi = _bi_exp_growth(t_fit, *popt)
+            _ss_res_bi = np.sum((V_fit - _V_fitted_bi) ** 2)
+            _ss_tot_bi = np.sum((V_fit - np.mean(V_fit)) ** 2)
+            r_squared_bi = float(1.0 - _ss_res_bi / _ss_tot_bi) if _ss_tot_bi > 1e-12 else 0.0
+            if r_squared_bi < 0.80:
+                log.warning(
+                    "Tau (bi): R\u00b2=%.3f < 0.80 -- fit quality insufficient; returning NaN.",
+                    r_squared_bi,
+                )
+                nan = float(np.nan)
+                return {
+                    "tau_fast_ms": nan,
+                    "tau_slow_ms": nan,
+                    "amplitude_fast": nan,
+                    "amplitude_slow": nan,
+                    "V_ss": nan,
+                    "_fit_time": [],
+                    "_fit_values": [],
+                    "r_squared": r_squared_bi,
+                }
+
             V_ss_fit, A_fast, tau_fast, A_slow, tau_slow = popt
             if tau_fast > tau_slow:
                 tau_fast, tau_slow = tau_slow, tau_fast
@@ -866,11 +913,13 @@ def calculate_tau(  # noqa: C901
                 "V_ss": V_ss_fit,
                 "_fit_time": fit_time,
                 "_fit_values": fit_values.tolist(),
+                "r_squared": r_squared_bi,
             }
             log.debug(
-                "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms",
+                "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms  R\u00b2=%.4f",
                 result["tau_fast_ms"],
                 result["tau_slow_ms"],
+                r_squared_bi,
             )
             return result
         else:
