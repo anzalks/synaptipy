@@ -97,9 +97,12 @@ jobs:
     name: Publish to TestPyPI
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/Synaptipy/
+      url: https://test.pypi.org/p/synaptipy
 
     steps:
       - name: Download build artifacts
