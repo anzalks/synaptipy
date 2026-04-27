@@ -3,24 +3,29 @@
 """
 Worker classes for running analysis tasks in background threads.
 
-Provides two worker types:
+Provides three worker types:
 
 * :class:`AnalysisWorker` — lightweight :class:`~PySide6.QtCore.QRunnable` for
   arbitrary callables (existing API, unchanged).
 * :class:`BatchWorker` — :class:`~PySide6.QtCore.QThread` specialised for
   :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine` batch runs.
   Emits rich progress signals so the GUI remains 100% responsive.
+* :class:`NwbExportWorker` — :class:`~PySide6.QtCore.QThread` for NWB file
+  export.  Keeps the UI thread free during potentially slow HDF5 writes.
 """
 
 import logging
 import sys
 import traceback
-from typing import TYPE_CHECKING, Callable, List, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 from PySide6 import QtCore
 
 if TYPE_CHECKING:
     from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+    from Synaptipy.core.data_model import Recording
+    from Synaptipy.infrastructure.exporters import NWBExporter
 
 log = logging.getLogger(__name__)
 
@@ -155,3 +160,56 @@ class BatchWorker(QtCore.QThread):
         if self._engine is not None:
             self._engine.cancel()
             log.debug("BatchWorker: cancellation requested.")
+
+
+# ---------------------------------------------------------------------------
+# NwbExportWorker — QThread for NWB file export
+# ---------------------------------------------------------------------------
+
+
+class NwbExportWorker(QtCore.QThread):
+    """QThread wrapper for :class:`~Synaptipy.infrastructure.exporters.NWBExporter`.
+
+    Running the NWB export on the UI thread blocks for several seconds on large
+    recordings (pynwb serialises to HDF5 synchronously).  This worker moves the
+    export to a background thread while the GUI stays responsive.
+
+    Signals:
+        export_finished: ``str`` — absolute path of the written NWB file.
+        export_error: ``str`` — human-readable error message on failure.
+    """
+
+    export_finished = QtCore.Signal(str)  # output_filepath as str
+    export_error = QtCore.Signal(str)
+
+    def __init__(
+        self,
+        exporter: "NWBExporter",
+        recording: "Recording",
+        output_filepath: Path,
+        nwb_metadata: Dict,
+        parent: Optional[QtCore.QObject] = None,
+    ) -> None:
+        """Initialise the NWB export worker.
+
+        Args:
+            exporter: A configured :class:`NWBExporter` instance.
+            recording: The :class:`~Synaptipy.core.data_model.Recording` to export.
+            output_filepath: Destination path for the ``.nwb`` file.
+            nwb_metadata: Metadata dict accepted by :meth:`NWBExporter.export`.
+            parent: Optional Qt parent object.
+        """
+        super().__init__(parent)
+        self._exporter = exporter
+        self._recording = recording
+        self._output_filepath = output_filepath
+        self._nwb_metadata = nwb_metadata
+
+    def run(self) -> None:
+        """Execute the NWB export — called automatically by :meth:`QThread.start`."""
+        try:
+            self._exporter.export(self._recording, self._output_filepath, self._nwb_metadata)
+            self.export_finished.emit(str(self._output_filepath))
+        except Exception:  # noqa: BLE001
+            log.exception("NwbExportWorker: unhandled exception.")
+            self.export_error.emit(traceback.format_exc())

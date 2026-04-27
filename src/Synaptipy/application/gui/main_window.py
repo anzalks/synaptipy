@@ -6,7 +6,6 @@ Manages overall window structure, menu, status bar, tabs, and core adapters.
 """
 
 import logging
-import os
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -751,8 +750,7 @@ class MainWindow(QtWidgets.QMainWindow):
         last_export_dir = self.settings.value(
             "lastExportDirectory", str(current_recording.source_file.parent), type=str
         )
-        # Use os.path.join for robust cross-platform default path suggestion
-        default_save_path = os.path.join(last_export_dir, default_filename)
+        default_save_path = str(Path(last_export_dir) / default_filename)
 
         output_filepath_str, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save NWB File", dir=default_save_path, filter="NWB Files (*.nwb)"

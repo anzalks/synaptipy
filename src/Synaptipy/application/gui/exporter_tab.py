@@ -6,7 +6,6 @@ using sub-tabs for different formats (e.g., NWB, CSV).
 """
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -21,9 +20,9 @@ from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.exporters import NWBExporter
 from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
-from Synaptipy.shared.error_handling import ExportError, SynaptipyError
 
-from .nwb_dialog import NwbMetadataDialog  # Need the metadata dialog
+from .analysis_worker import NwbExportWorker
+from .nwb_dialog import NwbMetadataDialog
 
 try:
     import tzlocal
@@ -55,6 +54,9 @@ class ExporterTab(QtWidgets.QWidget):
 
         # --- Exporters ---
         self._csv_exporter = CSVExporter()
+
+        # Background worker for NWB export (keeps UI thread free during HDF5 write)
+        self._nwb_worker: Optional[NwbExportWorker] = None
 
         # --- UI Widget References ---
         self.source_file_label: Optional[QtWidgets.QLabel] = None
@@ -285,7 +287,7 @@ class ExporterTab(QtWidgets.QWidget):
             default_filename = current_recording.source_file.with_suffix(".nwb").name
             if not default_dir:
                 default_dir = str(current_recording.source_file.parent)
-        default_save_path = os.path.join(default_dir, default_filename)
+        default_save_path = str(Path(default_dir) / default_filename) if default_dir else default_filename
         output_filepath_str, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save NWB File", dir=default_save_path, filter="NWB Files (*.nwb)"
         )
@@ -339,22 +341,30 @@ class ExporterTab(QtWidgets.QWidget):
 
         self.nwb_export_button.setEnabled(False)
         self._status_bar.showMessage(f"Exporting NWB to '{output_filepath.name}'...", 0)
-        QtWidgets.QApplication.processEvents()
-        try:
-            self._nwb_exporter.export(current_recording, output_filepath, nwb_metadata)
-            log.debug(f"Success export NWB: {output_filepath}")
-            self._status_bar.showMessage(f"Export successful: {output_filepath.name}", 5000)
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Data saved to:\n{output_filepath}")
-        except (ValueError, ExportError, SynaptipyError) as e:
-            log.error(f"NWB Export failed: {e}", exc_info=False)
-            self._status_bar.showMessage(f"NWB Export failed: {e}", 5000)
-            QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Failed to export NWB:\n{e}")
-        except Exception as e:
-            log.error(f"Unexpected NWB Export error: {e}", exc_info=True)
-            self._status_bar.showMessage("Unexpected NWB Export error.", 5000)
-            QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Unexpected error during export:\n{e}")
-        finally:
-            self.update_state()
+
+        self._nwb_worker = NwbExportWorker(
+            self._nwb_exporter, current_recording, output_filepath, nwb_metadata, parent=self
+        )
+        self._nwb_worker.export_finished.connect(self._on_nwb_export_finished)
+        self._nwb_worker.export_error.connect(self._on_nwb_export_error)
+        self._nwb_worker.start()
+
+    def _on_nwb_export_finished(self, output_path_str: str) -> None:
+        """Handle successful NWB export completion (called on the GUI thread)."""
+        output_filepath = Path(output_path_str)
+        log.debug(f"Success export NWB: {output_filepath}")
+        self._status_bar.showMessage(f"Export successful: {output_filepath.name}", 5000)
+        QtWidgets.QMessageBox.information(self, "Export Successful", f"Data saved to:\n{output_filepath}")
+        self.update_state()
+
+    def _on_nwb_export_error(self, error_msg: str) -> None:
+        """Handle NWB export failure (called on the GUI thread)."""
+        log.error(f"NWB Export failed: {error_msg}")
+        # Show only the last line of the traceback in the status bar to keep it brief
+        brief = error_msg.strip().splitlines()[-1]
+        self._status_bar.showMessage(f"NWB Export failed: {brief}", 5000)
+        QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Failed to export NWB:\n{brief}")
+        self.update_state()
 
     # --- NEW CSV Handlers ---
 
@@ -363,7 +373,7 @@ class ExporterTab(QtWidgets.QWidget):
         """Shows file dialog to select CSV output path for analysis results."""
         default_dir = self._settings.value("lastExportDirectory", "", type=str)
         default_filename = "analysis_results.csv"
-        default_path = os.path.join(default_dir, default_filename)
+        default_path = str(Path(default_dir) / default_filename) if default_dir else default_filename
 
         filepath_str, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save Analysis Results", dir=default_path, filter="CSV Files (*.csv);;JSON Files (*.json)"

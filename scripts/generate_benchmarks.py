@@ -3,6 +3,11 @@
 """
 Empirical scaling benchmark for Synaptipy's BatchAnalysisEngine.
 
+Reproduces **Figure 1** (``paper/results/benchmark_scaling.png``) in the
+Synaptipy manuscript.  To regenerate the figure::
+
+    python scripts/generate_benchmarks.py
+
 Two recording types are benchmarked separately:
 
   Dataset A  2023_04_11_0021.abf  spike_detection, all_trials, threshold=-20 mV
@@ -289,7 +294,15 @@ def main(output_dir: Path) -> None:
         all_results += _run_dataset("0022 event_detection", files_0022, _PIPELINE_0022)
 
     _save_csv(all_results, output_dir / f"benchmark_results_{_OS_TAG}.csv")
-    _save_plot(all_results, output_dir / f"benchmark_scaling_{_OS_TAG}.png")
+    tagged_png = output_dir / f"benchmark_scaling_{_OS_TAG}.png"
+    _save_plot(all_results, tagged_png)
+    # Also write the canonical filename referenced by paper/paper.md (Figure 1)
+    canonical_png = output_dir / "benchmark_scaling.png"
+    if tagged_png.exists():
+        import shutil as _shutil
+
+        _shutil.copy2(tagged_png, canonical_png)
+        print(f"Copied canonical: {canonical_png}")
 
     print("\nSummary:")
     print(f"  {'Dataset':<28}  {'Workers':>7}  {'Median (s)':>10}  {'Min':>7}  {'Max':>7}")

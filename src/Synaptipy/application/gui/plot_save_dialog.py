@@ -11,6 +11,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import logging
 import os
+from pathlib import Path
 from typing import Tuple
 
 from PySide6 import QtWidgets
@@ -178,7 +179,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         format_text = self.format_combo.currentText().lower()
 
         if path and filename:
-            full_path = os.path.join(path, f"{filename}.{format_text}")
+            full_path = str(Path(path) / f"{filename}.{format_text}")
             self.preview_label.setText(full_path)
         else:
             self.preview_label.setText("")
@@ -217,7 +218,7 @@ class PlotSaveDialog(QtWidgets.QDialog):
         filename = self.filename_edit.text()
         format_text = self.format_combo.currentText().lower()
 
-        full_path = os.path.join(path, f"{filename}.{format_text}")
+        full_path = str(Path(path) / f"{filename}.{format_text}")
         return full_path, format_text
 
 
