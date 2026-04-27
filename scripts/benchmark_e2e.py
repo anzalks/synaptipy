@@ -493,6 +493,13 @@ def run(output_dir: Path) -> bool:
     png_path = output_dir / f"e2e_rendering_benchmark_{_OS_TAG}.png"
     _save_csv(sw, gl, csv_path)
     _save_plot(sw, gl, png_path)
+    # Copy to canonical filename referenced by paper/paper.md (Figure 3)
+    canonical_png = output_dir / f"e2e_rendering_benchmark_{_OS_TAG.lower()}.png"
+    if png_path.exists() and canonical_png != png_path:
+        import shutil as _shutil
+
+        _shutil.copy2(png_path, canonical_png)
+        print(f"Copied canonical: {canonical_png}")
 
     _print_summary(sw, gl)
     return True

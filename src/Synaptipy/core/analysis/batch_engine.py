@@ -688,6 +688,11 @@ class BatchAnalysisEngine:
                             results_list.append(error_row)
                             continue
 
+                    # Explicitly release the per-channel data buffer so NumPy arrays
+                    # held in pipeline_context (which can be 10–200 MB for a long ABF)
+                    # are freed before processing the next channel in this file.
+                    pipeline_context = {"scope": None, "data": None, "time": None}
+
             except Exception as e:  # noqa: BLE001 - broad catch intentional; Domino Defense
                 # A single corrupted or unreadable file must never abort the entire batch run.
                 # Log the full traceback to batch_errors.log and continue to the next file.

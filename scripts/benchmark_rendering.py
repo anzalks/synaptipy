@@ -3,6 +3,11 @@
 """
 OpenGL vs software-rasterised rendering benchmark for Synaptipy plot traces.
 
+Reproduces **Figure 2** (``paper/results/rendering_benchmark.png``) in the
+Synaptipy manuscript.  To regenerate the figure::
+
+    python scripts/benchmark_rendering.py
+
 This script measures how long pyqtgraph takes to update a plot containing N
 overlaid voltage traces when OpenGL-accelerated rendering is enabled versus
 disabled.  Each condition is run in a separate child process so that
@@ -11,8 +16,9 @@ pyqtgraph's global ``useOpenGL`` flag is set before any Qt object is created.
 Dataset: 2023_04_11_0021.abf (20 trials x 20 000 samples @ 20 kHz = 400 K
          visible points at maximum overlay).
 
-Results are written to paper/results/rendering_results.csv and
-paper/results/rendering_benchmark.png by default.
+Results are written to paper/results/rendering_results_{os}.csv and
+paper/results/rendering_benchmark_{os}.png (OS-tagged) and also copied to the
+canonical paper/results/rendering_benchmark.png referenced by paper.md.
 
 Usage::
 
@@ -407,7 +413,15 @@ def main(output_dir: Path) -> None:
         sys.exit(1)
 
     _save_csv(opengl_data, software_data, output_dir / f"rendering_results_{_OS_TAG}.csv")
-    _save_plot(opengl_data, software_data, output_dir / f"rendering_benchmark_{_OS_TAG}.png")
+    tagged_png = output_dir / f"rendering_benchmark_{_OS_TAG}.png"
+    _save_plot(opengl_data, software_data, tagged_png)
+    # Copy to canonical filename referenced by paper/paper.md (Figure 2)
+    canonical_png = output_dir / "rendering_benchmark.png"
+    if tagged_png.exists():
+        import shutil as _shutil
+
+        _shutil.copy2(tagged_png, canonical_png)
+        print(f"Copied canonical: {canonical_png}")
 
     print("\nSummary (median ms per update cycle):")
     print(f"  {'N trials':>8}  {'Samples':>8}  {'Software':>10}  {'OpenGL':>8}  {'Ratio (SW/GL)':>14}")
