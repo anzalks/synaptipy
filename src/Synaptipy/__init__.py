@@ -7,7 +7,7 @@ electrophysiology data using the neo library and a Qt-based graphical interface.
 """
 
 # PEP 396 style version marker
-__version__ = "0.1.1"
+__version__ = "0.1.1b1"
 __author__ = "Anzal K Shahul"
 __email__ = "anzal.ks@gmail.com"
 __license__ = "AGPL-3.0-or-later"
