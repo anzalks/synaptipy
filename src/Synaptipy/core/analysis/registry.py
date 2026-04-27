@@ -49,16 +49,47 @@ class AnalysisRegistry:
         import copy
 
         def decorator(func: Callable) -> Callable:
-            if name in cls._registry:
-                log.warning(f"Analysis function '{name}' is already registered. Overwriting.")
-            cls._registry[name] = func
+            effective_name = name
+            if effective_name in cls._registry:
+                if effective_name in cls._core_analyses:
+                    # Plugin is trying to shadow a core analysis: rename the plugin
+                    # by appending an integer suffix to prevent silent overwrite.
+                    log.critical(
+                        "Plugin attempted to register '%s' which collides with a core "
+                        "analysis. The plugin will be registered under a suffixed name.",
+                        effective_name,
+                    )
+                    counter = 1
+                    while f"{effective_name}_{counter}" in cls._registry:
+                        counter += 1
+                    effective_name = f"{effective_name}_{counter}"
+                    log.critical(
+                        "Plugin registration collision resolved: '%s' -> '%s'.",
+                        name,
+                        effective_name,
+                    )
+                else:
+                    # Two plugins clash with each other: the later-registered plugin
+                    # wins silently (expected when plugins reload or when a user copy
+                    # overrides a bundled copy).  Log at INFO level for traceability.
+                    log.info(
+                        "Analysis name '%s' is already registered; overwriting with the "
+                        "new registration (plugin reload or user-plugin override).",
+                        effective_name,
+                    )
+            cls._registry[effective_name] = func
             # Ensure type is stored in metadata
             meta = kwargs.copy()
             meta["type"] = type
-            cls._metadata[name] = meta
+            cls._metadata[effective_name] = meta
             # Store deep copy as factory default
-            cls._original_metadata[name] = copy.deepcopy(meta)
-            log.debug(f"Registered {type} function: {name} with metadata: {list(meta.keys())}")
+            cls._original_metadata[effective_name] = copy.deepcopy(meta)
+            log.debug(
+                "Registered %s function: %s with metadata: %s",
+                type,
+                effective_name,
+                list(meta.keys()),
+            )
             return func
 
         return decorator

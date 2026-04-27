@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy Developer Guide &mdash; Synaptipy 0.1.0b6 documentation</title>
+  <title>Synaptipy Developer Guide &mdash; Synaptipy 0.1.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="_static/logo.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=2f6c07b9"></script>
+      <script src="_static/documentation_options.js?v=a58bc63e"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -274,6 +274,14 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#advanced-options">Advanced Options</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#reproducibility-how-gui-adjustments-serialize-to-the-batch-engine">Reproducibility: How GUI Adjustments Serialize to the Batch Engine</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="user_guide.html#parameter-capture">Parameter capture</a></li>
+<li class="toctree-l4"><a class="reference internal" href="user_guide.html#interactive-region-handles">Interactive region handles</a></li>
+<li class="toctree-l4"><a class="reference internal" href="user_guide.html#sessionmanager-serialization">SessionManager serialization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="user_guide.html#batch-engine-replay">Batch engine replay</a></li>
+<li class="toctree-l4"><a class="reference internal" href="user_guide.html#preprocessing-pipeline">Preprocessing pipeline</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#preferences">Preferences</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#enable-custom-plugins-hot-reload-mechanism">Enable Custom Plugins - Hot-Reload Mechanism</a></li>
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#included-example-plugins">Included Example Plugins</a></li>
@@ -377,6 +385,10 @@
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#subject-metadata">Subject Metadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#sweep-organisation">Sweep Organisation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#limitations-and-future-work">Limitations and Future Work</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#per-analysis-module-pynwb-class-mapping">Per-Analysis-Module PyNWB Class Mapping</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="nwb_mapping.html#notes-on-icephys-best-practice-containers">Notes on icephys best-practice containers</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#programmatic-usage">Programmatic Usage</a></li>
 </ul>
 </li>
@@ -533,6 +545,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#testing">Testing</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#running-tests">Running Tests</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#ci-test-matrix">CI Test Matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#golden-master-tests">Golden Master Tests</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#writing-tests">Writing Tests</a></li>
 </ul>
 </li>
@@ -2100,6 +2113,44 @@ see the dedicated guide: <strong><a class="reference internal" href="extending_s
 </table>
 <p>CI enforces <code class="docutils literal notranslate"><span class="pre">black</span> <span class="pre">--check</span></code>, <code class="docutils literal notranslate"><span class="pre">isort</span> <span class="pre">--check</span></code>, and <code class="docutils literal notranslate"><span class="pre">flake8</span></code>. PRs that fail
 any of these checks are rejected.</p>
+<p>Two additional jobs run automatically:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">minimum-viable</span></code></strong>: Python 3.10 with exact lower-bound versions
+(<code class="docutils literal notranslate"><span class="pre">numpy==2.0.0</span></code>, <code class="docutils literal notranslate"><span class="pre">scipy==1.13.0</span></code>, <code class="docutils literal notranslate"><span class="pre">neo==0.14.0</span></code>, <code class="docutils literal notranslate"><span class="pre">pyqtgraph==0.13.0</span></code>,
+<code class="docutils literal notranslate"><span class="pre">pyside6==6.7.3</span></code>). Confirms the stated minimum requirements actually work.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">bleeding-edge</span></code></strong>: Python 3.12 with all upgradable deps set to latest
+(PySide6 excluded). Runs with <code class="docutils literal notranslate"><span class="pre">continue-on-error:</span> <span class="pre">true</span></code> to give early
+warning of upcoming breakage without blocking the PR.</p></li>
+</ul>
+</section>
+<section id="golden-master-tests">
+<h3>Golden Master Tests<a class="headerlink" href="#golden-master-tests" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/core/test_golden_master.py</span></code> freezes exact floating-point outputs from
+the passive-properties algorithms against known ABF data files in
+<code class="docutils literal notranslate"><span class="pre">examples/data/</span></code>. If a library upgrade changes a result by more than 0.001 %,
+these tests fail immediately and pinpoint which value drifted.</p>
+<p><strong>When to update golden master values:</strong></p>
+<p>If you intentionally change an algorithm (e.g. improve the exponential fit
+initialisation in <code class="docutils literal notranslate"><span class="pre">calculate_tau</span></code>), the golden master values will need
+updating. Do this with a dedicated commit:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Re-run the probe script to get new values</span>
+conda<span class="w"> </span>run<span class="w"> </span>-n<span class="w"> </span>synaptipy<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter</span>
+<span class="s2">from Synaptipy.core.analysis.passive_properties import calculate_rmp, calculate_rin</span>
+<span class="s2">adapter = NeoAdapter()</span>
+<span class="s2">rec = adapter.load_recording(&#39;examples/data/24o18002.abf&#39;)</span>
+<span class="s2">ch = list(rec.channels.values())[0]</span>
+<span class="s2">v = ch.get_trial_data(0)</span>
+<span class="s2">t = ch.get_relative_time_vector(0)</span>
+<span class="s2">print(calculate_rmp(v, t, baseline_window=(0.0, 0.5)))</span>
+<span class="s2">&quot;</span>
+<span class="c1"># Then edit tests/core/test_golden_master.py to use the new expected value</span>
+<span class="c1"># with a clear commit message: &#39;test: update golden masters for improved tau fit&#39;</span>
+</pre></div>
+</div>
+<p>The tolerances are set to <code class="docutils literal notranslate"><span class="pre">rel=1e-5</span></code> (0.001 %) for most values and <code class="docutils literal notranslate"><span class="pre">rel=1e-2</span></code>
+(1 %) for <code class="docutils literal notranslate"><span class="pre">tau</span></code> (exponential fits are inherently less numerically stable).
+Do not tighten these tolerances without a specific reason.</p>
 </section>
 <section id="writing-tests">
 <h3>Writing Tests<a class="headerlink" href="#writing-tests" title="Link to this heading"></a></h3>
@@ -2312,7 +2363,7 @@ isort<span class="w"> </span>--check<span class="w"> </span>--diff<span class="w
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024-2026, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Apr 22, 2026.
+      <span class="lastupdated">Last updated on Apr 27, 2026.
       </span></p>
   </div>
 

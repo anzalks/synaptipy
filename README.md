@@ -15,6 +15,249 @@
 [![Collaborators Welcome](https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white)](https://github.com/anzalks/synaptipy)
 [![Release](https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange)](https://github.com/anzalks/synaptipy/releases)
 
+**Open-source electrophysiology analysis for wet-lab neuroscientists - no coding required.**
+
+Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
+
+Synaptipy is a cross-platform desktop application that turns raw patch-clamp recordings into publication-ready measurements. Load any `.abf`, `.wcp`, `.nwb`, or [other supported file](#supported-file-formats), and within seconds you can extract resting membrane potential, input resistance, action-potential features, synaptic event kinetics, and more - all from a point-and-click GUI with no Python knowledge required.
+
+When you are ready to scale up, the same analysis pipeline runs automatically across hundreds of files in batch mode, and all results export to CSV or NWB for downstream use in Excel, R, or Python.
+
+---
+
+## Quick Start - from install to first result in 3 steps
+
+### Step 1: Download and install
+
+**No Python needed.** Download the pre-compiled application for your operating system from the [Releases page](https://github.com/anzalks/Synaptipy/releases):
+
+- **Windows** - run `Synaptipy_Setup_v0.1.1.exe`
+- **macOS** - open `Synaptipy_v0.1.1.dmg` and drag to Applications
+- **Linux** - `chmod +x Synaptipy-v0.1.1-x86_64.AppImage` then run it
+
+### Step 2: Load your recording
+
+Launch Synaptipy and drag-and-drop your recording file (`.abf`, `.wcp`, `.nwb`, or any [supported format](#supported-file-formats)) into the **Explorer** tab. Traces render immediately.
+
+### Step 3: Analyse
+
+Click the **Analyser** tab. Select a channel, pick an analysis (e.g. **Input Resistance** or **Spike Detection**), and click **Run**. Results appear in the table below the plot and can be exported to CSV with one click.
+
+---
+
+## What can Synaptipy measure?
+
+### Intrinsic membrane properties (passive tab)
+- **Resting membrane potential (RMP)** - mean or median over a quiescent window
+- **Input resistance (Rin)** - automatically detects the current-step edges; falls back gracefully if auto-detection fails
+- **Membrane time constant (Tau)** - single-exponential fit to the voltage decay after a current step
+- **Sag ratio (Ih)** - peak-to-steady-state hyperpolarisation ratio; includes rebound depolarisation
+- **I-V curve** - current-voltage relationship across a multi-trial step protocol
+- **Membrane capacitance** - from Tau/Rin in current-clamp or from capacitive-transient integration in voltage-clamp
+
+### Action potential features (spike analysis tab)
+- **Spike detection** - threshold-crossing detection with refractory-period filtering
+- **Per-spike features** - amplitude, half-width, rise time, decay time, threshold voltage, fAHP, mAHP
+- **Phase-plane analysis** - dV/dt vs. voltage trajectory; threshold voltage via kink-slope criterion
+
+### Excitability (excitability tab)
+- **F-I curve** - rheobase, slope, maximum firing frequency, and spike-frequency adaptation ratio
+- **Burst analysis** - burst count, spikes per burst, burst duration, intra-burst frequency
+- **Spike-train statistics** - mean ISI, CV, local variation (LV), CV2
+
+### Synaptic events (synaptic events tab)
+- **Threshold detection** - prominence-based, baseline-drift-tolerant; click to accept/reject events
+- **Template matching** - double-exponential deconvolution for miniature events
+- **Baseline-to-peak** - amplitude and kinetics for evoked or spontaneous events
+
+### Optogenetics (opto tab)
+- **TTL correlation** - latency, response probability, and jitter between optical stimulus and response
+
+---
+
+## Batch processing
+
+Repeat any analysis across all files in a folder automatically:
+
+1. Open the **Batch** tab, add your files, configure the pipeline
+2. Click **Run** - the GUI stays responsive while analysis runs in the background
+3. Export the complete results table to CSV
+
+```python
+# Or run headlessly from a script:
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from pathlib import Path
+
+engine = BatchAnalysisEngine()
+results = engine.run_batch(
+    [Path("recording.abf")],
+    [{"analysis": "spike_detection", "scope": "all_trials",
+      "params": {"threshold": -20.0, "refractory_ms": 2.0}}],
+)
+print(results)
+```
+
+---
+
+## FAIR data compliance - NWB export
+
+Synaptipy exports both raw traces and analysis results to the
+[Neurodata Without Borders (NWB)](https://www.nwb.org) format, ensuring your
+data meets FAIR (Findable, Accessible, Interoperable, Reusable) requirements
+for journal submission and data sharing.
+
+---
+
+## Visual validation
+
+Every analysis result can be inspected visually before export:
+
+- OpenGL-accelerated trace rendering (handles multi-million-sample recordings at interactive frame rates)
+- Interactive zooming, panning, and per-channel amplitude scaling
+- Grand-average overlay across any combination of files and trials
+- Popup plots for I-V curves, F-I curves, and phase planes
+
+---
+
+## Supported file formats
+
+File I/O is handled through the [Neo](https://neo.readthedocs.io) library:
+
+| Format | Extension(s) | Acquisition system |
+|---|---|---|
+| Axon Binary Format | `.abf` | Axon / Molecular Devices |
+| WinWCP | `.wcp` | Strathclyde Electrophysiology Software |
+| CED / Spike2 | `.smr`, `.smrx` | Cambridge Electronic Design |
+| Igor Pro | `.ibw`, `.pxp` | WaveMetrics |
+| Intan | `.rhd`, `.rhs` | Intan Technologies |
+| Neurodata Without Borders | `.nwb` | NWB standard |
+| BrainVision | `.vhdr` | Brain Products |
+| European Data Format | `.edf` | EDF/EDF+ |
+| Plexon | `.plx`, `.pl2` | Plexon |
+| Open Ephys | `.continuous`, `.oebin` | Open Ephys |
+| Tucker Davis Technologies | `.tev`, `.tbk` | TDT |
+| Neuralynx | `.ncs`, `.nse`, `.nev` | Neuralynx |
+| NeuroExplorer | `.nex` | NeuroExplorer |
+| MATLAB | `.mat` | - |
+| ASCII / CSV | `.txt`, `.csv`, `.tsv` | - |
+
+Any format supported by Neo but not listed above can be added via the `IODict` in the infrastructure layer.
+
+---
+
+## Installing from source (developers and power users)
+
+If you want to use Synaptipy programmatically, write custom plugins, or contribute to development, install from source:
+
+```bash
+git clone https://github.com/anzalks/synaptipy.git
+cd synaptipy
+conda env create -f environment.yml
+conda activate synaptipy
+pip install -e ".[dev]"
+python -m pytest        # verify installation
+synaptipy               # launch the GUI
+```
+
+---
+
+## Documentation
+
+- [Full documentation (stable)](https://synaptipy.readthedocs.io/en/latest/)
+- [Quick-start tutorial](https://synaptipy.readthedocs.io/en/latest/tutorial/index.html)
+- [API reference](https://synaptipy.readthedocs.io/en/latest/api_reference.html)
+- [Developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html)
+
+---
+
+## Contributing
+
+Contributions are welcome - whether adding a new analysis module, supporting an additional file format, or improving documentation. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions and the contribution workflow.
+
+---
+
+## For developers - architecture and plugin system
+
+<details>
+<summary>Click to expand technical details</summary>
+
+### Architecture overview
+
+Synaptipy follows a strict separation-of-concerns design:
+
+- **Core layer** - pure Python analysis logic, fully decoupled from the GUI and independently testable
+- **Application layer** - PySide6 (Qt6) user interface and plugin manager
+- **Infrastructure layer** - file I/O via Neo and PyNWB; NWB export
+
+| Component | Technology | Version |
+|---|---|---|
+| Language | Python | 3.10 - 3.12 |
+| GUI Framework | PySide6 | 6.7.3 (pinned) |
+| Plotting Engine | PyQtGraph | 0.13.0+ |
+| Electrophysiology I/O | Neo | 0.14.0+ |
+| NWB Export | PyNWB | 3.1.0+ |
+| Numerical Computation | SciPy / NumPy | 1.13.0+ / 2.0.0+ |
+
+### Analysis registry pattern
+
+New analysis functions are registered with the `@AnalysisRegistry.register` decorator. The `ui_params` list drives the GUI parameter panel automatically, and the same parameters serialise directly to the batch engine - there is no separate configuration step.
+
+```python
+@AnalysisRegistry.register(
+    name="my_analysis",
+    ui_params=[{"name": "threshold", "type": "float", "default": -20.0}],
+    plots=["overlay"],
+)
+def my_analysis_wrapper(data, time, fs, params):
+    ...
+    return {"module_used": "my_analysis", "metrics": {"threshold_mv": threshold}}
+```
+
+### Plugin interface
+
+Any Python script placed in `~/.synaptipy/plugins/` that uses `@AnalysisRegistry.register` is automatically discovered at startup and available in both the interactive analyser and batch pipeline.
+
+A fully documented template lives at `src/Synaptipy/templates/analysis_template.py`.
+
+**Return schema** - every wrapper must return:
+```python
+return {
+    "module_used": "my_plugin",
+    "metrics": {"Val1": 1.0, "Val2": 2.0},
+}
+```
+Private keys (prefixed with `_`) pass data to plot overlays without appearing in the results table.
+
+**Hot-reload** - toggling "Enable Custom Plugins" in Edit > Preferences reloads all plugins and regenerates the UI without restarting the application.
+
+### Cross-file trial averaging
+
+While in "Cycle Single Trial" mode, click "Add Current Trial to Avg Set" to capture a trial. Navigate to other files and continue adding trials. Enable "Plot Selected Avg" to overlay the grand average.
+
+Shape mismatch is handled by NaN-padding shorter arrays and computing the column-wise `nanmean`, so recordings of different durations average correctly without truncation.
+
+</details>
+
+---
+
+## Dependencies and citations
+
+Synaptipy builds on the following open-source libraries. If you use Synaptipy in published research, please consider citing the relevant upstream packages.
+
+| Library | Role | Citation |
+|---|---|---|
+| [Neo](https://neo.readthedocs.io) | Electrophysiology file I/O | Garcia S et al. (2014). *Front. Neuroinformatics* 8:10. [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010) |
+| [PyNWB](https://pynwb.readthedocs.io) | NWB data export | Rubel O et al. (2022). *eLife* 11:e78362. [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362) |
+| [PySide6](https://doc.qt.io/qtforpython/) | Qt6 GUI framework | Qt for Python, The Qt Company |
+| [PyQtGraph](https://www.pyqtgraph.org) | Signal plotting | Campagnola L et al. https://www.pyqtgraph.org |
+| [SciPy](https://scipy.org) | Signal processing and curve fitting | Virtanen P et al. (2020). *Nature Methods* 17:261-272. [doi:10.1038/s41592-019-0686-2](https://doi.org/10.1038/s41592-019-0686-2) |
+| [NumPy](https://numpy.org) | Array computation | Harris CR et al. (2020). *Nature* 585:357-362. [doi:10.1038/s41586-020-2649-2](https://doi.org/10.1038/s41586-020-2649-2) |
+
+## License
+
+Synaptipy is free and open-source software licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for full terms.
+
+
 **Open-Source Electrophysiology Visualization and Analysis Suite**
 
 Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)

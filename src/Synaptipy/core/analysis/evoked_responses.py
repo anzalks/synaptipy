@@ -358,36 +358,75 @@ def calculate_paired_pulse_ratio(  # noqa: C901
 
     residual_at_stim2 = 0.0
     tau_ms = None
+
+    def _bi_exp(t: np.ndarray, a_f: float, tau_f: float, a_s: float, tau_s: float, c: float) -> np.ndarray:
+        return a_f * np.exp(-t / tau_f) + a_s * np.exp(-t / tau_s) + c
+
     try:
-        # Fit in the direction of the event
-        if polarity == "negative":
-            popt, _ = curve_fit(
-                _mono_exp,
-                t_fit,
-                y_fit,
-                p0=[-a0, tau0, bl1],
-                bounds=([-a0 * 20, 0.1, bl1 - r1_amp * 2], [0.0, tau0 * 50, bl1 + r1_amp]),
-                maxfev=3000,
-            )
-        else:
-            popt, _ = curve_fit(
-                _mono_exp,
-                t_fit,
-                y_fit,
-                p0=[a0, tau0, bl1],
-                bounds=([0.0, 0.1, bl1 - r1_amp], [a0 * 20, tau0 * 50, bl1 + r1_amp * 2]),
-                maxfev=3000,
-            )
-        tau_ms = float(popt[1])
-        out["decay_tau_ms"] = tau_ms
-        # Evaluate decay at stim2_onset
         t_at_stim2_ms = (stim2_onset_s - time[i_fit0]) * 1000.0
-        residual_at_stim2 = float(_mono_exp(t_at_stim2_ms, *popt)) - bl1
-        out["residual_at_stim2"] = residual_at_stim2
-        # Store fitted curve arrays for visual overlay (private keys, hidden from results table)
         t_fit_abs = time[i_fit0:i_fit1]
+        # Strict amplitude bound: ±3x R1 amplitude prevents parameter explosion.
+        amp_bound = max(a0 * 3.0, abs(r1_amp) * 2.0, 1e-6)
+
+        _fit_func = None
+        _popt = None
+
+        # ── Attempt bi-exponential fit (requires >= 8 samples for 5 params) ──
+        if len(t_fit) >= 8:
+            try:
+                if polarity == "negative":
+                    bi_p0 = [-a0 * 0.7, tau0 * 0.3, -a0 * 0.3, tau0, bl1]
+                    bi_lower = [-amp_bound, 0.1, -amp_bound, 0.1, bl1 - abs(r1_amp) * 2]
+                    bi_upper = [0.0, tau0 * 100, 0.0, tau0 * 100, bl1 + abs(r1_amp)]
+                else:
+                    bi_p0 = [a0 * 0.7, tau0 * 0.3, a0 * 0.3, tau0, bl1]
+                    bi_lower = [0.0, 0.1, 0.0, 0.1, bl1 - abs(r1_amp)]
+                    bi_upper = [amp_bound, tau0 * 100, amp_bound, tau0 * 100, bl1 + abs(r1_amp) * 2]
+                popt_bi, pcov_bi = curve_fit(_bi_exp, t_fit, y_fit, p0=bi_p0, bounds=(bi_lower, bi_upper), maxfev=4000)
+                # Fall back if covariance matrix cannot be estimated (degenerate fit).
+                if np.any(~np.isfinite(pcov_bi)):
+                    raise ValueError("Infinite covariance: bi-exp degenerate")
+                a_f_fit, tau_f_fit, a_s_fit, tau_s_fit, _ = popt_bi
+                total_amp = abs(a_f_fit) + abs(a_s_fit)
+                if total_amp < 1e-12:
+                    raise ValueError("Bi-exp amplitudes effectively zero")
+                # Amplitude-weighted dominant time constant (section 15.5).
+                tau_ms = (abs(a_f_fit) * tau_f_fit + abs(a_s_fit) * tau_s_fit) / total_amp
+                _fit_func = _bi_exp
+                _popt = popt_bi
+            except (RuntimeError, ValueError) as _bi_exc:
+                log.debug("PPR bi-exp failed (%s); falling back to mono-exp.", _bi_exc)
+
+        # ── Mono-exponential fallback ──
+        if _popt is None:
+            if polarity == "negative":
+                popt_mono, _ = curve_fit(
+                    _mono_exp,
+                    t_fit,
+                    y_fit,
+                    p0=[-a0, tau0, bl1],
+                    bounds=([-amp_bound, 0.1, bl1 - abs(r1_amp) * 2], [0.0, tau0 * 50, bl1 + abs(r1_amp)]),
+                    maxfev=3000,
+                )
+            else:
+                popt_mono, _ = curve_fit(
+                    _mono_exp,
+                    t_fit,
+                    y_fit,
+                    p0=[a0, tau0, bl1],
+                    bounds=([0.0, 0.1, bl1 - abs(r1_amp)], [amp_bound, tau0 * 50, bl1 + abs(r1_amp) * 2]),
+                    maxfev=3000,
+                )
+            tau_ms = float(popt_mono[1])
+            _fit_func = _mono_exp
+            _popt = popt_mono
+
+        out["decay_tau_ms"] = tau_ms
+        residual_at_stim2 = float(_fit_func(t_at_stim2_ms, *_popt)) - bl1
+        out["residual_at_stim2"] = residual_at_stim2
+        # Store fitted curve for visual overlay (private keys hidden from results table).
         out["_ppr_fit_times"] = t_fit_abs.tolist()
-        out["_ppr_fit_values"] = [float(_mono_exp(tv, *popt)) for tv in t_fit]
+        out["_ppr_fit_values"] = [float(_fit_func(tv, *_popt)) for tv in t_fit]
     except Exception as exc:
         log.warning("PPR decay fit failed: %s", exc)
         out["ppr_error"] = f"Decay fit failed: {exc}"

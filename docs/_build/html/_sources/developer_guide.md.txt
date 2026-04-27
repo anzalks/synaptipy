@@ -247,6 +247,48 @@ CI runs on all three platforms across Python 3.10, 3.11, and 3.12:
 CI enforces `black --check`, `isort --check`, and `flake8`. PRs that fail
 any of these checks are rejected.
 
+Two additional jobs run automatically:
+
+- **`minimum-viable`**: Python 3.10 with exact lower-bound versions
+  (`numpy==2.0.0`, `scipy==1.13.0`, `neo==0.14.0`, `pyqtgraph==0.13.0`,
+  `pyside6==6.7.3`). Confirms the stated minimum requirements actually work.
+- **`bleeding-edge`**: Python 3.12 with all upgradable deps set to latest
+  (PySide6 excluded). Runs with `continue-on-error: true` to give early
+  warning of upcoming breakage without blocking the PR.
+
+### Golden Master Tests
+
+`tests/core/test_golden_master.py` freezes exact floating-point outputs from
+the passive-properties algorithms against known ABF data files in
+`examples/data/`. If a library upgrade changes a result by more than 0.001 %,
+these tests fail immediately and pinpoint which value drifted.
+
+**When to update golden master values:**
+
+If you intentionally change an algorithm (e.g. improve the exponential fit
+initialisation in `calculate_tau`), the golden master values will need
+updating. Do this with a dedicated commit:
+
+```bash
+# Re-run the probe script to get new values
+conda run -n synaptipy python -c "
+from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+from Synaptipy.core.analysis.passive_properties import calculate_rmp, calculate_rin
+adapter = NeoAdapter()
+rec = adapter.load_recording('examples/data/24o18002.abf')
+ch = list(rec.channels.values())[0]
+v = ch.get_trial_data(0)
+t = ch.get_relative_time_vector(0)
+print(calculate_rmp(v, t, baseline_window=(0.0, 0.5)))
+"
+# Then edit tests/core/test_golden_master.py to use the new expected value
+# with a clear commit message: 'test: update golden masters for improved tau fit'
+```
+
+The tolerances are set to `rel=1e-5` (0.001 %) for most values and `rel=1e-2`
+(1 %) for `tau` (exponential fits are inherently less numerically stable).
+Do not tighten these tolerances without a specific reason.
+
 ### Writing Tests
 
 - Place tests in the appropriate subdirectory of the `tests/` folder

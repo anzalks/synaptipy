@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy User Guide &mdash; Synaptipy 0.1.0b6 documentation</title>
+  <title>Synaptipy User Guide &mdash; Synaptipy 0.1.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="_static/logo.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=2f6c07b9"></script>
+      <script src="_static/documentation_options.js?v=a58bc63e"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -276,6 +276,14 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#advanced-options">Advanced Options</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#reproducibility-how-gui-adjustments-serialize-to-the-batch-engine">Reproducibility: How GUI Adjustments Serialize to the Batch Engine</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#parameter-capture">Parameter capture</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#interactive-region-handles">Interactive region handles</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#sessionmanager-serialization">SessionManager serialization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#batch-engine-replay">Batch engine replay</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#preprocessing-pipeline">Preprocessing pipeline</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#preferences">Preferences</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#enable-custom-plugins-hot-reload-mechanism">Enable Custom Plugins - Hot-Reload Mechanism</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#included-example-plugins">Included Example Plugins</a></li>
@@ -379,6 +387,10 @@
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#subject-metadata">Subject Metadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#sweep-organisation">Sweep Organisation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#limitations-and-future-work">Limitations and Future Work</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#per-analysis-module-pynwb-class-mapping">Per-Analysis-Module PyNWB Class Mapping</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="nwb_mapping.html#notes-on-icephys-best-practice-containers">Notes on icephys best-practice containers</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="nwb_mapping.html#programmatic-usage">Programmatic Usage</a></li>
 </ul>
 </li>
@@ -535,6 +547,7 @@
 <li class="toctree-l2"><a class="reference internal" href="developer_guide.html#testing">Testing</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="developer_guide.html#running-tests">Running Tests</a></li>
 <li class="toctree-l3"><a class="reference internal" href="developer_guide.html#ci-test-matrix">CI Test Matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="developer_guide.html#golden-master-tests">Golden Master Tests</a></li>
 <li class="toctree-l3"><a class="reference internal" href="developer_guide.html#writing-tests">Writing Tests</a></li>
 </ul>
 </li>
@@ -2324,6 +2337,100 @@ for full details on what is included and planned.</p>
 </section>
 <section id="advanced-options">
 <h2>Advanced Options<a class="headerlink" href="#advanced-options" title="Link to this heading"></a></h2>
+<section id="reproducibility-how-gui-adjustments-serialize-to-the-batch-engine">
+<h3>Reproducibility: How GUI Adjustments Serialize to the Batch Engine<a class="headerlink" href="#reproducibility-how-gui-adjustments-serialize-to-the-batch-engine" title="Link to this heading"></a></h3>
+<p>A key design goal of Synaptipy is that any parameter tweak made interactively
+in the GUI produces an identical result when replayed by the headless
+<code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code>.  This section explains the serialization pathway.</p>
+<section id="parameter-capture">
+<h4>Parameter capture<a class="headerlink" href="#parameter-capture" title="Link to this heading"></a></h4>
+<p>Every widget in an analysis tab (spin-boxes, check-boxes, combo-boxes,
+draggable region handles) corresponds to one entry in the tab’s
+<code class="docutils literal notranslate"><span class="pre">ui_params</span></code> list, which is declared alongside the
+<code class="docutils literal notranslate"><span class="pre">&#64;AnalysisRegistry.register(...)</span></code> decorator for that analysis function.  The
+parameter name, type, and current value are stored together.</p>
+<p>When the user clicks <strong>Run Analysis</strong>, the tab calls
+<code class="docutils literal notranslate"><span class="pre">_gather_analysis_parameters()</span></code>, which iterates over every <code class="docutils literal notranslate"><span class="pre">ui_params</span></code> entry
+and reads the current widget value.  The result is a plain Python dictionary:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Example parameter dict for the Tau analysis tab</span>
+<span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;stim_start_time&quot;</span><span class="p">:</span> <span class="mf">0.200</span><span class="p">,</span>   <span class="c1"># s  (from a QDoubleSpinBox)</span>
+    <span class="s2">&quot;fit_duration&quot;</span><span class="p">:</span>    <span class="mf">0.300</span><span class="p">,</span>   <span class="c1"># s</span>
+    <span class="s2">&quot;model&quot;</span><span class="p">:</span>           <span class="s2">&quot;mono&quot;</span><span class="p">,</span>  <span class="c1"># (from a QComboBox)</span>
+    <span class="s2">&quot;artifact_blanking_ms&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="interactive-region-handles">
+<h4>Interactive region handles<a class="headerlink" href="#interactive-region-handles" title="Link to this heading"></a></h4>
+<p>Draggable baseline or fit windows rendered as <code class="docutils literal notranslate"><span class="pre">pyqtgraph.LinearRegionItem</span></code>
+objects are two-way linked to the corresponding spin-box pair via Qt signals.
+Dragging the region emits <code class="docutils literal notranslate"><span class="pre">sigRegionChangeFinished</span></code>, which updates the
+spin-box values.  Conversely, typing in a spin-box moves the region.
+At the moment of analysis, the spin-box values - not the graphical object
+positions - are read into the parameter dictionary.  The graphical object is
+therefore only a visual convenience; the canonical parameter value is always
+the spin-box number.</p>
+</section>
+<section id="sessionmanager-serialization">
+<h4>SessionManager serialization<a class="headerlink" href="#sessionmanager-serialization" title="Link to this heading"></a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">SessionManager</span></code> (a singleton) stores:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Simplified SessionManager state</span>
+<span class="p">{</span>
+    <span class="s2">&quot;active_analysis&quot;</span><span class="p">:</span> <span class="s2">&quot;tau_analysis&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;preprocessing_settings&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="s2">&quot;lowpass_hz&quot;</span><span class="p">:</span> <span class="mi">2000</span> <span class="p">},</span>
+    <span class="s2">&quot;analysis_params&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;tau_analysis&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;stim_start_time&quot;</span><span class="p">:</span> <span class="mf">0.200</span><span class="p">,</span>
+            <span class="s2">&quot;fit_duration&quot;</span><span class="p">:</span>    <span class="mf">0.300</span><span class="p">,</span>
+            <span class="s2">&quot;model&quot;</span><span class="p">:</span>           <span class="s2">&quot;mono&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="o">...</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>These dictionaries are serialized to JSON when the user saves a session file
+(<strong>File - Save Session</strong>).  Loading a session file restores them, so every
+tab shows the same parameter values as when the session was saved.</p>
+</section>
+<section id="batch-engine-replay">
+<h4>Batch engine replay<a class="headerlink" href="#batch-engine-replay" title="Link to this heading"></a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine</span></code> accepts a list of file paths plus a parameter
+dictionary in exactly the same format produced by <code class="docutils literal notranslate"><span class="pre">_gather_analysis_parameters()</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">Synaptipy.core.analysis.batch_engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">BatchAnalysisEngine</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">Synaptipy.core.analysis</span>  <span class="c1"># populates the registry</span>
+
+<span class="n">engine</span> <span class="o">=</span> <span class="n">BatchAnalysisEngine</span><span class="p">()</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+    <span class="n">file_paths</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;cell_01.abf&quot;</span><span class="p">,</span> <span class="s2">&quot;cell_02.abf&quot;</span><span class="p">],</span>
+    <span class="n">analysis_name</span><span class="o">=</span><span class="s2">&quot;tau_analysis&quot;</span><span class="p">,</span>
+    <span class="n">params</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;stim_start_time&quot;</span><span class="p">:</span> <span class="mf">0.200</span><span class="p">,</span>
+        <span class="s2">&quot;fit_duration&quot;</span><span class="p">:</span>    <span class="mf">0.300</span><span class="p">,</span>
+        <span class="s2">&quot;model&quot;</span><span class="p">:</span>           <span class="s2">&quot;mono&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;artifact_blanking_ms&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">channel_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">trial_indices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Because both paths invoke the same registered wrapper function with the same
+parameter dictionary, the batch result is mathematically identical to the
+GUI result - provided the same preprocessing pipeline is applied.</p>
+</section>
+<section id="preprocessing-pipeline">
+<h4>Preprocessing pipeline<a class="headerlink" href="#preprocessing-pipeline" title="Link to this heading"></a></h4>
+<p>Preprocessing settings (filters, baseline subtraction) are stored in
+<code class="docutils literal notranslate"><span class="pre">SessionManager().preprocessing_settings</span></code> as a nested dictionary and can be
+passed to the engine via the <code class="docutils literal notranslate"><span class="pre">preprocessing_settings</span></code> argument of
+<code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine.run()</span></code>.  The engine applies the identical
+<code class="docutils literal notranslate"><span class="pre">ProcessingPipeline</span></code> that the GUI uses, ensuring the batch trace matches the
+trace the user visually validated.</p>
+</section>
+</section>
 <section id="preferences">
 <h3>Preferences<a class="headerlink" href="#preferences" title="Link to this heading"></a></h3>
 <p>Open <strong>Edit &gt; Preferences</strong> (or <strong>Synaptipy &gt; Preferences</strong> on macOS) to access the application settings:</p>
@@ -2498,7 +2605,7 @@ synaptipy<span class="w"> </span>--dev
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024-2026, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Apr 22, 2026.
+      <span class="lastupdated">Last updated on Apr 27, 2026.
       </span></p>
   </div>
 

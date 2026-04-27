@@ -218,7 +218,6 @@ def calculate_spike_features(  # noqa: C901
 
     dvdt = np.gradient(data, dt)
     d2vdt2 = np.gradient(dvdt, dt)
-    threshold_val_mvs = dvdt_threshold * 1000.0
 
     lookback_samples = int(onset_lookback / dt)
     post_peak_samples = int(0.01 / dt)
@@ -236,9 +235,14 @@ def calculate_spike_features(  # noqa: C901
     d2vdt2_peak_rel = np.argmax(onset_d2vdt2_windows, axis=1)
     thresh_indices_d2 = onset_window_indices[np.arange(n_spikes), d2vdt2_peak_rel]
 
-    # Fallback: first dV/dt crossing above threshold
+    # Fallback: first dV/dt crossing above a dynamic per-spike threshold.
+    # Using 20% of the per-spike peak rising dV/dt avoids a hardcoded 20 V/s
+    # that is invalid for smaller or inactivated spikes in fast trains.
     onset_dvdt_windows = dvdt[onset_window_indices]
-    crossings_mask = onset_dvdt_windows > threshold_val_mvs
+    onset_max_dvdt = np.max(onset_dvdt_windows, axis=1)  # (n_spikes,) in mV/s
+    # Floor at 2 V/s (2000 mV/s) to prevent triggering at rest.
+    dynamic_thresh_mvs = np.maximum(0.2 * onset_max_dvdt, 2000.0)
+    crossings_mask = onset_dvdt_windows > dynamic_thresh_mvs[:, None]
     has_crossing = np.any(crossings_mask, axis=1)
     first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
     fallback_indices = np.maximum(0, spike_indices - int(0.001 / dt))

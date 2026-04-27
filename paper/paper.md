@@ -20,6 +20,64 @@ affiliations:
 date: 2026-04-24
 ---
 
+<!--
+=============================================================================
+MANUSCRIPT TODO - Pre-submission checklist (remove this block before submission)
+=============================================================================
+
+A) BENCHMARK FIGURES (Figures 1, 2, 3 are placeholders - MUST be regenerated):
+   - [ ] Run `python scripts/generate_benchmarks.py` to produce
+         paper/results/benchmark_scaling.png,
+         paper/results/rendering_benchmark.png,
+         paper/results/e2e_rendering_benchmark_macos.png
+   - [ ] Verify each figure has axis labels, units, and a legend.
+   - [ ] Replace placeholder images in the Results section with final versions.
+
+B) BIOLOGICAL VALIDATION FIGURE (placeholder text in Results section 2):
+   - [ ] Generate a scatter plot comparing SynaptiPy AP threshold and R_in
+         values against eFEL and Clampfit using an open dataset
+         (recommended: Allen Cell Types Database, AIBS, https://celltypes.brain-map.org/).
+     Steps:
+       1. Download a set of Allen Cell Types NWC/ABF files.
+       2. Run SynaptiPy batch engine on the files.
+       3. Run eFEL (https://github.com/BlueBrain/eFEL) on the same files.
+       4. Produce a Bland-Altman or scatter plot of SynaptiPy vs eFEL/Clampfit.
+       5. Save PNG to paper/results/biological_validation_scatter.png.
+   - [ ] Replace the `![Biological Validation]` placeholder in Results section 2
+         with the generated figure and its caption.
+   - [ ] Report exact numeric agreement statistics (mean bias, limits of
+         agreement, Pearson r) in the main text rather than the image alone.
+
+C) HARD PERFORMANCE NUMBERS (to replace figure-only benchmark evidence):
+   - [ ] Add a sentence reporting: median per-file batch time (ms),
+         peak RAM usage (MB) for a 100-sweep ABF, and GUI frame rate (fps)
+         at maximum plot density. Run `python scripts/benchmark_e2e.py --report`
+         and copy results here.
+
+D) ZENODO DOI:
+   - [ ] Archive the repository on Zenodo (https://zenodo.org/) by creating
+         a release tag and enabling the GitHub-Zenodo integration.
+   - [ ] Replace `[Zenodo DOI Here]` in the Software Availability section
+         with the real DOI badge, e.g. `[![DOI](https://zenodo.org/badge/DOI/...)](...)`.
+
+E) BIBLIOGRAPHY (`paper.bib`):
+   - [ ] Compile all references cited in the text into paper/paper.bib.
+   - [ ] Required entries (at minimum):
+         - Neo library (Garcia et al., 2014)
+         - PyNWB / NWB standard (Rubel et al., 2022)
+         - eFEL (cite BlueBrain/eFEL repository)
+         - Stimfit (Guzman et al., 2014)
+         - pyABF (Harden, 2020)
+         - SciPy (Virtanen et al., 2020)
+         - NumPy (Harris et al., 2020)
+         - PySide6 / Qt
+   - [ ] Verify all `@cite` keys in the text match entries in paper.bib.
+
+=============================================================================
+END TODO
+=============================================================================
+-->
+
 # Abstract
 SynaptiPy is an open-source, Python-based software suite developed for the visualization and automated analysis of intracellular electrophysiology data. It provides a modular, metadata-driven graphical user interface (GUI) designed to resolve the methodological divide between inflexible commercial software and complex programmatic libraries. SynaptiPy supports over 15 distinct analytical modules encompassing intrinsic passive properties, single-spike kinetics, short-term synaptic plasticity, and optogenetic mapping. The application natively supports multiple proprietary file formats via the `neo` library and integrates Neurodata Without Borders (NWB) export capabilities to facilitate open-science reproducibility.
 
@@ -35,9 +93,19 @@ Recent advancements in patch-clamp and optogenetic methodologies allow for the r
 To maximize long-term extensibility, SynaptiPy utilizes a decoupled, metadata-driven architecture. Rather than utilizing hard-coded user interfaces for individual analytical functions, the software employs a centralized `@AnalysisRegistry`. Researchers can implement custom algorithms via standard Python functions, which the application automatically parses to dynamically generate the required GUI elements, interactive plotting bounds, and batch-processing hooks. This abstraction allows users to expand the software’s capabilities without requiring familiarity with the underlying PySide6/Qt framework.
 
 ### 2. Automated Testing and Software Maintenance
-A common limitation of academic software is dependency drift, where unmonitored updates to third-party libraries alter underlying calculations. To ensure long-term reproducibility, SynaptiPy is supported by a continuous integration and continuous deployment (CI/CD) pipeline with strict semantic dependency constraints. Furthermore, the repository employs baseline regression testing—executing the core analytical pipeline against raw experimental datasets (`.abf`, `.wcp`) during automated checks—to verify that upstream updates to core libraries (`SciPy`, `NumPy`) do not introduce silent mathematical deviations.
+A common limitation of academic software is dependency drift, where unmonitored updates to third-party libraries alter underlying calculations. To ensure long-term reproducibility, SynaptiPy is supported by a continuous integration and continuous deployment (CI/CD) pipeline with strict semantic dependency constraints. Furthermore, the repository employs baseline regression testing-executing the core analytical pipeline against raw experimental datasets (`.abf`, `.wcp`) during automated checks-to verify that upstream updates to core libraries (`SciPy`, `NumPy`) do not introduce silent mathematical deviations.
 
-### 3. Interoperability and FAIR Data Standards
+### 3. GUI-to-Batch Parameter Serialization
+
+Interactive parameter adjustments made in the SynaptiPy GUI are fully reproducible in the headless `BatchAnalysisEngine`. Every analysis widget (spin-boxes, draggable region handles, combo-boxes) maps to a named entry in the `ui_params` list declared alongside the `@AnalysisRegistry.register(...)` decorator. When the user clicks **Run Analysis**, `_gather_analysis_parameters()` reads the current widget values into a plain Python dictionary:
+
+```python
+params = {"stim_start_time": 0.200, "fit_duration": 0.300, "model": "mono"}
+```
+
+This dictionary is stored in `SessionManager` and serialized to JSON when the user saves a session file. The `BatchAnalysisEngine` accepts the same dictionary format and invokes the identical registered wrapper function, ensuring that a batch result is mathematically equivalent to the GUI result. Draggable region handles are two-way linked to their spin-box counterparts via Qt signals; the spin-box value-not the graphical position-is the canonical parameter that enters the analysis. The preprocessing pipeline (filters, baseline subtraction) is passed to the batch engine via `preprocessing_settings`, applying the same `ProcessingPipeline` that the GUI uses on the visually validated trace.
+
+### 4. Interoperability and FAIR Data Standards
 In accordance with FAIR (Findable, Accessible, Interoperable, and Reusable) data principles, SynaptiPy incorporates native Neurodata Without Borders (NWB) compliance. A dedicated export module translates proprietary manufacturer data arrays and user-generated analytical metadata into the open NWB standard, thereby streamlining data deposition and facilitating cross-laboratory reproducibility.
 
 # Results (Biological Validation and Performance)

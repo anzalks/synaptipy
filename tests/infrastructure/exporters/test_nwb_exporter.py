@@ -151,3 +151,35 @@ def test_nwb_exporter_empty_recording(nwb_exporter_instance, valid_session_metad
     if output_file.exists():
         # verify it works
         pass
+
+
+def test_nwb_schema_validation_passes(
+    nwb_exporter_instance, mock_recording_for_export, valid_session_metadata, tmp_path
+):
+    """NWB file produced by NWBExporter must pass pynwb.validate() without errors.
+
+    pynwb.validate() checks:
+    - All required NWB fields are present and correctly typed
+    - No missing required attributes or incorrect data types
+    - Schema compliance at the HDMF / NWB core level
+
+    This is the authoritative pre-CI schema sanity check.
+    """
+    try:
+        from pynwb import NWBHDF5IO
+        from pynwb import validate as nwb_validate
+    except ImportError:
+        pytest.skip("pynwb not installed")
+
+    output_file = tmp_path / "schema_validation_test.nwb"
+    nwb_exporter_instance.export(mock_recording_for_export, output_file, valid_session_metadata)
+
+    assert output_file.exists(), "NWB file was not created"
+
+    # Re-open the file and run pynwb schema validation
+    with NWBHDF5IO(str(output_file), "r") as io:
+        errors = nwb_validate(io)
+
+    assert errors == [] or errors is None, f"PyNWB schema validation reported {len(errors)} error(s):\n" + "\n".join(
+        str(e) for e in errors
+    )

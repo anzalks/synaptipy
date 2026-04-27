@@ -22,6 +22,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import importlib.util
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import List
@@ -91,18 +92,20 @@ class PluginManager:
         """Attempt to import one plugin file and log any failure gracefully."""
         module_name = f"synaptipy_plugin_{p_file.stem}"
         try:
+            # Always evict any cached module so @AnalysisRegistry.register
+            # decorators fire from the correct file path on every load call.
+            # importlib.reload() would re-use the old __spec__ path (which may
+            # point to a stale temp directory in tests), so we always do a
+            # fresh load instead.
             if module_name in sys.modules:
-                # Module already loaded — force a reload so the
-                # @AnalysisRegistry.register decorators fire again.
-                importlib.reload(sys.modules[module_name])
-            else:
-                spec = importlib.util.spec_from_file_location(module_name, str(p_file))
-                if spec is None or spec.loader is None:
-                    log.warning(f"Could not load plugin specification for {p_file.name}")
-                    return
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                spec.loader.exec_module(module)
+                del sys.modules[module_name]
+            spec = importlib.util.spec_from_file_location(module_name, str(p_file))
+            if spec is None or spec.loader is None:
+                log.warning(f"Could not load plugin specification for {p_file.name}")
+                return
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
             log.info(f"Successfully loaded plugin: {p_file.name}")
         except ImportError as e:
             log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
@@ -110,6 +113,74 @@ class PluginManager:
             log.error(f"SyntaxError in plugin '{p_file.name}': {e}", exc_info=False)
         except Exception as e:
             log.error(f"Unexpected error loading plugin '{p_file.name}': {e}", exc_info=False)
+
+    @classmethod
+    def _warn_user_plugins(cls, user_plugin_files: List[Path]) -> bool:
+        """Show a one-time security warning when user plugins are about to be loaded.
+
+        User-provided code in ``~/.synaptipy/plugins/`` is executed with the
+        same privileges as the running Python process.  This dialog informs the
+        user before loading and records acknowledgement in QSettings so it only
+        fires once per plugin directory contents hash.
+
+        Args:
+            user_plugin_files: List of ``.py`` plugin files from the user directory.
+
+        Returns:
+            ``True`` if loading should proceed, ``False`` if the user declined.
+        """
+        if not user_plugin_files:
+            return True
+
+        # Compute a simple fingerprint of the current user-plugin file set.
+        fingerprint = ";".join(sorted(str(p) for p in user_plugin_files))
+
+        settings = QSettings()
+        acknowledged_key = "plugin_security_acknowledged"
+        last_ack = settings.value(acknowledged_key, "", type=str)
+        if last_ack == fingerprint:
+            return True  # already acknowledged this exact set
+
+        try:
+            from PySide6.QtWidgets import QApplication, QMessageBox
+
+            app = QApplication.instance()
+            _offscreen = getattr(app, "platformName", lambda: "")() == "offscreen"
+            _testing = bool(os.environ.get("PYTEST_CURRENT_TEST"))
+            if app is None or _offscreen or _testing:
+                # No QApplication yet, headless platform, or pytest session -
+                # skip the interactive dialog and proceed automatically.
+                log.warning(
+                    "Plugin security dialog skipped (no interactive session). "
+                    "User plugins will be loaded without confirmation."
+                )
+                settings.setValue(acknowledged_key, fingerprint)
+                return True
+
+            msg = QMessageBox()
+            msg.setWindowTitle("Plugin Security Warning")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText("<b>External plugins detected in ~/.synaptipy/plugins/</b>")
+            msg.setInformativeText(
+                "The following user-provided Python files will be executed with "
+                "the same system privileges as Synaptipy:<br><br>"
+                + "<br>".join(f"&nbsp;&nbsp;- {p.name}" for p in user_plugin_files)
+                + "<br><br>"
+                "Only load plugins from sources you trust. "
+                "Malicious plugins could modify your data or harm your system."
+            )
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+            choice = msg.exec()
+            if choice != QMessageBox.StandardButton.Ok:
+                log.info("User declined to load external plugins.")
+                return False
+        except Exception as exc:
+            # No display available (headless / CI) - log and proceed.
+            log.warning("Plugin security dialog could not be shown (%s); proceeding.", exc)
+
+        settings.setValue(acknowledged_key, fingerprint)
+        return True
 
     @classmethod
     def load_plugins(cls):
@@ -135,6 +206,15 @@ class PluginManager:
             return
 
         log.info(f"Discovered {len(plugin_files)} plugin(s). Attempting to load...")
+
+        # Separate user plugins (require security confirmation) from bundled examples.
+        user_plugins = [p for p in plugin_files if p.parent.resolve() == PLUGIN_DIR.resolve()]
+        if not cls._warn_user_plugins(user_plugins):
+            # User declined - load bundled examples only.
+            plugin_files = [p for p in plugin_files if p not in user_plugins]
+            if not plugin_files:
+                log.info("No example plugins to load after user declined external plugins.")
+                return
 
         # Make both plugin directories importable so plugins can pull in
         # sibling helper modules if they need to.

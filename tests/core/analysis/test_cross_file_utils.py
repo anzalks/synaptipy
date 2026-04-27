@@ -165,14 +165,15 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, grand_avg, n = get_cross_file_average(items, [0], 0, adapter)
+        time_out, grand_avg, n, has_unequal = get_cross_file_average(items, [0], 0, adapter)
 
         assert n == 2
+        assert not has_unequal
         assert len(grand_avg) == 100
         np.testing.assert_allclose(grand_avg, 3.0)  # mean(2, 4)
 
-    def test_two_files_different_lengths_truncated(self):
-        """Grand average is truncated to shortest per-file series."""
+    def test_two_files_different_lengths_nan_padded(self):
+        """Grand average is NaN-padded to longest per-file series."""
         t_long = np.linspace(0, 1, 100)
         t_short = np.linspace(0, 1, 80)
         ch_a = _make_channel({0: np.ones(100)}, {0: t_long})
@@ -183,11 +184,16 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("long.abf")}, {"path": Path("short.abf")}]
 
-        _, grand_avg, n = get_cross_file_average(items, [0], 0, adapter)
+        _, grand_avg, n, has_unequal = get_cross_file_average(items, [0], 0, adapter)
 
         assert n == 2
-        assert len(grand_avg) == 80
-        np.testing.assert_allclose(grand_avg, 2.0)  # mean(1, 3)
+        assert has_unequal
+        # Result length equals the longest trace
+        assert len(grand_avg) == 100
+        # First 80 samples: both files contribute, mean(1, 3) == 2
+        np.testing.assert_allclose(grand_avg[:80], 2.0)
+        # Remaining 20 samples: only long file contributes, nanmean == 1
+        np.testing.assert_allclose(grand_avg[80:], 1.0)
 
     def test_missing_trial_skipped(self):
         """File missing the requested trial is silently excluded."""
@@ -204,7 +210,7 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("good.abf")}, {"path": Path("bad.abf")}]
 
-        _, avg_out, n = get_cross_file_average(items, [20], 0, adapter)
+        _, avg_out, n, _ = get_cross_file_average(items, [20], 0, adapter)
 
         assert n == 1
         np.testing.assert_allclose(avg_out, 5.0)
@@ -218,9 +224,10 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, avg_out, n = get_cross_file_average(items, [0], 0, adapter)
+        time_out, avg_out, n, has_unequal = get_cross_file_average(items, [0], 0, adapter)
 
         assert n == 0
+        assert not has_unequal
         assert time_out is None
         assert avg_out is None
 
@@ -231,15 +238,16 @@ class TestGetCrossFileAverage:
         adapter = _make_adapter(rec)
         items = [{"path": Path("narrow.abf")}]
 
-        _, _, n = get_cross_file_average(items, [0], channel_idx=5, neo_adapter=adapter)
+        _, _, n, _ = get_cross_file_average(items, [0], channel_idx=5, neo_adapter=adapter)
 
         assert n == 0
 
     def test_empty_items_list(self):
         """Empty items list returns (None, None, 0) immediately."""
         adapter = MagicMock()
-        time_out, avg_out, n = get_cross_file_average([], [0], 0, adapter)
+        time_out, avg_out, n, has_unequal = get_cross_file_average([], [0], 0, adapter)
         assert n == 0
+        assert not has_unequal
         assert time_out is None
         assert avg_out is None
         adapter.read_recording.assert_not_called()
@@ -254,7 +262,7 @@ class TestGetCrossFileAverage:
         adapter = _make_adapter(_make_recording({0: ch}))
         items = [{"path": Path("multi.abf")}]
 
-        _, avg_out, n = get_cross_file_average(items, [0, 1], 0, adapter)
+        _, avg_out, n, _ = get_cross_file_average(items, [0, 1], 0, adapter)
 
         assert n == 1
         np.testing.assert_allclose(avg_out, 2.0)
@@ -271,6 +279,6 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, _, _ = get_cross_file_average(items, [0], 0, adapter)
+        time_out, _, _, _ = get_cross_file_average(items, [0], 0, adapter)
 
         np.testing.assert_allclose(time_out, t_a)
