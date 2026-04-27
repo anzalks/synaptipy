@@ -30,7 +30,11 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-        
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements.txt
+          pyproject.toml
+
     - name: Install Linux display dependencies
       if: runner.os == 'Linux'
       run: |
@@ -100,6 +104,17 @@ jobs:
 
     # Push core test coverage badge endpoint.json to the data branch so the
     # README badge resolves on every branch, not only after merging to main.
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v4
+      with:
+        files: coverage.xml
+        flags: unittests
+        name: synaptipy-coverage
+        fail_ci_if_error: false   # network blip must not block a green build
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
     - name: Push coverage badge data
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       env:
@@ -150,6 +165,10 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements.txt
+          pyproject.toml
 
     - name: Install Linux display dependencies
       run: |

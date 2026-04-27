@@ -34,6 +34,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
 
       - name: Install dependencies
         run: |
@@ -45,6 +49,46 @@ jobs:
 
       - name: Build with PyInstaller
         run: pyinstaller synaptipy.spec
+
+      # ── Smoke test: verify the binary launches without import errors ──────────
+      # Each OS variant probes the freshly-built executable before packaging.
+      # Any import error, missing DLL, or hard crash makes this step non-zero
+      # and blocks the artifact upload / release.
+      - name: Smoke test binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb
+          xvfb-run -a dist/Synaptipy/Synaptipy --help 2>&1 | tee /tmp/smoke.txt
+          # Accept exit-code 0 (clean help) or 1 (GUI refused --help gracefully).
+          # Any other code (e.g. 127 = not-found, 139 = SIGSEGV) is a failure.
+          CODE=$?
+          if [ "$CODE" -gt 1 ]; then
+            echo "Smoke test FAILED with exit code $CODE"
+            cat /tmp/smoke.txt
+            exit 1
+          fi
+
+      - name: Smoke test binary (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          dist/Synaptipy.app/Contents/MacOS/Synaptipy --help 2>&1 | tee /tmp/smoke.txt
+          CODE=$?
+          if [ "$CODE" -gt 1 ]; then
+            echo "Smoke test FAILED with exit code $CODE"
+            cat /tmp/smoke.txt
+            exit 1
+          fi
+
+      - name: Smoke test binary (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $result = & "dist\Synaptipy\Synaptipy.exe" --help 2>&1
+          Write-Host $result
+          if ($LASTEXITCODE -gt 1) {
+            Write-Error "Smoke test FAILED with exit code $LASTEXITCODE"
+            exit 1
+          }
 
       - name: Package for Windows
         if: runner.os == 'Windows'
