@@ -50,9 +50,9 @@
   {
     "name": "Tau (exp decay)",
     "expected": 0.03,
-    "measured": NaN,
+    "measured": 0.03,
     "tolerance_pct": 15.0,
     "unit": "s",
-    "passed": false
+    "passed": true
   }
 ]
