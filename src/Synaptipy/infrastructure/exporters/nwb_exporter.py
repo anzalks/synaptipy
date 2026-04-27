@@ -18,13 +18,15 @@ from typing import Any, Dict
 import numpy as np
 
 # Ensure pynwb is installed: pip install pynwb
-try:
+try:  # noqa: C901
     from pynwb import NWBHDF5IO, NWBFile
     from pynwb.icephys import (
         CurrentClampSeries,
+        CurrentClampStimulusSeries,
         IntracellularElectrode,
         PatchClampSeries,
         VoltageClampSeries,
+        VoltageClampStimulusSeries,
     )
 
     PYNWB_AVAILABLE = True
@@ -63,6 +65,18 @@ except ImportError:
             raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
 
     class VoltageClampSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
+
+    class CurrentClampStimulusSeries:  # type: ignore[no-redef]
+        """Sentinel: pynwb not installed."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError("pynwb is required for NWB export. Install with: pip install pynwb")
+
+    class VoltageClampStimulusSeries:  # type: ignore[no-redef]
         """Sentinel: pynwb not installed."""
 
         def __init__(self, *args, **kwargs):
@@ -357,6 +371,25 @@ class NWBExporter:
                         )
                         time_series = SeriesClass(**series_kwargs)
                         nwbfile.add_acquisition(time_series)
+
+                        # --- Relational linking via IntracellularRecordingsTable ---
+                        # Links each acquired series to its electrode in the NWB
+                        # icephys table.  stimulus=None documents that the command
+                        # waveform was not captured (valid per NWB:N 2.0 spec).
+                        try:
+                            nwbfile.add_intracellular_recording(
+                                electrode=ic_electrode,
+                                response=time_series,
+                                response_start_index=0,
+                                response_index_count=int(len(export_data)),
+                                stimulus=None,
+                            )
+                        except Exception as e_icr:
+                            log.debug(
+                                "Could not add intracellular_recording entry for '%s': %s",
+                                ts_name,
+                                e_icr,
+                            )
                     except Exception as e_ts:
                         log.error(f"Failed to add series '{ts_name}': {e_ts}")
                         continue

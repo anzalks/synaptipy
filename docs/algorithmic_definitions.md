@@ -28,6 +28,19 @@ $$
 $V_i = \beta_0 + \beta_1 \, t_i + \varepsilon_i$ fitted over $\mathcal{W}$, reported
 in mV/s.
 
+To prevent high-frequency electronic noise from inflating the slope estimate, the
+voltage array is pre-smoothed with a **uniform moving average** of window
+$w_{50} = \lfloor 50\,\text{ms} / \Delta t \rfloor$ samples before regression.
+Only the *valid* (non-edge) portion of the convolution output is used:
+
+$$
+\tilde{V}_i = \frac{1}{w_{50}} \sum_{k=0}^{w_{50}-1} V_{i+k},
+\quad i = 0,\ldots, N - w_{50}
+$$
+
+This attenuates noise components above $\approx 20\,\text{Hz}$ while preserving
+sub-Hz biological drift.
+
 **Auto-detect baseline** selects the window $\mathcal{W}^*$ that minimises the
 sliding-window variance:
 
@@ -308,7 +321,10 @@ $$
 $$
 
 where $V_{\text{AHP,min}}$ is the minimum voltage in the `ahp_window` following
-the spike peak, smoothed with a Savitzky-Golay filter (window 5 ms, order 3).
+the spike peak, smoothed with a Savitzky-Golay filter using a **dynamic window**
+$w = \max(5,\ \lfloor 5\,\text{ms} / \Delta t \rfloor)$ samples, order 3.
+The window is rounded up to the nearest odd integer to satisfy the Savitzky-Golay
+constraint, ensuring the filter width tracks the recording's sampling rate.
 
 **AHP duration** is the time from the repolarisation crossing of
 $V_{\text{threshold}}$ to recovery back to $V_{\text{threshold}}$.
@@ -681,9 +697,19 @@ before each spike peak.  Both $dV/dt$ and $d^2V/dt^2$ are computed via
 
 **Fallback rule:** if the $d^2V/dt^2$ maximum lies at the edge of $\mathcal{W}$
 (index 0 or $|\mathcal{W}|-1$), the estimate is unreliable (boundary artefact).
-In that case the algorithm reverts to the first $dV/dt > \theta_{\text{fallback}}$
-crossing within $\mathcal{W}$, where $\theta_{\text{fallback}}$ defaults to
-20 V/s (= 20,000 mV/s).
+In that case the algorithm uses a **dynamic per-spike threshold**: the first
+$dV/dt$ crossing above $\theta_{\text{dyn}}$ within $\mathcal{W}$, where
+
+$$
+\theta_{\text{dyn}} = \max\!\left(0.20 \cdot \max_{j \in \mathcal{W}}
+  \frac{dV}{dt}(j),\ \ 2{,}000\,\text{mV/s}\right)
+$$
+
+The 20 % fraction of the spike-specific peak rising rate captures onset
+consistently across spikes with attenuated upstrokes (Na$^+$ inactivation in
+high-frequency trains). The 2,000 mV/s floor prevents false triggering during
+subthreshold depolarisations at rest. A hardcoded 20 V/s absolute threshold is
+**not** used.
 
 ### 15.3 Separation of Fast AHP and Medium AHP
 

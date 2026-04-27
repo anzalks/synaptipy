@@ -133,7 +133,22 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
 
         try:
             window_time = time[start_idx:end_idx] - time[start_idx]
-            slope, _ = np.polyfit(window_time, baseline_data, 1)
+            # Pre-smooth with a ~50 ms uniform moving average before OLS to
+            # isolate true biological drift from high-frequency electronic noise.
+            # This prevents HF noise from inflating the polyfit slope estimate.
+            dt_base = float(window_time[1] - window_time[0]) if len(window_time) > 1 else 1e-4
+            smooth_n = max(3, int(round(0.050 / dt_base)))  # ~50 ms in samples
+            if smooth_n < len(baseline_data):
+                kernel = np.ones(smooth_n) / smooth_n
+                smoothed = np.convolve(baseline_data, kernel, mode="valid")
+                # 'valid' output is shorter; align to centre of the original window
+                trim = (len(baseline_data) - len(smoothed)) // 2
+                fit_time = window_time[trim : trim + len(smoothed)]
+                fit_data = smoothed
+            else:
+                fit_time = window_time
+                fit_data = baseline_data
+            slope, _ = np.polyfit(fit_time, fit_data, 1)
         except (ValueError, TypeError, np.linalg.LinAlgError):
             slope = None
 
