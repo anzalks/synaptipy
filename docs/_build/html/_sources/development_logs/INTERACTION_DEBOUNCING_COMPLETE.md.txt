@@ -59,15 +59,15 @@ timer.timeout.connect(self._apply_debounced_[control])
 ```python
 def _on_[control]_changed(self, value: int):
  self._last_[control]_value = value
- self._[control]_apply_timer.start()
- log.debug(f"[_on_[control]_changed] Debouncing: {value}")
+ self._CONTROL_apply_timer.start()
+ log.debug(f"[_on_CONTROL_changed] Debouncing: {value}")
 ```
 
 #### Apply Method Pattern
 ```python
-def _apply_debounced_[control](self):
- value = self._last_[control]_value
- log.debug(f"[_apply_debounced_[control]] Applying: {value}")
+def _apply_debounced_CONTROL(self):
+ value = self._last_CONTROL_value
+ log.debug(f"[_apply_debounced_CONTROL] Applying: {value}")
 
  # Guards
  if self.manual_limits_enabled or self._updating_viewranges:
