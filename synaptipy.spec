@@ -80,6 +80,6 @@ if sys.platform == 'darwin':
             'NSPrincipalClass': 'NSApplication',
             'NSHighResolutionCapable': 'True',
             'LSBackgroundOnly': 'False',
-            'CFBundleShortVersionString': '0.1.0',
+            'CFBundleShortVersionString': '0.1.1b2',
         },
     )

@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Synaptipy"
-version = "0.1.1b1"
+name = "synaptipy-anzalks-test"
+version = "0.1.1b2"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
