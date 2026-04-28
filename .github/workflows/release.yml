@@ -144,11 +144,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           for i in {1..20}; do
-            if curl -sf "https://test.pypi.org/pypi/synaptipy/${VERSION}/json" >/dev/null; then
-              echo "synaptipy ${VERSION} is available on TestPyPI."
+            if curl -sf "https://test.pypi.org/simple/synaptipy/" | grep -qF "synaptipy-${VERSION}"; then
+              echo "synaptipy ${VERSION} is available in the TestPyPI simple index."
               exit 0
             fi
-            echo "Attempt ${i}/20: TestPyPI index not ready yet; retrying in 15s..."
+            echo "Attempt ${i}/20: TestPyPI simple index not ready yet; retrying in 15s..."
             sleep 15
           done
           echo "Timed out waiting for TestPyPI package indexing."
