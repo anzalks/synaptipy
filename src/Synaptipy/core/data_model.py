@@ -502,6 +502,18 @@ class Recording:
         # --- Lazy Loading Support ---
         self.source_handle: Optional[SourceHandle] = None  # Decoupled handle for lazy loading
 
+    def close(self) -> None:
+        """Release any underlying file handles held by the source handle.
+
+        Must be called when a recording is removed from the workspace to
+        prevent Neo IO readers from keeping the source file locked.
+        """
+        if self.source_handle is not None and hasattr(self.source_handle, "close"):
+            try:
+                self.source_handle.close()
+            except Exception as exc:
+                log.debug("Error closing source handle for %s: %s", self.source_file, exc)
+
     @property
     def num_channels(self) -> int:
         """Returns the number of channels in this recording."""

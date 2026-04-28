@@ -20,6 +20,7 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
+import hashlib
 import importlib.util
 import logging
 import os
@@ -132,8 +133,16 @@ class PluginManager:
         if not user_plugin_files:
             return True
 
-        # Compute a simple fingerprint of the current user-plugin file set.
-        fingerprint = ";".join(sorted(str(p) for p in user_plugin_files))
+        # Compute a content-based SHA-256 fingerprint of all user plugin files.
+        # Hashing *file contents* (not paths) ensures the user is re-prompted
+        # whenever a plugin script is modified, even if its filename is unchanged.
+        hasher = hashlib.sha256()
+        for p in sorted(user_plugin_files, key=lambda f: f.name):
+            try:
+                hasher.update(p.read_bytes())
+            except OSError as exc:
+                log.warning("Could not read plugin file for fingerprinting: %s (%s)", p, exc)
+        fingerprint = hasher.hexdigest()
 
         settings = QSettings()
         acknowledged_key = "plugin_security_acknowledged"

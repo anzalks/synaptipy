@@ -856,6 +856,44 @@ that only high-frequency thermal noise is captured.  Without detrending, a
 recording with a slowly drifting baseline can report an inflated RMS noise
 floor that suppresses legitimate small-amplitude events.
 
+#### Sliding-window algorithm and event exclusion
+
+The RMS noise floor is computed by advancing a window of fixed length
+$w = \lfloor 50\,\text{ms} \times f_s \rfloor$ samples across the
+pre-event region in non-overlapping steps.  For each candidate window
+$\mathcal{W}_k = \{i : k \cdot w \le i < (k+1) \cdot w\}$:
+
+1. **Preliminary event screen:** the window is rejected if its peak-to-peak
+   amplitude exceeds a detection threshold $\theta_{\text{pp}}$
+   (default $= 2 \times$ the current RMS estimate, updated iteratively).
+   This prevents biological transients -- action potential bursts,
+   large EPSPs, stimulus artefacts -- from entering the noise calculation.
+
+2. **Local linear detrend:** `scipy.signal.detrend(V[\mathcal{W}_k], type="linear")`
+   removes the first-order trend $\hat{V}_i = \beta_0 + \beta_1 t_i$
+   from the window, estimated via OLS on the window samples.
+
+3. **RMS of the detrended residuals:**
+
+$$
+\sigma_k = \sqrt{ \frac{1}{w} \sum_{i \in \mathcal{W}_k} \bigl(V_i - \hat{V}_i\bigr)^2 }
+$$
+
+4. The final noise floor is the **median** of all accepted $\sigma_k$ values:
+
+$$
+\hat{\sigma}_{\text{noise}} = \operatorname{median}_k \sigma_k
+$$
+
+   Median aggregation is used rather than mean because the preliminary screen
+   may still admit occasional windows containing the tail of a burst; the
+   median is resistant to such outliers.
+
+> **Why 50 ms windows?**  At typical patch-clamp sampling rates (10-50 kHz)
+> a 50 ms window contains 500-2,500 samples -- enough to robustly estimate
+> a linear trend and its residuals while remaining short enough to stay within
+> a quiescent inter-burst interval in most in vitro preparations.
+
 ---
 
 ## 16. Immutable Trace Correction Pipeline
