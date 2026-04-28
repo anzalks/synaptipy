@@ -239,6 +239,12 @@ class DataCache:
             recording: Recording object to clean up
         """
         try:
+            # Release any open file handles held by the source handle first.
+            # This covers lazy-loaded recordings whose Neo IO reader still holds
+            # a file descriptor to the source file on disk.
+            if hasattr(recording, "close"):
+                recording.close()
+
             # Clear any large data structures that might be held in memory
             if hasattr(recording, "channels"):
                 for channel in recording.channels.values():

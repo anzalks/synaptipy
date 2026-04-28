@@ -367,3 +367,34 @@ def test_recording_max_trials(sample_recording):
 
 def test_recording_num_channels(sample_recording):
     assert sample_recording.num_channels == 2
+
+
+# ---------------------------------------------------------------------------
+# Recording.close() tests
+# ---------------------------------------------------------------------------
+
+
+def test_recording_close_calls_source_handle_close(sample_recording):
+    """close() delegates to source_handle.close() when one is present."""
+    from unittest.mock import MagicMock
+
+    handle = MagicMock()
+    sample_recording.source_handle = handle
+    sample_recording.close()
+    handle.close.assert_called_once()
+
+
+def test_recording_close_no_source_handle(sample_recording):
+    """close() is a no-op when source_handle is None."""
+    sample_recording.source_handle = None
+    sample_recording.close()  # Must not raise
+
+
+def test_recording_close_swallows_exception(sample_recording):
+    """close() swallows exceptions raised by source_handle.close()."""
+    from unittest.mock import MagicMock
+
+    handle = MagicMock()
+    handle.close.side_effect = OSError("file already closed")
+    sample_recording.source_handle = handle
+    sample_recording.close()  # Must not propagate OSError
