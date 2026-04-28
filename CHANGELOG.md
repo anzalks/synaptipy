@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1b3] - 2026-04-28
+
+### Fixed
+
+- CI: Replace broken `pip index versions` smoke-test check with `curl` against the TestPyPI JSON API.
+- CI: `pypi-publish` job now gates on `needs: [test]`; `release` job gates on `needs: [test, build]`.
+- CI: Add `twine check dist/*` validation step before TestPyPI upload.
+- CI: Add `skip_existing: true` to `pypa/gh-action-pypi-publish` to prevent `400 File already exists` on workflow re-runs.
+- CI: Delete existing GitHub Release for the same tag before re-creating it, preventing `already_exists` errors on re-runs.
+
 ## [0.1.1b2] - 2026-04-28
 
 ### Changed

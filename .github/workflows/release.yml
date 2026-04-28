@@ -125,6 +125,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
           # No username/password needed — authentication via OIDC Trusted Publisher
 
   # ── 4. Smoke test install from TestPyPI ──────────────────────────────────────
@@ -201,6 +202,11 @@ jobs:
           # Write to file to preserve newlines safely
           echo "$NOTES" > release_notes.md
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Delete existing GitHub Release for this tag (if any)
+        run: gh release delete "${GITHUB_REF_NAME}" --yes 2>/dev/null || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
