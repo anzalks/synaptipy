@@ -601,6 +601,13 @@ class ExplorerTab(QtWidgets.QWidget):
         # Bump generation counter so any pending _deferred_initial_reset from a
         # previous display pass is recognised as stale and skipped.
         self._display_generation += 1
+
+        # Release the file handle held by the outgoing recording before replacing
+        # the reference.  This is critical for lazy-loaded files: the Neo IO
+        # reader keeps the file descriptor open until explicitly closed.
+        if self.current_recording is not None and self.current_recording is not recording:
+            self.current_recording.close()
+
         self.current_recording = recording
         self.max_trials_current_recording = getattr(recording, "max_trials", 0)
 
