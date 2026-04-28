@@ -419,6 +419,20 @@ Choose the correct file for your operating system from the release assets:
 ### Python Package Installation
 For researchers who wish to use Synaptipy programmatically or develop custom plugins, you can install it via `conda` / `pip`:
 
+#### Install from TestPyPI (pre-release beta)
+
+> **Note:** TestPyPI is used for pre-release testing. Most dependencies (scipy, numpy, etc.)
+> are not available there, so you must include `--extra-index-url` to pull them from real PyPI:
+
+```bash
+pip install \
+  -i https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ \
+  synaptipy
+```
+
+Without `--extra-index-url`, pip will fail trying to build scipy from source using TestPyPI-only packages.
+
 #### Prerequisites
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
 
