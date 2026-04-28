@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1b2] - 2026-04-28
+
+### Changed
+
+- Bumped version to 0.1.1b2.
+- Universal version sync: `pyproject.toml`, `__init__.py`, `docs/conf.py`, `installer/windows_setup.iss`, `CITATION.cff`, `synaptipy.spec`, `README.md`, and `docs/manuals/CROSS_PLATFORM_SETUP.md` all updated to `0.1.1b2`.
+- CI: Release workflow overhauled to use OIDC Trusted Publishing (no API tokens); `pypi-publish` job is now self-contained (checkout, build, publish) with job-level `id-token: write` permissions and `environment: testpypi`.
+- CI: `installer.yml` smoke tests added for all three platforms; pip caching added across all workflows.
+- CI: Codecov badge added to `README.md`; `?branch=main` removed from GitHub Actions badge URLs.
+- `CITATION.cff` date updated to 2026-04-28.
+
 ### Added
 
 - **Semantic version bounds**: All scientific dependencies (`numpy`, `scipy`, `neo`, `pyqtgraph`)
