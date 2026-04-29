@@ -65,7 +65,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
 
         # Set Window Icon
-        icon_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
+        # When running as a PyInstaller bundle, __file__ is inside a temp dir;
+        # resources are placed under sys._MEIPASS/Synaptipy/resources/.
+        if hasattr(sys, "_MEIPASS"):
+            icon_path = Path(sys._MEIPASS) / "Synaptipy" / "resources" / "icons" / "logo.png"
+        else:
+            icon_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
         if icon_path.exists():
             app_icon = QtGui.QIcon(str(icon_path))
             self.setWindowIcon(app_icon)
