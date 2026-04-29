@@ -134,7 +134,7 @@ jobs:
         # actions/checkout working directory.
         REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
         WORK_DIR="/tmp/coverage-badge-$$"
-        git clone --depth=1 "$REPO_URL" "$WORK_DIR"
+        git clone --depth=1 --no-single-branch "$REPO_URL" "$WORK_DIR"
         cd "$WORK_DIR"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git config user.name "github-actions[bot]"
