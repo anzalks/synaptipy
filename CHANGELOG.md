@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1b4] - 2026-04-29
+
+### Changed
+
+- Sync `main` branch with `paper_compliance` branch; exclude `paper/` manuscript directory from PyPI distribution.
+- Bump version to 0.1.1b4 across `pyproject.toml`, `src/Synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`, `installer/windows_setup.iss`, and `synaptipy.spec`.
+- Fix bundled app icon: `main_window.py` and `welcome_screen.py` now resolve icon path via `sys._MEIPASS` when running as a PyInstaller executable.
+- Configure official PyPI release pipeline: OIDC Trusted Publishing with strict job chain (test -> build -> testpypi-publish -> smoke_test -> pypi-publish -> release).
+
 ## [0.1.1b3] - 2026-04-28
 
 ### Fixed

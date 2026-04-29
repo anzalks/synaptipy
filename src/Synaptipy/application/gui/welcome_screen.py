@@ -18,6 +18,7 @@ See the LICENSE file in the root of the repository for full license details.
 """
 
 import logging
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -67,7 +68,11 @@ class WelcomeScreen(QtWidgets.QWidget):
 
         # Logo
         logo_label = QtWidgets.QLabel()
-        logo_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
+        # Resolve resource path: use sys._MEIPASS when running as PyInstaller bundle.
+        if hasattr(sys, "_MEIPASS"):
+            logo_path = Path(sys._MEIPASS) / "Synaptipy" / "resources" / "icons" / "logo.png"
+        else:
+            logo_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
         if logo_path.exists():
             pixmap = QtGui.QPixmap(str(logo_path))
             # Scale logo to reasonable size (e.g., 100x100)
