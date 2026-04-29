@@ -129,10 +129,15 @@ jobs:
         fi
         printf '{"schemaVersion":1,"label":"core test coverage","message":"%s%%","color":"%s"}\n' \
           "$CORE_COVERAGE" "$COLOR" > /tmp/endpoint.json
-        ORIG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        # Clone into a fresh /tmp directory to avoid .git/objects permission
+        # conflicts that occur when switching orphan branches inside the
+        # actions/checkout working directory.
+        REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        WORK_DIR="/tmp/coverage-badge-$$"
+        git clone --depth=1 "$REPO_URL" "$WORK_DIR"
+        cd "$WORK_DIR"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git config user.name "github-actions[bot]"
-        git fetch origin python-coverage-comment-action-data 2>/dev/null || true
         if git ls-remote --exit-code --heads origin python-coverage-comment-action-data; then
           git checkout -B python-coverage-comment-action-data \
             origin/python-coverage-comment-action-data
@@ -145,7 +150,6 @@ jobs:
         git diff --cached --quiet || \
           git commit -m "chore: update coverage badge data [skip ci]"
         git push origin python-coverage-comment-action-data
-        git checkout "$ORIG_BRANCH"
 
   # ---------------------------------------------------------------------------
   # Minimum-viable slot: oldest supported Python + pinned lower-bound versions.

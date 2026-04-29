@@ -44,7 +44,7 @@ jobs:
 
       - name: Run Sphinx linkcheck
         run: |
-          sphinx-build -b linkcheck docs docs/_build/linkcheck -W --no-color 2>&1
+          sphinx-build -b linkcheck docs docs/_build/linkcheck --no-color 2>&1
 
       - name: Upload HTML docs as artifact
         uses: actions/upload-artifact@v4

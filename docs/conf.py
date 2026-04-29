@@ -206,3 +206,20 @@ latex_documents = [
 # Todo extension
 # ---------------------------------------------------------------------------
 todo_include_todos = True
+
+# ---------------------------------------------------------------------------
+# Linkcheck options
+# ---------------------------------------------------------------------------
+# Skip URLs that return 403 to automated bots (publisher paywalls / crawl
+# protection) but are genuinely valid links. Using regex patterns.
+linkcheck_ignore = [
+    r"https://pubs\.acs\.org/",          # ACS — blocks crawlers with 403
+    r"https://direct\.mit\.edu/",        # MIT Press — blocks crawlers with 403
+    r"https://journals\.physiology\.org/",  # APS — blocks crawlers with 403
+]
+# Allow redirects without treating them as broken (DOI resolvers always redirect)
+linkcheck_allowed_redirects = {
+    r"https://doi\.org/.*": r".*",
+}
+linkcheck_timeout = 15
+linkcheck_retries = 2
