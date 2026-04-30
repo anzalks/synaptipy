@@ -22,7 +22,7 @@ quantities>=0.16.1
 jsonschema>=4.25.0
 jsonschema-specifications>=2025.4.0
 referencing>=0.36.0
-rpds-py>=0.27.0
+rpds-py>=0.30.0
 
 # YAML
 ruamel-yaml>=0.18.0
