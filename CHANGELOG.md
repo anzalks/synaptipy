@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1b7] - 2026-05-01
+
+### Fixed
+
+- **Qt Offline Help CI pipeline**: Fixed three build failures in `installer.yml`
+  and `scripts/build_offline_help.py`:
+  - Added `.[docs]` extras to the `pip install` step in `installer.yml` so
+    that `sphinx` and its extensions are available when
+    `build_offline_help.py` runs `sphinx-build` on the CI runner.
+  - Extended `_find_qhelpgenerator()` to search `Path(sys.executable).parent`
+    (the active Python environment's `bin`/`Scripts` directory) before
+    falling back to the PySide6 wheel internals, ensuring the binary is
+    found when installed via `pyside6-tools` or the system `qt6-tools-dev-tools`
+    package.
+  - Added an explicit `os.makedirs(DEST_DIR, exist_ok=True)` guard before the
+    `shutil.copy2` loop so PyInstaller's `datas` collector never encounters a
+    missing `src/Synaptipy/resources/docs/` directory.
+
+### Changed
+
+- Bumped version to `0.1.1b7` across `pyproject.toml`, `__init__.py`,
+  `CITATION.cff`, `docs/conf.py`, `installer/windows_setup.iss`,
+  `installer/linux/synaptipy.desktop`, and `synaptipy.spec`.
+
 ## [0.1.1b6] - 2026-05-01
 
 ### Fixed
