@@ -6,12 +6,12 @@
 |--------------------------------------------------- | -------: | -------: | ------: | --------: |
 | src/Synaptipy/core/\_\_init\_\_.py                 |        2 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/\_\_init\_\_.py        |       13 |        0 |    100% |           |
-| src/Synaptipy/core/analysis/batch\_engine.py       |      467 |       16 |     97% |636-637, 639, 687-689, 798, 807, 833, 841, 1042-1049 |
+| src/Synaptipy/core/analysis/batch\_engine.py       |      475 |       16 |     97% |680-681, 683, 731-733, 842, 851, 877, 885, 1086-1093 |
 | src/Synaptipy/core/analysis/cross\_file\_utils.py  |       56 |        1 |     98% |        78 |
 | src/Synaptipy/core/analysis/epoch\_manager.py      |       96 |        8 |     92% |281-286, 290-291 |
-| src/Synaptipy/core/analysis/evoked\_responses.py   |      280 |        8 |     97% |311, 331, 388, 392, 413-423 |
-| src/Synaptipy/core/analysis/firing\_dynamics.py    |      230 |        5 |     98% |91, 381, 540, 643-644 |
-| src/Synaptipy/core/analysis/passive\_properties.py |      736 |       12 |     98% |128, 151-152, 216, 304, 902-907, 947-948, 1401-1402 |
+| src/Synaptipy/core/analysis/evoked\_responses.py   |      278 |        8 |     97% |311, 331, 388, 392, 413-423 |
+| src/Synaptipy/core/analysis/firing\_dynamics.py    |      233 |        7 |     97% |91, 139-140, 387, 546, 649-650 |
+| src/Synaptipy/core/analysis/passive\_properties.py |      755 |       15 |     98% |128, 151-152, 216, 304, 847-849, 962-967, 1007-1008, 1461-1462 |
 | src/Synaptipy/core/analysis/registry.py            |       96 |        6 |     94% |     57-66 |
 | src/Synaptipy/core/analysis/single\_spike.py       |      366 |       22 |     94% |115, 133, 138-139, 162-164, 212, 216-217, 411, 416, 476, 539-545, 627, 797-799 |
 | src/Synaptipy/core/analysis/synaptic\_events.py    |      491 |       39 |     92% |281-283, 335, 377, 416, 419-443, 459, 464, 587-589, 700-702, 812, 927, 957, 973, 1026-1028, 1148, 1233, 1247, 1266-1267, 1368 |
@@ -20,7 +20,7 @@
 | src/Synaptipy/core/results.py                      |       91 |        0 |    100% |           |
 | src/Synaptipy/core/signal\_processor.py            |      368 |        1 |     99% |        95 |
 | src/Synaptipy/core/source\_interfaces.py           |        2 |        0 |    100% |           |
-| **TOTAL**                                          | **3696** |  **132** | **96%** |           |
+| **TOTAL**                                          | **3724** |  **137** | **96%** |           |
 
 
 ## Setup coverage badge

@@ -54,8 +54,8 @@
             </div>
         </aside>
         <h2>
-            <span class="text">280 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">272<span class="text"> run</span></button>
+            <span class="text">278 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">270<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">8<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_1004c21fed1b7ca3_firing_dynamics_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-04-29 21:46 +0000
+            created at 2026-04-30 21:56 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -172,7 +172,7 @@
     <p class="run"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">            <span class="nam">data_min</span> <span class="op">=</span> <span class="nam">float</span><span class="op">(</span><span class="nam">np</span><span class="op">.</span><span class="nam">min</span><span class="op">(</span><span class="nam">ttl_data</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">            <span class="nam">data_max</span> <span class="op">=</span> <span class="nam">float</span><span class="op">(</span><span class="nam">np</span><span class="op">.</span><span class="nam">max</span><span class="op">(</span><span class="nam">ttl_data</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">            <span class="nam">data_range</span> <span class="op">=</span> <span class="nam">data_max</span> <span class="op">-</span> <span class="nam">data_min</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">            <span class="key">if</span> <span class="nam">data_range</span> <span class="op">></span> <span class="num">0</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">            <span class="key">if</span> <span class="nam">data_range</span> <span class="op">></span> <span class="num">1.0</span><span class="op">:</span>  <span class="com"># require >1 V swing; prevents thermal noise amplification on floating channels</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">                <span class="nam">auto_thr</span> <span class="op">=</span> <span class="nam">data_min</span> <span class="op">+</span> <span class="nam">data_range</span> <span class="op">*</span> <span class="num">0.5</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t">                <span class="nam">log</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t96" href="#t96">96</a></span><span class="t">                    <span class="str">"TTL threshold %.3f produced no edges; auto-adjusting to midpoint %.3f "</span>&nbsp;</span><span class="r"></span></p>
@@ -521,12 +521,12 @@
     <p class="run"><span class="n"><a id="t439" href="#t439">439</a></span><span class="t">    <span class="nam">r2_amp_raw</span><span class="op">,</span> <span class="nam">r2_peak_raw</span> <span class="op">=</span> <span class="nam">_response_peak</span><span class="op">(</span><span class="nam">stim2_onset_s</span><span class="op">,</span> <span class="nam">bl2</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t440" href="#t440">440</a></span><span class="t">    <span class="nam">out</span><span class="op">[</span><span class="str">"r2_amplitude_raw"</span><span class="op">]</span> <span class="op">=</span> <span class="nam">r2_amp_raw</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t441" href="#t441">441</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t442" href="#t442">442</a></span><span class="t">    <span class="com"># Subtract residual decay from R2 to get corrected amplitude</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t443" href="#t443">443</a></span><span class="t">    <span class="key">if</span> <span class="nam">polarity</span> <span class="op">==</span> <span class="str">"negative"</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t444" href="#t444">444</a></span><span class="t">        <span class="com"># The residual decay raises the apparent baseline under R2</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t445" href="#t445">445</a></span><span class="t">        <span class="nam">corrected_bl2</span> <span class="op">=</span> <span class="nam">bl2</span> <span class="op">+</span> <span class="nam">residual_at_stim2</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t446" href="#t446">446</a></span><span class="t">    <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t447" href="#t447">447</a></span><span class="t">        <span class="nam">corrected_bl2</span> <span class="op">=</span> <span class="nam">bl2</span> <span class="op">+</span> <span class="nam">residual_at_stim2</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t442" href="#t442">442</a></span><span class="t">    <span class="com"># Subtract residual decay from R2 to get corrected amplitude.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t443" href="#t443">443</a></span><span class="t">    <span class="com"># bl2 physically *includes* the residual tail from R1 &#8212; adding residual_at_stim2</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t444" href="#t444">444</a></span><span class="t">    <span class="com"># on top of bl2 would double-count it.  The correct reference is bl1 (the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t445" href="#t445">445</a></span><span class="t">    <span class="com"># true resting baseline before the first pulse) plus the modelled residual</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t446" href="#t446">446</a></span><span class="t">    <span class="com"># at the time of the second stimulus.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t447" href="#t447">447</a></span><span class="t">    <span class="nam">corrected_bl2</span> <span class="op">=</span> <span class="nam">bl1</span> <span class="op">+</span> <span class="nam">residual_at_stim2</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t448" href="#t448">448</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t449" href="#t449">449</a></span><span class="t">    <span class="key">if</span> <span class="nam">polarity</span> <span class="op">==</span> <span class="str">"negative"</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t450" href="#t450">450</a></span><span class="t">        <span class="nam">r2_corrected</span> <span class="op">=</span> <span class="nam">corrected_bl2</span> <span class="op">-</span> <span class="nam">r2_peak_raw</span>&nbsp;</span><span class="r"></span></p>
@@ -999,7 +999,7 @@
             <a class="nav" href="z_1004c21fed1b7ca3_firing_dynamics_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-04-29 21:46 +0000
+            created at 2026-04-30 21:56 +0000
         </p>
     </div>
 </footer>
