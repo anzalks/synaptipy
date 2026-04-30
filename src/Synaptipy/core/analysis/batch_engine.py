@@ -229,19 +229,51 @@ class BatchAnalysisEngine:
         except (ValueError, TypeError):
             return f"[{len(value)} items]", None
 
+    # Keys whose arrays represent discrete events (spike times, PSP amplitudes,
+    # etc.) and should be preserved verbatim inside ``_raw_arrays`` for downstream
+    # plotting and long-format CSV export.  Full continuous trace arrays (fitting
+    # curves, 10 kHz voltage traces) must NOT appear here to avoid memory spikes.
+    _EVENT_ARRAY_KEYS: frozenset = frozenset(
+        {
+            "event_times",
+            "event_amplitudes",
+            "event_iei",
+            "spike_times",
+            "spike_amplitudes",
+            "spike_counts",
+            "frequencies",
+            "current_steps",
+            "adaptation_ratios",
+            "broadening_indices",
+            "isi_array",
+            "event_rise_times",
+            "event_decay_times",
+            "event_charges",
+        }
+    )
+
     @staticmethod
     def _sanitise_result_for_export(result: Dict[str, Any]) -> Dict[str, Any]:
         """
         Make a single result row export-friendly.
 
-        1. Non-scalar values (numpy arrays, lists, complex objects) are summarised
-           as human-readable strings and the raw data moved to ``_``-prefixed keys.
-        2. Human-readable aliases are added for cryptic algorithm names.
-        3. Private keys are preserved internally but clearly marked.
+        Dual-representation architecture
+        ---------------------------------
+        1. Public array keys whose names appear in ``_EVENT_ARRAY_KEYS`` produce
+           both a human-readable summary string (kept in the main dict so UI
+           tables render correctly) *and* a copy of the raw NumPy array stored
+           under ``result["_raw_arrays"][key]``.  Only discrete-event arrays
+           (spike times, PSP amplitudes, …) are stored this way; continuous
+           10 kHz trace buffers are excluded to avoid memory spikes.
+        2. All other non-scalar values are summarised as strings and the raw
+           object moved to a ``_``-prefixed key (existing behaviour).
+        3. Human-readable aliases are added for cryptic algorithm names.
+        4. Private ``_``-prefixed keys are left untouched.
 
         Returns:
             Cleaned result dict (modified in-place for efficiency).
         """
+        raw_arrays: Dict[str, Any] = result.get("_raw_arrays", {})  # may already exist
         keys_to_add: Dict[str, Any] = {}
 
         for key, value in list(result.items()):
@@ -249,8 +281,20 @@ class BatchAnalysisEngine:
                 continue
             new_value, stash = BatchAnalysisEngine._sanitise_value(key, value)
             result[key] = new_value
+
+            # For discrete-event arrays: also store raw data under _raw_arrays.
+            if key in BatchAnalysisEngine._EVENT_ARRAY_KEYS and isinstance(value, (np.ndarray, list)):
+                arr = np.asarray(value) if isinstance(value, list) else value
+                # Only store compact discrete-event arrays (<= 50 000 elements)
+                # to guard against accidentally persisting continuous traces.
+                if arr.ndim <= 2 and arr.size <= 50_000:
+                    raw_arrays[key] = arr
+
             if stash is not None:
                 keys_to_add[stash[0]] = stash[1]
+
+        if raw_arrays:
+            result["_raw_arrays"] = raw_arrays
 
         result.update(keys_to_add)
 

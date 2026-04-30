@@ -215,12 +215,13 @@ jobs:
           echo "$NOTES" > release_notes.md
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
 
-      - name: Delete existing GitHub Release for this tag (if any)
-        run: gh release delete "${GITHUB_REF_NAME}" --yes 2>/dev/null || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
+        # softprops/action-gh-release@v2 creates the release if it does not exist
+        # and updates (appends files to) the release if it was already created by
+        # the installer.yml workflow running in parallel.  The old
+        # "gh release delete + recreate" pattern was destructive: it wiped any
+        # .exe / .dmg binaries that installer.yml had already attached, because
+        # both workflows fire in parallel on the same tag push.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -228,5 +229,7 @@ jobs:
           body_path: release_notes.md
           prerelease: ${{ steps.pre.outputs.prerelease }}
           files: dist/*
+          # Never overwrite files already uploaded by installer.yml
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

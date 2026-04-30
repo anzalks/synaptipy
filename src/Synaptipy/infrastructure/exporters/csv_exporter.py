@@ -616,3 +616,87 @@ class CSVExporter:
         except Exception as exc:
             log.error("export_tidy failed: %s", exc, exc_info=True)
             return False
+
+    def export_events(
+        self,
+        results: List[Dict[str, Any]],
+        output_path: Path,
+    ) -> bool:
+        """Write a relational long-format events CSV from ``_raw_arrays``.
+
+        The wide-format summary CSV cannot represent discrete event arrays
+        (spike times, PSP amplitudes, …) on a per-event basis.  When a result
+        row contains ``result["_raw_arrays"]["_event_times"]`` *and*
+        ``result["_raw_arrays"]["_event_amplitudes"]``, this method generates a
+        second file ``<stem>_events.csv`` with one row per event:
+
+        ``File, Channel, Trial, Event_Index, Time_s, Amplitude``
+
+        The file name is derived from *output_path* by inserting ``_events``
+        before the ``.csv`` suffix.
+
+        Parameters
+        ----------
+        results : list of dict
+            Result rows as returned by ``BatchAnalysisEngine.run_batch``.
+        output_path : Path
+            The *summary* CSV path; the events file is placed next to it.
+
+        Returns
+        -------
+        bool
+            ``True`` if at least one event row was written, ``False`` otherwise.
+        """
+        import csv as _csv
+
+        events_path = output_path.with_name(output_path.stem + "_events.csv")
+        fieldnames = ["File", "Channel", "Trial", "Event_Index", "Time_s", "Amplitude"]
+
+        event_rows: List[Dict[str, Any]] = []
+        for row in results:
+            raw = row.get("_raw_arrays")
+            if not isinstance(raw, dict):
+                continue
+
+            times_arr = raw.get("event_times")
+            amps_arr = raw.get("event_amplitudes")
+            if times_arr is None and amps_arr is None:
+                continue
+
+            file_val = row.get("file_name") or row.get("source_file_name") or row.get("file") or ""
+            chan_val = row.get("channel_name") or row.get("channel") or row.get("channel_id") or ""
+            trial_val = row.get("trial_index", row.get("trial_index_used", ""))
+
+            times_arr = np.asarray(times_arr) if times_arr is not None else np.array([])
+            amps_arr = np.asarray(amps_arr) if amps_arr is not None else np.full(len(times_arr), np.nan)
+
+            n_events = max(len(times_arr), len(amps_arr))
+            for evt_idx in range(n_events):
+                t_val = float(times_arr[evt_idx]) if evt_idx < len(times_arr) else float("nan")
+                a_val = float(amps_arr[evt_idx]) if evt_idx < len(amps_arr) else float("nan")
+                event_rows.append(
+                    {
+                        "File": file_val,
+                        "Channel": chan_val,
+                        "Trial": trial_val,
+                        "Event_Index": evt_idx,
+                        "Time_s": t_val,
+                        "Amplitude": a_val,
+                    }
+                )
+
+        if not event_rows:
+            log.info("export_events: no event arrays found in results; events file not written.")
+            return False
+
+        try:
+            events_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(events_path, "w", newline="", encoding="utf-8") as fh:
+                writer = _csv.DictWriter(fh, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(event_rows)
+            log.info("export_events: wrote %d event rows to %s", len(event_rows), events_path)
+            return True
+        except Exception as exc:
+            log.error("export_events failed: %s", exc, exc_info=True)
+            return False
