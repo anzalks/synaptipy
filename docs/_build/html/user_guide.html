@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy User Guide &mdash; Synaptipy 0.1.1 documentation</title>
+  <title>Synaptipy User Guide &mdash; Synaptipy 0.1.1b4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="_static/logo.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=a58bc63e"></script>
+      <script src="_static/documentation_options.js?v=cd394393"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -249,6 +249,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#getting-started">Getting Started</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#running-the-application">Running the Application</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#user-interface-overview">User Interface Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#quick-start-with-demo-data">Quick Start with Demo Data</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#loading-data">Loading Data</a><ul>
@@ -284,7 +285,8 @@
 <li class="toctree-l4"><a class="reference internal" href="#preprocessing-pipeline">Preprocessing pipeline</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#preferences">Preferences</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#preferences">Preferences</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#checking-for-updates">Checking for Updates</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#enable-custom-plugins-hot-reload-mechanism">Enable Custom Plugins - Hot-Reload Mechanism</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#included-example-plugins">Included Example Plugins</a></li>
 </ul>
@@ -344,7 +346,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#event-detection">7. Event Detection</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#threshold-based-detection">7.1 Threshold-based detection</a></li>
-<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#template-match-deconvolution">7.2 Template-match / deconvolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#template-match-matched-filter-cross-correlation">7.2 Template-match / matched-filter cross-correlation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#baseline-peak-detection">7.3 Baseline-peak detection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#local-pre-event-baseline-dynamic-amplitude-for-summating-events">7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)</a></li>
 </ul>
@@ -376,7 +378,10 @@
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#separation-of-fast-ahp-and-medium-ahp">15.3 Separation of Fast AHP and Medium AHP</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#multi-kernel-dendritic-tolerance-in-template-matching">15.4 Multi-Kernel Dendritic Tolerance in Template Matching</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#ppr-residual-fitting-bi-exponential-upgrade">15.5 PPR Residual Fitting - Bi-Exponential Upgrade</a></li>
-<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="algorithmic_definitions.html#sliding-window-algorithm-and-event-exclusion">Sliding-window algorithm and event exclusion</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#immutable-trace-correction-pipeline">16. Immutable Trace Correction Pipeline</a><ul>
@@ -1834,6 +1839,7 @@
 <li><p><a class="reference internal" href="#getting-started">Getting Started</a></p></li>
 <li><p><a class="reference internal" href="#running-the-application">Running the Application</a></p></li>
 <li><p><a class="reference internal" href="#user-interface-overview">User Interface Overview</a></p></li>
+<li><p><a class="reference internal" href="#quick-start-with-demo-data">Quick Start with Demo Data</a></p></li>
 <li><p><a class="reference internal" href="#loading-data">Loading Data</a></p></li>
 <li><p><a class="reference internal" href="#supported-file-formats">Supported File Formats</a></p></li>
 <li><p><a class="reference internal" href="#opening-files">Opening Files</a></p></li>
@@ -1931,6 +1937,57 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 <li><p><strong>Analyser Tab</strong>: Perform various analyses on the loaded data</p></li>
 <li><p><strong>Exporter Tab</strong>: Export data and results to different formats</p></li>
 </ol>
+</section>
+<section id="quick-start-with-demo-data">
+<h3>Quick Start with Demo Data<a class="headerlink" href="#quick-start-with-demo-data" title="Link to this heading"></a></h3>
+<p>If you have no recordings to hand, Synaptipy can download a set of curated
+example files automatically.</p>
+<ol class="arabic">
+<li><p>Open <strong>Help &gt; Download Demo Data…</strong>  A banner appears below the menu bar.</p></li>
+<li><p>Click <strong>Download Demo Data</strong>.  Synaptipy downloads five example recordings
+from the public repository to <code class="docutils literal notranslate"><span class="pre">~/Documents/SynaptiPy_Demo/</span></code>:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Format</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">2023_04_11_0018.abf</span></code></p></td>
+<td><p>ABF v2</p></td>
+<td><p>Whole-cell current-clamp, step protocol</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">2023_04_11_0019.abf</span></code></p></td>
+<td><p>ABF v2</p></td>
+<td><p>Whole-cell current-clamp, ramp protocol</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">2023_04_11_0021.abf</span></code></p></td>
+<td><p>ABF v2</p></td>
+<td><p>Voltage-clamp, IV curve</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">2023_04_11_0022.abf</span></code></p></td>
+<td><p>ABF v2</p></td>
+<td><p>Optogenetic stimulation protocol</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">240326_003.wcp</span></code></p></td>
+<td><p>WinWCP</p></td>
+<td><p>WinWCP current-clamp recording</p></td>
+</tr>
+</tbody>
+</table>
+</li>
+<li><p>Once all files are downloaded the banner closes automatically and the
+first ABF file opens in the <strong>Explorer Tab</strong>.</p></li>
+<li><p>The <strong>Help &gt; Download Demo Data…</strong> menu item is disabled for the rest of
+the session (and on future launches if the files are already present).</p></li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The download requires an internet connection.  Files already present on disk
+are never re-downloaded.  If a download is interrupted, partially written
+files are cleaned up so the next attempt starts fresh.</p>
+</div>
 </section>
 </section>
 <section id="loading-data">
@@ -2102,7 +2159,7 @@ parameter widgets, an interactive plot, a results table, and plot overlays.</p>
 </tr>
 <tr class="row-odd"><td><p><strong>Synaptic Events</strong></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">synaptic_events</span></code></p></td>
-<td><p>Miniature event detection (threshold, template, deconvolution)</p></td>
+<td><p>Miniature event detection (threshold, matched-filter cross-correlation, baseline+peak+kinetics)</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Optogenetics</strong></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">evoked_responses</span></code></p></td>
@@ -2182,9 +2239,12 @@ voltage used to binarise the stimulus signal</p></li>
 <li><p><strong>Spikes</strong> - threshold-crossing AP detection; set the <strong>Spike Threshold</strong> (mV)</p></li>
 <li><p><strong>Events (Threshold)</strong> - prominence-based threshold event detection; set
 <strong>Event Threshold</strong>, <strong>Event Direction</strong>, and <strong>Refractory Period</strong></p></li>
-<li><p><strong>Events (Template)</strong> - double-exponential template matching; set
+<li><p><strong>Events (Template)</strong> - matched-filter cross-correlation using a bi-exponential kernel; set
 <strong>Rise Tau</strong>, <strong>Decay Tau</strong>, <strong>Template Threshold</strong> (SD), and
-<strong>Template Direction</strong>
+<strong>Template Direction</strong>.
+A bank of three kernels scaled at 1x, 2x, and 3x the user-specified decay
+constant is applied automatically to tolerate dendritic filtering; events
+are detected on the pointwise maximum of the three z-scored filtered traces.
 Only the parameters relevant to the selected detection mode are shown.</p></li>
 </ul>
 <ol class="arabic simple" start="5">
@@ -2262,8 +2322,12 @@ spikes per burst, mean burst duration, and intra-burst frequency.</p></li>
 </ul>
 <p><strong>Synaptic Events tab:</strong></p>
 <ul class="simple">
-<li><p><strong>Event Detection (Template Match)</strong> - Parametric deconvolution against a
-double-exponential template for miniature event detection. Configurable</p></li>
+<li><p><strong>Event Detection (Template Match)</strong> - Matched-filter cross-correlation using a
+bi-exponential kernel for miniature event detection. A fixed bank of three
+kernels at 1x, 2x, and 3x the user-specified decay constant is convolved with
+the trace; events are detected on the pointwise maximum of the three z-scored
+outputs, providing automatic tolerance for dendritic cable filtering.
+Configurable</p></li>
 </ul>
 </section>
 <section id="visual-validation-overlays">
@@ -2326,10 +2390,25 @@ detection with kinetics estimation for evoked or spontaneous events.</p></li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The NWB exporter currently writes voltage/current traces and electrode
-metadata. Stimulus waveforms, <code class="docutils literal notranslate"><span class="pre">IntracellularRecordingsTable</span></code>, and embedded
-analysis results are not yet exported. See <a class="reference internal" href="nwb_mapping.html"><span class="std std-doc">NWB Export Mapping</span></a>
-for full details on what is included and planned.</p>
+<p>The NWB exporter writes:</p>
+<ul class="simple">
+<li><p>Voltage/current traces as <code class="docutils literal notranslate"><span class="pre">CurrentClampSeries</span></code> / <code class="docutils literal notranslate"><span class="pre">VoltageClampSeries</span></code> with SI
+unit conversion</p></li>
+<li><p>Electrode metadata and session information</p></li>
+<li><p><strong>Stimulus waveforms</strong> via a 3-step fallback: (1) raw digitized command
+waveform from the acquisition file; (2) synthetic step waveform reconstructed
+from ABF epoch metadata (description notes “Synthetic stimulus array
+reconstructed from protocol metadata.”); (3) <code class="docutils literal notranslate"><span class="pre">stimulus=None</span></code> with a warning
+appended to the response trace description when no waveform is available</p></li>
+<li><p><strong>IntracellularRecordingsTable</strong> linking each response to its electrode and
+stimulus series</p></li>
+<li><p><strong>SimultaneousRecordingsTable</strong> and <strong>SequentialRecordingsTable</strong> for NWB 2.x
+icephys sweep grouping</p></li>
+<li><p><strong>ProcessingModule</strong> containing discrete event arrays (spike times, synaptic
+event times) produced by the batch engine, stored as HDMF <code class="docutils literal notranslate"><span class="pre">DynamicTable</span></code>
+objects</p></li>
+</ul>
+<p>See <a class="reference internal" href="nwb_mapping.html"><span class="std std-doc">NWB Export Mapping</span></a> for full container mapping details.</p>
 </div>
 </section>
 <section id="exporting-analysis-results">
@@ -2463,6 +2542,26 @@ trace the user visually validated.</p>
 </tr>
 </tbody>
 </table>
+</section>
+<section id="checking-for-updates">
+<h3>Checking for Updates<a class="headerlink" href="#checking-for-updates" title="Link to this heading"></a></h3>
+<p>Synaptipy performs a silent version check in the background each time it
+starts.  If a newer release is found on
+<a class="reference external" href="https://github.com/anzalks/synaptipy/releases">GitHub Releases</a> a
+non-intrusive yellow banner appears below the menu bar showing the new version
+number and a link to the release notes.  The banner can be dismissed with the
+<strong>Dismiss</strong> button.</p>
+<p>You can also trigger a manual check at any time via <strong>Help &gt; Check for
+Updates…</strong>.  The status bar reports the outcome:</p>
+<ul class="simple">
+<li><p><em>“Checking for updates…”</em> - check in progress.</p></li>
+<li><p><em>“You are on the latest version.”</em> - no newer release found.</p></li>
+<li><p>Yellow banner - a newer version is available (click the link to open the
+release page in your browser).</p></li>
+</ul>
+<p>The check is a single lightweight request to the GitHub Releases API
+(<code class="docutils literal notranslate"><span class="pre">api.github.com</span></code>).  If your machine is offline or behind a firewall the
+check fails silently - no error message is shown and no data is sent.</p>
 <section id="enable-custom-plugins-hot-reload-mechanism">
 <h4>Enable Custom Plugins - Hot-Reload Mechanism<a class="headerlink" href="#enable-custom-plugins-hot-reload-mechanism" title="Link to this heading"></a></h4>
 <p>Toggling “Enable Custom Plugins” does <strong>not</strong> require an application restart.
@@ -2754,7 +2853,7 @@ can choose values that match your experimental design.</p>
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024-2026, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Apr 27, 2026.
+      <span class="lastupdated">Last updated on Apr 30, 2026.
       </span></p>
   </div>
 

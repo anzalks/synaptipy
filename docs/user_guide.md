@@ -38,11 +38,11 @@ This guide provides detailed instructions for installing, configuring, and using
 
 - Python 3.10 or higher
 - Dependencies are automatically installed during package installation:
- - [PySide6](https://doc.qt.io/qtforpython/) - Qt6 bindings for Python (GUI framework)
+ - [PySide6](https://doc.qt.io/qtforpython-6/) - Qt6 bindings for Python (GUI framework)
  - [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
- - [Neo](https://neo.readthedocs.io) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
+ - [Neo](https://neo.readthedocs.io/en/latest/) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
  - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) - numerical computation and signal processing
- - [PyNWB](https://pynwb.readthedocs.io) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
+ - [PyNWB](https://pynwb.readthedocs.io/en/stable/) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
 
 ### Standard Installation
 
@@ -134,7 +134,7 @@ files are cleaned up so the next attempt starts fresh.
 
 ### Supported File Formats
 
-File I/O is handled through the [Neo](https://neo.readthedocs.io) library
+File I/O is handled through the [Neo](https://neo.readthedocs.io/en/latest/) library
 (Garcia et al., 2014, *Front. Neuroinformatics*, [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010)).
 Synaptipy can load any recording format for which Neo provides a reader - this includes
 whole-cell patch-clamp and intracellular recordings as well as extracellular, sharp-electrode,

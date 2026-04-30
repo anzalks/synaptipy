@@ -11,6 +11,7 @@ This guide provides detailed instructions for installing, configuring, and using
 - [Getting Started](#getting-started)
  - [Running the Application](#running-the-application)
  - [User Interface Overview](#user-interface-overview)
+ - [Quick Start with Demo Data](#quick-start-with-demo-data)
 - [Loading Data](#loading-data)
  - [Supported File Formats](#supported-file-formats)
  - [Opening Files](#opening-files)
@@ -100,6 +101,34 @@ The Synaptipy interface consists of three main tabs:
 1. **Explorer Tab**: View and navigate through data files, with interactive plotting
 2. **Analyser Tab**: Perform various analyses on the loaded data
 3. **Exporter Tab**: Export data and results to different formats
+
+### Quick Start with Demo Data
+
+If you have no recordings to hand, Synaptipy can download a set of curated
+example files automatically.
+
+1. Open **Help > Download Demo Data...**  A banner appears below the menu bar.
+2. Click **Download Demo Data**.  Synaptipy downloads five example recordings
+   from the public repository to `~/Documents/SynaptiPy_Demo/`:
+
+   | File | Format | Description |
+   |------|--------|-------------|
+   | `2023_04_11_0018.abf` | ABF v2 | Whole-cell current-clamp, step protocol |
+   | `2023_04_11_0019.abf` | ABF v2 | Whole-cell current-clamp, ramp protocol |
+   | `2023_04_11_0021.abf` | ABF v2 | Voltage-clamp, IV curve |
+   | `2023_04_11_0022.abf` | ABF v2 | Optogenetic stimulation protocol |
+   | `240326_003.wcp` | WinWCP | WinWCP current-clamp recording |
+
+3. Once all files are downloaded the banner closes automatically and the
+   first ABF file opens in the **Explorer Tab**.
+4. The **Help > Download Demo Data...** menu item is disabled for the rest of
+   the session (and on future launches if the files are already present).
+
+:::{note}
+The download requires an internet connection.  Files already present on disk
+are never re-downloaded.  If a download is interrupted, partially written
+files are cleaned up so the next attempt starts fresh.
+:::
 
 ## Loading Data
 
@@ -191,7 +220,7 @@ The five Analyser pillars are:
 | **Intrinsic Properties** | `passive_properties` | RMP, Rin, Tau, Sag Ratio, I-V Curve, Capacitance |
 | **Spike Analysis** | `single_spike` | Spike detection, Phase-plane analysis |
 | **Excitability** | `firing_dynamics` | F-I curve, Burst analysis, Train dynamics |
-| **Synaptic Events** | `synaptic_events` | Miniature event detection (threshold, template, deconvolution) |
+| **Synaptic Events** | `synaptic_events` | Miniature event detection (threshold, matched-filter cross-correlation, baseline+peak+kinetics) |
 | **Optogenetics** | `evoked_responses` | Optogenetic synchronisation, Paired-pulse ratio |
 
 All analysis sub-tabs share the following interface behaviours:
@@ -247,9 +276,12 @@ All analysis sub-tabs share the following interface behaviours:
  - **Spikes** - threshold-crossing AP detection; set the **Spike Threshold** (mV)
  - **Events (Threshold)** - prominence-based threshold event detection; set
  **Event Threshold**, **Event Direction**, and **Refractory Period**
- - **Events (Template)** - double-exponential template matching; set
+ - **Events (Template)** - matched-filter cross-correlation using a bi-exponential kernel; set
  **Rise Tau**, **Decay Tau**, **Template Threshold** (SD), and
- **Template Direction**
+ **Template Direction**.
+ A bank of three kernels scaled at 1x, 2x, and 3x the user-specified decay
+ constant is applied automatically to tolerate dendritic filtering; events
+ are detected on the pointwise maximum of the three z-scored filtered traces.
  Only the parameters relevant to the selected detection mode are shown.
 5. Set the **Response Window** (ms) to define how far after each TTL onset
  to search for an event
@@ -311,8 +343,12 @@ valid ranges, and conditional visibility based on clamp mode.
   (CV), local variation (LV), and CV2. Opens a popup ISI plot.
 
 **Synaptic Events tab:**
-- **Event Detection (Template Match)** - Parametric deconvolution against a
-  double-exponential template for miniature event detection. Configurable
+- **Event Detection (Template Match)** - Matched-filter cross-correlation using a
+  bi-exponential kernel for miniature event detection. A fixed bank of three
+  kernels at 1x, 2x, and 3x the user-specified decay constant is convolved with
+  the trace; events are detected on the pointwise maximum of the three z-scored
+  outputs, providing automatic tolerance for dendritic cable filtering.
+  Configurable
 
 ### Visual Validation Overlays
 
@@ -353,10 +389,25 @@ All overlay settings are persisted via QSettings and restored across sessions.
 5. Click "Export to NWB" and wait for the export to complete
 
 :::{note}
-The NWB exporter currently writes voltage/current traces and electrode
-metadata. Stimulus waveforms, `IntracellularRecordingsTable`, and embedded
-analysis results are not yet exported. See [NWB Export Mapping](nwb_mapping.md)
-for full details on what is included and planned.
+The NWB exporter writes:
+
+- Voltage/current traces as `CurrentClampSeries` / `VoltageClampSeries` with SI
+  unit conversion
+- Electrode metadata and session information
+- **Stimulus waveforms** via a 3-step fallback: (1) raw digitized command
+  waveform from the acquisition file; (2) synthetic step waveform reconstructed
+  from ABF epoch metadata (description notes "Synthetic stimulus array
+  reconstructed from protocol metadata."); (3) `stimulus=None` with a warning
+  appended to the response trace description when no waveform is available
+- **IntracellularRecordingsTable** linking each response to its electrode and
+  stimulus series
+- **SimultaneousRecordingsTable** and **SequentialRecordingsTable** for NWB 2.x
+  icephys sweep grouping
+- **ProcessingModule** containing discrete event arrays (spike times, synaptic
+  event times) produced by the batch engine, stored as HDMF `DynamicTable`
+  objects
+
+See [NWB Export Mapping](nwb_mapping.md) for full container mapping details.
 :::
 
 ### Exporting Analysis Results
@@ -479,6 +530,27 @@ Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access 
 | **Scroll Behavior** | Choose Natural, Inverted, or System scroll direction for plots. |
 | **Appearance** | Switch between Light, Dark, or System color theme. |
 | **Enable Custom Plugins** | When checked, Synaptipy loads Python plugins from `~/.synaptipy/plugins/` and `examples/plugins/`. See below for the hot-reload mechanism. |
+
+### Checking for Updates
+
+Synaptipy performs a silent version check in the background each time it
+starts.  If a newer release is found on
+[GitHub Releases](https://github.com/anzalks/synaptipy/releases) a
+non-intrusive yellow banner appears below the menu bar showing the new version
+number and a link to the release notes.  The banner can be dismissed with the
+**Dismiss** button.
+
+You can also trigger a manual check at any time via **Help > Check for
+Updates...**.  The status bar reports the outcome:
+
+- *"Checking for updates..."* - check in progress.
+- *"You are on the latest version."* - no newer release found.
+- Yellow banner - a newer version is available (click the link to open the
+  release page in your browser).
+
+The check is a single lightweight request to the GitHub Releases API
+(`api.github.com`).  If your machine is offline or behind a firewall the
+check fails silently - no error message is shown and no data is sent.
 
 #### Enable Custom Plugins - Hot-Reload Mechanism
 

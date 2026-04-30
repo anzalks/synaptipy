@@ -3,7 +3,7 @@
 Synaptipy is a comprehensive electrophysiology visualisation and analysis suite.
 The primary focus is whole-cell patch-clamp and intracellular recordings; however,
 any electrophysiology signal whose file format is supported by the
-[Neo](https://neo.readthedocs.io) I/O library can be loaded, visualised, and processed.
+[Neo](https://neo.readthedocs.io/en/latest/) I/O library can be loaded, visualised, and processed.
 Built on Python and Qt6, it provides OpenGL-accelerated signal visualisation,
 15 built-in analysis modules, a composable batch processing engine, and an extensible
 plugin interface. This tutorial covers every feature of the application in detail,

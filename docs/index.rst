@@ -27,12 +27,12 @@ Welcome to Synaptipy's Documentation
  :target: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml
  :alt: Docs build
 
-.. image:: https://readthedocs.org/projects/synaptipy/badge/?version=latest
+.. image:: https://app.readthedocs.org/projects/synaptipy/badge/?version=latest
  :target: https://synaptipy.readthedocs.io/en/latest/
  :alt: Documentation Status
 
 .. image:: https://img.shields.io/badge/code%20style-flake8-black
- :target: https://flake8.pycqa.org/
+ :target: https://flake8.pycqa.org/en/latest/
  :alt: Code style: flake8
 
 .. image:: https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white
@@ -48,7 +48,7 @@ Welcome to Synaptipy's Documentation
 Synaptipy is a cross-platform, open-source electrophysiology visualisation and analysis suite.
 The primary focus is whole-cell patch-clamp and intracellular recordings; however, any
 electrophysiology signal whose file format is supported by the
-`Neo <https://neo.readthedocs.io>`_ I/O library can be loaded, visualised, and processed
+`Neo <https://neo.readthedocs.io/en/latest/>`_ I/O library can be loaded, visualised, and processed
 - including extracellular and multi-channel recordings.
 
 Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
@@ -58,9 +58,9 @@ engine, and an extensible plugin interface that allows custom analysis routines 
 integrated without modifying the core package. Three example plugins ship with
 the application and are loadable via a single checkbox in Preferences.
 File I/O is handled through
-`Neo <https://neo.readthedocs.io>`_, supporting over 30 acquisition formats including
+`Neo <https://neo.readthedocs.io/en/latest/>`_, supporting over 30 acquisition formats including
 Axon ABF, WinWCP, CED/Spike2, Intan, Igor Pro, NWB, Open Ephys, and more.
-NWB export is provided via `PyNWB <https://pynwb.readthedocs.io>`_.
+NWB export is provided via `PyNWB <https://pynwb.readthedocs.io/en/stable/>`_.
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 Collaborations, bug reports, and pull requests are welcome.
