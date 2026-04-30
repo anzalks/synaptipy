@@ -87,9 +87,9 @@ The easiest way to use Synaptipy is to download the standalone application. No P
 
 Please download the appropriate file for your system:
 
-* **Windows:** Download `Synaptipy_Setup_v0.1.0b6.exe` and follow the installation wizard.
-* **macOS:** Download `Synaptipy_v0.1.0b6.dmg`. Open the file and drag the Synaptipy application into your Applications folder.
-* **Linux:** Download `Synaptipy-v0.1.0b6-x86_64.AppImage`. You must make the file executable before running it. You can do this by right-clicking the file, navigating to Properties -> Permissions, and checking "Allow executing file as program", or via terminal: `chmod +x Synaptipy-v0.1.0b6-x86_64.AppImage`.
+* **Windows:** Download `Synaptipy_Setup_v0.1.1b2.exe` and follow the installation wizard.
+* **macOS:** Download `Synaptipy_v0.1.1b2.dmg`. Open the file and drag the Synaptipy application into your Applications folder.
+* **Linux:** Download `Synaptipy-v0.1.1b2-x86_64.AppImage`. You must make the file executable before running it. You can do this by right-clicking the file, navigating to Properties -> Permissions, and checking "Allow executing file as program", or via terminal: `chmod +x Synaptipy-v0.1.1b2-x86_64.AppImage`.
 
 **Troubleshooting Notes:**
 * **macOS:** Because the application is not currently signed via the Apple Developer Program, macOS Gatekeeper may block it the first time you try to open it. To bypass this, right-click (or Control-click) the Synaptipy app in your Applications folder and select "Open" from the context menu.

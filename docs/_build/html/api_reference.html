@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Synaptipy API Reference &mdash; Synaptipy 0.1.1 documentation</title>
+  <title>Synaptipy API Reference &mdash; Synaptipy 0.1.1b4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     <link rel="shortcut icon" href="_static/logo.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=a58bc63e"></script>
+      <script src="_static/documentation_options.js?v=cd394393"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -247,6 +247,7 @@
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#getting-started">Getting Started</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#running-the-application">Running the Application</a></li>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#user-interface-overview">User Interface Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#quick-start-with-demo-data">Quick Start with Demo Data</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#loading-data">Loading Data</a><ul>
@@ -282,7 +283,8 @@
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#preprocessing-pipeline">Preprocessing pipeline</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="user_guide.html#preferences">Preferences</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#preferences">Preferences</a></li>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#checking-for-updates">Checking for Updates</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#enable-custom-plugins-hot-reload-mechanism">Enable Custom Plugins - Hot-Reload Mechanism</a></li>
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#included-example-plugins">Included Example Plugins</a></li>
 </ul>
@@ -342,7 +344,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#event-detection">7. Event Detection</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#threshold-based-detection">7.1 Threshold-based detection</a></li>
-<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#template-match-deconvolution">7.2 Template-match / deconvolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#template-match-matched-filter-cross-correlation">7.2 Template-match / matched-filter cross-correlation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#baseline-peak-detection">7.3 Baseline-peak detection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#local-pre-event-baseline-dynamic-amplitude-for-summating-events">7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)</a></li>
 </ul>
@@ -374,7 +376,10 @@
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#separation-of-fast-ahp-and-medium-ahp">15.3 Separation of Fast AHP and Medium AHP</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#multi-kernel-dendritic-tolerance-in-template-matching">15.4 Multi-Kernel Dendritic Tolerance in Template Matching</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#ppr-residual-fitting-bi-exponential-upgrade">15.5 PPR Residual Fitting - Bi-Exponential Upgrade</a></li>
-<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="algorithmic_definitions.html#sliding-window-algorithm-and-event-exclusion">Sliding-window algorithm and event exclusion</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#immutable-trace-correction-pipeline">16. Immutable Trace Correction Pipeline</a><ul>
@@ -2063,6 +2068,14 @@ Contains multiple Channel objects.</p>
 <dd class="field-odd"><p><strong>source_file</strong> – The Path object pointing to the original data file.</p>
 </dd>
 </dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="Synaptipy.core.data_model.Recording.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/core/data_model.html#Recording.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.core.data_model.Recording.close" title="Link to this definition"></a></dt>
+<dd><p>Release any underlying file handles held by the source handle.</p>
+<p>Must be called when a recording is removed from the workspace to
+prevent Neo IO readers from keeping the source file locked.</p>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="Synaptipy.core.data_model.Recording.num_channels">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">num_channels</span></span><a class="headerlink" href="#Synaptipy.core.data_model.Recording.num_channels" title="Link to this definition"></a></dt>
@@ -4340,7 +4353,7 @@ Utilizes metadata extracted by NeoAdapter and stored in data_model objects.</p>
 <p>Handles exporting Recording domain objects to NWB files.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export">
-<span class="sig-name descname"><span class="pre">export</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">recording</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_metadata</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/infrastructure/exporters/nwb_exporter.html#NWBExporter.export"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">export</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">recording</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_metadata</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">analysis_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/Synaptipy/infrastructure/exporters/nwb_exporter.html#NWBExporter.export"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter.export" title="Link to this definition"></a></dt>
 <dd><p>Exports the given Recording object to an NWB file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -4352,6 +4365,12 @@ metadata required for NWBFile creation. Expected keys:
 ‘session_description’, ‘identifier’, ‘session_start_time’,
 plus optional ‘experimenter’, ‘lab’, ‘institution’, ‘session_id’,
 and Subject/Device/Electrode info.</p></li>
+<li><p><strong>analysis_results</strong> – Optional dict (or list of dicts) produced by
+<code class="docutils literal notranslate"><span class="pre">BatchAnalysisEngine.run_batch</span></code>.  When provided,
+discrete-event arrays stored under the
+<code class="docutils literal notranslate"><span class="pre">_raw_arrays</span></code> key are written into an NWB
+<code class="docutils literal notranslate"><span class="pre">ProcessingModule</span></code> as <code class="docutils literal notranslate"><span class="pre">DynamicTable</span></code> objects.
+No analysis computation is re-run.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
@@ -4403,7 +4422,7 @@ file for full terms.</p>
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024-2026, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Apr 27, 2026.
+      <span class="lastupdated">Last updated on Apr 30, 2026.
       </span></p>
   </div>
 

@@ -1,7 +1,7 @@
 # NWB Export Mapping
 
 This page documents how Synaptipy maps electrophysiology data to the
-[Neurodata Without Borders (NWB) 2.x](https://www.nwb.org/) format when
+[Neurodata Without Borders (NWB) 2.x](https://nwb.org/) format when
 exporting via **File - Export to NWB** or the `NWBExporter` API.
 
 :::{important}

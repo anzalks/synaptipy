@@ -418,7 +418,7 @@ Python side.
 - **PEP 8**: Follow Python style guidelines (max line length 120)
 - **Formatting**: All code is auto-formatted with [**black**](https://github.com/psf/black) (line-length 120, target Python 3.10)
 - **Import sorting**: Imports are sorted by [**isort**](https://pycqa.github.io/isort/) with the `black` profile
-- **Linting**: [**flake8**](https://flake8.pycqa.org/) enforces style rules (max-complexity 10)
+- **Linting**: [**flake8**](https://flake8.pycqa.org/en/latest/) enforces style rules (max-complexity 10)
 - **Docstrings**: All public functions, classes, and methods should have docstrings
 - **Type Hints**: Use type hints for function parameters and return values
 - **Error Handling**: Use custom error classes and handle exceptions appropriately

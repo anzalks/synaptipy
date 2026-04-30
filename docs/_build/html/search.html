@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Search &mdash; Synaptipy 0.1.1 documentation</title>
+  <title>Search &mdash; Synaptipy 0.1.1b4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
@@ -17,7 +17,7 @@
     
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=a58bc63e"></script>
+      <script src="_static/documentation_options.js?v=cd394393"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -247,6 +247,7 @@
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#getting-started">Getting Started</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#running-the-application">Running the Application</a></li>
 <li class="toctree-l3"><a class="reference internal" href="user_guide.html#user-interface-overview">User Interface Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#quick-start-with-demo-data">Quick Start with Demo Data</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="user_guide.html#loading-data">Loading Data</a><ul>
@@ -282,7 +283,8 @@
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#preprocessing-pipeline">Preprocessing pipeline</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="user_guide.html#preferences">Preferences</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#preferences">Preferences</a></li>
+<li class="toctree-l3"><a class="reference internal" href="user_guide.html#checking-for-updates">Checking for Updates</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#enable-custom-plugins-hot-reload-mechanism">Enable Custom Plugins - Hot-Reload Mechanism</a></li>
 <li class="toctree-l4"><a class="reference internal" href="user_guide.html#included-example-plugins">Included Example Plugins</a></li>
 </ul>
@@ -342,7 +344,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#event-detection">7. Event Detection</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#threshold-based-detection">7.1 Threshold-based detection</a></li>
-<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#template-match-deconvolution">7.2 Template-match / deconvolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#template-match-matched-filter-cross-correlation">7.2 Template-match / matched-filter cross-correlation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#baseline-peak-detection">7.3 Baseline-peak detection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#local-pre-event-baseline-dynamic-amplitude-for-summating-events">7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)</a></li>
 </ul>
@@ -374,7 +376,10 @@
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#separation-of-fast-ahp-and-medium-ahp">15.3 Separation of Fast AHP and Medium AHP</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#multi-kernel-dendritic-tolerance-in-template-matching">15.4 Multi-Kernel Dendritic Tolerance in Template Matching</a></li>
 <li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#ppr-residual-fitting-bi-exponential-upgrade">15.5 PPR Residual Fitting - Bi-Exponential Upgrade</a></li>
-<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="algorithmic_definitions.html#noise-floor-detrending-in-quiescent-baseline-rms">15.6 Noise Floor Detrending in Quiescent Baseline RMS</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="algorithmic_definitions.html#sliding-window-algorithm-and-event-exclusion">Sliding-window algorithm and event exclusion</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="algorithmic_definitions.html#immutable-trace-correction-pipeline">16. Immutable Trace Correction Pipeline</a><ul>
@@ -1839,7 +1844,7 @@
 
   <div role="contentinfo">
     <p>&#169; Copyright 2024-2026, Anzal K Shahul.
-      <span class="lastupdated">Last updated on Apr 27, 2026.
+      <span class="lastupdated">Last updated on Apr 30, 2026.
       </span></p>
   </div>
 
