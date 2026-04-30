@@ -1,9 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+# PyInstaller 6.x compatible spec file.
+# Removed: block_cipher / cipher (removed in 6.0), win_no_prefer_redirects,
+# win_private_assemblies (removed in 6.0), a.zipfiles in COLLECT (removed in 6.0).
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import os
 import sys
-
-block_cipher = None
 
 # Collect hidden imports for dynamic imports
 hiddenimports = []
@@ -33,12 +34,9 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
 )
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -52,7 +50,6 @@ exe = EXE(
     upx=True,
     console=False,
     disable_windowed_traceback=False,
-    argv_emulation=True,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
@@ -62,7 +59,6 @@ exe = EXE(
 coll = COLLECT(
     exe,
     a.binaries,
-    a.zipfiles,
     a.datas,
     strip=False,
     upx=True,
@@ -80,6 +76,6 @@ if sys.platform == 'darwin':
             'NSPrincipalClass': 'NSApplication',
             'NSHighResolutionCapable': 'True',
             'LSBackgroundOnly': 'False',
-            'CFBundleShortVersionString': '0.1.1b4',
+            'CFBundleShortVersionString': '0.1.1b6',
         },
     )

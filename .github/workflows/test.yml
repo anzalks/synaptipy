@@ -95,6 +95,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       env:
         QT_QPA_PLATFORM: offscreen
+        MPLBACKEND: Agg        # prevent plt.show() from trying to open a Qt window on headless CI
       run: |
         xvfb-run python -m pytest --no-cov --nbval-lax --maxfail=1 examples/ -v --tb=short
 

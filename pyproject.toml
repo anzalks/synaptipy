@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synaptipy"
-version = "0.1.1b5"
+version = "0.1.1b6"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}

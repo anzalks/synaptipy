@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-#define MyAppVersion "0.1.1b5"
+#define MyAppVersion "0.1.1b6"
 #endif
 
 [Setup]

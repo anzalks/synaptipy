@@ -38,9 +38,9 @@ When you are ready to scale up, the same analysis pipeline runs automatically ac
 
 **No Python needed.** Download the pre-compiled application for your operating system from the [Releases page](https://github.com/anzalks/Synaptipy/releases):
 
-- **Windows** - run `Synaptipy_Setup_v0.1.1b2.exe`
-- **macOS** - open `Synaptipy_v0.1.1b2.dmg` and drag to Applications
-- **Linux** - `chmod +x Synaptipy-v0.1.1b2-x86_64.AppImage` then run it
+- **Windows** - run `Synaptipy_Setup_v0.1.1b6.exe`
+- **macOS** - open `Synaptipy_v0.1.1b6.dmg` and drag to Applications
+- **Linux** - `chmod +x Synaptipy-v0.1.1b6-x86_64.AppImage` then run it
 
 ### Step 2: Load your recording
 
@@ -426,9 +426,9 @@ You do not need to install Python or any dependencies to run Synaptipy. We provi
 [Download the Beta Release Here](https://github.com/anzalks/Synaptipy/releases)
 
 Choose the correct file for your operating system from the release assets:
-* **Windows:** Download `Synaptipy_Setup_v0.1.1b2.exe` and run the installer.
-* **macOS:** Download `Synaptipy_v0.1.1b2.dmg`, open the disk image, and drag Synaptipy to your Applications folder.
-* **Linux:** Download `Synaptipy-v0.1.1b2-x86_64.AppImage`, make the file executable (`chmod +x Synaptipy-v0.1.1b2-x86_64.AppImage`), and run it directly.
+* **Windows:** Download `Synaptipy_Setup_v0.1.1b6.exe` and run the installer.
+* **macOS:** Download `Synaptipy_v0.1.1b6.dmg`, open the disk image, and drag Synaptipy to your Applications folder.
+* **Linux:** Download `Synaptipy-v0.1.1b6-x86_64.AppImage`, make the file executable (`chmod +x Synaptipy-v0.1.1b6-x86_64.AppImage`), and run it directly.
 
 ### Python Package Installation
 For researchers who wish to use Synaptipy programmatically or develop custom plugins, you can install it via `conda` / `pip`:
