@@ -414,6 +414,14 @@ $$
 z(t) = \frac{(V \star K)(t) - \mu_{\text{MAD}}}{\hat{\sigma}_{\text{MAD}}}
 $$
 
+:::{note}
+**Template bank construction:** The filter scales a single user-defined decay
+constant by fixed multipliers (1×, 2×, 3×) to create a detection template
+bank, rather than extracting a dynamic, data-driven template.  The three
+kernels provide tolerance for dendritic filtering without requiring a
+representative example event from the recording.
+:::
+
 ### 7.3 Baseline-peak detection
 
 **Registry name:** `event_detection_baseline_peak`
