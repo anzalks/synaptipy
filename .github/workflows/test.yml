@@ -5,6 +5,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  workflow_dispatch:
 
 permissions:
   pull-requests: write
@@ -14,6 +15,7 @@ jobs:
   test:
     name: Test and Lint
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -25,7 +27,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -106,7 +108,7 @@ jobs:
     # README badge resolves on every branch, not only after merging to main.
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         files: coverage.xml
         flags: unittests
@@ -159,6 +161,7 @@ jobs:
   minimum-viable:
     name: Minimum-viable (Python 3.10, lower-bound deps)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -215,6 +218,7 @@ jobs:
   security:
     name: Security scan (Bandit)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -249,6 +253,7 @@ jobs:
   bleeding-edge:
     name: Bleeding-edge (Python 3.12, latest deps)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     defaults:
       run:

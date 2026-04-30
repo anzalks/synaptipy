@@ -4,16 +4,27 @@ on:
   push:
     tags:
       - "v*"          # triggers on v0.1.0b1, v0.1.0, v1.0.0, etc.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >
+          Dry run: build and test only. Skip TestPyPI, PyPI, and GitHub Release
+          publishing. The dist wheel/sdist are uploaded as run artifacts instead.
+        type: boolean
+        default: true
 
-permissions:
-  contents: write    # needed to create GitHub Releases
-  id-token: write    # needed for PyPI Trusted Publisher (OIDC)
+# Top-level permissions are intentionally minimal.  Each job that needs
+# elevated access declares its own permissions block.
+permissions: {}
 
 jobs:
   # ── 1. Run the full test suite ────────────────────────────────────────────────
   test:
     name: Test (${{ matrix.os }} / py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -66,6 +77,9 @@ jobs:
     name: Build distribution
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -96,15 +110,20 @@ jobs:
           retention-days: 7
 
   # ── 3. Publish to TestPyPI (OIDC Trusted Publisher) ──────────────────────────
+  # Skipped on workflow_dispatch: GITHUB_REF_NAME is not a semver tag during
+  # manual runs, which would cause the smoke-test install to request a
+  # non-existent version from TestPyPI.
   testpypi-publish:
     name: Publish to TestPyPI
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name != 'workflow_dispatch'
     environment:
       name: testpypi
       url: https://test.pypi.org/p/synaptipy
     permissions:
-      id-token: write  # Mandatory for OIDC
+      id-token: write  # Mandatory for OIDC Trusted Publisher
 
     steps:
       - name: Download build artifacts
@@ -124,6 +143,8 @@ jobs:
     name: Smoke test from TestPyPI
     needs: testpypi-publish
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name != 'workflow_dispatch'
 
     steps:
       - name: Set up Python
@@ -155,15 +176,18 @@ jobs:
           python -c "import Synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
 
   # ── 5. Publish to official PyPI (OIDC Trusted Publisher) ─────────────────────
+  # Skipped on workflow_dispatch (dry_run).
   pypi-publish:
     name: Publish to PyPI
     needs: smoke_test_testpypi
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name != 'workflow_dispatch'
     environment:
       name: pypi
       url: https://pypi.org/p/synaptipy
     permissions:
-      id-token: write  # Mandatory for OIDC
+      id-token: write  # Mandatory for OIDC Trusted Publisher
 
     steps:
       - name: Download build artifacts
@@ -177,10 +201,22 @@ jobs:
         # No username/password -- authentication via OIDC Trusted Publisher
 
   # ── 6. Create GitHub Release ──────────────────────────────────────────────────
+  # On real tag pushes: creates/updates the GitHub Release with wheel + sdist.
+  # On workflow_dispatch (dry_run=true): uploads dist as a standard run
+  # artifact so the pipeline can be fully rehearsed without any public action.
   release:
     name: Create GitHub Release
-    needs: pypi-publish
+    needs: [build, pypi-publish]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Run when build succeeded regardless of whether pypi-publish was skipped
+    # (dry_run / workflow_dispatch path) or succeeded (real release path).
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.pypi-publish.result == 'success' || needs.pypi-publish.result == 'skipped')
+    permissions:
+      contents: write   # needed to create/update GitHub Releases
 
     steps:
       - uses: actions/checkout@v4
@@ -222,6 +258,7 @@ jobs:
         # "gh release delete + recreate" pattern was destructive: it wiped any
         # .exe / .dmg binaries that installer.yml had already attached, because
         # both workflows fire in parallel on the same tag push.
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -233,3 +270,15 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Dry-run: upload dist as run artifact"
+        # On workflow_dispatch the dist wheel/sdist are surfaced as run
+        # artifacts (the 'dist' artifact from the build job is also available).
+        # This step provides a second copy with a distinct name so it is easy
+        # to find in the Actions run summary.
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-dist-${{ github.run_id }}
+          path: dist/
+          retention-days: 7
