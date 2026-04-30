@@ -170,7 +170,7 @@ jobs:
         # if-no-files-found: error surfaces packaging failures immediately
         # rather than silently uploading an empty artifact that later causes
         # the release job to attach zero binaries to the GitHub Release.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}

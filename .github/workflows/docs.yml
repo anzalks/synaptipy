@@ -48,7 +48,7 @@ jobs:
           sphinx-build -b linkcheck docs docs/_build/linkcheck --no-color 2>&1
 
       - name: Upload HTML docs as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: html-docs
           path: docs/_build/html/
