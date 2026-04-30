@@ -33,6 +33,7 @@ from .analyser_tab import AnalyserTab
 # Use RELATIVE imports for tabs and dialogs within the gui package
 from .explorer import ExplorerTab
 from .exporter_tab import ExporterTab
+from .help_window import show_help_window
 from .nwb_dialog import NwbMetadataDialog
 from .plot_customization_dialog import PlotCustomizationDialog
 from .welcome_screen import DemoDownloadBanner
@@ -223,6 +224,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.check_updates_action.setToolTip("Check GitHub Releases for a newer version of Synaptipy")
         self.check_updates_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.check_updates_action.triggered.connect(self._check_for_updates_manual)
+
+        # Offline documentation - served via QHelpEngine from compiled .qhc artefacts
+        self.offline_docs_action = help_menu.addAction("&Offline Documentation")
+        self.offline_docs_action.setShortcut(QtGui.QKeySequence.StandardKey.HelpContents)
+        self.offline_docs_action.setToolTip("Open the bundled offline documentation viewer")
+        self.offline_docs_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.offline_docs_action.triggered.connect(lambda: show_help_window(self))
 
         help_menu.addSeparator()
         self.demo_data_action = help_menu.addAction("Download &Demo Data...")

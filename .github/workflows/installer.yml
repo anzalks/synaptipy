@@ -60,7 +60,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
-            libxcb-xfixes0 libegl1 libxcb-cursor0
+            libxcb-xfixes0 libegl1 libxcb-cursor0 \
+            qt6-tools-dev-tools
 
       - name: Install dependencies
         run: |
@@ -69,6 +70,14 @@ jobs:
 
       - name: Build ICNS and ICO
         run: python scripts/build_icons.py
+
+      # Build the Sphinx qthelp output and compile .qch/.qhc artefacts so
+      # they land in src/Synaptipy/resources/docs/ before PyInstaller runs.
+      # On macOS/Windows the qhelpgenerator binary is shipped inside the
+      # pyside6 wheel (already installed above); on Linux we install the
+      # system qt6-tools-dev-tools package (see step above).
+      - name: Build offline Help artefacts
+        run: python scripts/build_offline_help.py
 
       - name: Build with PyInstaller
         run: pyinstaller synaptipy.spec

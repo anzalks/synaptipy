@@ -11,8 +11,15 @@ set BUILDDIR=_build
 
 if "%1" == "" goto html
 if "%1" == "clean" goto clean
+if "%1" == "qthelp" goto qthelp
 
 %SPHINXBUILD% -b %1 %SOURCEDIR% %BUILDDIR%\%1 %SPHINXOPTS% %O%
+goto end
+
+:qthelp
+%SPHINXBUILD% -b qthelp %SOURCEDIR% %BUILDDIR%\qthelp %SPHINXOPTS% %O%
+echo.
+echo Build finished. Qt Help files are in %BUILDDIR%\qthelp.
 goto end
 
 :html
