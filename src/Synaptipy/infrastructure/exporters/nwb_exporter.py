@@ -13,7 +13,7 @@ __email__ = "anzalks@ncbs.res.in"
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -28,6 +28,13 @@ try:  # noqa: C901
         VoltageClampSeries,
         VoltageClampStimulusSeries,
     )
+
+    try:
+        from hdmf.common import DynamicTable
+
+        HDMF_AVAILABLE = True
+    except ImportError:
+        HDMF_AVAILABLE = False
 
     PYNWB_AVAILABLE = True
 except ImportError:
@@ -121,7 +128,13 @@ log = logging.getLogger(__name__)
 class NWBExporter:
     """Handles exporting Recording domain objects to NWB files."""
 
-    def export(self, recording: Recording, output_path: Path, session_metadata: Dict[str, Any]):  # noqa: C901
+    def export(  # noqa: C901
+        self,
+        recording: Recording,
+        output_path: Path,
+        session_metadata: Dict[str, Any],
+        analysis_results: Optional[Dict[str, Any]] = None,
+    ):
         """
         Exports the given Recording object to an NWB file.
 
@@ -133,6 +146,12 @@ class NWBExporter:
                               'session_description', 'identifier', 'session_start_time',
                               plus optional 'experimenter', 'lab', 'institution', 'session_id',
                               and Subject/Device/Electrode info.
+            analysis_results: Optional dict (or list of dicts) produced by
+                              ``BatchAnalysisEngine.run_batch``.  When provided,
+                              discrete-event arrays stored under the
+                              ``_raw_arrays`` key are written into an NWB
+                              ``ProcessingModule`` as ``DynamicTable`` objects.
+                              No analysis computation is re-run.
 
         Raises:
             ExportError: If any error occurs during the NWB file creation or writing.
@@ -375,6 +394,57 @@ class NWBExporter:
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
 
+                    # --- Stimulus Series ---
+                    # Check for an associated command waveform (populated by NeoAdapter
+                    # into channel.current_data_trials).  When present, map it to the
+                    # appropriate NWB stimulus class so the pairing can be stored in
+                    # IntracellularRecordingsTable for FAIR compliance.
+                    stim_series = None
+                    if getattr(channel, "current_data_trials", None) and trial_idx < len(channel.current_data_trials):
+                        cmd_data = channel.current_data_trials[trial_idx]
+                        if cmd_data is not None and cmd_data.size > 0:
+                            cmd_units_raw = (getattr(channel, "current_units", None) or "unknown").lower()
+                            stim_name = f"{channel.name}_stim_trial_{trial_idx:03d}"
+                            cmd_export = cmd_data.astype(np.float64)
+                            if cmd_units_raw in ("mv", "millivolt", "millivolts"):
+                                cmd_export = cmd_export * 1e-3
+                                stim_unit = "volts"
+                                StimulusClass = VoltageClampStimulusSeries
+                            elif cmd_units_raw in ("v", "volt", "volts"):
+                                stim_unit = "volts"
+                                StimulusClass = VoltageClampStimulusSeries
+                            elif cmd_units_raw in ("pa", "picoampere", "picoamperes"):
+                                cmd_export = cmd_export * 1e-12
+                                stim_unit = "amperes"
+                                StimulusClass = CurrentClampStimulusSeries
+                            elif cmd_units_raw in ("na", "nanoampere", "nanoamperes"):
+                                cmd_export = cmd_export * 1e-9
+                                stim_unit = "amperes"
+                                StimulusClass = CurrentClampStimulusSeries
+                            else:
+                                stim_unit = cmd_units_raw
+                                StimulusClass = CurrentClampStimulusSeries
+                            try:
+                                stim_series = StimulusClass(
+                                    name=stim_name,
+                                    data=cmd_export,
+                                    unit=stim_unit,
+                                    electrode=ic_electrode,
+                                    rate=float(channel_rate) if channel_rate else 1000.0,
+                                    starting_time=float(getattr(channel, "t_start", 0.0)),
+                                    gain=1.0,
+                                    sweep_number=np.uint64(trial_idx),
+                                )
+                                nwbfile.add_stimulus(stim_series)
+                            except Exception as e_stim:
+                                log.warning(
+                                    "Could not add stimulus series for '%s' trial %d: %s",
+                                    channel.name,
+                                    trial_idx,
+                                    e_stim,
+                                )
+                                stim_series = None
+
                     try:
                         series_kwargs = dict(
                             name=ts_name,
@@ -396,13 +466,39 @@ class NWBExporter:
                         # icephys table.  stimulus=None documents that the command
                         # waveform was not captured (valid per NWB:N 2.0 spec).
                         try:
-                            nwbfile.add_intracellular_recording(
+                            _icr_kwargs: Dict[str, Any] = dict(
                                 electrode=ic_electrode,
                                 response=time_series,
                                 response_start_index=0,
                                 response_index_count=int(len(export_data)),
-                                stimulus=None,
                             )
+                            if stim_series is not None:
+                                _icr_kwargs["stimulus"] = stim_series
+                                _icr_kwargs["stimulus_start_index"] = 0
+                                _icr_kwargs["stimulus_index_count"] = int(len(stim_series.data))
+                            icr_row = nwbfile.add_intracellular_recording(**_icr_kwargs)
+
+                            # --- NWB 2.x Sweep Grouping ---
+                            # Group each (electrode, trial) as a simultaneous recording
+                            # then all trials of the same trial_idx across channels
+                            # as a sequential recording for FAIR sweep linkage.
+                            try:
+                                sim_row = nwbfile.add_icephys_simultaneous_recording(recordings=[icr_row])
+                                nwbfile.add_icephys_sequential_recording(
+                                    simultaneous_recordings=[sim_row],
+                                    stimulus_type=(
+                                        "current_clamp"
+                                        if SeriesClass is CurrentClampSeries
+                                        else ("voltage_clamp" if SeriesClass is VoltageClampSeries else "unknown")
+                                    ),
+                                )
+                            except Exception as e_grp:
+                                log.debug(
+                                    "Sweep grouping failed for '%s' trial %d: %s",
+                                    ts_name,
+                                    trial_idx,
+                                    e_grp,
+                                )
                         except Exception as e_icr:
                             log.debug(
                                 "Could not add intracellular_recording entry for '%s': %s",
@@ -417,6 +513,52 @@ class NWBExporter:
 
             if num_channels_processed == 0:
                 log.warning("No valid channels exported.")
+
+            # --- Analysis Embedding (ProcessingModule) ---
+            # Ingest pre-computed ``_raw_arrays`` from batch-engine results.
+            # No analysis is re-run; only discrete-event arrays are written.
+            if analysis_results is not None and HDMF_AVAILABLE:
+                rows = analysis_results if isinstance(analysis_results, list) else [analysis_results]
+                try:
+                    pm = nwbfile.create_processing_module(
+                        name="analysis",
+                        description="Batch analysis results produced by Synaptipy BatchAnalysisEngine.",
+                    )
+                    _table_counts: Dict[str, int] = {}
+                    for row in rows:
+                        raw = row.get("_raw_arrays") if isinstance(row, dict) else None
+                        if not isinstance(raw, dict):
+                            continue
+                        event_times = raw.get("event_times")
+                        event_amplitudes = raw.get("event_amplitudes")
+                        if event_times is None:
+                            continue
+                        # Derive a unique table name from channel/analysis metadata
+                        chan_label = row.get("channel_name") or row.get("channel") or "ch"
+                        analysis_label = row.get("analysis") or row.get("analysis_type") or "events"
+                        base_name = f"{chan_label}_{analysis_label}"
+                        suffix = _table_counts.get(base_name, 0)
+                        _table_counts[base_name] = suffix + 1
+                        tbl_name = f"{base_name}_{suffix}" if suffix else base_name
+
+                        times_arr = np.asarray(event_times, dtype=np.float64)
+                        dt = DynamicTable(
+                            name=tbl_name,
+                            description=(f"Discrete events for channel={chan_label}, " f"analysis={analysis_label}."),
+                        )
+                        dt.add_column(name="time_s", description="Event time in seconds relative to sweep onset.")
+                        if event_amplitudes is not None:
+                            amps_arr = np.asarray(event_amplitudes, dtype=np.float64)
+                            dt.add_column(name="amplitude", description="Event amplitude in channel units.")
+                            for t_val, a_val in zip(times_arr, amps_arr):
+                                dt.add_row(time_s=float(t_val), amplitude=float(a_val))
+                        else:
+                            for t_val in times_arr:
+                                dt.add_row(time_s=float(t_val))
+                        pm.add(dt)
+                        log.debug("NWB ProcessingModule: added table '%s' (%d rows)", tbl_name, len(times_arr))
+                except Exception as e_pm:
+                    log.warning("NWB analysis ProcessingModule failed (non-fatal): %s", e_pm)
 
             # --- Write File ---
             log.debug(f"Writing NWB to: {output_path}")

@@ -160,11 +160,19 @@ jobs:
 
       - name: Upload binaries to Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
+          # Explicitly set tag_name so this step correctly targets the tag
+          # release whether or not release.yml has finished creating it yet.
+          # softprops/action-gh-release@v2 will create the release if absent
+          # or append files to the existing release if release.yml got there
+          # first.  fail_on_unmatched_files=false prevents the job from
+          # failing when a platform's build was skipped via fail-fast.
+          tag_name: ${{ github.ref_name }}
           files: |
             dist-artifacts/*/*.AppImage
             dist-artifacts/*/*.exe
             dist-artifacts/*/*.dmg
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

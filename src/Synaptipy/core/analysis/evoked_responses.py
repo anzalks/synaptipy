@@ -90,7 +90,7 @@ def extract_ttl_epochs(
             data_min = float(np.min(ttl_data))
             data_max = float(np.max(ttl_data))
             data_range = data_max - data_min
-            if data_range > 0:
+            if data_range > 1.0:  # require >1 V swing; prevents thermal noise amplification on floating channels
                 auto_thr = data_min + data_range * 0.5
                 log.info(
                     "TTL threshold %.3f produced no edges; auto-adjusting to midpoint %.3f "
@@ -439,12 +439,12 @@ def calculate_paired_pulse_ratio(  # noqa: C901
     r2_amp_raw, r2_peak_raw = _response_peak(stim2_onset_s, bl2)
     out["r2_amplitude_raw"] = r2_amp_raw
 
-    # Subtract residual decay from R2 to get corrected amplitude
-    if polarity == "negative":
-        # The residual decay raises the apparent baseline under R2
-        corrected_bl2 = bl2 + residual_at_stim2
-    else:
-        corrected_bl2 = bl2 + residual_at_stim2
+    # Subtract residual decay from R2 to get corrected amplitude.
+    # bl2 physically *includes* the residual tail from R1 — adding residual_at_stim2
+    # on top of bl2 would double-count it.  The correct reference is bl1 (the
+    # true resting baseline before the first pulse) plus the modelled residual
+    # at the time of the second stimulus.
+    corrected_bl2 = bl1 + residual_at_stim2
 
     if polarity == "negative":
         r2_corrected = corrected_bl2 - r2_peak_raw
