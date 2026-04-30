@@ -249,19 +249,49 @@ class HelpWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
 
     def _build_help_ui(self) -> None:
-        """Construct the full QHelpEngine two-pane viewer (tier 1)."""
+        """Construct the full QHelpEngine two-pane viewer (tier 1).
+
+        Left pane layout::
+
+            ┌──────────────────────┐
+            │  QTabWidget          │  Contents / Index / Search
+            │  (stretch = 1)       │
+            ├──────────────────────┤
+            │  QLabel (online link)│  fixed height; opens system browser
+            └──────────────────────┘
+        """
         self._browser = _HelpBrowser(self._engine, self)
         self._browser.setMinimumWidth(400)
 
         nav_tabs = QtWidgets.QTabWidget()
-        nav_tabs.setMinimumWidth(240)
-        nav_tabs.setMaximumWidth(380)
         nav_tabs.addTab(self._engine.contentWidget(), "Contents")
         nav_tabs.addTab(self._engine.indexWidget(), "Index")
         nav_tabs.addTab(self._build_search_tab(), "Search")
 
+        # Online documentation link pinned to the bottom of the left pane.
+        # setOpenExternalLinks(True) delegates the click to the OS browser
+        # via QDesktopServices — no custom slot required.
+        online_link = QtWidgets.QLabel(
+            '<a href="https://synaptipy.readthedocs.io/en/latest/">'
+            "View Online Documentation</a>"
+        )
+        online_link.setOpenExternalLinks(True)
+        online_link.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        online_link.setContentsMargins(6, 4, 6, 6)
+        online_link.setToolTip("Open the online documentation in your web browser")
+
+        left_pane = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_pane)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+        left_layout.addWidget(nav_tabs)
+        left_layout.addWidget(online_link)
+
+        left_pane.setMinimumWidth(240)
+        left_pane.setMaximumWidth(380)
+
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        splitter.addWidget(nav_tabs)
+        splitter.addWidget(left_pane)
         splitter.addWidget(self._browser)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)

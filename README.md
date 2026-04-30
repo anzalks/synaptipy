@@ -116,16 +116,17 @@ for journal submission and data sharing.
 **What is exported:**
 
 - Raw electrophysiology traces as `CurrentClampSeries` / `VoltageClampSeries`
-- Stimulus waveforms via a 3-step fallback: (1) raw digitised command waveform,
-  (2) automated synthesis from ABF protocol epoch metadata when the command
-  channel is absent, (3) `stimulus=None` with a warning note for unsupported
-  formats
+- Automated protocol metadata synthesis for missing stimulus arrays — when the
+  command channel is absent, stimulus waveforms are reconstructed from ABF
+  epoch metadata; a 3-step fallback (raw → synthetic → `stimulus=None` with
+  a warning) ensures NWB conformance for every recording
+- Full embedded discrete event analysis via NWB 2.x Processing Modules —
+  spike times, synaptic event times, and amplitudes are written as
+  `DynamicTable` objects inside a `ProcessingModule` when the batch engine
+  produces `_raw_arrays` output
 - Sweep-level organisation via `IntracellularRecordingsTable`,
   `SimultaneousRecordingsTable`, and `SequentialRecordingsTable` (NWB 2.x
   icephys best-practice hierarchy)
-- Full embedded discrete-event analysis via NWB 2.x `ProcessingModule` -
-  spike times, synaptic event times, and amplitudes are written as
-  `DynamicTable` objects when the batch engine produces `_raw_arrays` output
 - Electrode metadata and session provenance fields
 
 ---
