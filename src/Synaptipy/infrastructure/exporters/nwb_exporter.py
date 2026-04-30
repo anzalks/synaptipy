@@ -13,7 +13,7 @@ __email__ = "anzalks@ncbs.res.in"
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -127,6 +127,172 @@ log = logging.getLogger(__name__)
 
 class NWBExporter:
     """Handles exporting Recording domain objects to NWB files."""
+
+    # ------------------------------------------------------------------
+    # Stimulus resolution helpers (3-step fallback)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_stim_series(
+        cmd_data: np.ndarray,
+        cmd_units_raw: str,
+        stim_name: str,
+        description: str,
+        ic_electrode: Any,
+        rate: float,
+        t_start: float,
+        trial_idx: int,
+        nwbfile: Any,
+    ) -> Optional[Any]:
+        """Create and register one NWB stimulus series; return it or None on failure.
+
+        Unit conversion follows NWB best practice (SI: volts / amperes).
+        Selects ``CurrentClampStimulusSeries`` for current-units commands and
+        ``VoltageClampStimulusSeries`` for voltage-units commands.
+        """
+        units_lower = cmd_units_raw.lower()
+        cmd_export = np.asarray(cmd_data, dtype=np.float64)
+        if units_lower in ("mv", "millivolt", "millivolts"):
+            cmd_export = cmd_export * 1e-3
+            stim_unit = "volts"
+            StimulusClass = VoltageClampStimulusSeries
+        elif units_lower in ("v", "volt", "volts"):
+            stim_unit = "volts"
+            StimulusClass = VoltageClampStimulusSeries
+        elif units_lower in ("na", "nanoampere", "nanoamperes"):
+            cmd_export = cmd_export * 1e-9
+            stim_unit = "amperes"
+            StimulusClass = CurrentClampStimulusSeries
+        elif units_lower in ("pa", "picoampere", "picoamperes"):
+            cmd_export = cmd_export * 1e-12
+            stim_unit = "amperes"
+            StimulusClass = CurrentClampStimulusSeries
+        else:
+            stim_unit = units_lower or "unknown"
+            StimulusClass = CurrentClampStimulusSeries  # safe default
+        try:
+            stim = StimulusClass(
+                name=stim_name,
+                data=cmd_export,
+                unit=stim_unit,
+                description=description,
+                electrode=ic_electrode,
+                rate=float(rate) if rate else 1000.0,
+                starting_time=t_start,
+                gain=1.0,
+                sweep_number=np.uint64(trial_idx),
+            )
+            nwbfile.add_stimulus(stim)
+            return stim
+        except Exception as exc:
+            log.warning("Could not add stimulus series '%s': %s", stim_name, exc)
+            return None
+
+    @staticmethod
+    def _build_stim_from_abf_epochs(
+        epochs: Any,
+        trial_idx: int,
+        n_samples: int,
+    ) -> Optional[np.ndarray]:
+        """Synthesize a step-current waveform (pA) from ABF EpochSections metadata.
+
+        Epoch types: 1 = step, 2 = ramp (ramp not yet implemented, treated as step).
+        Returns a float64 array of length *n_samples*, or None when the epoch
+        data cannot produce a non-zero waveform.
+        """
+        try:
+            if not isinstance(epochs, (list, np.ndarray)) or len(epochs) == 0:
+                return None
+            waveform = np.zeros(n_samples, dtype=np.float64)
+            cursor = 0
+            for ep in epochs:
+                ep_dict = ep if isinstance(ep, dict) else {}
+                ep_type = int(ep_dict.get("nEpochType", 0))
+                if ep_type == 0:
+                    continue
+                level = (
+                    float(ep_dict.get("fEpochInitLevel", 0.0)) + float(ep_dict.get("fEpochLevelInc", 0.0)) * trial_idx
+                )
+                dur = int(ep_dict.get("lEpochInitDuration", 0)) + int(ep_dict.get("lEpochDurationInc", 0)) * trial_idx
+                end = min(cursor + dur, n_samples)
+                waveform[cursor:end] = level
+                cursor = end
+                if cursor >= n_samples:
+                    break
+            return waveform if np.any(waveform != 0.0) else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resolve_stimulus_series(
+        channel: Any,
+        trial_idx: int,
+        recording: Any,
+        ic_electrode: Any,
+        channel_rate: float,
+        n_samples: int,
+        nwbfile: Any,
+    ) -> "Tuple[Optional[Any], str]":
+        """Resolve the stimulus series for one trial using a 3-step fallback.
+
+        Attempt 1 — raw digitized command waveform from
+            ``channel.current_data_trials[trial_idx]``.
+        Attempt 2 — synthetic step waveform reconstructed from ABF epoch
+            metadata stored in ``recording.metadata["abf_epochs"]``.
+        Attempt 3 — ``(None, warning_string)`` noting that no waveform is
+            available; the caller should append the warning to the response
+            trace description.
+
+        Returns:
+            ``(stim_series, stim_note)`` where *stim_note* is an empty string
+            on success or a human-readable warning on failure.
+        """
+        stim_name_base = f"{channel.name}_stim_trial_{trial_idx:03d}"
+        t_start = float(getattr(channel, "t_start", 0.0))
+
+        # ------ Attempt 1: raw digitized command waveform ------
+        raw_trials = getattr(channel, "current_data_trials", None)
+        if raw_trials and trial_idx < len(raw_trials):
+            cmd_data = raw_trials[trial_idx]
+            if cmd_data is not None and np.asarray(cmd_data).size > 0:
+                stim = NWBExporter._make_stim_series(
+                    cmd_data,
+                    (getattr(channel, "current_units", None) or "pA"),
+                    stim_name_base,
+                    "Raw digitized command waveform from acquisition hardware.",
+                    ic_electrode,
+                    channel_rate,
+                    t_start,
+                    trial_idx,
+                    nwbfile,
+                )
+                if stim is not None:
+                    return stim, ""
+
+        # ------ Attempt 2: synthetic from ABF epoch metadata ------
+        abf_epochs = None
+        if hasattr(recording, "metadata") and isinstance(recording.metadata, dict):
+            abf_epochs = recording.metadata.get("abf_epochs")
+        if abf_epochs is not None:
+            synth = NWBExporter._build_stim_from_abf_epochs(abf_epochs, trial_idx, n_samples)
+            if synth is not None:
+                stim = NWBExporter._make_stim_series(
+                    synth,
+                    "pA",
+                    stim_name_base + "_synth",
+                    "Synthetic stimulus array reconstructed from protocol metadata.",
+                    ic_electrode,
+                    channel_rate,
+                    t_start,
+                    trial_idx,
+                    nwbfile,
+                )
+                if stim is not None:
+                    return stim, ""
+
+        # ------ Attempt 3: no stimulus available ------
+        warning = "WARNING: No stimulus waveform captured during acquisition; " "command waveform is unavailable."
+        return None, warning
 
     def export(  # noqa: C901
         self,
@@ -394,56 +560,21 @@ class NWBExporter:
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
 
-                    # --- Stimulus Series ---
-                    # Check for an associated command waveform (populated by NeoAdapter
-                    # into channel.current_data_trials).  When present, map it to the
-                    # appropriate NWB stimulus class so the pairing can be stored in
-                    # IntracellularRecordingsTable for FAIR compliance.
-                    stim_series = None
-                    if getattr(channel, "current_data_trials", None) and trial_idx < len(channel.current_data_trials):
-                        cmd_data = channel.current_data_trials[trial_idx]
-                        if cmd_data is not None and cmd_data.size > 0:
-                            cmd_units_raw = (getattr(channel, "current_units", None) or "unknown").lower()
-                            stim_name = f"{channel.name}_stim_trial_{trial_idx:03d}"
-                            cmd_export = cmd_data.astype(np.float64)
-                            if cmd_units_raw in ("mv", "millivolt", "millivolts"):
-                                cmd_export = cmd_export * 1e-3
-                                stim_unit = "volts"
-                                StimulusClass = VoltageClampStimulusSeries
-                            elif cmd_units_raw in ("v", "volt", "volts"):
-                                stim_unit = "volts"
-                                StimulusClass = VoltageClampStimulusSeries
-                            elif cmd_units_raw in ("pa", "picoampere", "picoamperes"):
-                                cmd_export = cmd_export * 1e-12
-                                stim_unit = "amperes"
-                                StimulusClass = CurrentClampStimulusSeries
-                            elif cmd_units_raw in ("na", "nanoampere", "nanoamperes"):
-                                cmd_export = cmd_export * 1e-9
-                                stim_unit = "amperes"
-                                StimulusClass = CurrentClampStimulusSeries
-                            else:
-                                stim_unit = cmd_units_raw
-                                StimulusClass = CurrentClampStimulusSeries
-                            try:
-                                stim_series = StimulusClass(
-                                    name=stim_name,
-                                    data=cmd_export,
-                                    unit=stim_unit,
-                                    electrode=ic_electrode,
-                                    rate=float(channel_rate) if channel_rate else 1000.0,
-                                    starting_time=float(getattr(channel, "t_start", 0.0)),
-                                    gain=1.0,
-                                    sweep_number=np.uint64(trial_idx),
-                                )
-                                nwbfile.add_stimulus(stim_series)
-                            except Exception as e_stim:
-                                log.warning(
-                                    "Could not add stimulus series for '%s' trial %d: %s",
-                                    channel.name,
-                                    trial_idx,
-                                    e_stim,
-                                )
-                                stim_series = None
+                    # --- Stimulus Series (3-step fallback) ---
+                    # Attempt 1: raw digitized command waveform.
+                    # Attempt 2: synthetic waveform from ABF epoch metadata.
+                    # Attempt 3: stimulus=None, warning appended to ts_desc.
+                    stim_series, stim_note = NWBExporter._resolve_stimulus_series(
+                        channel,
+                        trial_idx,
+                        recording,
+                        ic_electrode,
+                        float(channel_rate) if channel_rate else 1000.0,
+                        int(export_data.size),
+                        nwbfile,
+                    )
+                    if stim_note:
+                        ts_desc = ts_desc + " " + stim_note
 
                     try:
                         series_kwargs = dict(
