@@ -223,3 +223,13 @@ linkcheck_allowed_redirects = {
 }
 linkcheck_timeout = 15
 linkcheck_retries = 2
+
+# ---------------------------------------------------------------------------
+# Qt Help output options
+# qthelp_basename  - stem for the generated .qch / .qhc artefacts
+# qthelp_namespace - unique reverse-DNS identifier required by QHelpEngine
+# qthelp_theme     - standalone HTML theme (no inter-page JS dependencies)
+# ---------------------------------------------------------------------------
+qthelp_basename = "synaptipy"
+qthelp_namespace = "org.synaptipy.docs"
+qthelp_theme = "nonav"

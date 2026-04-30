@@ -10,7 +10,7 @@ SPHINXBUILD = conda run -n $(CONDA_ENV) sphinx-build
 SOURCEDIR   = .
 BUILDDIR    = _build
 
-.PHONY: help html clean livehtml linkcheck Makefile
+.PHONY: help html clean livehtml linkcheck qthelp Makefile
 
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
@@ -28,6 +28,11 @@ linkcheck:
 	@$(SPHINXBUILD) -b linkcheck "$(SOURCEDIR)" "$(BUILDDIR)/linkcheck" -W $(SPHINXOPTS) $(O)
 	@echo
 	@echo "Link check complete. Results are in $(BUILDDIR)/linkcheck."
+
+qthelp:
+	@$(SPHINXBUILD) -b qthelp "$(SOURCEDIR)" "$(BUILDDIR)/qthelp" $(SPHINXOPTS) $(O)
+	@echo
+	@echo "Build finished. Qt Help files are in $(BUILDDIR)/qthelp."
 
 livehtml:
 	@conda run -n $(CONDA_ENV) sphinx-autobuild \

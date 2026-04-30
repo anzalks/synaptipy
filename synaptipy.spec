@@ -15,7 +15,7 @@ hiddenimports += collect_submodules('scipy')
 hiddenimports += collect_submodules('h5py')
 hiddenimports += collect_submodules('pynwb')
 
-# Include our local resources
+# Include our local resources (icons, stylesheets, and compiled Qt Help docs)
 datas = [('src/Synaptipy/resources', 'Synaptipy/resources')]
 datas += collect_data_files('pynwb')
 datas += collect_data_files('hdmf')
