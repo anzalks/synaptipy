@@ -13,7 +13,7 @@ __email__ = "anzalks@ncbs.res.in"
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -28,6 +28,13 @@ try:  # noqa: C901
         VoltageClampSeries,
         VoltageClampStimulusSeries,
     )
+
+    try:
+        from hdmf.common import DynamicTable
+
+        HDMF_AVAILABLE = True
+    except ImportError:
+        HDMF_AVAILABLE = False
 
     PYNWB_AVAILABLE = True
 except ImportError:
@@ -121,7 +128,179 @@ log = logging.getLogger(__name__)
 class NWBExporter:
     """Handles exporting Recording domain objects to NWB files."""
 
-    def export(self, recording: Recording, output_path: Path, session_metadata: Dict[str, Any]):  # noqa: C901
+    # ------------------------------------------------------------------
+    # Stimulus resolution helpers (3-step fallback)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_stim_series(
+        cmd_data: np.ndarray,
+        cmd_units_raw: str,
+        stim_name: str,
+        description: str,
+        ic_electrode: Any,
+        rate: float,
+        t_start: float,
+        trial_idx: int,
+        nwbfile: Any,
+    ) -> Optional[Any]:
+        """Create and register one NWB stimulus series; return it or None on failure.
+
+        Unit conversion follows NWB best practice (SI: volts / amperes).
+        Selects ``CurrentClampStimulusSeries`` for current-units commands and
+        ``VoltageClampStimulusSeries`` for voltage-units commands.
+        """
+        units_lower = cmd_units_raw.lower()
+        cmd_export = np.asarray(cmd_data, dtype=np.float64)
+        if units_lower in ("mv", "millivolt", "millivolts"):
+            cmd_export = cmd_export * 1e-3
+            stim_unit = "volts"
+            StimulusClass = VoltageClampStimulusSeries
+        elif units_lower in ("v", "volt", "volts"):
+            stim_unit = "volts"
+            StimulusClass = VoltageClampStimulusSeries
+        elif units_lower in ("na", "nanoampere", "nanoamperes"):
+            cmd_export = cmd_export * 1e-9
+            stim_unit = "amperes"
+            StimulusClass = CurrentClampStimulusSeries
+        elif units_lower in ("pa", "picoampere", "picoamperes"):
+            cmd_export = cmd_export * 1e-12
+            stim_unit = "amperes"
+            StimulusClass = CurrentClampStimulusSeries
+        else:
+            stim_unit = units_lower or "unknown"
+            StimulusClass = CurrentClampStimulusSeries  # safe default
+        try:
+            stim = StimulusClass(
+                name=stim_name,
+                data=cmd_export,
+                unit=stim_unit,
+                description=description,
+                electrode=ic_electrode,
+                rate=float(rate) if rate else 1000.0,
+                starting_time=t_start,
+                gain=1.0,
+                sweep_number=np.uint64(trial_idx),
+            )
+            nwbfile.add_stimulus(stim)
+            return stim
+        except Exception as exc:
+            log.warning("Could not add stimulus series '%s': %s", stim_name, exc)
+            return None
+
+    @staticmethod
+    def _build_stim_from_abf_epochs(
+        epochs: Any,
+        trial_idx: int,
+        n_samples: int,
+    ) -> Optional[np.ndarray]:
+        """Synthesize a step-current waveform (pA) from ABF EpochSections metadata.
+
+        Epoch types: 1 = step, 2 = ramp (ramp not yet implemented, treated as step).
+        Returns a float64 array of length *n_samples*, or None when the epoch
+        data cannot produce a non-zero waveform.
+        """
+        try:
+            if not isinstance(epochs, (list, np.ndarray)) or len(epochs) == 0:
+                return None
+            waveform = np.zeros(n_samples, dtype=np.float64)
+            cursor = 0
+            for ep in epochs:
+                ep_dict = ep if isinstance(ep, dict) else {}
+                ep_type = int(ep_dict.get("nEpochType", 0))
+                if ep_type == 0:
+                    continue
+                level = (
+                    float(ep_dict.get("fEpochInitLevel", 0.0)) + float(ep_dict.get("fEpochLevelInc", 0.0)) * trial_idx
+                )
+                dur = int(ep_dict.get("lEpochInitDuration", 0)) + int(ep_dict.get("lEpochDurationInc", 0)) * trial_idx
+                end = min(cursor + dur, n_samples)
+                waveform[cursor:end] = level
+                cursor = end
+                if cursor >= n_samples:
+                    break
+            return waveform if np.any(waveform != 0.0) else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resolve_stimulus_series(
+        channel: Any,
+        trial_idx: int,
+        recording: Any,
+        ic_electrode: Any,
+        channel_rate: float,
+        n_samples: int,
+        nwbfile: Any,
+    ) -> "Tuple[Optional[Any], str]":
+        """Resolve the stimulus series for one trial using a 3-step fallback.
+
+        Attempt 1 — raw digitized command waveform from
+            ``channel.current_data_trials[trial_idx]``.
+        Attempt 2 — synthetic step waveform reconstructed from ABF epoch
+            metadata stored in ``recording.metadata["abf_epochs"]``.
+        Attempt 3 — ``(None, warning_string)`` noting that no waveform is
+            available; the caller should append the warning to the response
+            trace description.
+
+        Returns:
+            ``(stim_series, stim_note)`` where *stim_note* is an empty string
+            on success or a human-readable warning on failure.
+        """
+        stim_name_base = f"{channel.name}_stim_trial_{trial_idx:03d}"
+        t_start = float(getattr(channel, "t_start", 0.0))
+
+        # ------ Attempt 1: raw digitized command waveform ------
+        raw_trials = getattr(channel, "current_data_trials", None)
+        if raw_trials and trial_idx < len(raw_trials):
+            cmd_data = raw_trials[trial_idx]
+            if cmd_data is not None and np.asarray(cmd_data).size > 0:
+                stim = NWBExporter._make_stim_series(
+                    cmd_data,
+                    (getattr(channel, "current_units", None) or "pA"),
+                    stim_name_base,
+                    "Raw digitized command waveform from acquisition hardware.",
+                    ic_electrode,
+                    channel_rate,
+                    t_start,
+                    trial_idx,
+                    nwbfile,
+                )
+                if stim is not None:
+                    return stim, ""
+
+        # ------ Attempt 2: synthetic from ABF epoch metadata ------
+        abf_epochs = None
+        if hasattr(recording, "metadata") and isinstance(recording.metadata, dict):
+            abf_epochs = recording.metadata.get("abf_epochs")
+        if abf_epochs is not None:
+            synth = NWBExporter._build_stim_from_abf_epochs(abf_epochs, trial_idx, n_samples)
+            if synth is not None:
+                stim = NWBExporter._make_stim_series(
+                    synth,
+                    "pA",
+                    stim_name_base + "_synth",
+                    "Synthetic stimulus array reconstructed from protocol metadata.",
+                    ic_electrode,
+                    channel_rate,
+                    t_start,
+                    trial_idx,
+                    nwbfile,
+                )
+                if stim is not None:
+                    return stim, ""
+
+        # ------ Attempt 3: no stimulus available ------
+        warning = "WARNING: No stimulus waveform captured during acquisition; " "command waveform is unavailable."
+        return None, warning
+
+    def export(  # noqa: C901
+        self,
+        recording: Recording,
+        output_path: Path,
+        session_metadata: Dict[str, Any],
+        analysis_results: Optional[Dict[str, Any]] = None,
+    ):
         """
         Exports the given Recording object to an NWB file.
 
@@ -133,6 +312,12 @@ class NWBExporter:
                               'session_description', 'identifier', 'session_start_time',
                               plus optional 'experimenter', 'lab', 'institution', 'session_id',
                               and Subject/Device/Electrode info.
+            analysis_results: Optional dict (or list of dicts) produced by
+                              ``BatchAnalysisEngine.run_batch``.  When provided,
+                              discrete-event arrays stored under the
+                              ``_raw_arrays`` key are written into an NWB
+                              ``ProcessingModule`` as ``DynamicTable`` objects.
+                              No analysis computation is re-run.
 
         Raises:
             ExportError: If any error occurs during the NWB file creation or writing.
@@ -375,6 +560,22 @@ class NWBExporter:
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
 
+                    # --- Stimulus Series (3-step fallback) ---
+                    # Attempt 1: raw digitized command waveform.
+                    # Attempt 2: synthetic waveform from ABF epoch metadata.
+                    # Attempt 3: stimulus=None, warning appended to ts_desc.
+                    stim_series, stim_note = NWBExporter._resolve_stimulus_series(
+                        channel,
+                        trial_idx,
+                        recording,
+                        ic_electrode,
+                        float(channel_rate) if channel_rate else 1000.0,
+                        int(export_data.size),
+                        nwbfile,
+                    )
+                    if stim_note:
+                        ts_desc = ts_desc + " " + stim_note
+
                     try:
                         series_kwargs = dict(
                             name=ts_name,
@@ -396,13 +597,39 @@ class NWBExporter:
                         # icephys table.  stimulus=None documents that the command
                         # waveform was not captured (valid per NWB:N 2.0 spec).
                         try:
-                            nwbfile.add_intracellular_recording(
+                            _icr_kwargs: Dict[str, Any] = dict(
                                 electrode=ic_electrode,
                                 response=time_series,
                                 response_start_index=0,
                                 response_index_count=int(len(export_data)),
-                                stimulus=None,
                             )
+                            if stim_series is not None:
+                                _icr_kwargs["stimulus"] = stim_series
+                                _icr_kwargs["stimulus_start_index"] = 0
+                                _icr_kwargs["stimulus_index_count"] = int(len(stim_series.data))
+                            icr_row = nwbfile.add_intracellular_recording(**_icr_kwargs)
+
+                            # --- NWB 2.x Sweep Grouping ---
+                            # Group each (electrode, trial) as a simultaneous recording
+                            # then all trials of the same trial_idx across channels
+                            # as a sequential recording for FAIR sweep linkage.
+                            try:
+                                sim_row = nwbfile.add_icephys_simultaneous_recording(recordings=[icr_row])
+                                nwbfile.add_icephys_sequential_recording(
+                                    simultaneous_recordings=[sim_row],
+                                    stimulus_type=(
+                                        "current_clamp"
+                                        if SeriesClass is CurrentClampSeries
+                                        else ("voltage_clamp" if SeriesClass is VoltageClampSeries else "unknown")
+                                    ),
+                                )
+                            except Exception as e_grp:
+                                log.debug(
+                                    "Sweep grouping failed for '%s' trial %d: %s",
+                                    ts_name,
+                                    trial_idx,
+                                    e_grp,
+                                )
                         except Exception as e_icr:
                             log.debug(
                                 "Could not add intracellular_recording entry for '%s': %s",
@@ -417,6 +644,52 @@ class NWBExporter:
 
             if num_channels_processed == 0:
                 log.warning("No valid channels exported.")
+
+            # --- Analysis Embedding (ProcessingModule) ---
+            # Ingest pre-computed ``_raw_arrays`` from batch-engine results.
+            # No analysis is re-run; only discrete-event arrays are written.
+            if analysis_results is not None and HDMF_AVAILABLE:
+                rows = analysis_results if isinstance(analysis_results, list) else [analysis_results]
+                try:
+                    pm = nwbfile.create_processing_module(
+                        name="analysis",
+                        description="Batch analysis results produced by Synaptipy BatchAnalysisEngine.",
+                    )
+                    _table_counts: Dict[str, int] = {}
+                    for row in rows:
+                        raw = row.get("_raw_arrays") if isinstance(row, dict) else None
+                        if not isinstance(raw, dict):
+                            continue
+                        event_times = raw.get("event_times")
+                        event_amplitudes = raw.get("event_amplitudes")
+                        if event_times is None:
+                            continue
+                        # Derive a unique table name from channel/analysis metadata
+                        chan_label = row.get("channel_name") or row.get("channel") or "ch"
+                        analysis_label = row.get("analysis") or row.get("analysis_type") or "events"
+                        base_name = f"{chan_label}_{analysis_label}"
+                        suffix = _table_counts.get(base_name, 0)
+                        _table_counts[base_name] = suffix + 1
+                        tbl_name = f"{base_name}_{suffix}" if suffix else base_name
+
+                        times_arr = np.asarray(event_times, dtype=np.float64)
+                        dt = DynamicTable(
+                            name=tbl_name,
+                            description=(f"Discrete events for channel={chan_label}, " f"analysis={analysis_label}."),
+                        )
+                        dt.add_column(name="time_s", description="Event time in seconds relative to sweep onset.")
+                        if event_amplitudes is not None:
+                            amps_arr = np.asarray(event_amplitudes, dtype=np.float64)
+                            dt.add_column(name="amplitude", description="Event amplitude in channel units.")
+                            for t_val, a_val in zip(times_arr, amps_arr):
+                                dt.add_row(time_s=float(t_val), amplitude=float(a_val))
+                        else:
+                            for t_val in times_arr:
+                                dt.add_row(time_s=float(t_val))
+                        pm.add(dt)
+                        log.debug("NWB ProcessingModule: added table '%s' (%d rows)", tbl_name, len(times_arr))
+                except Exception as e_pm:
+                    log.warning("NWB analysis ProcessingModule failed (non-fatal): %s", e_pm)
 
             # --- Write File ---
             log.debug(f"Writing NWB to: {output_path}")
