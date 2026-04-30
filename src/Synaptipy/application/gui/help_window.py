@@ -272,8 +272,7 @@ class HelpWindow(QtWidgets.QMainWindow):
         # setOpenExternalLinks(True) delegates the click to the OS browser
         # via QDesktopServices — no custom slot required.
         online_link = QtWidgets.QLabel(
-            '<a href="https://synaptipy.readthedocs.io/en/latest/">'
-            "View Online Documentation</a>"
+            '<a href="https://synaptipy.readthedocs.io/en/latest/">' "View Online Documentation</a>"
         )
         online_link.setOpenExternalLinks(True)
         online_link.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
