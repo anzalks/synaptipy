@@ -108,7 +108,7 @@ jobs:
     # README badge resolves on every branch, not only after merging to main.
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v6
       with:
         files: coverage.xml
         flags: unittests
