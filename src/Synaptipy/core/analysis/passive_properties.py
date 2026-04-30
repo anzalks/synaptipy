@@ -505,6 +505,38 @@ def calculate_vc_transient_parameters(
     return result
 
 
+def _extrapolate_rs_at_t0(t_art: np.ndarray, v_art: np.ndarray, artifact_window_ms: float) -> float:
+    """Fit V(t) = A*exp(-t/tau)+C to the artifact window and return V(0).
+
+    Extrapolates the slow membrane-charging curve back to t=0 to recover the
+    instantaneous resistive drop before the RC charging contaminates it.
+    Falls back to ``np.mean(v_art)`` when the fit fails.
+    """
+
+    def _rc_charge(t: np.ndarray, A: float, tau: float, C: float) -> np.ndarray:
+        return A * np.exp(-t / tau) + C
+
+    if len(t_art) < 3:
+        return float(np.mean(v_art))
+
+    _v_range_art = float(np.ptp(v_art)) if float(np.ptp(v_art)) > 1e-9 else 1.0
+    try:
+        _popt_art, _ = curve_fit(
+            _rc_charge,
+            t_art,
+            v_art,
+            p0=[float(v_art[0]), float(artifact_window_ms / 1000.0) / 3.0, 0.0],
+            bounds=(
+                [-_v_range_art * 4, 1e-6, -_v_range_art * 2],
+                [_v_range_art * 4, float(artifact_window_ms / 1000.0) * 10, _v_range_art * 2],
+            ),
+            maxfev=3000,
+        )
+        return float(_rc_charge(0.0, *_popt_art))
+    except (RuntimeError, ValueError):
+        return float(np.mean(v_art))
+
+
 def calculate_cc_series_resistance_fast(
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
@@ -574,10 +606,15 @@ def calculate_cc_series_resistance_fast(
             log.warning("calculate_cc_series_resistance_fast: no artifact window samples.")
             return result
 
-        # The fast voltage drop is estimated as the mean in the artifact window
-        # minus the pre-step baseline (captures only the resistive drop).
-        v_artifact = float(np.mean(voltage_trace[art_mask]))
-        delta_v_fast = v_artifact - v_baseline  # mV
+        # Estimate the instantaneous resistive drop by fitting a mono-exponential
+        # to the slow membrane-charging curve and extrapolating back to t=0.
+        t_art = time_vector[art_mask] - step_onset_time  # relative time (s)
+        v_art = voltage_trace[art_mask] - v_baseline  # voltage relative to baseline
+        delta_v_fast: float = _extrapolate_rs_at_t0(t_art, v_art, artifact_window_ms)
+        log.debug(
+            "calculate_cc_series_resistance_fast: delta_V=%.4f mV",
+            delta_v_fast,
+        )
 
         # Rs (CC) = delta_V_fast / I_step   (mV / pA = MOhm * 1e3 ... )
         # mV/pA = (1e-3 V) / (1e-12 A) = 1e9 Ohm = 1000 MOhm
@@ -791,6 +828,29 @@ def calculate_tau(  # noqa: C901
         fit_mask = (time_vector >= fit_start_time) & (time_vector < fit_end_time)
         t_fit = time_vector[fit_mask] - fit_start_time
         V_fit = voltage_trace[fit_mask]
+
+        # Dynamically truncate the fit window at the absolute voltage peak
+        # (the point of maximum hyperpolarisation) so that I_h sag — which
+        # causes voltage to *rebound* after the peak — does not contaminate
+        # the mono-exponential fit.  For depolarising steps the "peak" is
+        # the local maximum; for hyperpolarising steps it is the minimum.
+        if len(V_fit) >= 3:
+            _peak_idx = int(np.argmin(V_fit)) if V_fit[-1] > V_fit[0] else int(np.argmax(V_fit))
+            # Only truncate when:
+            #   1. The peak is not at the extremes (indices 0 or end)
+            #   2. The peak is in the SECOND HALF of the window — guarantees
+            #      enough pre-peak data to reliably estimate tau.  If the sag
+            #      minimum falls in the first half the window is too short
+            #      relative to the membrane time constant; keep the full window
+            #      and accept the minor sag contamination.
+            if _peak_idx > 2 and _peak_idx < len(V_fit) - 1 and _peak_idx >= len(V_fit) // 2:
+                t_fit = t_fit[: _peak_idx + 1]
+                V_fit = V_fit[: _peak_idx + 1]
+                log.debug(
+                    "Tau fit: sag detected — window truncated at sample %d (%.1f ms into step)",
+                    _peak_idx,
+                    float(t_fit[-1]) * 1000.0,
+                )
 
         if len(t_fit) < 3:
             log.warning("Not enough data points to fit for Tau.")

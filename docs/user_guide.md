@@ -220,7 +220,7 @@ The five Analyser pillars are:
 | **Intrinsic Properties** | `passive_properties` | RMP, Rin, Tau, Sag Ratio, I-V Curve, Capacitance |
 | **Spike Analysis** | `single_spike` | Spike detection, Phase-plane analysis |
 | **Excitability** | `firing_dynamics` | F-I curve, Burst analysis, Train dynamics |
-| **Synaptic Events** | `synaptic_events` | Miniature event detection (threshold, template, deconvolution) |
+| **Synaptic Events** | `synaptic_events` | Miniature event detection (threshold, matched-filter cross-correlation, baseline+peak+kinetics) |
 | **Optogenetics** | `evoked_responses` | Optogenetic synchronisation, Paired-pulse ratio |
 
 All analysis sub-tabs share the following interface behaviours:
@@ -276,9 +276,12 @@ All analysis sub-tabs share the following interface behaviours:
  - **Spikes** - threshold-crossing AP detection; set the **Spike Threshold** (mV)
  - **Events (Threshold)** - prominence-based threshold event detection; set
  **Event Threshold**, **Event Direction**, and **Refractory Period**
- - **Events (Template)** - double-exponential template matching; set
+ - **Events (Template)** - matched-filter cross-correlation using a bi-exponential kernel; set
  **Rise Tau**, **Decay Tau**, **Template Threshold** (SD), and
- **Template Direction**
+ **Template Direction**.
+ A bank of three kernels scaled at 1x, 2x, and 3x the user-specified decay
+ constant is applied automatically to tolerate dendritic filtering; events
+ are detected on the pointwise maximum of the three z-scored filtered traces.
  Only the parameters relevant to the selected detection mode are shown.
 5. Set the **Response Window** (ms) to define how far after each TTL onset
  to search for an event
@@ -340,8 +343,12 @@ valid ranges, and conditional visibility based on clamp mode.
   (CV), local variation (LV), and CV2. Opens a popup ISI plot.
 
 **Synaptic Events tab:**
-- **Event Detection (Template Match)** - Parametric deconvolution against a
-  double-exponential template for miniature event detection. Configurable
+- **Event Detection (Template Match)** - Matched-filter cross-correlation using a
+  bi-exponential kernel for miniature event detection. A fixed bank of three
+  kernels at 1x, 2x, and 3x the user-specified decay constant is convolved with
+  the trace; events are detected on the pointwise maximum of the three z-scored
+  outputs, providing automatic tolerance for dendritic cable filtering.
+  Configurable
 
 ### Visual Validation Overlays
 
@@ -382,10 +389,25 @@ All overlay settings are persisted via QSettings and restored across sessions.
 5. Click "Export to NWB" and wait for the export to complete
 
 :::{note}
-The NWB exporter currently writes voltage/current traces and electrode
-metadata. Stimulus waveforms, `IntracellularRecordingsTable`, and embedded
-analysis results are not yet exported. See [NWB Export Mapping](nwb_mapping.md)
-for full details on what is included and planned.
+The NWB exporter writes:
+
+- Voltage/current traces as `CurrentClampSeries` / `VoltageClampSeries` with SI
+  unit conversion
+- Electrode metadata and session information
+- **Stimulus waveforms** via a 3-step fallback: (1) raw digitized command
+  waveform from the acquisition file; (2) synthetic step waveform reconstructed
+  from ABF epoch metadata (description notes "Synthetic stimulus array
+  reconstructed from protocol metadata."); (3) `stimulus=None` with a warning
+  appended to the response trace description when no waveform is available
+- **IntracellularRecordingsTable** linking each response to its electrode and
+  stimulus series
+- **SimultaneousRecordingsTable** and **SequentialRecordingsTable** for NWB 2.x
+  icephys sweep grouping
+- **ProcessingModule** containing discrete event arrays (spike times, synaptic
+  event times) produced by the batch engine, stored as HDMF `DynamicTable`
+  objects
+
+See [NWB Export Mapping](nwb_mapping.md) for full container mapping details.
 :::
 
 ### Exporting Analysis Results

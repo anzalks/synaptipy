@@ -74,7 +74,7 @@ Click the **Analyser** tab. Select a channel, pick an analysis (e.g. **Input Res
 
 ### Synaptic events (synaptic events tab)
 - **Threshold detection** - prominence-based, baseline-drift-tolerant; click to accept/reject events
-- **Template matching** - double-exponential deconvolution for miniature events
+- **Template matching** - matched-filter cross-correlation using a bi-exponential kernel (rise/decay tau configurable); a bank of three kernels scaled at 1x, 2x, and 3x the decay constant provides dendritic-filtering tolerance
 - **Baseline-to-peak** - amplitude and kinetics for evoked or spontaneous events
 
 ### Optogenetics (opto tab)
@@ -302,7 +302,7 @@ Synaptipy provides 15 built-in analysis routines organised into five core module
 
 **Tab 4: Synaptic Events**
 - **Event Detection (Threshold)** - prominence-based threshold detection that accommodates shifting baselines and overlapping events; interactive event markers with click-to-remove and Ctrl+click-to-add
-- **Event (Template Match)** - parametric deconvolution against a user-defined double-exponential template for miniature event detection
+- **Event (Template Match)** - matched-filter cross-correlation using a bi-exponential kernel (user-defined rise/decay tau); a fixed bank of three kernels scaled at 1x, 2x, and 3x the decay constant provides tolerance for dendritic filtering
 - **Event (Baseline Peak)** - direct baseline-to-peak amplitude detection with kinetics estimation for evoked or spontaneous events
 
 **Tab 5: Optogenetics**

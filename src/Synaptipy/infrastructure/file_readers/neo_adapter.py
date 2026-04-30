@@ -278,6 +278,81 @@ class NeoAdapter:
 
         return protocol_name, injected_current
 
+    @staticmethod
+    def _extract_protocol_trials(protocol_raw_list: list) -> List[np.ndarray]:
+        """Return per-trial command arrays from a read_raw_protocol() list.
+
+        Each element of *protocol_raw_list* is a (list|tuple) whose first
+        element is the command waveform array for that segment/trial.
+        """
+        trials: List[np.ndarray] = []
+        for seg_proto in protocol_raw_list:
+            if not (isinstance(seg_proto, (list, tuple)) and len(seg_proto) > 0):
+                continue
+            cmd = seg_proto[0]
+            if not isinstance(cmd, (np.ndarray, list)):
+                continue
+            arr = np.asarray(cmd, dtype=np.float64).ravel()
+            if arr.size > 0:
+                trials.append(arr)
+        return trials
+
+    @staticmethod
+    def _cache_abf_epochs(reader: object, recording: Recording) -> None:
+        """Store ABF EpochSections from reader._axon_info into recording.metadata."""
+        try:
+            axon_info = getattr(reader, "_axon_info", None)
+            if axon_info and "EpochSections" in axon_info:
+                recording.metadata["abf_epochs"] = axon_info["EpochSections"]
+                log.debug("_populate_command_signals: stored ABF epoch sections.")
+        except Exception as exc:
+            log.debug("ABF epoch extraction failed (non-fatal): %s", exc)
+
+    def _populate_command_signals(
+        self,
+        reader: object,
+        created_channels: List[Channel],
+        recording: Recording,
+        lazy: bool,
+    ) -> None:
+        """Populate channel.current_data_trials from ABF read_raw_protocol().
+
+        Called for every recording; silently exits for non-ABF readers, lazy
+        loads, or when no protocol data is available.  On success the first
+        voltage-units channel (or the first channel when no voltage channel is
+        found) receives per-trial command arrays with ``current_units = "pA"``.
+
+        ABF epoch parameters are also stored under
+        ``recording.metadata["abf_epochs"]`` for the NWB Attempt-2 synthetic
+        stimulus fallback.
+        """
+        if lazy or not hasattr(reader, "read_raw_protocol"):
+            return
+
+        voltage_chs = [ch for ch in created_channels if ch.units.lower() in ("mv", "v", "millivolts", "volts")]
+        target_chs = voltage_chs if voltage_chs else created_channels[:1]
+        if not target_chs:
+            return
+
+        try:
+            protocol_raw_list = reader.read_raw_protocol()  # type: ignore[attr-defined]
+            if not isinstance(protocol_raw_list, list) or not protocol_raw_list:
+                return
+            command_trials = self._extract_protocol_trials(protocol_raw_list)
+            if command_trials:
+                for ch in target_chs:
+                    ch.current_data_trials = command_trials
+                    ch.current_units = "pA"
+                log.debug(
+                    "_populate_command_signals: stored %d trial(s) on %d channel(s).",
+                    len(command_trials),
+                    len(target_chs),
+                )
+        except Exception as exc:
+            log.debug("read_raw_protocol() failed (non-fatal): %s", exc)
+
+        self._cache_abf_epochs(reader, recording)
+
     def read_recording(  # noqa: C901
         self,
         filepath: Path,
@@ -361,6 +436,13 @@ class NeoAdapter:
 
         # Stage 3: Create Channel objects
         created_channels = self._build_channels(channel_metadata_map, lazy, recording)
+
+        # Stage 4: Populate command/stimulus waveforms for ABF files.
+        # read_raw_protocol() is called here (after channel creation) so that
+        # channel.current_data_trials is filled for the NWB exporter Attempt-1
+        # stimulus path.  Recording.metadata["abf_epochs"] is also populated for
+        # the NWB Attempt-2 synthetic stimulus fallback.
+        self._populate_command_signals(reader, created_channels, recording, lazy)
 
         if created_channels:
             # Link channels to parent recording for lazy loading access

@@ -125,6 +125,12 @@ def calculate_fi_curve(  # noqa: C901
         valid_slice = slice(rheobase_idx, None)
         x = sorted_currents[valid_slice]
         y = sorted_freqs[valid_slice]
+        # Truncate at the maximum firing frequency to exclude the depolarisation
+        # block region where frequency drops back toward 0 Hz.  Including those
+        # points would produce a spuriously flat or negative slope.
+        peak_idx = int(np.argmax(y)) + 1  # +1 so the peak point itself is included
+        x = x[:peak_idx]
+        y = y[:peak_idx]
         if len(x) >= 2:
             try:
                 slope, _intercept, r_value, _p, _se = linregress(x, y)
