@@ -5,14 +5,26 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >
+          Dry run: build all installers and run smoke tests, but skip uploading
+          binaries to GitHub Releases.  Packaged binaries are available as run
+          artifacts from the build job regardless of this setting.
+        type: boolean
+        default: true
 
-permissions:
-  contents: write
+# contents: write is only needed by the release job.  Declared at job level
+# so the build job runs with minimal permissions.
+permissions: {}
 
 jobs:
   build:
     name: Build ${{ matrix.os }} Installer
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +51,17 @@ jobs:
             requirements.txt
             pyproject.toml
 
+      # PySide6 loads C extensions during PyInstaller's import analysis phase.
+      # Without xcb/xvfb the dynamic loader aborts, producing an incomplete or
+      # broken bundle.  Install here for all Linux builds, not only smoke tests.
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
+            libxcb-xfixes0 libegl1 libxcb-cursor0
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -50,17 +73,16 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller synaptipy.spec
 
-      # ── Smoke test: verify the binary launches without import errors ──────────
-      # Each OS variant probes the freshly-built executable before packaging.
-      # Any import error, missing DLL, or hard crash makes this step non-zero
-      # and blocks the artifact upload / release.
+      # ── Smoke tests: verify the binary launches without import errors ─────────
+      # Each OS variant probes the freshly-built executable.  Accept exit codes
+      # 0 (clean exit) and 1 (GUI gracefully refused --help).  Anything higher
+      # (127 = not-found, 139 = SIGSEGV, etc.) is a packaging failure.
+      # QT_QPA_PLATFORM=offscreen is set so Qt does not try to open a real
+      # display on the headless CI runner.
       - name: Smoke test binary (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y xvfb
           xvfb-run -a dist/Synaptipy/Synaptipy --help 2>&1 | tee /tmp/smoke.txt
-          # Accept exit-code 0 (clean help) or 1 (GUI refused --help gracefully).
-          # Any other code (e.g. 127 = not-found, 139 = SIGSEGV) is a failure.
           CODE=$?
           if [ "$CODE" -gt 1 ]; then
             echo "Smoke test FAILED with exit code $CODE"
@@ -70,6 +92,8 @@ jobs:
 
       - name: Smoke test binary (macOS)
         if: runner.os == 'macOS'
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           dist/Synaptipy.app/Contents/MacOS/Synaptipy --help 2>&1 | tee /tmp/smoke.txt
           CODE=$?
@@ -82,6 +106,8 @@ jobs:
       - name: Smoke test binary (Windows)
         if: runner.os == 'Windows'
         shell: powershell
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           $result = & "dist\Synaptipy\Synaptipy.exe" --help 2>&1
           Write-Host $result
@@ -92,10 +118,10 @@ jobs:
 
       - name: Package for Windows
         if: runner.os == 'Windows'
+        shell: powershell
         run: |
           $VERSION = (Select-String -Path pyproject.toml -Pattern '^version = "(.*)"$').Matches.Groups[1].Value
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/dMyAppVersion=$VERSION" installer\windows_setup.iss
-        shell: powershell
 
       - name: Package for macOS
         if: runner.os == 'macOS'
@@ -117,50 +143,66 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
-          
+
           # 1. Create the AppDir structure required by AppImage
           mkdir -p AppDir/usr/bin
-          
+
           # 2. Copy the PyInstaller output into the AppDir
           cp -r dist/Synaptipy/* AppDir/usr/bin/
-          
+
           # 3. Copy the desktop file and icon to the root of AppDir
           cp installer/linux/synaptipy.desktop AppDir/
           cp src/Synaptipy/resources/icons/logo.png AppDir/synaptipy.png
-          
+
           # 4. Create the standard AppRun symlink pointing to our binary
           cd AppDir
           ln -s usr/bin/Synaptipy AppRun
           cd ..
-          
+
           # 5. Download the official AppImage packaging tool
           wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x appimagetool
-          
-          # 6. Build the AppImage (using --appimage-extract-and-run to run it in CI environments seamlessly)
+
+          # 6. Build the AppImage
           ./appimagetool --appimage-extract-and-run AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage"
 
-      - name: Upload Artifact
+      - name: Upload installer artifact
+        # if-no-files-found: error surfaces packaging failures immediately
+        # rather than silently uploading an empty artifact that later causes
+        # the release job to attach zero binaries to the GitHub Release.
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
 
   release:
     name: Upload to Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
+    # Always run after a successful build so we can inspect/list artifacts,
+    # but only push to GitHub Releases when triggered by a real tag push
+    # and dry_run is not enabled.
+    if: always() && needs.build.result == 'success'
+    permissions:
+      contents: write   # needed to upload assets to GitHub Release
 
     steps:
-      - name: Download artifacts
+      - name: Download all installer artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist-artifacts
 
-      - name: Upload binaries to Release
+      - name: List downloaded installer artifacts
+        run: find dist-artifacts -type f | sort
+
+      - name: Upload binaries to GitHub Release
+        # Only upload on real tag pushes, and only when dry_run is not set.
+        # On workflow_dispatch the binaries are already available as run
+        # artifacts from the build job above.
+        if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v')
         with:
           # Explicitly set tag_name so this step correctly targets the tag
           # release whether or not release.yml has finished creating it yet.
@@ -170,9 +212,16 @@ jobs:
           # failing when a platform's build was skipped via fail-fast.
           tag_name: ${{ github.ref_name }}
           files: |
-            dist-artifacts/*/*.AppImage
-            dist-artifacts/*/*.exe
-            dist-artifacts/*/*.dmg
+            dist-artifacts/**/*.AppImage
+            dist-artifacts/**/*.exe
+            dist-artifacts/**/*.dmg
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Dry-run: binaries are available as run artifacts"
+        if: inputs.dry_run == true || !startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "Dry-run mode: binaries were NOT uploaded to a GitHub Release."
+          echo "They are available as run artifacts from the build job:"
+          find dist-artifacts -type f | sort
