@@ -113,12 +113,17 @@ jobs:
   # Skipped on workflow_dispatch: GITHUB_REF_NAME is not a semver tag during
   # manual runs, which would cause the smoke-test install to request a
   # non-existent version from TestPyPI.
+  # continue-on-error: true  → if the Trusted Publisher environment is not yet
+  # configured on test.pypi.org the job fails gracefully; the dependent
+  # smoke-test and pypi-publish jobs gate on its actual result so they skip
+  # cleanly, and the release job still runs because pypi-publish is 'skipped'.
   testpypi-publish:
     name: Publish to TestPyPI
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name != 'workflow_dispatch'
+    continue-on-error: true
     environment:
       name: testpypi
       url: https://test.pypi.org/p/synaptipy
@@ -144,7 +149,12 @@ jobs:
     needs: testpypi-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name != 'workflow_dispatch'
+    # Only run when testpypi-publish actually succeeded (result is 'success').
+    # If testpypi-publish was skipped or failed, skip the smoke test too so
+    # the pypi-publish job falls through to its own if-guard correctly.
+    if: >
+      github.event_name != 'workflow_dispatch' &&
+      needs.testpypi-publish.result == 'success'
 
     steps:
       - name: Set up Python
@@ -177,12 +187,17 @@ jobs:
 
   # ── 5. Publish to official PyPI (OIDC Trusted Publisher) ─────────────────────
   # Skipped on workflow_dispatch (dry_run).
+  # Also skipped when smoke_test_testpypi was skipped (e.g. testpypi not yet
+  # configured) — in that case pypi-publish.result == 'skipped' so the release
+  # job still runs via its always()-based if condition.
   pypi-publish:
     name: Publish to PyPI
     needs: smoke_test_testpypi
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name != 'workflow_dispatch'
+    if: >
+      github.event_name != 'workflow_dispatch' &&
+      needs.smoke_test_testpypi.result == 'success'
     environment:
       name: pypi
       url: https://pypi.org/p/synaptipy

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1b6] - 2026-05-01
+
+### Fixed
+
+- **Installer CI**: Rewrote `synaptipy.spec` for PyInstaller 6.x compatibility.
+  Removed deprecated `block_cipher` / `cipher` parameter (removed in 6.0),
+  `win_no_prefer_redirects`, `win_private_assemblies` (removed in 6.0), and
+  `a.zipfiles` in `COLLECT` (removed in 6.0). Removed deprecated
+  `argv_emulation` from `EXE`. Bumped `CFBundleShortVersionString` in macOS
+  bundle `info_plist`. Installers now build cleanly with PyInstaller 6.5+.
+- **Notebook CI**: Added `MPLBACKEND: Agg` to the notebook test step so that
+  `plt.show()` calls in example notebooks are no-ops on headless CI runners
+  instead of hanging or crashing.
+- **Release pipeline**: Added `continue-on-error: true` to `testpypi-publish`
+  and explicit `result == 'success'` guards on `smoke_test_testpypi` and
+  `pypi-publish`. The build, installer, and GitHub Release steps now complete
+  successfully even when the TestPyPI Trusted Publisher is not yet configured.
+
+### Changed
+
+- Bumped version to `0.1.1b6` across `pyproject.toml`,
+  `src/Synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`,
+  `installer/windows_setup.iss`, and `synaptipy.spec`.
+- Updated installer download links in `README.md` to `v0.1.1b6`.
+
+## [0.1.1b5] - 2026-05-01
+
+### Fixed
+
+- **Docs linkcheck**: Updated all redirect-prone URLs to their canonical
+  targets across `docs/index.rst`, `docs/user_guide.md`,
+  `docs/developer_guide.md`, `docs/nwb_mapping.md`, and
+  `docs/tutorial/index.md`. Sphinx linkcheck now reports 0 warnings (was 8
+  across 6 files).
+
+### Changed
+
+- Bumped version to `0.1.1b5` across `pyproject.toml`,
+  `src/Synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`,
+  `installer/windows_setup.iss`.
+
 ## [0.1.1b4] - 2026-04-29
 
 ### Changed
