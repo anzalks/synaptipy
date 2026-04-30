@@ -32,6 +32,7 @@ the script still completes steps 1 and 4, so the HTML fallback is always
 bundled even on platforms without Qt6 developer tools installed.
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -78,15 +79,28 @@ def _find_qhelpgenerator() -> Optional[Path]:
 
     Search order:
     1. ``qhelpgenerator`` on PATH (system Qt6 install).
-    2. Qt tools bundled by the ``pyside6`` pip package.
-    3. Fuzzy PATH scan for versioned names like ``qhelpgenerator6``.
+    2. Active Python environment's ``bin`` / ``Scripts`` directory — covers
+       ``pyside6-tools`` and similar pip-installed Qt helper packages that
+       drop the binary alongside the Python interpreter.
+    3. Qt tools bundled by the ``pyside6`` pip package (wheel-internal layout).
+    4. Fuzzy PATH scan for versioned names like ``qhelpgenerator6``.
     """
     # 1. Standard PATH lookup
     found = shutil.which("qhelpgenerator")
     if found:
         return Path(found)
 
-    # 2. Bundled with the pyside6 pip wheel
+    # 2. Same bin/Scripts directory as the running Python interpreter.
+    #    On Unix this is  $(dirname sys.executable)  (e.g. .venv/bin/).
+    #    On Windows both the interpreter and console-scripts land in the same
+    #    Scripts\ folder, so the same logic applies.
+    py_bin = Path(sys.executable).resolve().parent
+    for name in ("qhelpgenerator", "qhelpgenerator.exe"):
+        candidate = py_bin / name
+        if candidate.exists():
+            return candidate
+
+    # 3. Bundled with the pyside6 pip wheel
     try:
         import PySide6
 
@@ -103,8 +117,8 @@ def _find_qhelpgenerator() -> Optional[Path]:
     except ImportError:
         pass
 
-    # 3. Fuzzy PATH scan for versioned names like qhelpgenerator6
-    path_dirs = (Path(p) for p in (shutil.os.environ.get("PATH") or "").split(shutil.os.pathsep) if p)
+    # 4. Fuzzy PATH scan for versioned names like qhelpgenerator6
+    path_dirs = (Path(p) for p in (os.environ.get("PATH") or "").split(os.pathsep) if p)
     for directory in path_dirs:
         if not directory.is_dir():
             continue
@@ -206,6 +220,10 @@ def step_copy_artefacts() -> None:
         print("[build_offline_help] WARNING: HTML build not found; HTML fallback will be unavailable.")
 
     # Qt Help artefacts (tier-1 QHelpEngine)
+    # Explicit makedirs guard: PyInstaller's datas collector walks
+    # src/Synaptipy/resources/ at spec-parse time and will error if the
+    # docs/ subdirectory is missing, even when qhelpgenerator was unavailable.
+    os.makedirs(DEST_DIR, exist_ok=True)
     for src in (QCH_FILE, QHC_FILE):
         if src.exists():
             dest = DEST_DIR / src.name

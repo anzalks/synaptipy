@@ -8,25 +8,25 @@ import sys
 
 # Collect hidden imports for dynamic imports
 hiddenimports = []
-hiddenimports += collect_submodules('pyqtgraph')
-hiddenimports += collect_submodules('neo')
-hiddenimports += collect_submodules('quantities')
-hiddenimports += collect_submodules('scipy')
-hiddenimports += collect_submodules('h5py')
-hiddenimports += collect_submodules('pynwb')
+hiddenimports += collect_submodules("pyqtgraph")
+hiddenimports += collect_submodules("neo")
+hiddenimports += collect_submodules("quantities")
+hiddenimports += collect_submodules("scipy")
+hiddenimports += collect_submodules("h5py")
+hiddenimports += collect_submodules("pynwb")
 
 # Include our local resources (icons, stylesheets, and compiled Qt Help docs)
-datas = [('src/Synaptipy/resources', 'Synaptipy/resources')]
-datas += collect_data_files('pynwb')
-datas += collect_data_files('hdmf')
+datas = [("src/Synaptipy/resources", "Synaptipy/resources")]
+datas += collect_data_files("pynwb")
+datas += collect_data_files("hdmf")
 
 # Determine appropriate icon based on OS
-icon_ext = '.icns' if sys.platform == 'darwin' else '.ico'
-icon_path = os.path.join('src', 'Synaptipy', 'resources', 'icons', f'logo{icon_ext}')
+icon_ext = ".icns" if sys.platform == "darwin" else ".ico"
+icon_path = os.path.join("src", "Synaptipy", "resources", "icons", f"logo{icon_ext}")
 
 a = Analysis(
-    ['src/Synaptipy/application/__main__.py'],
-    pathex=['src'],
+    ["src/Synaptipy/application/__main__.py"],
+    pathex=["src"],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -43,7 +43,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Synaptipy',
+    name="Synaptipy",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -63,19 +63,19 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Synaptipy',
+    name="Synaptipy",
 )
 
-if sys.platform == 'darwin':
+if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name='Synaptipy.app',
+        name="Synaptipy.app",
         icon=icon_path if os.path.exists(icon_path) else None,
-        bundle_identifier='com.anzalks.synaptipy',
+        bundle_identifier="com.anzalks.synaptipy",
         info_plist={
-            'NSPrincipalClass': 'NSApplication',
-            'NSHighResolutionCapable': 'True',
-            'LSBackgroundOnly': 'False',
-            'CFBundleShortVersionString': '0.1.1b6',
+            "NSPrincipalClass": "NSApplication",
+            "NSHighResolutionCapable": "True",
+            "LSBackgroundOnly": "False",
+            "CFBundleShortVersionString": "0.1.1b7",
         },
     )

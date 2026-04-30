@@ -59,8 +59,8 @@ try:
     release = _version
     version = _version
 except Exception:
-    version = "0.1.1b6"
-    release = "0.1.1b6"
+    version = "0.1.1b7"
+    release = "0.1.1b7"
 
 # ---------------------------------------------------------------------------
 # General configuration
@@ -213,8 +213,8 @@ todo_include_todos = True
 # Skip URLs that return 403 to automated bots (publisher paywalls / crawl
 # protection) but are genuinely valid links. Using regex patterns.
 linkcheck_ignore = [
-    r"https://pubs\.acs\.org/",          # ACS — blocks crawlers with 403
-    r"https://direct\.mit\.edu/",        # MIT Press — blocks crawlers with 403
+    r"https://pubs\.acs\.org/",  # ACS — blocks crawlers with 403
+    r"https://direct\.mit\.edu/",  # MIT Press — blocks crawlers with 403
     r"https://journals\.physiology\.org/",  # APS — blocks crawlers with 403
 ]
 # Allow redirects without treating them as broken (DOI resolvers always redirect)
