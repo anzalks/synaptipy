@@ -108,10 +108,25 @@ print(results)
 
 ## FAIR data compliance - NWB export
 
-Synaptipy exports both raw traces and analysis results to the
-[Neurodata Without Borders (NWB)](https://www.nwb.org) format, ensuring your
+Synaptipy exports raw traces, stimulus waveforms, and analysis results to
+[Neurodata Without Borders (NWB) 2.x](https://www.nwb.org), ensuring your
 data meets FAIR (Findable, Accessible, Interoperable, Reusable) requirements
 for journal submission and data sharing.
+
+**What is exported:**
+
+- Raw electrophysiology traces as `CurrentClampSeries` / `VoltageClampSeries`
+- Stimulus waveforms via a 3-step fallback: (1) raw digitised command waveform,
+  (2) automated synthesis from ABF protocol epoch metadata when the command
+  channel is absent, (3) `stimulus=None` with a warning note for unsupported
+  formats
+- Sweep-level organisation via `IntracellularRecordingsTable`,
+  `SimultaneousRecordingsTable`, and `SequentialRecordingsTable` (NWB 2.x
+  icephys best-practice hierarchy)
+- Full embedded discrete-event analysis via NWB 2.x `ProcessingModule` -
+  spike times, synaptic event times, and amplitudes are written as
+  `DynamicTable` objects when the batch engine produces `_raw_arrays` output
+- Electrode metadata and session provenance fields
 
 ---
 
@@ -380,8 +395,8 @@ Synaptipy's Explorer tab supports manual grand-average construction across any c
 - Composable pipeline architecture: chain any registered analysis steps in sequence
 - Background execution in worker threads - the GUI remains responsive during batch runs
 - Automatic metadata extraction (sampling rate, gain, recording datetime)
-- Results exported to CSV, compatible with Python/Pandas, R, and MATLAB
-- NWB export for standards-compliant data archival
+- Results exported to CSV (wide-format scalars + long-format event arrays), compatible with Python/Pandas, R, and MATLAB
+- NWB 2.x export with icephys sweep tables, 3-step stimulus fallback, and discrete-event `ProcessingModule` for FAIR data archival
 
 ## Technical Architecture
 
