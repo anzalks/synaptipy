@@ -61,5 +61,7 @@ htmlcov/
 .verify_venv*/
 coverage.json
 
-# Sphinx documentation build output (generated; not committed)
+# Sphinx documentation build output and bundled resources (all generated; not committed)
+# CI runs build_offline_help.py before python -m build / PyInstaller to populate these.
 docs/_build/
+src/Synaptipy/resources/docs/
