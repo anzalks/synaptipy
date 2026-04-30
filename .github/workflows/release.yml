@@ -93,8 +93,11 @@ jobs:
             requirements.txt
             pyproject.toml
 
-      - name: Install build tools
-        run: python -m pip install --upgrade pip build twine
+      - name: Install build tools and docs dependencies
+        run: python -m pip install --upgrade pip build twine -e ".[docs]"
+
+      - name: Build offline Help artefacts (HTML fallback for pip-wheel users)
+        run: python scripts/build_offline_help.py
 
       - name: Build wheel and sdist
         run: python -m build

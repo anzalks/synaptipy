@@ -1,6 +1,0 @@
-# Sphinx internal build-cache files — not needed for HTML rendering or pip wheel.
-# Only the rendered HTML pages, _static/, and searchindex.js are committed.
-.buildinfo
-.buildinfo.bak
-.doctrees/
-_sources/
