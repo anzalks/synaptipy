@@ -80,6 +80,8 @@ jobs:
         run: python scripts/build_offline_help.py
 
       - name: Build with PyInstaller
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: pyinstaller synaptipy.spec
 
       # ── Smoke tests: verify the binary launches without import errors ─────────
