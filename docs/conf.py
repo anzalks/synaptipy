@@ -59,8 +59,8 @@ try:
     release = _version
     version = _version
 except Exception:
-    version = "0.1.1b7"
-    release = "0.1.1b7"
+    version = "0.1.1b8"
+    release = "0.1.1b8"
 
 # ---------------------------------------------------------------------------
 # General configuration

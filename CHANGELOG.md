@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1b8] - 2026-05-01
+
+### Fixed
+
+- **Installer CI — Ubuntu PyInstaller crash**: `collect_submodules("pyqtgraph")`
+  spawned an isolated subprocess that imported `pyqtgraph.examples`, triggering
+  Qt's xcb platform plugin on the headless runner (exit code -6).  Added
+  `QT_QPA_PLATFORM: offscreen` to the "Build with PyInstaller" step in
+  `installer.yml`; harmless on macOS and Windows.
+- **Sphinx linkcheck — eLife 406**: Added `elifesciences.org` to
+  `linkcheck_ignore` in `docs/conf.py`; the publisher returns HTTP 406 to
+  automated crawlers, identical behaviour to ACS, MIT Press, and APS already
+  on the ignore list.
+
+### Changed
+
+- Bumped version to `0.1.1b8` across `pyproject.toml`, `__init__.py`,
+  `CITATION.cff`, `docs/conf.py`, `installer/windows_setup.iss`,
+  `installer/linux/synaptipy.desktop`, and `synaptipy.spec`.
+
 ## [0.1.1b7] - 2026-05-01
 
 ### Fixed
