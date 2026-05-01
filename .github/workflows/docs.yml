@@ -30,7 +30,7 @@ jobs:
 
       # Docs build mocks all Qt/PySide6 imports via conf.py — no GUI libs needed.
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
