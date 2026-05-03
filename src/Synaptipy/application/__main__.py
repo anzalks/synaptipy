@@ -64,9 +64,9 @@ def parse_arguments():
 
 class CrashReportDialog(QtWidgets.QDialog):
     """Non-modal dialog shown when an unhandled Python exception escapes to the
-    top level.  Displays the full traceback in a read-only text area and
-    provides a one-click "Copy to Clipboard" button so the user can paste the
-    report directly into a GitHub Issue.
+    top level.  Displays a GitHub-ready Markdown crash report in a read-only
+    text area and provides one-click "Copy to Clipboard" so the user can paste
+    directly into a GitHub Issue.
     """
 
     _GITHUB_ISSUES_URL = "https://github.com/anzalks/synaptipy/issues/new"
@@ -74,9 +74,76 @@ class CrashReportDialog(QtWidgets.QDialog):
     def __init__(self, traceback_text: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Synaptipy — Unexpected Error")
-        self.setMinimumSize(680, 420)
+        self.setMinimumSize(720, 460)
         self._traceback_text = traceback_text
+        self._markdown_report = self._build_markdown_report(traceback_text)
         self._build_ui()
+
+    # ------------------------------------------------------------------
+    # Markdown report builder
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_markdown_report(traceback_text: str) -> str:
+        """Build a GitHub-ready Markdown crash report.
+
+        The report embeds:
+        - Synaptipy version
+        - Python version and platform
+        - OS description
+        - Full stack trace inside a fenced code block
+
+        Returns
+        -------
+        str
+            Markdown-formatted string suitable for pasting into a GitHub Issue.
+        """
+        import platform
+        import sys
+
+        try:
+            from Synaptipy import __version__ as synaptipy_version
+        except Exception:
+            synaptipy_version = "unknown"
+
+        os_info = platform.platform(aliased=True, terse=False)
+        python_info = (
+            f"{sys.version} "
+            f"[{platform.python_implementation()} {platform.python_version()}]"
+        )
+        try:
+            import PySide6
+            pyside_version = PySide6.__version__
+        except Exception:
+            pyside_version = "unknown"
+
+        report_lines = [
+            "# 🐛 Synaptipy Crash Report",
+            "",
+            "## Environment",
+            "",
+            f"| Property | Value |",
+            f"|---|---|",
+            f"| **Synaptipy** | `{synaptipy_version}` |",
+            f"| **Python** | `{python_info}` |",
+            f"| **PySide6** | `{pyside_version}` |",
+            f"| **OS** | `{os_info}` |",
+            "",
+            "## Stack Trace",
+            "",
+            "```python-traceback",
+            traceback_text.rstrip(),
+            "```",
+            "",
+            "*Please paste this report into a new "
+            "[GitHub Issue](https://github.com/anzalks/synaptipy/issues/new) "
+            "so we can fix this. Thank you!*",
+        ]
+        return "\n".join(report_lines)
+
+    # ------------------------------------------------------------------
+    # UI
+    # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
         layout = QtWidgets.QVBoxLayout(self)
@@ -84,18 +151,18 @@ class CrashReportDialog(QtWidgets.QDialog):
         # ---- Header ----
         header = QtWidgets.QLabel(
             "<b>An unexpected error occurred.</b><br>"
-            "The error details are shown below. "
-            "Please click <i>Copy to Clipboard</i> and paste them into a "
+            "The crash report below is formatted for GitHub Issues. "
+            "Click <i>Copy to Clipboard</i> and paste it into a "
             "<a href='{url}'>GitHub Issue</a> so we can fix this.".format(url=self._GITHUB_ISSUES_URL)
         )
         header.setWordWrap(True)
         header.setOpenExternalLinks(True)
         layout.addWidget(header)
 
-        # ---- Traceback ----
+        # ---- Markdown report (read-only) ----
         self._text_area = QtWidgets.QPlainTextEdit()
         self._text_area.setReadOnly(True)
-        self._text_area.setPlainText(self._traceback_text)
+        self._text_area.setPlainText(self._markdown_report)
         font = QtGui.QFont("Courier New", 9)
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
         self._text_area.setFont(font)
@@ -110,7 +177,7 @@ class CrashReportDialog(QtWidgets.QDialog):
         layout.addWidget(btn_box)
 
     def _copy_to_clipboard(self) -> None:
-        QtWidgets.QApplication.clipboard().setText(self._traceback_text)
+        QtWidgets.QApplication.clipboard().setText(self._markdown_report)
 
 
 def _install_excepthook() -> None:
@@ -118,8 +185,8 @@ def _install_excepthook() -> None:
 
     When an unhandled exception propagates to the top of the event loop,
     the default hook prints to stderr and silently exits.  Our replacement
-    logs the traceback, then pops up a ``CrashReportDialog`` so the user
-    can copy the error into a GitHub Issue.
+    logs the traceback, then pops up a ``CrashReportDialog`` containing a
+    GitHub-ready Markdown report so the user can paste it into an issue.
 
     The hook is intentionally *not* installed for ``SystemExit`` and
     ``KeyboardInterrupt`` so normal shutdown and Ctrl-C still work.
@@ -145,6 +212,7 @@ def _install_excepthook() -> None:
             sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _excepthook
+
 
 
 def run_gui():  # noqa: C901

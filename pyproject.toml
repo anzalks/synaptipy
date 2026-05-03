@@ -52,6 +52,9 @@ dependencies = [
     "pytz>=2025.0",
     "typing-extensions>=4.14.0",
     "tzlocal>=5.3.0",
+    # Out-of-core / chunked array processing for large recordings (> 500 MB).
+    # The core array module only; no distributed scheduler pulled in.
+    "dask[array]>=2024.1.0",
 ]
 
 # Runtime deps above; test/docs extras below

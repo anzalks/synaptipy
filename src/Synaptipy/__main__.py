@@ -17,8 +17,15 @@ import os
 import sys
 from pathlib import Path
 
+# Install the crash reporter as early as possible -- before any Qt
+# components are created -- so that import-time errors are also caught.
+from Synaptipy.core.error_handler import install_excepthook as _install_crash_hook
+
+_install_crash_hook()
+
 # Set up logging before importing the rest of the package
 from Synaptipy.shared.logging_config import setup_logging
+
 
 
 def parse_args():
