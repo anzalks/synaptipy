@@ -2202,8 +2202,28 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Determine which trials to extract; fall back to trial 0
         parsed_trials = self._determine_cross_file_trials()
 
-        time_arr, grand_avg, n_files = self._get_cross_file_average(parsed_trials, channel_idx)
-        _unequal_warn_msg = self._build_unequal_length_warning(parsed_trials, channel_idx, n_files)
+        time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
+            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+        )
+        if has_unequal and n_files > 0:
+            log.warning(
+                "Cross-file average: unequal trace lengths across %d files. "
+                "Shorter traces NaN-padded; effective N decreases toward end of average.",
+                n_files,
+            )
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Cross-File Average: Unequal Trace Lengths",
+                f"The {n_files} contributing files have traces of different lengths.\n\n"
+                "Shorter traces are padded with NaN so the grand average N "
+                "decreases smoothly at the end of shorter recordings rather than "
+                "producing an artificial variance step at a hard truncation point.\n\n"
+                "Verify that all loaded files use the same protocol and recording "
+                "duration if this is unexpected.",
+            )
+        _unequal_warn_msg = (
+            " [WARNING: traces of unequal length - N decreases toward end]" if (has_unequal and n_files > 0) else ""
+        )
 
         if time_arr is None or grand_avg is None or n_files == 0:
             QtWidgets.QMessageBox.warning(
