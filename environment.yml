@@ -39,6 +39,9 @@ dependencies:
       - tzdata>=2025.0
       - tzlocal>=5.3.0
       - pyqtgraph>=0.13.3,<1.0.0
+      # PySide6: see pyproject.toml for platform-conditional pinning details.
+      # Windows: install 6.7.3 exactly to avoid QTBUG-130070.
+      # Other platforms: 6.7.3 is the reference; >=6.7.0,!=6.8.0 is acceptable.
       - pyside6==6.7.3
       - pytest>=7.0.0
       - pytest-qt>=4.0.0

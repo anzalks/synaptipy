@@ -10,7 +10,10 @@ matplotlib>=3.8.0,<4.0.0
 
 # GUI
 pyqtgraph>=0.13.3,<1.0.0
-pyside6==6.7.3
+# PySide6: pin to 6.7.3 on Windows (avoids QTBUG-130070 crash in 6.8.0).
+# On all other platforms allow >=6.7.0 excluding the known-bad 6.8.0.
+PySide6==6.7.3 ; sys_platform == 'win32'
+PySide6>=6.7.0, !=6.8.0, <7.0.0 ; sys_platform != 'win32'
 
 # Data format support
 neo>=0.14.0,<1.0.0

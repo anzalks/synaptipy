@@ -436,3 +436,290 @@ class TestGoldenMasterPrimaryPipelinesSynthetic:
             auc_values.append(float(np.trapezoid(data[response_mask] - baseline, time[response_mask])))
 
         assert pytest.approx(float(np.mean(auc_values)), rel=1e-3) == 0.005999999999999964
+
+
+# ---------------------------------------------------------------------------
+# Expanded Golden-Master Lie Detector: passive-properties VC/CC paths and
+# spike-feature kinetics — all SciPy-dependent and historically untested.
+# ---------------------------------------------------------------------------
+
+# ── Shared synthetic-data helpers ──────────────────────────────────────────
+
+
+def _make_vc_transient(
+    rs_mohm: float = 10.0,
+    cm_pf: float = 100.0,
+    v_step_mv: float = -10.0,
+    onset_s: float = 0.010,
+    i_hold_pa: float = -50.0,
+    sampling_rate: float = 50_000.0,
+    duration_s: float = 0.05,
+) -> tuple:
+    """Return (current_trace, time_vector) for a synthetic VC capacitive transient.
+
+    Physics: I(t) = I_hold + I_peak * exp(-t / tau_c)
+    where I_peak = V_step / Rs  and  tau_c = Rs * Cm.
+    """
+    t = np.arange(0.0, duration_s, 1.0 / sampling_rate)
+    tau_c = rs_mohm * 1e6 * cm_pf * 1e-12  # seconds
+    i_peak_pa = (v_step_mv * 1e-3) / (rs_mohm * 1e6) * 1e12  # pA
+    i = np.full_like(t, i_hold_pa)
+    oi = int(onset_s * sampling_rate)
+    i[oi:] += i_peak_pa * np.exp(-(t[oi:] - onset_s) / tau_c)
+    return i, t
+
+
+def _make_cc_rs_trace(
+    rs_mohm: float = 15.0,
+    rin_mohm: float = 200.0,
+    tau_ms: float = 20.0,
+    i_step_pa: float = -20.0,
+    onset_s: float = 0.1,
+    v_rest_mv: float = -65.0,
+    sampling_rate: float = 20_000.0,
+    duration_s: float = 0.2,
+) -> tuple:
+    """Return (voltage_trace, time_vector) for a synthetic CC voltage response.
+
+    The trace contains a fast Rs artifact (tau_fast = Rs*Cm) followed by a
+    slow membrane response (tau_mem).  Cm is fixed at 100 pF internally.
+    """
+    t = np.arange(0.0, duration_s, 1.0 / sampling_rate)
+    tau_fast_s = rs_mohm * 1e6 * 100e-12  # 100 pF assumed
+    dv_fast = (rs_mohm * 1e6 * i_step_pa * 1e-12) * 1e3  # mV
+    dv_ss = (rin_mohm * 1e6 * i_step_pa * 1e-12) * 1e3  # mV
+    v = np.full_like(t, v_rest_mv)
+    oi = int(onset_s * sampling_rate)
+    tp = t[oi:] - onset_s
+    v[oi:] = v_rest_mv + dv_fast * np.exp(-tp / tau_fast_s) + dv_ss * (1.0 - np.exp(-tp / (tau_ms / 1000.0)))
+    return v, t
+
+
+def _make_iv_sweeps(
+    rin_mohm: float = 200.0,
+    v_rest_mv: float = -65.0,
+    current_steps_pa: tuple = (-60.0, -40.0, -20.0, 0.0, 20.0),
+    sampling_rate: float = 10_000.0,
+    duration_s: float = 0.5,
+    step_start_s: float = 0.1,
+    step_end_s: float = 0.4,
+) -> tuple:
+    """Return (sweeps, time_vectors, current_steps) for a linear Ohmic I-V protocol."""
+    t = np.arange(0.0, duration_s, 1.0 / sampling_rate)
+    sweeps, tvecs = [], []
+    for i_pa in current_steps_pa:
+        dv = (rin_mohm * 1e6 * i_pa * 1e-12) * 1e3  # mV
+        v = np.full_like(t, v_rest_mv)
+        v[int(step_start_s * sampling_rate) : int(step_end_s * sampling_rate)] += dv
+        sweeps.append(v)
+        tvecs.append(t.copy())
+    return sweeps, tvecs, list(current_steps_pa)
+
+
+def _make_spike_trace(
+    spike_times_s: tuple = (0.1, 0.3),
+    sampling_rate: float = 40_000.0,
+    duration_s: float = 0.5,
+    v_rest: float = -70.0,
+    v_peak: float = 40.0,
+    v_ahp: float = -80.0,
+    rise_ms: float = 0.3,
+    fall_ms: float = 0.8,
+    ahp_ms: float = 15.0,
+) -> tuple:
+    """Return (voltage_trace, time_vector) with deterministic triangular AP waveforms."""
+    t = np.arange(0.0, duration_s, 1.0 / sampling_rate)
+    v = np.full(len(t), v_rest)
+    for st in spike_times_s:
+        for i, tt in enumerate(t):
+            dt = (tt - st) * 1000.0  # ms
+            if dt < 0.0:
+                continue
+            elif dt < rise_ms:
+                v[i] += (v_peak - v_rest) * (dt / rise_ms)
+            elif dt < rise_ms + fall_ms:
+                v[i] += (v_peak - v_rest) * (1.0 - (dt - rise_ms) / fall_ms)
+            elif dt < rise_ms + fall_ms + ahp_ms:
+                v[i] += (v_ahp - v_rest) * np.exp(-(dt - rise_ms - fall_ms) / (ahp_ms * 0.3))
+    return v, t
+
+
+# ── Test class ─────────────────────────────────────────────────────────────
+
+
+class TestGoldenMasterExtendedSynthetic:
+    """Golden master assertions for SciPy-dependent passive-properties and
+    spike-kinetics functions that previously lacked numerical snapshots.
+
+    All data is deterministic (no random seeds needed) and all reference
+    values were computed on the reference implementation; update them only
+    after verifying the new outputs are scientifically correct.
+    """
+
+    # ── calculate_vc_transient_parameters ────────────────────────────────
+
+    def test_vc_transient_rs_cm_tau_charge(self):
+        """VC transient: Rs, Cm (charge method), tau_c, and peak current must be stable.
+
+        Synthetic ground truth: Rs=10 MΩ, Cm=100 pF, V_step=-10 mV.
+          I_peak = V_step / Rs = -1000 pA
+          tau_c  = Rs * Cm = 1.0 ms
+        """
+        from Synaptipy.core.analysis.passive_properties import calculate_vc_transient_parameters
+
+        i_trace, t = _make_vc_transient(rs_mohm=10.0, cm_pf=100.0, v_step_mv=-10.0)
+        result = calculate_vc_transient_parameters(
+            current_trace=i_trace,
+            time_vector=t,
+            step_onset_time=0.010,
+            voltage_step_mv=-10.0,
+            baseline_window_s=0.005,
+            transient_window_ms=5.0,
+        )
+
+        # Series resistance: exact by construction (no fitting involved)
+        assert not np.isnan(result["rs_mohm"]), "rs_mohm should not be NaN"
+        assert pytest.approx(result["rs_mohm"], rel=1e-6) == 10.0
+
+        # Transient peak current
+        assert pytest.approx(result["transient_peak_pa"], rel=1e-6) == -1000.0
+
+        # Capacitive time constant (mono-exp fit — allow 1 % relative tolerance)
+        assert not np.isnan(result["tau_c_ms"]), "tau_c_ms should not be NaN"
+        assert pytest.approx(result["tau_c_ms"], rel=1e-2) == 1.0
+
+        # Cm from charge integral — reference value from calibration run
+        # Reference: 99.31590414197261 pF  (slight underestimate due to finite
+        # transient window capturing only ~98% of the exponential tail)
+        assert not np.isnan(result["cm_pf"]), "cm_pf should not be NaN"
+        assert pytest.approx(result["cm_pf"], rel=1e-3) == 99.31590414197261
+
+        # Cm from exponential fit — should be much closer to the exact 100 pF
+        assert not np.isnan(result["cm_fit_pf"]), "cm_fit_pf should not be NaN"
+        assert pytest.approx(result["cm_fit_pf"], rel=1e-2) == 100.0
+
+    # ── calculate_cc_series_resistance_fast ──────────────────────────────
+
+    def test_cc_series_resistance_and_derived_cm(self):
+        """CC Rs fast-artifact: Rs and Cm-derived must be numerically stable.
+
+        Synthetic ground truth: Rs=15 MΩ, Rin=200 MΩ, tau=20 ms, I=-20 pA.
+          delta_V_fast = Rs * I = -0.3 mV
+          Rs (MΩ)      = 0.3 mV / 20 pA * 1e3 = 15 MΩ
+          Cm_derived   = tau / Rin = 20 ms / 200 MΩ = 100 pF
+        """
+        from Synaptipy.core.analysis.passive_properties import calculate_cc_series_resistance_fast
+
+        v_trace, t = _make_cc_rs_trace(rs_mohm=15.0, rin_mohm=200.0, tau_ms=20.0, i_step_pa=-20.0)
+        result = calculate_cc_series_resistance_fast(
+            voltage_trace=v_trace,
+            time_vector=t,
+            step_onset_time=0.1,
+            current_step_pa=-20.0,
+            artifact_window_ms=0.1,
+            tau_ms=20.0,
+            rin_mohm=200.0,
+        )
+
+        # Rs — extrapolation introduces small deviation; allow 0.1 % tolerance
+        assert not np.isnan(result["rs_cc_mohm"]), "rs_cc_mohm should not be NaN"
+        # Reference: 15.003808513868933 MΩ
+        assert pytest.approx(result["rs_cc_mohm"], rel=1e-3) == 15.003808513868933
+
+        # Cm derived analytically — exact by construction
+        assert not np.isnan(result["cm_derived_pf"]), "cm_derived_pf should not be NaN"
+        assert pytest.approx(result["cm_derived_pf"], rel=1e-6) == 100.0
+
+    # ── calculate_iv_curve ───────────────────────────────────────────────
+
+    def test_iv_curve_linear_membrane_rin_r2_intercept(self):
+        """I-V curve linear regression must recover exact Rin for a perfect Ohmic membrane.
+
+        Synthetic ground truth: Rin=200 MΩ, 5 symmetric current steps.
+          Slope of delta_V vs I (nA) = Rin (MΩ) = 200 MΩ exactly.
+          R² = 1.0 for a perfect linear I-V.
+          Intercept ≈ 0 V (floating-point machine epsilon).
+        """
+        from Synaptipy.core.analysis.passive_properties import calculate_iv_curve
+
+        sweeps, tvecs, isteps = _make_iv_sweeps(
+            rin_mohm=200.0,
+            current_steps_pa=(-60.0, -40.0, -20.0, 0.0, 20.0),
+        )
+        result = calculate_iv_curve(
+            sweeps=sweeps,
+            time_vectors=tvecs,
+            current_steps=isteps,
+            baseline_window=(0.0, 0.09),
+            response_window=(0.15, 0.39),
+        )
+
+        # Slope = Rin (MΩ) from linregress on (I_nA, delta_V_mV)
+        assert result["rin_aggregate_mohm"] is not None
+        assert pytest.approx(result["rin_aggregate_mohm"], rel=1e-6) == 200.0
+
+        # Perfect linear fit → R² = 1.0 exactly
+        assert pytest.approx(result["iv_r_squared"], rel=1e-9) == 1.0
+
+        # Intercept ≈ 0 (allow 1 μV absolute tolerance — floating-point residual)
+        assert pytest.approx(result["iv_intercept"], abs=1e-6) == 0.0
+
+        # Linear Ohmic membrane → no rectification (RI = 1.0)
+        assert result["rectification_index"] is not None
+        assert pytest.approx(result["rectification_index"], rel=1e-6) == 1.0
+
+        # Verify the five delta_V values match Rin * I_nA exactly
+        expected_dvs = [-12.0, -8.0, -4.0, 0.0, 4.0]  # mV
+        for measured, expected in zip(result["delta_vs"], expected_dvs):
+            assert pytest.approx(float(measured), rel=1e-6) == expected
+
+    # ── calculate_spike_features ─────────────────────────────────────────
+
+    def test_spike_features_half_width_fahp_mahp_stable(self):
+        """AP waveform kinetics (half-width, fAHP, mAHP) must be numerically stable.
+
+        Synthetic ground truth: triangular AP with known geometry.
+          rise_ms=0.3, fall_ms=0.8 → half-width at 50% amplitude level.
+          At 40 kHz, expected half-width ≈ 0.55 ms (verified on reference run).
+          fAHP window (1-5 ms post-peak): AHP depth ≈ 9.565 mV.
+          mAHP window (10-50 ms post-peak): AHP depth ≈ 1.295 mV.
+        """
+        from Synaptipy.core.analysis.single_spike import calculate_spike_features, detect_spikes_threshold
+
+        v_trace, t = _make_spike_trace(spike_times_s=(0.1, 0.3))
+        spike_result = detect_spikes_threshold(
+            data=v_trace,
+            time=t,
+            threshold=-20.0,
+            refractory_samples=int(0.002 * 40_000.0),
+            dvdt_threshold=5.0,
+        )
+        assert spike_result.value == 2, "Should detect exactly 2 synthetic spikes"
+
+        features = calculate_spike_features(
+            data=v_trace,
+            time=t,
+            spike_indices=spike_result.spike_indices,
+            dvdt_threshold=5.0,
+            ahp_window_sec=0.05,
+        )
+        assert len(features) == 2
+
+        for feat in features:
+            # Half-width at 50 % amplitude level (ms) — Reference: 0.55 ms
+            assert not np.isnan(feat["half_width"]), "half_width should not be NaN"
+            assert pytest.approx(feat["half_width"], rel=1e-3) == 0.55
+
+            # Peak amplitude: v_peak - v_threshold = 40 - (-70) = 110 mV
+            assert pytest.approx(feat["amplitude"], rel=1e-6) == 110.0
+
+            # fast-AHP depth (1-5 ms post-peak) — Reference: 9.56528739 mV
+            assert not np.isnan(feat["fahp_depth"]), "fahp_depth should not be NaN"
+            assert pytest.approx(feat["fahp_depth"], rel=1e-4) == 9.565287387880084
+
+            # medium-AHP depth (10-50 ms post-peak) — Reference: 1.29452088 mV
+            assert not np.isnan(feat["mahp_depth"]), "mahp_depth should not be NaN"
+            assert pytest.approx(feat["mahp_depth"], rel=1e-4) == 1.2945208811655853
+
+            # max dV/dt (upstroke rate) — Reference: 366.667 V/s
+            assert pytest.approx(feat["max_dvdt"], rel=1e-3) == 366.6666666666667
