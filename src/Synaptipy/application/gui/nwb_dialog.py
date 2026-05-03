@@ -17,6 +17,11 @@ try:
 except ImportError:
     tzlocal = None
 
+try:
+    from Synaptipy.application.session_manager import SessionManager as _SessionManager
+except ImportError:
+    _SessionManager = None  # type: ignore[assignment,misc]
+
 # Use a specific logger if desired, or fallback to root
 log = logging.getLogger(__name__)
 
@@ -319,6 +324,24 @@ class NwbMetadataDialog(QtWidgets.QDialog):
             "electrode_location_default": self.elec_location.text().strip(),
             "electrode_filtering_default": self.elec_filtering.text().strip(),
         }
+
+        # ------------------------------------------------------------------
+        # Provenance: embed active filter/preprocessing parameters
+        # ------------------------------------------------------------------
+        # Read the current preprocessing state from SessionManager so that the
+        # NWBExporter._write_provenance_module() can record exactly which
+        # filters were applied to the data before export.
+        # This key is consumed exclusively by the provenance module and is
+        # never written into the main NWBFile fields.
+        try:
+            if _SessionManager is not None:
+                _sm = _SessionManager()
+                _prep = getattr(_sm, "preprocessing_settings", None)
+                if _prep:
+                    metadata["filter_params"] = _prep
+                    log.debug("NWB dialog: attached active preprocessing settings to filter_params.")
+        except Exception as _exc_sm:
+            log.debug("Could not read SessionManager preprocessing for provenance: %s", _exc_sm)
 
         return metadata
 

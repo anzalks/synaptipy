@@ -2630,6 +2630,131 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.add_to_session_button:
             self.add_to_session_button.setEnabled(self._last_analysis_result is not None)
 
+    # ------------------------------------------------------------------
+    # NDX custom metric emission
+    # ------------------------------------------------------------------
+
+    def _emit_ndx_metrics(  # noqa: C901
+        self,
+        nwbfile: Any,
+        metrics: "list[tuple[str, list[float], str, str]]",
+    ) -> None:
+        """Write per-sweep custom metrics into *nwbfile* using the NDX pattern.
+
+        Call this from any analysis tab's export flow after the primary NWB
+        data has been written.  Non-fatal: a warning is logged if the
+        :class:`~Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter`
+        or ``hdmf`` is unavailable.
+
+        Args:
+            nwbfile:
+                An open :class:`~pynwb.NWBFile` object (not yet written to disk).
+                Pass the object **before** the final ``NWBHDF5IO.write()`` call.
+            metrics:
+                List of 4-tuples:
+                ``(metric_name, values, unit, description)``
+
+                * ``metric_name`` – NWB-safe identifier string, e.g.
+                  ``"SagRatio"``, ``"SpikeJitterMs"``, ``"PairedPulseRatio"``
+                * ``values``      – per-sweep float list (one element per sweep)
+                * ``unit``        – physical unit string, e.g. ``"ratio"``,
+                  ``"milliseconds"``, ``"mV"``
+                * ``description`` – human-readable sentence for the column
+
+        Example usage inside a concrete analysis tab's export slot::
+
+            def _on_export_nwb_clicked(self, nwbfile):
+                metrics = self._get_nwb_custom_metrics()
+                self._emit_ndx_metrics(nwbfile, metrics)
+
+        See :meth:`_get_nwb_custom_metrics` for the stub subclasses override.
+        """
+        if not metrics:
+            return
+        try:
+            from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+
+            for metric_name, values, unit, description in metrics:
+                if not values:
+                    log.debug("_emit_ndx_metrics: skipping empty metric '%s'.", metric_name)
+                    continue
+                sweep_indices = list(range(len(values)))
+                NWBExporter.write_ndx_custom_metric(
+                    nwbfile,
+                    metric_name=metric_name,
+                    sweep_indices=sweep_indices,
+                    values=values,
+                    unit=unit,
+                    description=description,
+                )
+                log.debug("_emit_ndx_metrics: wrote '%s' (%d rows).", metric_name, len(values))
+        except ImportError:
+            log.warning("_emit_ndx_metrics: NWBExporter not importable; custom metrics not written.")
+        except Exception as exc_ndx:
+            log.warning("_emit_ndx_metrics: failed to write metrics: %s", exc_ndx)
+
+    def _get_nwb_custom_metrics(self) -> "list[tuple[str, list[float], str, str]]":
+        """Return the list of custom NDX metrics for this analysis tab.
+
+        Subclasses **override** this method to expose derived metrics for NWB
+        export.  The base implementation returns an empty list (no metrics).
+
+        Returns:
+            List of ``(metric_name, values, unit, description)`` tuples —
+            see :meth:`_emit_ndx_metrics` for the full spec.
+
+        Concrete examples (copy into your subclass and adapt):
+
+        .. code-block:: python
+
+            # ── Passive-properties tab ──────────────────────────────────────
+            def _get_nwb_custom_metrics(self):
+                results = self._accumulated_results  # list of dicts from _on_add_to_session_clicked
+                sag_values = [r["sag_ratio"] for r in results if "sag_ratio" in r]
+                return [
+                    (
+                        "SagRatio",
+                        sag_values,
+                        "ratio",
+                        "Sag ratio (V_steady / V_peak) from hyperpolarising current injection.",
+                    )
+                ]
+
+            # ── Evoked-sync tab ─────────────────────────────────────────────
+            def _get_nwb_custom_metrics(self):
+                results = self._accumulated_results
+                jitter = [r["spike_jitter_ms"] for r in results if "spike_jitter_ms" in r]
+                latency = [r["optical_latency_ms"] for r in results if "optical_latency_ms" in r]
+                return [
+                    (
+                        "OptogeneticLatencyJitter",
+                        jitter,
+                        "milliseconds",
+                        "Std-dev of first-spike latency across optogenetic stimulus trials.",
+                    ),
+                    (
+                        "OptogeneticMeanLatency",
+                        latency,
+                        "milliseconds",
+                        "Mean first-spike latency after optogenetic stimulus onset.",
+                    ),
+                ]
+
+            # ── PPR tab ─────────────────────────────────────────────────────
+            def _get_nwb_custom_metrics(self):
+                results = self._accumulated_results
+                ppr = [r["paired_pulse_ratio"] for r in results if "paired_pulse_ratio" in r]
+                return [
+                    (
+                        "PairedPulseRatio",
+                        ppr,
+                        "ratio",
+                        "R2_corrected / R1 with mono-/bi-exponential residual subtraction.",
+                    )
+                ]
+        """
+        return []
+
     def highlight_trial(self, segment_index: int):  # noqa: C901
         """
         Called when the user selects a specific trial in the sidebar.
