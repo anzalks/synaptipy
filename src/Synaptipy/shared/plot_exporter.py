@@ -17,6 +17,13 @@ from Synaptipy.shared.plot_customization import get_average_pen, get_force_opaqu
 
 log = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Hybrid-rendering DPI for PDF/SVG exports.
+# Rasterized layers (dense traces, filled regions) are embedded at this DPI
+# so they remain sharp in print while keeping axes/text as true vectors.
+# ---------------------------------------------------------------------------
+_RASTER_DPI = 300
+
 
 class PlotExporter:
     """
@@ -57,31 +64,81 @@ class PlotExporter:
             raise e
 
     def _save_via_pyqtgraph(self, filename: str, fmt: str, dpi: int) -> bool:
-        """Save raster images using pyqtgraph (WYSIWYG)."""
+        """Save raster images using pyqtgraph (WYSIWYG).
+
+        Explicitly sets an opaque white background before grabbing the widget so
+        that macOS Dark Mode or transparent Qt themes do not bleed a dark canvas
+        colour through semi-transparent shaded regions in the exported PNG.
+        The original background is restored immediately after the capture.
+        """
         # Use the central layout item (.ci) if avail, else the widget itself
-        # Wrapper might not be present, so rely on widget
         target_item = getattr(self.widget, "ci", self.widget)
 
         # If it's a PlotWidget, target the PlotItem
         if hasattr(self.widget, "getPlotItem"):
             target_item = self.widget.getPlotItem()
 
-        exporter = pg.exporters.ImageExporter(target_item)
+        # --- Force opaque white background for PNG export ---
+        # Issue 2 fix: prevents OS dark-mode from compositing a dark canvas
+        # through transparent Qt backgrounds, which makes alpha shading appear
+        # muddy / over-dark in image viewers (Preview, Finder Quick Look, etc.)
+        original_bg = None
+        try:
+            if hasattr(self.widget, "backgroundBrush"):
+                original_bg = self.widget.backgroundBrush()
+            if hasattr(self.widget, "setBackground"):
+                self.widget.setBackground("w")  # solid white
+        except Exception:
+            pass  # non-fatal — proceed with whatever background exists
 
-        # Scale for DPI (Screen DPI is usually ~96)
-        scale_factor = dpi / 96.0
-        exporter.parameters()["width"] = int(target_item.width() * scale_factor)
+        try:
+            exporter = pg.exporters.ImageExporter(target_item)
 
-        exporter.export(filename)
-        log.info(f"Exported raster plot to {filename}")
-        return True
+            # Scale for DPI (Screen DPI is usually ~96)
+            scale_factor = dpi / 96.0
+            exporter.parameters()["width"] = int(target_item.width() * scale_factor)
+
+            exporter.export(filename)
+            log.info(f"Exported raster plot to {filename}")
+            return True
+        finally:
+            # Restore original background
+            try:
+                if original_bg is not None and hasattr(self.widget, "setBackground"):
+                    self.widget.setBackground(original_bg)
+            except Exception:
+                pass
 
     def _save_via_matplotlib(self, filename: str, fmt: str, dpi: int) -> bool:  # noqa: C901
         """
         Save vector plots using Matplotlib for publication quality.
-        Extracts data directly from pyqtgraph PlotDataItems to match screen.
+
+        Hybrid rendering strategy (Issue 1b + Issue 2):
+        - Axes, tick labels, and text are rendered as **true vectors** (crisp at any zoom).
+        - Dense raw-data lines and filled/shaded regions use ``rasterized=True`` so they
+          are embedded as a single high-DPI bitmap layer inside the PDF/SVG.  This prevents:
+            * PDF file bloat (one vector path per sample point),
+            * Alpha-compositing stitching artefacts in Acrobat / Preview,
+            * Viewer crashes on high-density recordings (>100 k points per line).
+        - The raster DPI used for embedded bitmaps is ``_RASTER_DPI`` (300 dpi) regardless
+          of the ``dpi`` argument so that the embedded layer is always print-quality.
+
+        PNG alpha-stacking / Dark Mode fix (Issue 2):
+        - Each call creates a *fresh* Figure + Axes (no state bleed between exports).
+        - ``fig.savefig`` always uses ``facecolor='white', transparent=False`` so that
+          macOS Dark Mode or any OS-level theme cannot composite a dark canvas colour
+          through the transparent PNG background.
+        - Every Axes face is also explicitly set to white (``ax.set_facecolor('white')``).
+
+        Extracts data directly from pyqtgraph PlotDataItems to match screen appearance.
         """
+        import matplotlib
         import matplotlib.pyplot as plt
+
+        # Use the non-interactive Agg backend for off-screen rendering.
+        # This avoids "matplotlib not found" errors that occur when the Qt backend
+        # tries to create a display window in a headless / embedded context.
+        matplotlib.use("Agg")
 
         # 1. Setup Figure
         plots_to_export = []
@@ -98,7 +155,7 @@ class PlotExporter:
                 plot_item = self.widget.getPlotItem()
                 plots_to_export.append(("Analysis", plot_item))
             else:
-                # Fallback for generic widgets?
+                # Fallback for generic widgets
                 log.warning("Widget does not have getPlotItem(). Cannot export vector.")
                 return False
 
@@ -119,7 +176,18 @@ class PlotExporter:
             fig_width = 10
             fig_height = 3 * n_plots
 
-        fig, axes = plt.subplots(n_plots, 1, sharex=True, figsize=(fig_width, fig_height), dpi=dpi)
+        # Always create a FRESH figure — never reuse a previous one.
+        # This is the core guard against alpha-stacking (Issue 2): if the same
+        # Figure object were reused, previously drawn semi-transparent regions
+        # would accumulate on top of the new draw.
+        fig, axes = plt.subplots(
+            n_plots,
+            1,
+            sharex=True,
+            figsize=(fig_width, fig_height),
+            dpi=_RASTER_DPI,  # Use high DPI so rasterized layers are sharp in print
+            facecolor="white",  # Solid white canvas — blocks OS dark-mode bleed
+        )
         if n_plots == 1:
             axes = [axes]
 
@@ -138,9 +206,18 @@ class PlotExporter:
         if get_force_opaque_trials():
             trial_alpha = 1.0
 
+        # Determine whether to rasterize data layers (always True for PDF/SVG).
+        # For PNG output coming through this path (unusual but possible), rasterizing
+        # is still harmless since the whole file is a bitmap anyway.
+        use_rasterized = fmt in ("pdf", "svg")
+
         # 2. Iterate and extract data DIRECTLY from pyqtgraph PlotDataItems
         for i, (label, plot_item) in enumerate(plots_to_export):
             ax = axes[i]
+
+            # Issue 2 fix: always set a white axes face so that OS themes cannot
+            # composite a dark colour through transparent Matplotlib patch regions.
+            ax.set_facecolor("white")
 
             # Get current view range to match screen
             vb = plot_item.getViewBox()
@@ -155,12 +232,6 @@ class PlotExporter:
                 for item in plot_item.items:
                     if isinstance(item, pg.PlotDataItem):
                         plotted_items.append(item)
-
-            # Also check for InfiniteLine and LinearRegionItem for Analysis plots?
-            # Matplotlib support for these is tricky but valuable.
-            # unique to PlotExporter: we mainly focus on traces.
-            # Subclassing usage in Analysis tabs might involve markers.
-            # Ideally we extract data points.
 
             # Plot each data item
             for item in plotted_items:
@@ -182,22 +253,15 @@ class PlotExporter:
                     item_name = item.name() if item.name() else ""
                     is_average = "Average" in item_name or "average" in item_name
 
-                    # Check pen color to decide style if name relies on defaults
-                    # Simply use the item's pen if possible?
-                    # For consistency with Explorer, we use the global pens.
-                    # But for Analysis tabs, the pen might be custom (e.g. orange for fits).
-                    # We should probably respect the item's pen if we can extract it.
-
+                    # Respect the item's own pen if possible; fall back to global pens
                     item_pen = item.opts.get("pen")
                     if item_pen:
-                        # Convert QPen to MPL
                         import PySide6.QtGui
 
                         if isinstance(item_pen, PySide6.QtGui.QPen):
                             c, a = pen_to_mpl(item_pen)
                             mp_color, mp_alpha = c, a
                         else:
-                            # Default fallback
                             mp_color, mp_alpha = trial_color, trial_alpha
                     else:
                         mp_color, mp_alpha = trial_color, trial_alpha
@@ -210,9 +274,22 @@ class PlotExporter:
                             alpha=mp_alpha if self.wrapper else avg_alpha,
                             linewidth=1.5,
                             zorder=10,
+                            # Averages are thinner datasets — keep as vectors for crispness.
+                            rasterized=False,
                         )
                     else:
-                        ax.plot(x_data, y_data, color=mp_color, alpha=mp_alpha, linewidth=0.8)
+                        # Issue 1b — Hybrid rendering:
+                        # Raw trial traces can have tens of thousands of points. Rasterizing
+                        # them prevents PDF/SVG bloat and compositing artefacts while the axes
+                        # frame, labels, and average line stay as clean vectors.
+                        ax.plot(
+                            x_data,
+                            y_data,
+                            color=mp_color,
+                            alpha=mp_alpha,
+                            linewidth=0.8,
+                            rasterized=use_rasterized,
+                        )
 
                 except Exception as e:
                     log.warning(f"Failed to extract data from plot item: {e}")
@@ -227,10 +304,9 @@ class PlotExporter:
                 chan = self.recording.channels[label]
                 ax.set_ylabel(f"{chan.get_primary_data_label()} ({chan.units})")
             else:
-                # Try to get label from plot item?
                 ax.set_ylabel(label)
 
-            # Remove top/right spines
+            # Remove top/right spines (publication style)
             ax.spines["right"].set_visible(False)
             ax.spines["top"].set_visible(False)
             ax.grid(True, alpha=0.3)
@@ -239,7 +315,18 @@ class PlotExporter:
         axes[-1].set_xlabel("Time (s)")
 
         plt.tight_layout()
-        fig.savefig(filename, format=fmt, dpi=dpi)
+
+        # Issue 2 fix: always save with a solid white background.
+        # ``transparent=False`` + ``facecolor='white'`` ensures that macOS Dark Mode
+        # and any other OS theme cannot composite a dark canvas colour through the
+        # transparent alpha channel of PNG files opened in Preview / Finder / browsers.
+        fig.savefig(
+            filename,
+            format=fmt,
+            dpi=_RASTER_DPI,
+            facecolor="white",
+            transparent=False,
+        )
         plt.close(fig)
-        log.info(f"Exported vector plot to {filename}")
+        log.info(f"Exported vector plot to {filename} (hybrid rendering, dpi={_RASTER_DPI})")
         return True
