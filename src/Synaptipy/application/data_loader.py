@@ -22,6 +22,11 @@ from Synaptipy.shared.error_handling import SynaptipyError
 
 log = logging.getLogger(__name__)
 
+# Files larger than this threshold are automatically loaded in lazy (out-of-core)
+# mode to prevent the application from exhausting system RAM.  Users can override
+# this via the ``lazy_load`` parameter of :meth:`DataLoader.load_file`.
+_LARGE_FILE_THRESHOLD_BYTES: int = 500 * 1024 * 1024  # 500 MB
+
 
 class DataLoader(QtCore.QObject):
     """
@@ -54,18 +59,48 @@ class DataLoader(QtCore.QObject):
         self.cache = DataCache.get_instance()
         log.debug("DataLoader initialization complete.")
 
+    @staticmethod
+    def _should_lazy_load(file_path: Path, lazy_load: bool) -> bool:
+        """Return ``True`` when the file should be loaded lazily.
+
+        Promotes *lazy_load* to ``True`` automatically for files whose size is
+        at or above :data:`_LARGE_FILE_THRESHOLD_BYTES` (default 500 MB).
+        """
+        if lazy_load:
+            return True
+        try:
+            file_size = Path(file_path).stat().st_size
+            if file_size >= _LARGE_FILE_THRESHOLD_BYTES:
+                log.warning(
+                    "LargeFileGuard: file '%s' is %.1f MB (threshold %.0f MB). "
+                    "Automatically switching to lazy (out-of-core) loading to "
+                    "prevent OOM crash.",
+                    Path(file_path).name,
+                    file_size / (1024 * 1024),
+                    _LARGE_FILE_THRESHOLD_BYTES / (1024 * 1024),
+                )
+                return True
+        except OSError:
+            pass  # Best-effort; fall back to caller's choice
+        return False
+
     @QtCore.Slot(Path, bool)
-    def load_file(self, file_path: Path, lazy_load: bool = False) -> None:
+    def load_file(self, file_path: Path, lazy_load: bool = False) -> None:  # noqa: C901
         """
         Load a file in the background thread.
 
-        This method is designed to be called from the main thread, which will
-        trigger the actual loading in the worker thread context.
+        For files whose size exceeds ``_LARGE_FILE_THRESHOLD_BYTES`` (default
+        500 MB), the loader automatically promotes to lazy (out-of-core) mode
+        even when *lazy_load* is ``False``.  This prevents the application from
+        exhausting system RAM on large recordings; the data is mapped into memory
+        only on demand as the user navigates through channels and trials.
 
         Args:
-            file_path: Path to the electrophysiology file to load
-            lazy_load: Whether to use lazy loading mode (default: False)
+            file_path: Path to the electrophysiology file to load.
+            lazy_load: Whether to use lazy loading mode (default: False).
+                       Automatically overridden to ``True`` for large files.
         """
+        lazy_load = self._should_lazy_load(file_path, lazy_load)
         log.debug(f"Starting background load of file: {file_path} (lazy_load: {lazy_load})")
 
         try:

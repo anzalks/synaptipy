@@ -153,6 +153,12 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             log.debug(f"Could not emit initialized signal: {e}")
 
+        # After all tabs are ready, offer to restore the previous session.
+        # Use a single-shot timer so the window is fully painted before the
+        # dialog appears.
+        QtCore.QTimer.singleShot(200, self._offer_session_restore)
+
+
     def _setup_menu_and_status_bar(self):
         """Creates the main menu bar and status bar, and connects menu actions."""
         log.debug("Setting up menu bar and status bar...")
@@ -1062,21 +1068,103 @@ class MainWindow(QtWidgets.QMainWindow):
                 log.debug("Cleared explorer tab graphics.")
             except Exception as e:
                 log.warning(f"Error clearing graphics layout during close: {e}")
-        # --- Save Settings ---
+        # --- Save QSettings (geometry / window state) ---
         try:
             log.debug("Saving window geometry and state...")
             self.settings.setValue("geometry", self.saveGeometry())
             self.settings.setValue("windowState", self.saveState())
-            # Ensure settings are written to disk (sync might be needed depending on OS/timing)
             self.settings.sync()
             log.debug("Saved window geometry and state.")
         except Exception as e:
             log.warning(f"Could not save settings on close: {e}")
+
+        # --- Persist session state to ~/.synaptipy/session.json ---
+        try:
+            active_tab = (
+                self.tab_widget.currentIndex() if hasattr(self, "tab_widget") else 0
+            )
+            self.session_manager.save_session(active_tab_index=active_tab)
+            log.debug("Session state persisted to disk.")
+        except Exception as e:
+            log.warning(f"Could not persist session on close: {e}")
+
         log.debug("Accepting close event.")
         event.accept()
 
+
+    def _offer_session_restore(self) -> None:
+        """Prompt the user to restore a previous session from ``~/.synaptipy/session.json``.
+
+        Called once via a single-shot QTimer after all tabs are fully
+        initialized so the window is visible before the dialog appears.
+        Does nothing if no valid session file is found.
+        """
+        try:
+            session = self.session_manager.load_session()
+        except Exception as exc:
+            log.warning("Could not check session file: %s", exc)
+            return
+
+        if not session:
+            return
+
+        file_paths: List[Path] = session.get("file_paths", [])
+        if not file_paths:
+            # No files to restore — still apply settings silently.
+            try:
+                self.session_manager.apply_session(session)
+            except Exception:
+                pass
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Restore Previous Session?",
+            f"A previous session was found with {len(file_paths)} file(s) loaded.\n"
+            "Would you like to restore it?",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.Yes,
+        )
+        if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+            log.debug("_offer_session_restore: user declined restore.")
+            return
+
+        # Apply settings (LJP, performance) first.
+        try:
+            self.session_manager.apply_session(session)
+        except Exception as exc:
+            log.warning("Could not apply session settings: %s", exc)
+
+        # Load the first file; session context is restored via SessionManager.
+        first_file = file_paths[0]
+        current_index = session.get("current_file_index", 0)
+        if current_index < 0 or current_index >= len(file_paths):
+            current_index = 0
+
+        log.info(
+            "_offer_session_restore: restoring %d file(s), starting from index %d.",
+            len(file_paths),
+            current_index,
+        )
+        self._load_in_explorer(
+            first_file,
+            file_paths,
+            current_index,
+            lazy_load=False,
+        )
+
+        # Restore active tab after a short delay (file loading is async).
+        active_tab = session.get("active_tab_index", 0)
+        if hasattr(self, "tab_widget") and 0 <= active_tab < self.tab_widget.count():
+            QtCore.QTimer.singleShot(
+                500,
+                lambda: self.tab_widget.setCurrentIndex(active_tab),
+            )
+
     # --- ADDED: Method to store analysis results ---
     def add_saved_result(self, result_data: Dict[str, Any]):
+
+
         """Appends a dictionary containing analysis results to the central list."""
         if not isinstance(result_data, dict):
             log.error(f"Attempted to add non-dict result: {type(result_data)}")

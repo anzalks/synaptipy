@@ -1,5 +1,6 @@
 # src/Synaptipy/application/session_manager.py
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,6 +11,12 @@ from PySide6.QtCore import QObject, Signal
 from Synaptipy.core.data_model import Recording
 
 log = logging.getLogger(__name__)
+
+# Default directory for session persistence: ~/.synaptipy/
+_SESSION_DIR: Path = Path.home() / ".synaptipy"
+_SESSION_FILE: Path = _SESSION_DIR / "session.json"
+_SESSION_SCHEMA_VERSION: int = 1
+
 
 
 class SessionManager(QObject):
@@ -233,3 +240,125 @@ class SessionManager(QObject):
     def emit_preferences_changed(self) -> None:
         """Re-emit the current performance settings (e.g. on app start-up)."""
         self.preferences_changed.emit(dict(self._performance_settings))
+
+    # ------------------------------------------------------------------
+    # Session persistence  (JSON save / restore)
+    # ------------------------------------------------------------------
+
+    def save_session(
+        self,
+        active_tab_index: int = 0,
+        analysis_params: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Persist the current application state to ``~/.synaptipy/session.json``.
+
+        Saves:
+
+        * The list of currently loaded file paths (as POSIX strings).
+        * The active tab index.
+        * The global settings (LJP, etc.).
+        * The performance settings.
+        * Optional per-tab analysis parameter snapshots.
+
+        Parameters
+        ----------
+        active_tab_index : int
+            Zero-based index of the currently visible tab in the main
+            ``QTabWidget``.
+        analysis_params : dict, optional
+            Arbitrary key/value mapping of analysis slider / spinbox values
+            that the caller wants to persist (e.g. threshold, window sizes).
+
+        Returns
+        -------
+        bool
+            ``True`` on success, ``False`` if the write failed.
+        """
+        payload: Dict[str, Any] = {
+            "schema_version": _SESSION_SCHEMA_VERSION,
+            "active_tab_index": active_tab_index,
+            "file_paths": [str(p) for p in self._file_list if p is not None],
+            "current_file_index": self._current_file_index,
+            "global_settings": dict(self._global_settings),
+            "performance_settings": dict(self._performance_settings),
+            "analysis_params": analysis_params or {},
+        }
+        try:
+            _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+            _SESSION_FILE.write_text(
+                json.dumps(payload, indent=2, default=str),
+                encoding="utf-8",
+            )
+            log.debug(
+                "SessionManager.save_session: wrote %d file path(s) to %s.",
+                len(payload["file_paths"]),
+                _SESSION_FILE,
+            )
+            return True
+        except Exception as exc:
+            log.warning("SessionManager.save_session failed: %s", exc)
+            return False
+
+    @staticmethod
+    def load_session() -> Optional[Dict[str, Any]]:
+        """Read ``~/.synaptipy/session.json`` and return its contents.
+
+        This is a **pure read** method — it does not modify any singleton
+        state.  The caller (e.g. ``MainWindow``) is responsible for prompting
+        the user and applying the returned values.
+
+        Returns
+        -------
+        dict or None
+            The parsed session dict, or ``None`` if the file does not exist,
+            cannot be parsed, or has an incompatible schema version.
+        """
+        if not _SESSION_FILE.is_file():
+            return None
+        try:
+            raw = json.loads(_SESSION_FILE.read_text(encoding="utf-8"))
+        except Exception as exc:
+            log.warning("SessionManager.load_session: cannot read %s: %s", _SESSION_FILE, exc)
+            return None
+
+        if not isinstance(raw, dict):
+            return None
+        if raw.get("schema_version") != _SESSION_SCHEMA_VERSION:
+            log.info(
+                "SessionManager.load_session: schema_version mismatch "
+                "(got %s, expected %s) — ignoring session file.",
+                raw.get("schema_version"),
+                _SESSION_SCHEMA_VERSION,
+            )
+            return None
+
+        # Coerce file_paths back to Path objects
+        raw["file_paths"] = [
+            Path(p) for p in raw.get("file_paths", []) if Path(p).is_file()
+        ]
+        log.debug(
+            "SessionManager.load_session: found %d valid file path(s).",
+            len(raw["file_paths"]),
+        )
+        return raw
+
+    def apply_session(self, session: Dict[str, Any]) -> None:
+        """Apply a previously loaded session dict to the singleton's internal state.
+
+        Restores global settings and performance settings only — file context
+        and tab index are left for ``MainWindow`` to handle, since those
+        require triggering Qt signals and loading data asynchronously.
+
+        Parameters
+        ----------
+        session : dict
+            A dict returned by :meth:`load_session`.
+        """
+        if not isinstance(session, dict):
+            return
+        if "global_settings" in session:
+            self.set_global_settings(session["global_settings"])
+        if "performance_settings" in session:
+            self.performance_settings = session["performance_settings"]
+        log.debug("SessionManager.apply_session: global and performance settings restored.")
+
