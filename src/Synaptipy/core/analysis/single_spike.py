@@ -42,19 +42,57 @@ def detect_spikes_threshold(  # noqa: C901
     dvdt_threshold: float = 20.0,
 ) -> SpikeTrainResult:
     """
-    Detect spikes based on dV/dt threshold crossing with refractory period.
+    Detect action potentials using a two-stage dV/dt-threshold crossing algorithm.
 
-    Args:
-        data: 1D voltage array (mV).
-        time: 1D time array (s).
-        threshold: Minimum voltage that the peak must exceed (mV).
-        refractory_samples: Minimum samples between spikes.
-        peak_search_window_samples: Samples to search for peak after crossing.
-        parameters: Optional parameter dict recorded in result.
-        dvdt_threshold: dV/dt threshold for onset detection (V/s, default 20.0).
+    Algorithm
+    ---------
+    1. **First-derivative computation**: :func:`numpy.gradient` is applied to
+       *data* with sample spacing ``dt = time[1] - time[0]`` (s), yielding
+       dV/dt in mV s⁻¹.
+    2. **dV/dt crossing detection**: candidate spike onsets are identified as
+       upward crossings of ``dvdt_threshold * 1000`` (mV s⁻¹).  Each
+       crossing is the sample where dV/dt transitions from strictly below to
+       at-or-above the threshold.
+    3. **Refractory period enforcement**: candidate crossings separated by
+       fewer than *refractory_samples* are suppressed, retaining only the
+       first crossing in each refractory interval (greedy forward scan).
+    4. **Peak localisation**: for each accepted onset, the voltage maximum
+       within the next *peak_search_window_samples* is found.  The candidate
+       is accepted as a spike only if ``data[peak_idx] >= threshold`` (mV).
 
-    Returns:
-        SpikeTrainResult.
+    Parameters
+    ----------
+    data : np.ndarray
+        1-D voltage array (mV).
+    time : np.ndarray
+        1-D time array aligned with *data* (s).
+    threshold : float
+        Minimum voltage a candidate peak must reach to be accepted as a
+        spike (mV).  Guards against sub-threshold dV/dt transients.
+    refractory_samples : int
+        Minimum number of samples between successive accepted spike onsets.
+        Convert from time: ``int(refractory_period_s * sampling_rate_hz)``.
+    peak_search_window_samples : int, optional
+        Number of samples to search forward from each onset crossing for the
+        voltage peak.  Defaults to *refractory_samples* when ``None``.
+    parameters : dict, optional
+        Arbitrary parameter dict stored verbatim in the returned
+        :class:`~Synaptipy.core.results.SpikeTrainResult` for provenance.
+    dvdt_threshold : float, optional
+        dV/dt threshold for onset detection (V s⁻¹, default 20.0).
+        Converted internally to mV s⁻¹ by multiplication with 1000.
+
+    Returns
+    -------
+    SpikeTrainResult
+        Attributes populated on success:
+
+        * ``value`` (int) – total spike count.
+        * ``spike_times`` (np.ndarray) – peak times (s).
+        * ``spike_indices`` (np.ndarray) – peak sample indices.
+        * ``mean_frequency`` (float) – mean instantaneous firing rate
+          ``(n_spikes - 1) / (t_last - t_first)`` (Hz); 0.0 for ≤ 1 spike.
+        * ``is_valid`` (bool) – ``False`` when input arrays are malformed.
     """
     if not isinstance(data, np.ndarray) or data.ndim != 1 or data.size < 2:
         return SpikeTrainResult(

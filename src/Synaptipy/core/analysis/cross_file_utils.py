@@ -97,23 +97,44 @@ def get_cross_file_average(
     Delegates per-file extraction to :func:`extract_per_file_trace`.  Files
     that fail silently are excluded so the average denominator stays
     scientifically correct.  Per-file averages of unequal length are
-    **padded with NaN** rather than truncated, so the statistical *N*
+    **padded with NaN** rather than truncated so the statistical *N*
     decreases smoothly at the end of shorter recordings instead of producing
     an artificial variance step.
 
-    Args:
-        items:         List of analysis-item dicts, each containing at least a
-                       ``"path"`` key.
-        parsed_trials: Ordered list of 0-based trial indices to extract.
-        channel_idx:   Position of the target channel (0-based, sorted by
-                       channel-id) shared across files.
-        neo_adapter:   Adapter with a ``read_recording(path)`` method.
+    Algorithm
+    ---------
+    1. Call :func:`extract_per_file_trace` for every item; collect the
+       ``(time, averaged_data)`` pairs from files that succeed.
+    2. If all traces share the same length, compute a plain
+       :func:`numpy.mean` across the file axis.
+    3. When lengths differ, allocate a ``(n_files, max_len)`` matrix filled
+       with ``NaN`` and copy each trace into the corresponding row up to its
+       own length.  :func:`numpy.nanmean` then produces a grand average
+       whose effective *N* equals the number of files that contributed a
+       non-NaN sample at each time point.
+    4. The reference time vector is taken from the longest contributing file
+       so the full axis is available for downstream plotting.
 
-    Returns:
-        Tuple ``(time_array, grand_average, n_files, has_unequal_lengths)``
+    Parameters
+    ----------
+    items : list of dict
+        Analysis-item dicts, each containing at least a ``"path"`` key.
+    parsed_trials : list of int
+        Ordered 0-based trial indices to extract from every file.
+    channel_idx : int
+        0-based position of the target channel (sorted by channel-id),
+        shared across all files.
+    neo_adapter : object
+        Adapter with a ``read_recording(path)`` method that returns a
+        :class:`~Synaptipy.core.data_model.Recording` or ``None``.
+
+    Returns
+    -------
+    tuple
+        ``(time_array, grand_average, n_files, has_unequal_lengths)``
         where *n_files* is the number of files that contributed and
         *has_unequal_lengths* is ``True`` when the contributing traces had
-        different sample counts (caller should warn the user).
+        different sample counts (the GUI layer should warn the user).
         Returns ``(None, None, 0, False)`` when no valid traces could be
         obtained.
     """
@@ -133,6 +154,20 @@ def get_cross_file_average(
     lengths = [len(t) for t in valid_traces]
     has_unequal_lengths = len(set(lengths)) > 1
     max_len = max(lengths)
+
+    if has_unequal_lengths:
+        min_len = min(lengths)
+        log.warning(
+            "Cross-file average: unequal trace lengths detected across %d files. "
+            "min=%d samples, max=%d samples. "
+            "Traces shorter than max_len (%d samples) are NaN-padded; "
+            "effective N decreases after sample %d.",
+            len(valid_traces),
+            min_len,
+            max_len,
+            max_len,
+            min_len,
+        )
 
     # Pad shorter arrays with NaN so that nanmean produces a smoothly
     # decreasing N rather than an artificial variance step at the truncation

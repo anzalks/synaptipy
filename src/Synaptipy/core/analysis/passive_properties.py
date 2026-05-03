@@ -89,13 +89,40 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
     """
     Calculate the Resting Membrane Potential (RMP) from a defined baseline window.
 
-    Args:
-        data: 1D NumPy array of voltage data.
-        time: 1D NumPy array of corresponding time points (seconds).
-        baseline_window: Tuple (start_time, end_time) defining the baseline period.
+    Algorithm
+    ---------
+    1. Extract the voltage samples whose timestamps fall within
+       ``baseline_window``.
+    2. **RMP** = :func:`numpy.mean` of those samples (mV).
+    3. **Drift estimate**: a uniform moving-average kernel of ~50 ms is applied
+       to suppress high-frequency noise, then :func:`numpy.polyfit` (degree 1)
+       fits a line to the smoothed segment.  The slope is the drift rate
+       (mV s⁻¹).  The kernel width is capped at one-third of the baseline
+       length to avoid boundary artefacts on short protocols.
 
-    Returns:
-        RmpResult object.
+    Parameters
+    ----------
+    data : np.ndarray
+        1-D voltage array (mV).
+    time : np.ndarray
+        1-D time array aligned with *data* (s).
+    baseline_window : tuple of float
+        ``(start_time, end_time)`` defining the pre-stimulus baseline period
+        (s).  Must satisfy ``start_time < end_time``.
+
+    Returns
+    -------
+    RmpResult
+        Attributes populated on success:
+
+        * ``value`` (float) – mean baseline voltage (mV).
+        * ``std_dev`` (float) – standard deviation of baseline (mV).
+        * ``drift`` (float or None) – linear drift rate of the smoothed
+          baseline (mV s⁻¹); ``None`` when estimation fails.
+        * ``duration`` (float) – window duration (s).
+        * ``unit`` (str) – always ``'mV'``.
+        * ``is_valid`` (bool) – ``False`` when the window contains no
+          samples or the data array is malformed.
     """
     if not isinstance(data, np.ndarray) or data.ndim != 1 or data.size == 0:
         log.warning("calculate_rmp: Invalid data array provided.")
@@ -235,26 +262,73 @@ def calculate_rin(
     rs_artifact_blanking_ms: float = 0.5,
 ) -> RinResult:
     """
-    Calculate Input Resistance (Rin = delta_V / delta_I).
+    Calculate Input Resistance (Rin) from a current-clamp voltage deflection.
 
-    Also computes Peak Rin (from maximum voltage deflection, sensitive to Ih
-    sag) and Steady-State Rin (from the last 20% of the response window,
-    reflecting the true membrane resistance after sag recovery).
+    Algorithm
+    ---------
+    Uses Ohm's Law applied to the membrane voltage deflection:
 
-    Args:
-        voltage_trace: 1D voltage array (mV).
-        time_vector: 1D time array (s).
-        current_amplitude: Current step amplitude (pA).
-        baseline_window: (start, end) seconds for baseline.
-        response_window: (start, end) seconds for response.
-        parameters: Optional parameter dict stored in result.
-        rs_artifact_blanking_ms: Duration (ms) to skip at the start of the
-            response window, preventing series-resistance jump contamination
-            (default 0.5 ms).
+    .. math::
 
-    Returns:
-        RinResult object with value (mean Rin), rin_peak_mohm, and
-        rin_steady_state_mohm populated.
+        R_{in} = \\frac{|\\Delta V|}{|\\Delta I|}
+
+    where :math:`\\Delta I` is *current_amplitude* converted from pA to nA
+    (:math:`\\Delta I_{nA} = |I_{pA}| / 1000`).
+
+    Three Rin estimates are returned:
+
+    * **Mean Rin** (``value``): :math:`\\Delta V_{mean} / \\Delta I_{nA}`, where
+      :math:`\\Delta V_{mean}` is the mean of the full (Rs-blanked) response
+      window relative to the baseline mean.
+    * **Peak Rin** (``rin_peak_mohm``): :math:`\\Delta V_{peak} / \\Delta I_{nA}`,
+      where :math:`\\Delta V_{peak}` is the point of maximum absolute voltage
+      deflection.  Most sensitive to Ih sag.
+    * **Steady-state Rin** (``rin_steady_state_mohm``):
+      :math:`\\Delta V_{ss} / \\Delta I_{nA}`, where :math:`\\Delta V_{ss}` is
+      the mean of the **last 20 %** of the (blanked) response window, reflecting
+      the true membrane resistance after Ih has settled.
+
+    The first ``rs_artifact_blanking_ms`` ms of the response window are
+    excluded from all three estimates to prevent the series-resistance jump
+    from contaminating the measurement.
+
+    Parameters
+    ----------
+    voltage_trace : np.ndarray
+        1-D voltage array (mV).
+    time_vector : np.ndarray
+        1-D time array aligned with *voltage_trace* (s).
+    current_amplitude : float
+        Amplitude of the injected current step (pA).  Sign is preserved; a
+        negative value indicates a hyperpolarising step.
+    baseline_window : tuple of float
+        ``(start, end)`` of the pre-stimulus baseline period (s).
+    response_window : tuple of float
+        ``(start, end)`` of the current-step response period (s).
+    parameters : dict, optional
+        Arbitrary parameter dict stored verbatim in the returned
+        :class:`~Synaptipy.core.results.RinResult` for provenance tracking.
+    rs_artifact_blanking_ms : float, optional
+        Duration (ms) to skip at the onset of the response window, excluding
+        the fast series-resistance voltage jump from all Rin estimates
+        (default 0.5 ms).
+
+    Returns
+    -------
+    RinResult
+        Attributes populated on success:
+
+        * ``value`` (float) – mean Rin (MΩ).
+        * ``rin_peak_mohm`` (float) – peak Rin from maximum deflection (MΩ).
+        * ``rin_steady_state_mohm`` (float) – steady-state Rin from last 20 %
+          of response window (MΩ).
+        * ``conductance`` (float) – membrane conductance, 1/Rin (µS).
+        * ``voltage_deflection`` (float) – mean ΔV (mV).
+        * ``current_injection`` (float) – current step amplitude (pA).
+        * ``baseline_voltage`` (float) – mean baseline voltage (mV).
+        * ``steady_state_voltage`` (float) – mean steady-state voltage (mV).
+        * ``is_valid`` (bool) – ``False`` when either window contains no
+          samples or *current_amplitude* is zero.
     """
     try:
         delta_i_pa = float(current_amplitude)
@@ -800,22 +874,80 @@ def calculate_tau(  # noqa: C901
     artifact_blanking_ms: float = 0.5,
 ) -> Optional[Union[float, Dict[str, float]]]:
     """
-    Calculate Membrane Time Constant (Tau) by fitting an exponential.
+    Calculate the membrane time constant (tau) by fitting an exponential model.
 
-    Args:
-        voltage_trace: 1D voltage array (mV).
-        time_vector: 1D time array (s).
-        stim_start_time: Stimulus onset time (s).
-        fit_duration: Duration of fit window (s).
-        model: 'mono' or 'bi'.
-        tau_bounds: (min_tau, max_tau) in seconds. Defaults to (1e-4, 1.0).
-        artifact_blanking_ms: Time to skip after stimulus onset (ms).
+    Algorithm
+    ---------
+    1. Extract the fit window from
+       ``stim_start_time + artifact_blanking_ms / 1000`` to
+       ``stim_start_time + fit_duration``.
+    2. **Sag detection** (Ih suppression): if the voltage peak (minimum for
+       hyperpolarising steps, maximum for depolarising steps) falls in the
+       second half of the window, the window is truncated at that peak to
+       prevent Ih-sag rebound from contaminating the exponential fit.
+    3. **Initial-guess estimation**: :func:`numpy.polyfit` (degree 1) is
+       applied to ``log(|V - V_ss|)`` vs. time to obtain a robust tau seed,
+       avoiding dependence on the (potentially noisy) first sample.
+    4. **Curve fitting** via :func:`scipy.optimize.curve_fit` using the
+       Trust-Region Reflective (TRF) algorithm (``maxfev=5000``) with
+       amplitude bounds derived from the data range (±2× peak-to-peak):
 
-    Returns:
-        For model='mono': dict with tau_ms, fit_time, fit_values.
-        For model='bi': dict with tau_fast_ms, tau_slow_ms, amplitude_fast,
-        amplitude_slow, V_ss, fit_time, fit_values.
-        None if fitting fails fatally.
+       * **Mono-exponential** (``model='mono'``):
+
+         .. math::
+
+             V(t) = V_{ss} + (V_0 - V_{ss})\\,e^{-t/\\tau}
+
+       * **Bi-exponential** (``model='bi'``):
+
+         .. math::
+
+             V(t) = V_{ss} + A_{fast}\\,e^{-t/\\tau_{fast}}
+                    + A_{slow}\\,e^{-t/\\tau_{slow}}
+
+    5. **Quality gate** (mono only): fits with R² < 0.80 are rejected and
+       ``tau_ms`` is set to ``NaN`` to prevent physiologically implausible
+       values from propagating silently.
+
+    Parameters
+    ----------
+    voltage_trace : np.ndarray
+        1-D voltage array (mV).
+    time_vector : np.ndarray
+        1-D time array aligned with *voltage_trace* (s).
+    stim_start_time : float
+        Onset time of the current step (s).
+    fit_duration : float
+        Duration of the fit window measured from *stim_start_time* (s).
+    model : {'mono', 'bi'}, optional
+        Exponential model to fit.  ``'mono'`` (default) is appropriate for
+        most standard passive-properties protocols.  ``'bi'`` separates fast
+        and slow time constants for multi-compartment cells.
+    tau_bounds : tuple of float, optional
+        ``(tau_min, tau_max)`` in seconds, passed directly as *bounds* to
+        :func:`scipy.optimize.curve_fit`.  Defaults to ``(1e-4, 1.0)``
+        (0.1 ms – 1 s), covering the physiological range of cortical and
+        hippocampal neurons.
+    artifact_blanking_ms : float, optional
+        Duration to skip at the start of the fit window to exclude the fast
+        capacitive artefact and the series-resistance voltage drop
+        (ms, default 0.5 ms).
+
+    Returns
+    -------
+    dict or None
+        For ``model='mono'``:
+        ``{'tau_ms': float, '_fit_time': list, '_fit_values': list,
+        'r_squared': float}``.
+        ``tau_ms`` is ``float('nan')`` when R² < 0.80 or the fit diverges.
+
+        For ``model='bi'``:
+        ``{'tau_fast_ms': float, 'tau_slow_ms': float, 'amplitude_fast': float,
+        'amplitude_slow': float, 'V_ss': float, '_fit_time': list,
+        '_fit_values': list}``.
+
+        Returns ``None`` when fewer than 3 samples are available in the fit
+        window after blanking.
     """
     if tau_bounds is None:
         tau_bounds = (1e-4, 1.0)
