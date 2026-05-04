@@ -18,7 +18,6 @@ _SESSION_FILE: Path = _SESSION_DIR / "session.json"
 _SESSION_SCHEMA_VERSION: int = 1
 
 
-
 class SessionManager(QObject):
     """
     Singleton class to manage the global state of the application.
@@ -333,9 +332,7 @@ class SessionManager(QObject):
             return None
 
         # Coerce file_paths back to Path objects
-        raw["file_paths"] = [
-            Path(p) for p in raw.get("file_paths", []) if Path(p).is_file()
-        ]
+        raw["file_paths"] = [Path(p) for p in raw.get("file_paths", []) if Path(p).is_file()]
         log.debug(
             "SessionManager.load_session: found %d valid file path(s).",
             len(raw["file_paths"]),
@@ -361,4 +358,3 @@ class SessionManager(QObject):
         if "performance_settings" in session:
             self.performance_settings = session["performance_settings"]
         log.debug("SessionManager.apply_session: global and performance settings restored.")
-

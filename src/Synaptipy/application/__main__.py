@@ -107,12 +107,10 @@ class CrashReportDialog(QtWidgets.QDialog):
             synaptipy_version = "unknown"
 
         os_info = platform.platform(aliased=True, terse=False)
-        python_info = (
-            f"{sys.version} "
-            f"[{platform.python_implementation()} {platform.python_version()}]"
-        )
+        python_info = f"{sys.version} " f"[{platform.python_implementation()} {platform.python_version()}]"
         try:
             import PySide6
+
             pyside_version = PySide6.__version__
         except Exception:
             pyside_version = "unknown"
@@ -122,8 +120,8 @@ class CrashReportDialog(QtWidgets.QDialog):
             "",
             "## Environment",
             "",
-            f"| Property | Value |",
-            f"|---|---|",
+            "| Property | Value |",
+            "|---|---|",
             f"| **Synaptipy** | `{synaptipy_version}` |",
             f"| **Python** | `{python_info}` |",
             f"| **PySide6** | `{pyside_version}` |",
@@ -212,7 +210,6 @@ def _install_excepthook() -> None:
             sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _excepthook
-
 
 
 def run_gui():  # noqa: C901
