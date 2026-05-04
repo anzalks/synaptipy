@@ -120,10 +120,12 @@ jobs:
 
     - name: Push coverage badge data
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      continue-on-error: true   # badge push is informational; must not block the build
       env:
         GITHUB_TOKEN: ${{ github.token }}
+        QT_QPA_PLATFORM: offscreen
       run: |
-        python -m pytest tests/core/ -q --cov=src/Synaptipy/core --cov-report=term --cov-report=xml
+        xvfb-run python -m pytest -p faulthandler tests/core/ -q --cov=src/Synaptipy/core --cov-report=term --cov-report=xml --cov-fail-under=0
         CORE_COVERAGE=$(python -m coverage report --format=total 2>/dev/null || echo "0")
         if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="brightgreen"
         elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="green"
@@ -208,7 +210,9 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short
+        # --no-cov overrides pyproject.toml addopts so the coverage threshold
+        # does not apply to this subset-only run (would be ~80 % without infra tests).
+        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short --no-cov
 
   # ---------------------------------------------------------------------------
   # Security: Bandit static analysis for HIGH-severity vulnerabilities.
@@ -302,4 +306,6 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short
+        # --no-cov overrides pyproject.toml addopts so the coverage threshold
+        # does not apply to this subset-only run (would be ~80 % without infra tests).
+        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short --no-cov
