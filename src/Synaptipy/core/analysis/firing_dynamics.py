@@ -203,9 +203,29 @@ def calculate_fi_curve(  # noqa: C901
             "max": 1000.0,
             "decimals": 2,
         },
+        {
+            "name": "analysis_start_s",
+            "label": "Analysis Start (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Clip each sweep to this start time before counting spikes.",
+        },
+        {
+            "name": "analysis_end_s",
+            "label": "Analysis End (s):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Clip each sweep to this end time before counting spikes.",
+        },
     ],
 )
-def run_excitability_analysis_wrapper(
+def run_excitability_analysis_wrapper(  # noqa: C901
     data_list: List[np.ndarray], time_list: List[np.ndarray], sampling_rate: float, **kwargs
 ) -> Dict[str, Any]:
     """Wrapper for Excitability Analysis (F-I Curve)."""
@@ -214,6 +234,8 @@ def run_excitability_analysis_wrapper(
         start_current = kwargs.get("start_current", 0.0)
         step_current = kwargs.get("step_current", 10.0)
         refractory_ms = kwargs.get("refractory_ms", 2.0)
+        analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
+        analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
 
         if isinstance(data_list, np.ndarray):
             if data_list.ndim == 1:
@@ -228,6 +250,17 @@ def run_excitability_analysis_wrapper(
 
         if isinstance(time_list, np.ndarray):
             time_list = [time_list]
+
+        # Clip each sweep to the analysis window when a valid window is set.
+        if analysis_end_s > analysis_start_s:
+            clipped_data: List[np.ndarray] = []
+            clipped_time: List[np.ndarray] = []
+            for d, t in zip(data_list, time_list):
+                mask = (t >= analysis_start_s) & (t <= analysis_end_s)
+                clipped_data.append(d[mask] if mask.any() else d)
+                clipped_time.append(t[mask] if mask.any() else t)
+            data_list = clipped_data
+            time_list = clipped_time
 
         num_sweeps = len(data_list)
         current_steps = [start_current + i * step_current for i in range(num_sweeps)]
@@ -439,6 +472,26 @@ def analyze_spikes_and_bursts(
             "tooltip": "Spikes are in a burst if ISI < this fraction of the train mean ISI.",
             "visible_when": {"param": "dynamic_burst", "value": True},
         },
+        {
+            "name": "analysis_start_s",
+            "label": "Analysis Start (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Clip the trace to this start time before detecting spikes.",
+        },
+        {
+            "name": "analysis_end_s",
+            "label": "Analysis End (s):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Clip the trace to this end time before detecting spikes.",
+        },
     ],
     plots=[{"type": "brackets", "data": "bursts", "color": "r"}],
 )
@@ -449,6 +502,15 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     max_isi_end = kwargs.get("max_isi_end", 0.1)
     dynamic_burst = kwargs.get("dynamic_burst", False)
     burst_isi_fraction = float(kwargs.get("burst_isi_fraction", 0.3))
+    analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
+    analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
+
+    # Clip to analysis window when a valid window is specified.
+    if analysis_end_s > analysis_start_s:
+        mask = (time >= analysis_start_s) & (time <= analysis_end_s)
+        if mask.any():
+            data = data[mask]
+            time = time[mask]
 
     result = analyze_spikes_and_bursts(
         data=data,
@@ -594,7 +656,27 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             "max": 50.0,
             "step": 1.0,
             "tooltip": "Threshold to detect action potentials. Lower this for blunted or dendritic spikes.",
-        }
+        },
+        {
+            "name": "analysis_start_s",
+            "label": "Analysis Start (s):",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Clip the trace to this start time before detecting spikes.",
+        },
+        {
+            "name": "analysis_end_s",
+            "label": "Analysis End (s):",
+            "type": "float",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Clip the trace to this end time before detecting spikes.",
+        },
     ],
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
@@ -608,13 +690,24 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
         },
     ],
 )
-def run_train_dynamics_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
+def run_train_dynamics_wrapper(  # noqa: C901
+    data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
+) -> Dict[str, Any]:
     """Wrapper for Spike Train Dynamics."""
     from Synaptipy.core.analysis.single_spike import calculate_spike_features
 
     ap_threshold = kwargs.get("spike_threshold", 0.0)
     ap_times = kwargs.get("action_potential_times", None)
+    analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
+    analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
     spike_indices = None
+
+    # Clip to analysis window when a valid window is specified.
+    if analysis_end_s > analysis_start_s:
+        mask = (time >= analysis_start_s) & (time <= analysis_end_s)
+        if mask.any():
+            data = data[mask]
+            time = time[mask]
 
     if ap_times is None:
         refractory_samples = max(1, int(0.002 * sampling_rate))

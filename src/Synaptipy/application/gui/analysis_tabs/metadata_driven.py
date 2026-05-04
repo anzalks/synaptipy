@@ -144,7 +144,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         main_layout.addWidget(splitter)
 
         # --- Left Control Panel (wrapped in scroll area for small screens) ---
-        scroll_area = QtWidgets.QScrollArea()
+        self._left_scroll_area = QtWidgets.QScrollArea()
+        scroll_area = self._left_scroll_area
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setMinimumWidth(250)
@@ -168,6 +169,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # Parameters Group
         params_group = QtWidgets.QGroupBox("Parameters")
+        self._params_group = params_group
         # Use a VBoxLayout for the group to stack permanent and generated layouts
         params_group_layout = QtWidgets.QVBoxLayout(params_group)
 
@@ -385,6 +387,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if self._artifact_curve_item:
             self._artifact_curve_item.setData([], [])
             self._artifact_curve_item.setVisible(False)
+
+        # Scroll the left panel so the Parameters group is visible.
+        QtCore.QTimer.singleShot(50, self._scroll_to_params)
+
+    def _scroll_to_params(self) -> None:
+        """Scroll the left control panel to bring the Parameters group into view."""
+        if hasattr(self, "_left_scroll_area") and hasattr(self, "_params_group"):
+            self._left_scroll_area.ensureWidgetVisible(self._params_group)
 
     def _setup_custom_plot_items(self):
         """

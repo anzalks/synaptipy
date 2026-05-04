@@ -253,11 +253,7 @@ the fastest way to see what the plugin system can do before writing your own.
 | `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for optogenetically evoked spikes; requires a secondary digital/TTL channel. |
 | `examples/plugins/ap_repolarization.py` | **Max Repolarization Rate** | Steepest falling dV/dt of the first action potential in a window (V/s), a proxy for voltage-gated potassium-channel dynamics. |
 
-![Synaptic Charge (AUC) plugin tab](screenshots/analyser_synaptic_charge_auc.png)
-
-![Max Repolarization Rate plugin tab](screenshots/analyser_max_repolarization_rate.png)
-
-![Opto Latency Jitter plugin tab](screenshots/analyser_opto_latency_jitter.png)
+![Analyser tab overview](screenshots/analyser_tab.png)
 
 To customise an example, copy it to `~/.synaptipy/plugins/` and edit your copy.
 Synaptipy always prefers the user copy over the bundled file.
@@ -493,7 +489,7 @@ passive membrane characterisation through synaptic and optogenetic studies.
 
 ![Synaptic Events tab](screenshots/analyser_synaptic_events.png)
 
-![Optogenetics tab](screenshots/analyser_optogenetics.png)
+![Evoked Responses tab](screenshots/analyser_evoked_responses.png)
 
 ---
 
@@ -662,7 +658,7 @@ Same interactive markers / threshold line / artifact overlay.
 
 ### 4.5 Event Detection - Baseline Peak / Kinetics
 
-![Event Detection - Baseline Peak interface](screenshots/analyser_synaptic_events_baseline__peak__kinetics.png)
+![Event Detection - Baseline Peak interface](screenshots/analyser_synaptic_events_baseline_peak_kinetics.png)
 
 **Registry name**: `event_detection_baseline_peak` | **Tab label**: *Event (Baseline Peak)*
 
@@ -912,7 +908,7 @@ Popup F-I scatter with regression line and slope annotation.
 
 ### 4.12 Optogenetic Synchronization
 
-![Optogenetics interface](screenshots/analyser_optogenetics_optogenetic_sync.png)
+![Evoked Synchronization interface](screenshots/analyser_evoked_responses_evoked_sync.png)
 
 **Registry name**: `optogenetic_sync` | **Tab label**: *Optogenetic Synchronization*
 **Requires secondary TTL channel** (dropdown to select the optical stimulus channel).
