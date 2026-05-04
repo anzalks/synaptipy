@@ -60,6 +60,7 @@ _WINDOW_W = 1280
 _WINDOW_H = 800
 
 # Paths to example recordings bundled with the repository.
+_ABF19 = _EXAMPLES_DATA / "2023_04_11_0019.abf"  # current-clamp, -20 pA hyperpolarising step
 _ABF21 = _EXAMPLES_DATA / "2023_04_11_0021.abf"  # current-clamp, action potentials
 _ABF22 = _EXAMPLES_DATA / "2023_04_11_0022.abf"  # multichannel, optogenetics
 _WCP03 = _EXAMPLES_DATA / "240326_003.wcp"  # voltage-clamp, intrinsic properties
@@ -397,24 +398,41 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     _grab(window, output_dir / "analyser_intrinsic_properties_tau_time_constant.png")
     captured.append("analyser_intrinsic_properties_tau_time_constant.png")
 
-    # ---- Capacitance ----
-    _set_method(tab, "Capacitance")
-    _run_analysis(tab)
-    _grab(window, output_dir / "analyser_intrinsic_properties_capacitance.png")
-    captured.append("analyser_intrinsic_properties_capacitance.png")
-
-    # ---- I-V Curve (produces a popup scatter plot) ----
-    _set_method(tab, "I-V Curve")
-    _run_analysis(tab)
-    _grab(window, output_dir / "analyser_intrinsic_properties_i-v_curve.png")
-    captured.append("analyser_intrinsic_properties_i-v_curve.png")
-    captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_i-v_curve", output_dir))
-
     # ---- Sag Ratio (Ih) ----
     _set_method(tab, "Sag Ratio (Ih)")
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png")
     captured.append("analyser_intrinsic_properties_sag_ratio_ih.png")
+
+    # ---- Capacitance (ABF19: CC, -20 pA step onset at 215 ms) ----
+    if _ABF19.exists():
+        _set_analysis_source(sm, _ABF19)
+        tab = _activate_sub_tab(window, analyser, "Intrinsic Properties")
+        if tab is not None:
+            _set_method(tab, "Capacitance")
+            _set_param(tab, "mode", "Current-Clamp")
+            _set_param(tab, "current_amplitude_pa", -20.0)
+            _set_param(tab, "baseline_start_s", 0.0)
+            _set_param(tab, "baseline_end_s", 0.2)
+            _set_param(tab, "response_start_s", 0.215)
+            _set_param(tab, "response_end_s", 0.55)
+            _run_analysis(tab)
+            _grab(window, output_dir / "analyser_intrinsic_properties_capacitance.png")
+            captured.append("analyser_intrinsic_properties_capacitance.png")
+
+    # ---- I-V Curve (ABF21: CC, current steps, current injection 75-325 ms) ----
+    _set_analysis_source(sm, _ABF21)
+    tab = _activate_sub_tab(window, analyser, "Intrinsic Properties")
+    if tab is not None:
+        _set_method(tab, "I-V Curve")
+        _set_param(tab, "baseline_start", 0.0)
+        _set_param(tab, "baseline_end", 0.075)
+        _set_param(tab, "response_start", 0.075)
+        _set_param(tab, "response_end", 0.325)
+        _run_analysis(tab)
+        _grab(window, output_dir / "analyser_intrinsic_properties_i-v_curve.png")
+        captured.append("analyser_intrinsic_properties_i-v_curve.png")
+        captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_i-v_curve", output_dir))
 
     return captured
 
@@ -538,14 +556,14 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
 
     # ---- Threshold Based ----
     _set_method(tab, "Threshold Based")
-    _set_param(tab, "polarity", "positive")
+    _set_param(tab, "direction", "positive")
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_synaptic_events_threshold_based.png")
     captured.append("analyser_synaptic_events_threshold_based.png")
 
     # ---- Deconvolution ----
     _set_method(tab, "Deconvolution (Custom)")
-    _set_param(tab, "polarity", "positive")
+    _set_param(tab, "direction", "positive")
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_synaptic_events_deconvolution_custom.png")
     captured.append("analyser_synaptic_events_deconvolution_custom.png")
@@ -597,9 +615,19 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
 
     # ---- Paired-Pulse Ratio ----
     _set_method(tab, "Paired-Pulse Ratio")
+    _set_param(tab, "polarity", "positive")
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_evoked_responses_paired-pulse_ratio.png")
     captured.append("analyser_evoked_responses_paired-pulse_ratio.png")
+
+    # ---- Stimulus Train (STP) ----
+    _set_method(tab, "Stimulus Train (STP)")
+    _set_param(tab, "polarity", "positive")
+    _set_param(tab, "use_ttl", True)
+    _run_analysis(tab)
+    _grab(window, output_dir / "analyser_evoked_responses_stimulus_train_stp.png")
+    captured.append("analyser_evoked_responses_stimulus_train_stp.png")
+    captured.extend(_grab_popups(tab, "analyser_evoked_responses_stimulus_train_stp", output_dir))
 
     return captured
 

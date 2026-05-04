@@ -205,6 +205,47 @@ def calculate_optogenetic_sync(
 
 
 # ---------------------------------------------------------------------------
+# Shared scatter-marker helper
+# ---------------------------------------------------------------------------
+
+
+def _peak_pos_s(
+    data: np.ndarray,
+    time: np.ndarray,
+    onset_s: float,
+    polarity: str,
+    blank_s: float,
+    win_s: float,
+) -> Tuple[float, float]:
+    """Return ``(peak_time, peak_raw_value)`` for scatter-plot overlays.
+
+    Searches a post-stimulus window (after artifact blanking) for the extremum
+    matching *polarity* and returns its time and raw signal value.  On failure
+    (e.g. window out of range) falls back to the onset time and the signal
+    value at that sample.
+
+    Args:
+        data: 1-D signal trace.
+        time: 1-D time vector (same length as *data*).
+        onset_s: Stimulus onset time in seconds.
+        polarity: ``"negative"`` or ``"positive"``.
+        blank_s: Artifact-blanking duration in seconds.
+        win_s: Response-search window duration in seconds.
+
+    Returns:
+        Tuple of ``(peak_time_s, peak_raw_value)``.
+    """
+    i0 = int(np.searchsorted(time, onset_s + blank_s))
+    i1 = min(int(np.searchsorted(time, onset_s + win_s)) + 1, len(data))
+    if i1 <= i0:
+        fallback = min(int(np.searchsorted(time, onset_s)), len(data) - 1)
+        return onset_s, float(data[fallback])
+    seg = data[i0:i1]
+    off = int(np.argmin(seg) if polarity == "negative" else np.argmax(seg))
+    return float(time[i0 + off]), float(seg[off])
+
+
+# ---------------------------------------------------------------------------
 # Paired-Pulse Ratio with Residual Subtraction
 # ---------------------------------------------------------------------------
 
@@ -769,6 +810,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "width": 2,
             "opacity": 85,
         },
+        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d", "color": "#ff6600"},
     ],
     ui_params=[
         {
@@ -914,6 +956,12 @@ def run_ppr_wrapper(
         artifact_blanking_ms=artifact_blanking_ms,
     )
 
+    # Compute peak positions for scatter overlays.
+    blank_s = artifact_blanking_ms / 1000.0
+    win_s = response_window_ms / 1000.0
+    r1_peak_t, r1_peak_v = _peak_pos_s(data, time, stim1_onset_s, polarity, blank_s, win_s)
+    r2_peak_t, r2_peak_v = _peak_pos_s(data, time, stim2_onset_s, polarity, blank_s, win_s)
+
     return {
         "module_used": "evoked_responses",
         "metrics": {
@@ -931,6 +979,8 @@ def run_ppr_wrapper(
             "_baseline_end_s": stim1_onset_s,
             "_ppr_fit_times": result.get("_ppr_fit_times"),
             "_ppr_fit_values": result.get("_ppr_fit_values"),
+            "_peak_times": [r1_peak_t, r2_peak_t],
+            "_peak_amps": [r1_peak_v, r2_peak_v],
         },
     }
 
@@ -1000,9 +1050,14 @@ def calculate_stimulus_train_stp(  # noqa: C901
         return float(np.max(seg) - baseline)
 
     amplitudes: List[float] = []
+    peak_times: List[float] = []
+    peak_values: List[float] = []
     for onset in stim_onsets:
         bl = _baseline(onset)
         amplitudes.append(_amplitude(onset, bl))
+        pt, pv = _peak_pos_s(data, time, float(onset), polarity, blank_s, win_s)
+        peak_times.append(pt)
+        peak_values.append(pv)
 
     n = len(amplitudes)
     pulse_numbers = list(range(1, n + 1))
@@ -1026,6 +1081,8 @@ def calculate_stimulus_train_stp(  # noqa: C901
         "amplitudes_norm": amplitudes_norm,
         "pulse_numbers": pulse_numbers,
         "_stim_onsets": stim_onsets.tolist(),
+        "_peak_times": peak_times,
+        "_peak_amps": peak_values,
     }
 
 
@@ -1128,6 +1185,7 @@ def calculate_stimulus_train_stp(  # noqa: C901
     plots=[
         {"name": "Trace", "type": "trace"},
         {"type": "vlines", "data": "_stim_onsets"},
+        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d", "color": "#ff6600"},
         {
             "type": "popup_xy",
             "title": "STP Profile",
