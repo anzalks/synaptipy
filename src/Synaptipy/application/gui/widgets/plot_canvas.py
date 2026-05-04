@@ -93,9 +93,14 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 except Exception:
                     pass
 
-        # Inject custom ViewBox: left=pan, right=rectangle-zoom
+        # Inject custom ViewBox: left=pan, right=rectangle-zoom.
+        # Propagate enableMenu so that the ViewBox itself does not create
+        # ViewBoxMenu when running offscreen (enableMenu=False was set above).
+        # Without this, pg.ViewBox.__init__ still calls initMenu() inside
+        # SynaptipyViewBox() even though enableMenu=False is in kwargs, because
+        # the ViewBox is constructed here before addPlot() sees the kwarg.
         if "viewBox" not in kwargs:
-            kwargs["viewBox"] = SynaptipyViewBox()
+            kwargs["viewBox"] = SynaptipyViewBox(enableMenu=kwargs.get("enableMenu", True))
 
         # Add to layout
         plot_item = self.widget.addPlot(row=row, col=col, **kwargs)

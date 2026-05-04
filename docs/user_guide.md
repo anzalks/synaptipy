@@ -166,7 +166,10 @@ For the full list of Neo-supported formats, see the
 1. Click "Open File..." in the menu or use the shortcut (Ctrl+O or Cmd+O)
 2. Navigate to your data file and select it
 3. The file will open in the Explorer tab
-4. If other files with the same extension exist in the folder, they will be available for navigation
+4. If other files with the same extension exist in the folder, they will be available
+   for navigation with **Prev / Next File** - this applies whether you opened one
+   file or many, and whether you used the menu, drag-and-drop, or
+   **Help > Download Demo Data**
 
 ## Using the Explorer Tab
 
@@ -205,6 +208,10 @@ For the full list of Neo-supported formats, see the
   average is plotted against the time vector of the first trial added to the
   set.
 - **Channel Selection**: Choose which channel to view from the dropdown
+- **Channel Visibility**: Use the per-channel show/hide checkboxes to hide channels
+  you are not interested in. When a channel is hidden its plot row collapses
+  entirely - no blank white space remains in the canvas. Re-checking the box
+  restores the row immediately.
 - **Downsampling**: Enable/disable automatic downsampling for large datasets
 
 ## Using the Analyser Tab

@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.1b8] - 2026-05-01
+## [0.1.2b2] - 2026-05-04
+
+### Fixed
+
+- **Explorer tab - Creeping Zoom**: View-state restoration blocks now use
+  `vb.blockLink(True)` + `vb.disableAutoRange()` + `vb.blockLink(False)` to
+  prevent cumulative zoom drift when cycling between files.
+- **Explorer tab - File Cycling State**: Single-file drag-and-drop now scans
+  sibling files of the same extension via `_scan_siblings()` in
+  `FileIOController`, matching the behaviour of multi-file drops and keyboard
+  cycling. Demo file loading in `MainWindow` also correctly populates the
+  sibling list.
+- **Explorer tab - Channel Checkbox White Void**: Hiding a channel via its
+  checkbox now collapses the grid row (via `setRowMaximumHeight(row, 0)` in
+  the new `set_channel_visible()` method on `PlotCanvas`) instead of just
+  calling `plot.hide()`, eliminating the blank white space left behind.
+- **CI - minimum-viable and bleeding-edge coverage**: Added `--no-cov` to
+  partial-suite pytest runs so that `pyproject.toml` `addopts`
+  `--cov-fail-under=90` is not applied when only `tests/core/ tests/gui/`
+  are exercised.
+- **CI - badge push SIGABRT**: The "Push coverage badge data" step now uses
+  `xvfb-run`, `QT_QPA_PLATFORM: offscreen`, `--cov-fail-under=0`, and
+  `continue-on-error: true` to prevent the Linux headless runner from
+  crashing with exit code 134.
+
+### Changed
+
+- Bumped version to `0.1.2b2` across `pyproject.toml`, `__init__.py`,
+  `CITATION.cff`, `docs/conf.py`, `installer/windows_setup.iss`, and
+  `synaptipy.spec`.
+
+
 
 ### Fixed
 
