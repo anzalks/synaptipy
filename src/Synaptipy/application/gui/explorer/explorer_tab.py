@@ -664,13 +664,29 @@ class ExplorerTab(QtWidgets.QWidget):
         restored_view = False
         if self._pending_view_state:
             log.debug("Restoring view state...")
+            viewboxes = []
             try:
                 self._updating_viewranges = True
+                # Block X-link propagation on all ViewBoxes before setting any
+                # range.  pyqtgraph's linkedViewChanged recalculates linked-view
+                # X ranges from screen-geometry pixel offsets which can expand
+                # the range slightly on every cycle (the creeping-zoom bug).
+                for cid, ranges in self._pending_view_state.items():
+                    if cid in self.plot_canvas.channel_plots:
+                        plot = self.plot_canvas.channel_plots[cid]
+                        if plot and plot.isVisible():
+                            vb = plot.getViewBox()
+                            if vb:
+                                vb.blockLink(True)
+                                viewboxes.append(vb)
                 for cid, ranges in self._pending_view_state.items():
                     # Only restore if channel exists in new recording
                     if cid in self.plot_canvas.channel_plots:
                         plot = self.plot_canvas.channel_plots[cid]
                         if plot and plot.isVisible():
+                            vb = plot.getViewBox()
+                            if vb:
+                                vb.disableAutoRange()
                             # ranges = ((xmin, xmax), (ymin, ymax))
                             plot.setXRange(ranges[0][0], ranges[0][1], padding=0)
                             plot.setYRange(ranges[1][0], ranges[1][1], padding=0)
@@ -680,6 +696,8 @@ class ExplorerTab(QtWidgets.QWidget):
             except Exception as e:
                 log.warning(f"Failed to restore view state: {e}")
             finally:
+                for vb in viewboxes:
+                    vb.blockLink(False)
                 self._updating_viewranges = False
 
         if not restored_view:
@@ -1136,14 +1154,30 @@ class ExplorerTab(QtWidgets.QWidget):
             # Restore View State — guard against XLink cascade on multi-channel.
             # Skip when 'fresh' to let auto-range show all data.
             if view_state and not fresh:
+                _vboxes = []
                 self._updating_viewranges = True
                 try:
+                    # Block X-link propagation before touching any range to
+                    # prevent linkedViewChanged from recalculating ranges from
+                    # pixel offsets (creeping-zoom fix).
                     for cid, state in view_state.items():
                         plot = self.plot_canvas.get_plot(cid)
                         if plot and plot.isVisible():
+                            vb = plot.getViewBox()
+                            if vb:
+                                vb.blockLink(True)
+                                _vboxes.append(vb)
+                    for cid, state in view_state.items():
+                        plot = self.plot_canvas.get_plot(cid)
+                        if plot and plot.isVisible():
+                            vb = plot.getViewBox()
+                            if vb:
+                                vb.disableAutoRange()
                             plot.setXRange(state[0][0], state[0][1], padding=0)
                             plot.setYRange(state[1][0], state[1][1], padding=0)
                 finally:
+                    for vb in _vboxes:
+                        vb.blockLink(False)
                     self._updating_viewranges = False
 
             # Log diagnostic summary (visible at WARNING level in terminal)
@@ -2204,12 +2238,11 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_all_ui_state()
 
     def _on_channel_visibility_changed(self, chan_id, visible):
-        plot = self.plot_canvas.get_plot(chan_id)
-        if plot:
-            if visible:
-                plot.show()
-            else:
-                plot.hide()
+        # Use the canvas helper which also collapses/expands the grid row so
+        # that hidden channels do not leave a blank white space in the layout.
+        if self._is_rebuilding:
+            return
+        self.plot_canvas.set_channel_visible(chan_id, visible)
         self._update_plot()
 
     def _auto_select_trials(self):
