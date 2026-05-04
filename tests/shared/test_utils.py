@@ -50,3 +50,8 @@ class TestParseTrialSelectionString:
     def test_large_range_capped(self):
         result = parse_trial_selection_string("0-999999", max_trials=10)
         assert len(result) == 10
+
+    def test_consecutive_commas_skip_empty_part(self):
+        """Line 27: empty part after split (e.g. '0,,2') → continue."""
+        result = parse_trial_selection_string("0,,2")
+        assert result == {0, 2}
