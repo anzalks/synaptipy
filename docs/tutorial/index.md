@@ -76,17 +76,23 @@ electrophysiology data files. It supports all formats handled by the Neo library
 - **Manual Trial Averaging** (Cycle mode) - Add Current Trial / Clear Average /
   Plot Selected Average.
 - **Trial Selection** - Trial Gap (skip N) and Start Trial index for sub-sampling.
-- **Channel Visibility** - Per-channel show/hide checkboxes.
+- **Channel Visibility** - Per-channel show/hide checkboxes. When a channel is
+  hidden its plot row collapses completely so no blank space is left in the canvas.
+  Re-checking the box restores the row to its normal height.
 - **Live Spike Detection** - Real-time detection with configurable threshold
-  (default −20 mV) and refractory period (default 2 ms). Spikes shown as red dots.
+  (default -20 mV) and refractory period (default 2 ms). Spikes shown as red dots.
 
 ### 1.4 Toolbar
 
 - **Prev / Next File** - Navigate through all files in the directory.
+  When a single file is opened (via drag-and-drop or **Help > Download Demo Data**)
+  Synaptipy automatically scans the parent folder for other files with the same
+  extension, so **Prev / Next File** works immediately without a second drop.
 - **Save Plot** - Export the current view to PNG or PDF.
 - **Reset View** - Restore default zoom and position.
 - **Lock Zoom** - Preserve the viewport when switching files (useful for cross-file
-  comparison of the same time window).
+  comparison of the same time window). The viewport is restored precisely to the
+  saved ranges; cumulative zoom drift across file cycles is eliminated.
 - **X Zoom Slider** - Fine horizontal zoom control.
 - **Prev / Next Trial** (Cycle mode) - Navigate individual sweeps.
 

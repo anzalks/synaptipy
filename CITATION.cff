@@ -18,8 +18,8 @@ authors:
     email: "anzal.ks@gmail.com"
     orcid: "https://orcid.org/0009-0006-9932-7944"
     affiliation: "Institute Neurosciences Cellulaires Et Intégratives (INCI), Centre National de la Recherche Scientifique (CNRS) / University of Strasbourg, Strasbourg, France"
-version: "0.1.2b1"
-date-released: "2026-05-01"
+version: "0.1.2b2"
+date-released: "2026-05-04"
 license: "AGPL-3.0-or-later"
 repository-code: "https://github.com/anzalks/synaptipy"
 keywords:
