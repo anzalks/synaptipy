@@ -5,8 +5,9 @@ from pathlib import Path
 # Add the src folder to path so we can import Synaptipy
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
-from PySide6.QtCore import QTimer            # noqa: E402
+
 from Synaptipy.application.gui.main_window import MainWindow  # noqa: E402
 
 DOCS_DIR = Path(__file__).parent.parent / "docs" / "tutorial"
@@ -851,12 +852,7 @@ def run_automation():
             QApplication.processEvents()
             time.sleep(0.5)
             safe_name = (
-                tab_widget.tabText(i)
-                .replace(" ", "_")
-                .replace("/", "-")
-                .replace("(", "")
-                .replace(")", "")
-                .lower()
+                tab_widget.tabText(i).replace(" ", "_").replace("/", "-").replace("(", "").replace(")", "").lower()
             )
             take_screenshot(window, f"analyser_{safe_name}.png")
 

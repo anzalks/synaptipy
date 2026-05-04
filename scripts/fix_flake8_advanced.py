@@ -3,12 +3,12 @@ from collections import defaultdict
 
 
 def fix_errors(report_file):  # noqa: C901
-    with open(report_file, 'r') as f:
+    with open(report_file, "r") as f:
         lines = f.readlines()
 
     errors_by_file = defaultdict(list)
     for line in lines:
-        parts = line.split(':')
+        parts = line.split(":")
         if len(parts) >= 4:
             file_path = parts[0]
             try:
@@ -24,7 +24,7 @@ def fix_errors(report_file):  # noqa: C901
         if not os.path.exists(file_path):
             continue
 
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             file_lines = f.readlines()
 
         # Sort errors descending by line number to avoid index shifting
@@ -40,38 +40,38 @@ def fix_errors(report_file):  # noqa: C901
 
             line_content = file_lines[idx]
 
-            if code == 'W291':  # Trailing whitespace
-                new_line = line_content.rstrip() + '\n'
+            if code == "W291":  # Trailing whitespace
+                new_line = line_content.rstrip() + "\n"
                 if new_line != line_content:
                     file_lines[idx] = new_line
                     modified = True
 
-            elif code == 'W293':  # Blank line contains whitespace
-                if line_content.strip() == '':
-                    file_lines[idx] = '\n'
+            elif code == "W293":  # Blank line contains whitespace
+                if line_content.strip() == "":
+                    file_lines[idx] = "\n"
                     modified = True
 
-            elif code == 'E302':  # Expected 2 blank lines, found 1
+            elif code == "E302":  # Expected 2 blank lines, found 1
                 # Insert a blank line before
-                file_lines.insert(idx, '\n')
+                file_lines.insert(idx, "\n")
                 modified = True
 
-            elif code == 'E305':  # Expected 2 blank lines after class/function
-                file_lines.insert(idx, '\n')
+            elif code == "E305":  # Expected 2 blank lines after class/function
+                file_lines.insert(idx, "\n")
                 modified = True
 
-            elif code == 'E261':  # At least two spaces before inline comment
+            elif code == "E261":  # At least two spaces before inline comment
                 # Find the comment start '#'
-                comment_idx = line_content.rfind('#')
+                comment_idx = line_content.rfind("#")
                 if comment_idx > 0:
                     code_part = line_content[:comment_idx].rstrip()
                     comment_part = line_content[comment_idx:]
                     # Ensure 2 spaces
-                    new_line = code_part + '  ' + comment_part
+                    new_line = code_part + "  " + comment_part
                     file_lines[idx] = new_line
                     modified = True
 
-            elif code == 'W391':  # Blank line at end of file
+            elif code == "W391":  # Blank line at end of file
                 # If it's a blank line at EOF, remove it.
                 # Be careful not to remove the *last* newline if it's needed for valid file?
                 # Actually, Valid text file has one newline at end.
@@ -81,10 +81,10 @@ def fix_errors(report_file):  # noqa: C901
                 # Logic: remove trailing blank lines from end of file list
                 pass  # Handled globally at end of processing for file
 
-            elif code == 'F401':  # Unused import
+            elif code == "F401":  # Unused import
                 # Heuristic: if line is purely an import, remove it.
                 stripped = line_content.strip()
-                if stripped.startswith('import ') or stripped.startswith('from '):
+                if stripped.startswith("import ") or stripped.startswith("from "):
                     # Check if it's multi-line? (Hard)
                     # For now, just comment it out to be safe? Or remove?
                     # User asked to fix logic? No, "Do NOT change logic".
@@ -98,34 +98,34 @@ def fix_errors(report_file):  # noqa: C901
                     # "from x import a, b  # noqa: F401"
                     # But that leaves the warning suppressed but code dirty.
                     # Let's try to remove if it seems simple.
-                    if ',' not in stripped:
+                    if "," not in stripped:
                         # Simple import
                         del file_lines[idx]
                         modified = True
                     else:
                         # Complex import, maybe Append  # noqa: F401
-                        if '# noqa' not in line_content:
-                            file_lines[idx] = line_content.rstrip() + '  # noqa: F401\n'
+                        if "# noqa" not in line_content:
+                            file_lines[idx] = line_content.rstrip() + "  # noqa: F401\n"
                             modified = True
 
         # Global fix for W391 / Trailing newlines
         # Remove all trailing blank lines
-        while file_lines and file_lines[-1].strip() == '':
+        while file_lines and file_lines[-1].strip() == "":
             file_lines.pop()
 
         # Ensure exactly one newline at end
         if file_lines:
-            if not file_lines[-1].endswith('\n'):
-                file_lines[-1] += '\n'
+            if not file_lines[-1].endswith("\n"):
+                file_lines[-1] += "\n"
         else:
             # Empty file
             pass
 
         if modified or True:  # W391 fix might not set modified flag
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.writelines(file_lines)
             print(f"Fixed errors in {file_path}")
 
 
 if __name__ == "__main__":
-    fix_errors('flake8_report.txt')
+    fix_errors("flake8_report.txt")
