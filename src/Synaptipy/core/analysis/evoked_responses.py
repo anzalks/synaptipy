@@ -744,6 +744,12 @@ def run_opto_sync_wrapper(  # noqa: C901
 @AnalysisRegistry.register(
     "paired_pulse_ratio",
     label="Paired-Pulse Ratio",
+    requires_secondary_channel={
+        "param_name": "ttl_data",
+        "label": "TTL / Stimulus Channel:",
+        "tooltip": "Optional TTL channel.  When 'Detect Stim from TTL' is enabled, "
+        "stimulus times are read from this channel instead of the manual spinboxes.",
+    },
     plots=[
         {"name": "Trace", "type": "trace"},
         {"type": "vlines", "data": "_stim_onsets"},
@@ -766,6 +772,26 @@ def run_opto_sync_wrapper(  # noqa: C901
     ],
     ui_params=[
         {
+            "name": "use_ttl",
+            "label": "Detect Stim from TTL:",
+            "type": "bool",
+            "default": False,
+            "tooltip": "When enabled, Stim 1 and Stim 2 onsets are detected automatically "
+            "from the TTL channel.  Select the TTL channel in the secondary-channel "
+            "dropdown above.",
+        },
+        {
+            "name": "ttl_threshold",
+            "label": "TTL Threshold (V):",
+            "type": "float",
+            "default": 2.5,
+            "min": -100.0,
+            "max": 100.0,
+            "decimals": 3,
+            "tooltip": "Binarisation threshold for TTL edge detection.",
+            "visible_when": {"param": "use_ttl", "value": True},
+        },
+        {
             "name": "stim1_onset_s",
             "label": "Stim 1 Onset (s):",
             "type": "float",
@@ -773,6 +799,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
+            "visible_when": {"param": "use_ttl", "value": False},
         },
         {
             "name": "stim2_onset_s",
@@ -782,6 +809,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
+            "visible_when": {"param": "use_ttl", "value": False},
         },
         {
             "name": "polarity",
@@ -845,9 +873,27 @@ def run_ppr_wrapper(
     sampling_rate: float,
     **kwargs,
 ) -> Dict[str, Any]:
-    """Wrapper for Paired-Pulse Ratio analysis with residual decay subtraction."""
+    """Wrapper for Paired-Pulse Ratio analysis with optional TTL-based onset detection."""
+    use_ttl = bool(kwargs.get("use_ttl", False))
+    ttl_threshold = float(kwargs.get("ttl_threshold", 2.5))
     stim1_onset_s = float(kwargs.get("stim1_onset_s", 0.1))
     stim2_onset_s = float(kwargs.get("stim2_onset_s", 0.2))
+
+    # Auto-detect stimulus times from TTL channel when requested.
+    if use_ttl:
+        ttl_data = kwargs.get("ttl_data", None)
+        if ttl_data is not None and len(ttl_data) > 0:
+            onsets, _ = extract_ttl_epochs(ttl_data, time, ttl_threshold)
+            if onsets is not None and len(onsets) >= 2:
+                stim1_onset_s = float(onsets[0])
+                stim2_onset_s = float(onsets[1])
+                log.debug("PPR: TTL-detected stim1=%.4f s, stim2=%.4f s", stim1_onset_s, stim2_onset_s)
+            elif onsets is not None and len(onsets) == 1:
+                stim1_onset_s = float(onsets[0])
+                log.warning("PPR: TTL detected only one onset; stim2 retains manual value %.4f s", stim2_onset_s)
+        else:
+            log.warning("PPR: use_ttl=True but no TTL data provided; using manual onsets.")
+
     polarity = kwargs.get("polarity", "negative")
     response_window_ms = float(kwargs.get("response_window_ms", 20.0))
     baseline_window_ms = float(kwargs.get("baseline_window_ms", 5.0))
@@ -878,6 +924,8 @@ def run_ppr_wrapper(
             "paired_pulse_ratio": result["paired_pulse_ratio"],
             "decay_tau_ms": result["decay_tau_ms"],
             "ppr_error": result["ppr_error"],
+            "stim1_onset_used_s": stim1_onset_s,
+            "stim2_onset_used_s": stim2_onset_s,
             "_stim_onsets": [stim1_onset_s, stim2_onset_s],
             "_baseline_start_s": stim1_onset_s - baseline_window_ms / 1000.0,
             "_baseline_end_s": stim1_onset_s,
@@ -885,6 +933,279 @@ def run_ppr_wrapper(
             "_ppr_fit_values": result.get("_ppr_fit_values"),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Stimulus Train STP
+# ---------------------------------------------------------------------------
+
+
+def calculate_stimulus_train_stp(  # noqa: C901
+    data: np.ndarray,
+    time: np.ndarray,
+    stim_onsets: np.ndarray,
+    polarity: str = "negative",
+    response_window_ms: float = 20.0,
+    baseline_window_ms: float = 5.0,
+    artifact_blanking_ms: float = 1.0,
+) -> Dict[str, Any]:
+    """Compute short-term plasticity (STP) amplitudes for a stimulus train.
+
+    For each stimulus onset the function measures a baseline immediately
+    preceding the stimulus, then finds the peak response in a post-stimulus
+    window (after artifact blanking).  Amplitudes are normalised to R1 to
+    yield the STP profile.
+
+    Args:
+        data: 1-D voltage or current trace.
+        time: 1-D time vector (seconds, same length as data).
+        stim_onsets: Stimulus onset times in seconds, ordered chronologically.
+        polarity: ``"negative"`` for inward/hyperpolarising events,
+            ``"positive"`` for outward/depolarising events.
+        response_window_ms: Duration of the post-stimulus peak-search window
+            in milliseconds.
+        baseline_window_ms: Duration of the pre-stimulus baseline window in
+            milliseconds.
+        artifact_blanking_ms: Data within this interval after each onset are
+            excluded from peak detection.
+
+    Returns:
+        Dictionary with keys ``amplitudes``, ``amplitudes_norm``,
+        ``pulse_numbers``, ``stim_onsets`` and descriptive metric keys.
+    """
+    if data.size < 2 or time.shape != data.shape:
+        return {"stp_error": "Invalid data or time array"}
+
+    blank_s = artifact_blanking_ms / 1000.0
+    win_s = response_window_ms / 1000.0
+    bl_s = baseline_window_ms / 1000.0
+
+    def _idx(t: float) -> int:
+        return int(np.searchsorted(time, t))
+
+    def _baseline(onset: float) -> float:
+        i0 = _idx(max(onset - bl_s, float(time[0])))
+        i1 = max(_idx(onset), i0 + 1)
+        seg = data[i0:i1]
+        return float(np.mean(seg)) if seg.size > 0 else float(data[_idx(onset)])
+
+    def _amplitude(onset: float, baseline: float) -> float:
+        i_start = _idx(onset + blank_s)
+        i_end = min(_idx(onset + win_s) + 1, len(data))
+        if i_end <= i_start:
+            return 0.0
+        seg = data[i_start:i_end]
+        if polarity == "negative":
+            return float(baseline - np.min(seg))
+        return float(np.max(seg) - baseline)
+
+    amplitudes: List[float] = []
+    for onset in stim_onsets:
+        bl = _baseline(onset)
+        amplitudes.append(_amplitude(onset, bl))
+
+    n = len(amplitudes)
+    pulse_numbers = list(range(1, n + 1))
+    r1 = amplitudes[0] if amplitudes else 1.0
+    amplitudes_norm = [a / r1 if r1 != 0.0 else float("nan") for a in amplitudes]
+
+    ratios: Dict[str, Any] = {}
+    for i in range(1, n):
+        ratios[f"R{i + 1}/R1"] = round(amplitudes_norm[i], 4)
+
+    stp_type = "none"
+    if n >= 2:
+        stp_type = "facilitation" if amplitudes[1] > amplitudes[0] else "depression"
+
+    return {
+        "pulse_count": n,
+        "r1_amplitude": round(amplitudes[0], 4) if amplitudes else None,
+        "stp_type": stp_type,
+        **ratios,
+        "amplitudes": [round(a, 4) for a in amplitudes],
+        "amplitudes_norm": amplitudes_norm,
+        "pulse_numbers": pulse_numbers,
+        "_stim_onsets": stim_onsets.tolist(),
+    }
+
+
+@AnalysisRegistry.register(
+    "stimulus_train_stp",
+    label="Stimulus Train (STP)",
+    requires_secondary_channel={
+        "param_name": "ttl_data",
+        "label": "TTL / Stimulus Channel:",
+        "tooltip": "Select the TTL/trigger channel to auto-detect stimulus times.  "
+        "Leave unset to use the manual frequency and start-time parameters.",
+    },
+    ui_params=[
+        {
+            "name": "use_ttl",
+            "label": "Detect Stim from TTL:",
+            "type": "bool",
+            "default": True,
+            "tooltip": "When enabled, stimulus times are detected from the TTL channel.  "
+            "When disabled, times are generated from the frequency and start-time "
+            "parameters below.",
+        },
+        {
+            "name": "ttl_threshold",
+            "label": "TTL Threshold (V):",
+            "type": "float",
+            "default": 2.5,
+            "min": -100.0,
+            "max": 100.0,
+            "decimals": 3,
+            "visible_when": {"param": "use_ttl", "value": True},
+        },
+        {
+            "name": "stim_start_s",
+            "label": "First Stim Onset (s):",
+            "type": "float",
+            "default": 0.1,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "Time of the first stimulus pulse. Used when TTL detection is disabled.",
+            "visible_when": {"param": "use_ttl", "value": False},
+        },
+        {
+            "name": "stim_frequency_hz",
+            "label": "Stim Frequency (Hz):",
+            "type": "float",
+            "default": 10.0,
+            "min": 0.1,
+            "max": 1000.0,
+            "decimals": 1,
+            "tooltip": "Stimulation frequency in Hz. Used when TTL detection is disabled.",
+            "visible_when": {"param": "use_ttl", "value": False},
+        },
+        {
+            "name": "n_pulses",
+            "label": "Number of Pulses:",
+            "type": "int",
+            "default": 5,
+            "min": 2,
+            "max": 100,
+            "tooltip": "Maximum number of stimulus pulses to include.",
+        },
+        {
+            "name": "polarity",
+            "label": "Event Polarity:",
+            "type": "choice",
+            "choices": ["negative", "positive"],
+            "default": "negative",
+        },
+        {
+            "name": "response_window_ms",
+            "label": "Response Window (ms):",
+            "type": "float",
+            "default": 20.0,
+            "min": 1.0,
+            "max": 500.0,
+            "decimals": 1,
+        },
+        {
+            "name": "baseline_window_ms",
+            "label": "Baseline Window (ms):",
+            "type": "float",
+            "default": 5.0,
+            "min": 1.0,
+            "max": 100.0,
+            "decimals": 1,
+        },
+        {
+            "name": "artifact_blanking_ms",
+            "label": "Artifact Blanking (ms):",
+            "type": "float",
+            "default": 1.0,
+            "min": 0.0,
+            "max": 50.0,
+            "decimals": 2,
+            "tooltip": "Data within this window after each stimulus onset are excluded from " "peak detection.",
+        },
+    ],
+    plots=[
+        {"name": "Trace", "type": "trace"},
+        {"type": "vlines", "data": "_stim_onsets"},
+        {
+            "type": "popup_xy",
+            "title": "STP Profile",
+            "x": "pulse_numbers",
+            "y": "amplitudes_norm",
+            "x_label": "Pulse Number",
+            "y_label": "Normalised Amplitude (R_n / R_1)",
+        },
+    ],
+)
+def run_stimulus_train_stp_wrapper(
+    data: np.ndarray,
+    time: np.ndarray,
+    sampling_rate: float,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Wrapper for Stimulus Train STP analysis.
+
+    Stimulus times are either detected from an optional TTL/trigger channel or
+    generated from a user-supplied frequency and start time.  For each pulse the
+    wrapper measures a baseline-subtracted peak amplitude and normalises the
+    series to R1 to produce the STP profile.
+    """
+    use_ttl = bool(kwargs.get("use_ttl", True))
+    ttl_threshold = float(kwargs.get("ttl_threshold", 2.5))
+    stim_start_s = float(kwargs.get("stim_start_s", 0.1))
+    stim_frequency_hz = float(kwargs.get("stim_frequency_hz", 10.0))
+    n_pulses = int(kwargs.get("n_pulses", 5))
+    polarity = str(kwargs.get("polarity", "negative"))
+    response_window_ms = float(kwargs.get("response_window_ms", 20.0))
+    baseline_window_ms = float(kwargs.get("baseline_window_ms", 5.0))
+    artifact_blanking_ms = float(kwargs.get("artifact_blanking_ms", 1.0))
+
+    # --- Determine stimulus onsets ---
+    stim_onsets: Optional[np.ndarray] = None
+
+    if use_ttl:
+        ttl_data = kwargs.get("ttl_data", None)
+        if ttl_data is not None and len(ttl_data) > 0:
+            detected, _ = extract_ttl_epochs(ttl_data, time, ttl_threshold)
+            if detected is not None and len(detected) > 0:
+                stim_onsets = detected[:n_pulses]
+                log.debug("STP: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
+
+    if stim_onsets is None or len(stim_onsets) == 0:
+        # Fall back to manual frequency + start time.
+        if use_ttl:
+            log.warning("STP: TTL detection yielded no onsets; falling back to manual frequency parameters.")
+        if stim_frequency_hz <= 0.0:
+            return {
+                "module_used": "evoked_responses",
+                "metrics": {"stp_error": "Stimulus frequency must be > 0 Hz"},
+            }
+        isi = 1.0 / stim_frequency_hz
+        stim_onsets = np.array([stim_start_s + i * isi for i in range(n_pulses)])
+
+    # Clip to recording duration.
+    stim_onsets = stim_onsets[stim_onsets < float(time[-1])]
+    if len(stim_onsets) == 0:
+        return {
+            "module_used": "evoked_responses",
+            "metrics": {"stp_error": "No stimulus onsets lie within the recording duration"},
+        }
+
+    result = calculate_stimulus_train_stp(
+        data=data,
+        time=time,
+        stim_onsets=stim_onsets,
+        polarity=polarity,
+        response_window_ms=response_window_ms,
+        baseline_window_ms=baseline_window_ms,
+        artifact_blanking_ms=artifact_blanking_ms,
+    )
+
+    if "stp_error" in result:
+        return {"module_used": "evoked_responses", "metrics": result}
+
+    return {"module_used": "evoked_responses", "metrics": result}
 
 
 # ---------------------------------------------------------------------------
@@ -901,6 +1222,7 @@ def run_ppr_wrapper(
     method_selector={
         "Evoked Sync": "optogenetic_sync",
         "Paired-Pulse Ratio": "paired_pulse_ratio",
+        "Stimulus Train (STP)": "stimulus_train_stp",
     },
     ui_params=[],
     plots=[],

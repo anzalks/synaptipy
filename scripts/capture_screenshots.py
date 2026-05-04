@@ -37,6 +37,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
@@ -127,12 +128,36 @@ def _pump(n: int = 5) -> None:
         QApplication.processEvents()
 
 
-def _wait_threads(timeout_ms: int = 10000) -> None:
-    """Block until all QThreadPool workers finish, then drain the event queue."""
-    from PySide6.QtCore import QThreadPool  # noqa: PLC0415
+def _wait_explorer_load(explorer: Any, timeout_s: float = 15.0) -> None:
+    """Poll until the Explorer tab finishes its background file load."""
+    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
-    QThreadPool.globalInstance().waitForDone(timeout_ms)
+    # Brief initial pump to allow the load to start.
+    _pump(3)
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+        if not getattr(explorer, "_is_loading", False):
+            break
+        time.sleep(0.05)
+    # Extra draining to allow deferred paint events to execute.
     _pump(20)
+
+
+def _wait_data_load(tab: Any, timeout_s: float = 15.0) -> None:
+    """Poll until an analysis tab re-enables itself after async data loading."""
+    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
+
+    # Brief initial pump so that any disable() call from _on_analysis_item_selected
+    # has already propagated before we start polling.
+    _pump(3)
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+        if tab.isEnabled():
+            break
+        time.sleep(0.05)
+    _pump(5)
 
 
 def _safe_name(text: str) -> str:
@@ -165,12 +190,18 @@ def _load_explorer(window: Any, path: Path, file_list: List[Path], index: int) -
     """Load *path* into the Explorer tab and wait for the background thread."""
     window.tab_widget.setCurrentIndex(0)
     _pump(3)
-    window.explorer_tab.load_file(path, file_list, index)
-    _wait_threads()
+    window.explorer_tab.load_recording_data(path, file_list, index)
+    _wait_explorer_load(window.explorer_tab)
 
 
 def _set_analysis_source(sm: Any, path: Path) -> None:
-    """Set a single-file analysis source in SessionManager and drain signals."""
+    """Set a single-file analysis source in SessionManager.
+
+    This populates each sub-tab's internal analysis-items list via the
+    ``selected_analysis_items_changed`` signal chain.  The data load itself is
+    deferred and must be awaited via ``_wait_data_load`` after switching to the
+    target sub-tab.
+    """
     sm.selected_analysis_items = [{"path": path, "target_type": "Recording", "trial_index": None}]
     _pump(5)
 
@@ -190,7 +221,12 @@ def _find_sub_tab(analyser: Any, label: str) -> Tuple[int, Optional[Any]]:
 
 
 def _activate_sub_tab(window: Any, analyser: Any, label: str) -> Optional[Any]:
-    """Switch to the Analyser top tab, then to the named sub-tab. Return the tab widget."""
+    """Switch to the Analyser top tab, then to the named sub-tab.
+
+    Switching the sub-tab index triggers ``_on_tab_changed`` which starts an
+    asynchronous data load for the newly visible tab.  This function waits for
+    that load to complete before returning.
+    """
     window.tab_widget.setCurrentIndex(1)
     _pump(3)
     idx, tab = _find_sub_tab(analyser, label)
@@ -198,7 +234,7 @@ def _activate_sub_tab(window: Any, analyser: Any, label: str) -> Optional[Any]:
         print(f"  [warn] sub-tab '{label}' not found", file=sys.stderr)
         return None
     analyser.sub_tab_widget.setCurrentIndex(idx)
-    _wait_threads()
+    _wait_data_load(tab)
     return tab
 
 
@@ -236,6 +272,22 @@ def _set_param(tab: Any, name: str, value: Any) -> None:
     elif hasattr(widget, "setCurrentText"):
         widget.setCurrentText(str(value))
     _pump(2)
+
+
+def _set_trial(tab: Any, trial_index: int) -> None:
+    """Select a single trial by 0-based index in the data-source combobox.
+
+    Has no effect when the combobox is absent or does not contain a matching
+    entry (e.g. when the tab is configured for multi-trial analysis).
+    """
+    cb = getattr(tab, "data_source_combobox", None)
+    if cb is None:
+        return
+    for i in range(cb.count()):
+        if cb.itemData(i) == trial_index:
+            cb.setCurrentIndex(i)
+            _pump(3)
+            return
 
 
 def _run_analysis(tab: Any) -> None:
@@ -387,15 +439,17 @@ def _capture_spike_analysis(window: Any, analyser: Any, sm: Any, output_dir: Pat
     _grab(window, output_dir / "analyser_spike_analysis.png")
     captured.append("analyser_spike_analysis.png")
 
-    # ---- Spike Detection ----
+    # ---- Spike Detection (Trial 18 = index 17 shows clear APs) ----
     _set_method(tab, "Spike Detection")
     _set_param(tab, "threshold", -20.0)
+    _set_trial(tab, 17)
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_spike_analysis_spike_detection.png")
     captured.append("analyser_spike_analysis_spike_detection.png")
 
     # ---- Phase Plane (produces a popup dV/dt vs V plot) ----
     _set_method(tab, "Phase Plane")
+    _set_trial(tab, 17)
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_spike_analysis_phase_plane.png")
     captured.append("analyser_spike_analysis_phase_plane.png")
@@ -427,21 +481,30 @@ def _capture_excitability(window: Any, analyser: Any, sm: Any, output_dir: Path)
     # ---- Excitability (F-I curve popup) ----
     _set_method(tab, "Excitability")
     _set_param(tab, "threshold", -20.0)
+    # Current step is injected from 75 ms to 325 ms in the ABF21 recording.
+    _set_param(tab, "analysis_start_s", 0.075)
+    _set_param(tab, "analysis_end_s", 0.325)
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_excitability_excitability.png")
     captured.append("analyser_excitability_excitability.png")
     captured.extend(_grab_popups(tab, "analyser_excitability_excitability", output_dir))
 
-    # ---- Burst Analysis ----
+    # ---- Burst Analysis (Trial 18 shows a clear burst) ----
     _set_method(tab, "Burst Analysis")
     _set_param(tab, "threshold", -20.0)
+    _set_param(tab, "analysis_start_s", 0.075)
+    _set_param(tab, "analysis_end_s", 0.325)
+    _set_trial(tab, 17)
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_excitability_burst_analysis.png")
     captured.append("analyser_excitability_burst_analysis.png")
 
-    # ---- Spike Train Dynamics (ISI popup) ----
+    # ---- Spike Train Dynamics (ISI popup; Trial 18) ----
     _set_method(tab, "Spike Train Dynamics")
     _set_param(tab, "spike_threshold", -20.0)
+    _set_param(tab, "analysis_start_s", 0.075)
+    _set_param(tab, "analysis_end_s", 0.325)
+    _set_trial(tab, 17)
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_excitability_spike_train_dynamics.png")
     captured.append("analyser_excitability_spike_train_dynamics.png")
@@ -475,12 +538,14 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
 
     # ---- Threshold Based ----
     _set_method(tab, "Threshold Based")
+    _set_param(tab, "polarity", "positive")
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_synaptic_events_threshold_based.png")
     captured.append("analyser_synaptic_events_threshold_based.png")
 
     # ---- Deconvolution ----
     _set_method(tab, "Deconvolution (Custom)")
+    _set_param(tab, "polarity", "positive")
     _run_analysis(tab)
     _grab(window, output_dir / "analyser_synaptic_events_deconvolution_custom.png")
     captured.append("analyser_synaptic_events_deconvolution_custom.png")
