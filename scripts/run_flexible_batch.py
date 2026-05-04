@@ -6,6 +6,7 @@ Demonstration script for the flexible batch analysis system.
 This script shows how to use the registry-based pipeline architecture
 to run multiple analyses on different data scopes.
 """
+
 import sys
 from pathlib import Path
 
@@ -13,11 +14,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
-from Synaptipy.core.analysis.registry import AnalysisRegistry  # noqa: E402
-
 # Import analysis modules to trigger registration
 import Synaptipy.core.analysis.spike_analysis  # noqa: F401, E402
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
+from Synaptipy.core.analysis.registry import AnalysisRegistry  # noqa: E402
 
 
 def main():  # noqa: C901
@@ -41,21 +41,15 @@ def main():  # noqa: C901
     # with different parameters
     pipeline_config = [
         {
-            'analysis': 'spike_detection',
-            'scope': 'all_trials',
-            'params': {
-                'threshold': -15.0,  # mV
-                'refractory_ms': 2.0
-            }
+            "analysis": "spike_detection",
+            "scope": "all_trials",
+            "params": {"threshold": -15.0, "refractory_ms": 2.0},  # mV
         },
         {
-            'analysis': 'spike_detection',
-            'scope': 'average',
-            'params': {
-                'threshold': -10.0,  # mV (different threshold for average)
-                'refractory_ms': 2.0
-            }
-        }
+            "analysis": "spike_detection",
+            "scope": "average",
+            "params": {"threshold": -10.0, "refractory_ms": 2.0},  # mV (different threshold for average)
+        },
     ]
 
     print("\nPipeline configuration:")
@@ -95,11 +89,7 @@ def main():  # noqa: C901
 
     # Run the batch analysis
     try:
-        df = engine.run_batch(
-            files=abf_files,
-            pipeline_config=pipeline_config,
-            progress_callback=progress_callback
-        )
+        df = engine.run_batch(files=abf_files, pipeline_config=pipeline_config, progress_callback=progress_callback)
 
         print("\n" + "=" * 70)
         print("Results Summary")
@@ -114,7 +104,7 @@ def main():  # noqa: C901
             print(df.head(10).to_string())
 
             # Show summary statistics if spike_count column exists
-            if 'spike_count' in df.columns:
+            if "spike_count" in df.columns:
                 print("\n" + "=" * 70)
                 print("Spike Detection Summary Statistics")
                 print("=" * 70)
@@ -123,9 +113,9 @@ def main():  # noqa: C901
                 print(f"Max spikes in single analysis: {df['spike_count'].max()}")
 
                 # Group by scope
-                if 'scope' in df.columns:
+                if "scope" in df.columns:
                     print("\nBy scope:")
-                    scope_summary = df.groupby('scope')['spike_count'].agg(['count', 'sum', 'mean'])
+                    scope_summary = df.groupby("scope")["spike_count"].agg(["count", "sum", "mean"])
                     print(scope_summary)
         else:
             print("\nNo results generated. Check logs for errors.")
@@ -133,6 +123,7 @@ def main():  # noqa: C901
     except Exception as e:
         print(f"\nError during batch analysis: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
