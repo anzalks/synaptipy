@@ -10,7 +10,6 @@ __copyright__ = "Copyright 2024-, Anzal K Shahul"
 __maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -294,164 +293,6 @@ class NWBExporter:
         # ------ Attempt 3: no stimulus available ------
         warning = "WARNING: No stimulus waveform captured during acquisition; " "command waveform is unavailable."
         return None, warning
-
-    # ------------------------------------------------------------------
-    # Provenance helper
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _write_provenance_module(
-        nwbfile: Any,
-        filter_params: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """Append a 'provenance' ProcessingModule to *nwbfile*.
-
-        Records:
-        - ``synaptipy_version`` : package version string at export time.
-        - ``analysis_timestamp``: ISO-8601 UTC timestamp.
-        - ``filter_params``     : JSON-serialised filter settings (or 'none').
-
-        This satisfies FAIR data reproducibility requirements for journal
-        submissions (eNeuro, Frontiers) by making the exact software version
-        and signal-processing parameters recoverable from the NWB file alone.
-        """
-        if not HDMF_AVAILABLE:
-            log.debug("hdmf.common.DynamicTable unavailable; skipping provenance module.")
-            return
-        try:
-            import Synaptipy
-
-            synaptipy_version = getattr(Synaptipy, "__version__", "unknown")
-        except Exception:
-            synaptipy_version = "unknown"
-
-        timestamp_utc = datetime.now(timezone.utc).isoformat()
-        filter_str = json.dumps(filter_params, default=str) if filter_params else "none"
-
-        try:
-            pm_prov = nwbfile.create_processing_module(
-                name="provenance",
-                description=(
-                    "Analysis provenance logged by Synaptipy. "
-                    "Contains software version, timestamp, and filter parameters "
-                    "used to produce the data in this file."
-                ),
-            )
-            prov_table = DynamicTable(
-                name="synaptipy_provenance",
-                description="One-row table recording analysis provenance for reproducibility.",
-            )
-            prov_table.add_column(name="synaptipy_version", description="Synaptipy package version used for export.")
-            prov_table.add_column(name="analysis_timestamp", description="UTC ISO-8601 timestamp of the export.")
-            prov_table.add_column(
-                name="filter_params",
-                description="JSON string of signal-processing filter parameters applied before export.",
-            )
-            prov_table.add_row(
-                synaptipy_version=synaptipy_version,
-                analysis_timestamp=timestamp_utc,
-                filter_params=filter_str,
-            )
-            pm_prov.add(prov_table)
-            log.debug("NWB provenance module written (version=%s, ts=%s).", synaptipy_version, timestamp_utc)
-        except Exception as exc_prov:
-            log.warning("Could not write NWB provenance module (non-fatal): %s", exc_prov)
-
-    # ------------------------------------------------------------------
-    # NDX custom metric helper
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def write_ndx_custom_metric(
-        nwbfile: Any,
-        metric_name: str,
-        sweep_indices: "list[int]",
-        values: "list[float]",
-        unit: str = "seconds",
-        description: str = "",
-        module_name: str = "custom_metrics",
-    ) -> None:
-        """Store a custom per-sweep scalar metric in an NDX-style ProcessingModule.
-
-        Use this for derived features that have no equivalent in the core NWB
-        schema (e.g. OptogeneticLatencyJitter, SagRatio, PPR).  Each unique
-        metric is stored as a separate :class:`~hdmf.common.DynamicTable` inside
-        a shared ``custom_metrics`` ProcessingModule.
-
-        For formal publication to DANDI with strict schema validation you should
-        also create a proper NDX YAML spec and register it via
-        ``hdmf-docutils`` / ``ndx-template``.  For internal lab use and eNeuro /
-        Frontiers data deposition this DynamicTable approach is sufficient.
-
-        Example
-        -------
-        .. code-block:: python
-
-            with NWBHDF5IO("recording.nwb", "r") as io:
-                nwbf = io.read()
-            nwbf_copy = nwbf.copy()  # never mutate the live HDF5 object
-            NWBExporter.write_ndx_custom_metric(
-                nwbf_copy,
-                metric_name="OptogeneticLatencyJitter",
-                sweep_indices=list(range(len(jitter_values))),
-                values=jitter_values,
-                unit="seconds",
-                description="Std-dev of first-spike latency across optogenetic trials.",
-            )
-            with NWBHDF5IO("recording_with_jitter.nwb", "w") as io:
-                io.write(nwbf_copy)
-
-        Round-trip best practice
-        ------------------------
-        1. Read the original file with ``NWBHDF5IO(path, 'r')``.
-        2. Copy with ``nwbfile.copy()`` — this prevents corrupting HDF5 object
-           references that become invalid when new datasets shift file offsets.
-        3. Append new ProcessingModule / DynamicTable to the **copy**.
-        4. Write the copy to a **new** path with ``NWBHDF5IO(new_path, 'w')``.
-
-        .. warning::
-            Never open an existing NWB file with mode ``'a'`` (append) after
-            intracellular sweep tables have been written.  The HDF5 object
-            references inside those tables become dangling when new datasets
-            shift dataset offsets inside the file.
-        """
-        if not HDMF_AVAILABLE:
-            log.warning("hdmf not available; cannot write NDX custom metric '%s'.", metric_name)
-            return
-        if not PYNWB_AVAILABLE:
-            log.warning("pynwb not available; cannot write NDX custom metric '%s'.", metric_name)
-            return
-
-        try:
-            # Reuse existing module or create a new one.
-            if module_name in nwbfile.processing:
-                pm = nwbfile.processing[module_name]
-            else:
-                pm = nwbfile.create_processing_module(
-                    name=module_name,
-                    description=(
-                        "Custom analytical metrics stored as NWB DynamicTables. "
-                        "These extend the standard NWB schema following the NDX pattern."
-                    ),
-                )
-
-            tbl = DynamicTable(
-                name=metric_name,
-                description=description or f"Per-sweep values of custom metric '{metric_name}'.",
-            )
-            tbl.add_column(name="sweep_index", description="Zero-based sweep (trial) index.")
-            tbl.add_column(name="value", description=f"{metric_name} in {unit}.")
-            for idx, val in zip(sweep_indices, values):
-                tbl.add_row(sweep_index=int(idx), value=float(val))
-
-            pm.add(tbl)
-            log.debug("NDX custom metric '%s' written (%d rows).", metric_name, len(values))
-        except Exception as exc_ndx:
-            log.warning("Could not write NDX custom metric '%s': %s", metric_name, exc_ndx)
-
-    # ------------------------------------------------------------------
-    # Main export
-    # ------------------------------------------------------------------
 
     def export(  # noqa: C901
         self,
@@ -849,12 +690,6 @@ class NWBExporter:
                         log.debug("NWB ProcessingModule: added table '%s' (%d rows)", tbl_name, len(times_arr))
                 except Exception as e_pm:
                     log.warning("NWB analysis ProcessingModule failed (non-fatal): %s", e_pm)
-
-            # --- Provenance Module ---
-            # Issue 3b: Always append a provenance table so that the software
-            # version and any filter parameters are recoverable from the file.
-            filter_params = session_metadata.get("filter_params") or None
-            NWBExporter._write_provenance_module(nwbfile, filter_params=filter_params)
 
             # --- Write File ---
             log.debug(f"Writing NWB to: {output_path}")

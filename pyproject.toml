@@ -112,7 +112,7 @@ norecursedirs = [".verify_venv", ".git", "__pycache__", "*.egg-info"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --cov=src/Synaptipy/core --cov-report=term-missing"
+addopts = "-v --tb=short --cov=src/Synaptipy/core --cov-report=term-missing --cov-report=xml --cov-fail-under=95"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
@@ -136,7 +136,7 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 0
+fail_under = 95
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.",

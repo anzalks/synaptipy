@@ -69,9 +69,9 @@ jobs:
         QT_QPA_PLATFORM: offscreen
       run: |
         if [ "$RUNNER_OS" == "Linux" ]; then
-          xvfb-run python -m pytest -p faulthandler --cov=src/Synaptipy/core --cov-report=term-missing --cov-report=xml
+          xvfb-run python -m pytest -p faulthandler --cov=src/Synaptipy/core --cov-report=term-missing --cov-report=xml --cov-fail-under=95
         else
-          python -m pytest -p faulthandler --cov=src/Synaptipy/core --cov-report=term-missing --cov-report=xml
+          python -m pytest -p faulthandler --cov=src/Synaptipy/core --cov-report=term-missing --cov-report=xml --cov-fail-under=95
         fi
 
     # High-DPI scaling check — runs a focused subset of plot tests with

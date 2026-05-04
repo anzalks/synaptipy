@@ -158,7 +158,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # dialog appears.
         QtCore.QTimer.singleShot(200, self._offer_session_restore)
 
-
     def _setup_menu_and_status_bar(self):
         """Creates the main menu bar and status bar, and connects menu actions."""
         log.debug("Setting up menu bar and status bar...")
@@ -1080,9 +1079,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Persist session state to ~/.synaptipy/session.json ---
         try:
-            active_tab = (
-                self.tab_widget.currentIndex() if hasattr(self, "tab_widget") else 0
-            )
+            active_tab = self.tab_widget.currentIndex() if hasattr(self, "tab_widget") else 0
             self.session_manager.save_session(active_tab_index=active_tab)
             log.debug("Session state persisted to disk.")
         except Exception as e:
@@ -1091,8 +1088,7 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug("Accepting close event.")
         event.accept()
 
-
-    def _offer_session_restore(self) -> None:
+    def _offer_session_restore(self) -> None:  # noqa: C901
         """Prompt the user to restore a previous session from ``~/.synaptipy/session.json``.
 
         Called once via a single-shot QTimer after all tabs are fully
@@ -1120,8 +1116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         reply = QtWidgets.QMessageBox.question(
             self,
             "Restore Previous Session?",
-            f"A previous session was found with {len(file_paths)} file(s) loaded.\n"
-            "Would you like to restore it?",
+            f"A previous session was found with {len(file_paths)} file(s) loaded.\n" "Would you like to restore it?",
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.Yes,
         )
@@ -1163,8 +1158,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # --- ADDED: Method to store analysis results ---
     def add_saved_result(self, result_data: Dict[str, Any]):
-
-
         """Appends a dictionary containing analysis results to the central list."""
         if not isinstance(result_data, dict):
             log.error(f"Attempted to add non-dict result: {type(result_data)}")

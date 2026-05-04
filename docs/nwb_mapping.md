@@ -5,21 +5,9 @@ This page documents how Synaptipy maps electrophysiology data to the
 exporting via **File - Export to NWB** or the `NWBExporter` API.
 
 :::{important}
-**Full embedded discrete event analysis via NWB 2.x Processing Modules** —
-spike times, synaptic event times, and amplitudes from every batch-engine
-`_raw_arrays` result are written as `DynamicTable` objects inside a named
-`ProcessingModule`, making discrete events FAIR-compliant first-class
-citizens of the NWB file.
-
-**Automated protocol metadata synthesis for missing stimulus arrays** —
-when a recording's command channel is absent the exporter reconstructs
-stimulus waveforms from ABF epoch metadata (a unique 3-step fallback:
-raw digitised → synthetic from protocol → `stimulus=None` with a warning
-appended to the response series description), ensuring NWB conformance
-even for partial or proprietary acquisitions.
-
-The exporter also writes voltage/current traces, electrode metadata,
-session information, and NWB 2.x icephys sweep grouping tables.
+The NWB exporter writes voltage/current traces, electrode metadata, session
+information, stimulus waveforms (3-step fallback), NWB 2.x icephys sweep
+grouping tables, and embedded analysis results via a `ProcessingModule`.
 See [Container Mapping](#container-mapping) and
 [Limitations and Future Work](#limitations-and-future-work) for details.
 :::
