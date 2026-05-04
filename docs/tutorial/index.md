@@ -43,6 +43,14 @@ including the mathematical methods used in each analysis module.
 
 ![Explorer Tab](screenshots/explorer_tab.png)
 
+*Multi-channel current-clamp view:*
+
+![Explorer Tab - Multichannel](screenshots/explorer_tab_multichannel.png)
+
+*Voltage-clamp view:*
+
+![Explorer Tab - Voltage Clamp](screenshots/explorer_tab_voltageclamp.png)
+
 The Explorer tab is the starting point for loading, browsing, and inspecting
 electrophysiology data files. It supports all formats handled by the Neo library
 (`.abf`, `.smr`, `.smrx`, `.nex`, `.h5`, and many more).
@@ -528,6 +536,8 @@ Computes resting membrane potential and baseline stability.
 
 Green draggable region; solid red h-line at RMP; dashed red h-lines at ±SD.
 
+![Baseline RMP popup](screenshots/analyser_intrinsic_properties_baseline_rmp_popup.png)
+
 ---
 
 ### 4.2 Spike Detection
@@ -806,6 +816,8 @@ Red exponential fit curve overlaid on the raw voltage trace.
 
 Popup I-V scatter + linear regression line with slope annotation and R².
 
+![I-V Curve popup](screenshots/analyser_intrinsic_properties_i-v_curve_popup.png)
+
 ---
 
 ### 4.9 Burst Analysis
@@ -904,6 +916,8 @@ Estimates whole-cell membrane capacitance from step protocols.
 
 Popup F-I scatter with regression line and slope annotation.
 
+![F-I Curve popup](screenshots/analyser_excitability_excitability_popup.png)
+
 ---
 
 ### 4.12 Optogenetic Synchronization
@@ -971,7 +985,98 @@ Event markers on signal trace; cyan dashed vertical lines at TTL onsets.
 
 ---
 
-### 4.13 Phase Plane Analysis
+### 4.13 Paired-Pulse Ratio (PPR)
+
+![Paired-Pulse Ratio interface](screenshots/analyser_evoked_responses_paired-pulse_ratio.png)
+
+**Registry name**: `paired_pulse_ratio` | **Tab label**: *Paired-Pulse Ratio*
+**Optional secondary TTL channel** (when "Detect Stim from TTL" is enabled).
+
+Quantifies short-term synaptic plasticity from two closely spaced stimuli by
+computing R2 / R1 after subtracting the residual exponential decay of R1 from
+beneath the R2 measurement window.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Detect Stim from TTL | bool | Auto-detect stimulus times from TTL channel |
+| TTL Threshold | float (V) | Binarise threshold (visible when TTL mode enabled) |
+| Stim 1 / Stim 2 Onset | float (s) | Manual stimulus times (visible when TTL disabled) |
+| Event Polarity | combo | `negative` / `positive` |
+| Response Window | float (ms) | Post-stimulus peak-search window |
+| Baseline Window | float (ms) | Pre-stimulus baseline window |
+| Decay Fit Start | float (ms) | Offset from stim 1 to begin exponential decay fit |
+| Decay Fit Window | float (ms) | Duration of decay-fit window |
+| Artifact Blanking | float (ms) | Suppress stimulus artefact at peak detection |
+
+#### Methods
+
+1. Measure R1 relative to its local pre-stimulus baseline.
+2. Fit a mono- or bi-exponential decay to the R1 tail.
+3. Extrapolate the decay to estimate the residual level at stim 2.
+4. Measure R2_raw; subtract the residual to obtain R2_corrected.
+5. PPR = R2_corrected / R1.
+
+#### Results
+
+`r1_amplitude`, `r2_amplitude_raw`, `r2_amplitude_corrected`,
+`residual_at_stim2`, `paired_pulse_ratio`, `decay_tau_ms`, `ppr_error`
+
+#### Visualization
+
+Vertical lines at stimulus onsets; cyan baseline shading; orange exponential
+decay fit overlay; diamond scatter markers at R1 and R2 peak positions.
+
+---
+
+### 4.14 Stimulus Train (STP)
+
+![Stimulus Train STP interface](screenshots/analyser_evoked_responses_stimulus_train_stp.png)
+
+**Registry name**: `stimulus_train_stp` | **Tab label**: *Stimulus Train (STP)*
+**Optional secondary TTL channel** for automatic stimulus detection.
+
+Measures short-term plasticity across a train of stimuli by computing
+baseline-subtracted peak amplitudes for each pulse, normalised to R1.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Detect Stim from TTL | bool | Auto-detect pulse times from TTL channel |
+| TTL Threshold | float (V) | Binarise threshold (visible when TTL mode enabled) |
+| First Stim Onset | float (s) | Manual first-pulse time (visible when TTL disabled) |
+| Stim Frequency | float (Hz) | Pulse frequency for manual mode |
+| Number of Pulses | int | How many pulses to analyse |
+| Event Polarity | combo | `negative` / `positive` |
+| Response Window | float (ms) | Post-stimulus peak-search window |
+| Baseline Window | float (ms) | Pre-stimulus baseline window |
+| Artifact Blanking | float (ms) | Suppress stimulus artefact at peak detection |
+
+#### Methods
+
+1. Detect or generate N stimulus onset times.
+2. For each onset: measure pre-stimulus baseline, find peak in response window.
+3. Amplitude_n = peak - baseline (sign-corrected for polarity).
+4. Normalise: R_n/R_1 = Amplitude_n / Amplitude_1.
+5. Classify as facilitation or depression from R2 vs R1.
+
+#### Results
+
+`pulse_count`, `r1_amplitude`, `stp_type`, `R2/R1 … Rn/R1`,
+`amplitudes`, `amplitudes_norm`, `pulse_numbers`
+
+#### Visualization
+
+Vertical lines at each stimulus onset; diamond scatter markers at each peak;
+popup scatter plot of normalised amplitude vs. pulse number.
+
+![STP popup](screenshots/analyser_evoked_responses_stimulus_train_stp_popup.png)
+
+---
+
+### 4.15 Phase Plane Analysis
 
 ![Phase Plane interface](screenshots/analyser_spike_analysis_phase_plane.png)
 
@@ -1007,9 +1112,11 @@ Visualizes AP dynamics in phase space (dV/dt vs. V).
 Popup phase-plane plot: red circles at threshold, green crosses at max dV/dt.
 H-line on main trace at threshold voltage.
 
+![Phase Plane popup](screenshots/analyser_spike_analysis_phase_plane_popup.png)
+
 ---
 
-### 4.14 Spike Train Dynamics
+### 4.16 Spike Train Dynamics
 
 ![Spike Train Dynamics interface](screenshots/analyser_excitability_spike_train_dynamics.png)
 
@@ -1040,9 +1147,11 @@ Quantifies spike train regularity and temporal structure with ISI statistics.
 
 Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
 
+![Spike Train Dynamics popup](screenshots/analyser_excitability_spike_train_dynamics_popup.png)
+
 ---
 
-### 4.15 Sag Ratio (I_h)
+### 4.17 Sag Ratio (I_h)
 
 ![Sag Ratio interface](screenshots/analyser_intrinsic_properties_sag_ratio_ih.png)
 
