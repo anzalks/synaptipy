@@ -354,6 +354,31 @@ class MainWindow(QtWidgets.QMainWindow):
             self._demo_banner.setVisible(True)
             self._demo_banner.raise_()
 
+    @staticmethod
+    def _build_sibling_file_list(path: Path) -> tuple:
+        """Return (file_list, index) by scanning *path*'s parent directory.
+
+        Finds all files with the same extension as *path* so that Next/Prev
+        navigation is available after loading.
+        """
+        ext = path.suffix.lower()
+        siblings: List[Path] = []
+        try:
+            if path.parent.exists():
+                for p in path.parent.iterdir():
+                    if p.is_file() and p.suffix.lower() == ext:
+                        siblings.append(p)
+            siblings.sort()
+        except Exception as scan_err:
+            log.debug("Sibling scan failed: %s", scan_err)
+        file_list = siblings if siblings else [path]
+        try:
+            idx = file_list.index(path)
+        except ValueError:
+            file_list = [path]
+            idx = 0
+        return file_list, idx
+
     def _on_demo_file_ready(self, dest_path: object) -> None:
         """Load the downloaded demo file into the Explorer Tab and hide the banner."""
         path = Path(str(dest_path))
@@ -363,7 +388,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.demo_data_action.setEnabled(False)
             self.demo_data_action.setToolTip("Demo data already downloaded to ~/Documents/SynaptiPy_Demo/")
         try:
-            self.load_request.emit(path, False)
+            # Scan siblings so Next/Prev navigation is available immediately.
+            file_list, current_index = self._build_sibling_file_list(path)
+            self._load_in_explorer(path, file_list, current_index, False)
             self.tab_widget.setCurrentWidget(self.explorer_tab)
             self.status_bar.showMessage(f"Loaded demo file: {path.name}", 5000)
         except Exception as exc:

@@ -131,6 +131,28 @@ class FileIOController:
 
         return selected_filepath, file_list, current_index, lazy_load_enabled
 
+    def _scan_siblings(self, file_path: Path) -> List[Path]:
+        """Return sorted sibling files in the same directory with the same extension.
+
+        Args:
+            file_path: The reference file whose parent directory is scanned.
+
+        Returns:
+            Sorted list of sibling files including *file_path* itself.
+        """
+        siblings: List[Path] = []
+        folder = file_path.parent
+        ext = file_path.suffix.lower()
+        try:
+            if folder.exists() and folder.is_dir():
+                for p in folder.iterdir():
+                    if p.is_file() and p.suffix.lower() == ext:
+                        siblings.append(p)
+            siblings.sort()
+        except Exception as e:
+            log.warning("Could not scan folder for siblings: %s", e)
+        return siblings if siblings else [file_path]
+
     def load_files(self, file_paths: List[Path]) -> Optional[Tuple[Path, List[Path], int, bool]]:
         """
         Processes a list of file paths (e.g. from Drag & Drop).
@@ -156,33 +178,25 @@ class FileIOController:
         # 2. Determine Primary File (First one)
         primary_file = valid_files[0]
 
-        # 3. Context
-        # If multiple files dropped, they form the context list
-        # If single file, we might want to scan parent?
-        # Requirement: "The Ingestion". Pass paths strictly.
-        # Let's assume dropped files *are* the context if multiple.
-        # If single file dropped, usually users expect to see siblings?
-        # Let's stick to "dropped files are the list" or "scan folder if single"?
-        # For drag and drop, usually the user drags what they want.
-        # If they drag a folder, we might scan it (but input is list of paths).
-
-        # Let's scan parent if only 1 file is dropped, to match "Open File" behavior?
-        # Or simpler: just use valid_files.
-
+        # 3. Build context list
+        # When a single file is dropped, scan the parent directory for sibling
+        # files with the same extension so that Next/Prev navigation works —
+        # matching the behaviour of the Open File dialog.
+        # When multiple files are dropped they form the context list directly.
         if len(valid_files) == 1:
-            # Single file selected — no sibling scanning per design constraint.
-            # Validation is handled by the file list below.
-            log.debug("Single file selected, proceeding without sibling scan")
+            file_list = self._scan_siblings(primary_file)
+        else:
+            file_list = sorted(valid_files)
 
-        file_list = sorted(valid_files)
-        current_index = file_list.index(primary_file)
+        try:
+            current_index = file_list.index(primary_file)
+        except ValueError:
+            file_list.append(primary_file)
+            file_list.sort()
+            current_index = file_list.index(primary_file)
 
         # Update Settings
         if primary_file.parent.exists():
             self.settings.setValue("lastDirectory", str(primary_file.parent))
 
-        # Default Lazy Load to False or True?
-        # Maybe False for D&D unless huge?
-        lazy_load = False
-
-        return primary_file, file_list, current_index, lazy_load
+        return primary_file, file_list, current_index, False

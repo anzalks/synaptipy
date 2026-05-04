@@ -33,6 +33,9 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self.plot_widgets: List[pg.PlotItem] = []  # Ordered list
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
+        # Maps channel key -> row index in the GraphicsLayoutWidget grid.
+        # Used by set_channel_visible() to collapse/expand rows.
+        self._channel_row: Dict[str, int] = {}
 
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
@@ -66,6 +69,43 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self.plot_widgets.clear()
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
+
+    def set_channel_visible(self, chan_id: str, visible: bool) -> None:
+        """Show or hide a channel plot and collapse/expand its grid row.
+
+        Calling ``PlotItem.hide()`` alone leaves the grid row at its original
+        height, producing a blank white space where the plot used to be.
+        This method also adjusts the ``QGraphicsGridLayout`` row constraints so
+        the remaining channels expand to fill the freed space.
+
+        Args:
+            chan_id: Channel identifier matching a key in ``channel_plots``.
+            visible: ``True`` to show; ``False`` to hide.
+        """
+        plot = self.plot_items.get(chan_id)
+        if plot is None:
+            return
+        if visible:
+            plot.show()
+        else:
+            plot.hide()
+        row = self._channel_row.get(chan_id)
+        if row is None:
+            return
+        try:
+            internal_layout = self.widget.ci.layout
+            if visible:
+                # Remove the 0-height cap so the row can grow again.
+                internal_layout.setRowMaximumHeight(row, -1)
+                internal_layout.setRowMinimumHeight(row, 0)
+            else:
+                # Collapse the row to 0 height.
+                internal_layout.setRowMaximumHeight(row, 0)
+                internal_layout.setRowMinimumHeight(row, 0)
+            internal_layout.invalidate()
+            self.widget.ci.update()
+        except Exception as e:
+            log.debug("Could not adjust row height for channel %s: %s", chan_id, e)
 
     def rebuild_plots(self, recording: Recording) -> List[str]:  # noqa: C901
         """
@@ -133,6 +173,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self.plot_widgets.clear()
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
+        self._channel_row.clear()
 
         # Create a fresh GraphicsLayoutWidget
         new_widget = SynaptipyPlotFactory.create_graphics_layout(
@@ -177,6 +218,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             # Row i, Col 0
             plot_item = self.add_plot(chan_key, row=i, col=0)
             self.plot_widgets.append(plot_item)
+            self._channel_row[chan_key] = i
 
             # X-Link
             if first_plot_item is None:
