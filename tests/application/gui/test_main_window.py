@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch  # Use unittest.mock or pytest-mock
 
@@ -34,17 +33,6 @@ def reset_main_window_state(main_window):
     # Clear status bar messages
     if hasattr(main_window, "status_bar"):
         main_window.status_bar.clearMessage()
-    # Process events to flush any pending Qt callbacks.
-    # macOS: pyqtgraph posts geometry events between tests that maintain
-    # AllViews / geometry caches.  Draining them here (processEvents) can
-    # corrupt the session-scoped Explorer tab's ViewBox state and cause a
-    # segfault in the next test.  Win/Linux only.
-    if sys.platform != "darwin":
-        from PySide6.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app:
-            app.processEvents()
 
 
 # --- Basic Window Tests ---
