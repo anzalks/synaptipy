@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2b4] - 2026-05-05
+
+### Fixed
+
+- **Installer CI - Ubuntu AppImage packaging**: `appimagetool` Release 13
+  requires `mksquashfs` from `squashfs-tools`. `ubuntu-latest` (24.04) does
+  not pre-install this package; added explicit `apt-get install squashfs-tools`
+  to the installer workflow.
+- **Installer CI - Windows smoke test**: PowerShell 5.x `&` operator does not
+  set `$LASTEXITCODE` for no-console (SUBSYSTEM=WINDOWS) GUI binaries, causing
+  the smoke test to always report success. Replaced with
+  `Start-Process -FilePath ... -PassThru -Wait` and read `.ExitCode` from the
+  returned process object.
+
+### Changed
+
+- Bumped version to `0.1.2b4` across all canonical locations.
+
+
 ## [0.1.2b3] - 2026-05-05
 
 ### Fixed
