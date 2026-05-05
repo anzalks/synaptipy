@@ -78,6 +78,7 @@ src/Synaptipy/                       # Main package
 │   └── startup_manager.py           # Application startup sequence
 ├── core/                            # Core analysis and data models
 │   ├── data_model.py                # Recording and Channel classes
+│   ├── error_handler.py             # Crash reporter and install_excepthook
 │   ├── results.py                   # Typed result dataclasses
 │   ├── processing_pipeline.py       # Signal processing pipeline
 │   │                                # (includes apply_trace_corrections - immutable A→B→C→D)
@@ -86,30 +87,41 @@ src/Synaptipy/                       # Main package
 │   └── analysis/                    # Analysis algorithms (registry pattern)
 │       ├── registry.py              # AnalysisRegistry (decorator pattern)
 │       ├── batch_engine.py          # Batch processing engine
+│       ├── epoch_manager.py         # EpochManager for TTL and manual epochs
+│       ├── cross_file_utils.py      # Cross-file trial averaging utilities
 │       ├── passive_properties.py    # Pillar 1: RMP, Rin, Tau, Sag, I-V, Capacitance
 │       ├── single_spike.py          # Pillar 2: Spike detection and phase plane
 │       ├── firing_dynamics.py       # Pillar 3: Excitability, burst, train dynamics
 │       ├── synaptic_events.py       # Pillar 4: Event detection (3 methods)
-│       └── evoked_responses.py      # Pillar 5: Optogenetic sync + paired-pulse ratio
+│       └── evoked_responses.py      # Pillar 5: Evoked Sync, PPR, Stimulus Train (STP)
 ├── infrastructure/                  # I/O and external integrations
 │   ├── file_readers/                # Neo-based file readers (NeoAdapter)
 │   ├── exporters/                   # NWB export (NWBExporter)
 │   └── neo_patches.py               # Neo compatibility patches
 ├── shared/                          # Utilities and styling
 │   ├── constants.py                 # Application-wide constants
+│   ├── data_cache.py                # Data caching layer
 │   ├── error_handling.py            # Custom error classes
 │   ├── logging_config.py            # Logging configuration
+│   ├── plot_exporter.py             # Plot export logic (PNG, PDF, SVG)
+│   ├── scroll_settings.py           # Scroll behaviour settings
 │   ├── styling.py                   # Qt theming (light/dark)
 │   ├── theme_manager.py             # Theme state management
+│   ├── utils.py                     # General shared utilities
 │   ├── plot_factory.py              # Reusable plot components
 │   ├── plot_zoom_sync.py            # Cross-tab zoom synchronization
 │   ├── plot_customization.py        # Plot appearance options
+│   ├── zoom_theme.py                # Zoom state theming utilities
 │   └── viewbox.py                   # Custom ViewBox subclass
+├── application/
+│   └── services/                    # Application services layer
+│       └── data_loader_service.py   # Thin service wrapper around data loading
 ├── resources/                       # Icons and assets
 └── templates/                       # Plugin templates
     ├── analysis_template.py         # Annotated analysis template
     ├── plugin_template.py           # Quick-start plugin template
-    └── tab_template.py              # Custom tab template
+    ├── tab_template.py              # Custom tab template
+    └── test_template.py             # Pytest test template for new analyses
 
 tests/                               # Test suite
 ├── conftest.py                      # Pytest fixtures (platform-specific)
@@ -139,7 +151,7 @@ inside each pillar tab and are **never** shown as independent top-level tabs.
 | 2 - Spike Analysis | `single_spike.py` | `single_spike` | Spike Detection, Phase Plane |
 | 3 - Excitability | `firing_dynamics.py` | `firing_dynamics` | Excitability, Burst Analysis, Spike Train Dynamics |
 | 4 - Synaptic Events | `synaptic_events.py` | `synaptic_events` | Threshold, Deconvolution, Baseline+Peak+Kinetics |
-| 5 - Optogenetics | `evoked_responses.py` | `evoked_responses` | Optogenetic Sync, Paired-Pulse Ratio |
+| 5 - Evoked Responses | `evoked_responses.py` | `evoked_responses` | Evoked Sync, Paired-Pulse Ratio, Stimulus Train (STP) |
 
 Custom plugin analyses are appended after the five core pillars.
 
@@ -250,7 +262,7 @@ any of these checks are rejected.
 Two additional jobs run automatically:
 
 - **`minimum-viable`**: Python 3.10 with exact lower-bound versions
-  (`numpy==2.0.0`, `scipy==1.13.0`, `neo==0.14.0`, `pyqtgraph==0.13.0`,
+  (`numpy==2.0.0`, `scipy==1.14.0`, `neo==0.14.0`, `pyqtgraph==0.13.3`,
   `pyside6==6.7.3`). Confirms the stated minimum requirements actually work.
 - **`bleeding-edge`**: Python 3.12 with all upgradable deps set to latest
   (PySide6 excluded). Runs with `continue-on-error: true` to give early

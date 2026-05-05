@@ -5,7 +5,7 @@ The primary focus is whole-cell patch-clamp and intracellular recordings; howeve
 any electrophysiology signal whose file format is supported by the
 [Neo](https://neo.readthedocs.io/en/latest/) I/O library can be loaded, visualised, and processed.
 Built on Python and Qt6, it provides OpenGL-accelerated signal visualisation,
-15 built-in analysis modules, a composable batch processing engine, and an extensible
+17 built-in analysis modules, a composable batch processing engine, and an extensible
 plugin interface. This tutorial covers every feature of the application in detail,
 including the mathematical methods used in each analysis module.
 
@@ -184,7 +184,7 @@ Computed on file load; shown as a traffic-light badge with tooltip:
 
 ![Analyser Tab](screenshots/analyser_tab.png)
 
-The central analysis engine. All 15 analysis sub-tabs are auto-built from registry
+The central analysis engine. All 17 analysis sub-tabs are auto-built from registry
 metadata - parameter widgets, interactive plots, and result tables are generated
 automatically.
 
@@ -478,8 +478,8 @@ immediately.
 > **Formal mathematics:** For publication-ready LaTeX definitions of every metric
 > computed below, see the [Algorithmic Definitions](../algorithmic_definitions.md) page.
 
-All 15 analyses are grouped into five tabs that match the neuroscience workflow from
-passive membrane characterisation through synaptic and optogenetic studies.
+All 17 analyses are grouped into five tabs that match the neuroscience workflow from
+passive membrane characterisation through synaptic and evoked-response studies.
 
 | UI Tab | Analyses covered |
 |--------|------------------|
@@ -487,7 +487,7 @@ passive membrane characterisation through synaptic and optogenetic studies.
 | **Spike Analysis** | Spike Detection (4.2), Phase Plane (4.13) |
 | **Excitability** | Excitability - F-I Curve (4.11), Burst (4.9), Spike Train Dynamics (4.14) |
 | **Synaptic Events** | Threshold (4.3), Deconvolution (4.4), Baseline+Peak+Kinetics (4.5) |
-| **Optogenetics** | Optogenetic Synchronization (4.12) |
+| **Evoked Responses** | Evoked Sync (4.12), Paired-Pulse Ratio, Stimulus Train / STP |
 
 ![Intrinsic Properties tab](screenshots/analyser_intrinsic_properties.png)
 
