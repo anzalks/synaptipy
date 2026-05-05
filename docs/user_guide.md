@@ -21,7 +21,7 @@ This guide provides detailed instructions for installing, configuring, and using
 - [Using the Analyser Tab](#using-the-analyser-tab)
  - [Input Resistance/Conductance Analysis](#input-resistanceconductance-analysis)
  - [Baseline/RMP Analysis](#baselinermp-analysis)
- - [Optogenetic Synchronization](#optogenetic-synchronization)
+ - [Evoked Responses](#evoked-responses)
  - [Sag Ratio (Ih) Analysis](#sag-ratio-ih-analysis)
 - [Using the Exporter Tab](#using-the-exporter-tab)
  - [Exporting to NWB](#exporting-to-nwb)
@@ -36,7 +36,7 @@ This guide provides detailed instructions for installing, configuring, and using
 
 ### Requirements
 
-- Python 3.10 or higher
+- Python 3.11 (recommended); Python 3.10 and 3.12 are also supported
 - Dependencies are automatically installed during package installation:
  - [PySide6](https://doc.qt.io/qtforpython-6/) - Qt6 bindings for Python (GUI framework)
  - [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
@@ -216,7 +216,7 @@ For the full list of Neo-supported formats, see the
 
 ## Using the Analyser Tab
 
-The Analyser tab provides 15 built-in analysis routines organised into five
+The Analyser tab provides 17 built-in analysis routines organised into five
 module tabs. Each sub-tab is auto-generated from registry metadata and provides
 parameter widgets, an interactive plot, a results table, and plot overlays.
 
@@ -226,9 +226,9 @@ The five Analyser pillars are:
 |---|---|---|
 | **Intrinsic Properties** | `passive_properties` | RMP, Rin, Tau, Sag Ratio, I-V Curve, Capacitance |
 | **Spike Analysis** | `single_spike` | Spike detection, Phase-plane analysis |
-| **Excitability** | `firing_dynamics` | F-I curve, Burst analysis, Train dynamics |
-| **Synaptic Events** | `synaptic_events` | Miniature event detection (threshold, matched-filter cross-correlation, baseline+peak+kinetics) |
-| **Optogenetics** | `evoked_responses` | Optogenetic synchronisation, Paired-pulse ratio |
+| **Excitability** | `firing_dynamics` | F-I curve, Burst analysis, Spike Train Dynamics |
+| **Synaptic Events** | `synaptic_events` | Event detection (threshold, template match, baseline-to-peak) |
+| **Evoked Responses** | `evoked_responses` | Evoked Sync, Paired-Pulse Ratio, Stimulus Train (STP) |
 
 All analysis sub-tabs share the following interface behaviours:
 
@@ -272,11 +272,16 @@ All analysis sub-tabs share the following interface behaviours:
 4. Results will display the baseline value and variability metrics
 5. Save results as needed
 
-### Optogenetic Synchronization
+### Evoked Responses
+
+The **Evoked Responses** tab contains three analysis sub-tabs for stimulus-evoked
+measurements.
+
+#### Evoked Sync
 
 1. Load a recording that contains a TTL/digital stimulus channel alongside the
  signal channel
-2. Switch to the *Optogenetic Synchronization* sub-tab in the Analyser
+2. Switch to the *Evoked Sync* sub-tab in the Analyser
 3. Select the TTL channel from the channel selector and set the **TTL Threshold**
  voltage used to binarise the stimulus signal
 4. Choose the **Event Detection Type**:
@@ -295,6 +300,31 @@ All analysis sub-tabs share the following interface behaviours:
 6. Results include optical latency, response probability, jitter, stimulus
  count, and event count
 7. Click "Save Result" to store for later export
+
+#### Paired-Pulse Ratio
+
+1. Load a two-pulse paired-stimulus recording
+2. Switch to the *Paired-Pulse Ratio* sub-tab
+3. Configure the two stimulus times (**Pulse 1 Time**, **Pulse 2 Time**, in seconds)
+4. Set the **Amplitude Measurement Window (ms)** used to measure R1 and R2
+5. Enable **Subtract R1 Tail** to fit a mono- or bi-exponential decay to the
+ R1 tail and subtract the residual baseline at the time of the second stimulus;
+ this prevents contamination of R2 by the decaying R1 current
+6. Results include R1 amplitude, R2 amplitude, PPR (R2/R1), and, when tail
+ subtraction is enabled, the corrected R2 and corrected PPR
+7. Click "Save Result" to store for later export
+
+#### Stimulus Train (STP)
+
+1. Load a multi-pulse train recording
+2. Switch to the *Stimulus Train (STP)* sub-tab
+3. Set **Number of Pulses** and the inter-stimulus interval (**ISI (ms)**)
+4. Set the **First Pulse Time (s)** and the **Amplitude Window (ms)**
+ used to measure each response amplitude
+5. Results include per-pulse amplitudes, amplitudes normalised to R1, and an
+ STP classification (facilitation or depression) based on whether the mean
+ normalised amplitude over pulses 2-N is above or below 1.0
+6. Click "Save Result" to store for later export
 
 ### Sag Ratio (Ih) Analysis
 
@@ -355,13 +385,15 @@ valid ranges, and conditional visibility based on clamp mode.
   kernels at 1x, 2x, and 3x the user-specified decay constant is convolved with
   the trace; events are detected on the pointwise maximum of the three z-scored
   outputs, providing automatic tolerance for dendritic cable filtering.
-  Configurable
+  Configurable parameters: rise tau, decay tau, threshold in SD, and direction.
+- **Event Detection (Baseline Peak)** - Direct baseline-to-peak amplitude
+  detection with kinetics estimation for evoked or spontaneous events.
 
 ### Visual Validation Overlays
 
 Several analysis sub-tabs draw semi-transparent overlays directly on top of the
 raw trace to assist with visual validation of the analysis windows and fitted
-curves.  These overlays are rendered entirely in pyqtgraph and do not affect the
+curves. These overlays are rendered entirely in pyqtgraph and do not affect the
 underlying data.
 
 | Overlay type | Where it appears | Default colour |
@@ -378,9 +410,6 @@ underlying data.
    width, and opacity.
 
 All overlay settings are persisted via QSettings and restored across sessions.
-  rise/decay tau, threshold in SD, and direction.
-- **Event Detection (Baseline Peak)** - Direct baseline-to-peak amplitude
-  detection with kinetics estimation for evoked or spontaneous events.
 
 ## Using the Exporter Tab
 

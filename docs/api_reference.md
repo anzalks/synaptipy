@@ -65,7 +65,7 @@ files = adapter.list_compatible_files("/path/to/directory")
 
 ### Analysis Modules
 
-Synaptipy organises its 15 built-in analysis routines into five core modules.
+Synaptipy organises its 17 built-in analysis routines into five core modules.
 Each module corresponds to a tab in the GUI Analyser and is also available as a
 composable unit in the batch processing pipeline.
 
@@ -115,10 +115,11 @@ detection.
    :show-inheritance:
 ```
 
-#### Module 5 - Evoked Responses (Optogenetics)
+#### Module 5 - Evoked Responses
 
-TTL-gated optogenetic stimulus synchronisation, latency, response probability,
-and jitter.
+Evoked Sync (TTL-gated stimulus correlation, latency, response probability,
+and jitter), Paired-Pulse Ratio with residual decay subtraction, and
+Stimulus Train short-term plasticity (STP) analysis.
 
 ```{eval-rst}
 .. automodule:: Synaptipy.core.analysis.evoked_responses

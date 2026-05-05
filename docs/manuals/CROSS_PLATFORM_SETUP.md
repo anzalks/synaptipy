@@ -21,7 +21,7 @@ Previously, Synaptipy had OS-specific dependencies that caused installation fail
 # Single environment.yml handles all OSes
 dependencies:
  # Cross-platform packages (work everywhere)
- - python>=3.10
+ - python=3.11  # 3.11 recommended; 3.10 and 3.12 also supported
  - qt>=6.7
  - pyside6>=6.7
 

@@ -7,9 +7,9 @@ Welcome to Synaptipy's Documentation
  :target: https://github.com/anzalks/synaptipy
  :alt: GitHub repository
 
-.. image:: https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white
+.. image:: https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white
  :target: https://www.python.org/
- :alt: Python 3.10+
+ :alt: Python 3.10-3.12
 
 .. image:: https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
  :target: https://github.com/anzalks/synaptipy

@@ -5,8 +5,9 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Core Python (let conda find compatible version)
-  - python>=3.10
+  # Python 3.11 is the recommended and tested interpreter.
+  # 3.10 and 3.12 are also supported but 3.11 is preferred for stability.
+  - python=3.11
   
   # Core build tools
   - pip
