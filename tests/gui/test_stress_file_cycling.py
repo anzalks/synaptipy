@@ -64,15 +64,16 @@ def stress_canvas(qapp):
 
 @pytest.fixture(autouse=True)
 def _drain_after_stress_test(stress_canvas):
-    """Per-test drain (Win/Linux only) — mirrors the global conftest pattern."""
-    # Pre-test: execute any pending deferred geometry events from prior
-    # modules while the session-scoped canvas is still alive, then clear.
-    # This mirrors the _cancel_pending_qt_events() pattern in production
-    # code and prevents stale callbacks from interfering mid-rebuild.
-    try:
-        QtCore.QCoreApplication.processEvents()
-    except Exception:
-        pass
+    """Per-test drain (Win/Linux only) -- mirrors the global conftest pattern.
+
+    Pre-test: clear the canvas using the canonical clear_plots() sequence,
+    which internally handles event draining in the correct order for each
+    platform (processEvents on macOS before widget.clear(); removePostedEvents
+    on Win/Linux after).  No manual processEvents() call is made here because
+    pumping the event loop before clear_plots() on macOS fires deferred ViewBox
+    callbacks against objects scheduled for deletion by the previous test's
+    rebuild_plots(), causing SIGSEGV.
+    """
     stress_canvas.clear()
     yield
     if sys.platform == "darwin":

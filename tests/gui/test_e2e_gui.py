@@ -106,24 +106,26 @@ def main_window_e2e(qtbot):
         qtbot.wait(100)
         yield window
 
-    # Cleanup: stop worker thread before widget teardown
+    # Cleanup: stop worker thread and explicitly teardown the plot canvas
+    # *before* closing the window.  ExplorerPlotCanvas.rebuild_plots() queues
+    # deferred ViewBox geometry callbacks via QTimer.singleShot(0, ...).  If
+    # we call window.close() first, those callbacks fire during the subsequent
+    # deleteLater() cycle against freed C++ pointers -> SIGSEGV.
+    # Calling clear_plots() here runs the canonical teardown sequence:
+    # _unlink_all_plots() -> _close_all_plots() -> drain -> widget.clear()
+    # which resolves all pending callbacks while all C++ objects are still alive.
     if hasattr(window, "data_loader_thread") and window.data_loader_thread:
         window.data_loader_thread.quit()
         window.data_loader_thread.wait(2000)
 
-    window.close()
-    app = QtWidgets.QApplication.instance()
-    if app:
-        app.processEvents()
-    window.deleteLater()
     try:
-        from PySide6.QtTest import QTest
-
-        QTest.qWait(50)
+        if hasattr(window, "explorer_tab") and hasattr(window.explorer_tab, "plot_canvas"):
+            window.explorer_tab.plot_canvas.clear_plots()
     except Exception:
-        for _ in range(5):
-            if app:
-                app.processEvents()
+        pass
+
+    window.close()
+    window.deleteLater()
 
 
 # ---------------------------------------------------------------------------
