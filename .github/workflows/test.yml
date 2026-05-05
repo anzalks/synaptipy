@@ -339,11 +339,23 @@ jobs:
           TAG="v${VERSION}"
           if git ls-remote --tags origin "${TAG}" | grep -q "${TAG}"; then
             echo "Tag ${TAG} already exists — skipping."
+            CREATED=false
           else
             echo "Creating tag ${TAG} at $(git rev-parse HEAD)"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git config user.name  "github-actions[bot]"
             git tag "${TAG}"
             git push origin "${TAG}"
-            echo "Tag ${TAG} pushed — installer.yml and release.yml will now run."
+            echo "Tag ${TAG} pushed."
+            CREATED=true
+          fi
+          # GitHub does not trigger workflows when GITHUB_TOKEN pushes a tag,
+          # so we dispatch installer.yml and release.yml explicitly via the API.
+          # This runs regardless of whether we just created the tag or it already
+          # existed (idempotent — both workflows handle duplicate runs gracefully).
+          if [ "$CREATED" = "true" ]; then
+            echo "Dispatching installer.yml and release.yml for ${TAG}..."
+            gh workflow run installer.yml --ref "refs/tags/${TAG}" -f dry_run=false
+            gh workflow run release.yml   --ref "refs/tags/${TAG}" -f dry_run=false
+            echo "Dispatched — installer and release workflows are now queued."
           fi
