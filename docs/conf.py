@@ -2,6 +2,7 @@
 # Configuration file for the Sphinx documentation builder.
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import datetime as _dt
 import os
 import sys
 from unittest.mock import MagicMock
@@ -49,7 +50,7 @@ for _mod in _MOCK_MODULES:
 # Project information
 # ---------------------------------------------------------------------------
 project = "Synaptipy"
-copyright = "2024-2026, Anzal K Shahul"
+copyright = f"2024-{_dt.datetime.now().year}, Anzal K Shahul"
 author = "Anzal K Shahul"
 
 # Retrieve version from the package itself

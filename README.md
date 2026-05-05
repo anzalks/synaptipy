@@ -70,7 +70,7 @@ Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releas
 ```bash
 synaptipy
 # or equivalently:
-python -m Synaptipy.application
+python -m Synaptipy
 ```
 
 Load a recording by dragging a file into the **Explorer** tab, then navigate to the **Analyser** tab to select a channel and run an analysis. Results are displayed in a table and can be exported to CSV.

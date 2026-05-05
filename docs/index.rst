@@ -52,8 +52,9 @@ electrophysiology signal whose file format is supported by the
 - including extracellular and multi-channel recordings.
 
 Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
-15 built-in analysis modules spanning intrinsic membrane properties, action potential
-characterisation, synaptic event detection, and optogenetics, a composable batch processing
+17 built-in analysis modules spanning intrinsic membrane properties, action potential
+characterisation, synaptic event detection, and evoked responses (Evoked Sync, Paired-Pulse
+Ratio, Stimulus Train STP), a composable batch processing
 engine, and an extensible plugin interface that allows custom analysis routines to be
 integrated without modifying the core package. Three example plugins ship with
 the application and are loadable via a single checkbox in Preferences.

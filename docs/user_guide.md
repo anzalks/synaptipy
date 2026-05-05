@@ -49,7 +49,7 @@ This guide provides detailed instructions for installing, configuring, and using
 Synaptipy is available both as a standalone application and as a Python package.
 
 #### Standalone Application (Recommended)
-You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.deb`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
+You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.AppImage`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
 - **macOS**: Download the `.dmg`, open it, and drag Synaptipy to your Applications folder.
 - **Windows**: Download and run the `_Setup.exe` installer.
 - **Linux**: Download the `.AppImage` file, make it executable (`chmod +x Synaptipy-*.AppImage`), and run it directly.
@@ -530,17 +530,23 @@ from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 import Synaptipy.core.analysis  # populates the registry
 
 engine = BatchAnalysisEngine()
-results = engine.run(
-    file_paths=["cell_01.abf", "cell_02.abf"],
-    analysis_name="tau_analysis",
-    params={
-        "stim_start_time": 0.200,
-        "fit_duration":    0.300,
-        "model":           "mono",
-        "artifact_blanking_ms": 0.5,
-    },
-    channel_index=0,
-    trial_indices=[0, 1, 2],
+
+pipeline = [
+    {
+        "analysis": "tau_analysis",
+        "scope": "all_trials",
+        "params": {
+            "stim_start_time": 0.200,
+            "fit_duration":    0.300,
+            "model":           "mono",
+            "artifact_blanking_ms": 0.5,
+        },
+    }
+]
+
+results = engine.run_batch(
+    files=["cell_01.abf", "cell_02.abf"],
+    pipeline_config=pipeline,
 )
 ```
 

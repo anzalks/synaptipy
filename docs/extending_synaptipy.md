@@ -623,9 +623,11 @@ return {
     "module_used": "evoked_responses",
     "metrics": {
         "decay_tau_ms": tau_ms,
-        "_ppr_fit_times": fit_time_array.tolist(),   # absolute time (s)
-        "_ppr_fit_values": fit_value_array.tolist(),  # fitted current/voltage
     },
+    # Private keys at the TOP LEVEL (not inside "metrics") are fed to plot
+    # overlays and hidden from the results table.
+    "_ppr_fit_times": fit_time_array.tolist(),   # absolute time (s)
+    "_ppr_fit_values": fit_value_array.tolist(),  # fitted current/voltage
 }
 ```
 
