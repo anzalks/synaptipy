@@ -141,28 +141,12 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                                 layout_pos = (row, col, rspan, cspan)
                         break
 
-        # Step 1: Break X/Y axis links (sets linkedViews[] to null weakrefs).
-        # Must happen BEFORE signal disconnection so that pyqtgraph's internal
-        # _setLinkedView() can cleanly disconnect the per-axis slot it owns on
-        # the linked ViewBox's sigXRangeChanged / sigResized.  Without this,
-        # pyqtgraph's ViewBox.linkedViews[] still hold stale weakrefs to the
-        # old ViewBoxes after teardown.  On macOS + Python 3.10, when those
-        # old ViewBoxes are later destroyed via deleteLater(), pyqtgraph's
-        # geometry-update callbacks dereference the stale weakrefs, producing
-        # a segfault (exit 139) in the AllViews range propagation path.
-        self._unlink_all_plots()
-
         # Disconnect old ViewBox signals BEFORE deleting old widget.
         # Without this, old ViewBoxes scheduled for deleteLater() can still
         # emit sigXRangeChanged / sigYRangeChanged / sigResized during the
         # event loop iteration that destroys them.  Those signals propagate
         # through the canvas's x_range_changed -> _on_vb_x_range_changed and
-        # corrupt the slider/scrollbar values for the NEW recording.  This is
-        # the root cause of the "X-axis shifted right" bug when cycling files.
-        #
-        # Also disconnect sigStateChanged so that PlotItem.close() (below) can
-        # safely set autoBtn=None without a pending viewStateChanged callback
-        # later trying to call autoBtn.hide() on a None object -> AttributeError.
+        # corrupt the slider/scrollbar values for the NEW recording.
         for plot_item in self.plot_items.values():
             try:
                 vb = plot_item.getViewBox()
@@ -179,30 +163,19 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                         vb.sigResized.disconnect()
                     except (TypeError, RuntimeError):
                         pass
-                    try:
-                        vb.sigStateChanged.disconnect()
-                    except (TypeError, RuntimeError):
-                        pass
             except Exception:
                 pass
 
-        # macOS: remove all ViewBoxes from the old widget's scene before calling
-        # old_widget.hide() / setParent(None).  On macOS + PySide6 6.7.x, those
-        # operations trigger Qt geometry recalculations that queue deferred
-        # ViewBox range callbacks (QTimer.singleShot(0, ...)).  If the ViewBoxes
-        # are already removed from the scene they cannot generate new callbacks.
-        #
-        # _close_all_plots() disconnects ctrl signals and calls PlotItem.close()
-        # which calls scene().removeItem(vb) and sets vb=None + autoBtn=None.
-        # sigStateChanged was disconnected above so the autoBtn=None path is safe.
-        #
-        # After _close_all_plots(), processEvents() drains any callbacks queued
-        # by PlotItem.close() itself while the C++ objects are still alive.
-        # This is safe because sigStateChanged is already disconnected.
-        #
-        # Win/Linux are excluded: add_plot()'s processEvents guard handles it.
+        # macOS: drain any pending deferred ViewBox geometry/range callbacks
+        # (queued by QTimer.singleShot(0, ...)) while ALL C++ objects are still
+        # alive.  Without this, those callbacks can fire inside PlotItem.__init__
+        # of the NEW widget (during the signal connect() sequence), referencing
+        # freed C++ pointers from the old widget -> SIGSEGV on macOS.
+        # Must be called BEFORE plot_items.clear() / deleteLater() so that
+        # all ViewBox C++ objects are still valid when the callbacks execute.
+        # Win/Linux are excluded: the processEvents() guard inside add_plot()
+        # already handles that case there.
         if sys.platform == "darwin":
-            self._close_all_plots()
             try:
                 QtCore.QCoreApplication.processEvents()
             except Exception:
@@ -310,20 +283,5 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 internal_layout.activate()
             except Exception:
                 pass  # Non-fatal; gracefully fall back on unsupported platforms
-
-        # Drain events posted by the new PlotItem.__init__ calls (geometry
-        # callbacks) AND fire the old widget's pending deleteLater() NOW,
-        # while all new C++ objects are fully initialised and stable.
-        #
-        # Without this, the old widget's destructor fires at the START of the
-        # NEXT rebuild_plots() call (inside the macOS processEvents block).
-        # On macOS + Python 3.10 that races with geometry callbacks for the
-        # CURRENT iteration's ViewBoxes, causing pyqtgraph's AllViews range
-        # propagation to dereference partially-freed C++ objects -> SIGSEGV.
-        #
-        # On Win/Linux add_plot() already called processEvents() before each
-        # addPlot(), so _flush_qt_registry() uses removePostedEvents() there
-        # (discards stragglers safely).
-        self._flush_qt_registry()
 
         return channel_keys
