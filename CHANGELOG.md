@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2b5] - 2026-05-05
+
+### Fixed
+
+- **Installer CI - Ubuntu AppImage (exit code 8)**: `appimagetool` Release 13
+  bundles a `mksquashfs` compiled against old glibc that segfaults on
+  ubuntu-latest 24.04 (glibc 2.39). Added `ARCH=x86_64 MKSQUASHFS=$(which
+  mksquashfs)` to force the tool to use the system `squashfs-tools` binary
+  rather than its incompatible bundled copy.
+- **Installer CI - Windows smoke test**: `SUBSYSTEM:WINDOWS` (no-console)
+  binaries are unreliable to execute in headless CI. Replaced the
+  `Start-Process --version` execution test with a deterministic existence and
+  minimum-size check (`> 5 MB`) that gives equivalent packaging assurance.
+- **Installer CI - Shell safety (`grep`/`cut` on Windows)**: The `installer.yml`
+  build job had no `defaults: run: shell: bash`. On Windows, GitHub Actions
+  defaults to `pwsh` (PowerShell 7), so any unguarded `grep`/`cut` invocation
+  would fail. Added `defaults: run: shell: bash` at the job level and a
+  dedicated `Read app version` step that exports `APP_VERSION` via
+  `$GITHUB_ENV`. All three packaging steps now use `${{ env.APP_VERSION }}`
+  (bash) or `$Env:APP_VERSION` (PowerShell) instead of inline `grep`/`cut`.
+- **macOS app icon not displayed**: `build_icons.py` passed the string
+  `"icon_256x256.png"` as the ICNS key, which is not a valid OSType code.
+  Rewrote icon generation to use canonical ICNS keys (`icp4`-`ic10`) with
+  all seven standard sizes (16 to 1024 px) so macOS renders the icon
+  correctly at every resolution and Dock zoom level.
+
+### Added
+
+- **CI - Auto-tag on main**: New `auto-tag` job in `test.yml`. When a push
+  to `main` passes all required CI checks (test matrix, minimum-viable,
+  security), the job reads the version from `pyproject.toml` and pushes a
+  lightweight tag `v<version>` if it does not already exist. This
+  automatically triggers `installer.yml` and `release.yml` without manual
+  tagging.
+
+### Changed
+
+- Bumped version to `0.1.2b5` across all canonical locations.
+
+
 ## [0.1.2b4] - 2026-05-05
 
 ### Fixed
