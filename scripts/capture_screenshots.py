@@ -399,10 +399,9 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     captured.append("analyser_intrinsic_properties_tau_time_constant.png")
 
     # ---- Sag Ratio (Ih) ----
-    _set_method(tab, "Sag Ratio (Ih)")
-    _run_analysis(tab)
-    _grab(window, output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png")
-    captured.append("analyser_intrinsic_properties_sag_ratio_ih.png")
+    # NOTE: Sag Ratio is captured on ABF19 (see block below) because ABF19
+    # provides a clear hyperpolarising step with a well-defined dip and
+    # steady-state plateau.  Nothing to capture here with WCP03.
 
     # ---- Capacitance (ABF19: CC, -20 pA step onset at 215 ms) ----
     if _ABF19.exists():
@@ -419,6 +418,20 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
             _run_analysis(tab)
             _grab(window, output_dir / "analyser_intrinsic_properties_capacitance.png")
             captured.append("analyser_intrinsic_properties_capacitance.png")
+
+            # ---- Sag Ratio (Ih) on ABF19 ----
+            # baseline: 0-200 ms, dip (peak hyperpolarisation): 210-300 ms,
+            # steady-state: 450-550 ms
+            _set_method(tab, "Sag Ratio (Ih)")
+            _set_param(tab, "baseline_start", 0.0)
+            _set_param(tab, "baseline_end", 0.2)
+            _set_param(tab, "peak_window_start", 0.21)
+            _set_param(tab, "peak_window_end", 0.3)
+            _set_param(tab, "ss_window_start", 0.45)
+            _set_param(tab, "ss_window_end", 0.55)
+            _run_analysis(tab)
+            _grab(window, output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png")
+            captured.append("analyser_intrinsic_properties_sag_ratio_ih.png")
 
     # ---- I-V Curve (ABF21: CC, current steps, current injection 75-325 ms) ----
     _set_analysis_source(sm, _ABF21)

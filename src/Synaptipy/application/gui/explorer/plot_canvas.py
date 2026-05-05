@@ -10,7 +10,7 @@ import sys
 from typing import Dict, List
 
 import pyqtgraph as pg
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.core.data_model import Recording
@@ -164,6 +164,22 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                         vb.sigResized.disconnect()
                     except (TypeError, RuntimeError):
                         pass
+            except Exception:
+                pass
+
+        # On macOS: drain any pending deferred ViewBox geometry/range callbacks
+        # (queued by QTimer.singleShot(0, ...)) while ALL C++ objects are still
+        # alive.  Without this, those callbacks can fire inside PlotItem.__init__
+        # of the NEW widget (during the signal connect() sequence), referencing
+        # freed C++ pointers from the old widget -> SIGSEGV on macOS Python 3.10.
+        # Must be called BEFORE plot_items.clear() / deleteLater() so that
+        # autoBtn and all ViewBox C++ objects are still valid when the callbacks
+        # execute.
+        # Win/Linux are excluded because the processEvents() guard inside
+        # add_plot() already handles this case there.
+        if sys.platform == "darwin":
+            try:
+                QtCore.QCoreApplication.processEvents()
             except Exception:
                 pass
 

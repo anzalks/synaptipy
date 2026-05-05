@@ -701,11 +701,17 @@ def run_train_dynamics_wrapper(  # noqa: C901
     analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
     analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
     spike_indices = None
+    # start_idx tracks the offset of the clipped window within the original
+    # time array.  spike_indices returned by detect_spikes_threshold are
+    # relative to the clipped subarray; adding start_idx converts them to
+    # absolute indices so that show_spikes overlays land on actual peaks.
+    start_idx = 0
 
     # Clip to analysis window when a valid window is specified.
     if analysis_end_s > analysis_start_s:
         mask = (time >= analysis_start_s) & (time <= analysis_end_s)
         if mask.any():
+            start_idx = int(np.searchsorted(time, analysis_start_s))
             data = data[mask]
             time = time[mask]
 
@@ -754,7 +760,10 @@ def run_train_dynamics_wrapper(  # noqa: C901
         "isi_ms": isi_ms,
     }
     if spike_indices is not None:
-        metrics["spike_indices"] = spike_indices
+        # Convert relative (clipped) indices to absolute (full-array) indices
+        # so that the show_spikes overlay in metadata_driven.py lands on the
+        # actual spike peaks rather than the start of the recording.
+        metrics["spike_indices"] = spike_indices + start_idx
 
     return {"module_used": "firing_dynamics", "metrics": metrics}
 
