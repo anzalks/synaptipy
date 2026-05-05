@@ -93,11 +93,15 @@ jobs:
       - name: Smoke test binary (Linux)
         if: runner.os == 'Linux'
         run: |
-          xvfb-run -a dist/Synaptipy/Synaptipy --help 2>&1 | tee /tmp/smoke.txt
+          # --version is handled by argparse before Qt initialises, so it
+          # exits 0 cleanly even in no-console / offscreen mode.
+          # We redirect to a file (not a pipe) so $? captures the binary's
+          # exit code rather than tee's (which is always 0).
+          xvfb-run -a dist/Synaptipy/Synaptipy --version > /tmp/smoke.txt 2>&1
           CODE=$?
-          if [ "$CODE" -gt 1 ]; then
+          cat /tmp/smoke.txt
+          if [ "$CODE" -ne 0 ]; then
             echo "Smoke test FAILED with exit code $CODE"
-            cat /tmp/smoke.txt
             exit 1
           fi
 
@@ -106,11 +110,11 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          dist/Synaptipy.app/Contents/MacOS/Synaptipy --help 2>&1 | tee /tmp/smoke.txt
+          dist/Synaptipy.app/Contents/MacOS/Synaptipy --version > /tmp/smoke.txt 2>&1
           CODE=$?
-          if [ "$CODE" -gt 1 ]; then
+          cat /tmp/smoke.txt
+          if [ "$CODE" -ne 0 ]; then
             echo "Smoke test FAILED with exit code $CODE"
-            cat /tmp/smoke.txt
             exit 1
           fi
 
@@ -120,9 +124,11 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          $result = & "dist\Synaptipy\Synaptipy.exe" --help 2>&1
+          # --version exits 0; stdout may be empty for no-console builds but
+          # LASTEXITCODE reliably reflects whether argparse ran successfully.
+          $result = & "dist\Synaptipy\Synaptipy.exe" --version 2>&1
           Write-Host $result
-          if ($LASTEXITCODE -gt 1) {
+          if ($LASTEXITCODE -ne 0) {
             Write-Error "Smoke test FAILED with exit code $LASTEXITCODE"
             exit 1
           }
@@ -170,8 +176,12 @@ jobs:
           ln -s usr/bin/Synaptipy AppRun
           cd ..
 
-          # 5. Download the official AppImage packaging tool
-          wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          # 5. Download the official AppImage packaging tool.
+          # Pinned to AppImageKit Release 13 (the last numbered stable release);
+          # avoids the 'continuous' rolling tag which changes without notice and
+          # introduces supply-chain uncertainty.
+          wget -q -O appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
           chmod +x appimagetool
 
           # 6. Build the AppImage

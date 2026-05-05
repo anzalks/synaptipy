@@ -65,7 +65,19 @@ def parse_arguments():
     Returns:
         argparse.Namespace: Parsed command line arguments
     """
+    try:
+        from Synaptipy import __version__ as _version
+    except Exception:
+        _version = "unknown"
+
     parser = argparse.ArgumentParser(description="Synaptipy - Electrophysiology Visualization Suite")
+    # --version is handled by argparse before any Qt code runs, so it exits 0
+    # cleanly in headless / no-console builds — used by installer smoke tests.
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_version}",
+    )
     parser.add_argument("--dev", action="store_true", help="Enable development mode with verbose logging")
     parser.add_argument("--log-dir", type=str, help="Custom directory for log files")
     parser.add_argument("--log-file", type=str, help="Custom log filename")
