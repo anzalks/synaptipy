@@ -88,7 +88,8 @@ docs = [
     "sphinx-rtd-theme>=2.0.0",
     "myst-parser>=2.0.0",
     "sphinx-autodoc-typehints>=1.25.0",
-    "sphinx-autoapi>=3.0.0",
+    # sphinx-autoapi removed: conf.py uses sphinx.ext.autodoc + autosummary;
+    # sphinx-autoapi was declared but never loaded in conf.py extensions.
     "sphinx-copybutton>=0.5.0",
     "sphinx-design>=0.5.0",
     "mock>=5.0.0",
@@ -115,7 +116,12 @@ norecursedirs = [".verify_venv", ".git", "__pycache__", "*.egg-info"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --cov=src/Synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90"
+# Coverage flags are NOT in addopts: including --cov here causes pytest
+# --collect-only (and any partial run) to measure coverage against 0 hits
+# and immediately fail the 90 % threshold.  Each CI step that needs coverage
+# passes --cov=src/Synaptipy --cov-report=... --cov-fail-under=90 explicitly.
+# The fail_under threshold is enforced by [tool.coverage.report] below.
+addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

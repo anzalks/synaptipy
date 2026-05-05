@@ -198,7 +198,7 @@ jobs:
           "neo==0.14.0" \
           "pyqtgraph==0.13.3" \
           "pyside6==6.7.3" \
-          "pandas==2.3.0"
+          "pandas==2.3.1"
         pip install flake8 pytest pytest-qt pytest-mock pytest-cov
         pip install -e .
 

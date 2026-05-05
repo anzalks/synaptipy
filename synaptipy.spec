@@ -4,7 +4,15 @@
 # win_private_assemblies (removed in 6.0), a.zipfiles in COLLECT (removed in 6.0).
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import os
+import re
 import sys
+
+# Read project version from pyproject.toml so the macOS bundle version stays
+# in sync automatically without manual edits after each release bump.
+_PYPROJECT = os.path.join(os.path.dirname(os.path.abspath(SPECPATH)), "pyproject.toml")
+with open(_PYPROJECT, encoding="utf-8") as _f:
+    _match = re.search(r'^version\s*=\s*"([^"]+)"', _f.read(), re.MULTILINE)
+_APP_VERSION = _match.group(1) if _match else "0.0.0"
 
 # Collect hidden imports for dynamic imports
 hiddenimports = []
@@ -76,6 +84,6 @@ if sys.platform == "darwin":
             "NSPrincipalClass": "NSApplication",
             "NSHighResolutionCapable": "True",
             "LSBackgroundOnly": "False",
-            "CFBundleShortVersionString": "0.1.2b2",
+            "CFBundleShortVersionString": _APP_VERSION,
         },
     )
