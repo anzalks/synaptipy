@@ -141,6 +141,17 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                                 layout_pos = (row, col, rspan, cspan)
                         break
 
+        # Step 1: Break X/Y axis links (sets linkedViews[] to null weakrefs).
+        # Must happen BEFORE signal disconnection so that pyqtgraph's internal
+        # _setLinkedView() can cleanly disconnect the per-axis slot it owns on
+        # the linked ViewBox's sigXRangeChanged / sigResized.  Without this,
+        # pyqtgraph's ViewBox.linkedViews[] still hold stale weakrefs to the
+        # old ViewBoxes after teardown.  On macOS + Python 3.10, when those
+        # old ViewBoxes are later destroyed via deleteLater(), pyqtgraph's
+        # geometry-update callbacks dereference the stale weakrefs, producing
+        # a segfault (exit 139) in the AllViews range propagation path.
+        self._unlink_all_plots()
+
         # Disconnect old ViewBox signals BEFORE deleting old widget.
         # Without this, old ViewBoxes scheduled for deleteLater() can still
         # emit sigXRangeChanged / sigYRangeChanged / sigResized during the
@@ -299,5 +310,20 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 internal_layout.activate()
             except Exception:
                 pass  # Non-fatal; gracefully fall back on unsupported platforms
+
+        # Drain events posted by the new PlotItem.__init__ calls (geometry
+        # callbacks) AND fire the old widget's pending deleteLater() NOW,
+        # while all new C++ objects are fully initialised and stable.
+        #
+        # Without this, the old widget's destructor fires at the START of the
+        # NEXT rebuild_plots() call (inside the macOS processEvents block).
+        # On macOS + Python 3.10 that races with geometry callbacks for the
+        # CURRENT iteration's ViewBoxes, causing pyqtgraph's AllViews range
+        # propagation to dereference partially-freed C++ objects -> SIGSEGV.
+        #
+        # On Win/Linux add_plot() already called processEvents() before each
+        # addPlot(), so _flush_qt_registry() uses removePostedEvents() there
+        # (discards stragglers safely).
+        self._flush_qt_registry()
 
         return channel_keys
