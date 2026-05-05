@@ -205,23 +205,18 @@ jobs:
           cd ..
 
           # 5. Download the official AppImage packaging tool.
-          # Pinned to AppImageKit Release 13 (the last numbered stable release);
-          # avoids the 'continuous' rolling tag which changes without notice and
-          # introduces supply-chain uncertainty.
+          # We must use the 'continuous' release because Release 13 (2020)
+          # bundles an outdated mksquashfs that segfaults on Ubuntu 24.04 (glibc 2.39).
+          # The continuous release contains the necessary glibc compatibility fixes.
           wget -q -O appimagetool \
-            "https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x appimagetool
 
           # 6. Build the AppImage.
-          # ARCH=x86_64      : tell appimagetool the target architecture.
-          # MKSQUASHFS=...   : force appimagetool to use the *system* mksquashfs
-          #   rather than its bundled one.  AppImageKit Release 13 bundles a
-          #   mksquashfs compiled against an old glibc that segfaults on
-          #   ubuntu-latest (24.04, glibc 2.39), causing exit code 8 even
-          #   when squashfs-tools is installed.  Setting this env var makes
-          #   the extracted appimagetool call the system binary instead.
-          ARCH=x86_64 MKSQUASHFS=$(which mksquashfs) \
-            ./appimagetool --appimage-extract-and-run AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+          # ARCH=x86_64 : tell appimagetool the target architecture.
+          # --appimage-extract-and-run bypasses the need for FUSE, which is 
+          # blocked by default on GitHub Actions ubuntu-24.04 AppArmor profiles.
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage"
 
       - name: Upload installer artifact
         # if-no-files-found: error surfaces packaging failures immediately

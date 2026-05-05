@@ -13,7 +13,7 @@
 [![Lint: flake8](https://img.shields.io/badge/lint-flake8-blue)](https://flake8.pycqa.org/)
 [![Release](https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange)](https://github.com/anzalks/synaptipy/releases)
 
-**Open-Source Electrophysiology Visualization and Analysis Suite** | v0.1.2b5
+**Open-Source Electrophysiology Visualization and Analysis Suite** | v0.1.2b6
 
 Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
 
@@ -55,11 +55,11 @@ synaptipy          # launches the graphical interface
 
 ### Standalone application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.2b5 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.2b6 release assets:
 
-- **Windows:** `Synaptipy_Setup_v0.1.2b5.exe`
-- **macOS:** `Synaptipy_v0.1.2b5.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.2b5-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Windows:** `Synaptipy_Setup_v0.1.2b6.exe`
+- **macOS:** `Synaptipy_v0.1.2b6.dmg` - open the disk image and drag to Applications
+- **Linux:** `Synaptipy-v0.1.2b6-x86_64.AppImage` - mark as executable (`chmod +x`) and run
 
 ---
 
