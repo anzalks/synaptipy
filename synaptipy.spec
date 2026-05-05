@@ -9,7 +9,9 @@ import sys
 
 # Read project version from pyproject.toml so the macOS bundle version stays
 # in sync automatically without manual edits after each release bump.
-_PYPROJECT = os.path.join(os.path.dirname(os.path.abspath(SPECPATH)), "pyproject.toml")
+# SPECPATH is the directory of the spec file (already the repo root); do NOT
+# call os.path.dirname() on it or we would look one level above the repo.
+_PYPROJECT = os.path.join(os.path.abspath(SPECPATH), "pyproject.toml")
 with open(_PYPROJECT, encoding="utf-8") as _f:
     _match = re.search(r'^version\s*=\s*"([^"]+)"', _f.read(), re.MULTILINE)
 _APP_VERSION = _match.group(1) if _match else "0.0.0"
