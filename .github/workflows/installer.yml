@@ -61,7 +61,8 @@ jobs:
           sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
             libxcb-xfixes0 libegl1 libxcb-cursor0 \
-            qt6-tools-dev-tools
+            qt6-tools-dev-tools \
+            squashfs-tools
 
       - name: Install dependencies
         run: |
@@ -124,12 +125,15 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          # --version exits 0; stdout may be empty for no-console builds but
-          # LASTEXITCODE reliably reflects whether argparse ran successfully.
-          $result = & "dist\Synaptipy\Synaptipy.exe" --version 2>&1
-          Write-Host $result
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Smoke test FAILED with exit code $LASTEXITCODE"
+          # Use Start-Process to reliably capture the exit code of the
+          # no-console (SUBSYSTEM=WINDOWS) binary.  The & operator leaves
+          # $LASTEXITCODE as $null for GUI apps under Windows PowerShell 5.x.
+          $proc = Start-Process -FilePath "dist\Synaptipy\Synaptipy.exe" `
+            -ArgumentList "--version" -PassThru -Wait
+          $exitCode = if ($null -ne $proc.ExitCode) { $proc.ExitCode } else { 0 }
+          Write-Host "Binary exited with code: $exitCode"
+          if ($exitCode -ne 0) {
+            Write-Error "Smoke test FAILED with exit code $exitCode"
             exit 1
           }
 
