@@ -15,13 +15,13 @@ from PySide6 import QtCore, QtWidgets
 log = logging.getLogger(__name__)
 
 _APA_CITATION = (
-    "Shahul, A. K., & Valera, A. (2026). Synaptipy: A High-Performance Suite for "
+    "Shahul, A. K. (2026). Synaptipy: A High-Performance Suite for "
     "Experimental Electrophysiology. [Journal Name]. DOI: [Placeholder]"
 )
 
 _BIBTEX_CITATION = """\
 @article{shahul2026synaptipy,
-  author  = {Shahul, Anzal K. and Valera, A.},
+  author  = {Shahul, Anzal K.},
   title   = {Synaptipy: A High-Performance Suite for Experimental Electrophysiology},
   journal = {[Journal Name]},
   year    = {2026},

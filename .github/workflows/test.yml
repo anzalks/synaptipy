@@ -309,3 +309,41 @@ jobs:
         # --no-cov overrides pyproject.toml addopts so the coverage threshold
         # does not apply to this subset-only run (would be ~80 % without infra tests).
         xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short --no-cov
+
+  # ---------------------------------------------------------------------------
+  # Auto-tag: create a release tag on main when all required CI passes.
+  # Reads the canonical version from pyproject.toml and creates a lightweight
+  # tag (v<version>) only if that tag does not yet exist.  Pushing the tag
+  # automatically triggers installer.yml and release.yml.
+  # Only runs on direct pushes to main — not on PRs or other branches.
+  # ---------------------------------------------------------------------------
+  auto-tag:
+    name: Auto-tag release
+    runs-on: ubuntu-latest
+    needs: [test, minimum-viable, security]
+    # bleeding-edge has continue-on-error=true so it is intentionally excluded
+    # from needs — a bleeding-edge failure must not block the release tag.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history required to check existing remote tags
+
+      - name: Read version and create tag if absent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          TAG="v${VERSION}"
+          if git ls-remote --tags origin "${TAG}" | grep -q "${TAG}"; then
+            echo "Tag ${TAG} already exists — skipping."
+          else
+            echo "Creating tag ${TAG} at $(git rev-parse HEAD)"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name  "github-actions[bot]"
+            git tag "${TAG}"
+            git push origin "${TAG}"
+            echo "Tag ${TAG} pushed — installer.yml and release.yml will now run."
+          fi
