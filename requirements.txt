@@ -10,10 +10,14 @@ matplotlib>=3.8.0,<4.0.0
 
 # GUI
 pyqtgraph>=0.13.3,<1.0.0
-# PySide6: pin to 6.7.3 on Windows (avoids QTBUG-130070 crash in 6.8.0).
-# On all other platforms allow >=6.7.0 excluding the known-bad 6.8.0.
-PySide6==6.7.3 ; sys_platform == 'win32'
-PySide6>=6.7.0, !=6.8.0, <7.0.0 ; sys_platform != 'win32'
+# PySide6: pinned to exactly 6.7.3 on ALL platforms.
+# - Windows: avoids QTBUG-130070 crash in 6.8.0.
+# - macOS/Linux: PySide6 >=6.10 changed signal-connection machinery so that
+#   deferred ViewBox geometry callbacks re-queue themselves during connect()
+#   inside PlotItem.__init__, dereferencing freed C++ ViewBox pointers when
+#   the canvas is rebuilt in the same GraphicsLayoutWidget (SIGSEGV).
+#   Pin must stay until pyqtgraph ships a compatible fix.
+PySide6==6.7.3
 
 # Data format support
 neo>=0.14.0,<1.0.0
