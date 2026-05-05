@@ -13,12 +13,9 @@ Run only these tests:
     pytest tests/gui/test_headless_visuals.py -v
 """
 
-import sys
-
 import numpy as np
 import pyqtgraph as pg
 import pytest
-from PySide6 import QtCore
 
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
@@ -42,13 +39,33 @@ _V = np.sin(2 * np.pi * 50 * _T) + np.random.default_rng(42).normal(0, 0.05, _N)
 def canvas(qapp, qtbot):
     """A fresh SynaptipyPlotCanvas with one plot, cleaned up after the test."""
     c = SynaptipyPlotCanvas(parent=None)
-    qtbot.addWidget(c.widget)
+
+    def _before_close(_widget):
+        """Sever ViewBox signal connections before pytest-qt destroys the widget.
+
+        pytest-qt's ``pytest_runtest_teardown`` hook (trylast=True) calls
+        ``_close_widgets()`` — which calls ``widget.close()`` followed by
+        ``widget.deleteLater()`` and ``processEvents()`` — *before* the
+        ``yield``-based fixture teardowns run.  By the time the code after
+        ``yield c`` would execute, the widget's C++ layout object is already
+        freed, so calling ``clear_plots()`` there raises:
+        ``RuntimeError: Internal C++ object (QGraphicsGridLayout) already deleted``.
+
+        ``before_close_func`` is the correct hook: it fires while all C++
+        objects are still alive.  Severing signal connections here prevents
+        stale deferred ViewBox callbacks (e.g. ``updateAutoRange``) from
+        accumulating and firing during a later test's
+        ``PlotItem.__init__()`` → Cocoa repaint → SIGSEGV on macOS.
+        """
+        try:
+            c._unlink_all_plots()
+            c._close_all_plots()
+        except Exception:
+            pass
+
+    qtbot.addWidget(c.widget, before_close_func=_before_close)
     c.add_plot("test_plot", row=0, col=0)
     yield c
-    # Tear down safely: let the event loop process deferred events on Win/Linux
-    # before the canvas goes out of scope.
-    if sys.platform != "darwin":
-        QtCore.QCoreApplication.removePostedEvents(None, 0)
 
 
 # ---------------------------------------------------------------------------

@@ -75,6 +75,38 @@ def _make_synthetic_recording(
 
 
 # ---------------------------------------------------------------------------
+# Helpers for fixture teardown
+# ---------------------------------------------------------------------------
+
+
+def _safe_clear(canvas) -> None:
+    if canvas is None:
+        return
+    try:
+        canvas.clear_plots()
+    except Exception:
+        pass
+
+
+def _clear_all_canvases(window) -> None:
+    """Call clear_plots() on every SynaptipyPlotCanvas in *window*.
+
+    Must be called BEFORE window.close() so that all C++ ViewBox objects are
+    still alive when clear_plots() runs its canonical teardown sequence
+    (_unlink_all_plots -> _close_all_plots -> drain -> widget.clear).
+    Without this, window.close() destroys the GraphicsLayoutWidget children
+    and queues deferred events for the freed ViewBoxes; those events then fire
+    during the next test's PlotItem.__init__() -> SIGSEGV on macOS.
+    """
+    explorer = getattr(window, "explorer_tab", None)
+    _safe_clear(getattr(explorer, "plot_canvas", None))
+    analyser = getattr(window, "analyser_tab", None)
+    tabs = getattr(analyser, "_loaded_analysis_tabs", None) or []
+    for tab in tabs:
+        _safe_clear(getattr(tab, "plot_canvas", None))
+
+
+# ---------------------------------------------------------------------------
 # Fixture: a clean MainWindow with all dialogs suppressed
 # (mirrors the shared ``main_window`` fixture in conftest.py)
 # ---------------------------------------------------------------------------
@@ -106,23 +138,13 @@ def main_window_e2e(qtbot):
         qtbot.wait(100)
         yield window
 
-    # Cleanup: stop worker thread and explicitly teardown the plot canvas
-    # *before* closing the window.  ExplorerPlotCanvas.rebuild_plots() queues
-    # deferred ViewBox geometry callbacks via QTimer.singleShot(0, ...).  If
-    # we call window.close() first, those callbacks fire during the subsequent
-    # deleteLater() cycle against freed C++ pointers -> SIGSEGV.
-    # Calling clear_plots() here runs the canonical teardown sequence:
-    # _unlink_all_plots() -> _close_all_plots() -> drain -> widget.clear()
-    # which resolves all pending callbacks while all C++ objects are still alive.
+    # Cleanup: stop worker thread, then clear ALL canvases before close.
+    # See _clear_all_canvases() docstring for the rationale.
     if hasattr(window, "data_loader_thread") and window.data_loader_thread:
         window.data_loader_thread.quit()
         window.data_loader_thread.wait(2000)
 
-    try:
-        if hasattr(window, "explorer_tab") and hasattr(window.explorer_tab, "plot_canvas"):
-            window.explorer_tab.plot_canvas.clear_plots()
-    except Exception:
-        pass
+    _clear_all_canvases(window)
 
     window.close()
     window.deleteLater()
