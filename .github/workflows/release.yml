@@ -125,7 +125,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
     continue-on-error: true
     environment:
       name: testpypi
@@ -160,7 +160,7 @@ jobs:
     # If testpypi-publish was skipped or failed, skip the smoke test too so
     # the pypi-publish job falls through to its own if-guard correctly.
     if: >
-      github.event_name != 'workflow_dispatch' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')) &&
       needs.testpypi-publish.result == 'success'
 
     steps:
@@ -196,7 +196,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >
-      github.event_name != 'workflow_dispatch' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')) &&
       (needs.smoke_test_testpypi.result == 'success' ||
        needs.smoke_test_testpypi.result == 'skipped')
     environment:
