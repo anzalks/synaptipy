@@ -88,9 +88,7 @@ def test_cursor_group_box_present(qtbot, mock_neo_adapter, monkeypatch):
     """
     from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 
-    monkeypatch.setattr(
-        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
-    )
+    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
 
     class _StubTab(BaseAnalysisTab):
         def get_display_name(self) -> str:

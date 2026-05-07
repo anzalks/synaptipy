@@ -309,6 +309,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.clear_btn = QtWidgets.QPushButton("Clear All")
 
         from Synaptipy.shared.styling import style_button
+
         style_button(self.undo_btn)
         style_button(self.clear_btn)
 
@@ -1502,7 +1503,9 @@ class ExplorerTab(QtWidgets.QWidget):
             )
             self._file_nav_timer.start()  # restart coalesces rapid clicks
 
-    def _explorer_set_xy_ranges_with_y_autoscale(self, plot: pg.PlotItem, xrange_tuple: tuple, yrange_tuple: tuple) -> None:
+    def _explorer_set_xy_ranges_with_y_autoscale(
+        self, plot: pg.PlotItem, xrange_tuple: tuple, yrange_tuple: tuple
+    ) -> None:
         """Apply explicit X/Y ranges, then let Y track data in the visible X window."""
         vb = plot.getViewBox()
         if vb:
