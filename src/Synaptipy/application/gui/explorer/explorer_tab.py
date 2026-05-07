@@ -294,11 +294,16 @@ class ExplorerTab(QtWidgets.QWidget):
         cursor_row_layout = QtWidgets.QHBoxLayout(cursor_row_widget)
         cursor_row_layout.setContentsMargins(0, 0, 0, 0)
 
-        cursor_group = QtWidgets.QGroupBox("Quick Measure Cursors")
+        cursor_group = QtWidgets.QGroupBox("Interactive Cursor")
+        cursor_group.setToolTip(
+            "View-only: place markers on the plot; use the Analyser tab to save measurements to results."
+        )
         cursor_layout = QtWidgets.QHBoxLayout(cursor_group)
 
-        self.cursor_cb = QtWidgets.QCheckBox("Quick Measure Cursor")
-        self.delta_cb = QtWidgets.QCheckBox("Delta Mode")
+        self.cursor_cb = QtWidgets.QCheckBox("Show")
+        self.cursor_cb.setToolTip("Enable interactive cursors on the plot area")
+        self.delta_cb = QtWidgets.QCheckBox("Delta")
+        self.delta_cb.setToolTip("Click twice on the same channel to measure differences")
         self.delta_cb.setEnabled(False)
         self.undo_btn = QtWidgets.QPushButton("Undo Last")
         self.clear_btn = QtWidgets.QPushButton("Clear All")

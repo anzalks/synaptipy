@@ -274,13 +274,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         group_box = QtWidgets.QGroupBox("Interactive Cursor")
         layout = QtWidgets.QHBoxLayout()
 
-        self.show_cursor_checkbox = QtWidgets.QCheckBox("Show Cursor")
-        self.show_cursor_checkbox.setToolTip("Click on the plot to leave a persistent cursor value")
+        self.show_cursor_checkbox = QtWidgets.QCheckBox("Show")
+        self.show_cursor_checkbox.setToolTip("Click on the plot to place persistent cursor markers")
         self.show_cursor_checkbox.stateChanged.connect(self._toggle_cursor_mode)
         layout.addWidget(self.show_cursor_checkbox)
 
-        self.delta_mode_checkbox = QtWidgets.QCheckBox("Delta Mode")
-        self.delta_mode_checkbox.setToolTip("Click twice to measure differences")
+        self.delta_mode_checkbox = QtWidgets.QCheckBox("Delta")
+        self.delta_mode_checkbox.setToolTip("Click twice on the plot to measure differences")
         self.delta_mode_checkbox.setEnabled(False)
         self.delta_mode_checkbox.stateChanged.connect(self._toggle_delta_mode)
         layout.addWidget(self.delta_mode_checkbox)

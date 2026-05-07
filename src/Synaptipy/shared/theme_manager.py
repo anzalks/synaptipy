@@ -146,6 +146,8 @@ def apply_theme(mode: Optional[ThemeMode] = None) -> None:
         return
 
     if mode == ThemeMode.SYSTEM:
+        # Windows: prefer registry via _detect_system_dark_mode(); falls back to
+        # palette luminance when the key is missing (same helper as is_dark_mode()).
         if _detect_system_dark_mode():
             _apply_dark_theme(app)
             log.debug("Applied system theme (dark)")

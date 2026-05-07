@@ -63,7 +63,6 @@ class CursorDeltaResult(AnalysisResult):
         return f"CursorDeltaResult(Error: {self.error_message})"
 
 
-
 @dataclass
 class SpikeTrainResult(AnalysisResult):
     """
