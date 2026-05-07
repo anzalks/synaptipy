@@ -45,42 +45,39 @@ Welcome to Synaptipy's Documentation
 
 |
 
-Synaptipy is a cross-platform, open-source electrophysiology visualisation and analysis suite.
-The primary focus is whole-cell patch-clamp and intracellular recordings; however, any
-electrophysiology signal whose file format is supported by the
-`Neo <https://neo.readthedocs.io/en/latest/>`_ I/O library can be loaded, visualised, and processed
-- including extracellular and multi-channel recordings.
+Synaptipy is a cross-platform electrophysiology visualization and analysis application.
+The primary experimental focus is whole-cell patch-clamp and intracellular recordings; file I/O
+is implemented via the `Neo <https://neo.readthedocs.io/en/latest/>`_ library, which supports
+over 30 acquisition formats including extracellular and multi-channel data.
 
-Built on Python and Qt6, Synaptipy provides OpenGL-accelerated signal visualisation,
-17 built-in analysis modules spanning intrinsic membrane properties, action potential
-characterisation, synaptic event detection, and evoked responses (Evoked Sync, Paired-Pulse
-Ratio, Stimulus Train STP), a composable batch processing
-engine, and an extensible plugin interface that allows custom analysis routines to be
-integrated without modifying the core package. Three example plugins ship with
-the application and are loadable via a single checkbox in Preferences.
-File I/O is handled through
-`Neo <https://neo.readthedocs.io/en/latest/>`_, supporting over 30 acquisition formats including
-Axon ABF, WinWCP, CED/Spike2, Intan, Igor Pro, NWB, Open Ephys, and more.
-NWB export is provided via `PyNWB <https://pynwb.readthedocs.io/en/stable/>`_.
+The software is implemented in Python using the Qt6 framework (PySide6). Signal visualization
+employs GPU-accelerated rendering via PyQtGraph. The application includes 17 built-in analysis
+modules spanning intrinsic membrane properties, action potential characterization, synaptic
+event detection, and evoked responses (Evoked Sync, Paired-Pulse Ratio, Stimulus Train STP).
+A batch processing engine implements composable analysis pipelines. An extensible plugin
+interface permits integration of user-written analysis routines without modification to the
+core package. Three example plugins are distributed with the application. File I/O is handled
+via `Neo <https://neo.readthedocs.io/en/latest/>`_, supporting Axon ABF, WinWCP, CED/Spike2,
+Intan, Igor Pro, NWB, Open Ephys, and additional formats. NWB 2.x export is provided via
+`PyNWB <https://pynwb.readthedocs.io/en/stable/>`_.
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
-Collaborations, bug reports, and pull requests are welcome.
 
 .. grid:: 2
 
-   .. grid-item-card:: Quick-start Tutorial
+   .. grid-item-card:: Tutorial
       :link: tutorial/index
       :link-type: doc
 
-      A full walkthrough of every feature - Explorer, Analyser, Batch
-      Processing, and Exporter - with the maths behind each analysis module.
+      Walkthrough of Explorer, Analyser, Batch Processing, and Exporter
+      interfaces. Includes mathematical definitions for each analysis module.
 
    .. grid-item-card:: User Guide
       :link: user_guide
       :link-type: doc
 
-      Installation, supported file formats, and a detailed walkthrough of
-      all three application tabs.
+      Installation procedures, supported file formats, and application
+      interface description.
 
 .. grid:: 2
 
@@ -88,7 +85,7 @@ Collaborations, bug reports, and pull requests are welcome.
       :link: api_reference
       :link-type: doc
 
-      Public Python API for using Synaptipy as a library in your own scripts.
+      Public Python API for programmatic use.
 
    .. grid-item-card:: Developer Guide
       :link: developer_guide
@@ -102,25 +99,23 @@ Collaborations, bug reports, and pull requests are welcome.
       :link: algorithmic_definitions
       :link-type: doc
 
-      Formal mathematical definitions for every analysis metric - suitable
-      for citation in manuscripts and peer review.
+      Mathematical definitions for all analysis metrics.
 
    .. grid-item-card:: NWB Export Mapping
       :link: nwb_mapping
       :link-type: doc
 
-      How Synaptipy maps electrophysiology data to NWB 2.x containers,
-      including electrode metadata and unit conventions.
+      Mapping of electrophysiology data to NWB 2.x containers, including
+      electrode metadata and unit conventions.
 
 .. grid:: 2
 
-   .. grid-item-card:: Writing Plugins
+   .. grid-item-card:: Plugin Development
       :link: extending_synaptipy
       :link-type: doc
 
-      Add custom analysis routines without modifying source code -
-      complete reference for ``ui_params``, ``plots``, return-dict
-      conventions, and three bundled example plugins.
+      Reference for custom analysis routines. Includes ``ui_params``,
+      ``plots``, return-dict conventions, and example plugins.
 
    .. grid-item-card:: Source on GitHub
       :link: https://github.com/anzalks/synaptipy

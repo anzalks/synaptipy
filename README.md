@@ -13,11 +13,11 @@
 [![Lint: flake8](https://img.shields.io/badge/lint-flake8-blue)](https://flake8.pycqa.org/)
 [![Release](https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange)](https://github.com/anzalks/synaptipy/releases)
 
-**Open-Source Electrophysiology Visualization and Analysis Suite** | v0.1.2b9
+## Abstract
+
+Synaptipy is a cross-platform application for the visualization and analysis of electrophysiological recordings. The software implements a modular architecture supporting interactive single-recording analysis, batch processing, and integration of user-written analysis routines via a plugin interface. The primary experimental focus is whole-cell patch-clamp and intracellular recordings; file I/O is handled via the [Neo](https://neo.readthedocs.io) library, enabling import of any supported electrophysiology format including extracellular, sharp-electrode, and multi-channel data.
 
 Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/en/latest/)
-
-Synaptipy is a cross-platform, open-source application for the visualization and analysis of electrophysiological recordings. It is designed around a modular, extensible architecture that supports interactive single-recording analysis, large-scale batch processing, and integration of custom user-written analysis routines via a plugin interface. The primary focus is whole-cell patch-clamp and intracellular recordings; any electrophysiology signal whose file format is supported by the [Neo](https://neo.readthedocs.io) I/O library can be loaded, visualised, and processed, including extracellular, sharp-electrode, and multi-channel recordings.
 
 ---
 
@@ -137,30 +137,23 @@ Synaptipy provides 17 built-in analysis routines organised into five module tabs
 
 ## Visualization
 
-- Trace rendering via PyQtGraph, capable of handling multi-million-sample recordings at interactive frame rates
-- Tree-based multi-file explorer with synchronised trial navigation and per-channel amplitude scaling
-- Interactive zooming and panning with explicit view-range management
-- Popup plots for I-V curves, F-I curves, phase planes, and ISI distributions
+Trace rendering is implemented via PyQtGraph (GPU-accelerated plotting library). The interface comprises a tree-based multi-file explorer with synchronized trial navigation and per-channel amplitude scaling. View-range management, zooming, and panning are performed explicitly via mouse interactions. Popup plots are generated for I-V curves, F-I curves, phase planes, and inter-spike interval distributions.
 
 ### Cross-file trial averaging
 
-The Explorer tab supports grand-average construction across an arbitrary selection of files and trials. While in **Cycle Single Trial** mode, activate **Add Current Trial to Avg Set** to capture the current trial. Navigate to other files and continue adding trials; the accumulated set persists across the session. Enable **Plot Selected Avg** to overlay the mean trace. Shape mismatches between recordings of different durations are resolved by truncating all trials to the length of the shortest array in the selection.
+The Explorer tab implements grand-average construction across multiple files and trials. In **Cycle Single Trial** mode, the user captures individual trials via **Add Current Trial to Avg Set**. Trials from different files may be accumulated; the selection persists across the session. Activation of **Plot Selected Avg** overlays the mean trace. When recordings of different durations are selected, all trials are truncated to the minimum array length before averaging to resolve shape mismatches.
 
 ---
 
 ## Batch Processing
 
-- Composable pipeline architecture: any registered analysis steps can be chained in sequence
-- Analysis runs in a background worker thread; the graphical interface remains responsive
-- Automatic extraction of recording metadata (sampling rate, gain, acquisition datetime)
-- Results exported to CSV in wide format (scalar metrics) and long format (event arrays), compatible with Python/Pandas, R, and MATLAB
-- NWB 2.x export with icephys sweep tables, a three-step stimulus reconstruction fallback, and a discrete-event `ProcessingModule` for FAIR-compliant data archival
+The batch processing engine implements a composable pipeline architecture in which registered analysis routines are chained sequentially. Analysis operations execute in a background worker thread; the graphical interface remains responsive during execution. Recording metadata (sampling rate, gain, acquisition datetime) are extracted automatically. Results are exported to CSV in wide format (scalar metrics) or long format (event arrays); both formats are compatible with Python/Pandas, R, and MATLAB. NWB 2.x export includes icephys sweep tables, a three-step stimulus reconstruction fallback, and a discrete-event `ProcessingModule` for FAIR-compliant data archival.
 
 ---
 
 ## Plugin Interface
 
-Synaptipy is built around a central `AnalysisRegistry` that maps named analysis functions to the graphical interface and batch engine via a decorator. Any Python script placed in `~/.synaptipy/plugins/` that uses the `@AnalysisRegistry.register` decorator is discovered at startup and made available in both the interactive analyser and the batch pipeline without modification to the core package.
+The software architecture comprises a central `AnalysisRegistry` that maps named analysis functions to the graphical interface and batch engine via a decorator pattern. Python scripts placed in `~/.synaptipy/plugins/` that use the `@AnalysisRegistry.register` decorator are discovered at startup and integrated into both the interactive analyser and batch pipeline without modification to the core package.
 
 A documented template at `src/Synaptipy/templates/analysis_template.py` defines the required function signature and return schema.
 

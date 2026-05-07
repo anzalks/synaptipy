@@ -1,6 +1,6 @@
 # Synaptipy User Guide
 
-This guide provides detailed instructions for installing, configuring, and using Synaptipy for electrophysiology data visualization and analysis.
+This document describes installation, configuration, and operation of Synaptipy for electrophysiology data visualization and analysis.
 
 ## Table of Contents
 
@@ -48,11 +48,11 @@ This guide provides detailed instructions for installing, configuring, and using
 
 Synaptipy is available both as a standalone application and as a Python package.
 
-#### Standalone Application (Recommended)
-You can download pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.AppImage`) directly from the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
-- **macOS**: Download the `.dmg`, open it, and drag Synaptipy to your Applications folder.
-- **Windows**: Download and run the `_Setup.exe` installer.
-- **Linux**: Download the `.AppImage` file, make it executable (`chmod +x Synaptipy-*.AppImage`), and run it directly.
+#### Standalone Application
+Pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.AppImage`) are available on the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
+- **macOS**: Open the `.dmg` and drag Synaptipy to the Applications folder.
+- **Windows**: Execute the `_Setup.exe` installer.
+- **Linux**: Mark the `.AppImage` file executable (`chmod +x Synaptipy-*.AppImage`) and execute.
 
 #### Python Package Installation
 
@@ -102,13 +102,12 @@ The Synaptipy interface consists of three main tabs:
 2. **Analyser Tab**: Perform various analyses on the loaded data
 3. **Exporter Tab**: Export data and results to different formats
 
-### Quick Start with Demo Data
+### Demo Data
 
-If you have no recordings to hand, Synaptipy can download a set of curated
-example files automatically.
+A set of example recordings may be downloaded automatically for testing purposes.
 
-1. Open **Help > Download Demo Data...**  A banner appears below the menu bar.
-2. Click **Download Demo Data**.  Synaptipy downloads five example recordings
+1. Select **Help > Download Demo Data...** A banner appears below the menu bar.
+2. Select **Download Demo Data**. The application downloads five example recordings
    from the public repository to `~/Documents/SynaptiPy_Demo/`:
 
    | File | Format | Description |
@@ -119,16 +118,14 @@ example files automatically.
    | `2023_04_11_0022.abf` | ABF v2 | Optogenetic stimulation protocol |
    | `240326_003.wcp` | WinWCP | WinWCP current-clamp recording |
 
-3. Once all files are downloaded the banner closes automatically and the
-   first ABF file opens in the **Explorer Tab**.
-4. The **Help > Download Demo Data...** menu item is disabled for the rest of
-   the session (and on future launches if the files are already present).
+3. Upon completion, the banner closes and the first ABF file is opened in
+   the **Explorer Tab**.
+4. The **Help > Download Demo Data...** menu item is disabled for the session
+   (and on subsequent launches if files are already present).
 
-:::{note}
-The download requires an internet connection.  Files already present on disk
-are never re-downloaded.  If a download is interrupted, partially written
-files are cleaned up so the next attempt starts fresh.
-:::
+**Note:** An internet connection is required. Files already present are not
+re-downloaded. If a download is interrupted, partially written files are
+removed.
 
 ## Loading Data
 
@@ -573,26 +570,23 @@ Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access 
 | **Appearance** | Switch between Light, Dark, or System color theme. |
 | **Enable Custom Plugins** | When checked, Synaptipy loads Python plugins from `~/.synaptipy/plugins/` and `examples/plugins/`. See below for the hot-reload mechanism. |
 
-### Checking for Updates
+### Version Checking
 
-Synaptipy performs a silent version check in the background each time it
-starts.  If a newer release is found on
-[GitHub Releases](https://github.com/anzalks/synaptipy/releases) a
-non-intrusive yellow banner appears below the menu bar showing the new version
-number and a link to the release notes.  The banner can be dismissed with the
-**Dismiss** button.
+The application performs a version check at startup. If a newer release is
+detected on [GitHub Releases](https://github.com/anzalks/synaptipy/releases),
+a yellow banner appears below the menu bar displaying the version number and a
+link to release notes. The banner may be dismissed.
 
-You can also trigger a manual check at any time via **Help > Check for
-Updates...**.  The status bar reports the outcome:
+A manual check may be initiated via **Help > Check for Updates...**. Status
+bar messages indicate:
 
 - *"Checking for updates..."* - check in progress.
-- *"You are on the latest version."* - no newer release found.
-- Yellow banner - a newer version is available (click the link to open the
-  release page in your browser).
+- *"You are on the latest version."* - no newer release detected.
+- Yellow banner - newer version available.
 
-The check is a single lightweight request to the GitHub Releases API
-(`api.github.com`).  If your machine is offline or behind a firewall the
-check fails silently - no error message is shown and no data is sent.
+The check consists of a single request to the GitHub Releases API
+(`api.github.com`). If the system is offline or behind a firewall, the check
+fails silently.
 
 #### Enable Custom Plugins - Hot-Reload Mechanism
 
