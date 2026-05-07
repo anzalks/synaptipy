@@ -391,12 +391,20 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     def enable_cursor_mode(self, enabled: bool):
         self._cursor_mode_enabled = enabled
         
+    def set_cursor_enabled(self, enabled: bool):
+        self.enable_cursor_mode(enabled)
+        
     def enable_delta_mode(self, enabled: bool):
         self._delta_mode_enabled = enabled
         if not enabled and self._delta_anchor:
-            self.main_plot.removeItem(self._delta_anchor['marker'])
-            self.main_plot.removeItem(self._delta_anchor['text'])
+            plot = self._delta_anchor.get('plot', self.main_plot)
+            if plot:
+                plot.removeItem(self._delta_anchor['marker'])
+                plot.removeItem(self._delta_anchor['text'])
             self._delta_anchor = None
+
+    def set_delta_mode_enabled(self, enabled: bool):
+        self.enable_delta_mode(enabled)
 
     def _on_mouse_clicked(self, event):
         if not self._cursor_mode_enabled:
@@ -405,15 +413,17 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
             
-        if not self.main_plot:
+        clicked_plot = None
+        for plot in self.plot_items.values():
+            if plot.getViewBox() and plot.sceneBoundingRect().contains(event.scenePos()):
+                clicked_plot = plot
+                break
+                
+        if not clicked_plot:
             return
             
-        vb = self.main_plot.getViewBox()
+        vb = clicked_plot.getViewBox()
         if not vb:
-            return
-
-        pos = event.scenePos()
-        if not vb.sceneBoundingRect().contains(pos):
             return
             
         mouse_point = vb.mapSceneToView(pos)
@@ -454,12 +464,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                     
         if best_x is not None and best_y is not None:
             if self._delta_mode_enabled:
-                self.handle_delta_click(float(best_x), float(best_y))
+                self.handle_delta_click(float(best_x), float(best_y), clicked_plot)
             else:
-                self.add_cursor_box(float(best_x), float(best_y))
+                self.add_cursor_box(float(best_x), float(best_y), clicked_plot)
         
-    def handle_delta_click(self, x_val: float, y_val: float):
-        if not self.main_plot:
+    def handle_delta_click(self, x_val: float, y_val: float, target_plot=None):
+        target_plot = target_plot or self.main_plot
+        if not target_plot:
             return
             
         try:
@@ -482,7 +493,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 pen=pg.mkPen(None),
                 brush=pg.mkBrush(bg_color)
             )
-            self.main_plot.addItem(marker)
+            target_plot.addItem(marker)
             
             text_item = pg.TextItem(
                 text=f"[Pair {pair_id} Start] X: {x_val:.4g}\nY: {y_val:.4g}",
@@ -490,24 +501,29 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2)
             )
-            self.main_plot.addItem(text_item)
+            target_plot.addItem(text_item)
             text_item.setPos(x_val, y_val)
             
-            self._delta_anchor = {'x': x_val, 'y': y_val, 'marker': marker, 'text': text_item}
+            self._delta_anchor = {'x': x_val, 'y': y_val, 'marker': marker, 'text': text_item, 'plot': target_plot}
         else:
             # Second click
             x1 = self._delta_anchor['x']
             y1 = self._delta_anchor['y']
             marker1 = self._delta_anchor['marker']
             text1 = self._delta_anchor['text']
+            plot1 = self._delta_anchor['plot']
             
+            # If the user clicked on a different plot, we still render it there, but ideally we force it to the same plot
+            if target_plot != plot1:
+                target_plot = plot1
+                
             marker2 = pg.ScatterPlotItem(
                 x=[x_val], y=[y_val],
                 size=10,
                 pen=pg.mkPen(None),
                 brush=pg.mkBrush(bg_color)
             )
-            self.main_plot.addItem(marker2)
+            target_plot.addItem(marker2)
             
             text2 = pg.TextItem(
                 text=f"[Pair {pair_id} End] X: {x_val:.4g}\nY: {y_val:.4g}",
@@ -515,11 +531,11 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2)
             )
-            self.main_plot.addItem(text2)
+            target_plot.addItem(text2)
             text2.setPos(x_val, y_val)
             
             line = pg.PlotDataItem([x1, x_val], [y1, y_val], pen=pg.mkPen(bg_color, style=QtCore.Qt.DashLine))
-            self.main_plot.addItem(line)
+            target_plot.addItem(line)
             
             dx = x_val - x1
             dy = y_val - y1
@@ -532,12 +548,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             )
             mid_x = (x1 + x_val) / 2
             mid_y = (y1 + y_val) / 2
-            self.main_plot.addItem(mid_text)
+            target_plot.addItem(mid_text)
             mid_text.setPos(mid_x, mid_y)
             
             self._cursor_history.append({
                 'type': 'delta',
                 'items': [marker1, text1, marker2, text2, line, mid_text],
+                'plot': target_plot,
                 'data': (x1, y1, x_val, y_val, dx, dy, pair_id)
             })
             
@@ -555,67 +572,85 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             bg_color = pg.mkColor(bg_color_str)
         except ImportError:
             bg_color = pg.mkColor(0, 120, 215)
+    def add_cursor_box(self, x_val: float, y_val: float, target_plot=None):
+        target_plot = target_plot or self.main_plot
+        if not target_plot:
+            return
             
-        # Ensure some transparency
+        try:
+            from Synaptipy.shared.zoom_theme import get_system_accent_color
+            bg_color_str = get_system_accent_color()
+            bg_color = pg.mkColor(bg_color_str)
+        except ImportError:
+            bg_color = pg.mkColor(0, 120, 215)
+            
         if bg_color.alpha() == 255:
             bg_color.setAlpha(180)
             
-        # Add visual marker (scatter point)
         marker = pg.ScatterPlotItem(
             x=[x_val], y=[y_val],
             size=10,
             pen=pg.mkPen(None),
             brush=pg.mkBrush(bg_color)
         )
-        self.main_plot.addItem(marker)
+        target_plot.addItem(marker)
         
-        # Add text box
         text_item = pg.TextItem(
             text=f"X: {x_val:.4g}\nY: {y_val:.4g}",
             color="white",
             fill=pg.mkBrush(bg_color),
-            anchor=(0.5, 1.2)  # Anchor it slightly above the marker
+            anchor=(0.5, 1.2)
         )
-        self.main_plot.addItem(text_item)
+        target_plot.addItem(text_item)
         text_item.setPos(x_val, y_val)
         
         self._cursor_history.append({
             'type': 'single',
             'items': [marker, text_item],
+            'plot': target_plot,
             'data': (x_val, y_val)
         })
         self.cursor_added.emit(x_val, y_val)
 
     def undo_cursor(self):
-        if not self.main_plot:
-            return
-            
         if self._delta_anchor:
-            self.main_plot.removeItem(self._delta_anchor['marker'])
-            self.main_plot.removeItem(self._delta_anchor['text'])
+            plot = self._delta_anchor.get('plot', self.main_plot)
+            if plot:
+                plot.removeItem(self._delta_anchor['marker'])
+                plot.removeItem(self._delta_anchor['text'])
             self._delta_anchor = None
             return
             
         if self._cursor_history:
             last = self._cursor_history.pop()
-            for item in last['items']:
-                self.main_plot.removeItem(item)
+            plot = last.get('plot', self.main_plot)
+            if plot:
+                for item in last['items']:
+                    plot.removeItem(item)
             if last['type'] == 'delta':
                 self._delta_pair_counter = max(0, self._delta_pair_counter - 1)
 
     def clear_cursors(self):
-        if not self.main_plot:
-            return
         if self._delta_anchor:
-            self.main_plot.removeItem(self._delta_anchor['marker'])
-            self.main_plot.removeItem(self._delta_anchor['text'])
+            plot = self._delta_anchor.get('plot', self.main_plot)
+            if plot:
+                plot.removeItem(self._delta_anchor['marker'])
+                plot.removeItem(self._delta_anchor['text'])
             self._delta_anchor = None
             
         for entry in self._cursor_history:
-            for item in entry['items']:
-                self.main_plot.removeItem(item)
+            plot = entry.get('plot', self.main_plot)
+            if plot:
+                for item in entry['items']:
+                    plot.removeItem(item)
         self._cursor_history.clear()
         self._delta_pair_counter = 0
+
+    def undo_last_cursor(self):
+        self.undo_cursor()
+
+    def clear_all_cursors(self):
+        self.clear_cursors()
 
     def get_cursor_history(self):
         return self._cursor_history.copy()

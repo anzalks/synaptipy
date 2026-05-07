@@ -363,19 +363,19 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if not is_checked:
             self.delta_mode_checkbox.setChecked(False)
         if self.plot_canvas:
-            self.plot_canvas.enable_cursor_mode(is_checked)
+            self.plot_canvas.set_cursor_enabled(is_checked)
 
     def _toggle_delta_mode(self, state):
         if self.plot_canvas:
-            self.plot_canvas.enable_delta_mode(state == QtCore.Qt.CheckState.Checked.value)
+            self.plot_canvas.set_delta_mode_enabled(state == QtCore.Qt.CheckState.Checked.value)
 
     def _undo_last_cursor(self):
         if self.plot_canvas:
-            self.plot_canvas.undo_cursor()
+            self.plot_canvas.undo_last_cursor()
 
     def _clear_cursors(self):
         if self.plot_canvas:
-            self.plot_canvas.clear_cursors()
+            self.plot_canvas.clear_all_cursors()
 
     def _save_cursor_value(self):
         if not self.plot_canvas:

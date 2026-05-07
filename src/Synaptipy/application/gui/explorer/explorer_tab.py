@@ -289,8 +289,35 @@ class ExplorerTab(QtWidgets.QWidget):
 
         zoom_row_layout.addWidget(zoom_controls_group)
 
+        # 6. Cursor Controls Row (Row 4)
+        cursor_row_widget = QtWidgets.QWidget()
+        cursor_row_layout = QtWidgets.QHBoxLayout(cursor_row_widget)
+        cursor_row_layout.setContentsMargins(0, 0, 0, 0)
+        
+        cursor_group = QtWidgets.QGroupBox("Quick Measure Cursors")
+        cursor_layout = QtWidgets.QHBoxLayout(cursor_group)
+        
+        self.cursor_cb = QtWidgets.QCheckBox("Quick Measure Cursor")
+        self.delta_cb = QtWidgets.QCheckBox("Delta Mode")
+        self.delta_cb.setEnabled(False)
+        self.undo_btn = QtWidgets.QPushButton("Undo Last")
+        self.clear_btn = QtWidgets.QPushButton("Clear All")
+        
+        from Synaptipy.shared.styling import style_button
+        style_button(self.undo_btn)
+        style_button(self.clear_btn)
+        
+        cursor_layout.addWidget(self.cursor_cb)
+        cursor_layout.addWidget(self.delta_cb)
+        cursor_layout.addWidget(self.undo_btn)
+        cursor_layout.addWidget(self.clear_btn)
+        cursor_layout.addStretch()
+        
+        cursor_row_layout.addWidget(cursor_group)
+
         center_layout.addWidget(nav_row_widget, 2, 0)
         center_layout.addWidget(zoom_row_widget, 3, 0)
+        center_layout.addWidget(cursor_row_widget, 4, 0)
 
         # Adjust column stretch
         center_layout.setColumnStretch(0, 1)  # Plot takes max width
@@ -301,6 +328,7 @@ class ExplorerTab(QtWidgets.QWidget):
         center_layout.setRowStretch(1, 0)
         center_layout.setRowStretch(2, 0)
         center_layout.setRowStretch(3, 0)
+        center_layout.setRowStretch(4, 0)
 
         layout.addWidget(center_widget, 1)
 
@@ -360,6 +388,12 @@ class ExplorerTab(QtWidgets.QWidget):
         # Plot Canvas
         self.plot_canvas.x_range_changed.connect(self._on_vb_x_range_changed)
         self.plot_canvas.y_range_changed.connect(self._on_vb_y_range_changed)
+        
+        # Cursor Controls
+        self.cursor_cb.stateChanged.connect(self._on_cursor_toggled)
+        self.delta_cb.stateChanged.connect(self._on_delta_toggled)
+        self.undo_btn.clicked.connect(self.plot_canvas.undo_last_cursor)
+        self.clear_btn.clicked.connect(self.plot_canvas.clear_all_cursors)
 
         # Global plot-customization signal — propagate pen/brush changes to Explorer canvas
         from Synaptipy.shared.plot_customization import get_plot_customization_signals
@@ -373,6 +407,17 @@ class ExplorerTab(QtWidgets.QWidget):
         # Live Analysis Controls
         self.config_panel.threshold_changed.connect(self._request_live_analysis)
         self.config_panel.refractory_changed.connect(self._request_live_analysis)
+
+    def _on_cursor_toggled(self, state):
+        is_enabled = state == QtCore.Qt.CheckState.Checked.value
+        self.delta_cb.setEnabled(is_enabled)
+        if not is_enabled:
+            self.delta_cb.setChecked(False)
+        self.plot_canvas.set_cursor_enabled(is_enabled)
+        
+    def _on_delta_toggled(self, state):
+        is_enabled = state == QtCore.Qt.CheckState.Checked.value
+        self.plot_canvas.set_delta_mode_enabled(is_enabled)
 
     def _request_live_analysis(self):
         """Gather params and request analysis for the CURRENT visible channel/trial."""
