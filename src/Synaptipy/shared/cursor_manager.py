@@ -164,7 +164,7 @@ class CursorToolManager(QtCore.QObject):
                 return
 
             marker2 = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
-            target_plot.addItem(marker2)
+            target_plot.addItem(marker2, ignoreBounds=True)
 
             text2 = pg.TextItem(
                 text=f"[Pair {pair_id} End] X: {x_val:.4g}\\nY: {y_val:.4g}",
@@ -172,11 +172,11 @@ class CursorToolManager(QtCore.QObject):
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2),
             )
-            target_plot.addItem(text2)
+            target_plot.addItem(text2, ignoreBounds=True)
             text2.setPos(x_val, y_val)
 
             line = pg.PlotDataItem([x1, x_val], [y1, y_val], pen=pg.mkPen(bg_color, style=QtCore.Qt.DashLine))
-            target_plot.addItem(line)
+            target_plot.addItem(line, ignoreBounds=True)
 
             dx = x_val - x1
             dy = y_val - y1
@@ -189,7 +189,7 @@ class CursorToolManager(QtCore.QObject):
             )
             mid_x = (x1 + x_val) / 2
             mid_y = (y1 + y_val) / 2
-            target_plot.addItem(mid_text)
+            target_plot.addItem(mid_text, ignoreBounds=True)
             mid_text.setPos(mid_x, mid_y)
 
             self._cursor_history.append(
@@ -218,12 +218,12 @@ class CursorToolManager(QtCore.QObject):
             bg_color.setAlpha(180)
 
         marker = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
-        target_plot.addItem(marker)
+        target_plot.addItem(marker, ignoreBounds=True)
 
         text_item = pg.TextItem(
             text=f"X: {x_val:.4g}\\nY: {y_val:.4g}", color="white", fill=pg.mkBrush(bg_color), anchor=(0.5, 1.2)
         )
-        target_plot.addItem(text_item)
+        target_plot.addItem(text_item, ignoreBounds=True)
         text_item.setPos(x_val, y_val)
 
         self._cursor_history.append(
