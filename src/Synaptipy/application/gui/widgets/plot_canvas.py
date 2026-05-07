@@ -46,6 +46,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self._cursor_mode_enabled = False
         self._delta_mode_enabled = False
         self._delta_anchor = None
+        self._delta_pair_counter = 0
         self._cursor_history = []
         self.widget.scene().sigMouseClicked.connect(self._on_mouse_clicked)
 
@@ -394,6 +395,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self._delta_mode_enabled = enabled
         if not enabled and self._delta_anchor:
             self.main_plot.removeItem(self._delta_anchor['marker'])
+            self.main_plot.removeItem(self._delta_anchor['text'])
             self._delta_anchor = None
 
     def _on_mouse_clicked(self, event):
@@ -470,6 +472,8 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         if bg_color.alpha() == 255:
             bg_color.setAlpha(180)
             
+        pair_id = self._delta_pair_counter + 1
+            
         if not self._delta_anchor:
             # First click
             marker = pg.ScatterPlotItem(
@@ -479,12 +483,23 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                 brush=pg.mkBrush(bg_color)
             )
             self.main_plot.addItem(marker)
-            self._delta_anchor = {'x': x_val, 'y': y_val, 'marker': marker}
+            
+            text_item = pg.TextItem(
+                text=f"[Pair {pair_id} Start] X: {x_val:.4g}\nY: {y_val:.4g}",
+                color="white",
+                fill=pg.mkBrush(bg_color),
+                anchor=(0.5, 1.2)
+            )
+            self.main_plot.addItem(text_item)
+            text_item.setPos(x_val, y_val)
+            
+            self._delta_anchor = {'x': x_val, 'y': y_val, 'marker': marker, 'text': text_item}
         else:
             # Second click
             x1 = self._delta_anchor['x']
             y1 = self._delta_anchor['y']
             marker1 = self._delta_anchor['marker']
+            text1 = self._delta_anchor['text']
             
             marker2 = pg.ScatterPlotItem(
                 x=[x_val], y=[y_val],
@@ -494,29 +509,39 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             )
             self.main_plot.addItem(marker2)
             
+            text2 = pg.TextItem(
+                text=f"[Pair {pair_id} End] X: {x_val:.4g}\nY: {y_val:.4g}",
+                color="white",
+                fill=pg.mkBrush(bg_color),
+                anchor=(0.5, 1.2)
+            )
+            self.main_plot.addItem(text2)
+            text2.setPos(x_val, y_val)
+            
             line = pg.PlotDataItem([x1, x_val], [y1, y_val], pen=pg.mkPen(bg_color, style=QtCore.Qt.DashLine))
             self.main_plot.addItem(line)
             
             dx = x_val - x1
             dy = y_val - y1
             
-            text_item = pg.TextItem(
-                text=f"ΔX: {dx:.4g}\nΔY: {dy:.4g}",
+            mid_text = pg.TextItem(
+                text=f"[Pair {pair_id}]\nΔX: {dx:.4g}\nΔY: {dy:.4g}",
                 color="white",
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2)
             )
             mid_x = (x1 + x_val) / 2
             mid_y = (y1 + y_val) / 2
-            self.main_plot.addItem(text_item)
-            text_item.setPos(mid_x, mid_y)
+            self.main_plot.addItem(mid_text)
+            mid_text.setPos(mid_x, mid_y)
             
             self._cursor_history.append({
                 'type': 'delta',
-                'items': [marker1, marker2, line, text_item],
-                'data': (x1, y1, x_val, y_val, dx, dy)
+                'items': [marker1, text1, marker2, text2, line, mid_text],
+                'data': (x1, y1, x_val, y_val, dx, dy, pair_id)
             })
             
+            self._delta_pair_counter += 1
             self._delta_anchor = None
             self.cursor_added.emit(x_val, y_val)
 
@@ -567,6 +592,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             
         if self._delta_anchor:
             self.main_plot.removeItem(self._delta_anchor['marker'])
+            self.main_plot.removeItem(self._delta_anchor['text'])
             self._delta_anchor = None
             return
             
@@ -574,18 +600,22 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             last = self._cursor_history.pop()
             for item in last['items']:
                 self.main_plot.removeItem(item)
+            if last['type'] == 'delta':
+                self._delta_pair_counter = max(0, self._delta_pair_counter - 1)
 
     def clear_cursors(self):
         if not self.main_plot:
             return
         if self._delta_anchor:
             self.main_plot.removeItem(self._delta_anchor['marker'])
+            self.main_plot.removeItem(self._delta_anchor['text'])
             self._delta_anchor = None
             
         for entry in self._cursor_history:
             for item in entry['items']:
                 self.main_plot.removeItem(item)
         self._cursor_history.clear()
+        self._delta_pair_counter = 0
 
     def get_cursor_history(self):
         return self._cursor_history.copy()
