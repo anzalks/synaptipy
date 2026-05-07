@@ -53,21 +53,48 @@ class CursorToolManager(QtCore.QObject):
                 plots.append(item)
         return plots
 
+    def _find_nearest_point(
+        self,
+        click_x: float,
+        click_y: float,
+        x_range: float,
+        y_range: float,
+        items: List,
+    ):
+        """Return (best_x, best_y) nearest to the click in normalised 2-D space."""
+        best_x = None
+        best_y = None
+        min_dist = float("inf")
+        for item in items:
+            xData = getattr(item, "xData", None)
+            yData = getattr(item, "yData", None)
+            if xData is None or yData is None or len(xData) == 0 or len(xData) != len(yData):
+                continue
+            idx = np.argmin(np.abs(xData - click_x))
+            pt_x = float(xData[idx])
+            pt_y = float(yData[idx])
+            norm_dist = ((pt_x - click_x) / x_range) ** 2 + ((pt_y - click_y) / y_range) ** 2
+            if norm_dist < min_dist:
+                min_dist = norm_dist
+                best_x = pt_x
+                best_y = pt_y
+        return best_x, best_y
+
+    def _resolve_clicked_plot(self, pos) -> Optional[pg.PlotItem]:
+        """Return the first PlotItem whose bounding rect contains *pos*."""
+        for plot in self._get_all_plots():
+            if plot.getViewBox() and plot.sceneBoundingRect().contains(pos):
+                return plot
+        return None
+
     def _on_mouse_clicked(self, event):
         if not self._cursor_mode_enabled:
             return
-
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
 
         pos = event.scenePos()
-        clicked_plot = None
-
-        for plot in self._get_all_plots():
-            if plot.getViewBox() and plot.sceneBoundingRect().contains(pos):
-                clicked_plot = plot
-                break
-
+        clicked_plot = self._resolve_clicked_plot(pos)
         if not clicked_plot:
             return
 
@@ -82,35 +109,17 @@ class CursorToolManager(QtCore.QObject):
         view_rect = vb.viewRange()
         x_range = view_rect[0][1] - view_rect[0][0]
         y_range = view_rect[1][1] - view_rect[1][0]
-
         if x_range == 0 or y_range == 0:
             return
 
-        best_x = None
-        best_y = None
-        min_dist = float("inf")
+        best_x, best_y = self._find_nearest_point(click_x, click_y, x_range, y_range, clicked_plot.listDataItems())
+        if best_x is None:
+            return
 
-        for item in clicked_plot.listDataItems():
-            xData = getattr(item, "xData", None)
-            yData = getattr(item, "yData", None)
-
-            if xData is not None and yData is not None and len(xData) > 0 and len(xData) == len(yData):
-                idx = np.argmin(np.abs(xData - click_x))
-                pt_x = xData[idx]
-                pt_y = yData[idx]
-
-                norm_dist = ((pt_x - click_x) / x_range) ** 2 + ((pt_y - click_y) / y_range) ** 2
-
-                if norm_dist < min_dist:
-                    min_dist = norm_dist
-                    best_x = pt_x
-                    best_y = pt_y
-
-        if best_x is not None and best_y is not None:
-            if self._delta_mode_enabled:
-                self.handle_delta_click(float(best_x), float(best_y), clicked_plot)
-            else:
-                self.add_cursor_box(float(best_x), float(best_y), clicked_plot)
+        if self._delta_mode_enabled:
+            self.handle_delta_click(best_x, best_y, clicked_plot)
+        else:
+            self.add_cursor_box(best_x, best_y, clicked_plot)
 
     def handle_delta_click(self, x_val: float, y_val: float, target_plot: pg.PlotItem):
         try:
