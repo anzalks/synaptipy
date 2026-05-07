@@ -1729,6 +1729,12 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         x_label = cfg.get("x_label", f"{quantity} ({unit})")
         y_label = cfg.get("y_label", "Y")
+        
+        # Override hardcoded configs with dynamic units
+        if "(mV)" in x_label and unit != "mV":
+            x_label = x_label.replace("(mV)", f"({unit})").replace("Voltage", quantity).replace("RMP", "Baseline")
+        if "(mV)" in y_label and unit != "mV":
+            y_label = y_label.replace("(mV)", f"({unit})").replace("Voltage", quantity).replace("RMP", "Baseline")
 
         if self._popup_plot is None:
             self._popup_plot = self.create_popup_plot(title, x_label, y_label)
