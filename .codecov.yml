@@ -1,0 +1,27 @@
+codecov:
+  require_ci_to_pass: no
+
+coverage:
+  precision: 2
+  round: down
+  range: "85...100"
+
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 2%
+        if_ci_failed: error
+
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+fixes:
+  - "src/Synaptipy/::"  # Strip this prefix when reporting files
+
+comment:
+  layout: "header, diff, flags, files"
+  behavior: default
+  require_changes: false
