@@ -21,6 +21,26 @@ class AnalysisResult:
 
 
 @dataclass
+class CursorResult(AnalysisResult):
+    """
+    Result of a manual cursor selection.
+    Primary 'value' can be a tuple of (x, y) or None.
+    """
+
+    file_name: str = ""
+    analysis_chosen: str = ""
+    x_cursor: float = 0.0
+    y_cursor: float = 0.0
+    channel_name: str = ""
+
+    def __repr__(self):
+        if self.is_valid:
+            return f"CursorResult(x={self.x_cursor:.4f}, y={self.y_cursor:.4f} {self.unit})"
+        return f"CursorResult(Error: {self.error_message})"
+
+
+
+@dataclass
 class SpikeTrainResult(AnalysisResult):
     """
     Result of spike detection analysis.
