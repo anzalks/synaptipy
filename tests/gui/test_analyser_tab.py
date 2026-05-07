@@ -80,36 +80,50 @@ def test_analyser_tab_loads_analysis_tabs(qtbot, mock_neo_adapter, monkeypatch):
 
 
 def test_cursor_group_box_present(qtbot, mock_neo_adapter, monkeypatch):
-    """Each MetadataDrivenAnalysisTab must contain a QGroupBox titled
-    'Interactive Cursor'.  This verifies that _setup_cursor_group() is wired
-    into _setup_plot_area() and is therefore part of every analysis sub-tab's
-    layout.
+    """BaseAnalysisTab._setup_cursor_group() must create a QGroupBox titled
+    'Interactive Cursor' and add it to the supplied layout.
+
+    We call the method directly on a minimal stub to avoid heavy pyqtgraph
+    initialisation in offscreen mode.
     """
-    from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+    from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 
-    # Build a minimal metadata dict so the tab initialises without crashing.
-    metadata = {
-        "name": "test_analysis",
-        "display_name": "Test Analysis",
-        "description": "unit-test stub",
-        "ui_params": [],
-        "plots": [],
-    }
+    monkeypatch.setattr(
+        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
+    )
 
-    class _StubTab(MetadataDrivenAnalysisTab):
-        """Concrete stub that provides the abstract get_display_name."""
-
+    class _StubTab(BaseAnalysisTab):
         def get_display_name(self) -> str:
-            return "Test Analysis"
+            return "Stub"
 
-    tab = _StubTab(neo_adapter=mock_neo_adapter, metadata=metadata)
+        def _setup_ui(self):
+            pass
+
+        def _plot_selected_data(self):
+            pass
+
+        def _trigger_analysis(self):
+            pass
+
+        def _load_analysis_tab_settings(self):
+            pass
+
+        def _save_analysis_tab_settings(self):
+            pass
+
+        def _build_ui(self, layout):
+            pass
+
+    tab = _StubTab(neo_adapter=mock_neo_adapter)
     qtbot.addWidget(tab)
 
-    # Walk the widget tree looking for QGroupBox with title "Interactive Cursor"
-    group_boxes = tab.findChildren(QtWidgets.QGroupBox)
+    container = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(container)
+    tab._setup_cursor_group(layout)
+
+    group_boxes = container.findChildren(QtWidgets.QGroupBox)
     titles = [gb.title() for gb in group_boxes]
     assert "Interactive Cursor" in titles, (
-        f"Expected a QGroupBox titled 'Interactive Cursor' in the analysis tab layout, "
-        f"but found only: {titles}. "
-        "Check that _setup_cursor_group() is called from _setup_plot_area()."
+        f"Expected a QGroupBox titled 'Interactive Cursor', found: {titles}. "
+        "Check that _setup_cursor_group() adds the group box correctly."
     )

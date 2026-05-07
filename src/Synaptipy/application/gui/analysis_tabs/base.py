@@ -388,6 +388,83 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.cursor_manager:
             self.cursor_manager.clear()
 
+    def _get_cursor_save_context(self):
+        """Return (channel_name, unit, file_name, analysis_chosen) for cursor saving."""
+        channel_name = ""
+        unit = ""
+        if hasattr(self, "signal_channel_combobox") and self.signal_channel_combobox:
+            channel_name = self.signal_channel_combobox.currentText()
+        if self._current_plot_data:
+            unit = self._current_plot_data.get("units", "")
+            if not channel_name:
+                channel_name = self._current_plot_data.get("channel_name", "")
+        file_name = "Unknown"
+        if self._selected_item_recording and self._selected_item_recording.source_file:
+            file_name = self._selected_item_recording.source_file.name
+        return channel_name, unit, file_name, self.get_display_name()
+
+    def _get_cursor_data_source(self):
+        """Return current data_source value from the data_source_combobox."""
+        if hasattr(self, "data_source_combobox") and self.data_source_combobox:
+            idx = self.data_source_combobox.currentIndex()
+            if idx == 0:
+                return "average"
+            if idx > 0:
+                return idx - 1
+        return None
+
+    def _build_cursor_entry_dict(self, entry, channel_name, unit, file_name, analysis_chosen, data_source):
+        """Build the result object and cursor_dict for a single history entry."""
+        from Synaptipy.core.results import CursorDeltaResult, CursorResult
+
+        if entry["type"] == "single":
+            x_val, y_val = entry["data"]
+            result_obj = CursorResult(
+                value=(x_val, y_val),
+                unit=unit,
+                file_name=file_name,
+                analysis_chosen=analysis_chosen,
+                x_cursor=x_val,
+                y_cursor=y_val,
+                channel_name=channel_name,
+            )
+            return {
+                "result_object": result_obj,
+                "data_source": data_source,
+                "x_cursor": x_val,
+                "y_cursor": y_val,
+                "channel": channel_name,
+                "is_manual_cursor": True,
+            }
+
+        x1, y1, x2, y2, dx, dy, pair_id = entry["data"]
+        result_obj = CursorDeltaResult(
+            value=(x1, y1, x2, y2),
+            unit=unit,
+            file_name=file_name,
+            analysis_chosen=analysis_chosen,
+            x1=x1,
+            y1=y1,
+            x2=x2,
+            y2=y2,
+            delta_x=dx,
+            delta_y=dy,
+            pair_id=pair_id,
+            channel_name=channel_name,
+        )
+        return {
+            "result_object": result_obj,
+            "data_source": data_source,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+            "delta_x": dx,
+            "delta_y": dy,
+            "channel": channel_name,
+            "is_manual_cursor": True,
+        }
+
     def _save_cursor_value(self):
         if not self.cursor_manager:
             return
@@ -401,81 +478,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             QtWidgets.QMessageBox.warning(self, "Save Cursor", "No recording loaded.")
             return
 
-        from Synaptipy.core.results import CursorDeltaResult, CursorResult
-
-        channel_name = ""
-        unit = ""
-        if hasattr(self, "signal_channel_combobox") and self.signal_channel_combobox:
-            channel_name = self.signal_channel_combobox.currentText()
-
-        if self._current_plot_data:
-            unit = self._current_plot_data.get("units", "")
-            if not channel_name:
-                channel_name = self._current_plot_data.get("channel_name", "")
-
-        file_name = "Unknown"
-        if self._selected_item_recording.source_file:
-            file_name = self._selected_item_recording.source_file.name
-
-        analysis_chosen = self.get_display_name()
+        channel_name, unit, file_name, analysis_chosen = self._get_cursor_save_context()
+        data_source = self._get_cursor_data_source()
 
         for entry in cursor_history:
-            data_source = None
-            if hasattr(self, "data_source_combobox") and self.data_source_combobox:
-                idx = self.data_source_combobox.currentIndex()
-                if idx == 0:
-                    data_source = "average"
-                elif idx > 0:
-                    data_source = idx - 1
-
-            if entry["type"] == "single":
-                x_val, y_val = entry["data"]
-                result_obj = CursorResult(
-                    value=(x_val, y_val),
-                    unit=unit,
-                    file_name=file_name,
-                    analysis_chosen=analysis_chosen,
-                    x_cursor=x_val,
-                    y_cursor=y_val,
-                    channel_name=channel_name,
-                )
-                cursor_dict = {
-                    "result_object": result_obj,
-                    "data_source": data_source,
-                    "x_cursor": x_val,
-                    "y_cursor": y_val,
-                    "channel": channel_name,
-                    "is_manual_cursor": True,
-                }
-            else:
-                x1, y1, x2, y2, dx, dy, pair_id = entry["data"]
-                result_obj = CursorDeltaResult(
-                    value=(x1, y1, x2, y2),
-                    unit=unit,
-                    file_name=file_name,
-                    analysis_chosen=analysis_chosen,
-                    x1=x1,
-                    y1=y1,
-                    x2=x2,
-                    y2=y2,
-                    delta_x=dx,
-                    delta_y=dy,
-                    pair_id=pair_id,
-                    channel_name=channel_name,
-                )
-                cursor_dict = {
-                    "result_object": result_obj,
-                    "data_source": data_source,
-                    "x1": x1,
-                    "y1": y1,
-                    "x2": x2,
-                    "y2": y2,
-                    "delta_x": dx,
-                    "delta_y": dy,
-                    "channel": channel_name,
-                    "is_manual_cursor": True,
-                }
-
+            cursor_dict = self._build_cursor_entry_dict(
+                entry, channel_name, unit, file_name, analysis_chosen, data_source
+            )
             self._request_save_result(cursor_dict)
             self._append_to_saved_results_list(cursor_dict)
 
