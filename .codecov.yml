@@ -18,9 +18,6 @@ coverage:
         target: 80%
         threshold: 1%
 
-fixes:
-  - "::src/Synaptipy/"  # Prepend this prefix to relative paths
-
 comment:
   layout: "header, diff, flags, files"
   behavior: default
