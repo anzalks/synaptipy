@@ -264,6 +264,24 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.restrict_analysis_checkbox.setToolTip("Only analyze data within the green region")
         self.restrict_analysis_checkbox.stateChanged.connect(self._toggle_analysis_region)
         toolbar_layout.addWidget(self.restrict_analysis_checkbox)
+        
+        # Cursor Checkbox
+        self.show_cursor_checkbox = QtWidgets.QCheckBox("Show cursor values")
+        self.show_cursor_checkbox.setToolTip("Click on the plot to leave a persistent cursor value")
+        self.show_cursor_checkbox.stateChanged.connect(self._toggle_cursor_mode)
+        toolbar_layout.addWidget(self.show_cursor_checkbox)
+
+        # Clear Cursors Button
+        self.clear_cursors_button = QtWidgets.QPushButton("Clear cursor values")
+        style_button(self.clear_cursors_button)
+        self.clear_cursors_button.clicked.connect(self._clear_cursors)
+        toolbar_layout.addWidget(self.clear_cursors_button)
+
+        # Save Cursor Value Button
+        self.save_cursor_button = QtWidgets.QPushButton("Save value")
+        style_button(self.save_cursor_button)
+        self.save_cursor_button.clicked.connect(self._save_cursor_value)
+        toolbar_layout.addWidget(self.save_cursor_button)
 
         toolbar_layout.addStretch()
 
@@ -325,6 +343,79 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 except Exception as e:
                     log.error(f"Error saving plot: {e}")
                     QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to save plot:\n{e}")
+
+    def _toggle_cursor_mode(self, state):
+        if self.plot_canvas:
+            self.plot_canvas.enable_cursor_mode(state == QtCore.Qt.CheckState.Checked.value)
+
+    def _clear_cursors(self):
+        if self.plot_canvas:
+            self.plot_canvas.clear_cursors()
+
+    def _save_cursor_value(self):
+        if not self.plot_canvas:
+            return
+            
+        cursor_values = self.plot_canvas.get_cursor_values()
+        if not cursor_values:
+            QtWidgets.QMessageBox.warning(self, "Save Cursor", "No cursor values on the plot to save.")
+            return
+            
+        if not self._selected_item_recording:
+            QtWidgets.QMessageBox.warning(self, "Save Cursor", "No recording loaded.")
+            return
+
+        from Synaptipy.core.results import CursorResult
+        
+        channel_name = ""
+        unit = ""
+        if hasattr(self, "signal_channel_combobox") and self.signal_channel_combobox:
+            channel_name = self.signal_channel_combobox.currentText()
+        
+        if self._current_plot_data:
+            unit = self._current_plot_data.get("units", "")
+            if not channel_name:
+                channel_name = self._current_plot_data.get("channel_name", "")
+
+        file_name = "Unknown"
+        if self._selected_item_recording.source_file:
+            file_name = self._selected_item_recording.source_file.name
+
+        analysis_chosen = self.get_display_name()
+
+        for x_val, y_val in cursor_values:
+            result_obj = CursorResult(
+                value=(x_val, y_val),
+                unit=unit,
+                file_name=file_name,
+                analysis_chosen=analysis_chosen,
+                x_cursor=x_val,
+                y_cursor=y_val,
+                channel_name=channel_name
+            )
+            
+            data_source = None
+            if hasattr(self, "data_source_combobox") and self.data_source_combobox:
+                idx = self.data_source_combobox.currentIndex()
+                if idx == 0:
+                    data_source = "average"
+                elif idx > 0:
+                    data_source = idx - 1
+            
+            cursor_dict = {
+                "result_object": result_obj,
+                "data_source": data_source,
+                "x_cursor": x_val,
+                "y_cursor": y_val,
+                "channel": channel_name,
+                "is_manual_cursor": True
+            }
+            
+            self._request_save_result(cursor_dict)
+            self._append_to_saved_results_list(cursor_dict)
+        
+        if hasattr(self, "status_label") and self.status_label:
+            self.status_label.setText(f"Status: Saved {len(cursor_values)} cursor values.")
 
     # --- END ADDED ---
 

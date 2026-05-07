@@ -1715,7 +1715,19 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         py = [y_data[i] for i in valid]
 
         title = cfg.get("title", "Popup Plot")
-        x_label = cfg.get("x_label", "X")
+        
+        unit = "mV"
+        quantity = "Voltage"
+        if self._current_plot_data:
+            unit = self._current_plot_data.get("units", "mV")
+            if unit.lower() in ["pa", "na", "ua", "a"]:
+                quantity = "Current"
+            elif unit.lower() in ["mv", "v"]:
+                quantity = "Voltage"
+            else:
+                quantity = self._current_plot_data.get("channel_name", "Signal")
+
+        x_label = cfg.get("x_label", f"{quantity} ({unit})")
         y_label = cfg.get("y_label", "Y")
 
         if self._popup_plot is None:
@@ -1760,7 +1772,30 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         if self._popup_plot is None:
             title = cfg.get("title", "Phase Plane")
-            self._popup_plot = self.create_popup_plot(title, "Voltage (mV)", "dV/dt (V/s)")
+            
+            unit = "mV"
+            quantity = "Voltage"
+            if self._current_plot_data:
+                unit = self._current_plot_data.get("units", "mV")
+                if unit.lower() in ["pa", "na", "ua", "a"]:
+                    quantity = "Current"
+                elif unit.lower() in ["mv", "v"]:
+                    quantity = "Voltage"
+                else:
+                    quantity = self._current_plot_data.get("channel_name", "Signal")
+            
+            x_label = f"{quantity} ({unit})"
+            
+            # The derivative is dy/dt so units are unit/s
+            unit_s = unit + "/s"
+            if quantity == "Voltage":
+                y_label = f"dV/dt ({unit_s})"
+            elif quantity == "Current":
+                y_label = f"dI/dt ({unit_s})"
+            else:
+                y_label = f"d({quantity})/dt ({unit_s})"
+                
+            self._popup_plot = self.create_popup_plot(title, x_label, y_label)
             self._popup_curves["phase"] = self._popup_plot.plot(pen="b", name="Phase Loop")
             self._popup_curves["thresh_marker"] = self._popup_plot.plot(
                 pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"

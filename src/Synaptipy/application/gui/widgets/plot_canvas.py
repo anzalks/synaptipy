@@ -28,6 +28,7 @@ class SynaptipyPlotCanvas(QtCore.QObject):
     # Signals for range changes
     x_range_changed = QtCore.Signal(str, object)  # (plot_id, range_tuple)
     y_range_changed = QtCore.Signal(str, object)  # (plot_id, range_tuple)
+    cursor_added = QtCore.Signal(float, float)  # (x, y)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -40,6 +41,12 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self.plot_items: Dict[str, pg.PlotItem] = {}
         # Provide a main plot property for simple single-plot tabs
         self._main_plot_id: Optional[str] = None
+        
+        # Cursor tracking
+        self._cursor_mode_enabled = False
+        self._cursor_items = []
+        self._cursor_values = []
+        self.widget.scene().sigMouseClicked.connect(self._on_mouse_clicked)
 
     @property
     def main_plot(self) -> Optional[pg.PlotItem]:
@@ -378,6 +385,89 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         self._main_plot_id = None
         # Step 6: Discard any events posted BY widget.clear() (Win/Linux).
         self._flush_qt_registry()
+
+    def enable_cursor_mode(self, enabled: bool):
+        self._cursor_mode_enabled = enabled
+
+    def _on_mouse_clicked(self, event):
+        if not self._cursor_mode_enabled:
+            return
+            
+        if event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return
+            
+        if not self.main_plot:
+            return
+            
+        vb = self.main_plot.getViewBox()
+        if not vb:
+            return
+
+        pos = event.scenePos()
+        if not vb.sceneBoundingRect().contains(pos):
+            return
+            
+        mouse_point = vb.mapSceneToView(pos)
+        click_x = mouse_point.x()
+        
+        # Snap to nearest data point
+        best_x = None
+        best_y = None
+        min_dist = float('inf')
+        import numpy as np
+        
+        for item in self.main_plot.listDataItems():
+            xData = getattr(item, 'xData', None)
+            yData = getattr(item, 'yData', None)
+            
+            if xData is not None and yData is not None and len(xData) > 0:
+                idx = np.argmin(np.abs(xData - click_x))
+                dist = np.abs(xData[idx] - click_x)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_x = xData[idx]
+                    best_y = yData[idx]
+                    
+        if best_x is not None and best_y is not None:
+            self.add_cursor_box(float(best_x), float(best_y))
+        
+    def add_cursor_box(self, x_val: float, y_val: float):
+        if not self.main_plot:
+            return
+            
+        try:
+            from Synaptipy.shared.zoom_theme import get_system_accent_color
+            bg_color_str = get_system_accent_color()
+            bg_color = pg.mkColor(bg_color_str)
+        except ImportError:
+            bg_color = pg.mkColor(0, 120, 215)
+            
+        # Ensure some transparency
+        if bg_color.alpha() == 255:
+            bg_color.setAlpha(180)
+            
+        text_item = pg.TextItem(
+            text=f"X: {x_val:.4g}\nY: {y_val:.4g}",
+            color="white",
+            fill=pg.mkBrush(bg_color)
+        )
+        text_item.setPos(x_val, y_val)
+        self.main_plot.addItem(text_item)
+        
+        self._cursor_items.append(text_item)
+        self._cursor_values.append((x_val, y_val))
+        self.cursor_added.emit(x_val, y_val)
+
+    def clear_cursors(self):
+        if not self.main_plot:
+            return
+        for item in self._cursor_items:
+            self.main_plot.removeItem(item)
+        self._cursor_items.clear()
+        self._cursor_values.clear()
+
+    def get_cursor_values(self):
+        return self._cursor_values.copy()
 
     def clear_items(self, plot_id: str):
         """Clear data items from a specific plot (keeping axis/labels)."""
