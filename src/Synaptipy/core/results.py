@@ -54,11 +54,12 @@ class CursorDeltaResult(AnalysisResult):
     y2: float = 0.0
     delta_x: float = 0.0
     delta_y: float = 0.0
+    pair_id: int = 0
     channel_name: str = ""
 
     def __repr__(self):
         if self.is_valid:
-            return f"CursorDeltaResult(dx={self.delta_x:.4f}, dy={self.delta_y:.4f} {self.unit})"
+            return f"CursorDeltaResult(Pair {self.pair_id}: dx={self.delta_x:.4f}, dy={self.delta_y:.4f} {self.unit})"
         return f"CursorDeltaResult(Error: {self.error_message})"
 
 

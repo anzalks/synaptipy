@@ -437,7 +437,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     "is_manual_cursor": True
                 }
             else:
-                x1, y1, x2, y2, dx, dy = entry['data']
+                x1, y1, x2, y2, dx, dy, pair_id = entry['data']
                 result_obj = CursorDeltaResult(
                     value=(x1, y1, x2, y2),
                     unit=unit,
@@ -445,6 +445,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     analysis_chosen=analysis_chosen,
                     x1=x1, y1=y1, x2=x2, y2=y2,
                     delta_x=dx, delta_y=dy,
+                    pair_id=pair_id,
                     channel_name=channel_name
                 )
                 cursor_dict = {
