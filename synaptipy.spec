@@ -25,8 +25,19 @@ hiddenimports += collect_submodules("scipy")
 hiddenimports += collect_submodules("h5py")
 hiddenimports += collect_submodules("pynwb")
 
+# Explicit extras frequently missed by bytecode scanning despite collect_submodules
+hiddenimports += [
+    "PySide6.QtSvg",
+    "PySide6.QtXml",
+    "pyqtgraph.graphicsItems",
+    "scipy.special",
+    "scipy.spatial.transform",
+]
+
 # Include our local resources (icons, stylesheets, and compiled Qt Help docs)
 datas = [("src/Synaptipy/resources", "Synaptipy/resources")]
+# Example plugins shipped in-repo — consumed via EXAMPLES_PLUGIN_DIR in frozen builds
+datas += [("examples/plugins", "Synaptipy/examples/plugins")]
 datas += collect_data_files("pynwb")
 datas += collect_data_files("hdmf")
 

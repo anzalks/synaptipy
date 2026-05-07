@@ -35,11 +35,24 @@ log = logging.getLogger(__name__)
 # Default location for 3rd-party user plugins
 PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 
-# Built-in example plugins shipped alongside the source tree.
-# Resolved relative to this file: src/Synaptipy/application/ -> project_root
+# Built-in example plugins shipped alongside the source tree (development) or
+# under sys._MEIPASS/Synaptipy/examples/plugins (PyInstaller one-folder bundle).
 _THIS_FILE = Path(__file__).resolve()
-_PROJECT_ROOT = _THIS_FILE.parents[3]  # src/Synaptipy/application -> project root
-EXAMPLES_PLUGIN_DIR = _PROJECT_ROOT / "examples" / "plugins"
+
+
+def _project_root_from_source_tree() -> Path:
+    """Repository root when running from editable / pip-installed sources."""
+    return _THIS_FILE.parents[3]
+
+
+def _examples_plugin_directory() -> Path:
+    """Return the directory containing shipped example ``*.py`` plugins."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "Synaptipy" / "examples" / "plugins"
+    return _project_root_from_source_tree() / "examples" / "plugins"
+
+
+EXAMPLES_PLUGIN_DIR = _examples_plugin_directory()
 
 
 class PluginManager:
