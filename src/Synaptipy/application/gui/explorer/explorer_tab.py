@@ -734,12 +734,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     if cid in self.plot_canvas.channel_plots:
                         plot = self.plot_canvas.channel_plots[cid]
                         if plot and plot.isVisible():
-                            vb = plot.getViewBox()
-                            if vb:
-                                vb.disableAutoRange()
-                            # ranges = ((xmin, xmax), (ymin, ymax))
-                            plot.setXRange(ranges[0][0], ranges[0][1], padding=0)
-                            plot.setYRange(ranges[1][0], ranges[1][1], padding=0)
+                            self._explorer_set_xy_ranges_with_y_autoscale(plot, ranges[0], ranges[1])
                 restored_view = True
                 # Clear after use
                 self._pending_view_state = None
@@ -1220,11 +1215,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     for cid, state in view_state.items():
                         plot = self.plot_canvas.get_plot(cid)
                         if plot and plot.isVisible():
-                            vb = plot.getViewBox()
-                            if vb:
-                                vb.disableAutoRange()
-                            plot.setXRange(state[0][0], state[0][1], padding=0)
-                            plot.setYRange(state[1][0], state[1][1], padding=0)
+                            self._explorer_set_xy_ranges_with_y_autoscale(plot, state[0], state[1])
                 finally:
                     for vb in _vboxes:
                         vb.blockLink(False)
@@ -1511,6 +1502,20 @@ class ExplorerTab(QtWidgets.QWidget):
             )
             self._file_nav_timer.start()  # restart coalesces rapid clicks
 
+    def _explorer_set_xy_ranges_with_y_autoscale(self, plot: pg.PlotItem, xrange_tuple: tuple, yrange_tuple: tuple) -> None:
+        """Apply explicit X/Y ranges, then let Y track data in the visible X window."""
+        vb = plot.getViewBox()
+        if vb:
+            vb.enableAutoRange(x=False, y=False)
+        plot.setXRange(xrange_tuple[0], xrange_tuple[1], padding=0)
+        plot.setYRange(yrange_tuple[0], yrange_tuple[1], padding=0)
+        if vb:
+            self.plot_canvas.apply_explorer_y_follow_visible_x(vb)
+            try:
+                vb.updateAutoRange()
+            except Exception:
+                pass
+
     def _execute_pending_file_nav(self):
         """Slot called by the debounce timer: load the last-requested file."""
         if self._pending_nav_target is None:
@@ -1562,12 +1567,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 base_y = self.base_y_ranges.get(cid)
                 if not (base_x and base_y and plot.isVisible()):
                     continue
-                vb = plot.getViewBox()
-                # Disable auto-range so the explicit ranges stick.
-                if vb:
-                    vb.disableAutoRange()
-                plot.setXRange(*base_x, padding=0)
-                plot.setYRange(*base_y, padding=0)
+                self._explorer_set_xy_ranges_with_y_autoscale(plot, base_x, base_y)
 
             # Unblock links now that all ranges are consistent.
             for vb in viewboxes:

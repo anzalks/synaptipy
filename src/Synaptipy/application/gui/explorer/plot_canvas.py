@@ -7,7 +7,7 @@ Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 
 import logging
 import sys
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
@@ -44,8 +44,70 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         # Cursor manager (created/replaced whenever the widget is rebuilt)
         self.cursor_manager: Optional[CursorToolManager] = None
 
+        # Extra sigXRangeChanged slots so Y auto-range follows the visible X window.
+        self._explorer_y_autoscale_slots: Dict[str, Callable[..., None]] = {}
+
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
+
+    @staticmethod
+    def apply_explorer_y_follow_visible_x(vb: pg.ViewBox) -> None:
+        """Let Y track data visible at the current X span (per-channel; X stays manual/linked)."""
+        vb.enableAutoRange(x=False, y=True)
+        vb.setAutoVisible(y=True)
+
+    def _teardown_explorer_y_autoscale_handlers(self) -> None:
+        for cid, slot in list(self._explorer_y_autoscale_slots.items()):
+            plot = self.plot_items.get(cid)
+            if plot is None:
+                continue
+            vb = plot.getViewBox()
+            if vb is None:
+                continue
+            try:
+                vb.sigXRangeChanged.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
+        self._explorer_y_autoscale_slots.clear()
+
+    def _install_explorer_y_autoscale_handlers(self) -> None:
+        self._teardown_explorer_y_autoscale_handlers()
+        for cid in self._ordered_channel_ids():
+            plot = self.plot_items.get(cid)
+            if plot is None:
+                continue
+            vb = plot.getViewBox()
+            if vb is None:
+                continue
+
+            def _slot(v_emit: pg.ViewBox, xr: object, chan: str = cid) -> None:
+                self._on_explorer_viewbox_x_changed_refresh_y(chan, v_emit, xr)
+
+            vb.sigXRangeChanged.connect(_slot)
+            self._explorer_y_autoscale_slots[cid] = _slot
+
+    def _on_explorer_viewbox_x_changed_refresh_y(self, chan_id: str, vb: pg.ViewBox, _xr: object) -> None:
+        if not self._channel_visible_pref.get(chan_id, True):
+            return
+        plot = self.plot_items.get(chan_id)
+        if plot is None or not plot.isVisible():
+            return
+        try:
+            self.apply_explorer_y_follow_visible_x(vb)
+            vb.updateAutoRange()
+        except Exception as exc:
+            log.debug("Explorer Y autoscale on X change failed (%s): %s", chan_id, exc)
+
+    def _refresh_explorer_visible_y_after_layout(self, visible_plots: List[pg.PlotItem]) -> None:
+        for pl in visible_plots:
+            vb = pl.getViewBox()
+            if vb is None:
+                continue
+            self.apply_explorer_y_follow_visible_x(vb)
+            try:
+                vb.updateAutoRange()
+            except Exception as exc:
+                log.debug("Explorer Y refresh after layout rebuild: %s", exc)
 
     @property
     def channel_plots(self) -> Dict[str, pg.PlotItem]:
@@ -184,22 +246,12 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         except Exception as e:
             log.debug("Could not refresh grid stretch factors: %s", e)
 
-    @staticmethod
-    def _enable_autorange_visible_plots(visible_plots: List[pg.PlotItem]) -> None:
-        for pl in visible_plots:
-            vb = pl.getViewBox()
-            if vb:
-                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
-            try:
-                pl.autoRange()
-            except Exception as e:
-                log.debug("autoRange after channel layout rebuild: %s", e)
-
     def _rebuild_visible_channels_grid(self) -> None:
         """Detach stacked PlotItems, then re-insert only those marked visible in prefs."""
         if self.widget is None:
             return
         ci = self.widget.ci
+        self._teardown_explorer_y_autoscale_handlers()
         self._unlink_all_plots()
         stack_order = self._ordered_channel_ids()
         self._detach_stacked_plots_from_grid(ci, stack_order)
@@ -212,7 +264,8 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self._xlink_visible_stack(visible_plots)
         self._sync_bottom_time_axis_labels(visible_plots)
         self._stretch_multichannel_grid_rows(row_count)
-        self._enable_autorange_visible_plots(visible_plots)
+        self._refresh_explorer_visible_y_after_layout(visible_plots)
+        self._install_explorer_y_autoscale_handlers()
 
     def rebuild_plots(self, recording: Recording) -> List[str]:  # noqa: C901
         """
@@ -304,6 +357,8 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             except Exception:
                 pass
 
+        self._explorer_y_autoscale_slots.clear()
+
         # Drop Python refs to old plot items BEFORE deleting old widget
         self.plot_items.clear()
         self._main_plot_id = None
@@ -374,11 +429,9 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 vb = plot_item.getViewBox()
                 if vb:
                     vb._synaptipy_chan_id = chan_key
-                    # Disable auto-range immediately so pyqtgraph does not
-                    # queue deferred updateAutoRange callbacks when data items
-                    # are added later.  The Explorer manages view ranges
-                    # explicitly via _reset_view().
-                    vb.disableAutoRange()
+                    # Y scales to data visible in the current X window; X stays under
+                    # slider / pan / X-link control (_reset_view seeds explicit ranges).
+                    self.apply_explorer_y_follow_visible_x(vb)
             except Exception as e:
                 log.warning(f"Error styling ViewBox: {e}")
 
@@ -412,6 +465,8 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 internal_layout.activate()
             except Exception:
                 pass  # Non-fatal; gracefully fall back on unsupported platforms
+
+        self._install_explorer_y_autoscale_handlers()
 
         return channel_keys
 

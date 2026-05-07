@@ -9,6 +9,7 @@ Regression guard for:
   - autoRange() re-entrancy: _handle_preprocessing_reset must not call
     plot.autoRange() per channel (fires sigXRangeChanged without
     _updating_viewranges guard -> cascade -> SIGBUS on large files).
+  - Y-axis policy: manual X / auto Y with handlers so visible-window Y tracks X zoom.
 """
 
 import sys
@@ -98,6 +99,18 @@ def test_rebuild_plots_creates_correct_channel_count(nav_explorer_tab, num_chann
     assert len(nav_explorer_tab.plot_canvas.channel_plots) == num_channels
     for i in range(num_channels):
         assert f"ch{i}" in nav_explorer_tab.plot_canvas.channel_plots
+
+
+def test_explorer_y_follow_visible_x_policy_after_rebuild(nav_explorer_tab):
+    """ViewBoxes use manual X / auto Y so zooming the time axis can rescale amplitude."""
+    rec = _make_recording("y_policy.wcp", num_channels=2, num_trials=3)
+    nav_explorer_tab._display_recording(rec)
+    canvas = nav_explorer_tab.plot_canvas
+    assert len(canvas._explorer_y_autoscale_slots) == 2
+    for cid in ("ch0", "ch1"):
+        vb = canvas.channel_plots[cid].getViewBox()
+        assert vb is not None
+        assert vb.autoRangeEnabled() == [False, True]
 
 
 @pytest.mark.parametrize("num_channels", [1, 2, 4])
