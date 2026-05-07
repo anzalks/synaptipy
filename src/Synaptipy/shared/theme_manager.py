@@ -165,11 +165,6 @@ def apply_theme(mode: Optional[ThemeMode] = None) -> None:
 def _get_light_stylesheet() -> str:
     """Return comprehensive light theme stylesheet."""
     return """
-    /* Global font */
-    * {
-        font-family: "Segoe UI", "Ubuntu", "Roboto", sans-serif;
-    }
-
     /* Menus */
     QMenuBar {
         background-color: #f0f0f0;
@@ -371,11 +366,6 @@ def _get_light_stylesheet() -> str:
 def _get_dark_stylesheet() -> str:
     """Return comprehensive dark theme stylesheet."""
     return """
-    /* Global font */
-    * {
-        font-family: "Segoe UI", "Ubuntu", "Roboto", sans-serif;
-    }
-
     /* Menus */
     QMenuBar {
         background-color: #353535;
