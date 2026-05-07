@@ -5,9 +5,11 @@ This module provides functions to set up logging with different verbosity levels
 including a development mode with more detailed logging. All logs are written to
 both a file (in the logs directory) and the console.
 
-The module provides two main functions:
-1. setup_logging - Configure the root logger with console and file handlers
-2. get_logger - Get a properly namespaced logger for a specific module
+The module provides these entry helpers:
+1. ensure_stdio_streams_support_fileno - Patch stdout/stderr for embedded builds
+   (PyInstaller ``console=False``) before ``faulthandler.enable()`` / logging.
+2. setup_logging - Configure the root logger with console and file handlers
+3. get_logger - Get a properly namespaced logger for a specific module
 
 Usage:
     # In application entry point:
@@ -20,11 +22,50 @@ Usage:
     log.debug("This is a log message")
 """
 
+import io
 import logging
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Lazily opened discard stream for windowed / embedded builds (shared stdout+stderr).
+_discard_stdio_stream = None
+
+
+def ensure_stdio_streams_support_fileno() -> None:
+    """Ensure ``sys.stdout`` and ``sys.stderr`` support ``fileno()``.
+
+    PyInstaller ``console=False`` builds may set streams to ``None`` or to
+    in-memory wrappers without an OS file descriptor.  The standard library's
+    :func:`faulthandler.enable` requires ``sys.stderr.fileno()``; routing ``None``
+    to :class:`io.StringIO` avoids ``None`` errors but still raises
+    :exc:`io.UnsupportedOperation` on ``fileno()``.
+
+    When a stream is missing or fd-less, replace it with a write-only handle to
+    :data:`os.devnull` (same approach as redirecting to a real log file).  Console
+    output is already duplicated to log files via :func:`setup_logging`.
+    """
+    global _discard_stdio_stream
+
+    def _needs_replacement(stream) -> bool:
+        if stream is None:
+            return True
+        try:
+            stream.fileno()
+        except (io.UnsupportedOperation, OSError, AttributeError):
+            return True
+        else:
+            return False
+
+    if _needs_replacement(sys.stdout) or _needs_replacement(sys.stderr):
+        if _discard_stdio_stream is None:
+            _discard_stdio_stream = open(os.devnull, "w", encoding="utf-8")
+        if _needs_replacement(sys.stdout):
+            sys.stdout = _discard_stdio_stream
+        if _needs_replacement(sys.stderr):
+            sys.stderr = _discard_stdio_stream
+
 
 # Default log directory is in the user's home directory
 DEFAULT_LOG_DIR = Path.home() / ".synaptipy" / "logs"

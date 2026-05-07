@@ -316,6 +316,16 @@ The test suite involves PySide6 and pyqtgraph widgets running under
 `QT_QPA_PLATFORM=offscreen`. Several platform-specific crash patterns have been
 resolved; the rules below **must not be reverted** or the CI will break again.
 
+### PyInstaller ``console=False`` and ``faulthandler.enable()``
+
+Bundled executables with no console attach may set ``sys.stdout`` / ``sys.stderr``
+to ``None`` or to streams without an OS file descriptor. The standard library's
+``faulthandler.enable()`` calls ``sys.stderr.fileno()``; replacing ``None`` with
+``io.StringIO`` avoids ``AttributeError`` but still raises ``io.UnsupportedOperation``
+on ``fileno()``. Entry points call ``ensure_stdio_streams_support_fileno()`` in
+``Synaptipy.shared.logging_config`` before Qt imports so both streams point at a
+real discard sink (``os.devnull``) when needed.
+
 ### Analysis Registry import rule - DO NOT import only registry.py
 
 To populate the `AnalysisRegistry`, **always import the full package**:
