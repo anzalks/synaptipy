@@ -20,8 +20,6 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from Synaptipy.application.controllers.analysis_plot_manager import AnalysisPlotManager
 from Synaptipy.application.gui.dialogs.export_manager import ExportManager
 from Synaptipy.application.gui.dialogs.plot_export_dialog import PlotExportDialog
-
-# NEW: Unified Plotting & Pipeline
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
 from Synaptipy.application.services.data_loader_service import DataLoaderService
@@ -34,6 +32,7 @@ from Synaptipy.core.analysis.cross_file_utils import (
 from Synaptipy.core.data_model import Recording
 from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
 from Synaptipy.infrastructure.file_readers import NeoAdapter
+from Synaptipy.shared.cursor_manager import CursorToolManager
 from Synaptipy.shared.plot_customization import get_average_pen, get_plot_customization_signals, get_single_trial_pen
 from Synaptipy.shared.plot_exporter import PlotExporter
 from Synaptipy.shared.plot_zoom_sync import PlotZoomSyncManager
@@ -89,6 +88,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_canvas: Optional[SynaptipyPlotCanvas] = None
         # self.plot_widget will now reference the main PlotItem for compatibility
         self.plot_widget: Optional[pg.PlotItem] = None
+        self.cursor_manager: Optional[CursorToolManager] = None
         # --- END ADDED ---
         # --- ADDED: Save Button ---
         self.save_button: Optional[QtWidgets.QPushButton] = None
@@ -264,41 +264,44 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.restrict_analysis_checkbox.setToolTip("Only analyze data within the green region")
         self.restrict_analysis_checkbox.stateChanged.connect(self._toggle_analysis_region)
         toolbar_layout.addWidget(self.restrict_analysis_checkbox)
-        
-        # Cursor Checkbox
+
+        # Cursor tools are now in a separate group box
+        toolbar_layout.addStretch()
+        parent_layout.addLayout(toolbar_layout)
+
+    def _setup_cursor_group(self, parent_layout: QtWidgets.QLayout) -> None:
+        """Create a dedicated group box for Interactive Cursor tools."""
+        group_box = QtWidgets.QGroupBox("Interactive Cursor")
+        layout = QtWidgets.QHBoxLayout()
+
         self.show_cursor_checkbox = QtWidgets.QCheckBox("Show Cursor")
         self.show_cursor_checkbox.setToolTip("Click on the plot to leave a persistent cursor value")
         self.show_cursor_checkbox.stateChanged.connect(self._toggle_cursor_mode)
-        toolbar_layout.addWidget(self.show_cursor_checkbox)
+        layout.addWidget(self.show_cursor_checkbox)
 
-        # Delta Mode Checkbox
         self.delta_mode_checkbox = QtWidgets.QCheckBox("Delta Mode")
         self.delta_mode_checkbox.setToolTip("Click twice to measure differences")
         self.delta_mode_checkbox.setEnabled(False)
         self.delta_mode_checkbox.stateChanged.connect(self._toggle_delta_mode)
-        toolbar_layout.addWidget(self.delta_mode_checkbox)
+        layout.addWidget(self.delta_mode_checkbox)
 
-        # Undo Last Button
         self.undo_cursor_button = QtWidgets.QPushButton("Undo Last")
         style_button(self.undo_cursor_button)
         self.undo_cursor_button.clicked.connect(self._undo_last_cursor)
-        toolbar_layout.addWidget(self.undo_cursor_button)
+        layout.addWidget(self.undo_cursor_button)
 
-        # Clear Cursors Button
         self.clear_cursors_button = QtWidgets.QPushButton("Clear All")
         style_button(self.clear_cursors_button)
         self.clear_cursors_button.clicked.connect(self._clear_cursors)
-        toolbar_layout.addWidget(self.clear_cursors_button)
+        layout.addWidget(self.clear_cursors_button)
 
-        # Save Cursor Value Button
         self.save_cursor_button = QtWidgets.QPushButton("Save Results")
         style_button(self.save_cursor_button)
         self.save_cursor_button.clicked.connect(self._save_cursor_value)
-        toolbar_layout.addWidget(self.save_cursor_button)
+        layout.addWidget(self.save_cursor_button)
 
-        toolbar_layout.addStretch()
-
-        parent_layout.addLayout(toolbar_layout)
+        group_box.setLayout(layout)
+        parent_layout.addWidget(group_box)
 
     def _reset_plot_view(self) -> None:
         """Reset the plot view to default range."""
@@ -357,46 +360,54 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     log.error(f"Error saving plot: {e}")
                     QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to save plot:\n{e}")
 
+    def _init_cursor_manager(self):
+        if not self.cursor_manager and self.plot_canvas and self.plot_canvas.widget:
+            self.cursor_manager = CursorToolManager(
+                widget=self.plot_canvas.widget, scene=self.plot_canvas.widget.scene()
+            )
+
     def _toggle_cursor_mode(self, state):
-        is_checked = (state == QtCore.Qt.CheckState.Checked.value)
+        is_checked = state == QtCore.Qt.CheckState.Checked.value
         self.delta_mode_checkbox.setEnabled(is_checked)
         if not is_checked:
             self.delta_mode_checkbox.setChecked(False)
-        if self.plot_canvas:
-            self.plot_canvas.set_cursor_enabled(is_checked)
+        self._init_cursor_manager()
+        if self.cursor_manager:
+            self.cursor_manager.set_cursor_enabled(is_checked)
 
     def _toggle_delta_mode(self, state):
-        if self.plot_canvas:
-            self.plot_canvas.set_delta_mode_enabled(state == QtCore.Qt.CheckState.Checked.value)
+        self._init_cursor_manager()
+        if self.cursor_manager:
+            self.cursor_manager.set_delta_mode_enabled(state == QtCore.Qt.CheckState.Checked.value)
 
     def _undo_last_cursor(self):
-        if self.plot_canvas:
-            self.plot_canvas.undo_last_cursor()
+        if self.cursor_manager:
+            self.cursor_manager.undo()
 
     def _clear_cursors(self):
-        if self.plot_canvas:
-            self.plot_canvas.clear_all_cursors()
+        if self.cursor_manager:
+            self.cursor_manager.clear()
 
     def _save_cursor_value(self):
-        if not self.plot_canvas:
+        if not self.cursor_manager:
             return
-            
-        cursor_history = self.plot_canvas.get_cursor_history()
+
+        cursor_history = self.cursor_manager.get_cursor_history()
         if not cursor_history:
             QtWidgets.QMessageBox.warning(self, "Save Cursor", "No cursor values on the plot to save.")
             return
-            
+
         if not self._selected_item_recording:
             QtWidgets.QMessageBox.warning(self, "Save Cursor", "No recording loaded.")
             return
 
-        from Synaptipy.core.results import CursorResult, CursorDeltaResult
-        
+        from Synaptipy.core.results import CursorDeltaResult, CursorResult
+
         channel_name = ""
         unit = ""
         if hasattr(self, "signal_channel_combobox") and self.signal_channel_combobox:
             channel_name = self.signal_channel_combobox.currentText()
-        
+
         if self._current_plot_data:
             unit = self._current_plot_data.get("units", "")
             if not channel_name:
@@ -416,9 +427,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     data_source = "average"
                 elif idx > 0:
                     data_source = idx - 1
-            
-            if entry['type'] == 'single':
-                x_val, y_val = entry['data']
+
+            if entry["type"] == "single":
+                x_val, y_val = entry["data"]
                 result_obj = CursorResult(
                     value=(x_val, y_val),
                     unit=unit,
@@ -426,7 +437,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     analysis_chosen=analysis_chosen,
                     x_cursor=x_val,
                     y_cursor=y_val,
-                    channel_name=channel_name
+                    channel_name=channel_name,
                 )
                 cursor_dict = {
                     "result_object": result_obj,
@@ -434,32 +445,40 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     "x_cursor": x_val,
                     "y_cursor": y_val,
                     "channel": channel_name,
-                    "is_manual_cursor": True
+                    "is_manual_cursor": True,
                 }
             else:
-                x1, y1, x2, y2, dx, dy, pair_id = entry['data']
+                x1, y1, x2, y2, dx, dy, pair_id = entry["data"]
                 result_obj = CursorDeltaResult(
                     value=(x1, y1, x2, y2),
                     unit=unit,
                     file_name=file_name,
                     analysis_chosen=analysis_chosen,
-                    x1=x1, y1=y1, x2=x2, y2=y2,
-                    delta_x=dx, delta_y=dy,
+                    x1=x1,
+                    y1=y1,
+                    x2=x2,
+                    y2=y2,
+                    delta_x=dx,
+                    delta_y=dy,
                     pair_id=pair_id,
-                    channel_name=channel_name
+                    channel_name=channel_name,
                 )
                 cursor_dict = {
                     "result_object": result_obj,
                     "data_source": data_source,
-                    "x1": x1, "y1": y1, "x2": x2, "y2": y2,
-                    "delta_x": dx, "delta_y": dy,
+                    "x1": x1,
+                    "y1": y1,
+                    "x2": x2,
+                    "y2": y2,
+                    "delta_x": dx,
+                    "delta_y": dy,
                     "channel": channel_name,
-                    "is_manual_cursor": True
+                    "is_manual_cursor": True,
                 }
-            
+
             self._request_save_result(cursor_dict)
             self._append_to_saved_results_list(cursor_dict)
-        
+
         if hasattr(self, "status_label") and self.status_label:
             self.status_label.setText(f"Status: Saved {len(cursor_history)} cursor results.")
 
@@ -916,6 +935,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # Add Toolbar below the plot
         self._setup_toolbar(layout)
+
+        # Add Interactive Cursor controls group box
+        self._setup_cursor_group(layout)
 
         # Initialize zoom synchronization manager
         self._setup_zoom_sync()

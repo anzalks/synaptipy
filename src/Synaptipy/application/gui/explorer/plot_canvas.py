@@ -7,13 +7,14 @@ Handles the pyqtgraph GraphicsLayoutWidget and plot item management.
 
 import logging
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 from Synaptipy.core.data_model import Recording
+from Synaptipy.shared.cursor_manager import CursorToolManager
 from Synaptipy.shared.plot_factory import SynaptipyPlotFactory
 
 log = logging.getLogger(__name__)
@@ -36,6 +37,9 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         # Maps channel key -> row index in the GraphicsLayoutWidget grid.
         # Used by set_channel_visible() to collapse/expand rows.
         self._channel_row: Dict[str, int] = {}
+
+        # Cursor manager (created/replaced whenever the widget is rebuilt)
+        self.cursor_manager: Optional[CursorToolManager] = None
 
         # Constants
         self.Y_AXIS_FIXED_WIDTH = 65
@@ -233,6 +237,10 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
 
         self.widget = new_widget
 
+        # Re-create cursor manager for the fresh widget so scene connections
+        # always point to the live C++ object.
+        self._init_cursor_manager()
+
         if not recording or not recording.channels:
             return []
 
@@ -301,3 +309,48 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
                 pass  # Non-fatal; gracefully fall back on unsupported platforms
 
         return channel_keys
+
+    # ------------------------------------------------------------------
+    # Cursor tool delegation
+    # ------------------------------------------------------------------
+
+    def _init_cursor_manager(self) -> None:
+        """Create (or replace) the CursorToolManager for the current widget."""
+        if self.widget is None:
+            return
+        # Disconnect the old manager's scene connection first to avoid leaks.
+        if self.cursor_manager is not None:
+            try:
+                self.cursor_manager.scene.sigMouseClicked.disconnect(self.cursor_manager._on_mouse_clicked)
+            except (TypeError, RuntimeError):
+                pass
+        # Preserve enabled state across rebuilds.
+        was_cursor_enabled = self.cursor_manager._cursor_mode_enabled if self.cursor_manager else False
+        was_delta_enabled = self.cursor_manager._delta_mode_enabled if self.cursor_manager else False
+        self.cursor_manager = CursorToolManager(widget=self.widget, scene=self.widget.scene())
+        self.cursor_manager.set_cursor_enabled(was_cursor_enabled)
+        self.cursor_manager.set_delta_mode_enabled(was_delta_enabled)
+
+    def set_cursor_enabled(self, enabled: bool) -> None:
+        """Enable or disable interactive cursor mode."""
+        if self.cursor_manager is None:
+            self._init_cursor_manager()
+        if self.cursor_manager is not None:
+            self.cursor_manager.set_cursor_enabled(enabled)
+
+    def set_delta_mode_enabled(self, enabled: bool) -> None:
+        """Enable or disable delta (pair) measurement mode."""
+        if self.cursor_manager is None:
+            self._init_cursor_manager()
+        if self.cursor_manager is not None:
+            self.cursor_manager.set_delta_mode_enabled(enabled)
+
+    def undo_last_cursor(self) -> None:
+        """Remove the most recently placed cursor from the plot."""
+        if self.cursor_manager is not None:
+            self.cursor_manager.undo()
+
+    def clear_all_cursors(self) -> None:
+        """Remove all cursors from the plot."""
+        if self.cursor_manager is not None:
+            self.cursor_manager.clear()

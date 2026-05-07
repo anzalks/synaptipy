@@ -77,3 +77,39 @@ def test_analyser_tab_loads_analysis_tabs(qtbot, mock_neo_adapter, monkeypatch):
         "The fix is: 'import Synaptipy.core.analysis' (full package) in "
         "_load_analysis_tabs() before calling list_registered()."
     )
+
+
+def test_cursor_group_box_present(qtbot, mock_neo_adapter, monkeypatch):
+    """Each MetadataDrivenAnalysisTab must contain a QGroupBox titled
+    'Interactive Cursor'.  This verifies that _setup_cursor_group() is wired
+    into _setup_plot_area() and is therefore part of every analysis sub-tab's
+    layout.
+    """
+    from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+
+    # Build a minimal metadata dict so the tab initialises without crashing.
+    metadata = {
+        "name": "test_analysis",
+        "display_name": "Test Analysis",
+        "description": "unit-test stub",
+        "ui_params": [],
+        "plots": [],
+    }
+
+    class _StubTab(MetadataDrivenAnalysisTab):
+        """Concrete stub that provides the abstract get_display_name."""
+
+        def get_display_name(self) -> str:
+            return "Test Analysis"
+
+    tab = _StubTab(neo_adapter=mock_neo_adapter, metadata=metadata)
+    qtbot.addWidget(tab)
+
+    # Walk the widget tree looking for QGroupBox with title "Interactive Cursor"
+    group_boxes = tab.findChildren(QtWidgets.QGroupBox)
+    titles = [gb.title() for gb in group_boxes]
+    assert "Interactive Cursor" in titles, (
+        f"Expected a QGroupBox titled 'Interactive Cursor' in the analysis tab layout, "
+        f"but found only: {titles}. "
+        "Check that _setup_cursor_group() is called from _setup_plot_area()."
+    )

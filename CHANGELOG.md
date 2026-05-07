@@ -5,18 +5,6 @@ All notable changes to Synaptipy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2b8] - 2026-05-06
-### Fixed
-- Fixed GitHub Actions release workflow skipping PyPI publishing when triggered via auto-tag workflow dispatch.
-
-## [0.1.2b7] - 2026-05-05
-### Fixed
-- Fixed missing actions:write permission in auto-tag workflow, enabling GitHub Actions to dispatch the installer and release workflows correctly.
-
-## [0.1.2b6] - 2026-05-05
-### Fixed
-- Fixed Linux AppImage packaging failure on Ubuntu 24.04 GitHub Actions runner by migrating to the continuous release of appimagetool.
-
 ## [Unreleased]
 
 ## [0.1.2b5] - 2026-05-05
