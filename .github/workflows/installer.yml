@@ -35,7 +35,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # ubuntu-22.04: oldest GitHub-hosted runner still supported for Linux;
+          # links against older glibc than ubuntu-latest so AppImage/Python ELF
+          # binaries tolerate older user distros.  ubuntu-20.04 image retired Apr 2025.
+          - os: ubuntu-22.04
             artifact_name: Synaptipy-Linux.AppImage
             artifact_path: dist/*.AppImage
           - os: windows-latest
@@ -66,9 +69,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
-            libxcb-xfixes0 libegl1 libxcb-cursor0 \
-            qt6-tools-dev-tools \
-            squashfs-tools
+            libxcb-xfixes0 libegl1 libegl1-mesa libxcb-cursor0 \
+            qt6-tools-dev-tools squashfs-tools libfuse2
 
       - name: Install dependencies
         run: |
