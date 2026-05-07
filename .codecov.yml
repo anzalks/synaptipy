@@ -19,7 +19,7 @@ coverage:
         threshold: 1%
 
 fixes:
-  - "src/Synaptipy/::"  # Strip this prefix when reporting files
+  - "::src/Synaptipy/"  # Prepend this prefix to relative paths
 
 comment:
   layout: "header, diff, flags, files"
