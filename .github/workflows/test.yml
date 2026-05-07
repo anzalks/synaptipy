@@ -26,7 +26,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -169,7 +169,7 @@ jobs:
       run:
         shell: bash
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python 3.10
       uses: actions/setup-python@v5
@@ -228,7 +228,7 @@ jobs:
       run:
         shell: bash
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
@@ -264,7 +264,7 @@ jobs:
       run:
         shell: bash
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
@@ -328,7 +328,7 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # full history required to check existing remote tags
 
