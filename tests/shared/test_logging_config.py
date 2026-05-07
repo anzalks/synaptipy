@@ -2,6 +2,7 @@
 """Tests for shared.logging_config."""
 
 import logging
+import sys
 
 from Synaptipy.shared.logging_config import get_logger, setup_logging
 
@@ -34,6 +35,42 @@ class TestSetupLogging:
     def test_setup_logging_handlers_attached(self, tmp_path):
         logger = setup_logging(dev_mode=False, log_dir=tmp_path)
         assert len(logger.handlers) >= 2  # console + file
+
+
+class TestEnsureStdioStreamsSupportFileno:
+    """Regression: PyInstaller windowed builds use streams without fileno()."""
+
+    def test_stringio_streams_replaced_so_fileno_and_faulthandler_work(self):
+        import faulthandler
+        import io
+
+        from Synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno
+
+        saved_o, saved_e = sys.stdout, sys.stderr
+        try:
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
+            ensure_stdio_streams_support_fileno()
+            sys.stdout.fileno()
+            sys.stderr.fileno()
+            faulthandler.enable()
+        finally:
+            faulthandler.disable()
+            sys.stdout, sys.stderr = saved_o, saved_e
+
+    def test_synaptipy_main_main_survives_stringio_stdio(self, monkeypatch):
+        """Exercise package entry ``main()`` after stdio lacks fileno() (frozen exe analogue)."""
+        import importlib
+        import io
+
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+        monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+        import Synaptipy.__main__ as syn_entry
+
+        syn_entry = importlib.reload(syn_entry)
+        monkeypatch.setattr(sys, "argv", ["Synaptipy", "--version"])
+        assert syn_entry.main() == 0
 
 
 class TestGetLogger:

@@ -137,7 +137,7 @@ class CursorToolManager(QtCore.QObject):
 
         if not self._delta_anchor:
             marker = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
-            target_plot.addItem(marker)
+            target_plot.addItem(marker, ignoreBounds=True)
 
             text_item = pg.TextItem(
                 text=f"[Pair {pair_id} Start] X: {x_val:.4g}\\nY: {y_val:.4g}",
@@ -145,7 +145,7 @@ class CursorToolManager(QtCore.QObject):
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2),
             )
-            target_plot.addItem(text_item)
+            target_plot.addItem(text_item, ignoreBounds=True)
             text_item.setPos(x_val, y_val)
 
             self._delta_anchor = {"x": x_val, "y": y_val, "marker": marker, "text": text_item, "plot": target_plot}

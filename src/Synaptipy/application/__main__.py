@@ -19,40 +19,32 @@ See the LICENSE file in the root of the repository for full license details.
 
 import argparse
 import faulthandler
-import io
 import logging
 import os
 import sys
 import traceback
-
-# Suppress annoying pyqtgraph RuntimeWarnings (overflow in cast)
 import warnings
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from Synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno, setup_logging
+
+# PyInstaller ``console=False`` / ``--noconsole``: streams may be None or lack
+# ``fileno()`` (e.g. *None* patched to :class:`io.StringIO` elsewhere).
+# :func:`faulthandler.enable` requires ``sys.stderr.fileno()`` — bootstrap before Qt.
+ensure_stdio_streams_support_fileno()
+
+from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 # --- Import Core Components ---
-from Synaptipy.application.startup_manager import StartupManager
-from Synaptipy.shared.logging_config import setup_logging
+from Synaptipy.application.startup_manager import StartupManager  # noqa: E402
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyqtgraph")
 
-# PyInstaller --noconsole / -w builds on Windows set sys.stdout and sys.stderr
-# to None because there is no attached console.  Several stdlib modules
-# (logging, warnings, faulthandler, traceback) will raise
-#   RuntimeError / AttributeError: sys.stderr is None
-# if they try to write before this is patched.  Redirect both streams to a
-# silent in-memory buffer so the rest of the startup code is safe to use
-# print() / logging / faulthandler without special-casing every call site.
-if sys.stdout is None:
-    sys.stdout = io.StringIO()
-if sys.stderr is None:
-    sys.stderr = io.StringIO()
-
 # Enable low-level C traceback on SIGBUS/SIGSEGV so fatal crashes include a
 # Python stack trace in the log (zero overhead in normal operation).
-# Must be called AFTER the sys.stderr guard above -- faulthandler writes to
-# sys.stderr and raises if it is None.
-faulthandler.enable()
+try:
+    faulthandler.enable()
+except Exception:
+    pass
 
 # Log instance to be initialized after setting up logging
 log = logging.getLogger(__name__)

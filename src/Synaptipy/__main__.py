@@ -17,14 +17,20 @@ import os
 import sys
 from pathlib import Path
 
+from Synaptipy.shared.logging_config import (
+    ensure_stdio_streams_support_fileno,
+    setup_logging,
+)
+
+# Windowed PyInstaller builds: streams must support ``fileno()`` before logging /
+# GUI bootstrap (see application/__main__.py ``faulthandler.enable``).
+ensure_stdio_streams_support_fileno()
+
 # Install the crash reporter as early as possible -- before any Qt
 # components are created -- so that import-time errors are also caught.
 from Synaptipy.core.error_handler import install_excepthook as _install_crash_hook  # noqa: E402
 
 _install_crash_hook()
-
-# Set up logging before importing the rest of the package
-from Synaptipy.shared.logging_config import setup_logging  # noqa: E402
 
 
 def parse_args():
