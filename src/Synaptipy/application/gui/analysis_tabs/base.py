@@ -266,19 +266,32 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         toolbar_layout.addWidget(self.restrict_analysis_checkbox)
         
         # Cursor Checkbox
-        self.show_cursor_checkbox = QtWidgets.QCheckBox("Show cursor values")
+        self.show_cursor_checkbox = QtWidgets.QCheckBox("Show Cursor")
         self.show_cursor_checkbox.setToolTip("Click on the plot to leave a persistent cursor value")
         self.show_cursor_checkbox.stateChanged.connect(self._toggle_cursor_mode)
         toolbar_layout.addWidget(self.show_cursor_checkbox)
 
+        # Delta Mode Checkbox
+        self.delta_mode_checkbox = QtWidgets.QCheckBox("Delta Mode")
+        self.delta_mode_checkbox.setToolTip("Click twice to measure differences")
+        self.delta_mode_checkbox.setEnabled(False)
+        self.delta_mode_checkbox.stateChanged.connect(self._toggle_delta_mode)
+        toolbar_layout.addWidget(self.delta_mode_checkbox)
+
+        # Undo Last Button
+        self.undo_cursor_button = QtWidgets.QPushButton("Undo Last")
+        style_button(self.undo_cursor_button)
+        self.undo_cursor_button.clicked.connect(self._undo_last_cursor)
+        toolbar_layout.addWidget(self.undo_cursor_button)
+
         # Clear Cursors Button
-        self.clear_cursors_button = QtWidgets.QPushButton("Clear cursor values")
+        self.clear_cursors_button = QtWidgets.QPushButton("Clear All")
         style_button(self.clear_cursors_button)
         self.clear_cursors_button.clicked.connect(self._clear_cursors)
         toolbar_layout.addWidget(self.clear_cursors_button)
 
         # Save Cursor Value Button
-        self.save_cursor_button = QtWidgets.QPushButton("Save value")
+        self.save_cursor_button = QtWidgets.QPushButton("Save Results")
         style_button(self.save_cursor_button)
         self.save_cursor_button.clicked.connect(self._save_cursor_value)
         toolbar_layout.addWidget(self.save_cursor_button)
@@ -345,8 +358,20 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to save plot:\n{e}")
 
     def _toggle_cursor_mode(self, state):
+        is_checked = (state == QtCore.Qt.CheckState.Checked.value)
+        self.delta_mode_checkbox.setEnabled(is_checked)
+        if not is_checked:
+            self.delta_mode_checkbox.setChecked(False)
         if self.plot_canvas:
-            self.plot_canvas.enable_cursor_mode(state == QtCore.Qt.CheckState.Checked.value)
+            self.plot_canvas.enable_cursor_mode(is_checked)
+
+    def _toggle_delta_mode(self, state):
+        if self.plot_canvas:
+            self.plot_canvas.enable_delta_mode(state == QtCore.Qt.CheckState.Checked.value)
+
+    def _undo_last_cursor(self):
+        if self.plot_canvas:
+            self.plot_canvas.undo_cursor()
 
     def _clear_cursors(self):
         if self.plot_canvas:
@@ -356,8 +381,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if not self.plot_canvas:
             return
             
-        cursor_values = self.plot_canvas.get_cursor_values()
-        if not cursor_values:
+        cursor_history = self.plot_canvas.get_cursor_history()
+        if not cursor_history:
             QtWidgets.QMessageBox.warning(self, "Save Cursor", "No cursor values on the plot to save.")
             return
             
@@ -365,7 +390,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             QtWidgets.QMessageBox.warning(self, "Save Cursor", "No recording loaded.")
             return
 
-        from Synaptipy.core.results import CursorResult
+        from Synaptipy.core.results import CursorResult, CursorDeltaResult
         
         channel_name = ""
         unit = ""
@@ -383,17 +408,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         analysis_chosen = self.get_display_name()
 
-        for x_val, y_val in cursor_values:
-            result_obj = CursorResult(
-                value=(x_val, y_val),
-                unit=unit,
-                file_name=file_name,
-                analysis_chosen=analysis_chosen,
-                x_cursor=x_val,
-                y_cursor=y_val,
-                channel_name=channel_name
-            )
-            
+        for entry in cursor_history:
             data_source = None
             if hasattr(self, "data_source_combobox") and self.data_source_combobox:
                 idx = self.data_source_combobox.currentIndex()
@@ -402,20 +417,50 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 elif idx > 0:
                     data_source = idx - 1
             
-            cursor_dict = {
-                "result_object": result_obj,
-                "data_source": data_source,
-                "x_cursor": x_val,
-                "y_cursor": y_val,
-                "channel": channel_name,
-                "is_manual_cursor": True
-            }
+            if entry['type'] == 'single':
+                x_val, y_val = entry['data']
+                result_obj = CursorResult(
+                    value=(x_val, y_val),
+                    unit=unit,
+                    file_name=file_name,
+                    analysis_chosen=analysis_chosen,
+                    x_cursor=x_val,
+                    y_cursor=y_val,
+                    channel_name=channel_name
+                )
+                cursor_dict = {
+                    "result_object": result_obj,
+                    "data_source": data_source,
+                    "x_cursor": x_val,
+                    "y_cursor": y_val,
+                    "channel": channel_name,
+                    "is_manual_cursor": True
+                }
+            else:
+                x1, y1, x2, y2, dx, dy = entry['data']
+                result_obj = CursorDeltaResult(
+                    value=(x1, y1, x2, y2),
+                    unit=unit,
+                    file_name=file_name,
+                    analysis_chosen=analysis_chosen,
+                    x1=x1, y1=y1, x2=x2, y2=y2,
+                    delta_x=dx, delta_y=dy,
+                    channel_name=channel_name
+                )
+                cursor_dict = {
+                    "result_object": result_obj,
+                    "data_source": data_source,
+                    "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                    "delta_x": dx, "delta_y": dy,
+                    "channel": channel_name,
+                    "is_manual_cursor": True
+                }
             
             self._request_save_result(cursor_dict)
             self._append_to_saved_results_list(cursor_dict)
         
         if hasattr(self, "status_label") and self.status_label:
-            self.status_label.setText(f"Status: Saved {len(cursor_values)} cursor values.")
+            self.status_label.setText(f"Status: Saved {len(cursor_history)} cursor results.")
 
     # --- END ADDED ---
 

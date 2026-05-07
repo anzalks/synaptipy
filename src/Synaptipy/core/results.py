@@ -39,6 +39,29 @@ class CursorResult(AnalysisResult):
         return f"CursorResult(Error: {self.error_message})"
 
 
+@dataclass
+class CursorDeltaResult(AnalysisResult):
+    """
+    Result of a manual cursor delta selection (pair of clicks).
+    Primary 'value' can be a tuple of (x1, y1, x2, y2) or None.
+    """
+
+    file_name: str = ""
+    analysis_chosen: str = ""
+    x1: float = 0.0
+    y1: float = 0.0
+    x2: float = 0.0
+    y2: float = 0.0
+    delta_x: float = 0.0
+    delta_y: float = 0.0
+    channel_name: str = ""
+
+    def __repr__(self):
+        if self.is_valid:
+            return f"CursorDeltaResult(dx={self.delta_x:.4f}, dy={self.delta_y:.4f} {self.unit})"
+        return f"CursorDeltaResult(Error: {self.error_message})"
+
+
 
 @dataclass
 class SpikeTrainResult(AnalysisResult):
