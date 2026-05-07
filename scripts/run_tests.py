@@ -33,6 +33,9 @@ def run_tests(args):
 
     # Set up environment for tests
     env = os.environ.copy()
+    # Align with CI (.github/workflows): headless Qt avoids macOS teardown crashes
+    # when GUI tests finish without a display (see docs/developer_guide.md).
+    env.setdefault("QT_QPA_PLATFORM", "offscreen")
     if args.dev_mode:
         env["SYNAPTIPY_DEV_MODE"] = "1"
 
