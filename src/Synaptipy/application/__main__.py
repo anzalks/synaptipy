@@ -143,7 +143,7 @@ class CrashReportDialog(QtWidgets.QDialog):
             pyside_version = "unknown"
 
         report_lines = [
-            "# 🐛 Synaptipy Crash Report",
+            "# Synaptipy Crash Report",
             "",
             "## Environment",
             "",

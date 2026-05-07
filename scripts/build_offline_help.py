@@ -74,7 +74,7 @@ def _run(cmd: list, description: str) -> None:
         sys.exit(result.returncode)
 
 
-def _find_qhelpgenerator() -> Optional[Path]:
+def _find_qhelpgenerator() -> Optional[Path]:  # noqa: C901
     """Locate the ``qhelpgenerator`` binary, returning *None* if not found.
 
     Search order:

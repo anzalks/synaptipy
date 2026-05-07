@@ -110,6 +110,24 @@ def test_rebuild_plots_repeated_no_crash(nav_explorer_tab, num_channels):
     assert len(nav_explorer_tab.plot_canvas.channel_plots) == num_channels
 
 
+def test_channel_visibility_hard_reset_packs_visible_rows(nav_explorer_tab):
+    """Hiding a middle channel re-packs stacked plots into contiguous grid rows."""
+    rec = _make_recording("toggle_ch.wcp", num_channels=3, num_trials=2)
+    nav_explorer_tab._display_recording(rec)
+    canvas = nav_explorer_tab.plot_canvas
+
+    nav_explorer_tab._on_channel_visibility_changed("ch1", False)
+
+    assert canvas._channel_row.get("ch0") == 0
+    assert canvas._channel_row.get("ch1") is None
+    assert canvas._channel_row.get("ch2") == 1
+    assert canvas.channel_plots["ch1"].scene() is None
+
+    nav_explorer_tab._on_channel_visibility_changed("ch1", True)
+    assert canvas._channel_row == {"ch0": 0, "ch1": 1, "ch2": 2}
+    assert canvas.channel_plots["ch1"].scene() is canvas.widget.scene()
+
+
 # ---------------------------------------------------------------------------
 # Tests: multi-channel → single-channel navigation and back
 # ---------------------------------------------------------------------------

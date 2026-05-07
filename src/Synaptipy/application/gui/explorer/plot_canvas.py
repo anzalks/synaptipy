@@ -31,12 +31,15 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
 
         # State unique to Explorer
         # channel_plots will alias to self.plot_items for backward compatibility
-        self.plot_widgets: List[pg.PlotItem] = []  # Ordered list
+        self.plot_widgets: List[pg.PlotItem] = []  # Ordered PlotItems (stack order)
         self.channel_plot_data_items: Dict[str, List[pg.PlotDataItem]] = {}
         self.selected_average_plot_items: Dict[str, pg.PlotDataItem] = {}
         # Maps channel key -> row index in the GraphicsLayoutWidget grid.
-        # Used by set_channel_visible() to collapse/expand rows.
+        # Updated when the stacked layout is rebuilt after visibility toggles.
         self._channel_row: Dict[str, int] = {}
+        # Authoritative visibility preference from ExplorerTab / config panel
+        # (do not rely on PlotItem.isVisible() alone — graphics items can lag).
+        self._channel_visible_pref: Dict[str, bool] = {}
 
         # Cursor manager (created/replaced whenever the widget is rebuilt)
         self.cursor_manager: Optional[CursorToolManager] = None
@@ -73,14 +76,22 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self.plot_widgets.clear()
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
+        self._channel_visible_pref.clear()
+
+    def _ordered_channel_ids(self) -> List[str]:
+        """Channel ids parallel to ``plot_widgets`` (same stacking order)."""
+        plot_to_id = {plot: pid for pid, plot in self.plot_items.items()}
+        return [plot_to_id[p] for p in self.plot_widgets if p in plot_to_id]
 
     def set_channel_visible(self, chan_id: str, visible: bool) -> None:
-        """Show or hide a channel plot and collapse/expand its grid row.
+        """Show or hide a channel plot and rebuild the stacked layout.
 
-        Calling ``PlotItem.hide()`` alone leaves the grid row at its original
-        height, producing a blank white space where the plot used to be.
-        This method also adjusts the ``QGraphicsGridLayout`` row constraints so
-        the remaining channels expand to fill the freed space.
+        Collapsing rows via ``setRowMaximumHeight`` alone can shrink or corrupt
+        the multi-row ``GraphicsLayout`` on Windows when channels are toggled.
+        After updating visibility, we perform a hard reset: clear the layout,
+        re-add only visible plot rows in channel order, restore X-links,
+        refresh stretch factors, and run ``enableAutoRange`` + ``autoRange``
+        so stacked views recover sane scaling before the next draw pass.
 
         Args:
             chan_id: Channel identifier matching a key in ``channel_plots``.
@@ -89,27 +100,119 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         plot = self.plot_items.get(chan_id)
         if plot is None:
             return
+        self._channel_visible_pref[chan_id] = visible
         if visible:
             plot.show()
         else:
             plot.hide()
-        row = self._channel_row.get(chan_id)
-        if row is None:
+        self._rebuild_visible_channels_grid()
+
+    def _detach_stacked_plots_from_grid(self, ci: pg.GraphicsLayout, stack_order: List[str]) -> None:
+        """Remove every stacked PlotItem from *ci* (prefer over ``GraphicsLayout.clear()``).
+
+        ``clear()`` can abort halfway through disconnecting border helpers and leave
+        the layout mapping stale; ``removeItem`` per plot matches pyqtgraph's path
+        but stays tolerant via ``ValueError``.
+        """
+        plots_ordered = [self.plot_items[cid] for cid in stack_order if self.plot_items.get(cid)]
+        for pl in plots_ordered:
+            try:
+                ci.removeItem(pl)
+            except ValueError:
+                pass
+            except Exception as e:
+                log.debug("GraphicsLayout removeItem failed: %s", e)
+
+    def _reset_graphics_layout_counters(self, ci: pg.GraphicsLayout) -> None:
+        try:
+            ci.currentRow = 0
+            ci.currentCol = 0
+        except Exception:
+            pass
+
+    def _stack_pref_visible_channels_into_grid(
+        self,
+        ci: pg.GraphicsLayout,
+        stack_order: List[str],
+    ) -> tuple[int, List[pg.PlotItem]]:
+        """Place plots preferred visible back onto *ci*; returns ``(row_count, visible_stack)``."""
+        row = 0
+        visible_plots: List[pg.PlotItem] = []
+        for chan_key in stack_order:
+            pl = self.plot_items.get(chan_key)
+            if pl is None:
+                continue
+            if self._channel_visible_pref.get(chan_key, True):
+                try:
+                    ci.addItem(pl, row, 0)
+                except Exception as e:
+                    log.warning("Could not re-add plot for channel %s: %s", chan_key, e)
+                    continue
+                pl.show()
+                self._channel_row[chan_key] = row
+                visible_plots.append(pl)
+                row += 1
+            else:
+                self._channel_row[chan_key] = None
+        return row, visible_plots
+
+    @staticmethod
+    def _xlink_visible_stack(visible_plots: List[pg.PlotItem]) -> None:
+        if len(visible_plots) < 2:
             return
+        master = visible_plots[0]
+        for pl in visible_plots[1:]:
+            pl.setXLink(master)
+
+    @staticmethod
+    def _sync_bottom_time_axis_labels(visible_plots: List[pg.PlotItem]) -> None:
+        for i, pl in enumerate(visible_plots):
+            if i == len(visible_plots) - 1:
+                pl.setLabel("bottom", "Time", units="s")
+            else:
+                pl.getAxis("bottom").showLabel(False)
+
+    def _stretch_multichannel_grid_rows(self, row_count: int) -> None:
         try:
             internal_layout = self.widget.ci.layout
-            if visible:
-                # Remove the 0-height cap so the row can grow again.
-                internal_layout.setRowMaximumHeight(row, -1)
-                internal_layout.setRowMinimumHeight(row, 0)
-            else:
-                # Collapse the row to 0 height.
-                internal_layout.setRowMaximumHeight(row, 0)
-                internal_layout.setRowMinimumHeight(row, 0)
+            for row_idx in range(row_count):
+                internal_layout.setRowStretchFactor(row_idx, 1)
+            internal_layout.setColumnStretchFactor(0, 1)
             internal_layout.invalidate()
-            self.widget.ci.update()
+            if sys.platform == "win32":
+                internal_layout.activate()
         except Exception as e:
-            log.debug("Could not adjust row height for channel %s: %s", chan_id, e)
+            log.debug("Could not refresh grid stretch factors: %s", e)
+
+    @staticmethod
+    def _enable_autorange_visible_plots(visible_plots: List[pg.PlotItem]) -> None:
+        for pl in visible_plots:
+            vb = pl.getViewBox()
+            if vb:
+                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+            try:
+                pl.autoRange()
+            except Exception as e:
+                log.debug("autoRange after channel layout rebuild: %s", e)
+
+    def _rebuild_visible_channels_grid(self) -> None:
+        """Detach stacked PlotItems, then re-insert only those marked visible in prefs."""
+        if self.widget is None:
+            return
+        ci = self.widget.ci
+        self._unlink_all_plots()
+        stack_order = self._ordered_channel_ids()
+        self._detach_stacked_plots_from_grid(ci, stack_order)
+        self._reset_graphics_layout_counters(ci)
+        try:
+            ci.setSpacing(10)
+        except Exception:
+            pass
+        row_count, visible_plots = self._stack_pref_visible_channels_into_grid(ci, stack_order)
+        self._xlink_visible_stack(visible_plots)
+        self._sync_bottom_time_axis_labels(visible_plots)
+        self._stretch_multichannel_grid_rows(row_count)
+        self._enable_autorange_visible_plots(visible_plots)
 
     def rebuild_plots(self, recording: Recording) -> List[str]:  # noqa: C901
         """
@@ -208,6 +311,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         self.channel_plot_data_items.clear()
         self.selected_average_plot_items.clear()
         self._channel_row.clear()
+        self._channel_visible_pref.clear()
 
         # Create a fresh GraphicsLayoutWidget
         new_widget = SynaptipyPlotFactory.create_graphics_layout(
@@ -257,6 +361,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             plot_item = self.add_plot(chan_key, row=i, col=0)
             self.plot_widgets.append(plot_item)
             self._channel_row[chan_key] = i
+            self._channel_visible_pref[chan_key] = True
 
             # X-Link
             if first_plot_item is None:

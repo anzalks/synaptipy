@@ -378,8 +378,6 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         # Step 6: Discard any events posted BY widget.clear() (Win/Linux).
         self._flush_qt_registry()
 
-
-
     def clear_items(self, plot_id: str):
         """Clear data items from a specific plot (keeping axis/labels)."""
         plot = self.get_plot(plot_id)
