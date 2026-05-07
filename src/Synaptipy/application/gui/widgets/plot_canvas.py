@@ -409,8 +409,17 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             
         mouse_point = vb.mapSceneToView(pos)
         click_x = mouse_point.x()
+        click_y = mouse_point.y()
         
-        # Snap to nearest data point
+        # Get view ranges for normalization
+        view_rect = vb.viewRange()
+        x_range = view_rect[0][1] - view_rect[0][0]
+        y_range = view_rect[1][1] - view_rect[1][0]
+        
+        if x_range == 0 or y_range == 0:
+            return
+        
+        # Snap to nearest data point in 2D normalized space
         best_x = None
         best_y = None
         min_dist = float('inf')
@@ -420,13 +429,19 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             xData = getattr(item, 'xData', None)
             yData = getattr(item, 'yData', None)
             
-            if xData is not None and yData is not None and len(xData) > 0:
+            if xData is not None and yData is not None and len(xData) > 0 and len(xData) == len(yData):
+                # Find closest X index for this line
                 idx = np.argmin(np.abs(xData - click_x))
-                dist = np.abs(xData[idx] - click_x)
-                if dist < min_dist:
-                    min_dist = dist
-                    best_x = xData[idx]
-                    best_y = yData[idx]
+                pt_x = xData[idx]
+                pt_y = yData[idx]
+                
+                # Calculate 2D normalized squared distance
+                norm_dist = ((pt_x - click_x) / x_range)**2 + ((pt_y - click_y) / y_range)**2
+                
+                if norm_dist < min_dist:
+                    min_dist = norm_dist
+                    best_x = pt_x
+                    best_y = pt_y
                     
         if best_x is not None and best_y is not None:
             self.add_cursor_box(float(best_x), float(best_y))
@@ -446,15 +461,26 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         if bg_color.alpha() == 255:
             bg_color.setAlpha(180)
             
+        # Add visual marker (scatter point)
+        marker = pg.ScatterPlotItem(
+            x=[x_val], y=[y_val],
+            size=10,
+            pen=pg.mkPen(None),
+            brush=pg.mkBrush(bg_color)
+        )
+        self.main_plot.addItem(marker)
+        
+        # Add text box
         text_item = pg.TextItem(
             text=f"X: {x_val:.4g}\nY: {y_val:.4g}",
             color="white",
-            fill=pg.mkBrush(bg_color)
+            fill=pg.mkBrush(bg_color),
+            anchor=(0.5, 1.2)  # Anchor it slightly above the marker
         )
-        text_item.setPos(x_val, y_val)
         self.main_plot.addItem(text_item)
+        text_item.setPos(x_val, y_val)
         
-        self._cursor_items.append(text_item)
+        self._cursor_items.extend([marker, text_item])
         self._cursor_values.append((x_val, y_val))
         self.cursor_added.emit(x_val, y_val)
 
