@@ -335,6 +335,52 @@ def _capture_explorer_screenshots(window: Any, output_dir: Path) -> List[str]:
         _grab(window, output_dir / "explorer_tab.png")
         captured.append("explorer_tab.png")
 
+        # --- Cursor demonstration: enable cursors and place two delta markers ---
+        explorer = window.explorer_tab
+        try:
+            explorer.cursor_cb.setChecked(True)
+            _pump(3)
+            explorer.delta_cb.setChecked(True)
+            _pump(3)
+
+            # Place delta cursors programmatically via the plot canvas cursor manager
+            canvas = explorer.plot_canvas
+            cm = getattr(canvas, "cursor_manager", None)
+            if cm is None:
+                from Synaptipy.shared.cursor_manager import CursorToolManager  # noqa: PLC0415
+
+                plots = list(canvas.channel_plots.values())
+                if plots:
+                    plot = plots[0]
+                    scene = plot.scene()
+                    cm = CursorToolManager(canvas.widget, scene)
+                    cm.set_cursor_enabled(True)
+                    cm.set_delta_mode_enabled(True)
+
+            if cm is not None:
+                plots = list(canvas.channel_plots.values())
+                if plots:
+                    plot = plots[0]
+                    cm.set_cursor_enabled(True)
+                    cm.set_delta_mode_enabled(True)
+                    # Place first cursor at ~100 ms (mid-spike), second at ~250 ms
+                    cm.handle_delta_click(0.100, 40.0, plot)
+                    _pump(3)
+                    cm.handle_delta_click(0.250, 35.0, plot)
+                    _pump(5)
+
+            _grab(window, output_dir / "explorer_tab_cursors.png")
+            captured.append("explorer_tab_cursors.png")
+
+            # Clean up cursors
+            if cm is not None:
+                cm.clear()
+            explorer.cursor_cb.setChecked(False)
+            explorer.delta_cb.setChecked(False)
+            _pump(3)
+        except Exception as exc:
+            print(f"  [warn] cursor screenshot: {exc}", file=sys.stderr)
+
     # Multichannel recording (four channels) - demonstrates channel stacking.
     if _ABF22.exists():
         _load_explorer(window, _ABF22, abf22_files, 0)
@@ -698,6 +744,9 @@ def run(output_dir: Path) -> bool:  # noqa: C901
         from Synaptipy.application.plugin_manager import PluginManager  # noqa: PLC0415
 
         PluginManager.load_plugins()
+
+        # Suppress the session-restore dialog which blocks in headless mode.
+        MainWindow._offer_session_restore = lambda self: None
 
         window = MainWindow()
         window.resize(_WINDOW_W, _WINDOW_H)
