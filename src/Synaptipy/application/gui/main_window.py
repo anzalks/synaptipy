@@ -158,6 +158,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # dialog appears.
         QtCore.QTimer.singleShot(200, self._offer_session_restore)
 
+        # Setup auto-save timer (MEDIUM-12)
+        self._setup_autosave_timer()
+
     def _setup_menu_and_status_bar(self):
         """Creates the main menu bar and status bar, and connects menu actions."""
         log.debug("Setting up menu bar and status bar...")
@@ -1182,6 +1185,23 @@ class MainWindow(QtWidgets.QMainWindow):
                 500,
                 lambda: self.tab_widget.setCurrentIndex(active_tab),
             )
+
+    def _setup_autosave_timer(self):
+        """Setup auto-save timer for session state (MEDIUM-12)."""
+        self._autosave_timer = QtCore.QTimer(self)
+        self._autosave_timer.timeout.connect(self._autosave_session)
+        # Auto-save every 5 minutes
+        self._autosave_timer.start(5 * 60 * 1000)
+        log.debug("Auto-save timer started (5 minutes interval)")
+
+    def _autosave_session(self):
+        """Auto-save session state to disk (MEDIUM-12)."""
+        try:
+            active_tab = self.tab_widget.currentIndex() if hasattr(self, "tab_widget") else 0
+            self.session_manager.save_session(active_tab_index=active_tab)
+            log.debug("Auto-saved session state")
+        except Exception as e:
+            log.warning(f"Auto-save failed: {e}")
 
     # --- ADDED: Method to store analysis results ---
     def add_saved_result(self, result_data: Dict[str, Any]):

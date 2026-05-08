@@ -2762,6 +2762,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.add_to_session_button.clicked.connect(self._on_add_to_session_clicked)
         self.add_to_session_button.setEnabled(False)  # Enabled only when result exists
         style_button(self.add_to_session_button)
+        self._update_session_badge()  # MEDIUM-14: Initialize badge
 
         self.view_session_button = QtWidgets.QPushButton("View Session")
         self.view_session_button.setToolTip("View accumulated results and statistics.")
@@ -2795,9 +2796,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         self._accumulated_results.append(entry)
 
-        # Update UI
-        self.view_session_button.setEnabled(True)
-        self.view_session_button.setText(f"View Session ({len(self._accumulated_results)})")
+        # Update UI (MEDIUM-14)
+        self._update_session_badge()
 
         # Feedback
         if hasattr(self, "status_label") and self.status_label:
@@ -2817,6 +2817,22 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """Enable/Disable Add button based on result availability."""
         if self.add_to_session_button:
             self.add_to_session_button.setEnabled(self._last_analysis_result is not None)
+
+    def _update_session_badge(self):
+        """Update session count badge on buttons (MEDIUM-14)."""
+        count = len(self._accumulated_results)
+        if self.add_to_session_button:
+            if count > 0:
+                self.add_to_session_button.setText(f"Add to Session ({count})")
+            else:
+                self.add_to_session_button.setText("Add to Session")
+
+        if self.view_session_button:
+            self.view_session_button.setEnabled(count > 0)
+            if count > 0:
+                self.view_session_button.setText(f"View Session ({count})")
+            else:
+                self.view_session_button.setText("View Session")
 
     # ------------------------------------------------------------------
     # NDX custom metric emission
