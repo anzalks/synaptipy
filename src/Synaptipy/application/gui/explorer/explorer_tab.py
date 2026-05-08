@@ -643,6 +643,32 @@ class ExplorerTab(QtWidgets.QWidget):
         if recording and recording.source_file:
             self.sidebar.update_file_quality(recording.source_file, metrics)
 
+            # Check for batch-to-explorer context (HIGH-8)
+            batch_ctx = self.session_manager.batch_load_context
+            if batch_ctx and batch_ctx.get("file_path") == recording.source_file:
+                # Auto-select channel and trial from batch results
+                channel_id = batch_ctx.get("channel_id")
+                trial_idx = batch_ctx.get("trial_index", 0)
+
+                if channel_id and channel_id in recording.channels:
+                    # Hide other channels
+                    for cid in recording.channels:
+                        if cid in self.config_panel.channel_checkboxes:
+                            cb = self.config_panel.channel_checkboxes[cid]
+                            cb.setChecked(cid == channel_id)
+
+                # Set trial in cycle mode
+                if trial_idx is not None and 0 <= trial_idx < self.max_trials_current_recording:
+                    self.current_plot_mode = self.PlotMode.CYCLE_SINGLE
+                    self.config_panel.plot_mode_combo.setCurrentIndex(self.PlotMode.CYCLE_SINGLE)
+                    self.current_trial_index = trial_idx
+                    self._update_plot()
+                    self._update_all_ui_state()
+
+                # Clear context after use
+                self.session_manager.batch_load_context = None
+                log.debug(f"Applied batch context: Ch={channel_id}, Trial={trial_idx}")
+
             # Also Auto-Trigger Live Analysis on load?
             # self._request_live_analysis() # Maybe too aggressive/slow
 
@@ -698,6 +724,9 @@ class ExplorerTab(QtWidgets.QWidget):
             self.y_controls.rebuild(recording)
         finally:
             self._is_rebuilding = False
+
+        # Update trial quality metrics after loading
+        self._update_trial_quality_metrics()
 
         # Calculate Base Ranges
         self._calculate_base_ranges()
@@ -1537,12 +1566,14 @@ class ExplorerTab(QtWidgets.QWidget):
             self.current_trial_index -= 1
             self._update_plot()
             self._update_all_ui_state()
+            self._update_trial_quality_metrics()
 
     def _next_trial(self):
         if self.current_trial_index < self.max_trials_current_recording - 1:
             self.current_trial_index += 1
             self._update_plot()
             self._update_all_ui_state()
+            self._update_trial_quality_metrics()
 
     def _reset_view(self):
         """Reset plot ranges to base ranges and reset UI controls."""
@@ -2301,3 +2332,23 @@ class ExplorerTab(QtWidgets.QWidget):
     def _auto_select_trials(self):
         # Auto-selection disabled to preserve default view (Show All).
         return
+
+    def _update_trial_quality_metrics(self):
+        """Update trial quality metrics display from current channel and trial."""
+        if not self.current_recording or not self.current_recording.channels:
+            self.config_panel.update_trial_quality_metrics(None, 0)
+            return
+
+        # Use the first visible channel for metrics
+        first_channel = None
+        for cid, channel in self.current_recording.channels.items():
+            if cid in self.config_panel.channel_checkboxes:
+                cb = self.config_panel.channel_checkboxes[cid]
+                if cb.isChecked():
+                    first_channel = channel
+                    break
+
+        if not first_channel:
+            first_channel = list(self.current_recording.channels.values())[0]
+
+        self.config_panel.update_trial_quality_metrics(first_channel, self.current_trial_index)

@@ -183,16 +183,37 @@ class AddStepDialog(QtWidgets.QDialog):
         self.analysis_combo = QtWidgets.QComboBox()
         analysis_names = sorted(AnalysisRegistry.list_analysis())
         preprocessing_names = sorted(AnalysisRegistry.list_preprocessing())
+
+        # Populate combo with parent analyses and expand method_selector children (HIGH-9)
         if analysis_names or preprocessing_names:
             if analysis_names:
-                self.analysis_combo.addItems(analysis_names)
+                for name in analysis_names:
+                    meta = AnalysisRegistry.get_metadata(name)
+                    # Check if this is a parent module with method_selector
+                    method_selector = meta.get("method_selector")
+                    if method_selector:
+                        # Add separator and child methods
+                        self.analysis_combo.insertSeparator(self.analysis_combo.count())
+                        label = meta.get("label", name)
+                        self.analysis_combo.addItem(f"── {label} ──")
+                        self.analysis_combo.setItemData(self.analysis_combo.count() - 1, None, QtCore.Qt.UserRole)
+                        # Make it non-selectable
+                        idx = self.analysis_combo.count() - 1
+                        self.analysis_combo.model().item(idx).setEnabled(False)
+                        # Add child analyses
+                        for display_name, child_id in method_selector.items():
+                            self.analysis_combo.addItem(f"  {display_name}", userData=child_id)
+                    else:
+                        # Regular analysis
+                        self.analysis_combo.addItem(name, userData=name)
             if preprocessing_names:
                 self.analysis_combo.insertSeparator(self.analysis_combo.count())
-                self.analysis_combo.addItems(preprocessing_names)
+                for name in preprocessing_names:
+                    self.analysis_combo.addItem(name, userData=name)
         else:
             self.analysis_combo.addItem("No analyses registered")
             self.analysis_combo.setEnabled(False)
-        self.analysis_combo.currentTextChanged.connect(self._on_analysis_changed)
+        self.analysis_combo.currentIndexChanged.connect(self._on_analysis_combo_changed)
         type_layout.addRow("Analysis:", self.analysis_combo)
 
         # Description
@@ -281,12 +302,29 @@ class AddStepDialog(QtWidgets.QDialog):
 
         layout.addLayout(button_layout)
 
-        # Initialize with first analysis
+        # Initialize with first selectable analysis
         if analysis_names or preprocessing_names:
-            self._on_analysis_changed(self.analysis_combo.currentText())
+            # Find first valid item
+            for idx in range(self.analysis_combo.count()):
+                if self.analysis_combo.itemData(idx, QtCore.Qt.UserRole) is not None:
+                    self.analysis_combo.setCurrentIndex(idx)
+                    break
+            self._on_analysis_combo_changed(self.analysis_combo.currentIndex())
+
+    def _on_analysis_combo_changed(self, index: int):
+        """Update UI when analysis type changes."""
+        # Get actual analysis ID from combo userData
+        analysis_name = self.analysis_combo.itemData(index, QtCore.Qt.UserRole)
+        if analysis_name is None:
+            # Separator or disabled item
+            return
+        self._on_analysis_changed(analysis_name)
 
     def _on_analysis_changed(self, analysis_name: str):
         """Update UI when analysis type changes."""
+        if not analysis_name:
+            return
+
         # Clear existing parameter widgets
         for widget in self.param_widgets.values():
             self.params_layout.removeRow(widget)
@@ -409,7 +447,10 @@ class AddStepDialog(QtWidgets.QDialog):
 
     def _on_add_clicked(self):
         """Handle add button click."""
-        analysis_name = self.analysis_combo.currentText()
+        # Get analysis ID from userData
+        analysis_name = self.analysis_combo.currentData(QtCore.Qt.UserRole)
+        if not analysis_name:
+            return
 
         # Get selected scope
         selected_scope = "average"
@@ -649,6 +690,12 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         # ==== Action Buttons ====
         button_layout = QtWidgets.QHBoxLayout()
+
+        # View Error Log Button (MEDIUM-7)
+        self.view_error_log_btn = QtWidgets.QPushButton("View Error Log")
+        self.view_error_log_btn.setToolTip("Open batch error log file")
+        self.view_error_log_btn.clicked.connect(self._on_view_error_log)
+        button_layout.addWidget(self.view_error_log_btn)
 
         self.export_btn = QtWidgets.QPushButton("Export Results...")
         self.export_btn.setToolTip("Export results to CSV, Excel, or JSON")
@@ -1005,6 +1052,77 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         except Exception as e:
             log.error(f"Error handling row click: {e}")
+
+    def _on_view_error_log(self):
+        """Open batch error log file (MEDIUM-7)."""
+        from pathlib import Path
+        error_log_path = Path.home() / ".synaptipy" / "logs" / "batch_errors.log"
+
+        if not error_log_path.exists():
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Error Log",
+                "No batch error log file found.\n\nErrors will be logged to:\n" + str(error_log_path)
+            )
+            return
+
+        # Read and display log in a dialog
+        try:
+            with open(error_log_path, "r", encoding="utf-8") as f:
+                log_content = f.read()
+
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Batch Error Log")
+            dialog.resize(800, 600)
+
+            layout = QtWidgets.QVBoxLayout(dialog)
+
+            # Text display
+            text_edit = QtWidgets.QTextEdit()
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(log_content)
+            text_edit.setLineWrapMode(QtWidgets.QTextEdit.LineWrapMode.NoWrap)
+            layout.addWidget(text_edit)
+
+            # Buttons
+            btn_layout = QtWidgets.QHBoxLayout()
+            clear_btn = QtWidgets.QPushButton("Clear Log")
+            clear_btn.clicked.connect(lambda: self._clear_error_log(error_log_path, text_edit))
+            btn_layout.addWidget(clear_btn)
+
+            btn_layout.addStretch()
+
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+
+            layout.addLayout(btn_layout)
+            dialog.exec()
+
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Error Reading Log",
+                f"Could not read error log:\n\n{e}"
+            )
+
+    def _clear_error_log(self, log_path, text_widget):
+        """Clear the batch error log file."""
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Clear Error Log",
+            "Are you sure you want to clear the error log?",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
+        )
+
+        if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+            try:
+                with open(log_path, "w", encoding="utf-8") as f:
+                    f.write("")
+                text_widget.setPlainText("")
+                QtWidgets.QMessageBox.information(self, "Success", "Error log cleared.")
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(self, "Error", f"Could not clear log:\n\n{e}")
 
     def _on_export(self):
         """Export results to CSV, Excel (.xlsx), or JSON with full metadata."""

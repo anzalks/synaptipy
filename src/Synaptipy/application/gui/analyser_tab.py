@@ -99,6 +99,7 @@ class AnalyserTab(QtWidgets.QWidget):
         self.sub_tab_widget: Optional[QtWidgets.QTabWidget] = None
         self.central_analysis_item_combo: Optional[QtWidgets.QComboBox] = None
         self.splitter: Optional[QtWidgets.QSplitter] = None
+        self.preprocessing_indicator: Optional[QtWidgets.QLabel] = None
 
         self._setup_ui()
         self._load_analysis_tabs()
@@ -148,6 +149,9 @@ class AnalyserTab(QtWidgets.QWidget):
 
         log.debug(f"Global preprocessing set: {self._global_preprocessing_settings is not None}")
 
+        # Update preprocessing indicator banner
+        self._update_preprocessing_indicator()
+
         # Propagate full accumulated settings to all loaded sub-tabs
         for tab in self._loaded_analysis_tabs:
             if hasattr(tab, "apply_global_preprocessing"):
@@ -155,6 +159,36 @@ class AnalyserTab(QtWidgets.QWidget):
                     tab.apply_global_preprocessing(self._global_preprocessing_settings)
                 except Exception as e:
                     log.error(f"Failed to apply global preprocessing to {tab.get_display_name()}: {e}")
+
+    def _update_preprocessing_indicator(self):
+        """Update the visual indicator banner showing active preprocessing steps."""
+        if not self.preprocessing_indicator:
+            return
+
+        if not self._global_preprocessing_settings:
+            self.preprocessing_indicator.setVisible(False)
+            return
+
+        # Build description of active preprocessing
+        steps = []
+
+        if "baseline" in self._global_preprocessing_settings:
+            baseline = self._global_preprocessing_settings["baseline"]
+            method = baseline.get("method", "unknown")
+            steps.append(f"Baseline: {method}")
+
+        if "filters" in self._global_preprocessing_settings:
+            filters = self._global_preprocessing_settings["filters"]
+            for filter_method, filter_settings in filters.items():
+                cutoff = filter_settings.get("cutoff", "")
+                steps.append(f"Filter: {filter_method} ({cutoff} Hz)")
+
+        if steps:
+            text = "⚠️ Active Preprocessing: " + " | ".join(steps)
+            self.preprocessing_indicator.setText(text)
+            self.preprocessing_indicator.setVisible(True)
+        else:
+            self.preprocessing_indicator.setVisible(False)
 
     def _show_global_preprocessing_popup(self, settings: Dict[str, Any]) -> bool:
         """
@@ -303,6 +337,22 @@ class AnalyserTab(QtWidgets.QWidget):
         toolbar_layout.addWidget(self.files_info_label)
 
         main_layout.addLayout(toolbar_layout)
+
+        # --- Preprocessing Indicator Banner ---
+        self.preprocessing_indicator = QtWidgets.QLabel()
+        self.preprocessing_indicator.setWordWrap(True)
+        self.preprocessing_indicator.setStyleSheet("""
+            QLabel {
+                background-color: #FFF3CD;
+                color: #856404;
+                border: 1px solid #FFEAA7;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+            }
+        """)
+        self.preprocessing_indicator.setVisible(False)
+        main_layout.addWidget(self.preprocessing_indicator)
 
         # Create Global Controls widgets (they will be injected into the active tab)
         self.source_list_widget = AnalysisSourceListWidget(self)
@@ -674,14 +724,23 @@ class AnalyserTab(QtWidgets.QWidget):
     def _handle_batch_load_request(self, file_path, params, channel, trial):
         """
         Handle request to load a file from batch results.
-        Emits signal for MainWindow to handle.
+        Emits signal for MainWindow to handle and stores context for Explorer.
         """
-        log.debug(f"Batch Analysis requested load: {file_path}")
-        self.load_file_requested.emit(file_path)
+        log.debug(f"Batch Analysis requested load: {file_path}, Ch={channel}, Trial={trial}")
 
-        # NOTE: Channel/trial auto-selection after batch load is not possible
-        # because file loading is asynchronous. The file is loaded via signal emission
-        # and processed by MainWindow, so we cannot select channels here.
+        # Store context in SessionManager for Explorer to pick up
+        from pathlib import Path
+        context = {
+            "source": "batch_analysis",
+            "file_path": Path(file_path),
+            "channel_id": channel,
+            "trial_index": trial if trial is not None else 0,
+            "params": params
+        }
+        self.session_manager.batch_load_context = context
+
+        # Emit signal for MainWindow to load file
+        self.load_file_requested.emit(file_path)
 
     @QtCore.Slot()
     def _copy_methods_to_clipboard(self):

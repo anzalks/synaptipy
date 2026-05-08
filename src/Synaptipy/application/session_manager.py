@@ -53,6 +53,7 @@ class SessionManager(QObject):
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
         self._performance_settings: Dict[str, Any] = {"max_cpu_cores": 1, "max_ram_allocation_gb": 4.0}
+        self._batch_load_context: Optional[Dict[str, Any]] = None  # Context for batch-to-explorer roundtrip
         self._initialized = True
         log.debug("SessionManager initialized.")
 
@@ -358,3 +359,14 @@ class SessionManager(QObject):
         if "performance_settings" in session:
             self.performance_settings = session["performance_settings"]
         log.debug("SessionManager.apply_session: global and performance settings restored.")
+
+    @property
+    def batch_load_context(self) -> Optional[Dict[str, Any]]:
+        """Get batch-to-explorer load context (file, channel, trial)."""
+        return self._batch_load_context
+
+    @batch_load_context.setter
+    def batch_load_context(self, context: Optional[Dict[str, Any]]):
+        """Set batch-to-explorer load context for Explorer to consume."""
+        self._batch_load_context = context
+        log.debug(f"Batch load context set: {context}")

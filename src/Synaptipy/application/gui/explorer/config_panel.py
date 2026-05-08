@@ -67,7 +67,10 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         # 4. Analysis Controls (New)
         self._setup_analysis_controls(layout)
 
-        # 5. File Info
+        # 5. Trial Quality Metrics (HIGH-6)
+        self._setup_trial_quality_metrics(layout)
+
+        # 6. File Info
         self._setup_file_info(layout)
 
         layout.addStretch()
@@ -242,6 +245,24 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
 
         parent_layout.addWidget(group)
 
+    def _setup_trial_quality_metrics(self, parent_layout):
+        group = QtWidgets.QGroupBox("Trial Quality Metrics")
+        layout = QtWidgets.QFormLayout(group)
+
+        # Rs (series resistance)
+        self.lbl_rs = QtWidgets.QLabel("N/A")
+        layout.addRow("Rs (Series Resistance):", self.lbl_rs)
+
+        # Cm (capacitance)
+        self.lbl_cm = QtWidgets.QLabel("N/A")
+        layout.addRow("Cm (Capacitance):", self.lbl_cm)
+
+        # SNR (signal-to-noise ratio)
+        self.lbl_snr = QtWidgets.QLabel("N/A")
+        layout.addRow("SNR:", self.lbl_snr)
+
+        parent_layout.addWidget(group)
+
     def _setup_file_info(self, parent_layout):
         group = QtWidgets.QGroupBox("File Information")
         layout = QtWidgets.QFormLayout(group)
@@ -275,6 +296,37 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
             self.lbl_rate.setText("N/A")
             self.lbl_duration.setText("N/A")
             self.lbl_channels.setText("N/A")
+
+    def update_trial_quality_metrics(self, channel, trial_index: int):
+        """Update trial quality metrics display from channel metadata."""
+        if not channel or not hasattr(channel, "metadata"):
+            self.lbl_rs.setText("N/A")
+            self.lbl_cm.setText("N/A")
+            self.lbl_snr.setText("N/A")
+            return
+
+        metadata = channel.metadata
+
+        # Rs (series resistance) - typically in MOhm
+        rs_val = metadata.get("series_resistance")
+        if rs_val is not None:
+            self.lbl_rs.setText(f"{rs_val:.2f} MΩ")
+        else:
+            self.lbl_rs.setText("N/A")
+
+        # Cm (capacitance) - typically in pF
+        cm_val = metadata.get("capacitance")
+        if cm_val is not None:
+            self.lbl_cm.setText(f"{cm_val:.2f} pF")
+        else:
+            self.lbl_cm.setText("N/A")
+
+        # SNR (signal-to-noise ratio)
+        snr_val = metadata.get("snr")
+        if snr_val is not None:
+            self.lbl_snr.setText(f"{snr_val:.2f}")
+        else:
+            self.lbl_snr.setText("N/A")
 
     def _rebuild_channel_list(self, recording):
         # Clear

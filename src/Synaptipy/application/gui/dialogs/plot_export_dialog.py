@@ -22,6 +22,25 @@ class PlotExportDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(10)
 
+        # Preset Selection (MEDIUM-8)
+        preset_layout = QtWidgets.QHBoxLayout()
+        preset_layout.addWidget(QtWidgets.QLabel("Preset:"))
+        self.preset_combo = QtWidgets.QComboBox()
+        self.preset_combo.addItems([
+            "Custom",
+            "Journal Quality (300 DPI, PDF)",
+            "Presentation (150 DPI, PNG)",
+            "Web (72 DPI, PNG)"
+        ])
+        self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
+        preset_layout.addWidget(self.preset_combo, 1)
+        layout.addLayout(preset_layout)
+
+        # Separator
+        sep = QtWidgets.QFrame()
+        sep.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        layout.addWidget(sep)
+
         # 1. Format Selection
         fmt_layout = QtWidgets.QHBoxLayout()
         fmt_layout.addWidget(QtWidgets.QLabel("Format:"))
@@ -55,6 +74,27 @@ class PlotExportDialog(QtWidgets.QDialog):
 
         # Connect format change to update DPI availability/Info
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
+
+    def _on_preset_changed(self, text):
+        """Apply preset settings (MEDIUM-8)."""
+        if text == "Journal Quality (300 DPI, PDF)":
+            self.format_combo.setCurrentText("PDF")
+            self.dpi_spin.setValue(300)
+            self.format_combo.setEnabled(False)
+            self.dpi_spin.setEnabled(False)
+        elif text == "Presentation (150 DPI, PNG)":
+            self.format_combo.setCurrentText("PNG")
+            self.dpi_spin.setValue(150)
+            self.format_combo.setEnabled(False)
+            self.dpi_spin.setEnabled(False)
+        elif text == "Web (72 DPI, PNG)":
+            self.format_combo.setCurrentText("PNG")
+            self.dpi_spin.setValue(72)
+            self.format_combo.setEnabled(False)
+            self.dpi_spin.setEnabled(False)
+        else:  # Custom
+            self.format_combo.setEnabled(True)
+            self.dpi_spin.setEnabled(True)
 
     def _on_format_changed(self, text):
         # DPI is mostly for rasterization, but sometimes used for PDF sizing.

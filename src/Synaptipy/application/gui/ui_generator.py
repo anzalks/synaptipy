@@ -110,15 +110,23 @@ class ParameterWidgetGenerator:
         if param_type == "float":
             widget = FlexibleDoubleSpinBox()
             # Use a very wide range by default to avoid restricting the user
-            widget.setRange(param.get("min", -1e9), param.get("max", 1e9))
+            param_min = param.get("min", -1e9)
+            param_max = param.get("max", 1e9)
+            widget.setRange(param_min, param_max)
             widget.setDecimals(param.get("decimals", 4))
-            widget.setValue(param.get("default", 0.0))
+            default_val = param.get("default", 0.0)
+            widget.setValue(default_val)
+            widget.valueChanged.connect(lambda v: self._validate_and_update(widget, v, param_min, param_max))
             widget.valueChanged.connect(self._on_param_changed)
 
         elif param_type == "int":
             widget = QtWidgets.QSpinBox()
-            widget.setRange(int(param.get("min", -1e9)), int(param.get("max", 1e9)))
-            widget.setValue(int(param.get("default", 0)))
+            param_min = int(param.get("min", -1e9))
+            param_max = int(param.get("max", 1e9))
+            widget.setRange(param_min, param_max)
+            default_val = int(param.get("default", 0))
+            widget.setValue(default_val)
+            widget.valueChanged.connect(lambda v: self._validate_and_update(widget, v, param_min, param_max))
             widget.valueChanged.connect(self._on_param_changed)
 
         elif param_type == "choice" or param_type == "combo":
@@ -139,6 +147,16 @@ class ParameterWidgetGenerator:
         else:
             log.warning(f"Unknown parameter type '{param_type}' for {name}")
             return
+
+        # Add tooltip if provided
+        tooltip = param.get("tooltip")
+        if tooltip:
+            widget.setToolTip(tooltip)
+            # Also add tooltip to label if it's a string
+            if isinstance(label, str):
+                label_widget = self.layout.labelForField(widget)
+                if label_widget:
+                    label_widget.setToolTip(tooltip)
 
         self.layout.addRow(label, widget)
         self.widgets[name] = widget
@@ -199,6 +217,16 @@ class ParameterWidgetGenerator:
             except RuntimeError:
                 # Widget was deleted during a UI rebuild — skip silently.
                 continue
+
+    def _validate_and_update(self, widget, value, min_val, max_val):
+        """Validate parameter and provide visual feedback (MEDIUM-6)."""
+        # Check if value is out of range
+        if value < min_val or value > max_val:
+            # Red border for out-of-range
+            widget.setStyleSheet("border: 2px solid red;")
+        else:
+            # Clear styling for valid values
+            widget.setStyleSheet("")
 
     def _on_param_changed(self):
         """Trigger registered callbacks."""
