@@ -482,18 +482,32 @@ class NWBExporter:
                 ic_loc = getattr(channel, "electrode_location", None) or elec_loc_def
                 ic_filt = getattr(channel, "electrode_filtering", None) or elec_filt_def
 
+                # Extract electrode resistance and seal from channel metadata
+                # These are stored as strings (e.g., "10 MOhm", "5 GOhm") in data_model
+                ic_resistance = getattr(channel, "electrode_resistance", None)
+                ic_seal = getattr(channel, "electrode_seal", None)
+
                 # Since we iterate, check if electrode exists (though unique per channel usually)
                 if electrode_name in nwbfile.icephys_electrodes:
                     ic_electrode = nwbfile.icephys_electrodes[electrode_name]
                 else:
                     try:
-                        ic_electrode = nwbfile.create_icephys_electrode(
-                            name=electrode_name,
-                            description=str(ic_desc),
-                            device=device,
-                            location=str(ic_loc),
-                            filtering=str(ic_filt),
-                        )
+                        # Build electrode parameters dict
+                        electrode_params = {
+                            "name": electrode_name,
+                            "description": str(ic_desc),
+                            "device": device,
+                            "location": str(ic_loc),
+                            "filtering": str(ic_filt),
+                        }
+
+                        # Add optional resistance and seal if available
+                        if ic_resistance is not None:
+                            electrode_params["resistance"] = str(ic_resistance)
+                        if ic_seal is not None:
+                            electrode_params["seal"] = str(ic_seal)
+
+                        ic_electrode = nwbfile.create_icephys_electrode(**electrode_params)
                     except Exception as e_elec:
                         log.error(f"Failed to create electrode '{electrode_name}': {e_elec}")
                         continue
