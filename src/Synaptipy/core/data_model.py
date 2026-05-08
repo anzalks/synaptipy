@@ -151,6 +151,10 @@ class Channel:
         self.current_units: Optional[str] = None  # Populated by adapter
         # --- END ADDED ---
 
+        # --- Thread Safety for Lazy Loading ---
+        import threading
+        self._load_lock = threading.Lock()  # Prevents concurrent load_trial() calls
+
         # --- Optional Electrode Metadata (Populated by NeoAdapter) ---
         self.electrode_description: Optional[str] = None
         self.electrode_location: Optional[str] = None
@@ -243,6 +247,7 @@ class Channel:
         """
         Returns the raw data for a specific trial.
         For lazy loading, this method will load the data from disk if not already loaded.
+        Thread-safe to prevent concurrent loading of the same trial.
         """
         # Check if data is already loaded
         if self.data_trials and 0 <= trial_index < len(self.data_trials):
@@ -250,29 +255,36 @@ class Channel:
             if data is not None:
                 return data
 
-        # For lazy loading, try to load data using the loader
+        # For lazy loading, try to load data using the loader (thread-safe)
         if self.loader:
-            try:
-                # If loader is a callable or has load_trial method
-                if hasattr(self.loader, "load_trial"):
-                    data = self.loader.load_trial(trial_index)
-                elif callable(self.loader):
-                    data = self.loader(trial_index)
-                else:
-                    log.error(f"Channel {self.id}: Invalid loader object.")
-                    return None
+            with self._load_lock:
+                # Double-check after acquiring lock (may have been loaded by another thread)
+                if self.data_trials and 0 <= trial_index < len(self.data_trials):
+                    data = self.data_trials[trial_index]
+                    if data is not None:
+                        return data
 
-                if data is not None:
-                    # Store valid data to avoid re-loading
-                    # Ensure data_trials list is long enough
-                    while len(self.data_trials) <= trial_index:
-                        self.data_trials.append(None)
-                    self.data_trials[trial_index] = data
+                try:
+                    # If loader is a callable or has load_trial method
+                    if hasattr(self.loader, "load_trial"):
+                        data = self.loader.load_trial(trial_index)
+                    elif callable(self.loader):
+                        data = self.loader(trial_index)
+                    else:
+                        log.error(f"Channel {self.id}: Invalid loader object.")
+                        return None
 
-                return data
+                    if data is not None:
+                        # Store valid data to avoid re-loading
+                        # Ensure data_trials list is long enough
+                        while len(self.data_trials) <= trial_index:
+                            self.data_trials.append(None)
+                        self.data_trials[trial_index] = data
 
-            except (TypeError, ValueError, IndexError) as e:
-                log.error(f"Failed to load trial {trial_index} data lazily for channel {self.id}: {e}")
+                    return data
+
+                except (TypeError, ValueError, IndexError) as e:
+                    log.error(f"Failed to load trial {trial_index} data lazily for channel {self.id}: {e}")
                 return None
 
         return None
