@@ -1,0 +1,35 @@
+name: Dependabot Auto-close
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  close-old-dependabot-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close stale Dependabot PRs
+        run: |
+          # Close Dependabot PRs older than 7 days
+          gh pr list \
+            --repo ${{ github.repository }} \
+            --state open \
+            --json number,headRefName,createdAt,author \
+            --jq '.[] | select(.author.login == "dependabot[bot]") | select((now - (.createdAt | fromdateiso8601)) > (7 * 86400)) | .number' \
+          | while read -r pr_number; do
+              echo "Closing stale PR #$pr_number"
+              gh pr close "$pr_number" --repo ${{ github.repository }} --comment "Auto-closing stale Dependabot PR. Dependencies will be updated in batch releases."
+
+              # Get branch name and delete it
+              branch=$(gh pr view "$pr_number" --repo ${{ github.repository }} --json headRefName --jq '.headRefName')
+              echo "Deleting branch: $branch"
+              git push origin --delete "$branch" || echo "Branch already deleted"
+            done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
