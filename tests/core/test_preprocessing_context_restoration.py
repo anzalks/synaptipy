@@ -62,13 +62,13 @@ class TestPreprocessingContextRestoration:
                 }
             ]
 
-            # Process - should not crash
-            results, context = engine._process_channel(
-                file_path=Path("test.abf"),
+            # Process first task (preprocessing that will fail)
+            results, context = engine._process_task(
+                task=pipeline[0],
                 channel=channel,
                 channel_name="Vm",
-                pipeline=pipeline,
-                pipeline_context=None,
+                file_path=Path("test.abf"),
+                context={"scope": None, "data": None, "time": None},
             )
 
             # Should have error row
@@ -155,12 +155,12 @@ class TestPipelineContextAdaptation:
             }
         ]
 
-        results, final_context = engine._process_channel(
-            file_path=Path("test.abf"),
+        results, final_context = engine._process_task(
+            task=pipeline[0],
             channel=channel,
             channel_name="Vm",
-            pipeline=pipeline,
-            pipeline_context=None,
+            file_path=Path("test.abf"),
+            context={"scope": None, "data": None, "time": None},
         )
 
         # Should succeed without errors
@@ -228,12 +228,12 @@ class TestErrorPropagation:
 
             pipeline = [{"analysis": "error_preproc", "scope": "first_trial", "params": {}}]
 
-            results, _ = engine._process_channel(
-                file_path=Path("test.abf"),
+            results, _ = engine._process_task(
+                task=pipeline[0],
                 channel=channel,
                 channel_name="Vm",
-                pipeline=pipeline,
-                pipeline_context=None,
+                file_path=Path("test.abf"),
+                context={"scope": None, "data": None, "time": None},
             )
 
             # Error row should include traceback

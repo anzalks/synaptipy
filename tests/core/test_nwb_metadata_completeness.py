@@ -12,6 +12,7 @@ Covers:
 """
 
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -61,10 +62,14 @@ class TestElectrodeMetadataExport:
             NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
-                session_description="Test electrode metadata",
-                experimenter="Test",
-                lab="Test Lab",
-                institution="Test University",
+                session_metadata={
+                    "session_description": "Test electrode metadata",
+                    "identifier": "test_electrode",
+                    "session_start_time": recording.session_start_time_dt or datetime.now(),
+                    "experimenter": "Test",
+                    "lab": "Test Lab",
+                    "institution": "Test University",
+                },
             )
 
             # Read back and validate
@@ -111,10 +116,14 @@ class TestElectrodeMetadataExport:
             NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
-                session_description="Test without electrode metadata",
-                experimenter="Test",
-                lab="Test Lab",
-                institution="Test University",
+                session_metadata={
+                    "session_description": "Test without electrode metadata",
+                    "identifier": "test_no_electrode",
+                    "session_start_time": recording.session_start_time_dt or datetime.now(),
+                    "experimenter": "Test",
+                    "lab": "Test Lab",
+                    "institution": "Test University",
+                },
             )
 
             assert output_path.exists(), "NWB file should be created even without resistance/seal"
@@ -150,10 +159,14 @@ class TestPreprocessingHistoryExport:
             NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
-                session_description="Test preprocessing history",
-                experimenter="Test",
-                lab="Test Lab",
-                institution="Test University",
+                session_metadata={
+                    "session_description": "Test preprocessing history",
+                    "identifier": "test_preprocessing",
+                    "session_start_time": recording.session_start_time_dt or datetime.now(),
+                    "experimenter": "Test",
+                    "lab": "Test Lab",
+                    "institution": "Test University",
+                },
             )
 
             # Read back and validate
@@ -171,11 +184,12 @@ class TestPreprocessingHistoryExport:
                 # Should have 3 rows
                 assert len(steps_table) == 3, f"Expected 3 steps, got {len(steps_table)}"
 
-                # Validate operations
-                operations = [str(row[1]) for row in steps_table[:]]  # Column 1 is operation
-                assert "lowpass" in operations, "Lowpass should be in operations"
-                assert "baseline_subtract" in operations, "Baseline subtract should be in operations"
-                assert "notch" in operations, "Notch should be in operations"
+                # Validate operations - DynamicTable columns accessed via .get() or direct attribute
+                operations_col = steps_table.operation[:] if hasattr(steps_table, 'operation') else steps_table['operation'][:]
+                operations = [str(op) for op in operations_col]
+                assert "lowpass" in operations, f"Lowpass should be in operations, got {operations}"
+                assert "baseline_subtract" in operations, f"Baseline subtract should be in operations, got {operations}"
+                assert "notch" in operations, f"Notch should be in operations, got {operations}"
 
     def test_no_preprocessing_history(self):
         """NWB export should handle recordings without preprocessing history."""
@@ -201,10 +215,14 @@ class TestPreprocessingHistoryExport:
             NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
-                session_description="Test without preprocessing",
-                experimenter="Test",
-                lab="Test Lab",
-                institution="Test University",
+                session_metadata={
+                    "session_description": "Test without preprocessing",
+                    "identifier": "test_no_preprocessing",
+                    "session_start_time": recording.session_start_time_dt or datetime.now(),
+                    "experimenter": "Test",
+                    "lab": "Test Lab",
+                    "institution": "Test University",
+                },
             )
 
             assert output_path.exists(), "NWB file should be created"
@@ -248,10 +266,14 @@ class TestNWBValidation:
             NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
-                session_description="Validation test",
-                experimenter="Test",
-                lab="Test Lab",
-                institution="Test University",
+                session_metadata={
+                    "session_description": "Validation test",
+                    "identifier": "test_validate",
+                    "session_start_time": recording.session_start_time_dt or datetime.now(),
+                    "experimenter": "Test",
+                    "lab": "Test Lab",
+                    "institution": "Test University",
+                },
             )
 
             # Validate with PyNWB
@@ -293,10 +315,14 @@ class TestDANDICompliance:
             NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
-                session_description="DANDI compliance test",
-                experimenter="Jane Doe",
-                lab="Neuroscience Lab",
-                institution="University",
+                session_metadata={
+                    "session_description": "DANDI compliance test",
+                    "identifier": "test_dandi",
+                    "session_start_time": recording.session_start_time_dt or datetime.now(),
+                    "experimenter": "Jane Doe",
+                    "lab": "Neuroscience Lab",
+                    "institution": "University",
+                },
             )
 
             with NWBHDF5IO(str(output_path), "r") as io:

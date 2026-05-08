@@ -35,10 +35,6 @@ class TestCV2LVDivisionGuards:
         data = np.zeros_like(time)
 
         result = calculate_train_dynamics(
-            data=data,
-            time=time,
-            sampling_rate=10000.0,
-            spike_indices=None,
             spike_times=spike_times,
         )
 
@@ -52,10 +48,6 @@ class TestCV2LVDivisionGuards:
         data = np.zeros_like(time)
 
         result = calculate_train_dynamics(
-            data=data,
-            time=time,
-            sampling_rate=10000.0,
-            spike_indices=None,
             spike_times=spike_times,
         )
 
@@ -70,10 +62,6 @@ class TestCV2LVDivisionGuards:
         data = np.zeros_like(time)
 
         result = calculate_train_dynamics(
-            data=data,
-            time=time,
-            sampling_rate=10000.0,
-            spike_indices=None,
             spike_times=spike_times,
         )
 
@@ -144,7 +132,6 @@ class TestRMPPolyfitValidation:
             data=voltage,
             time=time,
             baseline_window=(0.9, 1.1),  # Will only find constant-time points
-            ljp_mv=0.0,
         )
 
         # Drift should be None (cannot fit line to constant time)
@@ -161,7 +148,6 @@ class TestRMPPolyfitValidation:
             data=voltage,
             time=time,
             baseline_window=(0.9, 1.1),
-            ljp_mv=0.0,
         )
 
         # Should not crash, drift may be None
@@ -224,10 +210,6 @@ class TestAdaptationRatioGuards:
         data = np.zeros_like(time)
 
         result = calculate_train_dynamics(
-            data=data,
-            time=time,
-            sampling_rate=10000.0,
-            spike_indices=None,
             spike_times=spike_times,
         )
 
@@ -242,10 +224,6 @@ class TestAdaptationRatioGuards:
         data = np.zeros_like(time)
 
         result = calculate_train_dynamics(
-            data=data,
-            time=time,
-            sampling_rate=10000.0,
-            spike_indices=None,
             spike_times=spike_times,
         )
 
