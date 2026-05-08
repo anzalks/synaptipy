@@ -809,7 +809,7 @@ class BatchAnalysisEngine:
         analysis_func = AnalysisRegistry.get_function(analysis_name)
         if analysis_func is None:
             # Provide helpful suggestions using fuzzy string matching
-            available_analyses = AnalysisRegistry.list_analyses()
+            available_analyses = AnalysisRegistry.list_analysis()
             error_msg = f"Analysis function '{analysis_name}' not registered"
 
             # Simple fuzzy matching: find analyses with similar names

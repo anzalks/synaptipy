@@ -547,31 +547,30 @@ class TestProcessTaskContextAdaptation:
         self.channel.get_averaged_data.assert_called_once()
 
     def test_context_selected_average_fallback_when_parse_fails(self, monkeypatch):
+        """With strict mode, parse failures now return error immediately instead of falling back."""
         ctx = self._ctx("all_trials", [DATA.copy(), DATA.copy()], [T.copy(), T.copy()])
         task = {
             "analysis": "rmp_analysis",
             "scope": "selected_trials_average",
             "params": {"trial_indices": "broken"},
         }
-        parse_calls = {"count": 0}
 
-        def _parse_once_then_recover(*args, **kwargs):
-            parse_calls["count"] += 1
-            if parse_calls["count"] == 1:
-                raise ValueError("bad selection")
-            return {0, 1}
+        # Mock parse to raise ValueError (simulating invalid format)
+        def _parse_fail(*args, **kwargs):
+            raise ValueError("Invalid trial selection string 'broken': bad selection")
 
         monkeypatch.setattr(
             "Synaptipy.shared.utils.parse_trial_selection_string",
-            _parse_once_then_recover,
+            _parse_fail,
         )
-        self.channel.get_averaged_data = MagicMock(return_value=DATA.copy())
-        self.channel.get_relative_averaged_time_vector = MagicMock(return_value=T.copy())
 
         results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
 
+        # Should return error result instead of falling back
         assert isinstance(results, list)
-        self.channel.get_averaged_data.assert_called_once_with(trial_indices=[0, 1])
+        assert len(results) == 1
+        assert "error" in results[0]
+        assert "Invalid trial selection" in results[0]["error"]
 
 
 # ---------------------------------------------------------------------------
