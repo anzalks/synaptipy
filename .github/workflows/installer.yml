@@ -208,10 +208,10 @@ jobs:
 
           # 5. Download the AppImage runtime
           # Using the manual squashfs method instead of appimagetool to avoid
-          # glibc compatibility issues with the bundled appimagetool from Release 13.
-          # This method is more reliable on ubuntu-22.04.
+          # glibc compatibility issues. The runtime from 'continuous' release is
+          # actively maintained and compatible with ubuntu-22.04.
           echo "Downloading AppImage runtime..."
-          if ! wget -O runtime https://github.com/AppImage/AppImageKit/releases/download/13/runtime-x86_64; then
+          if ! wget -O runtime https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64; then
             echo "ERROR: Failed to download AppImage runtime"
             exit 1
           fi
