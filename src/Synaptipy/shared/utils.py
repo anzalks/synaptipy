@@ -32,11 +32,37 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999, str
         if not part:
             continue
         try:
-            if "-" in part:
+            # Check if this is a range by looking for '-' after the first character
+            # Single negative number: "-5"
+            # Range with negative start: "-2-5" (ambiguous, but let's try to parse)
+            # Valid range: "2-5"
+            # We'll try parsing as range if there's a '-' not at position 0,
+            # or if there are multiple '-' characters
+            dash_count = part.count("-")
+            is_range = dash_count >= 2 or (dash_count == 1 and not part.startswith("-"))
+
+            if is_range:
                 # Validate range format
+                # Handle negative numbers: "-2-5" splits to ["", "2", "5"]
+                # Incomplete ranges: "2-" splits to ["2", ""]
                 range_parts = part.split("-")
-                if len(range_parts) != 2:
-                    error_msg = f"Invalid range format '{part}' (expected 'start-end')"
+
+                # Check for incomplete ranges first (before filtering)
+                has_empty = "" in range_parts
+                trailing_dash = part.endswith("-")
+
+                # Filter out empty strings only from leading '-'
+                if part.startswith("-"):
+                    # Remove first empty string from leading '-'
+                    if range_parts and range_parts[0] == "":
+                        range_parts = range_parts[1:]
+
+                # Now check if valid after filtering
+                if len(range_parts) != 2 or has_empty and trailing_dash:
+                    if has_empty:
+                        error_msg = f"Incomplete range '{part}' (missing start or end)"
+                    else:
+                        error_msg = f"Invalid range format '{part}' (expected 'start-end')"
                     if strict:
                         errors.append(error_msg)
                         continue
@@ -45,7 +71,11 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999, str
 
                 start_str, end_str = range_parts[0].strip(), range_parts[1].strip()
 
-                # Check for empty bounds
+                # Check if start was negative (original part started with '-')
+                if part.startswith("-"):
+                    start_str = "-" + start_str
+
+                # Double-check for empty bounds
                 if not start_str or not end_str:
                     error_msg = f"Incomplete range '{part}' (missing start or end)"
                     if strict:
@@ -66,15 +96,14 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999, str
                     log.warning(error_msg)
                     continue
 
-                if start >= max_trials or end >= max_trials:
+                # In strict mode, reject ranges that exceed max_trials
+                # In lenient mode, clamp to valid range
+                if strict and (start >= max_trials or end >= max_trials):
                     error_msg = (
                         f"Range '{part}' exceeds available trials "
                         f"(max index: {max_trials - 1})"
                     )
-                    if strict:
-                        errors.append(error_msg)
-                        continue
-                    log.warning(error_msg)
+                    errors.append(error_msg)
                     continue
 
                 # Handle descending ranges
