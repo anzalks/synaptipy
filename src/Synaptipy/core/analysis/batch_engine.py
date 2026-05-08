@@ -976,6 +976,9 @@ class BatchAnalysisEngine:
 
         if is_preprocessing:
             # Preprocessing: Modify data and return new context
+            # Store original context to restore on failure (prevents contamination)
+            original_context = context.copy() if context else None
+
             try:
                 # Preprocessing functions typically take (data, time, fs, **kwargs)
                 # and return modified data.
@@ -1008,18 +1011,18 @@ class BatchAnalysisEngine:
 
             except Exception as e:
                 log.error(f"Preprocessing failed: {e}", exc_info=True)
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "sampling_rate": sampling_rate,
-                        "error": f"Preprocessing failed: {e}",
-                        "debug_trace": traceback.format_exc(),
-                    }
-                ], None
+                # Restore original context to prevent contamination of subsequent tasks
+                error_row = {
+                    "file_name": file_path.name,
+                    "file_path": str(file_path),
+                    "channel": channel_name,
+                    "analysis": analysis_name,
+                    "scope": scope,
+                    "sampling_rate": sampling_rate,
+                    "error": f"Preprocessing failed: {e}",
+                    "debug_trace": traceback.format_exc(),
+                }
+                return [error_row], original_context
 
         else:
             # Standard Analysis

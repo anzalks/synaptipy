@@ -502,6 +502,30 @@ class Recording:
         # --- Lazy Loading Support ---
         self.source_handle: Optional[SourceHandle] = None  # Decoupled handle for lazy loading
 
+    def add_preprocessing_step(self, operation: str, parameters: Dict[str, Any]) -> None:
+        """
+        Log a preprocessing operation to the processing_history for reproducibility.
+
+        This method tracks all signal processing operations applied to the recording
+        for documentation in exports (e.g., NWB files) to ensure FAIR compliance.
+
+        Args:
+            operation: Name of the preprocessing operation (e.g., 'lowpass', 'baseline_subtract')
+            parameters: Dictionary of parameters used (e.g., {'cutoff_hz': 300, 'order': 4})
+        """
+        from datetime import datetime
+
+        if "processing_history" not in self.metadata:
+            self.metadata["processing_history"] = []
+
+        step = {
+            "timestamp": datetime.now().isoformat(),
+            "operation": operation,
+            "parameters": parameters,
+        }
+        self.metadata["processing_history"].append(step)
+        log.debug(f"Logged preprocessing: {operation} with params {parameters}")
+
     def close(self) -> None:
         """Release any underlying file handles held by the source handle.
 
