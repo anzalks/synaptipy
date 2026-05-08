@@ -801,7 +801,22 @@ class BatchAnalysisEngine:
         # Get the registered analysis function
         analysis_func = AnalysisRegistry.get_function(analysis_name)
         if analysis_func is None:
-            log.error(f"Analysis function '{analysis_name}' not found in registry")
+            # Provide helpful suggestions using fuzzy string matching
+            available_analyses = AnalysisRegistry.list_analyses()
+            error_msg = f"Analysis function '{analysis_name}' not registered"
+
+            # Simple fuzzy matching: find analyses with similar names
+            from difflib import get_close_matches
+            suggestions = get_close_matches(analysis_name, available_analyses, n=3, cutoff=0.6)
+
+            if suggestions:
+                error_msg += f". Did you mean: {', '.join(suggestions)}?"
+            else:
+                error_msg += f". Available analyses: {', '.join(sorted(available_analyses)[:10])}"
+                if len(available_analyses) > 10:
+                    error_msg += f" (and {len(available_analyses) - 10} more)"
+
+            log.error(error_msg)
             return [
                 {
                     "file_name": file_path.name,
@@ -809,7 +824,7 @@ class BatchAnalysisEngine:
                     "channel": channel_name,
                     "analysis": analysis_name,
                     "scope": scope,
-                    "error": f"Analysis function '{analysis_name}' not registered",
+                    "error": error_msg,
                 }
             ], None
 
