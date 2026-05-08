@@ -227,16 +227,17 @@ def sweep_event_threshold_factor(
         values = [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
 
     current, time = _generate_synaptic_event_trace()
-    sampling_rate = 1.0 / (time[1] - time[0])
+    # Estimate noise SD from the trace to compute absolute thresholds
+    noise_sd = float(np.std(current[:1000]))  # first 1000 samples as baseline
 
     metric_values = []
     for factor in values:
+        threshold_abs = factor * noise_sd
         result = detect_events_threshold(
             current,
             time,
-            sampling_rate,
-            threshold_factor=factor,
-            direction="negative",
+            threshold=threshold_abs,
+            polarity="negative",
         )
         metric_values.append(float(result.event_count))
 
