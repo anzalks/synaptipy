@@ -85,8 +85,11 @@ def calculate_fi_curve(  # noqa: C901
         frequencies.append(freq)
         if count >= 3 and result.spike_times is not None:
             isis = np.diff(result.spike_times)
-            if isis[0] > 0:
-                adaptation_ratios.append(float(isis[-1] / isis[0]))
+            # Guard against tiny or zero first ISI (< 1 µs is artifact)
+            if isis[0] > 1e-6:
+                ratio = float(isis[-1] / isis[0])
+                # Clip to reasonable range to prevent huge ratios from artifacts
+                adaptation_ratios.append(float(np.clip(ratio, 0, 1000)))
             else:
                 adaptation_ratios.append(np.nan)
         else:

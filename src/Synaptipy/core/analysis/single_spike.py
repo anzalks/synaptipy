@@ -345,12 +345,14 @@ def calculate_spike_features(  # noqa: C901
         if ri + 1 < waveforms.shape[1]:
             y_lo, y_hi = waveforms[k, ri], waveforms[k, ri + 1]
             denom = y_hi - y_lo
-            rise_frac[k] = (lev_50_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+            # Use np.nan instead of arbitrary 0.5 to signal interpolation failure
+            rise_frac[k] = (lev_50_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
         fi = idx_fall_50_rel[k]
         if fi - 1 >= 0:
             y_hi2, y_lo2 = waveforms[k, fi - 1], waveforms[k, fi]
             denom2 = y_hi2 - y_lo2
-            fall_frac[k] = (lev_50_flat[k] - y_lo2) / denom2 if abs(denom2) > 1e-12 else 0.5
+            # Use np.nan instead of arbitrary 0.5 to signal interpolation failure
+            fall_frac[k] = (lev_50_flat[k] - y_lo2) / denom2 if abs(denom2) > 1e-12 else np.nan
 
     half_widths[valid_width] = (
         (

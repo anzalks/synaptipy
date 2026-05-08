@@ -837,13 +837,25 @@ class BatchAnalysisEngine:
                 # files where trials can have different sample counts.
                 try:
                     if len(context["data"]) > 0:
-                        lengths = {len(a) for a in context["data"]}
-                        if len(lengths) > 1:
+                        trial_lengths = [len(a) for a in context["data"]]
+                        lengths_set = set(trial_lengths)
+                        if len(lengths_set) > 1:
+                            # Build detailed error message showing which trials have which lengths
+                            length_counts = {}
+                            for i, length in enumerate(trial_lengths):
+                                if length not in length_counts:
+                                    length_counts[length] = []
+                                length_counts[length].append(i)
+
+                            length_desc = ", ".join(
+                                f"{length} samples (trials {','.join(map(str, trials))})"
+                                for length, trials in sorted(length_counts.items())
+                            )
                             raise ValueError(
-                                f"Cannot average trials with mismatched lengths "
-                                f"{sorted(lengths)} in {file_path.name}/{channel_name}. "
-                                "Ensure all sweeps in a batch file use the same protocol "
-                                "duration."
+                                f"Cannot average trials with mismatched lengths in "
+                                f"{file_path.name}/{channel_name}: {length_desc}. "
+                                "Use 'first_trial' or 'specific_trial' scope instead, or ensure "
+                                "all sweeps use the same protocol duration."
                             )
                         data = np.mean(np.array(context["data"]), axis=0)
                         time = context["time"][0]
