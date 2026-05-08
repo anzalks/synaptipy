@@ -249,6 +249,20 @@ class Channel:
         For lazy loading, this method will load the data from disk if not already loaded.
         Thread-safe to prevent concurrent loading of the same trial.
         """
+        # Validate trial index range
+        if trial_index < 0:
+            log.warning(
+                f"Channel {self.id}: Negative trial index {trial_index} requested. Returning None."
+            )
+            return None
+
+        if self.data_trials and trial_index >= len(self.data_trials):
+            log.warning(
+                f"Channel {self.id}: Trial index {trial_index} exceeds available trials "
+                f"(max index: {len(self.data_trials) - 1}). Returning None."
+            )
+            return None
+
         # Check if data is already loaded
         if self.data_trials and 0 <= trial_index < len(self.data_trials):
             data = self.data_trials[trial_index]
@@ -316,7 +330,14 @@ class Channel:
             try:
                 # Determine which trials to use
                 if trial_indices is not None and len(trial_indices) > 0:
-                    # Validate indices
+                    # Validate indices and warn about out-of-range values
+                    invalid_indices = [i for i in trial_indices if i < 0 or i >= len(self.data_trials)]
+                    if invalid_indices:
+                        log.warning(
+                            f"Channel {self.id}: Trial indices {invalid_indices} are out of range "
+                            f"(valid range: 0-{len(self.data_trials) - 1}). These will be ignored."
+                        )
+
                     valid_indices = [i for i in trial_indices if 0 <= i < len(self.data_trials)]
                     trials_to_avg = [self.data_trials[i] for i in valid_indices if self.data_trials[i] is not None]
                 else:

@@ -757,8 +757,15 @@ class BatchAnalysisEngine:
                 # runs.  gc.collect() ensures cyclic references are broken even when
                 # GC is otherwise disabled for test-mode offscreen stability.
                 recording = None  # noqa: F841  # drop reference
-                gc.collect()
-                log.debug("gc.collect() called after processing item %d.", i)
+
+                # Aggressive memory management: collect garbage every 10 files and after each file
+                # if the results list is large (>500 rows), to prevent OOM on 8GB systems.
+                if (i + 1) % 10 == 0 or len(results_list) > 500:
+                    gc.collect()
+                    log.debug(
+                        "gc.collect() called after processing item %d (results: %d rows).",
+                        i, len(results_list)
+                    )
 
         if progress_callback:
             if self._cancelled:
@@ -892,8 +899,26 @@ class BatchAnalysisEngine:
                     if trial_indices_str:
                         from Synaptipy.shared.utils import parse_trial_selection_string
 
-                        parsed_indices = parse_trial_selection_string(trial_indices_str, len(context["data"]))
-                        selected_indices = sorted(list(parsed_indices))
+                        try:
+                            parsed_indices = parse_trial_selection_string(
+                                trial_indices_str, len(context["data"]), strict=True
+                            )
+                            selected_indices = sorted(list(parsed_indices))
+                        except ValueError as e:
+                            log.error(
+                                f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
+                            )
+                            # Return early with error
+                            return [
+                                {
+                                    "file_name": file_path.name,
+                                    "file_path": str(file_path),
+                                    "channel": channel_name,
+                                    "analysis": analysis_name,
+                                    "scope": scope,
+                                    "error": str(e),
+                                }
+                            ], None
                     else:
                         selected_indices = list(range(len(context["data"])))
 
@@ -920,6 +945,23 @@ class BatchAnalysisEngine:
 
         # If data is still None, load from channel
         if data is None:
+            # Validate scope against available data
+            if scope in ("all_trials", "selected_trials", "channel_set") and channel.num_trials == 0:
+                log.error(
+                    f"Scope '{scope}' requires trials, but channel {channel_name} in "
+                    f"{file_path.name} has no trials loaded."
+                )
+                return [
+                    {
+                        "file_name": file_path.name,
+                        "file_path": str(file_path),
+                        "channel": channel_name,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "error": f"Scope '{scope}' requires trials but channel has no trials",
+                    }
+                ], None
+
             if scope == "average":
                 data = channel.get_averaged_data()
                 time = channel.get_relative_averaged_time_vector()
@@ -942,8 +984,25 @@ class BatchAnalysisEngine:
                 if trial_indices_str:
                     from Synaptipy.shared.utils import parse_trial_selection_string
 
-                    parsed_indices = parse_trial_selection_string(trial_indices_str, channel.num_trials)
-                    selected_indices = sorted(list(parsed_indices))
+                    try:
+                        parsed_indices = parse_trial_selection_string(
+                            trial_indices_str, channel.num_trials, strict=True
+                        )
+                        selected_indices = sorted(list(parsed_indices))
+                    except ValueError as e:
+                        log.error(
+                            f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
+                        )
+                        return [
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": str(e),
+                            }
+                        ], None
                 else:
                     selected_indices = list(range(channel.num_trials))
 
@@ -959,8 +1018,25 @@ class BatchAnalysisEngine:
                 if trial_indices_str:
                     from Synaptipy.shared.utils import parse_trial_selection_string
 
-                    parsed_indices = parse_trial_selection_string(trial_indices_str, channel.num_trials)
-                    selected_indices = sorted(list(parsed_indices))
+                    try:
+                        parsed_indices = parse_trial_selection_string(
+                            trial_indices_str, channel.num_trials, strict=True
+                        )
+                        selected_indices = sorted(list(parsed_indices))
+                    except ValueError as e:
+                        log.error(
+                            f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
+                        )
+                        return [
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": str(e),
+                            }
+                        ], None
                 else:
                     selected_indices = None
 
@@ -1117,8 +1193,25 @@ class BatchAnalysisEngine:
                             if trial_indices_str:
                                 from Synaptipy.shared.utils import parse_trial_selection_string
 
-                                parsed_indices = parse_trial_selection_string(trial_indices_str, total_trials)
-                                indices_list = sorted(list(parsed_indices))
+                                try:
+                                    parsed_indices = parse_trial_selection_string(
+                                        trial_indices_str, total_trials, strict=True
+                                    )
+                                    indices_list = sorted(list(parsed_indices))
+                                except ValueError as e:
+                                    log.error(
+                                        f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
+                                    )
+                                    return [
+                                        {
+                                            "file_name": file_path.name,
+                                            "file_path": str(file_path),
+                                            "channel": channel_name,
+                                            "analysis": analysis_name,
+                                            "scope": scope,
+                                            "error": str(e),
+                                        }
+                                    ], None
                             else:
                                 indices_list = list(range(total_trials))
                         else:
