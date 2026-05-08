@@ -1333,6 +1333,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             # PHASE 1: Populate channel and data source comboboxes if they exist
             if self.signal_channel_combobox and self.data_source_combobox:
                 self._populate_channel_and_source_comboboxes()
+                # HIGH-12: Auto-select trial if specified in analysis item
+                self._auto_select_trial_from_item()
 
             self._update_ui_for_selected_item()
         except Exception as e:
@@ -2029,6 +2031,25 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"{self.__class__.__name__}: Comboboxes populated - triggering plot")
         self._plot_selected_data()
+
+    def _auto_select_trial_from_item(self):
+        """Auto-select trial index from analysis item if specified (HIGH-12)."""
+        if self._selected_item_index < 0 or self._selected_item_index >= len(self._analysis_items):
+            return
+
+        selected_item = self._analysis_items[self._selected_item_index]
+        trial_index = selected_item.get("trial_index")
+        target_type = selected_item.get("target_type")
+
+        # If target type is "Current Trial" and trial_index is specified
+        if target_type == "Current Trial" and trial_index is not None:
+            if self.data_source_combobox:
+                # Find the trial in the data source combobox
+                for i in range(self.data_source_combobox.count()):
+                    if self.data_source_combobox.itemData(i) == trial_index:
+                        self.data_source_combobox.setCurrentIndex(i)
+                        log.debug(f"{self.__class__.__name__}: Auto-selected trial {trial_index} from analysis item")
+                        break
 
     @QtCore.Slot()
     def _plot_selected_data(self):  # noqa: C901

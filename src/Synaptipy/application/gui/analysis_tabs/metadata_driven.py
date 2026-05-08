@@ -1399,10 +1399,27 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if event_indices is not None:
             self._current_event_indices = list(np.array(event_indices, dtype=int))
             self._refresh_event_markers()
+
+            # Add event count annotation (LOW-5)
+            if len(event_indices) > 0 and "event_count_text" not in self._popup_curves:
+                text_item = pg.TextItem(anchor=(1, 1), color=(255, 255, 255), fill=(0, 0, 0, 150))
+                self.plot_widget.addItem(text_item)
+                self._dynamic_plot_items.append(text_item)
+                self._popup_curves["event_count_text"] = text_item
+            if len(event_indices) > 0 and "event_count_text" in self._popup_curves:
+                count_text = f"Events: {len(event_indices)}"
+                self._popup_curves["event_count_text"].setText(count_text)
+                if self._current_plot_data:
+                    time = self._current_plot_data.get("time", [])
+                    data = self._current_plot_data.get("data", [])
+                    if len(time) > 0 and len(data) > 0:
+                        self._popup_curves["event_count_text"].setPos(np.nanmax(time), np.nanmax(data))
         else:
             self._current_event_indices = []
             if self._event_markers_item:
                 self._event_markers_item.setVisible(False)
+            if "event_count_text" in self._popup_curves:
+                self._popup_curves["event_count_text"].setText("")
 
     def _viz_threshold_line(self, cfg, result):
         """Update threshold line position from result."""
@@ -1471,6 +1488,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
+
+        # Add statistical annotation for fit parameters (LOW-5)
+        tau_key = cfg.get("tau_key", "tau")
+        tau = self._val(result, tau_key)
+        if tau is not None and "fit_stats" not in self._popup_curves:
+            text_item = pg.TextItem(anchor=(0, 0), color=(255, 255, 255), fill=(0, 0, 0, 150))
+            self.plot_widget.addItem(text_item)
+            self._dynamic_plot_items.append(text_item)
+            stats_text = f"τ = {tau:.2f} ms"
+            text_item.setText(stats_text)
+            text_item.setPos(np.nanmax(x_arr) * 0.7, np.nanmax(y_arr) * 0.9)
 
     # ------------------------------------------------------------------
     # fill_between helpers
@@ -1757,8 +1785,24 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             y_min = slope * (min(px) * scale) + intercept
             y_max = slope * (max(px) * scale) + intercept
             self._popup_curves["fit"].setData([min(px), max(px)], [y_min, y_max])
+
+            # Add statistical annotation (LOW-5)
+            r2_key = cfg.get("r2_key", "r_squared")
+            r2 = self._val(result, r2_key)
+            if r2 is not None and "stat_text" not in self._popup_curves:
+                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 150))
+                self._popup_plot.addItem(text_item)
+                self._popup_curves["stat_text"] = text_item
+            if r2 is not None and "stat_text" in self._popup_curves:
+                stats_text = f"R² = {r2:.3f}\nSlope = {slope:.2f}"
+                self._popup_curves["stat_text"].setText(stats_text)
+                x_range = max(px) - min(px)
+                y_range = max(py) - min(py)
+                self._popup_curves["stat_text"].setPos(min(px) + 0.05 * x_range, max(py) - 0.05 * y_range)
         else:
             self._popup_curves["fit"].setData([], [])
+            if "stat_text" in self._popup_curves:
+                self._popup_curves["stat_text"].setText("")
 
     def _viz_popup_phase(self, cfg, result):  # noqa: C901
         """Show dV/dt vs V phase-plane in a popup with threshold + max markers."""
@@ -1827,6 +1871,21 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self._popup_curves["max_marker"].setData([voltage[idx]], [dvdt[idx]])
         else:
             self._popup_curves["max_marker"].setData([], [])
+
+        # Add statistical annotations (LOW-5)
+        if threshold_v is not None and max_dvdt is not None:
+            if "phase_stats" not in self._popup_curves:
+                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 150))
+                self._popup_plot.addItem(text_item)
+                self._popup_curves["phase_stats"] = text_item
+            if "phase_stats" in self._popup_curves:
+                stats_text = f"Threshold V: {threshold_v:.1f}\nMax dV/dt: {max_dvdt:.1f}"
+                self._popup_curves["phase_stats"].setText(stats_text)
+                v_range = np.nanmax(voltage) - np.nanmin(voltage)
+                dvdt_range = np.nanmax(dvdt) - np.nanmin(dvdt)
+                self._popup_curves["phase_stats"].setPos(
+                    np.nanmin(voltage) + 0.05 * v_range, np.nanmax(dvdt) - 0.05 * dvdt_range
+                )
 
         # Also draw threshold line on main plot
         if threshold_v is not None:
