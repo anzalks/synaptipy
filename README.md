@@ -26,32 +26,20 @@ Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/
 ### Prerequisites
 
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-- Python 3.11 is recommended (3.10 and 3.12 are also supported)
+- Python 3.10-3.12 (3.11 recommended)
 
-### From source (recommended)
+### From source
 
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
 cd synaptipy
-conda env create -f environment.yml   # creates the 'synaptipy' environment with Python 3.11
+conda env create -f environment.yml
 conda activate synaptipy
 pip install -e ".[dev]"
+synaptipy  # launch the application
 ```
 
-The `environment.yml` file specifies all required dependencies. Python 3.11 is the tested and recommended interpreter; to enforce it explicitly, pass the `--python` flag:
-
-```bash
-conda create -n synaptipy python=3.11
-conda activate synaptipy
-pip install -e ".[dev]"
-```
-
-### Verify the installation
-
-```bash
-python -m pytest   # runs the full test suite
-synaptipy          # launches the graphical interface
-```
+For detailed installation instructions, system requirements, and troubleshooting, see the [full documentation](https://synaptipy.readthedocs.io/en/latest/user_guide.html#installation).
 
 ### Standalone application
 

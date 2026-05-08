@@ -17,7 +17,7 @@ This guide is intended for developers who want to understand, modify, or contrib
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.10-3.12
 - Git
 - pip or conda package manager
 

@@ -34,15 +34,31 @@ This document describes installation, configuration, and operation of Synaptipy 
 
 ## Installation
 
-### Requirements
+### System Requirements
 
-- Python 3.11 (recommended); Python 3.10 and 3.12 are also supported
-- Dependencies are automatically installed during package installation:
- - [PySide6](https://doc.qt.io/qtforpython-6/) - Qt6 bindings for Python (GUI framework)
- - [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
- - [Neo](https://neo.readthedocs.io/en/latest/) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
- - [NumPy](https://numpy.org) / [SciPy](https://scipy.org) - numerical computation and signal processing
- - [PyNWB](https://pynwb.readthedocs.io/en/stable/) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
+**Operating Systems:**
+- macOS 10.15 (Catalina) or later
+- Windows 10/11 (64-bit)
+- Linux (Ubuntu 20.04+, Fedora 35+, or equivalent)
+
+**Hardware:**
+- CPU: Multi-core processor (quad-core or better recommended for batch processing)
+- RAM: 8 GB minimum, 16 GB recommended for large recordings (>500 MB)
+- Display: 1920×1080 resolution or higher recommended for optimal interface layout
+- GPU: Optional - PyQtGraph can leverage OpenGL acceleration for rendering; discrete GPU improves performance with high-density traces
+
+**Software Requirements:**
+- Python 3.10-3.12 (3.11 recommended)
+- Anaconda or Miniconda (recommended) or pip
+
+### Dependencies
+
+Dependencies are automatically installed during package installation:
+- [PySide6](https://doc.qt.io/qtforpython-6/) - Qt6 bindings for Python (GUI framework)
+- [PyQtGraph](https://www.pyqtgraph.org) - OpenGL-accelerated plotting library
+- [Neo](https://neo.readthedocs.io/en/latest/) - electrophysiology file I/O (Garcia et al., 2014, *Front. Neuroinformatics* [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010))
+- [NumPy](https://numpy.org) / [SciPy](https://scipy.org) - numerical computation and signal processing
+- [PyNWB](https://pynwb.readthedocs.io/en/stable/) - NWB data export (Rubel et al., 2022, *eLife* [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362))
 
 ### Standard Installation
 
