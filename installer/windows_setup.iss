@@ -5,7 +5,13 @@
 [Setup]
 AppName=Synaptipy
 AppVersion={#MyAppVersion}
+; Allow both admin and non-admin installation
+; Admin: installs to Program Files (system-wide)
+; Non-admin: installs to user's AppData\Local (per-user)
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={autopf}\Synaptipy
+; When running without admin, {autopf} becomes {localappdata}\Programs automatically
 DefaultGroupName=Synaptipy
 OutputBaseFilename=Synaptipy_Setup_{#MyAppVersion}
 Compression=lzma2
