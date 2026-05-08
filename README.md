@@ -55,11 +55,11 @@ synaptipy          # launches the graphical interface
 
 ### Standalone application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.3b3 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.3b4 release assets:
 
-- **Windows:** `Synaptipy_Setup_v0.1.3b3.exe`
-- **macOS:** `Synaptipy_v0.1.3b3.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.3b3-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Windows:** `Synaptipy_Setup_v0.1.3b4.exe`
+- **macOS:** `Synaptipy_v0.1.3b4.dmg` - open the disk image and drag to Applications
+- **Linux:** `Synaptipy-v0.1.3b4-x86_64.AppImage` - mark as executable (`chmod +x`) and run
 
 ---
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3b4] - 2026-05-08
+
+### Fixed
+
+- **Installer CI - PyInstaller spec wrong path**: `synaptipy.spec` used
+  `os.path.dirname(os.path.abspath(SPECPATH))` which resolved to the
+  *parent* of the repository root on GitHub Actions, causing
+  `FileNotFoundError: pyproject.toml` on all platforms. Fixed by
+  removing the `os.path.dirname()` wrapper: `SPECPATH` is already the
+  directory of the spec file (i.e. the repo root).
+
+### Changed
+
+- Bumped version to `0.1.3b4` across all canonical locations.
+- Added `scripts/bump_version.py` to automate cross-file version bumps
+  in future releases.
+
+
 ## [0.1.3b3] - 2026-05-08
 
 ### Fixed
