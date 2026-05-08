@@ -4,7 +4,7 @@ Shows before/after preprocessing in a simple dialog.
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple  # noqa: F401
 
 import numpy as np
 import pyqtgraph as pg

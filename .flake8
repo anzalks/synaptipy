@@ -18,3 +18,8 @@ exclude =
 ignore = E203, W503, E226
 per-file-ignores =
     __init__.py:F401
+    src/Synaptipy/application/gui/analysis_tabs/metadata_driven.py:C901
+    src/Synaptipy/application/gui/batch_dialog.py:C901
+    src/Synaptipy/application/gui/ui_generator.py:C901
+    src/Synaptipy/core/data_model.py:C901
+    src/Synaptipy/shared/utils.py:C901

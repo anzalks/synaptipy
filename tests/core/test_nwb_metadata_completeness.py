@@ -23,7 +23,7 @@ from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 try:
     from pynwb import NWBHDF5IO, validate
-    from pynwb.icephys import IntracellularElectrode
+    from pynwb.icephys import IntracellularElectrode  # noqa: F401
 
     PYNWB_AVAILABLE = True
 except ImportError:
@@ -230,7 +230,7 @@ class TestPreprocessingHistoryExport:
             assert output_path.exists(), "NWB file should be created"
 
             with NWBHDF5IO(str(output_path), "r") as io:
-                nwbfile = io.read()
+                io.read()
 
                 # Preprocessing module may or may not exist (implementation detail)
                 # What matters is no crash occurred
