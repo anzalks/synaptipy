@@ -206,48 +206,35 @@ jobs:
           ln -s usr/bin/Synaptipy AppRun
           cd ..
 
-          # 5. Download the official AppImage packaging tool.
-          # Pinned to AppImageKit Release 13 (the last numbered stable release);
-          # avoids the 'continuous' rolling tag which changes without notice and
-          # introduces supply-chain uncertainty.
-          wget -q -O appimagetool \
-            "https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
-          chmod +x appimagetool
+          # 5. Download the AppImage runtime
+          # Using the manual squashfs method instead of appimagetool to avoid
+          # glibc compatibility issues with the bundled appimagetool from Release 13.
+          # This method is more reliable on ubuntu-22.04.
+          echo "Downloading AppImage runtime..."
+          wget -q -O runtime https://github.com/AppImage/AppImageKit/releases/download/13/runtime-x86_64
+          chmod +x runtime
 
-          # 6. Build the AppImage.
-          # ARCH=x86_64      : tell appimagetool the target architecture.
-          # MKSQUASHFS=...   : force appimagetool to use the *system* mksquashfs
-          #   rather than its bundled one.  AppImageKit Release 13 bundles a
-          #   mksquashfs compiled against an old glibc that segfaults on
-          #   ubuntu-latest (24.04, glibc 2.39), causing exit code 8 even
-          #   when squashfs-tools is installed.  Setting this env var makes
-          #   the extracted appimagetool call the system binary instead.
-
-          # Extract appimagetool and call it with explicit debugging
-          ./appimagetool --appimage-extract 2>&1 | tee extract.log || {
-            echo "AppImage extraction failed with code $?"
-            cat extract.log
-            exit 1
-          }
-
-          # Verify extraction succeeded
-          if [ ! -f squashfs-root/AppRun ]; then
-            echo "ERROR: squashfs-root/AppRun not found after extraction"
-            ls -la squashfs-root/ || echo "squashfs-root directory does not exist"
-            exit 1
-          fi
-
+          # 6. Build the squashfs filesystem
           echo "System mksquashfs version:"
           mksquashfs -version
 
-          echo "Building AppImage with system mksquashfs..."
-          ARCH=x86_64 MKSQUASHFS=$(which mksquashfs) \
-            ./squashfs-root/AppRun -v AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage" 2>&1 | tee appimage.log || {
-            CODE=$?
-            echo "AppImage build failed with exit code $CODE"
-            cat appimage.log
-            exit $CODE
-          }
+          echo "Creating squashfs filesystem..."
+          mksquashfs AppDir AppDir.squashfs -root-owned -noappend -comp xz -Xbcj x86 -b 1M -mkfs-time 0
+
+          # 7. Combine runtime + squashfs to create the final AppImage
+          echo "Combining runtime + squashfs..."
+          cat runtime AppDir.squashfs > "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+          chmod +x "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+
+          # 8. Verify the AppImage was created
+          if [ -f "dist/Synaptipy-${VERSION}-x86_64.AppImage" ]; then
+            SIZE=$(stat -c%s "dist/Synaptipy-${VERSION}-x86_64.AppImage")
+            echo "AppImage created successfully: $(($SIZE / 1024 / 1024)) MB"
+            file "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+          else
+            echo "ERROR: AppImage file not created"
+            exit 1
+          fi
 
       - name: Upload installer artifact
         # if-no-files-found: error surfaces packaging failures immediately

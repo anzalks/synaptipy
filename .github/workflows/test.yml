@@ -115,6 +115,8 @@ jobs:
         flags: unittests
         name: synaptipy-coverage
         fail_ci_if_error: false   # network blip must not block a green build
+        working-directory: .
+        disable_file_fixes: true  # coverage.xml already has correct relative paths
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
