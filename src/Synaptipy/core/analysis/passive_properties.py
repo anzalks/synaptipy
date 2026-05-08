@@ -1307,7 +1307,7 @@ def calculate_capacitance_cc(
         log.warning(
             "Effective resistance too low (%.3f MOhm); cannot compute reliable Cm. "
             "This may indicate corrupted recording or incorrect Rs/Rin values.",
-            effective_r
+            effective_r,
         )
         return None
 

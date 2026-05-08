@@ -23,7 +23,7 @@ class PreprocessingComparisonDialog(QtWidgets.QDialog):
         processed_data: np.ndarray,
         processed_time: np.ndarray,
         title: str = "Preprocessing Comparison",
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -59,9 +59,7 @@ class PreprocessingComparisonDialog(QtWidgets.QDialog):
         self.processed_plot = pg.PlotWidget(title="Preprocessed Data")
         self.processed_plot.setLabel("left", "Amplitude")
         self.processed_plot.setLabel("bottom", "Time", units="s")
-        self.processed_plot.plot(
-            self.processed_time, self.processed_data, pen=pg.mkPen(color="green", width=1)
-        )
+        self.processed_plot.plot(self.processed_time, self.processed_data, pen=pg.mkPen(color="green", width=1))
         plot_layout.addWidget(self.processed_plot)
 
         layout.addLayout(plot_layout)
@@ -95,7 +93,7 @@ class PreprocessingComparisonDialog(QtWidgets.QDialog):
             ("Mean", raw_mean, proc_mean),
             ("Std Dev", raw_std, proc_std),
             ("Min", raw_min, proc_min),
-            ("Max", raw_max, proc_max)
+            ("Max", raw_max, proc_max),
         ]
 
         for row, (name, raw_val, proc_val) in enumerate(metrics, start=1):

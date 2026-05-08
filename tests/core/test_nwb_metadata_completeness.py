@@ -95,7 +95,7 @@ class TestElectrodeMetadataExport:
         recording = Recording(source_file=Path("test.abf"))
         recording.protocol_name = "Steps"
         recording.duration = 1.0
-        recording.sampling_rate=10000.0
+        recording.sampling_rate = 10000.0
 
         channel = Channel(
             id="0",
@@ -136,7 +136,7 @@ class TestPreprocessingHistoryExport:
     def test_preprocessing_history_exported(self):
         """Preprocessing steps should be exported as DynamicTable in NWB."""
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name="Steps"
+        recording.protocol_name = "Steps"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
 
@@ -185,7 +185,9 @@ class TestPreprocessingHistoryExport:
                 assert len(steps_table) == 3, f"Expected 3 steps, got {len(steps_table)}"
 
                 # Validate operations - DynamicTable columns accessed via .get() or direct attribute
-                operations_col = steps_table.operation[:] if hasattr(steps_table, 'operation') else steps_table['operation'][:]
+                operations_col = (
+                    steps_table.operation[:] if hasattr(steps_table, "operation") else steps_table["operation"][:]
+                )
                 operations = [str(op) for op in operations_col]
                 assert "lowpass" in operations, f"Lowpass should be in operations, got {operations}"
                 assert "baseline_subtract" in operations, f"Baseline subtract should be in operations, got {operations}"

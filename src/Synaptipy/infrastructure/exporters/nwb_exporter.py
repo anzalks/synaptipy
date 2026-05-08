@@ -714,8 +714,7 @@ class NWBExporter:
                         # Create preprocessing module if it doesn't exist
                         if "preprocessing" not in nwbfile.processing:
                             preproc_module = nwbfile.create_processing_module(
-                                name="preprocessing",
-                                description="Signal preprocessing steps applied in Synaptipy"
+                                name="preprocessing", description="Signal preprocessing steps applied in Synaptipy"
                             )
                         else:
                             preproc_module = nwbfile.processing["preprocessing"]
@@ -726,23 +725,23 @@ class NWBExporter:
                         timestamps = VectorData(
                             name="timestamp",
                             description="ISO timestamp when preprocessing was applied",
-                            data=[str(step.get("timestamp", "")) for step in history]
+                            data=[str(step.get("timestamp", "")) for step in history],
                         )
                         operations = VectorData(
                             name="operation",
                             description="Name of preprocessing operation (e.g., lowpass, baseline_subtract)",
-                            data=[str(step.get("operation", "")) for step in history]
+                            data=[str(step.get("operation", "")) for step in history],
                         )
                         parameters = VectorData(
                             name="parameters",
                             description="JSON-encoded parameters for the operation",
-                            data=[str(step.get("parameters", {})) for step in history]
+                            data=[str(step.get("parameters", {})) for step in history],
                         )
 
                         preproc_table = DynamicTable(
                             name="preprocessing_steps",
                             description="Log of all preprocessing operations applied to this recording",
-                            columns=[timestamps, operations, parameters]
+                            columns=[timestamps, operations, parameters],
                         )
                         preproc_module.add(preproc_table)
                         log.debug(f"NWB: Exported {len(history)} preprocessing steps")

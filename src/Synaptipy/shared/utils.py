@@ -99,10 +99,7 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999, str
                 # In strict mode, reject ranges that exceed max_trials
                 # In lenient mode, clamp to valid range
                 if strict and (start >= max_trials or end >= max_trials):
-                    error_msg = (
-                        f"Range '{part}' exceeds available trials "
-                        f"(max index: {max_trials - 1})"
-                    )
+                    error_msg = f"Range '{part}' exceeds available trials " f"(max index: {max_trials - 1})"
                     errors.append(error_msg)
                     continue
 
@@ -124,10 +121,7 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999, str
                     continue
 
                 if val >= max_trials:
-                    error_msg = (
-                        f"Index {val} exceeds available trials "
-                        f"(max index: {max_trials - 1})"
-                    )
+                    error_msg = f"Index {val} exceeds available trials " f"(max index: {max_trials - 1})"
                     if strict:
                         errors.append(error_msg)
                         continue
@@ -146,9 +140,6 @@ def parse_trial_selection_string(selection_str: str, max_trials: int = 9999, str
 
     # If strict mode and errors occurred, raise combined error
     if strict and errors:
-        raise ValueError(
-            f"Invalid trial selection string '{selection_str}': "
-            + "; ".join(errors)
-        )
+        raise ValueError(f"Invalid trial selection string '{selection_str}': " + "; ".join(errors))
 
     return indices

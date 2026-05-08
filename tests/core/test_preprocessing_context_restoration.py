@@ -10,9 +10,10 @@ Covers:
 - Multi-step preprocessing rollback
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from Synaptipy.core.data_model import Channel, Recording

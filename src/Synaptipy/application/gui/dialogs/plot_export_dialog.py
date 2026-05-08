@@ -26,12 +26,9 @@ class PlotExportDialog(QtWidgets.QDialog):
         preset_layout = QtWidgets.QHBoxLayout()
         preset_layout.addWidget(QtWidgets.QLabel("Preset:"))
         self.preset_combo = QtWidgets.QComboBox()
-        self.preset_combo.addItems([
-            "Custom",
-            "Journal Quality (300 DPI, PDF)",
-            "Presentation (150 DPI, PNG)",
-            "Web (72 DPI, PNG)"
-        ])
+        self.preset_combo.addItems(
+            ["Custom", "Journal Quality (300 DPI, PDF)", "Presentation (150 DPI, PNG)", "Web (72 DPI, PNG)"]
+        )
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
         preset_layout.addWidget(self.preset_combo, 1)
         layout.addLayout(preset_layout)

@@ -762,10 +762,7 @@ class BatchAnalysisEngine:
                 # if the results list is large (>500 rows), to prevent OOM on 8GB systems.
                 if (i + 1) % 10 == 0 or len(results_list) > 500:
                     gc.collect()
-                    log.debug(
-                        "gc.collect() called after processing item %d (results: %d rows).",
-                        i, len(results_list)
-                    )
+                    log.debug("gc.collect() called after processing item %d (results: %d rows).", i, len(results_list))
 
         if progress_callback:
             if self._cancelled:
@@ -814,6 +811,7 @@ class BatchAnalysisEngine:
 
             # Simple fuzzy matching: find analyses with similar names
             from difflib import get_close_matches
+
             suggestions = get_close_matches(analysis_name, available_analyses, n=3, cutoff=0.6)
 
             if suggestions:
@@ -905,9 +903,7 @@ class BatchAnalysisEngine:
                             )
                             selected_indices = sorted(list(parsed_indices))
                         except ValueError as e:
-                            log.error(
-                                f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
-                            )
+                            log.error(f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}")
                             # Return early with error
                             return [
                                 {
@@ -990,9 +986,7 @@ class BatchAnalysisEngine:
                         )
                         selected_indices = sorted(list(parsed_indices))
                     except ValueError as e:
-                        log.error(
-                            f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
-                        )
+                        log.error(f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}")
                         return [
                             {
                                 "file_name": file_path.name,
@@ -1024,9 +1018,7 @@ class BatchAnalysisEngine:
                         )
                         selected_indices = sorted(list(parsed_indices))
                     except ValueError as e:
-                        log.error(
-                            f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
-                        )
+                        log.error(f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}")
                         return [
                             {
                                 "file_name": file_path.name,
@@ -1199,9 +1191,7 @@ class BatchAnalysisEngine:
                                     )
                                     indices_list = sorted(list(parsed_indices))
                                 except ValueError as e:
-                                    log.error(
-                                        f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}"
-                                    )
+                                    log.error(f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}")
                                     return [
                                         {
                                             "file_name": file_path.name,

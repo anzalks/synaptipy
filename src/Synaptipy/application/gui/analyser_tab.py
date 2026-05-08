@@ -730,12 +730,13 @@ class AnalyserTab(QtWidgets.QWidget):
 
         # Store context in SessionManager for Explorer to pick up
         from pathlib import Path
+
         context = {
             "source": "batch_analysis",
             "file_path": Path(file_path),
             "channel_id": channel,
             "trial_index": trial if trial is not None else 0,
-            "params": params
+            "params": params,
         }
         self.session_manager.batch_load_context = context
 

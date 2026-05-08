@@ -626,9 +626,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
     # Guard against division by zero with epsilon comparison
     cv2_denominator = isi_next + isi_i
     cv2_safe_mask = cv2_denominator > 1e-9
-    cv2_array = np.where(
-        cv2_safe_mask, 2.0 * np.abs(isi_next - isi_i) / cv2_denominator, np.nan
-    )
+    cv2_array = np.where(cv2_safe_mask, 2.0 * np.abs(isi_next - isi_i) / cv2_denominator, np.nan)
     cv2_val = float(np.nanmean(cv2_array))
 
     lv_denominator_sq = (isi_i + isi_next) ** 2

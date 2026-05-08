@@ -1056,13 +1056,14 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
     def _on_view_error_log(self):
         """Open batch error log file (MEDIUM-7)."""
         from pathlib import Path
+
         error_log_path = Path.home() / ".synaptipy" / "logs" / "batch_errors.log"
 
         if not error_log_path.exists():
             QtWidgets.QMessageBox.information(
                 self,
                 "No Error Log",
-                "No batch error log file found.\n\nErrors will be logged to:\n" + str(error_log_path)
+                "No batch error log file found.\n\nErrors will be logged to:\n" + str(error_log_path),
             )
             return
 
@@ -1100,11 +1101,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             dialog.exec()
 
         except Exception as e:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Error Reading Log",
-                f"Could not read error log:\n\n{e}"
-            )
+            QtWidgets.QMessageBox.warning(self, "Error Reading Log", f"Could not read error log:\n\n{e}")
 
     def _clear_error_log(self, log_path, text_widget):
         """Clear the batch error log file."""
@@ -1112,7 +1109,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             self,
             "Clear Error Log",
             "Are you sure you want to clear the error log?",
-            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
         )
 
         if reply == QtWidgets.QMessageBox.StandardButton.Yes:

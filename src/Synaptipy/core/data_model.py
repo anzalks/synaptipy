@@ -153,6 +153,7 @@ class Channel:
 
         # --- Thread Safety for Lazy Loading ---
         import threading
+
         self._load_lock = threading.Lock()  # Prevents concurrent load_trial() calls
 
         # --- Optional Electrode Metadata (Populated by NeoAdapter) ---
@@ -251,9 +252,7 @@ class Channel:
         """
         # Validate trial index range
         if trial_index < 0:
-            log.warning(
-                f"Channel {self.id}: Negative trial index {trial_index} requested. Returning None."
-            )
+            log.warning(f"Channel {self.id}: Negative trial index {trial_index} requested. Returning None.")
             return None
 
         if self.data_trials and trial_index >= len(self.data_trials):
