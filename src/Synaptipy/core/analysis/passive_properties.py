@@ -177,7 +177,11 @@ def calculate_rmp(data: np.ndarray, time: np.ndarray, baseline_window: Tuple[flo
             else:
                 fit_time = window_time
                 fit_data = baseline_data
-            slope, _ = np.polyfit(fit_time, fit_data, 1)
+            # Validate sufficient unique points for linear fit
+            if len(fit_time) >= 2 and np.ptp(fit_time) > 1e-9:
+                slope, _ = np.polyfit(fit_time, fit_data, 1)
+            else:
+                slope = None
         except (ValueError, TypeError, np.linalg.LinAlgError):
             slope = None
 
@@ -976,13 +980,19 @@ def calculate_tau(  # noqa: C901
             #      relative to the membrane time constant; keep the full window
             #      and accept the minor sag contamination.
             if _peak_idx > 2 and _peak_idx < len(V_fit) - 1 and _peak_idx >= len(V_fit) // 2:
-                t_fit = t_fit[: _peak_idx + 1]
-                V_fit = V_fit[: _peak_idx + 1]
-                log.debug(
-                    "Tau fit: sag detected — window truncated at sample %d (%.1f ms into step)",
-                    _peak_idx,
-                    float(t_fit[-1]) * 1000.0,
-                )
+                t_fit_truncated = t_fit[: _peak_idx + 1]
+                V_fit_truncated = V_fit[: _peak_idx + 1]
+                # Validate truncation left enough points for exponential fit
+                if len(t_fit_truncated) >= 3:
+                    t_fit = t_fit_truncated
+                    V_fit = V_fit_truncated
+                    log.debug(
+                        "Tau fit: sag detected — window truncated at sample %d (%.1f ms into step)",
+                        _peak_idx,
+                        float(t_fit[-1]) * 1000.0,
+                    )
+                else:
+                    log.debug("Tau fit: sag truncation would leave < 3 points, keeping full window")
 
         if len(t_fit) < 3:
             log.warning("Not enough data points to fit for Tau.")
@@ -1198,11 +1208,12 @@ def calculate_sag_ratio(  # noqa: C901
         delta_v_peak = v_peak - v_baseline
         delta_v_ss = v_ss - v_baseline
 
-        if delta_v_ss == 0:
+        # Guard against division by zero with epsilon comparison (float equality is fragile)
+        if abs(delta_v_ss) < 1e-9:
             return _sag_nan_payload()
 
         sag_ratio = float(delta_v_peak / delta_v_ss)
-        sag_percentage = 0.0 if delta_v_peak == 0 else float(100.0 * (v_peak - v_ss) / delta_v_peak)
+        sag_percentage = 0.0 if abs(delta_v_peak) < 1e-9 else float(100.0 * (v_peak - v_ss) / delta_v_peak)
 
         rebound_start = response_steady_state_window[1]
         rebound_end = rebound_start + (rebound_window_ms / 1000.0)
@@ -1290,6 +1301,16 @@ def calculate_capacitance_cc(
             "Pass rs_mohm for a more accurate result."
         )
         effective_r = rin_mohm
+
+    # Validate effective resistance is physiologically reasonable (> 0.1 MΩ = 100 kΩ)
+    if effective_r < 0.1:
+        log.warning(
+            "Effective resistance too low (%.3f MOhm); cannot compute reliable Cm. "
+            "This may indicate corrupted recording or incorrect Rs/Rin values.",
+            effective_r
+        )
+        return None
+
     cm_nf = tau_ms / effective_r
     return cm_nf * 1000.0
 

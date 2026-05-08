@@ -90,7 +90,7 @@ def extract_ttl_epochs(
             data_min = float(np.min(ttl_data))
             data_max = float(np.max(ttl_data))
             data_range = data_max - data_min
-            if data_range > 1.0:  # require >1 V swing; prevents thermal noise amplification on floating channels
+            if data_range > 0.3:  # require >300 mV swing (lowered from 1V to support low-voltage TTL)
                 auto_thr = data_min + data_range * 0.5
                 log.info(
                     "TTL threshold %.3f produced no edges; auto-adjusting to midpoint %.3f "

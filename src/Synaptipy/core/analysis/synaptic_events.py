@@ -80,6 +80,8 @@ def find_quiescent_baseline_rms(
     best_end = best_start + window_samples
     quiescent_chunk = signal.detrend(data[best_start:best_end], type="linear")
     rms = float(np.sqrt(np.mean(quiescent_chunk**2)))
+    # Add minimum floor to prevent zero RMS in completely flat traces
+    rms = max(rms, 1e-6)  # floor at 1 µV/pA
     return rms, (best_start, best_end)
 
 
@@ -272,7 +274,8 @@ def fit_biexponential_decay(  # noqa: C901
         a_f, tau_f, a_s, tau_s = popt_b
 
         # Sanity: both amplitudes and both taus must be positive and tau_fast < tau_slow
-        if a_f > 0 and a_s > 0 and tau_f > 0 and tau_s > 0 and tau_f != tau_s:
+        # Use epsilon comparison instead of exact equality for floating-point safety
+        if a_f > 0 and a_s > 0 and tau_f > 0 and tau_s > 0 and abs(tau_f - tau_s) > 0.01:
             tau_fast = min(tau_f, tau_s)
             tau_slow = max(tau_f, tau_s)
             result["tau_fast_ms"] = float(tau_fast)
@@ -370,8 +373,10 @@ def _fit_p1_decay_residual(
         the single tau for the mono-exp case.
     """
     nan = float("nan")
-    max_decay_samples = min(int(0.2 * sample_rate), int((s2_t - time[peak1_idx]) * sample_rate) - 1)
-    decay_end_idx = min(peak1_idx + max(4, max_decay_samples), len(data) - 1)
+    # Guard against negative max_decay_samples when stim2 is very close to peak1
+    time_to_s2_samples = int((s2_t - time[peak1_idx]) * sample_rate) - 1
+    max_decay_samples = min(int(0.2 * sample_rate), max(4, time_to_s2_samples))
+    decay_end_idx = min(peak1_idx + max_decay_samples, len(data) - 1)
 
     if decay_end_idx <= peak1_idx + 3:
         return 0.0, nan

@@ -620,11 +620,18 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
     isi_i = isis[:-1]
     isi_next = isis[1:]
 
-    cv2_array = 2.0 * np.abs(isi_next - isi_i) / (isi_next + isi_i)
-    cv2_val = float(np.mean(cv2_array))
+    # Guard against division by zero with epsilon comparison
+    cv2_denominator = isi_next + isi_i
+    cv2_safe_mask = cv2_denominator > 1e-9
+    cv2_array = np.where(
+        cv2_safe_mask, 2.0 * np.abs(isi_next - isi_i) / cv2_denominator, np.nan
+    )
+    cv2_val = float(np.nanmean(cv2_array))
 
-    lv_array = 3.0 * ((isi_i - isi_next) ** 2) / ((isi_i + isi_next) ** 2)
-    lv_val = float(np.mean(lv_array))
+    lv_denominator_sq = (isi_i + isi_next) ** 2
+    lv_safe_mask = lv_denominator_sq > 1e-15
+    lv_array = np.where(lv_safe_mask, 3.0 * ((isi_i - isi_next) ** 2) / lv_denominator_sq, np.nan)
+    lv_val = float(np.nanmean(lv_array))
 
     # Adaptation index: ISI_last / ISI_first (>1 = adapting, <1 = bursting)
     adaptation_index = float(isis[-1] / isis[0]) if isis[0] > 0 else float(np.nan)
