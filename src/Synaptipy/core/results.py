@@ -13,6 +13,7 @@ class AnalysisResult:
     is_valid: bool = True
     error_message: Optional[str] = None
     quality_flags: List[str] = field(default_factory=list)
+    confidence: Optional[str] = None  # "high", "medium", "low", or None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def set_error(self, message: str):

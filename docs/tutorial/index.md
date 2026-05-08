@@ -74,6 +74,15 @@ electrophysiology data files. It supports all formats handled by the Neo library
   X-axes for synchronized panning/zooming.
 - **Hardware-Accelerated Rendering** - PyQtGraph + OpenGL, up to 60 fps on large files.
 - **Interactive Navigation** - Scroll to zoom, drag to pan, toolbar for fine control.
+- **Interactive Cursors** - Enable crosshair cursors via the **Interactive Cursor**
+  group in the display panel. Clicking on the trace places a persistent marker at the
+  selected (time, amplitude) coordinate. Enable **Delta Mode** to measure differences
+  between successive cursor placements (Δt, ΔV/ΔI). Undo and Clear buttons manage
+  cursor history.
+
+*Delta cursor measurement between two time points:*
+
+![Explorer Tab - Interactive Cursors](screenshots/explorer_tab_cursors.png)
 
 ### 1.3 Display Configuration Panel
 
@@ -89,6 +98,10 @@ electrophysiology data files. It supports all formats handled by the Neo library
   Re-checking the box restores the row to its normal height.
 - **Live Spike Detection** - Real-time detection with configurable threshold
   (default -20 mV) and refractory period (default 2 ms). Spikes shown as red dots.
+- **Trial Quality Metrics** - Displays series resistance (Rs), membrane capacitance
+  (Cm), and signal-to-noise ratio (SNR) extracted from channel metadata for the
+  currently visible trial. These metrics update automatically when navigating between
+  trials.
 
 ### 1.4 Toolbar
 
@@ -178,6 +191,15 @@ Computed on file load; shown as a traffic-light badge with tooltip:
 - **Line Noise** - Welch PSD at 50/60 Hz.
 - **Low-Frequency Variance** - energy below a configurable cutoff.
 
+### 2.5 Preprocessing Comparison
+
+A side-by-side comparison dialog allows visual inspection of the signal before
+and after preprocessing. Two linked PyQtGraph plots display the raw and processed
+traces with synchronised X-axes, accompanied by a statistics table comparing
+mean, standard deviation, minimum, and maximum values for each condition. This
+facilitates verification that the preprocessing parameters produce the intended
+effect without introducing artefacts.
+
 ---
 
 ## 3. The Analyser Tab
@@ -201,16 +223,25 @@ automatically.
 Each sub-tab provides:
 
 - **Parameter Panel** - Auto-generated spin boxes, combo boxes, and checkboxes.
-  All include tooltips, unit suffixes, valid min/max ranges.
+  All include tooltips (populated from registry metadata), unit suffixes, valid
+  min/max ranges.
   - *Free-form numeric entry* - Number fields accept typed values directly;
     intermediate states (a lone `−`, an empty field, etc.) are tolerated while
     typing and validated only on commit. Stepping uses adaptive decimal increments.
+  - *Validation feedback* - Parameters that fall outside their valid range are
+    highlighted with a red border, providing immediate visual indication of
+    invalid entries without blocking interaction.
   - *Interactive / Manual mode* - Sub-tabs with draggable plot regions expose a
     mode selector. In **Interactive** mode the time-window spinboxes are read-only
     (their values are driven by the plot regions); switching to **Manual** mode
     unlocks all spinboxes for direct entry.
   - *Conditional visibility* - Parameters that are irrelevant for the current
     clamp mode, analysis type, or detection method are hidden automatically.
+- **Preprocessing Indicator** - When preprocessing (baseline subtraction, filtering)
+  is active, a coloured banner appears at the top of the Analyser listing the active
+  steps (e.g. "Active Preprocessing: Baseline: mode | Filter: lowpass (500 Hz)").
+  This ensures the operator is aware that the displayed signal differs from the raw
+  acquisition.
 - **Interactive Plot**
   - *Draggable Regions* - Color-coded overlays (blue = baseline, red = response,
     orange = peak, green = steady-state) bidirectionally linked to parameter boxes.
@@ -218,6 +249,8 @@ Each sub-tab provides:
   - *Draggable Threshold Line* - Syncs with the threshold parameter.
   - *Artifact Overlay* - Semi-transparent green shading on detected artifact windows.
   - *Fit Overlays* - Exponential or regression curves overlaid on the trace.
+  - *Statistical Annotations* - Popup plots display quantitative annotations
+    (R², regression slope, τ values, event counts) directly on the figure.
 - **Results Table** - Parameter / Value pairs for all computed metrics.
 - **Clamp-Mode Awareness** - Parameters show/hide automatically (CC vs. VC).
 
@@ -225,10 +258,15 @@ Each sub-tab provides:
 
 - **Run Analysis** - Executes with current parameters; also auto-triggers (debounced)
   on parameter change.
-- **Save Result** - Accumulate result to the session for later export/comparison.
+- **Add to Session** - Accumulate the current result to the session for later
+  export or cross-cell comparison. A numeric badge on the button displays the
+  running count of accumulated results (e.g. "Add to Session (5)").
+- **View Session** - Inspect accumulated results; also badged with the current count.
 - **Copy Methods Text** - Publication-ready methods paragraph copied to clipboard.
 - **Run Batch** - Opens the Batch Analysis Dialog (see Section 5).
 - **Cross-Tab Zoom Sync** - Zoom states shared across all analysis sub-tabs.
+- **Auto-Save** - The session state is persisted automatically at five-minute
+  intervals, reducing the risk of data loss during prolonged analysis sessions.
 
 ### 3.4 Popup Windows
 
@@ -1214,9 +1252,13 @@ post-processing.
 
 Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
 - The file list from the analysis set (paths *or* in-memory Recording objects).
-- A visual pipeline builder.
+- A visual pipeline builder with an expanded method selector for browsing
+  available analyses by module tab.
 - A channel filter (comma-separated names/IDs; leave empty for all channels).
 - A progress bar, status label, and cancel button.
+- **View Error Log** - opens the batch error log file
+  (`~/.synaptipy/logs/batch_errors.log`) for post-hoc diagnosis of failures
+  encountered during prior batch runs.
 
 ### 5.3 Building a Pipeline
 
@@ -1412,9 +1454,18 @@ fully NWB 2.x compliant.
 
 ### 6.3 Plot Export
 
-Every Explorer and Analyser sub-tab has a **"Save Plot"** button:
-- Format: PNG or PDF.
-- DPI setting for publication-quality figures.
+Every Explorer and Analyser sub-tab has a **"Save Plot"** button that opens an
+export dialog with the following options:
+
+- **Preset selector** - Choose from predefined configurations:
+  - *Journal Quality (300 DPI, PDF)* - Vector format at 300 DPI, suitable for
+    submission to peer-reviewed journals.
+  - *Presentation (150 DPI, PNG)* - Raster format at 150 DPI for slide decks.
+  - *Web (72 DPI, PNG)* - Lightweight raster for online documentation or reports.
+  - *Custom* - Manual control over format and resolution.
+- **Format** - PNG, JPG, SVG, or PDF. Vector formats (SVG, PDF) retain editable
+  text and scale without loss.
+- **DPI** - Configurable resolution from 72 to 1200 dpi.
 
 ---
 

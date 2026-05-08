@@ -218,8 +218,14 @@ class ExplorerTab(QtWidgets.QWidget):
     def _setup_layout(self):
         layout = QtWidgets.QHBoxLayout(self)
 
-        # LEFT PANEL
-        layout.addWidget(self.config_panel, 0)
+        # LEFT PANEL (wrapped in scroll area for small screens)
+        left_scroll = QtWidgets.QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        left_scroll.setWidget(self.config_panel)
+        left_scroll.setMaximumWidth(320)
+        layout.addWidget(left_scroll, 0)
 
         # CENTER PANEL
         center_widget = QtWidgets.QWidget()
@@ -338,7 +344,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         layout.addWidget(center_widget, 1)
 
-        # RIGHT PANEL
+        # RIGHT PANEL (wrapped in scroll area for small screens)
         right_widget = QtWidgets.QWidget()
         right_layout = QtWidgets.QVBoxLayout(right_widget)
 
@@ -346,9 +352,14 @@ class ExplorerTab(QtWidgets.QWidget):
         right_layout.addWidget(self.sidebar)
         right_layout.addWidget(self.analysis_group)
         right_layout.addWidget(self.preprocessing_widget)  # Added below analysis selection
-        # right_layout.addWidget(self.y_controls)  # Removed, integrated into center grid
 
-        layout.addWidget(right_widget, 0)
+        right_scroll = QtWidgets.QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        right_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        right_scroll.setWidget(right_widget)
+        right_scroll.setMaximumWidth(360)
+        layout.addWidget(right_scroll, 0)
 
     def _connect_signals(self):
         # Open File

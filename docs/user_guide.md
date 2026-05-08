@@ -226,6 +226,13 @@ For the full list of Neo-supported formats, see the
   entirely - no blank white space remains in the canvas. Re-checking the box
   restores the row immediately.
 - **Downsampling**: Enable/disable automatic downsampling for large datasets
+- **Interactive Cursor**: Enable crosshair cursors to place persistent markers at
+  specific (time, amplitude) coordinates on the trace. In **Delta Mode**, successive
+  cursor placements report the difference (Δt, ΔV or ΔI) between points. Use
+  **Undo** and **Clear** to manage placed cursors.
+- **Trial Quality Metrics**: Displays series resistance (Rs), membrane capacitance
+  (Cm), and signal-to-noise ratio (SNR) for the current trial, extracted from the
+  recording metadata. Values update automatically during trial navigation.
 
 ## Using the Analyser Tab
 
@@ -245,15 +252,34 @@ The five Analyser pillars are:
 
 All analysis sub-tabs share the following interface behaviours:
 
+- **Preprocessing indicator** - A coloured banner appears at the top of the
+ Analyser whenever preprocessing (baseline subtraction, digital filtering) is
+ active. The banner lists each active step so the operator is always aware that
+ the analysed signal differs from the raw acquisition.
+- **Session count badge** - The "Add to Session" and "View Session" buttons
+ display a count of accumulated results (e.g. "Add to Session (5)"). This
+ provides an at-a-glance indication of session progress without opening the
+ session summary.
+- **Auto-save** - Session state is persisted automatically every five minutes
+ to reduce the risk of data loss during prolonged recording sessions.
 - **Free-form numeric input** - Number fields accept freely typed values;
  intermediate states (empty field, a lone minus sign, etc.) are tolerated while
  typing. Stepping uses adaptive decimal increments.
+- **Parameter validation feedback** - Parameters outside their valid range are
+ highlighted with a red border, providing immediate visual indication without
+ blocking interaction.
+- **Parameter tooltips** - All parameter widgets display descriptive tooltips
+ drawn from the analysis registry metadata, describing what the parameter
+ controls and its expected units.
 - **Interactive vs Manual mode** - Sub-tabs that have draggable plot regions
  (e.g. Rin, Tau, Capacitance) expose a mode selector. In **Interactive** mode
  the time-window spinboxes are read-only and driven by the plot regions.
  Switching to **Manual** mode unlocks all spinboxes for direct entry.
 - **Conditional parameter visibility** - Parameters irrelevant to the current
  clamp mode or analysis type are hidden automatically.
+- **Statistical annotations on popup plots** - Popup scatter and curve-fit plots
+ display quantitative annotations (R², regression slope, τ, event counts)
+ directly on the figure for immediate reference.
 
 ### Input Resistance/Conductance Analysis
 
@@ -467,6 +493,21 @@ See [NWB Export Mapping](nwb_mapping.md) for full container mapping details.
 4. Specify the CSV output file location.
 5. Click "Export Selected" to create the output.
  - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
+
+### Exporting Plots
+
+Every Explorer and Analyser sub-tab includes a **Save Plot** button. The export
+dialog provides three predefined presets for common publication workflows:
+
+| Preset | Format | Resolution | Typical use |
+|--------|--------|------------|-------------|
+| Journal Quality | PDF (vector) | 300 DPI | Manuscript figure submission |
+| Presentation | PNG (raster) | 150 DPI | Slide decks and posters |
+| Web | PNG (raster) | 72 DPI | Online supplementary material |
+
+Select **Custom** to choose format (PNG, JPG, SVG, PDF) and DPI independently.
+Vector formats (SVG, PDF) retain editable text elements suitable for post-hoc
+annotation in illustration software.
 
 ## Advanced Options
 

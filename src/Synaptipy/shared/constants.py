@@ -11,8 +11,21 @@ PLOT_COLORS = [
     (0, 200, 200),  # Cyan
     (255, 128, 0),  # Orange
     (100, 100, 100),  # Gray
-    # Add more colors if needed
 ]
+
+# Wong (2011) Nature Methods 8:441 — colorblind-safe palette.
+# Distinguishable under protanopia, deuteranopia, and tritanopia.
+COLORBLIND_SAFE_PALETTE = [
+    (0, 0, 0),  # Black
+    (230, 159, 0),  # Orange
+    (86, 180, 233),  # Sky Blue
+    (0, 158, 115),  # Bluish Green
+    (240, 228, 66),  # Yellow
+    (0, 114, 178),  # Blue
+    (213, 94, 0),  # Vermillion
+    (204, 121, 167),  # Reddish Purple
+]
+
 TRIAL_COLOR = (55, 126, 184)  # Blueish (similar to  #377eb8)
 AVERAGE_COLOR = (0, 0, 0)  # Black (#000000)
 TRIAL_ALPHA = 100  # Alpha for overlaid trials (0-255)
@@ -36,6 +49,7 @@ DOWNSAMPLING_THRESHOLD = 100000  # Apply auto-downsampling if samples > this
 __all__ = [
     "DEFAULT_PLOT_PEN_WIDTH",
     "PLOT_COLORS",
+    "COLORBLIND_SAFE_PALETTE",
     "TRIAL_COLOR",
     "AVERAGE_COLOR",
     "TRIAL_ALPHA",

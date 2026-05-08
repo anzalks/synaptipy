@@ -250,6 +250,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
         log.debug("Menu bar and status bar setup complete.")
 
+        # --- Keyboard Shortcuts for File Navigation ---
+        self._shortcut_next_file = QtGui.QShortcut(
+            QtGui.QKeySequence("Ctrl+Right"), self
+        )
+        self._shortcut_next_file.activated.connect(self._navigate_next_file)
+        self._shortcut_prev_file = QtGui.QShortcut(
+            QtGui.QKeySequence("Ctrl+Left"), self
+        )
+        self._shortcut_prev_file.activated.connect(self._navigate_prev_file)
+        self._shortcut_next_trial = QtGui.QShortcut(
+            QtGui.QKeySequence("Ctrl+Down"), self
+        )
+        self._shortcut_next_trial.activated.connect(self._navigate_next_trial)
+        self._shortcut_prev_trial = QtGui.QShortcut(
+            QtGui.QKeySequence("Ctrl+Up"), self
+        )
+        self._shortcut_prev_trial.activated.connect(self._navigate_prev_trial)
+
         # Connect to plot customization signals
         self._connect_plot_customization_signals()
 
@@ -350,6 +368,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Set Central Widget ---
         self.setCentralWidget(central)
         log.debug("Tabs setup complete.")
+
+    # --- Keyboard Navigation ---
+
+    def _navigate_next_file(self) -> None:
+        """Navigate to next file in folder (Ctrl+Right)."""
+        if hasattr(self, "explorer_tab"):
+            self.explorer_tab._next_file_folder()
+
+    def _navigate_prev_file(self) -> None:
+        """Navigate to previous file in folder (Ctrl+Left)."""
+        if hasattr(self, "explorer_tab"):
+            self.explorer_tab._prev_file_folder()
+
+    def _navigate_next_trial(self) -> None:
+        """Navigate to next trial/sweep (Ctrl+Down)."""
+        if hasattr(self, "explorer_tab") and hasattr(self.explorer_tab, "toolbar"):
+            tb = self.explorer_tab.toolbar
+            if hasattr(tb, "trial_spinbox"):
+                tb.trial_spinbox.setValue(tb.trial_spinbox.value() + 1)
+
+    def _navigate_prev_trial(self) -> None:
+        """Navigate to previous trial/sweep (Ctrl+Up)."""
+        if hasattr(self, "explorer_tab") and hasattr(self.explorer_tab, "toolbar"):
+            tb = self.explorer_tab.toolbar
+            if hasattr(tb, "trial_spinbox"):
+                tb.trial_spinbox.setValue(tb.trial_spinbox.value() - 1)
 
     def _show_demo_download_banner(self) -> None:
         """Show (or reveal if already visible) the demo download banner."""

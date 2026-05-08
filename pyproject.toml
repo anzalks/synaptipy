@@ -110,6 +110,9 @@ Synaptipy = [
 ]
 
 [tool.pytest.ini_options]
+# Note: No random seed fixture is needed.  All Synaptipy analysis algorithms
+# are fully deterministic (threshold-based detection, deterministic curve-fit
+# initial conditions, IIR/FIR filters).  See docs/reproducibility.md.
 testpaths = ["tests"]
 pythonpath = ["src"]
 norecursedirs = [".verify_venv", ".git", "__pycache__", "*.egg-info"]

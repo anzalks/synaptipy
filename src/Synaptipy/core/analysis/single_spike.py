@@ -22,6 +22,7 @@ from scipy.signal import savgol_filter
 
 from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.constants import DVDT_ARTIFACT_CEILING_VS, DVDT_THRESHOLD_VS, MIN_RISING_PHASE_MS
 from Synaptipy.core.results import SpikeTrainResult
 
 log = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ def detect_spikes_threshold(  # noqa: C901
     refractory_samples: int,
     peak_search_window_samples: int = None,
     parameters: Dict[str, Any] = None,
-    dvdt_threshold: float = 20.0,
+    dvdt_threshold: float = 20.0,  # Default: DVDT_THRESHOLD_VS (Bean 2007)
 ) -> SpikeTrainResult:
     """
     Detect action potentials using a two-stage dV/dt-threshold crossing algorithm.
@@ -278,8 +279,8 @@ def calculate_spike_features(  # noqa: C901
     # that is invalid for smaller or inactivated spikes in fast trains.
     onset_dvdt_windows = dvdt[onset_window_indices]
     onset_max_dvdt = np.max(onset_dvdt_windows, axis=1)  # (n_spikes,) in mV/s
-    # Floor at 2 V/s (2000 mV/s) to prevent triggering at rest.
-    dynamic_thresh_mvs = np.maximum(0.2 * onset_max_dvdt, 2000.0)
+    # Floor at DVDT_THRESHOLD_VS (converted to mV/s) to prevent triggering at rest.
+    dynamic_thresh_mvs = np.maximum(0.2 * onset_max_dvdt, DVDT_THRESHOLD_VS * 1000.0)
     crossings_mask = onset_dvdt_windows > dynamic_thresh_mvs[:, None]
     has_crossing = np.any(crossings_mask, axis=1)
     first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
@@ -297,7 +298,10 @@ def calculate_spike_features(  # noqa: C901
     # threshold-to-peak rising phase is shorter than 0.2 ms (false detection).
     # onset_max_dvdt is in mV/s; 300 V/s = 300_000 mV/s.
     rising_phase_s = (spike_indices - thresh_indices) * dt
-    artifact_flag = at_edge & ((onset_max_dvdt > 300_000.0) | (rising_phase_s < 0.0002))
+    artifact_flag = at_edge & (
+        (onset_max_dvdt > DVDT_ARTIFACT_CEILING_VS * 1000.0)
+        | (rising_phase_s < MIN_RISING_PHASE_MS / 1000.0)
+    )
     ap_thresholds = np.where(artifact_flag, np.nan, ap_thresholds)
 
     peak_vals = data[spike_indices]
@@ -381,12 +385,12 @@ def calculate_spike_features(  # noqa: C901
         if ri10 + 1 < waveforms.shape[1]:
             y_lo, y_hi = waveforms[k, ri10], waveforms[k, ri10 + 1]
             denom = y_hi - y_lo
-            rise_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+            rise_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
         ri90 = idx_90_rel[k]
         if ri90 + 1 < waveforms.shape[1]:
             y_lo, y_hi = waveforms[k, ri90], waveforms[k, ri90 + 1]
             denom = y_hi - y_lo
-            rise_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
+            rise_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
 
     rise_times[valid_rise] = (
         ((idx_90_rel[valid_rise] + rise_frac_90[valid_rise]) - (idx_10_rel[valid_rise] + rise_frac_10[valid_rise]))
