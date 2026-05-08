@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.exporters.nwb_exporter import export_to_nwb
+from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 try:
     from pynwb import NWBHDF5IO, validate
@@ -58,7 +58,7 @@ class TestElectrodeMetadataExport:
         # Export to NWB
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test_electrode.nwb"
-            export_to_nwb(
+            NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
                 session_description="Test electrode metadata",
@@ -108,7 +108,7 @@ class TestElectrodeMetadataExport:
             output_path = Path(tmpdir) / "test_no_electrode.nwb"
 
             # Should not crash
-            export_to_nwb(
+            NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
                 session_description="Test without electrode metadata",
@@ -147,7 +147,7 @@ class TestPreprocessingHistoryExport:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test_preprocessing.nwb"
-            export_to_nwb(
+            NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
                 session_description="Test preprocessing history",
@@ -198,7 +198,7 @@ class TestPreprocessingHistoryExport:
             output_path = Path(tmpdir) / "test_no_preprocessing.nwb"
 
             # Should not crash
-            export_to_nwb(
+            NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
                 session_description="Test without preprocessing",
@@ -245,7 +245,7 @@ class TestNWBValidation:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test_validate.nwb"
-            export_to_nwb(
+            NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
                 session_description="Validation test",
@@ -290,7 +290,7 @@ class TestDANDICompliance:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test_dandi.nwb"
-            export_to_nwb(
+            NWBExporter().export(
                 recording=recording,
                 output_path=output_path,
                 session_description="DANDI compliance test",
