@@ -222,14 +222,32 @@ jobs:
           #   ubuntu-latest (24.04, glibc 2.39), causing exit code 8 even
           #   when squashfs-tools is installed.  Setting this env var makes
           #   the extracted appimagetool call the system binary instead.
+
+          # Extract appimagetool and call it with explicit debugging
+          ./appimagetool --appimage-extract 2>&1 | tee extract.log || {
+            echo "AppImage extraction failed with code $?"
+            cat extract.log
+            exit 1
+          }
+
+          # Verify extraction succeeded
+          if [ ! -f squashfs-root/AppRun ]; then
+            echo "ERROR: squashfs-root/AppRun not found after extraction"
+            ls -la squashfs-root/ || echo "squashfs-root directory does not exist"
+            exit 1
+          fi
+
+          echo "System mksquashfs version:"
           mksquashfs -version
-          echo "Checking appimagetool..."
-          file ./appimagetool
-          ./appimagetool --appimage-extract
-          ls -la squashfs-root
-          echo "Running extracted appimagetool..."
+
+          echo "Building AppImage with system mksquashfs..."
           ARCH=x86_64 MKSQUASHFS=$(which mksquashfs) \
-            ./squashfs-root/AppRun -v AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+            ./squashfs-root/AppRun -v AppDir "dist/Synaptipy-${VERSION}-x86_64.AppImage" 2>&1 | tee appimage.log || {
+            CODE=$?
+            echo "AppImage build failed with exit code $CODE"
+            cat appimage.log
+            exit $CODE
+          }
 
       - name: Upload installer artifact
         # if-no-files-found: error surfaces packaging failures immediately
