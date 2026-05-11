@@ -480,17 +480,30 @@ def calculate_paired_pulse_ratio(  # noqa: C901
     r2_amp_raw, r2_peak_raw = _response_peak(stim2_onset_s, bl2)
     out["r2_amplitude_raw"] = r2_amp_raw
 
-    # Subtract residual decay from R2 to get corrected amplitude.
-    # bl2 physically *includes* the residual tail from R1 — adding residual_at_stim2
-    # on top of bl2 would double-count it.  The correct reference is bl1 (the
-    # true resting baseline before the first pulse) plus the modelled residual
-    # at the time of the second stimulus.
-    corrected_bl2 = bl1 + residual_at_stim2
-
+    # Compute the corrected R2 amplitude measured from bl1 (the true resting
+    # baseline before any stimulation), not from bl2 (the local baseline just
+    # before stim2 which may be contaminated by the R1 decay tail).
+    #
+    # Scientific rationale (Zucker & Regehr 2002, Regehr 2012):
+    #   The "raw" amplitude r2_amp_raw is measured from bl2.  When the R1 decay
+    #   has not fully returned to baseline by stim2, bl2 < bl1 (for inward/
+    #   negative events) or bl2 > bl1 (for outward/positive events).  Using bl2
+    #   as reference therefore underestimates the true R2 amplitude.  The
+    #   corrected amplitude is obtained by using bl1 as the reference, which
+    #   directly captures the contamination without relying on a potentially
+    #   poor extrapolation of the decay fit.
+    #
+    #   Derivation:
+    #     r2_peak_raw = actual peak value (returned by _response_peak)
+    #     Negative: r2_corrected = bl1 - r2_peak_raw
+    #     Positive: r2_corrected = r2_peak_raw - bl1
+    #
+    #   When residual is negligible (bl2 ≈ bl1): r2_corrected ≈ r2_amp_raw.
+    #   When residual is significant: r2_corrected uses bl1 as reference.
     if polarity == "negative":
-        r2_corrected = corrected_bl2 - r2_peak_raw
+        r2_corrected = bl1 - r2_peak_raw
     else:
-        r2_corrected = r2_peak_raw - corrected_bl2
+        r2_corrected = r2_peak_raw - bl1
 
     out["r2_amplitude_corrected"] = float(r2_corrected)
 
