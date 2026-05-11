@@ -1068,7 +1068,10 @@ def calculate_tau(  # noqa: C901
 
             log.debug(
                 "Calculated Tau (mono): %.3f ms  R\u00b2=%.4f  95%%CI=[%.3f, %.3f]",
-                tau_ms, r_squared, tau_ci_lower, tau_ci_upper,
+                tau_ms,
+                r_squared,
+                tau_ci_lower,
+                tau_ci_upper,
             )
             return {
                 "tau_ms": tau_ms,

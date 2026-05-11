@@ -299,8 +299,7 @@ def calculate_spike_features(  # noqa: C901
     # onset_max_dvdt is in mV/s; 300 V/s = 300_000 mV/s.
     rising_phase_s = (spike_indices - thresh_indices) * dt
     artifact_flag = at_edge & (
-        (onset_max_dvdt > DVDT_ARTIFACT_CEILING_VS * 1000.0)
-        | (rising_phase_s < MIN_RISING_PHASE_MS / 1000.0)
+        (onset_max_dvdt > DVDT_ARTIFACT_CEILING_VS * 1000.0) | (rising_phase_s < MIN_RISING_PHASE_MS / 1000.0)
     )
     ap_thresholds = np.where(artifact_flag, np.nan, ap_thresholds)
 

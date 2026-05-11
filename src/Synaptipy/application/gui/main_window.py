@@ -251,21 +251,13 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug("Menu bar and status bar setup complete.")
 
         # --- Keyboard Shortcuts for File Navigation ---
-        self._shortcut_next_file = QtGui.QShortcut(
-            QtGui.QKeySequence("Ctrl+Right"), self
-        )
+        self._shortcut_next_file = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Right"), self)
         self._shortcut_next_file.activated.connect(self._navigate_next_file)
-        self._shortcut_prev_file = QtGui.QShortcut(
-            QtGui.QKeySequence("Ctrl+Left"), self
-        )
+        self._shortcut_prev_file = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Left"), self)
         self._shortcut_prev_file.activated.connect(self._navigate_prev_file)
-        self._shortcut_next_trial = QtGui.QShortcut(
-            QtGui.QKeySequence("Ctrl+Down"), self
-        )
+        self._shortcut_next_trial = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Down"), self)
         self._shortcut_next_trial.activated.connect(self._navigate_next_trial)
-        self._shortcut_prev_trial = QtGui.QShortcut(
-            QtGui.QKeySequence("Ctrl+Up"), self
-        )
+        self._shortcut_prev_trial = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Up"), self)
         self._shortcut_prev_trial.activated.connect(self._navigate_prev_trial)
 
         # Connect to plot customization signals
