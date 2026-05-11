@@ -695,6 +695,85 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# SpikeInterface plugin screenshots
+# ---------------------------------------------------------------------------
+
+
+def _capture_spike_interface_plugin(window: Any, analyser: Any, sm: Any, output_dir: Path) -> List[str]:
+    """Capture the Spike Detection (SpikeInterface) plugin tab.
+
+    Two screenshots are produced:
+
+    1. ``plugin_spike_interface_empty.png``  -- tab in default state, no run yet.
+    2. ``plugin_spike_interface_detected.png`` -- after running; red vlines and
+       scatter markers shown on the Field channel trace.  Only produced when
+       spikeinterface is installed and the ABF22 example file exists.
+    """
+    captured: List[str] = []
+
+    if not _ABF22.exists():
+        print("  [warn] ABF22 example file not found -- skipping SpikeInterface screenshots", file=sys.stderr)
+        return captured
+
+    # Load the ABF22 4-channel recording (Field channel is id='3').
+    _set_analysis_source(sm, _ABF22)
+
+    tab = _activate_sub_tab(window, analyser, "Spike Detection (SpikeInterface)")
+    if tab is None:
+        print(
+            "  [warn] 'Spike Detection (SpikeInterface)' sub-tab not found -- is the plugin installed?",
+            file=sys.stderr,
+        )
+        return captured
+
+    # Select the Field channel (id='3') so the screenshot shows the right trace.
+    # Data source is left at the default (Average Trace) so all 3 evoked spikes
+    # are visible at high SNR.
+    _set_channel(tab, "3")
+    _pump(3)
+
+    # Screenshot 1: default empty state (Run Analysis button visible, no results).
+    _grab(window, output_dir / "plugin_spike_interface_empty.png")
+    captured.append("plugin_spike_interface_empty.png")
+
+    # Configure parameters.
+    _set_param(tab, "freq_min", 300.0)
+    _set_param(tab, "freq_max", 6000.0)
+    _set_param(tab, "threshold_mad", 5.0)
+    _set_param(tab, "exclude_sweep_ms", 5.0)
+    _set_param(tab, "peak_sign", "neg")
+    _pump(3)
+
+    # Screenshot 2: run analysis and show detected spikes.
+    try:
+        import spikeinterface  # noqa: F401
+
+        _run_analysis(tab)
+        _wait_data_load(tab, timeout_s=30.0)
+        _pump(10)
+
+        # Zoom to 0–12 s to show all 3 evoked spikes at distinct x-positions.
+        try:
+            pw = getattr(tab, "plot_widget", None)
+            if pw is not None:
+                pw.setXRange(0.0, 12.0, padding=0)
+                _pump(3)
+        except Exception as zoom_exc:
+            print(f"  [warn] zoom failed: {zoom_exc}", file=sys.stderr)
+
+        _grab(window, output_dir / "plugin_spike_interface_detected.png")
+        captured.append("plugin_spike_interface_detected.png")
+    except ImportError:
+        print(
+            "  [warn] spikeinterface not installed -- skipping inference screenshot",
+            file=sys.stderr,
+        )
+
+    return captured
+
+
+# ---------------------------------------------------------------------------
 # miniML Events plugin screenshots
 # ---------------------------------------------------------------------------
 
@@ -863,6 +942,9 @@ def run(output_dir: Path) -> bool:  # noqa: C901
 
         print("[miniml plugin]")
         captured.extend(_capture_miniml_plugin(window, analyser, sm, output_dir))
+
+        print("[spikeinterface plugin]")
+        captured.extend(_capture_spike_interface_plugin(window, analyser, sm, output_dir))
 
         # --- Exporter tab ---
         window.tab_widget.setCurrentIndex(2)

@@ -1130,16 +1130,18 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             plot_type = plot_cfg.get("type")
 
             # --- simple markers ---
+            # Pass full results so top-level private array keys (_spike_times etc.) are found
             if plot_type == "markers":
-                self._viz_markers(plot_cfg, result_item)
+                self._viz_markers(plot_cfg, results)
 
             # --- brackets (bursts) ---
             elif plot_type == "brackets":
                 self._viz_brackets(plot_cfg, result_item)
 
             # --- vertical lines ---
+            # Pass full results so top-level private array keys (_spike_times etc.) are found
             elif plot_type == "vlines":
-                self._viz_vlines(plot_cfg, result_item)
+                self._viz_vlines(plot_cfg, results)
 
             # --- horizontal lines ---
             elif plot_type == "hlines":
@@ -1324,6 +1326,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
         vals = self._val(result, data_key, [])
+        # Fall back to metrics subdict when key not found at top level
+        if not vals and isinstance(result, dict) and "metrics" in result:
+            vals = result["metrics"].get(data_key, [])
         color = cfg.get("color")
         if isinstance(vals, (int, float)):
             vals = [vals]

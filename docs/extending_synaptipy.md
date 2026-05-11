@@ -42,6 +42,9 @@ and batch engine the next time the application starts.
 8. [Testing Your Plugin](#8-testing-your-plugin)
 9. [Full Annotated Example - Synaptic Charge Transfer](#9-full-annotated-example--synaptic-charge-transfer)
 10. [Troubleshooting](#10-troubleshooting)
+11. [SpikeInterface Integration Plugin](#11-spikeinterface-integration-plugin)
+12. [Deep Learning & Third-Party Integrations (e.g., miniML)](#12-deep-learning--third-party-integrations-eg-miniml)
+13. [Troubleshooting (full table)](#13-troubleshooting)
 
 ---
 
@@ -1119,7 +1122,80 @@ signals.preferences_updated.connect(my_popup_widget.update_pens)
 
 ---
 
-## 11. Deep Learning & Third-Party Integrations (e.g., miniML)
+## 11. SpikeInterface Integration Plugin
+
+Synaptipy ships a ready-to-use plugin that integrates
+[SpikeInterface](https://spikeinterface.readthedocs.io/) spike detection
+directly into the standard Analyser workflow.  Because SpikeInterface is an
+optional dependency it is **not** listed in `requirements.txt`; install it once
+with `pip install spikeinterface`.
+
+### What the plugin does
+
+1. You select the extracellular field channel in the Analyser tab (exactly like
+   any other built-in analysis).
+2. The plugin wraps the selected 1-D numpy array in a
+   `spikeinterface.core.NumpyRecording`, bandpass-filters it (default
+   300-6000 Hz), and runs `detect_peaks` with the `by_channel` method - no
+   external sorter binary is required.
+3. Detected spike times are shown as:
+   - **Red dashed vertical lines** on the trace (one line per spike).
+   - **Red scatter markers** at the filtered amplitude of each peak.
+4. Summary metrics appear in the Results panel: `Spike_Count`,
+   `Noise_Estimate`, `Threshold`, and `Mean_Firing_Rate_Hz`.
+
+### Before running
+
+![SpikeInterface plugin - parameters ready](screenshots/plugin_spike_interface_empty.png)
+
+The tab renders automatically when the plugin file is present in
+`examples/plugins/` or `~/.synaptipy/plugins/`.  The **Run Analysis** button
+(`run_button=True` in the decorator) means the analysis only executes when
+clicked - it does not re-run on every parameter change, which is appropriate
+for the relatively expensive bandpass + peak-detection pipeline.
+
+### After running - 3 detected spikes
+
+![SpikeInterface plugin - 3 spikes detected](screenshots/plugin_spike_interface_detected.png)
+
+Red dashed lines mark each detected spike time; red circles mark the filtered
+amplitude at each peak.  The Results panel shows all four metrics.
+
+### Installation
+
+```bash
+# Activate the Synaptipy environment and install SpikeInterface
+conda activate synaptipy
+pip install spikeinterface
+
+# The plugin is already present at:
+#   examples/plugins/spike_interface_integration.py
+# Copy it to your personal directory for auto-load on every launch:
+cp examples/plugins/spike_interface_integration.py ~/.synaptipy/plugins/
+```
+
+### Key parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `freq_min` | 300 Hz | Lower bandpass cutoff (removes LFP / baseline drift) |
+| `freq_max` | 6000 Hz | Upper bandpass cutoff (removes high-frequency noise) |
+| `threshold_mad` | 5 | Spike threshold as a multiple of the MAD noise estimate |
+| `peak_sign` | `neg` | Polarity: `neg` for field potentials, `pos` for some units |
+| `exclude_sweep_ms` | 5 ms | Refractory period - prevents double-counting secondary deflections |
+
+### Testing the plugin without running the full CI suite
+
+The plugin tests live in `examples/tests/` and are intentionally excluded from
+the core CI `testpaths` (which only scans `tests/`).  Run them manually:
+
+```bash
+conda run -n synaptipy python -m pytest examples/tests/ -v
+```
+
+---
+
+## 12. Deep Learning & Third-Party Integrations (e.g., miniML)
 
 Synaptipy's plugin architecture is intentionally decoupled from its core
 dependencies. You can integrate heavy machine-learning or third-party
@@ -1220,7 +1296,7 @@ The same pattern works for any inference library:
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
