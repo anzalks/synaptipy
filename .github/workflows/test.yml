@@ -101,6 +101,10 @@ jobs:
 
     - name: Coverage Comment
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      # This action only supports push/pull_request/workflow_run events.
+      # workflow_dispatch runs (e.g. manual dry-runs) cause it to exit with an
+      # error; continue-on-error prevents that from failing the entire job.
+      continue-on-error: true
       uses: py-cov-action/python-coverage-comment-action@v3
       with:
         GITHUB_TOKEN: ${{ github.token }}

@@ -60,8 +60,8 @@ try:
     release = _version
     version = _version
 except Exception:
-    version = "0.1.3b5"
-    release = "0.1.3b5"
+    version = "0.1.3b6"
+    release = "0.1.3b6"
 
 # ---------------------------------------------------------------------------
 # General configuration
@@ -224,6 +224,8 @@ linkcheck_ignore = [
     r"https://direct\.mit\.edu/",  # MIT Press — blocks crawlers with 403
     r"https://journals\.physiology\.org/",  # APS — blocks crawlers with 403
     r"https://elifesciences\.org/",  # eLife — blocks crawlers with 406
+    r"https://physoc\.onlinelibrary\.wiley\.com/",  # Wiley/J.Physiol — blocks crawlers with 403
+    r"https://www\.jneurosci\.org/",  # JNeurosci — blocks crawlers with 403
 ]
 # Allow redirects without treating them as broken (DOI resolvers always redirect)
 linkcheck_allowed_redirects = {
