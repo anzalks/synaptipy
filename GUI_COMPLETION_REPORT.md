@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-08  
 **Branch:** UX_UI_analysis_math_check  
-**Status:** ✅ 8/13 GUI ITEMS COMPLETED + ALL TESTS PASSING
+**Status:** [DONE] 8/13 GUI ITEMS COMPLETED + ALL TESTS PASSING
 
 ---
 
@@ -10,10 +10,10 @@
 
 **Completion: 8/13 GUI items (62%) in single session**
 
-- ✅ **8 GUI items implemented and tested**
-- ✅ **All 1080 tests passing (0 failures)**
-- ✅ **Test coverage: >95%**
-- ⏸️ **5 complex GUI items deferred (require extensive work)**
+- [DONE] **8 GUI items implemented and tested**
+- [DONE] **All 1080 tests passing (0 failures)**
+- [DONE] **Test coverage: >95%**
+-  **5 complex GUI items deferred (require extensive work)**
 
 ---
 
@@ -21,58 +21,58 @@
 
 ### GUI Items Completed (8 items):
 
-1. **CRITICAL-4:** GUI preprocessing visual indicator ✅
+1. **CRITICAL-4:** GUI preprocessing visual indicator [DONE]
    - Location: `src/Synaptipy/application/gui/analyser_tab.py`
    - Added: Yellow warning banner showing active preprocessing steps
    - Auto-updates when preprocessing settings change
    - Implementation: ~30 lines, tested manually
 
-2. **HIGH-5:** Parameter tooltips from registry metadata ✅
+2. **HIGH-5:** Parameter tooltips from registry metadata [DONE]
    - Location: `src/Synaptipy/application/gui/ui_generator.py`
    - Added: Tooltip support from metadata `tooltip` field
    - Applies to both widget and label
    - Implementation: ~10 lines
 
-3. **HIGH-6:** Trial quality metrics in Explorer ✅
+3. **HIGH-6:** Trial quality metrics in Explorer [DONE]
    - Location: `src/Synaptipy/application/gui/explorer/config_panel.py`, `explorer_tab.py`
    - Added: Display Rs (series resistance), Cm (capacitance), SNR
    - Updates on trial navigation
    - Reads from channel.metadata
    - Implementation: ~60 lines
 
-4. **HIGH-8:** Batch-to-explorer roundtrip functionality ✅
+4. **HIGH-8:** Batch-to-explorer roundtrip functionality [DONE]
    - Location: `analyser_tab.py`, `session_manager.py`, `explorer_tab.py`
-   - Added: Double-click batch result → auto-load file, channel, trial in Explorer
+   - Added: Double-click batch result -> auto-load file, channel, trial in Explorer
    - Stores context in SessionManager.batch_load_context
    - Auto-switches to cycle mode and selects correct trial
    - Implementation: ~40 lines
 
-5. **HIGH-9:** Method selector in batch dialog ✅
+5. **HIGH-9:** Method selector in batch dialog [DONE]
    - Location: `src/Synaptipy/application/gui/batch_dialog.py`
    - Added: Expand method_selector nodes to show child analyses
-   - Properly handles parent modules (e.g., "Excitability" → sub-analyses)
+   - Properly handles parent modules (e.g., "Excitability" -> sub-analyses)
    - Implementation: ~40 lines, uses userData for IDs
 
-6. **MEDIUM-6:** Parameter validation visual feedback ✅
+6. **MEDIUM-6:** Parameter validation visual feedback [DONE]
    - Location: `src/Synaptipy/application/gui/ui_generator.py`
    - Added: Red border when parameter value out of range
    - Applies to int and float spinboxes
    - Implementation: ~15 lines
 
-7. **MEDIUM-7:** Batch error log UI button ✅
+7. **MEDIUM-7:** Batch error log UI button [DONE]
    - Location: `src/Synaptipy/application/gui/batch_dialog.py`
    - Added: "View Error Log" button
    - Opens dialog showing `~/.synaptipy/logs/batch_errors.log`
    - Includes "Clear Log" functionality
    - Implementation: ~70 lines
 
-8. **MEDIUM-8:** Journal-quality plot export preset ✅
+8. **MEDIUM-8:** Journal-quality plot export preset [DONE]
    - Location: `src/Synaptipy/application/gui/dialogs/plot_export_dialog.py`
    - Added: Presets dropdown: "Journal Quality (300 DPI, PDF)", "Presentation", "Web"
    - Automatically sets format and DPI
    - Implementation: ~30 lines
 
-### Test Results: 1080/1080 Passing ✅
+### Test Results: 1080/1080 Passing [DONE]
 
 ```bash
 python -m pytest tests/core/ -v
@@ -173,7 +173,7 @@ These require significant refactoring and were deferred:
 
 ## CI/Release Pipeline Verification
 
-### CI Pipeline (test.yml): ✅ VERIFIED
+### CI Pipeline (test.yml): [DONE] VERIFIED
 - **Matrix:** Ubuntu, Windows, macOS × Python 3.10, 3.11, 3.12
 - **Tests:** Full pytest suite with coverage
 - **Linting:** black, isort, flake8
@@ -181,7 +181,7 @@ These require significant refactoring and were deferred:
 - **Special Checks:** HiDPI scaling, notebook validation
 - **Status:** Configuration looks correct and comprehensive
 
-### Release Pipeline (release.yml): ✅ VERIFIED
+### Release Pipeline (release.yml): [DONE] VERIFIED
 - **Triggers:** Git tags `v*` or manual workflow_dispatch
 - **Steps:**
   1. Test on all platforms
@@ -205,8 +205,8 @@ All workflows appear properly configured and ready for use.
 
 **Branch:** `UX_UI_analysis_math_check`  
 **Commits ahead of main:** 20+  
-**All changes committed:** ❌ No (GUI work not yet committed)  
-**Ready to merge:** ⚠️ Yes, but should commit GUI work first
+**All changes committed:** [PENDING] No (GUI work not yet committed)  
+**Ready to merge:** [WARNING] Yes, but should commit GUI work first
 
 ```bash
 # Uncommitted changes:
@@ -264,14 +264,14 @@ The 5 deferred GUI items are **not blocking** for release:
 
 ## Publication Readiness
 
-### Backend: 100% Ready ✅
+### Backend: 100% Ready [DONE]
 - All CRITICAL backend issues resolved
 - All mathematical edge cases handled
 - NWB DANDI compliance complete
 - Test coverage >95%
 - 1080/1080 tests passing
 
-### GUI: 62% Ready ✅
+### GUI: 62% Ready [DONE]
 - 8/13 items completed
 - All high-impact items done (CRITICAL-4, HIGH-5, HIGH-6, HIGH-8, HIGH-9)
 - Remaining items are polish/enhancement

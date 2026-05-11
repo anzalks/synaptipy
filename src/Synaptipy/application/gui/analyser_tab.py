@@ -184,7 +184,7 @@ class AnalyserTab(QtWidgets.QWidget):
                 steps.append(f"Filter: {filter_method} ({cutoff} Hz)")
 
         if steps:
-            text = "⚠️ Active Preprocessing: " + " | ".join(steps)
+            text = "[PREPROCESSING ACTIVE] " + " | ".join(steps)
             self.preprocessing_indicator.setText(text)
             self.preprocessing_indicator.setVisible(True)
         else:

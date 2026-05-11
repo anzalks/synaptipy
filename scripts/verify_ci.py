@@ -127,11 +127,35 @@ def check_tests() -> bool:
 
 
 def check_no_emojis() -> bool:  # noqa: C901
-    """Scan codebase for emojis."""
+    """Scan codebase for emojis.
+
+    Covers both supplementary-plane emoji (U+10000-U+10FFFF) and the common
+    BMP blocks that host decorative emoji used in markdown files:
+    - U+2600-U+26FF: Miscellaneous Symbols (e.g. warning sign U+26A0, checkmark
+      U+2705 falls nearby)
+    - U+2700-U+27BF: Dingbats (e.g. heavy check mark U+2714, cross mark U+274C,
+      sparkles U+2728)
+    - U+2B50, U+2B55: star and circle symbols used as emoji
+    - U+FE00-U+FE0F: Unicode variation selectors (e.g. U+FE0F appended to
+      U+26A0 to produce the full-colour warning emoji)
+
+    Excluded intentionally to avoid false positives:
+    - U+2300-U+25FF: Misc Technical, Box Drawing, Block Elements, Geometric
+      Shapes -- all legitimately used in code comments and YAML as structural
+      visual separators (e.g. the section-divider pattern # -- Name --).
+    """
     print("Running: Emoji Scanner...")
-    # Regex for emojis (simplified range, covers most common ones)
-    # Using a broad unicode range for emojis and symbols commonly used as emojis
-    emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
+    # Combined pattern: supplementary-plane emoji AND true BMP emoji blocks.
+    # Range U+2600-U+27BF covers Miscellaneous Symbols and Dingbats.
+    # Range U+2B50-U+2B55 covers star/circle emoji.
+    # Range U+FE00-U+FE0F covers variation selectors (tone/colour modifiers).
+    emoji_pattern = re.compile(
+        r"[\u2600-\u27BF"  # Misc Symbols (warning ⚠, checkmark ✅) + Dingbats (❌ ✨)
+        r"\u2B50\u2B55"  # star and circle emoji
+        r"\uFE00-\uFE0F"  # variation selectors (e.g. \uFE0F after ⚠)
+        r"\U00010000-\U0010ffff]",  # supplementary plane (😀 🎉 etc.)
+        flags=re.UNICODE,
+    )
 
     found_emojis = False
     affected_files = []

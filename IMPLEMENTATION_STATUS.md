@@ -8,21 +8,21 @@
 
 ---
 
-## ✅ Completed Issues (20/42)
+## [DONE] Completed Issues (20/42)
 
 ### CRITICAL Issues (6/9 completed - 66%)
 
 | ID | Issue | Status | Commit |
 |----|-------|--------|--------|
-| CRITICAL-1 | PPR baseline correction | ✅ Verified Correct | N/A (audit was wrong) |
-| CRITICAL-2 | CV2/LV division by zero | ✅ Fixed | a0ba646 |
-| CRITICAL-3 | Sag ratio float equality | ✅ Fixed | a0ba646 |
-| **CRITICAL-4** | **GUI preprocessing indicator** | ❌ Pending | GUI work required |
-| CRITICAL-5 | Preprocessing context safety | ✅ Fixed | eb728ee |
-| CRITICAL-6 | Electrode metadata to NWB | ✅ Fixed | 55f3161 |
-| CRITICAL-7 | Preprocessing history in NWB | ✅ Fixed | eb728ee |
-| CRITICAL-8 | PPR amplitude bounds | ✅ Verified Correct | N/A (already correct) |
-| CRITICAL-9 | Tau fitting truncation | ✅ Fixed | a0ba646 |
+| CRITICAL-1 | PPR baseline correction | [DONE] Verified Correct | N/A (audit was wrong) |
+| CRITICAL-2 | CV2/LV division by zero | [DONE] Fixed | a0ba646 |
+| CRITICAL-3 | Sag ratio float equality | [DONE] Fixed | a0ba646 |
+| **CRITICAL-4** | **GUI preprocessing indicator** | [PENDING] Pending | GUI work required |
+| CRITICAL-5 | Preprocessing context safety | [DONE] Fixed | eb728ee |
+| CRITICAL-6 | Electrode metadata to NWB | [DONE] Fixed | 55f3161 |
+| CRITICAL-7 | Preprocessing history in NWB | [DONE] Fixed | eb728ee |
+| CRITICAL-8 | PPR amplitude bounds | [DONE] Verified Correct | N/A (already correct) |
+| CRITICAL-9 | Tau fitting truncation | [DONE] Fixed | a0ba646 |
 
 **Critical Issues Status:** 6/9 = **67% Complete**  
 **Remaining:** Only CRITICAL-4 (GUI visual indicator)
@@ -33,18 +33,18 @@
 
 | ID | Issue | Status | Commit |
 |----|-------|--------|--------|
-| HIGH-1 | PPR amplitude bounds | ✅ Verified Correct | N/A |
-| HIGH-2 | Tau fitting array truncation | ✅ Fixed | a0ba646 |
-| HIGH-3 | PPR decay window negative | ✅ Fixed | a0ba646 |
-| HIGH-4 | TTL auto-threshold | ✅ Fixed | a0ba646 |
-| **HIGH-5** | **Parameter tooltips** | ❌ Pending | GUI work |
-| **HIGH-6** | **Trial quality metrics** | ❌ Pending | GUI work |
-| **HIGH-7** | **Registry error messages** | ❌ Pending | Backend |
-| **HIGH-8** | **Batch-to-explorer roundtrip** | ❌ Pending | GUI work |
-| **HIGH-9** | **Method selector in batch** | ❌ Pending | GUI work |
-| **HIGH-10** | **Channel_set scope validation** | ❌ Pending | Backend |
-| HIGH-11 | Mixed-length trial errors | ✅ Fixed | 38984ce |
-| **HIGH-12** | **Analysis item trial_index** | ❌ Pending | GUI work |
+| HIGH-1 | PPR amplitude bounds | [DONE] Verified Correct | N/A |
+| HIGH-2 | Tau fitting array truncation | [DONE] Fixed | a0ba646 |
+| HIGH-3 | PPR decay window negative | [DONE] Fixed | a0ba646 |
+| HIGH-4 | TTL auto-threshold | [DONE] Fixed | a0ba646 |
+| **HIGH-5** | **Parameter tooltips** | [PENDING] Pending | GUI work |
+| **HIGH-6** | **Trial quality metrics** | [PENDING] Pending | GUI work |
+| **HIGH-7** | **Registry error messages** | [PENDING] Pending | Backend |
+| **HIGH-8** | **Batch-to-explorer roundtrip** | [PENDING] Pending | GUI work |
+| **HIGH-9** | **Method selector in batch** | [PENDING] Pending | GUI work |
+| **HIGH-10** | **Channel_set scope validation** | [PENDING] Pending | Backend |
+| HIGH-11 | Mixed-length trial errors | [DONE] Fixed | 38984ce |
+| **HIGH-12** | **Analysis item trial_index** | [PENDING] Pending | GUI work |
 
 **HIGH Priority Status:** 5/12 = **42% Complete**
 
@@ -54,20 +54,20 @@
 
 | ID | Issue | Status | Commit |
 |----|-------|--------|--------|
-| MEDIUM-1 | RMP polyfit validation | ✅ Fixed | a0ba646 |
-| MEDIUM-2 | Spike detection refractory=0 | ✅ Verified Correct | N/A |
-| MEDIUM-3 | Capacitance guard | ✅ Fixed | a0ba646 |
-| MEDIUM-4 | Bi-exp tau comparison | ✅ Fixed | a0ba646 |
-| **MEDIUM-5** | **dV/dt threshold configurable** | ❌ Pending | Registry update |
-| **MEDIUM-6** | **Parameter validation feedback** | ❌ Pending | GUI work |
-| **MEDIUM-7** | **Batch error log UI** | ❌ Pending | GUI work |
-| **MEDIUM-8** | **Journal-quality export** | ❌ Pending | Export module |
-| **MEDIUM-9** | **Trial selection validation** | ❌ Pending | Backend |
-| **MEDIUM-10** | **Invalid trial indices warning** | ❌ Pending | Backend |
-| **MEDIUM-11** | **Memory management** | ❌ Pending | Backend |
-| **MEDIUM-12** | **Session auto-save** | ❌ Pending | GUI work |
-| **MEDIUM-13** | **Preprocessing comparison** | ❌ Pending | GUI work |
-| **MEDIUM-14** | **Session count badge** | ❌ Pending | GUI work |
+| MEDIUM-1 | RMP polyfit validation | [DONE] Fixed | a0ba646 |
+| MEDIUM-2 | Spike detection refractory=0 | [DONE] Verified Correct | N/A |
+| MEDIUM-3 | Capacitance guard | [DONE] Fixed | a0ba646 |
+| MEDIUM-4 | Bi-exp tau comparison | [DONE] Fixed | a0ba646 |
+| **MEDIUM-5** | **dV/dt threshold configurable** | [PENDING] Pending | Registry update |
+| **MEDIUM-6** | **Parameter validation feedback** | [PENDING] Pending | GUI work |
+| **MEDIUM-7** | **Batch error log UI** | [PENDING] Pending | GUI work |
+| **MEDIUM-8** | **Journal-quality export** | [PENDING] Pending | Export module |
+| **MEDIUM-9** | **Trial selection validation** | [PENDING] Pending | Backend |
+| **MEDIUM-10** | **Invalid trial indices warning** | [PENDING] Pending | Backend |
+| **MEDIUM-11** | **Memory management** | [PENDING] Pending | Backend |
+| **MEDIUM-12** | **Session auto-save** | [PENDING] Pending | GUI work |
+| **MEDIUM-13** | **Preprocessing comparison** | [PENDING] Pending | GUI work |
+| **MEDIUM-14** | **Session count badge** | [PENDING] Pending | GUI work |
 
 **MEDIUM Priority Status:** 6/14 = **43% Complete**
 
@@ -77,13 +77,13 @@
 
 | ID | Issue | Status | Commit |
 |----|-------|--------|--------|
-| LOW-1 | Half-width np.nan fallback | ✅ Fixed | 38984ce |
-| LOW-2 | Adaptation ratio guard | ✅ Fixed | 38984ce |
-| LOW-3 | Event RMS floor | ✅ Fixed | a0ba646 |
-| **LOW-4** | **Savitzky-Golay window** | ❌ Pending | Minor fix |
-| **LOW-5** | **Statistical plot annotations** | ❌ Pending | Plot module |
-| **LOW-6** | **Lazy loading thread safety** | ❌ Pending | Data model |
-| **LOW-7** | **Undo stack configurable** | ❌ Pending | Preferences |
+| LOW-1 | Half-width np.nan fallback | [DONE] Fixed | 38984ce |
+| LOW-2 | Adaptation ratio guard | [DONE] Fixed | 38984ce |
+| LOW-3 | Event RMS floor | [DONE] Fixed | a0ba646 |
+| **LOW-4** | **Savitzky-Golay window** | [PENDING] Pending | Minor fix |
+| **LOW-5** | **Statistical plot annotations** | [PENDING] Pending | Plot module |
+| **LOW-6** | **Lazy loading thread safety** | [PENDING] Pending | Data model |
+| **LOW-7** | **Undo stack configurable** | [PENDING] Pending | Preferences |
 
 **LOW Priority Status:** 3/10 = **30% Complete**
 
@@ -94,26 +94,26 @@
 **Total Completed:** 20/42 = **48%**
 
 ### By Priority:
-- **CRITICAL:** 6/9 = 67% ✅
-- **HIGH:** 5/12 = 42% ⚠️
-- **MEDIUM:** 6/14 = 43% ⚠️
-- **LOW:** 3/10 = 30% ⚠️
+- **CRITICAL:** 6/9 = 67% [DONE]
+- **HIGH:** 5/12 = 42% [WARNING]
+- **MEDIUM:** 6/14 = 43% [WARNING]
+- **LOW:** 3/10 = 30% [WARNING]
 
 ### By Category:
-- **Mathematical/Scientific Fixes:** 14/16 = **88% Complete** ✅
-- **Backend/Batch Engine:** 6/10 = **60% Complete** ⚠️
-- **GUI/UX:** 0/16 = **0% Complete** ❌
+- **Mathematical/Scientific Fixes:** 14/16 = **88% Complete** [DONE]
+- **Backend/Batch Engine:** 6/10 = **60% Complete** [WARNING]
+- **GUI/UX:** 0/16 = **0% Complete** [PENDING]
 
 ---
 
 ## [tests] Test Coverage Status
 
 ### New Test Files Created (3/5):
-- ✅ `test_division_by_zero_guards.py` (288 lines) - Comprehensive edge case validation
-- ✅ `test_nwb_metadata_completeness.py` (320 lines) - DANDI compliance validation
-- ✅ `test_preprocessing_context_restoration.py` (227 lines) - Pipeline isolation tests
-- ❌ `test_ppr_baseline_correction.py` - Pending
-- ❌ `test_trial_selection_validation.py` - Pending
+- [DONE] `test_division_by_zero_guards.py` (288 lines) - Comprehensive edge case validation
+- [DONE] `test_nwb_metadata_completeness.py` (320 lines) - DANDI compliance validation
+- [DONE] `test_preprocessing_context_restoration.py` (227 lines) - Pipeline isolation tests
+- [PENDING] `test_ppr_baseline_correction.py` - Pending
+- [PENDING] `test_trial_selection_validation.py` - Pending
 
 **New Test Coverage:** 835 lines added  
 **Test Suite Status:** All core mathematical fixes have test coverage
@@ -178,7 +178,7 @@
 
 ---
 
-## ⏭️ Remaining Work by Category
+##  Remaining Work by Category
 
 ### Backend Fixes (Can be done without GUI) - ~6-8 hours
 
@@ -269,10 +269,10 @@
 ## [goal] Recommended Next Steps
 
 ### For Immediate Journal Submission (Backend Complete):
-1. ✅ All CRITICAL mathematical issues fixed (except GUI indicator)
-2. ✅ NWB DANDI compliance achieved
-3. ✅ Preprocessing reproducibility implemented
-4. ✅ Comprehensive test coverage for core algorithms
+1. [DONE] All CRITICAL mathematical issues fixed (except GUI indicator)
+2. [DONE] NWB DANDI compliance achieved
+3. [DONE] Preprocessing reproducibility implemented
+4. [DONE] Comprehensive test coverage for core algorithms
 
 **Publication Readiness:** **85%**  
 Can submit with note that GUI enhancements are in progress.
@@ -289,13 +289,13 @@ Can submit with note that GUI enhancements are in progress.
 ## [notes] Notes for Reviewers
 
 ### Strengths:
-- ✅ All mathematical edge cases properly guarded
-- ✅ Division by zero prevention throughout
-- ✅ NWB 2.x export with complete metadata
-- ✅ DANDI validator compliance
-- ✅ Preprocessing provenance tracking (FAIR)
-- ✅ Pipeline isolation and error handling
-- ✅ Comprehensive test suite (835 new test lines)
+- [DONE] All mathematical edge cases properly guarded
+- [DONE] Division by zero prevention throughout
+- [DONE] NWB 2.x export with complete metadata
+- [DONE] DANDI validator compliance
+- [DONE] Preprocessing provenance tracking (FAIR)
+- [DONE] Pipeline isolation and error handling
+- [DONE] Comprehensive test suite (835 new test lines)
 
 ### Known Limitations (Documented for Paper):
 - GUI preprocessing indicator not yet implemented (workaround: document in methods)
@@ -303,10 +303,10 @@ Can submit with note that GUI enhancements are in progress.
 - Batch dialog method selector pending (single-method analyses work correctly)
 
 ### Code Quality:
-- ✅ All fixes include epsilon-based comparisons
-- ✅ No hardcoded magic numbers (except well-documented thresholds)
-- ✅ Consistent error handling patterns
-- ✅ Comprehensive logging for debugging
+- [DONE] All fixes include epsilon-based comparisons
+- [DONE] No hardcoded magic numbers (except well-documented thresholds)
+- [DONE] Consistent error handling patterns
+- [DONE] Comprehensive logging for debugging
 
 ---
 

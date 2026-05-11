@@ -18,40 +18,40 @@
 
 ## What Has Been Completed
 
-### ✅ Backend & Mathematical Fixes (20 items)
+### [DONE] Backend & Mathematical Fixes (20 items)
 
 #### CRITICAL Issues (6/9):
-1. ✅ **CRITICAL-1:** PPR baseline correction - Verified correct (audit was wrong)
-2. ✅ **CRITICAL-2:** CV2/LV division by zero - Fixed with epsilon guards (a0ba646)
-3. ✅ **CRITICAL-3:** Sag ratio float equality - Fixed with abs() < 1e-9 (a0ba646)
-4. ✅ **CRITICAL-5:** Preprocessing context contamination - Fixed with try-finally (eb728ee)
-5. ✅ **CRITICAL-6:** Electrode metadata to NWB - Fixed export (55f3161)
-6. ✅ **CRITICAL-7:** Preprocessing history in NWB - Added DynamicTable export (eb728ee)
-7. ✅ **CRITICAL-8:** PPR amplitude bounds - Verified correct (already properly separated)
-8. ✅ **CRITICAL-9:** Tau fitting truncation - Fixed validation (a0ba646)
+1. [DONE] **CRITICAL-1:** PPR baseline correction - Verified correct (audit was wrong)
+2. [DONE] **CRITICAL-2:** CV2/LV division by zero - Fixed with epsilon guards (a0ba646)
+3. [DONE] **CRITICAL-3:** Sag ratio float equality - Fixed with abs() < 1e-9 (a0ba646)
+4. [DONE] **CRITICAL-5:** Preprocessing context contamination - Fixed with try-finally (eb728ee)
+5. [DONE] **CRITICAL-6:** Electrode metadata to NWB - Fixed export (55f3161)
+6. [DONE] **CRITICAL-7:** Preprocessing history in NWB - Added DynamicTable export (eb728ee)
+7. [DONE] **CRITICAL-8:** PPR amplitude bounds - Verified correct (already properly separated)
+8. [DONE] **CRITICAL-9:** Tau fitting truncation - Fixed validation (a0ba646)
 
 #### HIGH Priority (5/12):
-1. ✅ **HIGH-1:** PPR amplitude bounds - Verified correct
-2. ✅ **HIGH-2:** Tau array truncation - Fixed (a0ba646)
-3. ✅ **HIGH-3:** PPR decay window - Fixed negative guard (a0ba646)
-4. ✅ **HIGH-4:** TTL auto-threshold - Lowered to 0.3V (a0ba646)
-5. ✅ **HIGH-11:** Mixed-length trial errors - Detailed messages (38984ce)
+1. [DONE] **HIGH-1:** PPR amplitude bounds - Verified correct
+2. [DONE] **HIGH-2:** Tau array truncation - Fixed (a0ba646)
+3. [DONE] **HIGH-3:** PPR decay window - Fixed negative guard (a0ba646)
+4. [DONE] **HIGH-4:** TTL auto-threshold - Lowered to 0.3V (a0ba646)
+5. [DONE] **HIGH-11:** Mixed-length trial errors - Detailed messages (38984ce)
 
 #### MEDIUM Priority (6/14):
-1. ✅ **MEDIUM-1:** RMP polyfit - Added validation (a0ba646)
-2. ✅ **MEDIUM-2:** Spike detection refractory - Verified correct
-3. ✅ **MEDIUM-3:** Capacitance guard - Added < 0.1 MOhm check (a0ba646)
-4. ✅ **MEDIUM-4:** Bi-exp tau comparison - Fixed epsilon (a0ba646)
+1. [DONE] **MEDIUM-1:** RMP polyfit - Added validation (a0ba646)
+2. [DONE] **MEDIUM-2:** Spike detection refractory - Verified correct
+3. [DONE] **MEDIUM-3:** Capacitance guard - Added < 0.1 MOhm check (a0ba646)
+4. [DONE] **MEDIUM-4:** Bi-exp tau comparison - Fixed epsilon (a0ba646)
 
 #### LOW Priority (3/10):
-1. ✅ **LOW-1:** Half-width interpolation - Changed to np.nan (38984ce)
-2. ✅ **LOW-2:** Adaptation ratio guard - Added ISI epsilon (38984ce)
-3. ✅ **LOW-3:** Event RMS floor - Added 1e-6 floor (a0ba646)
+1. [DONE] **LOW-1:** Half-width interpolation - Changed to np.nan (38984ce)
+2. [DONE] **LOW-2:** Adaptation ratio guard - Added ISI epsilon (38984ce)
+3. [DONE] **LOW-3:** Event RMS floor - Added 1e-6 floor (a0ba646)
 
 #### Test Files (3/5):
-1. ✅ `test_division_by_zero_guards.py` - 288 lines
-2. ✅ `test_nwb_metadata_completeness.py` - 320 lines
-3. ✅ `test_preprocessing_context_restoration.py` - 227 lines
+1. [DONE] `test_division_by_zero_guards.py` - 288 lines
+2. [DONE] `test_nwb_metadata_completeness.py` - 320 lines
+3. [DONE] `test_preprocessing_context_restoration.py` - 227 lines
 
 ---
 
@@ -144,11 +144,11 @@
 - `src/Synaptipy/application/gui/batch_dialog.py`
 
 ### Test Suite:
-- `tests/core/test_division_by_zero_guards.py` ✅
-- `tests/core/test_nwb_metadata_completeness.py` ✅
-- `tests/core/test_preprocessing_context_restoration.py` ✅
-- `tests/core/test_ppr_baseline_correction.py` ❌
-- `tests/core/test_trial_selection_validation.py` ❌
+- `tests/core/test_division_by_zero_guards.py` [DONE]
+- `tests/core/test_nwb_metadata_completeness.py` [DONE]
+- `tests/core/test_preprocessing_context_restoration.py` [DONE]
+- `tests/core/test_ppr_baseline_correction.py` [PENDING]
+- `tests/core/test_trial_selection_validation.py` [PENDING]
 
 ---
 

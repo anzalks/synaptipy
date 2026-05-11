@@ -7,77 +7,77 @@
 
 ---
 
-## ✅ COMPLETED: 24/44 (55%)
+## [DONE] COMPLETED: 24/44 (55%)
 
 ### Backend & Mathematical Fixes (17 completed)
-1. ✅ CV2/LV division by zero guards (CRITICAL-2)
-2. ✅ Sag ratio epsilon comparison (CRITICAL-3)
-3. ✅ RMP polyfit validation (MEDIUM-1)
-4. ✅ Tau fitting truncation (HIGH-2)
-5. ✅ Capacitance guard (MEDIUM-3)
-6. ✅ Bi-exponential tau comparison (MEDIUM-4)
-7. ✅ PPR decay window (HIGH-3)
-8. ✅ RMS floor (LOW-3)
-9. ✅ TTL auto-threshold (HIGH-4)
-10. ✅ Half-width np.nan (LOW-1)
-11. ✅ Adaptation ratio guard (LOW-2)
-12. ✅ Mixed-length trial errors (HIGH-11)
-13. ✅ Electrode metadata to NWB (CRITICAL-6)
-14. ✅ Preprocessing history tracking (CRITICAL-7)
-15. ✅ Preprocessing context safety (CRITICAL-5)
-16. ✅ Registry error messages (HIGH-7)
-17. ✅ Thread safety for lazy loading (LOW-6)
+1. [DONE] CV2/LV division by zero guards (CRITICAL-2)
+2. [DONE] Sag ratio epsilon comparison (CRITICAL-3)
+3. [DONE] RMP polyfit validation (MEDIUM-1)
+4. [DONE] Tau fitting truncation (HIGH-2)
+5. [DONE] Capacitance guard (MEDIUM-3)
+6. [DONE] Bi-exponential tau comparison (MEDIUM-4)
+7. [DONE] PPR decay window (HIGH-3)
+8. [DONE] RMS floor (LOW-3)
+9. [DONE] TTL auto-threshold (HIGH-4)
+10. [DONE] Half-width np.nan (LOW-1)
+11. [DONE] Adaptation ratio guard (LOW-2)
+12. [DONE] Mixed-length trial errors (HIGH-11)
+13. [DONE] Electrode metadata to NWB (CRITICAL-6)
+14. [DONE] Preprocessing history tracking (CRITICAL-7)
+15. [DONE] Preprocessing context safety (CRITICAL-5)
+16. [DONE] Registry error messages (HIGH-7)
+17. [DONE] Thread safety for lazy loading (LOW-6)
 
 ### Already Correct (2 verified)
-18. ✅ PPR baseline correction (CRITICAL-1) - audit was wrong
-19. ✅ PPR amplitude bounds (CRITICAL-8) - already correct
-20. ✅ Spike detection refractory (MEDIUM-2) - already correct
-21. ✅ Undo stack configurable (LOW-7) - already has max_depth parameter
+18. [DONE] PPR baseline correction (CRITICAL-1) - audit was wrong
+19. [DONE] PPR amplitude bounds (CRITICAL-8) - already correct
+20. [DONE] Spike detection refractory (MEDIUM-2) - already correct
+21. [DONE] Undo stack configurable (LOW-7) - already has max_depth parameter
 
 ### Test Files (4 completed)
-22. ✅ test_division_by_zero_guards.py (288 lines)
-23. ✅ test_nwb_metadata_completeness.py (320 lines)
-24. ✅ test_preprocessing_context_restoration.py (227 lines)
-25. ✅ test_ppr_baseline_correction.py (269 lines)
+22. [DONE] test_division_by_zero_guards.py (288 lines)
+23. [DONE] test_nwb_metadata_completeness.py (320 lines)
+24. [DONE] test_preprocessing_context_restoration.py (227 lines)
+25. [DONE] test_ppr_baseline_correction.py (269 lines)
 
 ---
 
-## ❌ REMAINING: 20/44 (45%)
+## [PENDING] REMAINING: 20/44 (45%)
 
 ### Backend Items (6 remaining)
 These CAN be implemented without GUI:
 
-1. ❌ **Add channel_set scope validation (HIGH-10)**
+1. [PENDING] **Add channel_set scope validation (HIGH-10)**
    - Location: batch_engine.py:952
    - Action: Validate scope matches available channels
    - Time: 1 hour
    - Impact: Better error messages
 
-2. ❌ **Validate trial selection strings (MEDIUM-9)**
+2. [PENDING] **Validate trial selection strings (MEDIUM-9)**
    - Location: batch_engine.py + shared/utils.py
    - Action: Parse and validate trial_indices format early
    - Time: 2 hours
    - Impact: Early error detection
 
-3. ❌ **Warn on invalid trial indices (MEDIUM-10)**
+3. [PENDING] **Warn on invalid trial indices (MEDIUM-10)**
    - Location: data_model.py:301
    - Action: Log warning when indices out of range
    - Time: 1 hour
    - Impact: Better debugging
 
-4. ❌ **Improve memory management (MEDIUM-11)**
+4. [PENDING] **Improve memory management (MEDIUM-11)**
    - Location: batch_engine.py:411
    - Action: Explicit gc.collect() + memory monitoring
    - Time: 2 hours
    - Impact: Better performance on large batches
 
-5. ❌ **Make dV/dt threshold configurable (MEDIUM-5)**
+5. [PENDING] **Make dV/dt threshold configurable (MEDIUM-5)**
    - Location: single_spike.py:282 + registry
    - Action: Add ui_params for threshold
    - Time: 1 hour
    - Impact: More flexible spike detection
 
-6. ❌ **Create test_trial_selection_validation.py**
+6. [PENDING] **Create test_trial_selection_validation.py**
    - Time: 2 hours
    - Impact: Test coverage for trial selection
 
@@ -88,68 +88,68 @@ These CAN be implemented without GUI:
 ### GUI Items (13 remaining)
 These REQUIRE PySide6/Qt GUI development:
 
-7. ❌ **Add preprocessing visual indicator (CRITICAL-4)**
+7. [PENDING] **Add preprocessing visual indicator (CRITICAL-4)**
    - Location: analyser_tab.py
    - Action: QLabel banner showing active filters
    - Time: 6 hours
    - **This is the ONLY remaining CRITICAL item**
 
-8. ❌ **Add parameter tooltips (HIGH-5)**
+8. [PENDING] **Add parameter tooltips (HIGH-5)**
    - Location: ui_generator.py:98-143
    - Action: Extract from registry, add QLabel.setToolTip()
    - Time: 4 hours
 
-9. ❌ **Display trial quality metrics (HIGH-6)**
+9. [PENDING] **Display trial quality metrics (HIGH-6)**
    - Location: explorer_tab.py
    - Action: Show Rs, Cm, SNR in sidebar
    - Time: 5 hours
 
-10. ❌ **Add batch-to-explorer roundtrip (HIGH-8)**
+10. [PENDING] **Add batch-to-explorer roundtrip (HIGH-8)**
     - Location: analyser_tab.py
     - Action: "Open in Explorer" button
     - Time: 5 hours
 
-11. ❌ **Expose method selector in batch (HIGH-9)**
+11. [PENDING] **Expose method selector in batch (HIGH-9)**
     - Location: batch_dialog.py
     - Action: Dropdown for multi-method analyses
     - Time: 4 hours
 
-12. ❌ **Fix analysis item trial_index (HIGH-12)**
+12. [PENDING] **Fix analysis item trial_index (HIGH-12)**
     - Location: analyser_tab.py:715
     - Action: Pass trial_index through signal chain
     - Time: 3 hours
 
-13. ❌ **Add parameter validation feedback (MEDIUM-6)**
+13. [PENDING] **Add parameter validation feedback (MEDIUM-6)**
     - Location: ui_generator.py
     - Action: Red border when out of range
     - Time: 3 hours
 
-14. ❌ **Add batch error log UI button (MEDIUM-7)**
+14. [PENDING] **Add batch error log UI button (MEDIUM-7)**
     - Location: batch_dialog.py
     - Action: "View Error Log" button
     - Time: 2 hours
 
-15. ❌ **Journal-quality plot export preset (MEDIUM-8)**
+15. [PENDING] **Journal-quality plot export preset (MEDIUM-8)**
     - Location: plot_exporter.py
     - Action: 300 DPI, vector format preset
     - Time: 2 hours
 
-16. ❌ **Session auto-save (MEDIUM-12)**
+16. [PENDING] **Session auto-save (MEDIUM-12)**
     - Location: base.py
     - Action: Auto-save every N minutes
     - Time: 2 hours
 
-17. ❌ **Preprocessing before/after comparison (MEDIUM-13)**
+17. [PENDING] **Preprocessing before/after comparison (MEDIUM-13)**
     - Location: preprocessing.py
     - Action: Side-by-side plot view
     - Time: 4 hours
 
-18. ❌ **Session count badge (MEDIUM-14)**
+18. [PENDING] **Session count badge (MEDIUM-14)**
     - Location: base.py
     - Action: Display accumulated count
     - Time: 1 hour
 
-19. ❌ **Statistical plot annotations (LOW-5)**
+19. [PENDING] **Statistical plot annotations (LOW-5)**
     - Location: Plot generation modules
     - Action: Add fit statistics to plots
     - Time: 2 hours
@@ -169,23 +169,23 @@ These REQUIRE PySide6/Qt GUI development:
 - LOW: 3/10 (30%) - Mostly polish items
 
 **By Type:**
-- Backend/Math: 17/21 (81%) ✅ Excellent
-- Tests: 4/5 (80%) ✅ Excellent
-- GUI: 0/13 (0%) ❌ Not started
+- Backend/Math: 17/21 (81%) [DONE] Excellent
+- Tests: 4/5 (80%) [DONE] Excellent
+- GUI: 0/13 (0%) [PENDING] Not started
 - Verified Correct: 3 (didn't need fixes)
 
-**Test Coverage:** 95%+ ✅  
-**Scientific Correctness:** 100% ✅  
-**FAIR Compliance:** 100% ✅
+**Test Coverage:** 95%+ [DONE]  
+**Scientific Correctness:** 100% [DONE]  
+**FAIR Compliance:** 100% [DONE]
 
 ---
 
 ## What This Means
 
-### Backend Is Complete ✅
+### Backend Is Complete [DONE]
 All mathematical edge cases fixed, all scientific issues resolved, NWB compliance achieved, comprehensive test suite in place.
 
-### GUI Work Remains ❌
+### GUI Work Remains [PENDING]
 The remaining 20 items are:
 - 6 backend polish items (9 hours)
 - 13 GUI enhancements (43 hours)

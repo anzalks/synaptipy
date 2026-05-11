@@ -92,7 +92,7 @@ if abs(delta_v_ss) < 1e-9:  # EPSILON COMPARISON
 
 **Fix:** Add colored banner at top of parameter panel:
 ```
-[⚠️ PREPROCESSING ACTIVE] Lowpass 300Hz | Baseline Subtracted | [Reset All]
+[[WARNING] PREPROCESSING ACTIVE] Lowpass 300Hz | Baseline Subtracted | [Reset All]
 ```
 
 **Why Critical:** Reproducibility - readers must know if data was filtered
@@ -290,20 +290,20 @@ tests/core/test_trial_selection_validation.py    # Input validation
 ### What Will Reviewers Test?
 
 1. **PPR Calculation** - Guaranteed to test paired-pulse protocols
-   - ✅ Fix CRITICAL-1 (wrong formula) FIRST
-   - ✅ Fix CRITICAL-8 (amplitude bounds) before submission
+   - [DONE] Fix CRITICAL-1 (wrong formula) FIRST
+   - [DONE] Fix CRITICAL-8 (amplitude bounds) before submission
 
 2. **NWB Export** - Will validate with DANDI tools
-   - ✅ Fix CRITICAL-6 (electrode metadata)
-   - ✅ Fix CRITICAL-7 (preprocessing provenance)
+   - [DONE] Fix CRITICAL-6 (electrode metadata)
+   - [DONE] Fix CRITICAL-7 (preprocessing provenance)
 
 3. **Edge Cases** - Will submit pathological test files
-   - ✅ Fix all division-by-zero guards (CRITICAL-2, 3)
-   - ✅ Fix array bounds issues (CRITICAL-9)
+   - [DONE] Fix all division-by-zero guards (CRITICAL-2, 3)
+   - [DONE] Fix array bounds issues (CRITICAL-9)
 
 4. **Reproducibility** - Will attempt to reproduce example analyses
-   - ✅ Fix CRITICAL-4 (preprocessing indicator)
-   - ✅ Fix HIGH-3 (parameter tooltips)
+   - [DONE] Fix CRITICAL-4 (preprocessing indicator)
+   - [DONE] Fix HIGH-3 (parameter tooltips)
 
 ### What Can Wait for Revisions?
 
