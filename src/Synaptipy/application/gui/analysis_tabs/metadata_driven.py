@@ -310,6 +310,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             analyze_btn.clicked.connect(self._trigger_analysis)
             layout.addRow("", analyze_btn)
 
+        elif self.metadata.get("run_button"):
+            # Explicit opt-in: add a standalone Run Analysis button without a
+            # method selector (used by slow/heavy analyses like deep-learning
+            # event detectors where auto-run on every parameter change would be
+            # unacceptably slow).
+            analyze_btn = QtWidgets.QPushButton("Run Analysis")
+            analyze_btn.setToolTip("Run the analysis with current parameters")
+            analyze_btn.clicked.connect(self._trigger_analysis)
+            layout.addRow("", analyze_btn)
+
         # --- Secondary channel selector (e.g. TTL channel for optogenetics) ---
         sec_chan = self.metadata.get("requires_secondary_channel")
         if sec_chan and isinstance(sec_chan, dict):

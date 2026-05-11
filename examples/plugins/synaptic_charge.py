@@ -279,7 +279,8 @@ def calculate_synaptic_charge(
             "min": 0.001,
             "max": 10.0,
             "decimals": 4,
-            "tooltip": "Legacy: full pre-window duration used for Global baseline. Ignored by the local dynamic baseline.",
+            "tooltip": "Legacy: full pre-window duration used for Global baseline. "
+            "Ignored by the local dynamic baseline.",
             "visible_when": {"param": "baseline_method", "value": "Global"},
         },
         {

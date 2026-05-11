@@ -272,6 +272,9 @@ def _set_param(tab: Any, name: str, value: Any) -> None:
         widget.setValue(value)
     elif hasattr(widget, "setCurrentText"):
         widget.setCurrentText(str(value))
+    elif hasattr(widget, "setText"):
+        # FileBrowseWidget and QLineEdit
+        widget.setText(str(value))
     _pump(2)
 
 
@@ -692,6 +695,80 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
 
 
 # ---------------------------------------------------------------------------
+# miniML Events plugin screenshots
+# ---------------------------------------------------------------------------
+
+
+# Paths to the local miniML installation used for the inference screenshot.
+# These are only used when the paths actually exist on the machine running
+# capture_screenshots.py.  CI machines skip the inference screenshot.
+_MINIML_CORE = Path.home() / "PycharmProjects" / "miniML" / "core"
+_MINIML_MODEL = Path.home() / "PycharmProjects" / "miniML" / "models" / "GC_lstm_model.h5"
+
+
+def _capture_miniml_plugin(window: Any, analyser: Any, sm: Any, output_dir: Path) -> List[str]:
+    """Capture the miniML Events plugin tab.
+
+    Three screenshots are produced:
+    1. ``plugin_miniml_empty.png`` -- tab in default empty state (Browse buttons visible).
+    2. ``plugin_miniml_paths_filled.png`` -- paths typed in, threshold 0.3, no run yet.
+    3. ``plugin_miniml_detected.png`` -- after running inference; event markers shown on
+       the trace.  Only produced when the local miniML installation is found at
+       ``~/PycharmProjects/miniML/``; skipped silently on CI.
+    """
+    captured: List[str] = []
+
+    # Use WCP voltage-clamp file for miniML (designed for mEPSC-style VC data).
+    # Fall back to ABF22 or ABF21 if WCP is absent.
+    if _WCP03.exists():
+        _set_analysis_source(sm, _WCP03)
+    elif _ABF22.exists():
+        _set_analysis_source(sm, _ABF22)
+    elif _ABF21.exists():
+        _set_analysis_source(sm, _ABF21)
+    else:
+        return captured
+
+    tab = _activate_sub_tab(window, analyser, "miniML Events")
+    if tab is None:
+        print("  [warn] 'miniML Events' sub-tab not found -- is the plugin installed?", file=sys.stderr)
+        return captured
+
+    # Screenshot 1: default empty state showing Browse buttons.
+    _grab(window, output_dir / "plugin_miniml_empty.png")
+    captured.append("plugin_miniml_empty.png")
+
+    # Screenshot 2: paths filled in, threshold 0.3.
+    _set_param(tab, "miniml_core_path", str(_MINIML_CORE))
+    _set_param(tab, "model_path", str(_MINIML_MODEL))
+    _set_param(tab, "threshold", 0.3)
+    _set_param(tab, "direction", "negative")
+    _pump(3)
+    _grab(window, output_dir / "plugin_miniml_paths_filled.png")
+    captured.append("plugin_miniml_paths_filled.png")
+
+    # Screenshot 3: run actual inference when the local miniML install exists.
+    if _MINIML_CORE.exists() and _MINIML_MODEL.exists():
+        # Switch to a single trial so event markers are clearly visible against
+        # a clean trace rather than an averaged overlay.
+        _set_trial(tab, 5)
+        _pump(5)
+        _run_analysis(tab)
+        # TensorFlow inference is async -- wait until the tab re-enables itself.
+        _wait_data_load(tab, timeout_s=120.0)
+        _pump(10)
+        _grab(window, output_dir / "plugin_miniml_detected.png")
+        captured.append("plugin_miniml_detected.png")
+    else:
+        print(
+            "  [warn] miniML not found locally -- skipping inference screenshot",
+            file=sys.stderr,
+        )
+
+    return captured
+
+
+# ---------------------------------------------------------------------------
 # Stale-file cleanup
 # ---------------------------------------------------------------------------
 
@@ -783,6 +860,9 @@ def run(output_dir: Path) -> bool:  # noqa: C901
 
         print("[evoked responses]")
         captured.extend(_capture_evoked_responses(window, analyser, sm, output_dir))
+
+        print("[miniml plugin]")
+        captured.extend(_capture_miniml_plugin(window, analyser, sm, output_dir))
 
         # --- Exporter tab ---
         window.tab_widget.setCurrentIndex(2)

@@ -5,11 +5,80 @@ Helper module to generate UI widgets from metadata parameters.
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PySide6 import QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 log = logging.getLogger(__name__)
+
+
+class FileBrowseWidget(QtWidgets.QWidget):
+    """A QLineEdit paired with a Browse button for filepath or directory parameters."""
+
+    textChanged = QtCore.Signal(str)
+
+    def __init__(self, mode: str = "file", parent=None):
+        """
+        Initialize the widget.
+
+        Args:
+            mode: ``"file"`` opens a file-picker dialog;
+                  ``"dir"`` opens a directory-picker dialog.
+        """
+        super().__init__(parent)
+        self._mode = mode
+        hbox = QtWidgets.QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.setSpacing(4)
+        self._line_edit = QtWidgets.QLineEdit()
+        self._browse_btn = QtWidgets.QPushButton("Browse...")
+        self._browse_btn.setFixedWidth(80)
+        hbox.addWidget(self._line_edit)
+        hbox.addWidget(self._browse_btn)
+        self._line_edit.textChanged.connect(self.textChanged)
+        self._browse_btn.clicked.connect(self._on_browse)
+
+    # ------------------------------------------------------------------
+    # Public interface matching QLineEdit so callers need no special casing
+    # ------------------------------------------------------------------
+
+    def text(self) -> str:
+        """Return the current text from the inner QLineEdit."""
+        return self._line_edit.text()
+
+    def setText(self, value: str) -> None:
+        """Set the text in the inner QLineEdit."""
+        self._line_edit.setText(value)
+
+    def setPlaceholderText(self, text: str) -> None:
+        """Forward placeholder text to the inner QLineEdit."""
+        self._line_edit.setPlaceholderText(text)
+
+    def setToolTip(self, text: str) -> None:  # type: ignore[override]
+        """Apply the tooltip to both the line-edit and the browse button."""
+        self._line_edit.setToolTip(text)
+        self._browse_btn.setToolTip(text)
+
+    # ------------------------------------------------------------------
+    # Browse slot
+    # ------------------------------------------------------------------
+
+    def _on_browse(self) -> None:
+        """Open a file or directory picker and populate the line-edit."""
+        current = self._line_edit.text().strip()
+        start_dir = current if current else str(Path.home())
+        if self._mode == "dir":
+            chosen = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory", start_dir)
+        else:
+            chosen, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self,
+                "Select File",
+                start_dir,
+                "Model files (*.h5 *.keras);;All files (*)",
+            )
+        if chosen:
+            self._line_edit.setText(chosen)
 
 
 class FlexibleDoubleSpinBox(QtWidgets.QDoubleSpinBox):
@@ -144,6 +213,23 @@ class ParameterWidgetGenerator:
             widget.setChecked(param.get("default", False))
             widget.stateChanged.connect(self._on_param_changed)
 
+        elif param_type in ("string", "str", "path"):
+            widget = QtWidgets.QLineEdit()
+            widget.setText(str(param.get("default", "")))
+            placeholder = param.get("placeholder", "")
+            if placeholder:
+                widget.setPlaceholderText(placeholder)
+            widget.textChanged.connect(self._on_param_changed)
+
+        elif param_type in ("filepath", "dirpath"):
+            mode = "dir" if param_type == "dirpath" else "file"
+            widget = FileBrowseWidget(mode=mode)
+            widget.setText(str(param.get("default", "")))
+            placeholder = param.get("placeholder", "")
+            if placeholder:
+                widget.setPlaceholderText(placeholder)
+            widget.textChanged.connect(self._on_param_changed)
+
         else:
             log.warning(f"Unknown parameter type '{param_type}' for {name}")
             return
@@ -191,6 +277,8 @@ class ParameterWidgetGenerator:
                 live_context[wname] = w.value()
             elif isinstance(w, QtWidgets.QCheckBox):
                 live_context[wname] = w.isChecked()
+            elif isinstance(w, (QtWidgets.QLineEdit, FileBrowseWidget)):
+                live_context[wname] = w.text()
 
         for name, info in self.visibility_map.items():
             rule = info["rule"]
@@ -243,6 +331,8 @@ class ParameterWidgetGenerator:
                 params[name] = widget.currentText()
             elif isinstance(widget, QtWidgets.QCheckBox):
                 params[name] = widget.isChecked()
+            elif isinstance(widget, (QtWidgets.QLineEdit, FileBrowseWidget)):
+                params[name] = widget.text()
         return params
 
     def set_params(self, params: Dict[str, Any]):
@@ -256,3 +346,5 @@ class ParameterWidgetGenerator:
                     widget.setCurrentText(str(value))
                 elif isinstance(widget, QtWidgets.QCheckBox):
                     widget.setChecked(bool(value))
+                elif isinstance(widget, (QtWidgets.QLineEdit, FileBrowseWidget)):
+                    widget.setText(str(value))
