@@ -261,9 +261,23 @@ jobs:
       - name: Extract CHANGELOG section for this release
         id: changelog
         run: |
-          TAG="${GITHUB_REF_NAME#v}"           # strip leading 'v'
-          # Grab everything between this version header and the next one
-          NOTES=$(awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # When triggered by a tag push, GITHUB_REF_NAME is the semver string
+          # (e.g. "v0.1.3b6").  When triggered via workflow_dispatch from a
+          # branch, GITHUB_REF_NAME is the branch name (may contain "/") and
+          # is not a valid version; fall back to the version in pyproject.toml.
+          if echo "${GITHUB_REF_NAME}" | grep -qE '^v?[0-9]+\.[0-9]+'; then
+            TAG="${GITHUB_REF_NAME#v}"
+          else
+            TAG=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          fi
+          # Grab everything between this version header and the next one.
+          # Use awk -v to pass TAG so special characters (e.g. "/") in the
+          # variable do not break the regex delimiter.  index() performs a
+          # plain string match rather than a regex match.
+          NOTES=$(awk -v tag="## [$TAG]" \
+            'index($0, tag)==1{found=1; next} found && /^## \[/{exit} found{print}' \
+            CHANGELOG.md 2>/dev/null || echo "See CHANGELOG.md for details.")
+          [ -z "$NOTES" ] && NOTES="See CHANGELOG.md for details."
           echo "$NOTES" > release_notes.md
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
 

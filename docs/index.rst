@@ -141,6 +141,8 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
  algorithmic_definitions
  nwb_mapping
  extending_synaptipy
+ reproducibility
+ comparison_table
  api_reference
 
 .. toctree::

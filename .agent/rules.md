@@ -85,21 +85,27 @@ All analysis features must be split into two distinct parts:
 ## IV. CI/CD & QUALITY ASSURANCE
 
 **1. Linting Compliance (Flake8 Strictness)**
-* **Line Length**: Strictly <= 120 characters (matches `.flake8`). 
-* **Complexity**: Keep function cyclomatic complexity under 10. Refactor if logic gets too nested. Use `# noqa: C901` as a last resort, but you must manually suppress warnings if you do.
-* **Unused Imports/Vars**: Clean them up before finalizing code.
-* **Execution Constraint**: Before marking any Phase or batch of work completed, the Agent MUST run `python -m flake8 src/ tests/ --count --max-complexity=10 --max-line-length=120 --statistics` and verify it returns **0 errors**.
-* **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (Linting + Headless Tests). **Zero Tolerance** for failures (0 errors allowed).
-* **Whitespace Hygiene**: Agents MUST inspect and fix all flake8 whitespace warnings (W293, W391, W504, etc.) before finishing a task. Codebase should be pristine.
+* **Line Length**: Strictly <= 127 characters (matches the project `.flake8` configuration; do not use 120).
+* **Complexity**: Keep function cyclomatic complexity strictly under 10. Refactor complex logic into helper functions before resorting to `# noqa: C901`. Every `noqa` suppression must include a comment explaining why the suppression is necessary.
+* **Unused Imports/Vars**: Clean them up before finalizing code. Flake8 F401 (unused import) and F841 (unused variable) violations are not acceptable.
+* **Execution Constraint**: Before marking any Phase or batch of work completed, the Agent MUST run:
+    ```bash
+    conda run -n synaptipy flake8 src/ tests/ scripts/ --count --max-complexity=10 --max-line-length=127 --statistics
+    ```
+    and verify the output is exactly `0`.
+* **Pre-Push Mandate**: ALWAYS run `python scripts/verify_ci.py` before pushing or requesting review. This script replicates the strict CI/CD environment (linting, headless tests, emoji scan). Zero tolerance for failures.
+* **Whitespace Hygiene**: Agents MUST inspect and fix all flake8 whitespace warnings (W293, W391, W504, etc.) before finishing a task.
 
 **2. Mandatory Formatting and Test Gate (Zero-Tolerance)**
-* **Every Generation Cycle**: After writing or modifying any Python file, the Agent MUST automatically run:
-    1. `python -m black src/ tests/` — auto-format code
-    2. `python -m isort src/ tests/` — sort imports
-    3. `python -m flake8 src/ tests/` — verify linting compliance
-    4. `python scripts/run_tests.py` — execute full test suite
+* **Every Generation Cycle**: After writing or modifying any Python file, the Agent MUST automatically run all of the following in sequence and fix every error before proceeding:
+    ```bash
+    conda run -n synaptipy black src/ tests/ scripts/
+    conda run -n synaptipy isort src/ tests/ scripts/
+    conda run -n synaptipy flake8 src/ tests/ scripts/ --count --max-complexity=10 --max-line-length=127 --statistics
+    conda run -n synaptipy python scripts/verify_ci.py
+    ```
 * **Non-Negotiable Rule**: Do NOT stop generating or fixing until all four commands succeed with zero errors and all tests pass. If tests fail, automatically debug and fix regressions before moving on.
-* **Pre-Completion Checklist**: Before marking any task as complete, confirm that `scripts/run_tests.py` shows 100% pass rate.
+* **Pre-Completion Checklist**: Before marking any task as complete, `scripts/verify_ci.py` MUST output `[SUCCESS] All CI Checks Passed!`.
 
 **3. Cross-Platform Compatibility (The "Windows" Rule)**
 * **Path Handling**: NEVER use string concatenation for paths (e.g., `"data/" + filename`).
@@ -114,9 +120,13 @@ All analysis features must be split into two distinct parts:
     * *Good:* Instantiate widgets, verify state, but do not rely on rendering frames.
 * **Qt Mocking**: Use `pytest-qt` fixtures (`qtbot`) for all GUI interactions in tests. Do not use `time.sleep()`; use `qtbot.wait()`.
 
-**4. Dependency Management**
-* **Lockfile Integrity**: If you import a new third-party library, you **MUST** explicitly tell the user to add it to `requirements.txt`.
-* *Reason*: The CI pipeline installs dependencies strictly from `requirements.txt`. If you skip this, the build fails.
+**4. Dependency Management (The Unified Source of Truth)**
+* **Single Source of Truth**: `pyproject.toml` is the absolute single source of truth for all Python dependencies. No other file may introduce packages that are not declared there first.
+* **Lockfile Automation (DO NOT EDIT MANUALLY)**: `requirements.txt` is strictly a compiled lockfile. It MUST NEVER be edited by hand. If dependencies change, run `pip-compile pyproject.toml -o requirements.txt` (via `pip-tools`) to regenerate it. An agent must instruct the user to run this command if a dependency change is needed.
+* **PEP 508 Environment Markers for OS Edge Cases**: You MUST NOT create separate OS-specific dependency files (e.g., `environment-windows.yml`). If a package is required only on a specific operating system, declare it in `pyproject.toml` using standard PEP 508 environment markers:
+    * Windows only: `"pywin32 ; sys_platform == 'win32'"`
+    * macOS only: `"pyobjc-framework-Cocoa ; sys_platform == 'darwin'"`
+* **Universal Environment**: `environment.yml` manages only cross-platform system-level setup (e.g., Python version, conda channels) and delegates package installation by calling `pip install -e .[dev]`. It MUST NOT duplicate package pinning already expressed in `pyproject.toml`.
 
 **5. IO & Data Abstraction**
 * **Native Discovery**: In `NeoAdapter`, strictly prioritize `neo.io.get_io(filename)` over manual extension mapping lists (`IODict`), which become stale.
@@ -124,22 +134,47 @@ All analysis features must be split into two distinct parts:
 
 **6. Dependency Management & Synchronization (The "Three-Pillar" Rule)**
 * **Unconditional Sync**: Dependency updates MUST be applied consistently across the entire ecosystem. If you add or remove an environment requirement, you MUST synchronize:
-    1. `pyproject.toml`
-    2. `environment.yml`
-    3. `requirements.txt`
+    1. `pyproject.toml` (authoritative source -- edit this first)
+    2. Regenerate `requirements.txt` via `pip-compile pyproject.toml -o requirements.txt` (never edit manually)
+    3. `environment.yml` (system setup only -- update Python version or conda channels here)
 * **Mismatch Prevention**: Ensure Python floor versions match exactly (e.g., `>=3.10`). Do not leave old classifiers (e.g., Python 3.9) in `pyproject.toml` if the floor is 3.10.
+
+**7. Headless Execution Mandate (CI/CD Crash Prevention)**
+* **Hard Requirement**: Any automated script that instantiates Qt widgets -- including unit tests, benchmarking scripts, and screenshot generators such as `capture_screenshots.py` -- MUST enforce headless mode before any Qt object is created:
+    ```python
+    import os
+    if "QT_QPA_PLATFORM" not in os.environ:
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    ```
+* **Rationale**: GitHub Actions Linux and macOS runners operate without a display server. Failing to set this environment variable causes a fatal SIGSEGV crash that silently kills the test worker process and reports exit code 127 instead of a meaningful test failure.
+* **Scope**: This rule applies to `scripts/capture_screenshots.py`, `scripts/benchmark_rendering.py`, all files under `tests/gui/`, and any future script that imports `PySide6` or `pyqtgraph` at the top level.
+
+**8. PyInstaller Hidden Imports Guard**
+* **Mandatory Evaluation**: Because PyInstaller's bytecode scanner does not follow dynamic imports, any package newly added to the project dependencies MUST be evaluated for inclusion in `synaptipy.spec`:
+    * If the package uses plugin patterns, type registries, or lazy module loading (common in `neo`, `pynwb`, `hdmf`, `dask`, `pyqtgraph`), add `collect_submodules("package_name")` to `hiddenimports`.
+    * If the package ships non-Python data files (schemas, JSON specs, Qt resources), add `collect_data_files("package_name")` to `datas`.
+* **Version Sync**: The `synaptipy.spec` version regex `re.search(r'^version\s*=\s*"([^"]+)"', ...)` reads from `pyproject.toml` at build time. `bump_version.py` updates `pyproject.toml`, `installer/windows_setup.iss`, and `environment.yml` atomically. The spec must NEVER hardcode a version string.
 
 ## V. DOCUMENTATION & PROFESSIONALISM
 
 **1. Zero-Tolerance Emoji Policy**
+*   **FATAL CI CRASH WARNING**: Generating emojis in any Markdown or Python file will instantly trigger a fatal CI failure via `scripts/verify_ci.py`, blocking the release pipeline. There are no exceptions and no overrides.
 *   **Scope**: Emojis are strictly forbidden in **ALL** project files without exception: source code, documentation (`.md`, `.rst`), commit messages, docstrings, and inline comments.
-*   *Forbidden patterns*:
+*   **Covered Unicode ranges** (enforced by `verify_ci.py`):
+    *   Supplementary plane U+10000-U+10FFFF (e.g., 😀 🎉 🚀)
+    *   Miscellaneous Symbols U+2600-U+26FF (e.g., ⚠ ☆ ★)
+    *   Dingbats U+2700-U+27BF (e.g., ✅ ❌ ✨ ✔ ➔)
+    *   Star and circle emoji U+2B50, U+2B55
+    *   Variation selectors U+FE00-U+FE0F (e.g., the invisible U+FE0F that converts ⚠ into ⚠️)
+*   **Permitted exception**: Box-drawing characters U+2500-U+25FF (e.g., `─`, `│`) used as structural separators in code comments or YAML section dividers.
+*   *Forbidden patterns* (replace as shown):
     *   `🚀 Key Features` → `Key Features`
     *   `# TODO: Fix this 🐛` → `# TODO: Fix this bug`
     *   `## ✅ Benefits` → `## Benefits`
     *   `- ❌ Removed: ...` → `- Removed: ...`
     *   `print('Done! 🎉')` → `print('Done!')`
-*   **Enforcement**: Before completing any documentation task, run a grep for Unicode codepoints above U+007F in non-code contexts. Box-drawing characters (U+2500–U+257F) used in directory tree diagrams are the only permitted exception.
+    *   `"⚠️ Active preprocessing"` → `"[PREPROCESSING ACTIVE]"`
+*   **Enforcement**: Before completing any documentation task, run `python scripts/verify_ci.py` and confirm the `[PASS] Emoji Check Passed` line appears.
 
 **2. Source-Verified Accuracy (The "Ground Truth" Rule)**
 *   **CRITICAL**: Every technical statement in documentation MUST be verified against the actual source code before being written. Never document from memory, assumption, or from other documentation files.
@@ -249,7 +284,29 @@ Never integrate third-party coverage dashboards or telemetry services (e.g., Cod
 **4. Unit Safety & Validation**
 * **Magnitude Checks**: Functions accepting `sampling_rate` MUST implement sanity checks (e.g., if `fs < 100`, warn "Is this Hz or kHz?").
 * **Zero-State Safety**: All statistical aggregators (mean, std) MUST explicitly handle empty arrays to prevent `NaN` propagation or RuntimeWarnings.
+**8. The Epsilon Guard Rule (Division-by-Zero Prevention)**
+* **Hard Prohibition**: NEVER use exact floating-point equality to test whether a biological or mathematical value is zero (e.g., `if value == 0:` or `if denominator == 0:`). Hardware noise, floating-point underflow, and subtraction cancellation make exact zero comparisons unreliable in electrophysiology data.
+* **Mandatory Pattern**: Always use an epsilon-based comparison:
+    ```python
+    EPSILON = 1e-9  # appropriate for biological voltage (mV) and time (s) scales
+    if abs(denominator) < EPSILON:
+        return np.nan  # or 0.0 if a sentinel is more appropriate for the metric
+    ```
+* **Contextual Epsilons**: Choose the epsilon value to match the physical scale of the quantity:
+    * Voltage denominators (mV scale): `1e-9`
+    * Time denominators (s scale): `1e-9`
+    * Current denominators (pA scale): `1e-15`
+    * Squared time denominators (s^2, used in LV): `1e-15`
+* **Propagation**: When a division produces `NaN` due to an epsilon guard, downstream aggregators MUST use `numpy.nanmean` / `numpy.nanstd` rather than `numpy.mean` / `numpy.std` to exclude the guarded value from summary statistics.
 
+**9. FAIR Compliance for Preprocessing Provenance**
+* **Mandate**: Any new analytical function that modifies the raw data trace -- including filters, baseline subtractions, detrending, artefact blanking, or downsampling -- MUST record its operation in the `pipeline_context` of the enclosing analysis call.
+* **Required fields** (passed as a dict to the context):
+    * `operation`: short canonical name (e.g., `"lowpass_filter"`, `"baseline_subtract"`)
+    * `parameters`: a dict of all non-default arguments used (e.g., `{"cutoff_hz": 300, "order": 4}`)
+    * `timestamp`: ISO 8601 string at the time of application
+* **NWB export**: Preprocessing context entries are exported to the NWB `ProcessingModule` named `preprocessing` as a `DynamicTable` with columns `timestamp`, `operation`, and `parameters` (JSON-serialised). This satisfies the DANDI Archive reproducibility requirement that all transformations applied to raw data are traceable from the archived NWB file alone.
+* **Enforcement**: Any analysis wrapper that accepts preprocessing settings MUST pass them through the pipeline context. Omitting provenance from a data-modifying operation is treated as a correctness defect, not a cosmetic issue.
 **5. Infrastructure Robustness (IO)**
 * **Native Discovery**: In `neo_adapter.py`, strictly prioritize `neo.io.get_io(filename)` over manual extension mapping lists (`IODict`). Manual mapping is only a fallback.
 * **Memory Hygiene**: When aggregating signals from multiple segments, PRE-ALLOCATE NumPy arrays based on header info. Do not use `.append()` on lists inside data loops.

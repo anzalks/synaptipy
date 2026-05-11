@@ -386,16 +386,16 @@ Synaptipy is a well-architected electrophysiology analysis platform with robust 
 
 ### Correctly Implemented (No Changes Needed)
 
-✓ **File-level error isolation** - excellent implementation  
-✓ **Task-level error handling** - creates error rows with full metadata  
-✓ **gc.collect() placement** - correctly called after each file  
-✓ **Lazy loading logic** - cache-first approach works correctly  
-✓ **Trial averaging** - handles mismatched lengths correctly  
-✓ **Undo stack** - no circular reference risk  
-✓ **Metadata propagation** - complete through pipeline  
-✓ **Plugin reload** - rebuilds tabs correctly  
-✓ **Plugin name collision** - handled with suffix renaming  
-✓ **NWB stimulus resolution** - excellent 3-step fallback  
+[DONE] **File-level error isolation** - excellent implementation  
+[DONE] **Task-level error handling** - creates error rows with full metadata  
+[DONE] **gc.collect() placement** - correctly called after each file  
+[DONE] **Lazy loading logic** - cache-first approach works correctly  
+[DONE] **Trial averaging** - handles mismatched lengths correctly  
+[DONE] **Undo stack** - no circular reference risk  
+[DONE] **Metadata propagation** - complete through pipeline  
+[DONE] **Plugin reload** - rebuilds tabs correctly  
+[DONE] **Plugin name collision** - handled with suffix renaming  
+[DONE] **NWB stimulus resolution** - excellent 3-step fallback  
 
 ---
 

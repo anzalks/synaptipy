@@ -16,7 +16,11 @@ with open(_PYPROJECT, encoding="utf-8") as _f:
     _match = re.search(r'^version\s*=\s*"([^"]+)"', _f.read(), re.MULTILINE)
 _APP_VERSION = _match.group(1) if _match else "0.0.0"
 
-# Collect hidden imports for dynamic imports
+# Collect hidden imports for dynamic imports.
+# Note: pyqtgraph, neo, and pynwb all use plugin/registry patterns and require
+# collect_submodules to enumerate their subpackages.  hdmf uses dynamic type
+# registration (TypeMap) at import time; dask uses lazy top-level imports that
+# the bytecode scanner does not follow without explicit collection.
 hiddenimports = []
 hiddenimports += collect_submodules("pyqtgraph")
 hiddenimports += collect_submodules("neo")
@@ -24,22 +28,16 @@ hiddenimports += collect_submodules("quantities")
 hiddenimports += collect_submodules("scipy")
 hiddenimports += collect_submodules("h5py")
 hiddenimports += collect_submodules("pynwb")
-
-# Explicit extras frequently missed by bytecode scanning despite collect_submodules
-hiddenimports += [
-    "PySide6.QtSvg",
-    "PySide6.QtXml",
-    "pyqtgraph.graphicsItems",
-    "scipy.special",
-    "scipy.spatial.transform",
-]
+hiddenimports += collect_submodules("hdmf")
+hiddenimports += collect_submodules("dask")
 
 # Include our local resources (icons, stylesheets, and compiled Qt Help docs)
 datas = [("src/Synaptipy/resources", "Synaptipy/resources")]
-# Example plugins shipped in-repo — consumed via EXAMPLES_PLUGIN_DIR in frozen builds
+# Example plugins shipped in-repo -- consumed via EXAMPLES_PLUGIN_DIR in frozen builds
 datas += [("examples/plugins", "Synaptipy/examples/plugins")]
 datas += collect_data_files("pynwb")
 datas += collect_data_files("hdmf")
+datas += collect_data_files("neo")
 
 # Determine appropriate icon based on OS
 icon_ext = ".icns" if sys.platform == "darwin" else ".ico"

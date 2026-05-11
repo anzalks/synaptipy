@@ -1036,7 +1036,9 @@ def calculate_tau(  # noqa: C901
             p0 = [V_ss_guess, V_0_est, tau_est]
 
             try:
-                popt, _ = curve_fit(_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000)
+                popt, pcov = curve_fit(
+                    _exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=5000
+                )
             except RuntimeError:
                 log.warning("Optimal parameters not found for Tau (mono exponential fit).")
                 return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": []}
@@ -1056,12 +1058,29 @@ def calculate_tau(  # noqa: C901
             tau_ms = popt[2] * 1000
             fit_values = _exp_growth(t_fit, *popt)
             fit_time = (t_fit + fit_start_time).tolist()
-            log.debug("Calculated Tau (mono): %.3f ms  R\u00b2=%.4f", tau_ms, r_squared)
+
+            # Confidence intervals from covariance matrix (95% CI = +/-1.96*SE)
+            perr = np.sqrt(np.diag(pcov))
+            tau_se_s = float(perr[2])  # SE of tau in seconds
+            tau_se_ms = tau_se_s * 1000.0
+            tau_ci_lower = tau_ms - 1.96 * tau_se_ms
+            tau_ci_upper = tau_ms + 1.96 * tau_se_ms
+
+            log.debug(
+                "Calculated Tau (mono): %.3f ms  R\u00b2=%.4f  95%%CI=[%.3f, %.3f]",
+                tau_ms,
+                r_squared,
+                tau_ci_lower,
+                tau_ci_upper,
+            )
             return {
                 "tau_ms": tau_ms,
                 "_fit_time": fit_time,
                 "_fit_values": fit_values.tolist(),
                 "r_squared": r_squared,
+                "tau_se_ms": tau_se_ms,
+                "tau_ci_lower": tau_ci_lower,
+                "tau_ci_upper": tau_ci_upper,
             }
 
         elif model == "bi":
@@ -1079,7 +1098,7 @@ def calculate_tau(  # noqa: C901
             upper_bounds = [_v_hi, _v_range * 3, tau_max, _v_range * 3, tau_max]
 
             try:
-                popt, _ = curve_fit(
+                popt, pcov = curve_fit(
                     _bi_exp_growth, t_fit, V_fit, p0=p0, bounds=(lower_bounds, upper_bounds), maxfev=10000
                 )
             except RuntimeError:
@@ -1124,6 +1143,18 @@ def calculate_tau(  # noqa: C901
 
             fit_values = _bi_exp_growth(t_fit, *popt)
             fit_time = (t_fit + fit_start_time).tolist()
+
+            # Confidence intervals from covariance matrix (95% CI = +/-1.96*SE)
+            # popt order: [V_ss, A_fast, tau_fast, A_slow, tau_slow]
+            perr_bi = np.sqrt(np.diag(pcov))
+            tau_fast_se_s = float(perr_bi[2])
+            tau_slow_se_s = float(perr_bi[4])
+            # If params were swapped above, swap SE too
+            if popt[2] > popt[4]:  # original tau_fast > tau_slow before swap
+                tau_fast_se_s, tau_slow_se_s = tau_slow_se_s, tau_fast_se_s
+            tau_fast_se_ms = tau_fast_se_s * 1000.0
+            tau_slow_se_ms = tau_slow_se_s * 1000.0
+
             result = {
                 "tau_fast_ms": tau_fast * 1000,
                 "tau_slow_ms": tau_slow * 1000,
@@ -1133,6 +1164,12 @@ def calculate_tau(  # noqa: C901
                 "_fit_time": fit_time,
                 "_fit_values": fit_values.tolist(),
                 "r_squared": r_squared_bi,
+                "tau_fast_se_ms": tau_fast_se_ms,
+                "tau_fast_ci_lower": tau_fast * 1000 - 1.96 * tau_fast_se_ms,
+                "tau_fast_ci_upper": tau_fast * 1000 + 1.96 * tau_fast_se_ms,
+                "tau_slow_se_ms": tau_slow_se_ms,
+                "tau_slow_ci_lower": tau_slow * 1000 - 1.96 * tau_slow_se_ms,
+                "tau_slow_ci_upper": tau_slow * 1000 + 1.96 * tau_slow_se_ms,
             }
             log.debug(
                 "Calculated Tau (bi): fast=%.3f ms, slow=%.3f ms  R\u00b2=%.4f",

@@ -23,6 +23,7 @@ from scipy.stats import linregress
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.analysis.single_spike import calculate_spike_features, detect_spikes_threshold
+from Synaptipy.core.constants import EPSILON_ISI_SUM, EPSILON_ISI_SUM_SQ
 from Synaptipy.core.results import AnalysisResult, BurstResult
 
 log = logging.getLogger(__name__)
@@ -124,6 +125,8 @@ def calculate_fi_curve(  # noqa: C901
 
     fi_slope = None
     r_squared = None
+    fi_p_value = None
+    fi_slope_se = None
     if rheobase_idx != -1 and rheobase_idx < len(sorted_counts) - 1:
         valid_slice = slice(rheobase_idx, None)
         x = sorted_currents[valid_slice]
@@ -136,9 +139,11 @@ def calculate_fi_curve(  # noqa: C901
         y = y[:peak_idx]
         if len(x) >= 2:
             try:
-                slope, _intercept, r_value, _p, _se = linregress(x, y)
+                slope, _intercept, r_value, p_value, std_err = linregress(x, y)
                 fi_slope = float(slope)
                 r_squared = float(r_value**2)
+                fi_p_value = float(p_value)
+                fi_slope_se = float(std_err)
             except (ValueError, TypeError) as e:
                 log.warning(f"Linear regression failed: {e}")
 
@@ -146,6 +151,8 @@ def calculate_fi_curve(  # noqa: C901
         "rheobase_pa": rheobase_pa,
         "fi_slope": fi_slope,
         "fi_r_squared": r_squared,
+        "fi_p_value": fi_p_value,
+        "fi_slope_se": fi_slope_se,
         "max_freq": float(np.max(frequencies)) if frequencies else 0.0,
         "spike_counts": spike_counts,
         "frequencies": frequencies,
@@ -285,6 +292,8 @@ def run_excitability_analysis_wrapper(  # noqa: C901
                 "rheobase_pa": results["rheobase_pa"],
                 "fi_slope": results["fi_slope"],
                 "fi_r_squared": results["fi_r_squared"],
+                "fi_p_value": results.get("fi_p_value"),
+                "fi_slope_se": results.get("fi_slope_se"),
                 "max_freq_hz": results["max_freq"],
                 "frequencies": results["frequencies"],
                 "adaptation_ratios": results["adaptation_ratios"],
@@ -625,12 +634,12 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
 
     # Guard against division by zero with epsilon comparison
     cv2_denominator = isi_next + isi_i
-    cv2_safe_mask = cv2_denominator > 1e-9
+    cv2_safe_mask = cv2_denominator > EPSILON_ISI_SUM
     cv2_array = np.where(cv2_safe_mask, 2.0 * np.abs(isi_next - isi_i) / cv2_denominator, np.nan)
     cv2_val = float(np.nanmean(cv2_array))
 
     lv_denominator_sq = (isi_i + isi_next) ** 2
-    lv_safe_mask = lv_denominator_sq > 1e-15
+    lv_safe_mask = lv_denominator_sq > EPSILON_ISI_SUM_SQ
     lv_array = np.where(lv_safe_mask, 3.0 * ((isi_i - isi_next) ** 2) / lv_denominator_sq, np.nan)
     lv_val = float(np.nanmean(lv_array))
 

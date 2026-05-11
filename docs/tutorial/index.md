@@ -80,9 +80,7 @@ electrophysiology data files. It supports all formats handled by the Neo library
   between successive cursor placements (Δt, ΔV/ΔI). Undo and Clear buttons manage
   cursor history.
 
-*Delta cursor measurement between two time points:*
-
-![Explorer Tab - Interactive Cursors](screenshots/explorer_tab_cursors.png)
+*The interactive cursor group is located in the display configuration panel on the right side of the Explorer tab.*
 
 ### 1.3 Display Configuration Panel
 

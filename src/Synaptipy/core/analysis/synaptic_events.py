@@ -26,6 +26,7 @@ from scipy.optimize import curve_fit
 from scipy.stats import median_abs_deviation
 
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.constants import NOISE_FLOOR_MIN_RMS
 from Synaptipy.core.results import EventDetectionResult
 from Synaptipy.core.signal_processor import find_artifact_windows
 
@@ -81,7 +82,7 @@ def find_quiescent_baseline_rms(
     quiescent_chunk = signal.detrend(data[best_start:best_end], type="linear")
     rms = float(np.sqrt(np.mean(quiescent_chunk**2)))
     # Add minimum floor to prevent zero RMS in completely flat traces
-    rms = max(rms, 1e-6)  # floor at 1 µV/pA
+    rms = max(rms, NOISE_FLOOR_MIN_RMS)  # floor at 1 µV/pA
     return rms, (best_start, best_end)
 
 
@@ -255,7 +256,7 @@ def fit_biexponential_decay(  # noqa: C901
         popt_m, _ = curve_fit(mono_exp, t_fit, y_fit, p0=p0_mono, bounds=bounds_mono, maxfev=2000)
         tau_mono_ms = float(popt_m[1])
         result["tau_mono_ms"] = tau_mono_ms
-    except Exception as exc_m:
+    except (ValueError, TypeError, RuntimeError) as exc_m:
         result["decay_fit_error"] = f"Mono-exp failed: {exc_m}"
         return result
 
@@ -281,7 +282,7 @@ def fit_biexponential_decay(  # noqa: C901
             result["tau_fast_ms"] = float(tau_fast)
             result["tau_slow_ms"] = float(tau_slow)
             result["bi_exp_converged"] = True
-    except Exception:
+    except (ValueError, TypeError, RuntimeError):
         # Bi-exp failed; mono-exp result is still valid
         pass
 
@@ -702,7 +703,7 @@ def detect_events_threshold(  # noqa: C901
             summary_stats={"noise_sd": float(noise_sd), "min_prominence_used": float(min_prominence)},
         )
 
-    except Exception as e:
+    except (ValueError, TypeError, IndexError, RuntimeError) as e:
         log.error(f"Error during adaptive threshold event detection: {e}", exc_info=True)
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
 
@@ -1028,7 +1029,7 @@ def detect_events_template(  # noqa: C901
             artifact_mask=artifact_mask,
         )
 
-    except Exception as e:
+    except (ValueError, TypeError, IndexError, RuntimeError) as e:
         log.error(f"Error during template event detection: {e}", exc_info=True)
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
 

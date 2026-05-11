@@ -7,6 +7,34 @@ equations match the variable names in the source code.
 
 ---
 
+## Scope and Validated Conditions
+
+All default parameter values in Synaptipy are calibrated for and validated
+against the following experimental conditions:
+
+| Parameter | Validated Range |
+|-----------|----------------|
+| Preparation | Acute brain slices, dissociated cultures |
+| Species | Rodent (mouse, rat) |
+| Cell types | Cortical/hippocampal pyramidal neurons, interneurons |
+| Recording mode | Whole-cell patch-clamp (current-clamp, voltage-clamp) |
+| Temperature | Room temperature (20–25 °C) |
+| Sampling rate | 10–50 kHz |
+| Holding potential | −60 to −80 mV (current-clamp) |
+
+**Users working outside these conditions** (e.g., invertebrate preparations,
+cardiac myocytes, in vivo recordings, or temperatures > 30 °C) should
+adjust threshold parameters according to their preparation's electrophysiological
+characteristics. In particular:
+
+- Fast-spiking interneurons may require raising `dvdt_artifact_ceiling` above
+  300 V/s (cortical FS cells can reach 400+ V/s at 34 °C)
+- Slow-spiking cells (e.g., dopaminergic neurons) may need lower `dvdt_threshold`
+  (10 V/s) and wider AHP windows
+- High-temperature recordings accelerate kinetics by Q₁₀ ≈ 2–3×
+
+---
+
 ## 1. Baseline / Resting Membrane Potential (RMP)
 
 **Module:** `passive_properties.py` · **Registry name:** `rmp_analysis`
@@ -172,6 +200,8 @@ $$
 A value > 1 indicates hyperpolarisation-activated sag (I_h current).
 A value of 1 indicates no sag.
 
+**Numerical stability guard:** when $|V_{\text{ss}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$ (effectively zero denominator, e.g. during a flat or noise-only trace), the ratio is set to `NaN` to prevent division by zero rather than returning an arbitrary large value. Similarly, the percentage form (Section 4.2) returns 0 % when $|V_{\text{peak}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$.
+
 ### 4.2 Percentage form
 
 $$
@@ -273,6 +303,8 @@ refractory period between crossings. The peak is the local maximum within
 ### 6.2 Onset detection (dV/dt-based)
 
 *(See also §15.2 for the full maximum-curvature method; cited in Sekerli et al., 2004.)*
+*(Default threshold $\theta_{dV/dt}$ = 20 V/s, calibrated on rodent cortical pyramidal neurons; Bean, 2007.)*
+*(Artifact ceiling: 300 V/s — above this value the rising phase is flagged as non-physiological; Naundorf et al., 2006.)*
 
 The action potential onset is defined as the first point where
 
@@ -318,8 +350,24 @@ $$
 
 on the falling phase of the action potential.
 
+### 6.6.1 Sub-Sample Feature Interpolation
+
+Half-width, rise time (10–90%), and decay time (90–10%) measurements use
+**linear interpolation** between the two samples bracketing the target
+voltage level $V_{\text{target}}$:
+
+$$
+t_{\text{cross}} = t_i + \frac{V_{\text{target}} - V_i}{V_{i+1} - V_i} \cdot \Delta t
+$$
+
+When the denominator $|V_{i+1} - V_i| < 10^{-12}$ mV (numerically flat),
+the interpolation is flagged as unreliable and the result is set to `NaN`
+rather than returning an arbitrary midpoint estimate.
+
 ### 6.7 Afterhyperpolarisation (AHP)
 
+*(Fast AHP: BK/Kv3 channel kinetics, 1-5 ms window; Storm, 1987.)*
+*(Medium AHP: SK channel kinetics, 10-50 ms window; Sah & Faber, 2002.)*
 *(Savitzky-Golay smoothing applied to AHP waveforms; filter derivation in Savitzky & Golay, 1964.)*
 
 $$
@@ -422,6 +470,54 @@ kernels provide tolerance for dendritic filtering without requiring a
 representative example event from the recording.
 :::
 
+**Formal multi-scale matched filter specification:**
+
+The kernel bank consists of $K=3$ biophysically motivated templates:
+
+$$
+h_k(t) = \left(1 - e^{-t/\tau_{\text{rise}}}\right) \cdot e^{-t/\tau_{k,\text{decay}}}
+\quad \text{for } t \geq 0
+$$
+
+where $\tau_{k,\text{decay}} \in \{1 \cdot \tau_d,\; 2 \cdot \tau_d,\; 3 \cdot \tau_d\}$
+reflects cable-theory predictions of 2–3× slowing for distal synaptic
+inputs (Rall, 1967; Major et al., 1994).
+
+Convolution is computed via FFT: $c_k = \mathcal{F}^{-1}\{\mathcal{F}\{x\} \cdot \mathcal{F}\{h_k\}^*\}$.
+
+Z-score normalisation per kernel:
+
+$$
+z_k[n] = \frac{c_k[n] - \mu_{c_k}}{\sigma_{c_k}}
+$$
+
+**Peak selection rule:** Events are detected at local maxima of
+$\max_k z_k[n]$ exceeding $z_{\min}$ (default 3.5), subject to a minimum
+inter-event interval of $\tau_{\text{rise}}$:
+
+$$
+n^* = \arg\max_{n \in \mathcal{N}} \max_k z_k[n], \quad \text{s.t. } \max_k z_k[n^*] \geq z_{\min}
+$$
+
+### 7.2.1 Adaptive Noise Floor Estimation
+
+The quiescent noise floor is estimated via a sliding minimum-variance window:
+
+$$
+\hat{\sigma}_{\text{noise}} = \sqrt{\min_{j} \operatorname{Var}(\tilde{x}_{j:j+W})}
+$$
+
+where $\tilde{x}$ denotes the linearly detrended signal within each window
+of $W = \lfloor 20\,\text{ms} / \Delta t \rfloor$ samples, with step size $W/2$.
+Linear detrending (via `scipy.signal.detrend`) ensures that slow baseline
+drift does not inflate the local variance estimate.
+
+A floor of $10^{-6}$ (matching thermal noise) prevents division by zero
+when the recording is digitally silent.
+
+*(Standard signal detection criterion: 3× noise SD corresponds to
+p < 0.003 under Gaussian noise assumption.)*
+
 ### 7.3 Baseline-peak detection
 
 **Registry name:** `event_detection_baseline_peak`
@@ -497,9 +593,15 @@ reported with $R^2$ goodness-of-fit.
 
 **Module:** `burst_analysis.py` · **Registry name:** `burst_analysis`
 
+*(Criterion adapted from Grace & Bunney, 1984; dynamic ISI fraction (30% of mean ISI) motivated by Harris et al., 2001.)*
+
 A burst begins when $\text{ISI}_k \le \text{max\_isi\_start}$ and continues
 while $\text{ISI}_k \le \text{max\_isi\_end}$. Groups with fewer than
 `min_spikes` spikes are discarded.
+
+**Dynamic threshold mode:** when enabled, the ISI boundary is computed as
+$\text{threshold} = 0.3 \times \overline{\text{ISI}}$ (the `burst_isi_fraction`
+parameter), adapting to the train's own temporal structure.
 
 $$
 f_{\text{burst}} = \frac{N_{\text{bursts}}}{T_{\text{recording}}}
@@ -569,6 +671,11 @@ $$
 
 Measures local variability; insensitive to slow firing-rate changes.
 
+**Numerical stability guard (CV₂):** each term is computed only when
+$\text{ISI}_{i+1} + \text{ISI}_i > \varepsilon_{\text{ISI}} = 10^{-9}\,\text{s}$.
+Pairs that do not satisfy this condition (e.g. duplicate spike-time entries)
+contribute `NaN` to the sum and are excluded via `numpy.nanmean`.
+
 **Local Variation (LV)** (Shinomoto et al., 2003):
 
 $$
@@ -577,6 +684,11 @@ $$
 $$
 
 $\text{LV} < 1$: regular; $\text{LV} \approx 1$: Poisson; $\text{LV} > 1$: bursty.
+
+**Numerical stability guard (LV):** each squared term is computed only when
+$(\text{ISI}_i + \text{ISI}_{i+1})^2 > \varepsilon_{\text{ISI}}^{2} = 10^{-15}\,\text{s}^2$,
+where $\varepsilon_{\text{ISI}} = 10^{-9}\,\text{s}$ matches the CV₂ guard.
+Terms failing this check contribute `NaN` and are excluded via `numpy.nanmean`.
 
 ---
 
@@ -724,6 +836,76 @@ For stimulus artefact suppression, three interpolation modes are available:
   [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010)
   - Provides the I/O layer for all supported file formats.
 
+### Default parameter justification
+
+- **Bean, B. P. (2007).** The action potential in mammalian central neurons.
+  *Nature Reviews Neuroscience*, 8(6), 451-465.
+  [doi:10.1038/nrn2148](https://doi.org/10.1038/nrn2148)
+  - **Used in:** Default dV/dt threshold (20 V/s) for spike onset detection;
+    cortical pyramidal neuron AP kinetics reference.
+
+- **Naundorf, B., Wolf, F., & Volgushev, M. (2006).** Unique features of action
+  potential initiation in cortical neurons. *Nature*, 440(7087), 1060-1063.
+  [doi:10.1038/nature04610](https://doi.org/10.1038/nature04610)
+  - **Used in:** Artifact ceiling (300 V/s) for the fastest cortical APs.
+
+- **Storm, J. F. (1987).** Action potential repolarization and a fast
+  after-hyperpolarization in rat hippocampal pyramidal cells. *Journal of
+  Physiology*, 385, 733-759.
+  [doi:10.1113/jphysiol.1987.sp016517](https://doi.org/10.1113/jphysiol.1987.sp016517)
+  - **Used in:** Fast AHP window (1-5 ms), BK channel kinetics.
+
+- **Sah, P., & Faber, E. S. L. (2002).** Channels underlying neuronal
+  calcium-activated potassium currents. *Progress in Neurobiology*, 66(5),
+  345-353.
+  [doi:10.1016/S0301-0082(02)00004-7](https://doi.org/10.1016/S0301-0082(02)00004-7)
+  - **Used in:** Medium AHP window (10-50 ms), SK channel kinetics.
+
+- **Grace, A. A., & Bunney, B. S. (1984).** The control of firing pattern in
+  nigral dopamine neurons: burst firing. *Journal of Neuroscience*, 4(11),
+  2877-2890.
+  [doi:10.1523/JNEUROSCI.04-11-02877.1984](https://doi.org/10.1523/JNEUROSCI.04-11-02877.1984)
+  - **Used in:** Burst detection ISI criterion (adapted for cortical neurons).
+
+- **Harris, K. D., Hirase, H., Leinekugel, X., Henze, D. A., & Buzsáki, G.
+  (2001).** Temporal interaction between single spikes and complex spike bursts
+  in hippocampal pyramidal cells. *Neuron*, 32(1), 141-149.
+  [doi:10.1016/S0896-6273(01)00447-0](https://doi.org/10.1016/S0896-6273(01)00447-0)
+  - **Used in:** Burst ISI fraction (30% of mean ISI) for cortical neurons.
+
+- **Rall, W. (1967).** Distinguishing theoretical synaptic potentials computed
+  for different soma-dendritic distributions of synaptic input. *Journal of
+  Neurophysiology*, 30(5), 1138-1168.
+  [doi:10.1152/jn.1967.30.5.1138](https://doi.org/10.1152/jn.1967.30.5.1138)
+  - **Used in:** Multi-scale template bank (2-3× tau slowing for distal inputs).
+
+- **Major, G., Larkman, A. U., Jonas, P., Sakmann, B., & Jack, J. J. B.
+  (1994).** Detailed passive cable models of whole-cell recorded CA3 pyramidal
+  neurons in rat hippocampal slices. *Journal of Neuroscience*, 14(8),
+  4613-4638.
+  - **Used in:** Cable-theory prediction of dendritic filtering (template bank).
+
+### Paired-pulse ratio and short-term plasticity
+
+- **Zucker, R. S., & Regehr, W. G. (2002).** Short-term synaptic plasticity.
+  *Annual Review of Physiology*, 64, 355-405.
+  [doi:10.1146/annurev.physiol.64.092501.114547](https://doi.org/10.1146/annurev.physiol.64.092501.114547)
+  - **Used in:** PPR R2 baseline correction methodology (Section 15.5); direct
+    referencing of R2 amplitude to the pre-stimulus resting baseline (bl1).
+
+- **Regehr, W. G. (2012).** Short-term presynaptic plasticity.
+  *Cold Spring Harbor Perspectives in Biology*, 4(7), a005702.
+  [doi:10.1101/cshperspect.a005702](https://doi.org/10.1101/cshperspect.a005702)
+  - **Used in:** Conceptual framework for PPR interpretation (Section 15.5);
+    facilitation (PPR > 1) and depression (PPR < 1) classification.
+
+### Visualization and accessibility
+
+- **Wong, B. (2011).** Points of view: Color blindness. *Nature Methods*,
+  8(6), 441.
+  [doi:10.1038/nmeth.1618](https://doi.org/10.1038/nmeth.1618)
+  - **Used in:** Colorblind-safe palette for plot colors.
+
 
 ## 15. Advanced Biophysics (Publication Audit)
 
@@ -840,7 +1022,58 @@ threshold.  This ensures that both fast somatic (narrow) and slow dendritic
 (broadened) events cross the detection threshold, without requiring the user
 to re-tune $\tau_{\text{decay}}$ for distal inputs.
 
-### 15.5 PPR Residual Fitting - Bi-Exponential Upgrade
+### 15.5 PPR R2 Amplitude: Direct Baseline Correction
+
+*(Zucker & Regehr, 2002; Regehr, 2012)*
+
+The amplitude of the second response ($R_2$) must be measured from a reference
+that is uncontaminated by the decaying tail of the first response ($R_1$).
+When the inter-stimulus interval is short relative to the $R_1$ decay constant,
+the local baseline immediately preceding the second stimulus ($\text{bl}_2$)
+lies above (or below) the true resting potential, causing a systematic
+underestimate (or overestimate) of $R_2$.
+
+The corrected $R_2$ amplitude is obtained by referencing the raw $R_2$ peak
+voltage directly to $\text{bl}_1$ (the pre-stimulus resting baseline measured
+before the first pulse):
+
+$$
+R_{2,\text{corrected}} =
+\begin{cases}
+  \text{bl}_1 - V_{R_2,\text{peak}} & \text{(inward / negative polarity)} \\
+  V_{R_2,\text{peak}} - \text{bl}_1 & \text{(outward / positive polarity)}
+\end{cases}
+$$
+
+where $V_{R_2,\text{peak}}$ is the minimum (negative polarity) or maximum
+(positive polarity) voltage in the $R_2$ response window, and $\text{bl}_1$
+is the mean voltage in the user-specified pre-stimulus baseline window.
+
+This formulation is equivalent to $R_{2,\text{raw}} + (\text{bl}_2 - \text{bl}_1)$:
+the correction term $(\text{bl}_2 - \text{bl}_1)$ equals the measured baseline
+contamination from the $R_1$ decay tail.  When the decay has fully returned to
+baseline ($\text{bl}_2 \approx \text{bl}_1$), $R_{2,\text{corrected}} \approx
+R_{2,\text{raw}}$, so equal-amplitude paired events yield $\text{PPR} = 1$.
+
+The raw amplitude $R_{2,\text{raw}}$ (measured from $\text{bl}_2$) and the
+residual at stimulus 2 ($\text{residual\_at\_stim2}$, from the exponential
+decay fit) are retained as diagnostic output fields. The decay-fit residual
+is **not** used as the reference for $R_{2,\text{corrected}}$ because the
+exponential extrapolation can be unreliable when the fit window partially
+overlaps the $R_1$ alpha-function rise phase.
+
+**Paired-pulse ratio:**
+
+$$
+\text{PPR} = \frac{R_{2,\text{corrected}}}{R_{1,\text{amplitude}}}
+$$
+
+Values $> 1$ indicate short-term facilitation; values $< 1$ indicate
+short-term depression.
+
+---
+
+### 15.6 PPR Residual Fitting - Bi-Exponential Upgrade
 
 The P1 decay tail is now first fitted with a **bi-exponential** model before
 falling back to a mono-exponential.  Bi-exponential fits capture mixed
@@ -861,7 +1094,7 @@ $$
 \tau_{\text{dominant}} = \frac{|A_f| \tau_f + |A_s| \tau_s}{|A_f| + |A_s|}
 $$
 
-### 15.6 Noise Floor Detrending in Quiescent Baseline RMS
+### 15.7 Noise Floor Detrending in Quiescent Baseline RMS
 
 `find_quiescent_baseline_rms` applies `scipy.signal.detrend(chunk, type="linear")`
 to each candidate window **before** computing variance.  This removes slow

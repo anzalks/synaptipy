@@ -4,9 +4,11 @@ Includes filtering and trace quality checks.
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+from Synaptipy.core.constants import BASELINE_DRIFT_THRESHOLD_MV
 
 
 def _get_scipy():
@@ -89,9 +91,9 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         results["metrics"]["drift_slope"] = slope
         results["metrics"]["total_drift"] = total_drift
 
-        # Threshold: Arbitrary for now, say > 5mV or 20pA drift is "high" depending on units
-        # We'll just flag it if it's significant relative to signal std
-        if abs(total_drift) > 5.0 * np.std(data):
+        # Flag drift if it exceeds BASELINE_DRIFT_THRESHOLD_MV standard deviations
+        # of the signal -- indicates recording instability (seal degradation, etc.)
+        if abs(total_drift) > BASELINE_DRIFT_THRESHOLD_MV * np.std(data):
             results["warnings"].append(f"Significant baseline drift detected ({total_drift:.2f} units)")
             # results['is_good'] = False  # Don't fail automatically, just warn
 
@@ -837,3 +839,84 @@ def multi_harmonic_notch(
         harmonic += 1
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Validated operating range checks
+# ---------------------------------------------------------------------------
+
+VALIDATED_CONDITIONS = {
+    "sampling_rate_hz": (10_000, 50_000),
+    "temperature_c": (20, 25),
+    "min_duration_s": 0.1,
+    "cell_types": ["cortical pyramidal", "hippocampal pyramidal", "interneurons"],
+    "species": ["mouse", "rat"],
+    "recording_mode": ["whole-cell current-clamp", "whole-cell voltage-clamp"],
+}
+
+
+def validate_recording_conditions(
+    sampling_rate: float,
+    temperature_c: Optional[float] = None,
+    duration_s: Optional[float] = None,
+) -> List[str]:
+    """
+    Check recording parameters against Synaptipy's validated operating ranges.
+
+    Returns a list of warning messages for conditions outside validated ranges.
+    Warnings do not prevent analysis but inform the user that default parameters
+    may need adjustment.
+
+    Validated ranges (rodent cortical neurons, room temperature):
+    - Sampling rate: 10-50 kHz
+    - Temperature: 20-25 C (room temperature)
+    - Duration: > 100 ms (minimum for meaningful passive property analysis)
+    """
+    log = logging.getLogger(__name__)
+    warnings: List[str] = []
+
+    if sampling_rate < 10_000:
+        msg = (
+            f"Sampling rate ({sampling_rate/1000:.1f} kHz) is below 10 kHz. "
+            "The 0.1 ms Rs artifact window requires >=10 kHz for reliable estimation. "
+            "Consider increasing rs_artifact_blanking_ms."
+        )
+        warnings.append(msg)
+        log.warning(msg)
+    elif sampling_rate > 50_000:
+        msg = (
+            f"Sampling rate ({sampling_rate/1000:.1f} kHz) exceeds 50 kHz. "
+            "Defaults are validated for 10-50 kHz. High rates may require "
+            "adjusted smoothing windows."
+        )
+        warnings.append(msg)
+        log.warning(msg)
+
+    if temperature_c is not None:
+        if temperature_c > 30:
+            msg = (
+                f"Temperature ({temperature_c} C) exceeds room temperature range. "
+                "Kinetics are ~2-3x faster per 10 C (Q10). Consider: "
+                "narrower AHP windows, lower refractory period, "
+                "higher dvdt thresholds."
+            )
+            warnings.append(msg)
+            log.warning(msg)
+        elif temperature_c < 18:
+            msg = (
+                f"Temperature ({temperature_c} C) is below typical range. "
+                "Kinetics are slowed. Consider: wider AHP windows, "
+                "longer refractory period."
+            )
+            warnings.append(msg)
+            log.warning(msg)
+
+    if duration_s is not None and duration_s < 0.1:
+        msg = (
+            f"Recording duration ({duration_s*1000:.1f} ms) is very short. "
+            "Passive property analysis requires >=100 ms for reliable tau estimation."
+        )
+        warnings.append(msg)
+        log.warning(msg)
+
+    return warnings

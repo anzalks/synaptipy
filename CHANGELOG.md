@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3b6] - 2026-05-11
+
+### Fixed
+
+- **Scientific rigor - epsilon guards**: CV2, LV, sag ratio, and capacitance
+  calculations guarded against division by zero using `epsilon = 1e-9` to
+  prevent `NaN`/`Inf` propagation in recordings with identical ISIs or
+  negligible voltage deflections.
+- **Scientific rigor - PPR baseline correction**: Paired-pulse ratio amplitude
+  now uses an explicit direct baseline correction relative to the first-pulse
+  baseline (`r2_corrected = r2_peak - bl1`), replacing an equivalent but
+  opaque indirect formula.
+- **Scientific rigor - tau fitting**: Tau fit array truncation fixed; fit
+  window enforces a minimum of 3 samples before invoking
+  `scipy.optimize.curve_fit`, preventing `ValueError` on very short windows.
+- **NWB export - electrode metadata**: Electrode `resistance` and `seal`
+  fields exported to NWB `ElectrodeTable` when present.
+- **NWB export - preprocessing history**: Active preprocessing steps exported
+  as a `DynamicTable` in a `ProcessingModule` named `preprocessing`, with
+  columns `timestamp`, `operation`, and `parameters` (JSON-serialised).
+- **CI - docs linkcheck**: Added `physoc.onlinelibrary.wiley.com` (Wiley) and
+  `www.jneurosci.org` to `linkcheck_ignore` - both return 403 to automated
+  crawlers despite hosting valid, publicly accessible content.
+- **CI - coverage comment action**: Added `continue-on-error: true` to the
+  `py-cov-action/python-coverage-comment-action` step so that
+  `workflow_dispatch` dry runs do not fail the test job (the action only
+  supports `push`/`pull_request` event contexts).
+- **CI - release workflow awk syntax error**: `Extract CHANGELOG section` step
+  now uses `awk -v tag=...` with `index()` for plain string matching instead
+  of embedding the tag in the regex delimiter, preventing syntax errors when
+  `GITHUB_REF_NAME` contains `/` (e.g. during `workflow_dispatch` from a
+  feature branch).
+
+### Changed
+
+- Root-level audit/handoff documents (12 files) relocated to
+  `docs/development_logs/audits_and_handoffs/`; 11 redundant intermediate
+  files deleted, retaining only `AUDIT_REPORT.md` as the definitive reference.
+- `docs/development_logs/IMPLEMENTATION_SUMMARY.md` extended with a
+  consolidated account of all 2026-05-08 scientific rigor audit fixes.
+
+
 ## [0.1.3b5] - 2026-05-08
 
 ### Fixed

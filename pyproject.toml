@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synaptipy"
-version = "0.1.3b5"
+version = "0.1.3b6"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
@@ -110,6 +110,9 @@ Synaptipy = [
 ]
 
 [tool.pytest.ini_options]
+# Note: No random seed fixture is needed.  All Synaptipy analysis algorithms
+# are fully deterministic (threshold-based detection, deterministic curve-fit
+# initial conditions, IIR/FIR filters).  See docs/reproducibility.md.
 testpaths = ["tests"]
 pythonpath = ["src"]
 norecursedirs = [".verify_venv", ".git", "__pycache__", "*.egg-info"]

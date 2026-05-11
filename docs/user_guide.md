@@ -494,18 +494,20 @@ See [NWB Export Mapping](nwb_mapping.md) for full container mapping details.
 5. Click "Export Selected" to create the output.
  - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
 
-### Plot Export Presets
+### Exporting Plots
 
-The Exporter tab provides four publication-ready plot export presets that apply appropriate figure dimensions, DPI, font sizes, and line weights:
+Every Explorer and Analyser sub-tab includes a **Save Plot** button. The export
+dialog provides three predefined presets for common publication workflows:
 
-| Preset | Dimensions | DPI | Use case |
-|---|---|---|---|
-| **Journal** | 85 mm single-column / 170 mm double | 600 | Print publication (Nature, eLife, JNeurosci) |
-| **Presentation** | 254 × 190 mm (10 × 7.5 in) | 150 | Slide decks and posters |
-| **Web** | 800 × 600 px | 96 | Online supplementary figures |
-| **Custom** | User-defined | User-defined | Non-standard requirements |
+| Preset | Format | Resolution | Typical use |
+|--------|--------|------------|-------------|
+| Journal Quality | PDF (vector) | 300 DPI | Manuscript figure submission |
+| Presentation | PNG (raster) | 150 DPI | Slide decks and posters |
+| Web | PNG (raster) | 72 DPI | Online supplementary material |
 
-Select a preset from the dropdown before exporting to apply its parameters. The **Custom** preset exposes editable fields for width, height, DPI, font family, and axis line weight.
+Select **Custom** to choose format (PNG, JPG, SVG, PDF) and DPI independently.
+Vector formats (SVG, PDF) retain editable text elements suitable for post-hoc
+annotation in illustration software.
 
 ## Advanced Options
 

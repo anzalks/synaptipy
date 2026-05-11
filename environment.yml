@@ -1,63 +1,38 @@
-# Cross-platform environment for Synaptipy
-# This single file handles Windows, macOS, and Linux automatically
-name: synaptipy
+# Fully pinned conda environment for exact reproducibility of published results.
+# For development with flexible version ranges, install via: pip install -e ".[dev]"
+#
+# Usage:
+#   conda env create -f environment.yml
+#   conda activate synaptipy-repro
+name: synaptipy-repro
 channels:
   - conda-forge
   - defaults
 dependencies:
-  # Python 3.11 is the recommended and tested interpreter.
-  # 3.10 and 3.12 are also supported but 3.11 is preferred for stability.
-  - python=3.11
-  
-  # Core build tools
+  - python=3.11.9
+  - numpy=2.0.2
+  - scipy=1.14.1
+  - pandas=2.3.0
+  - matplotlib=3.9.2
+  - h5py=3.12.1
   - pip
   - setuptools
   - wheel
-  
-  # Python packages via pip (compatible versions)
   - pip:
-      - numpy>=2.0.0,<3.0.0
-      - scipy>=1.14.0,<2.0.0
-      - matplotlib>=3.8.0,<4.0.0
-      - attrs>=25.0.0
-      - h5py>=3.14.0
-      - hdmf>=4.1.0
-      - jsonschema>=4.25.0
-      - jsonschema-specifications>=2025.0
-      - neo>=0.14.0,<1.0.0
-      - packaging>=25.0
-      - pandas>=2.3.0
-      - platformdirs>=4.3.0
-      - pynwb>=3.1.0
-      - python-dateutil>=2.9.0
-      - pytz>=2025.0
-      - quantities>=0.16.0
-      - referencing>=0.36.0
-      - rpds-py>=0.27.0
-      - ruamel-yaml>=0.18.0
-      - ruamel-yaml-clib>=0.2.0
-      - six>=1.17.0
-      - typing-extensions>=4.14.0
-      - tzdata>=2025.0
-      - tzlocal>=5.3.0
-      - pyqtgraph>=0.13.3,<1.0.0
-      # PySide6: pinned to exactly 6.7.3 on ALL platforms.
-      # Windows: avoids QTBUG-130070 crash in 6.8.0.
-      # macOS/Linux: PySide6 >=6.10 changed signal-connection machinery causing
-      #   SIGSEGV in pyqtgraph's ViewBox path. Pin stays until upstream fixes this.
       - pyside6==6.7.3
-      # Out-of-core / chunked array processing for large recordings (> 500 MB).
-      - dask[array]>=2024.1.0
-      - pytest>=7.0.0
-      - pytest-qt>=4.0.0
-      - pytest-mock
-      - pytest-cov
-      - flake8
-      # Documentation build (Sphinx / ReadTheDocs)
-      - sphinx>=7.2.0
-      - sphinx-rtd-theme>=2.0.0
-      - myst-parser>=2.0.0
-      - sphinx-autodoc-typehints>=1.25.0
-      - sphinx-copybutton>=0.5.0
-      - sphinx-design>=0.5.0
-      - mock>=5.0.0
+      - pyqtgraph==0.13.7
+      - neo==0.14.0
+      - pynwb==3.1.0
+      - dask[array]==2024.8.0
+      - quantities==0.16.1
+      - hdmf==4.1.0
+      - jsonschema==4.25.0
+      - ruamel-yaml==0.18.10
+      - attrs==25.3.0
+      - packaging==25.0
+      - platformdirs==4.3.6
+      - python-dateutil==2.9.0
+      - pytz==2025.1
+      - typing-extensions==4.14.0
+      - tzlocal==5.3.0
+      - synaptipy==0.1.3b5
