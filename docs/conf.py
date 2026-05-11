@@ -148,6 +148,9 @@ exclude_patterns = [
     ".agent/*",
     ".github/*",
     "decisions/REFACTORING_GUIDE.md",
+    # Archived audit and handoff documents - historical reference only,
+    # not part of the public ReadTheDocs build.
+    "development_logs/audits_and_handoffs/*",
 ]
 
 # Pygments syntax highlighting style

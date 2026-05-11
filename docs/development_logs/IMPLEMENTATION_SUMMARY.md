@@ -167,3 +167,82 @@ The downsampling fix ensures compatibility with PyQtGraph 0.13.x by using the co
 
 **All specifications fully implemented. The application now loads files correctly and includes all requested performance optimizations.**
 
+---
+
+## Scientific Rigor Audit and Remediation (2026-05-08)
+
+**Branch:** `UX_UI_analysis_math_check` / `review-fixes/scientific-rigor-and-ux`
+**Audit scope:** 42 issues (9 critical, 8 high, 14 medium, 10 low)
+**Audit source:** `docs/development_logs/audits_and_handoffs/AUDIT_REPORT.md`
+
+### Completed Fixes
+
+#### Mathematical and algorithmic corrections
+
+| ID | Module | Fix | Commit |
+|----|--------|-----|--------|
+| CRITICAL-2 | `firing_dynamics.py` | CV2 and LV ISI denominators guarded with `epsilon = 1e-9 s`; near-zero pairs produce `NaN`, excluded from `nanmean` | a0ba646 |
+| CRITICAL-3 | `passive_properties.py` | Sag ratio denominator guarded with `abs(V_ss - V_baseline) < 1e-9 mV`; returns `NaN` on near-zero denominator | a0ba646 |
+| CRITICAL-9 | `passive_properties.py` | Tau fitting array truncation fixed; fit window now enforces minimum of 3 samples before calling `scipy.optimize.curve_fit` | a0ba646 |
+| HIGH-2 | `passive_properties.py` | Tau fitting bi-exp fallback correctly validates that tau1 < tau2 before accepting the bi-exponential result | a0ba646 |
+| HIGH-3 | `evoked_responses.py` | PPR decay window clamped to non-negative values; negative window from protocol edge cases now raises `ValueError` | a0ba646 |
+| HIGH-4 | `evoked_responses.py` | TTL auto-threshold computes 50th-percentile of the signal amplitude distribution rather than a hardcoded voltage level | a0ba646 |
+| MEDIUM-1 | `passive_properties.py` | RMP polynomial fit validated against minimum 10-sample baseline; fit is rejected if `R^2 < 0.5` | a0ba646 |
+| MEDIUM-3 | `passive_properties.py` | Capacitance calculation guarded against zero-duration transient window | a0ba646 |
+| MEDIUM-4 | `passive_properties.py` | Bi-exp tau comparison uses relative tolerance (`abs(tau1 - tau2) / max(tau1, tau2) > 0.05`) rather than absolute equality | a0ba646 |
+| HIGH-11 | `batch_engine.py` | Mixed-length trial arrays no longer raise `ValueError`; the batch engine pads to the longest trial with `NaN` before stacking | 38984ce |
+| HIGH-7 | `registry.py` | Registry `KeyError` on unknown analysis name now includes fuzzy-matched suggestions via `difflib.get_close_matches` | 0c41f20 |
+
+#### PPR baseline correction (CRITICAL-1, resolved as verified-correct then re-fixed)
+
+The original audit flagged the PPR R2 amplitude formula as using an incorrect
+double-counting baseline correction. Subsequent verification confirmed that the
+commit-history implementation (`r2_amp_raw + (bl2 - bl1)`) is mathematically
+equivalent to the direct baseline correction approach. A final fix (commit
+`db3678a`) replaced the formula with the explicit direct form for clarity:
+
+```python
+# Direct baseline correction: measure R2 amplitude relative to bl1
+if polarity == "negative":
+    r2_corrected = bl1 - r2_peak_raw   # inward current: more negative = larger
+else:
+    r2_corrected = r2_peak_raw - bl1   # outward current: more positive = larger
+```
+
+The corrected algorithm and its mathematical derivation are documented in
+`docs/algorithmic_definitions.md`, Section 15.5.
+
+#### NWB / FAIR compliance
+
+| ID | Module | Fix | Commit |
+|----|--------|-----|--------|
+| CRITICAL-6 | `nwb_exporter.py` | Electrode `resistance` and `seal` fields exported to NWB `ElectrodeTable` when the corresponding `Channel` attribute is not `None` | 55f3161 |
+| CRITICAL-7 | `nwb_exporter.py` | Preprocessing history exported as a `DynamicTable` in a `ProcessingModule` named `preprocessing`; columns: `timestamp`, `operation`, `parameters` (JSON) | eb728ee |
+| CRITICAL-5 | `processing_pipeline.py` | Preprocessing context correctly restored after analysis completes; `BaseAnalysisTab` clears stale context on `preprocessing_reset_requested` signal | eb728ee |
+
+### Pending Issues (deferred to post-publication sprint)
+
+The following issues require GUI integration work and were deferred after the
+backend sprint:
+
+- **CRITICAL-4**: Visual indicator for active global preprocessing state (GUI)
+- **HIGH-5**: Parameter tooltips in analysis tabs (GUI)
+- **HIGH-6**: Trial quality metrics display (GUI)
+- **HIGH-8**: Batch-to-Explorer round-trip navigation (GUI)
+- **HIGH-9**: Method selector persistence in batch mode (GUI)
+- **HIGH-12**: Analysis item trial index binding (GUI)
+- **MEDIUM-5 through MEDIUM-14**: UX polish items (mix of GUI and backend)
+- **LOW-4 through LOW-7**: Minor cosmetic improvements
+
+Full issue descriptions are available in
+`docs/development_logs/audits_and_handoffs/AUDIT_REPORT.md`.
+
+### New tests added in this sprint
+
+| Test file | Coverage |
+|-----------|----------|
+| `tests/core/test_division_by_zero_guards.py` | CV2, LV, sag ratio, capacitance epsilon guards |
+| `tests/core/test_nwb_metadata_completeness.py` | Electrode resistance/seal, preprocessing history DynamicTable |
+| `tests/core/test_preprocessing_context_restoration.py` | Context save/restore around analysis calls |
+
+
