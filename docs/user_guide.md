@@ -29,6 +29,11 @@ This document describes installation, configuration, and operation of Synaptipy 
 - [Advanced Options](#advanced-options)
  - [Command Line Arguments](#command-line-arguments)
  - [Logging and Debugging](#logging-and-debugging)
+- [Generating Publication-Quality Figures](#generating-publication-quality-figures)
+ - [Standard rcParams block](#standard-rcparams-block)
+ - [L-shaped scale bar for electrophysiology traces](#l-shaped-scale-bar-for-electrophysiology-traces)
+ - [Statistical transparency: strip plots instead of bare bar charts](#statistical-transparency-strip-plots-instead-of-bare-bar-charts)
+ - [Saving figures for headless / CI environments](#saving-figures-for-headless--ci-environments)
 - [Licensing](#licensing)
 - [Troubleshooting](#troubleshooting)
 
@@ -709,6 +714,124 @@ synaptipy --dev
 # Using environment variable
 SYNAPTIPY_DEV_MODE=1 synaptipy
 ```
+
+## Generating Publication-Quality Figures
+
+Synaptipy's programmatic API is designed for direct use in manuscript
+workflows. The code patterns below are used in every example in the
+`examples/` directory and can be copy-pasted into your own analysis scripts.
+
+### Standard `rcParams` block
+
+Place this block at the top of any script or notebook cell, before creating
+any figure object. It sets sans-serif typography, 8 pt fonts appropriate for
+single-column journal figures, and removes the top and right spines:
+
+```python
+import matplotlib
+matplotlib.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "font.size": 8,
+    "axes.titlesize": 8,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 7,
+    "ytick.labelsize": 7,
+    "legend.fontsize": 7,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.linewidth": 0.8,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "lines.linewidth": 0.8,
+    "figure.dpi": 150,      # screen preview
+    "savefig.dpi": 300,     # output files
+    "pdf.fonttype": 42,     # editable text in Illustrator / Inkscape
+    "ps.fonttype": 42,
+})
+```
+
+Figure sizes follow single-column (3.5 in) or double-column (7.0 in) widths
+typical for *Nature*, *eLife*, and *Journal of Neuroscience* styles:
+
+```python
+fig, ax = plt.subplots(figsize=(3.5, 2.5))   # single-column
+fig, ax = plt.subplots(figsize=(7.0, 3.0))   # double-column
+```
+
+### L-shaped scale bar for electrophysiology traces
+
+Raw electrophysiology traces should omit conventional axes ticks and instead
+carry an explicit L-shaped scale bar showing the time and amplitude scales.
+This matches the standard used in most patch-clamp publications.
+
+```python
+# Remove axes decorations entirely
+for spine in ax.spines.values():
+    spine.set_visible(False)
+ax.set_xticks([])
+ax.set_yticks([])
+
+# Draw the L-bar using plot() and text()
+# Adjust x0, y0, sb_dx, sb_dy to your data range
+sb_x0 = time[-1] - 0.15      # right-aligned, 15 % from right edge
+sb_y0 = data.min() + 0.05 * (data.max() - data.min())
+sb_dx = 0.100                 # 100 ms horizontal arm
+sb_dy = 10.0                  # 10 mV vertical arm
+
+ax.plot([sb_x0, sb_x0 + sb_dx], [sb_y0, sb_y0],
+        color="k", linewidth=1.5, solid_capstyle="butt", clip_on=False)
+ax.plot([sb_x0, sb_x0], [sb_y0, sb_y0 + sb_dy],
+        color="k", linewidth=1.5, solid_capstyle="butt", clip_on=False)
+ax.text(sb_x0 + sb_dx / 2, sb_y0 - 1.2, "100 ms",
+        ha="center", va="top", fontsize=7)
+ax.text(sb_x0 - 0.01, sb_y0 + sb_dy / 2, "10 mV",
+        ha="right", va="center", fontsize=7, rotation=90)
+```
+
+### Statistical transparency: strip plots instead of bare bar charts
+
+Rather than plotting only the group mean, overlay individual data points
+with horizontal jitter so reviewers can assess the underlying distribution:
+
+```python
+import numpy as np
+
+rng = np.random.default_rng(0)
+x_pos = np.arange(len(groups))
+
+fig, ax = plt.subplots(figsize=(3.5, 2.5))
+for i, (label, values) in enumerate(groups.items()):
+    jitter = rng.uniform(-0.15, 0.15, size=len(values))
+    ax.scatter(x_pos[i] + jitter, values,
+               s=12, color="#4393c3", alpha=0.7, linewidths=0, zorder=3)
+
+# Mean bar with SEM error bar
+means = [np.mean(v) for v in groups.values()]
+sems  = [np.std(v, ddof=1) / np.sqrt(len(v)) for v in groups.values()]
+ax.bar(x_pos, means, width=0.45,
+       color="#d1e5f0", edgecolor="#4393c3", linewidth=0.8, zorder=2)
+ax.errorbar(x_pos, means, yerr=sems, fmt="none",
+            ecolor="#2166ac", elinewidth=1.0, capsize=2, zorder=4)
+ax.set_xticks(x_pos)
+ax.set_xticklabels(list(groups.keys()), rotation=40, ha="right")
+```
+
+### Saving figures for headless / CI environments
+
+Always save figures to disk and close them explicitly. Never call `plt.show()`
+in batch scripts or CI pipelines -- it blocks execution in headless
+environments:
+
+```python
+plt.savefig("figure_01.pdf", bbox_inches="tight")
+plt.savefig("figure_01.png", bbox_inches="tight")
+plt.close("all")
+```
+
+The PDF uses `pdf.fonttype=42` (set in the `rcParams` block above), which
+embeds fonts as TrueType outlines. This makes text fully editable in Adobe
+Illustrator, Inkscape, and most journal submission portals.
 
 ## Licensing
 

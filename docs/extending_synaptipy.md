@@ -644,6 +644,22 @@ The user can customise both overlay types via
 > macOS).  This setting is on by default.  After changing it, restart
 > Synaptipy for the change to take effect.
 
+### Real-world templates in `examples/plugins/`
+
+> **Looking for a working starting point?**  The `examples/plugins/` directory
+> ships three fully annotated, copy-pasteable plugin templates that cover the
+> most common use cases:
+>
+> | File | What it demonstrates |
+> |---|---|
+> | `synaptic_charge.py` | Baseline subtraction, trapezoidal integration, `fill_between` + star overlays |
+> | `opto_jitter.py` | Multi-channel access (TTL + voltage), per-trial loop, jitter statistics |
+> | `ap_repolarization.py` | Derivative-based detection, `vlines` + `hlines` overlays |
+>
+> Copy any file to `~/.synaptipy/plugins/`, rename the function and the
+> `name=` / `label=` fields in the decorator, and you have a working plugin
+> in minutes -- no blank-page problem.
+
 ### Option A: Built-in Examples Directory
 
 Synaptipy ships ready-to-run example plugins in `examples/plugins/`.  These are
@@ -1048,7 +1064,84 @@ signals.preferences_updated.connect(my_popup_widget.update_pens)
 
 ---
 
-## 11. Troubleshooting
+## 11. Deep Learning & Third-Party Integrations (e.g., miniML)
+
+Synaptipy's plugin architecture is intentionally decoupled from its core
+dependencies. You can integrate heavy machine-learning or third-party
+libraries -- such as [miniML](https://github.com/delvendahl/miniML), a
+deep-learning framework for synaptic event detection -- without modifying
+any Synaptipy source files and without adding those dependencies to
+`requirements.txt`, `pyproject.toml`, or `environment.yml`.
+
+> **CI contract:** `miniML`, `tensorflow`, `keras`, `ruptures`, and any other
+> third-party ML library must **never** be added to Synaptipy's core dependency
+> files. The CI pipelines are headless, fast, and must remain completely
+> decoupled from these optional dependencies.
+
+### Template: `examples/plugins/miniml_integration.py`
+
+A fully annotated, copy-pasteable template is provided at
+`examples/plugins/miniml_integration.py`. It shows:
+
+- How to guard optional imports with a `try/except ImportError` block so the
+  plugin loads without error even when miniML is not installed (the Analyser
+  tab still appears; running the analysis returns a descriptive error message
+  rather than crashing).
+- How to pass the model path via a module-level constant
+  (`DEFAULT_MODEL_PATH`) that the user edits once.
+- How to expose `threshold` and `direction` as GUI widgets via `ui_params`.
+- How to return private `_event_times` / `_event_peaks` keys for plot
+  overlays while keeping `Event_Count` and `Frequency_Hz` visible in the
+  results table.
+
+### Setup instructions for end-users
+
+1. **Install the optional dependencies** in your Synaptipy conda/venv
+   environment:
+   ```bash
+   pip install miniML ruptures==1.1.10
+   ```
+   Do not add these to any Synaptipy requirements file.
+
+2. **Download a pre-trained miniML model** from the
+   [miniML releases page](https://github.com/delvendahl/miniML/releases)
+   (`.h5` file).
+
+3. **Edit the template**: open
+   `examples/plugins/miniml_integration.py` and set `DEFAULT_MODEL_PATH`
+   to the absolute path of your downloaded model:
+   ```python
+   DEFAULT_MODEL_PATH = "/Users/you/models/miniML_GC_mEPSC.h5"
+   ```
+
+4. **Move the edited file** to your personal plugin directory:
+   ```bash
+   # macOS / Linux
+   cp examples/plugins/miniml_integration.py ~/.synaptipy/plugins/
+
+   # Windows (PowerShell)
+   Copy-Item examples\plugins\miniml_integration.py ~\.synaptipy\plugins\
+   ```
+
+5. In Synaptipy, open **Edit > Preferences**, check **Enable Custom
+   Plugins**, and restart. The **miniML Events** tab appears in the
+   Analyser under the channel you select.
+
+### Adapting the template to other ML tools
+
+The same pattern works for any inference library:
+
+| Part | What to change |
+|---|---|
+| `try/except ImportError` block | Replace `miniML` imports with your library |
+| `DEFAULT_MODEL_PATH` | Use whatever path or identifier your model needs |
+| `run_*_detection()` function | Replace miniML API calls with your library's API |
+| `ui_params` | Expose whichever hyperparameters the user should control |
+| `plots` | Map returned private keys to the overlay type that fits |
+
+---
+
+## 12. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
