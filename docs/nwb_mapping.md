@@ -82,6 +82,14 @@ channel attributes:
 | `location` | Dialog or `channel.electrode_location` | `"Unknown"` |
 | `filtering` | Dialog or `channel.electrode_filtering` | `"unknown"` |
 | `device` | Linked `Device` object | - |
+| `resistance` | `channel.electrode_resistance` | Omitted when not available |
+| `seal` | `channel.electrode_seal` | Omitted when not available |
+
+`resistance` and `seal` are written as strings in the units stored by the
+acquisition software (e.g. `"10 MOhm"`, `"5 GOhm"`). These fields are
+omitted entirely when the corresponding channel attribute is `None`, ensuring
+the exported NWB file remains valid for recordings where pipette QC data were
+not logged.
 
 ---
 
@@ -143,6 +151,39 @@ Each trial is also linked via the NWB 2.x icephys hierarchy:
 
 ---
 
+## Preprocessing History (FAIR Compliance)
+
+When the active recording carries a `processing_history` key in its
+`metadata` dictionary, Synaptipy exports the full preprocessing audit trail
+to NWB as a `DynamicTable` within a dedicated `ProcessingModule` named
+`"preprocessing"`. This ensures that the computational provenance of the
+data is machine-readable and replicable by third-party tools.
+
+### Container structure
+
+```
+NWBFile
+  processing
+    preprocessing (ProcessingModule)
+      preprocessing_steps (DynamicTable)
+        timestamp  : ISO 8601 string - when the step was applied
+        operation  : string - operation name (e.g. "lowpass", "baseline_subtract")
+        parameters : string - JSON-encoded parameter dict
+```
+
+### Availability
+
+Preprocessing history export requires HDMF (installed with PyNWB). When HDMF
+is unavailable, the preprocessing module is silently omitted (non-fatal) and
+a warning is logged. The absence of the `preprocessing` module does not affect
+the validity of the exported acquisition data.
+
+Steps are appended to `processing_history` automatically whenever the user
+applies a preprocessing operation via the Analyser tab's preprocessing widget
+before running analysis.
+
+---
+
 ## Limitations and Future Work
 
 1. **Stimulus data** - A 3-step fallback is applied per trial: (1) raw
@@ -154,6 +195,7 @@ Each trial is also linked via the NWB 2.x icephys hierarchy:
    to CSV/JSON but not yet embedded in the NWB `ProcessingModule`. Only
    discrete event arrays (spike times, synaptic event times) from the batch
    engine `_raw_arrays` sub-dict are currently written as `DynamicTable` rows.
+   Preprocessing steps are embedded (see [Preprocessing History](#preprocessing-history-fair-compliance)).
 3. **RepetitionsTable / ExperimentalConditionsTable** - Higher-level NWB icephys
    grouping tables are not yet populated.
 

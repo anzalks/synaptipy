@@ -1,17 +1,13 @@
 # Synaptipy
 
-[![PyPI](https://img.shields.io/pypi/v/Synaptipy?color=blue&label=PyPI)](https://pypi.org/project/Synaptipy/)
-[![Python](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/anzalks/synaptipy)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![CI](https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg)](https://codecov.io/gh/anzalks/synaptipy)
-[![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
-[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Imports: isort](https://img.shields.io/badge/imports-isort-%231674b1?labelColor=ef8336)](https://pycqa.github.io/isort/)
-[![Lint: flake8](https://img.shields.io/badge/lint-flake8-blue)](https://flake8.pycqa.org/)
+[![PyPI](https://img.shields.io/pypi/v/Synaptipy?color=blue&label=PyPI)](https://pypi.org/project/Synaptipy/)
 [![Release](https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange)](https://github.com/anzalks/synaptipy/releases)
+[![Python](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/anzalks/synaptipy)
 
 ## Abstract
 

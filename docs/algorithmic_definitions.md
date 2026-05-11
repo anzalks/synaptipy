@@ -200,6 +200,8 @@ $$
 A value > 1 indicates hyperpolarisation-activated sag (I_h current).
 A value of 1 indicates no sag.
 
+**Numerical stability guard:** when $|V_{\text{ss}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$ (effectively zero denominator, e.g. during a flat or noise-only trace), the ratio is set to `NaN` to prevent division by zero rather than returning an arbitrary large value. Similarly, the percentage form (Section 4.2) returns 0 % when $|V_{\text{peak}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$.
+
 ### 4.2 Percentage form
 
 $$
@@ -669,6 +671,11 @@ $$
 
 Measures local variability; insensitive to slow firing-rate changes.
 
+**Numerical stability guard (CV₂):** each term is computed only when
+$\text{ISI}_{i+1} + \text{ISI}_i > \varepsilon_{\text{ISI}} = 10^{-9}\,\text{s}$.
+Pairs that do not satisfy this condition (e.g. duplicate spike-time entries)
+contribute `NaN` to the sum and are excluded via `numpy.nanmean`.
+
 **Local Variation (LV)** (Shinomoto et al., 2003):
 
 $$
@@ -677,6 +684,11 @@ $$
 $$
 
 $\text{LV} < 1$: regular; $\text{LV} \approx 1$: Poisson; $\text{LV} > 1$: bursty.
+
+**Numerical stability guard (LV):** each squared term is computed only when
+$(\text{ISI}_i + \text{ISI}_{i+1})^2 > \varepsilon_{\text{ISI}}^{2} = 10^{-15}\,\text{s}^2$,
+where $\varepsilon_{\text{ISI}} = 10^{-9}\,\text{s}$ matches the CV₂ guard.
+Terms failing this check contribute `NaN` and are excluded via `numpy.nanmean`.
 
 ---
 
@@ -873,6 +885,20 @@ For stimulus artefact suppression, three interpolation modes are available:
   4613-4638.
   - **Used in:** Cable-theory prediction of dendritic filtering (template bank).
 
+### Paired-pulse ratio and short-term plasticity
+
+- **Zucker, R. S., & Regehr, W. G. (2002).** Short-term synaptic plasticity.
+  *Annual Review of Physiology*, 64, 355-405.
+  [doi:10.1146/annurev.physiol.64.092501.114547](https://doi.org/10.1146/annurev.physiol.64.092501.114547)
+  - **Used in:** PPR R2 baseline correction methodology (Section 15.5); direct
+    referencing of R2 amplitude to the pre-stimulus resting baseline (bl1).
+
+- **Regehr, W. G. (2012).** Short-term presynaptic plasticity.
+  *Cold Spring Harbor Perspectives in Biology*, 4(7), a005702.
+  [doi:10.1101/cshperspect.a005702](https://doi.org/10.1101/cshperspect.a005702)
+  - **Used in:** Conceptual framework for PPR interpretation (Section 15.5);
+    facilitation (PPR > 1) and depression (PPR < 1) classification.
+
 ### Visualization and accessibility
 
 - **Wong, B. (2011).** Points of view: Color blindness. *Nature Methods*,
@@ -996,7 +1022,58 @@ threshold.  This ensures that both fast somatic (narrow) and slow dendritic
 (broadened) events cross the detection threshold, without requiring the user
 to re-tune $\tau_{\text{decay}}$ for distal inputs.
 
-### 15.5 PPR Residual Fitting - Bi-Exponential Upgrade
+### 15.5 PPR R2 Amplitude: Direct Baseline Correction
+
+*(Zucker & Regehr, 2002; Regehr, 2012)*
+
+The amplitude of the second response ($R_2$) must be measured from a reference
+that is uncontaminated by the decaying tail of the first response ($R_1$).
+When the inter-stimulus interval is short relative to the $R_1$ decay constant,
+the local baseline immediately preceding the second stimulus ($\text{bl}_2$)
+lies above (or below) the true resting potential, causing a systematic
+underestimate (or overestimate) of $R_2$.
+
+The corrected $R_2$ amplitude is obtained by referencing the raw $R_2$ peak
+voltage directly to $\text{bl}_1$ (the pre-stimulus resting baseline measured
+before the first pulse):
+
+$$
+R_{2,\text{corrected}} =
+\begin{cases}
+  \text{bl}_1 - V_{R_2,\text{peak}} & \text{(inward / negative polarity)} \\
+  V_{R_2,\text{peak}} - \text{bl}_1 & \text{(outward / positive polarity)}
+\end{cases}
+$$
+
+where $V_{R_2,\text{peak}}$ is the minimum (negative polarity) or maximum
+(positive polarity) voltage in the $R_2$ response window, and $\text{bl}_1$
+is the mean voltage in the user-specified pre-stimulus baseline window.
+
+This formulation is equivalent to $R_{2,\text{raw}} + (\text{bl}_2 - \text{bl}_1)$:
+the correction term $(\text{bl}_2 - \text{bl}_1)$ equals the measured baseline
+contamination from the $R_1$ decay tail.  When the decay has fully returned to
+baseline ($\text{bl}_2 \approx \text{bl}_1$), $R_{2,\text{corrected}} \approx
+R_{2,\text{raw}}$, so equal-amplitude paired events yield $\text{PPR} = 1$.
+
+The raw amplitude $R_{2,\text{raw}}$ (measured from $\text{bl}_2$) and the
+residual at stimulus 2 ($\text{residual\_at\_stim2}$, from the exponential
+decay fit) are retained as diagnostic output fields. The decay-fit residual
+is **not** used as the reference for $R_{2,\text{corrected}}$ because the
+exponential extrapolation can be unreliable when the fit window partially
+overlaps the $R_1$ alpha-function rise phase.
+
+**Paired-pulse ratio:**
+
+$$
+\text{PPR} = \frac{R_{2,\text{corrected}}}{R_{1,\text{amplitude}}}
+$$
+
+Values $> 1$ indicate short-term facilitation; values $< 1$ indicate
+short-term depression.
+
+---
+
+### 15.6 PPR Residual Fitting - Bi-Exponential Upgrade
 
 The P1 decay tail is now first fitted with a **bi-exponential** model before
 falling back to a mono-exponential.  Bi-exponential fits capture mixed
@@ -1017,7 +1094,7 @@ $$
 \tau_{\text{dominant}} = \frac{|A_f| \tau_f + |A_s| \tau_s}{|A_f| + |A_s|}
 $$
 
-### 15.6 Noise Floor Detrending in Quiescent Baseline RMS
+### 15.7 Noise Floor Detrending in Quiescent Baseline RMS
 
 `find_quiescent_baseline_rms` applies `scipy.signal.detrend(chunk, type="linear")`
 to each candidate window **before** computing variance.  This removes slow
