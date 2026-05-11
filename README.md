@@ -250,6 +250,51 @@ Synaptipy builds on the following open-source libraries. When using Synaptipy in
 | [PyQtGraph](https://www.pyqtgraph.org) | Signal rendering | Campagnola L et al. PyQtGraph. https://www.pyqtgraph.org |
 | [SciPy](https://scipy.org) | Signal processing and curve fitting | Virtanen P et al. (2020). *Nature Methods* 17:261-272. [doi:10.1038/s41592-019-0686-2](https://doi.org/10.1038/s41592-019-0686-2) |
 | [NumPy](https://numpy.org) | Array computation | Harris CR et al. (2020). *Nature* 585:357-362. [doi:10.1038/s41586-020-2649-2](https://doi.org/10.1038/s41586-020-2649-2) |
+| [pandas](https://pandas.pydata.org) | Tabular result export | McKinney W (2010). *Proc. SciPy 2010*, 51-56. [doi:10.25080/Majora-92bf1922-00a](https://doi.org/10.25080/Majora-92bf1922-00a) |
+
+### Scientific Method References
+
+The analyses implemented in Synaptipy are grounded in peer-reviewed literature. Key references
+are listed below; see the [full references page](https://synaptipy.readthedocs.io/en/latest/references.html)
+in the documentation for a complete annotated bibliography.
+
+**Action potential detection and kinetics:**
+- Bean BP (2007). The action potential in mammalian central neurons. *Nat Rev Neurosci* 8:451-465. [doi:10.1038/nrn2148](https://doi.org/10.1038/nrn2148) — dV/dt threshold default (20 V/s)
+- Hodgkin AL & Huxley AF (1952). *J Physiol* 117:500-544. [doi:10.1113/jphysiol.1952.sp004764](https://doi.org/10.1113/jphysiol.1952.sp004764) — foundational AP model
+- Sekerli M et al. (2004). *IEEE Trans Biomed Eng* 51:1665-1672. [doi:10.1109/TBME.2004.827827](https://doi.org/10.1109/TBME.2004.827827) — maximum-curvature threshold method
+- Naundorf B et al. (2006). *Nature* 440:1060-1063. [doi:10.1038/nature04610](https://doi.org/10.1038/nature04610) — artifact ceiling (300 V/s)
+
+**Passive membrane properties:**
+- Hamill OP et al. (1981). *Pflugers Arch* 391:85-100. [doi:10.1007/BF00656997](https://doi.org/10.1007/BF00656997) — patch-clamp; series resistance and capacitance
+- Robinson RB & Siegelbaum SA (2003). *Annu Rev Physiol* 65:453-480. [doi:10.1146/annurev.physiol.65.092101.142734](https://doi.org/10.1146/annurev.physiol.65.092101.142734) — HCN / Ih current; peak vs. steady-state Rᵢₙ
+
+**After-hyperpolarisation:**
+- Storm JF (1987). *J Physiol* 385:733-759. [doi:10.1113/jphysiol.1987.sp016517](https://doi.org/10.1113/jphysiol.1987.sp016517) — fast AHP (BK, 1-5 ms)
+- Sah P & Faber ESL (2002). *Prog Neurobiol* 66:345-353. [doi:10.1016/S0301-0082(02)00004-7](https://doi.org/10.1016/S0301-0082(02)00004-7) — medium AHP (SK, 10-50 ms)
+
+**Spike-train statistics:**
+- Holt GR et al. (1996). *J Neurophysiol* 75:1806-1814. [doi:10.1152/jn.1996.75.5.1806](https://doi.org/10.1152/jn.1996.75.5.1806) — CV and CV₂
+- Shinomoto S et al. (2003). *Neural Comput* 15:2823-2842. [doi:10.1162/089976603322518759](https://doi.org/10.1162/089976603322518759) — Local Variation (LV)
+
+**Burst detection:**
+- Grace AA & Bunney BS (1984). *J Neurosci* 4:2877-2890. [doi:10.1523/JNEUROSCI.04-11-02877.1984](https://doi.org/10.1523/JNEUROSCI.04-11-02877.1984) — ISI burst criterion
+- Harris KD et al. (2001). *Neuron* 32:141-149. [doi:10.1016/S0896-6273(01)00447-0](https://doi.org/10.1016/S0896-6273(01)00447-0) — dynamic ISI fraction (30%)
+
+**Synaptic event detection:**
+- Rall W (1967). *J Neurophysiol* 30:1138-1168. [doi:10.1152/jn.1967.30.5.1138](https://doi.org/10.1152/jn.1967.30.5.1138) — cable theory; dendritic filtering (2-3x tau)
+- Hampel FR (1974). *J Am Stat Assoc* 69:383-393. [doi:10.1080/01621459.1974.10482962](https://doi.org/10.1080/01621459.1974.10482962) — MAD noise estimator (1.4826 factor)
+
+**Paired-pulse ratio:**
+- Zucker RS & Regehr WG (2002). *Annu Rev Physiol* 64:355-405. [doi:10.1146/annurev.physiol.64.092501.114547](https://doi.org/10.1146/annurev.physiol.64.092501.114547) — short-term synaptic plasticity
+- Regehr WG (2012). *Cold Spring Harb Perspect Biol* 4:a005702. [doi:10.1101/cshperspect.a005702](https://doi.org/10.1101/cshperspect.a005702) — PPR facilitation/depression classification
+
+**Signal filtering:**
+- Savitzky A & Golay MJE (1964). *Anal Chem* 36:1627-1639. [doi:10.1021/ac60214a047](https://doi.org/10.1021/ac60214a047) — Savitzky-Golay smoothing
+- Welch PD (1967). *IEEE Trans Audio Electroacoust* 15:70-73. [doi:10.1109/TAU.1967.1161901](https://doi.org/10.1109/TAU.1967.1161901) — Welch PSD / line noise detection
+
+**Electrode corrections:**
+- Barry PH & Lynch JW (1991). *J Membr Biol* 121:101-117. [doi:10.1007/BF01870526](https://doi.org/10.1007/BF01870526) — liquid junction potential correction
+- Armstrong CM & Bezanilla F (1977). *J Gen Physiol* 70:567-590. [doi:10.1085/jgp.70.5.567](https://doi.org/10.1085/jgp.70.5.567) — P/N leak subtraction protocol
 
 ---
 

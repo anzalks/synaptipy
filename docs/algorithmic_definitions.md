@@ -126,6 +126,8 @@ The same blanking logic is available for the RMP baseline window via the
 
 ### 2.2 Peak $R_{\text{in}}$ and Steady-State $R_{\text{in}}$ ($I_h$ correction)
 
+*(HCN channel physiology and Ih current: Robinson & Siegelbaum, 2003.)*
+
 Cells expressing HCN channels ($I_h$) exhibit a voltage "sag" during
 sustained hyperpolarisation: the voltage first reaches a maximum deflection
 (Peak) and then partially recovers toward a lower steady-state. A single
@@ -203,6 +205,8 @@ A value of 1 indicates no sag.
 **Numerical stability guard:** when $|V_{\text{ss}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$ (effectively zero denominator, e.g. during a flat or noise-only trace), the ratio is set to `NaN` to prevent division by zero rather than returning an arbitrary large value. Similarly, the percentage form (Section 4.2) returns 0 % when $|V_{\text{peak}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$.
 
 ### 4.2 Percentage form
+
+*(Sag and rebound are hallmarks of HCN-mediated $I_h$; Robinson & Siegelbaum, 2003.)*
 
 $$
 \text{Sag} \;(\%) = 100 \times \frac{V_{\text{peak}} - V_{\text{ss}}}{V_{\text{peak}} - V_{\text{baseline}}}
@@ -436,8 +440,10 @@ per-spike feature dictionaries produced by `calculate_spike_features`.
 **Module:** `synaptic_events.py` · **Registry name:** `event_detection_threshold`
 
 1. Rolling median subtraction (window = `rolling_baseline_window_ms`).
-2. Noise estimate via Median Absolute Deviation:
- $\hat{\sigma} = 1.4826 \times \text{MAD}$.
+2. Noise estimate via Median Absolute Deviation (MAD; Hampel, 1974;
+ Rousseeuw & Croux, 1993): $\hat{\sigma} = 1.4826 \times \text{MAD}$,
+ where the constant 1.4826 is the consistency factor making the estimate
+ equivalent to a standard deviation for Gaussian noise.
 3. Adaptive prominence: $p = \max(\text{threshold}, \, 2\hat{\sigma})$.
 4. Peak detection via `scipy.signal.find_peaks` with the computed prominence,
  height, and refractory distance constraints.
@@ -523,8 +529,9 @@ p < 0.003 under Gaussian noise assumption.)*
 **Registry name:** `event_detection_baseline_peak`
 
 Uses sliding-window variance minimisation to find the most stable baseline
-segment, estimates noise as $\hat{\sigma} = 1.4826 \times \text{MAD}$ in that
-region, and detects peaks with prominence $\ge 0.5 \times \text{threshold}$.
+segment, estimates noise as $\hat{\sigma} = 1.4826 \times \text{MAD}$
+(Hampel, 1974; Rousseeuw & Croux, 1993) in that region, and detects peaks
+with prominence $\ge 0.5 \times \text{threshold}$.
 
 ### 7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)
 
@@ -724,8 +731,11 @@ $$
 
 ### 14.1 Digital filters
 
-All Butterworth IIR filters are applied as zero-phase via
-`scipy.signal.sosfiltfilt` (second-order sections):
+All Butterworth IIR filters (Butterworth, 1930) are applied as zero-phase via
+`scipy.signal.sosfiltfilt` (second-order sections). The Butterworth design
+maximally flat magnitude in the passband with monotonic roll-off. Zero-phase
+filtration via `sosfiltfilt` applies the filter twice (forward and reverse),
+eliminating group delay distortion critical for preserving AP waveform timing:
 
 | Filter | Transfer function |
 |--------|-------------------|
@@ -761,7 +771,10 @@ For stimulus artefact suppression, three interpolation modes are available:
 
 **Baseline drift:** slope $\beta_1$ of OLS regression over the full trace.
 
-**Line noise:** Welch PSD amplitude at 50/60 Hz.
+**Line noise:** Welch PSD amplitude at 50/60 Hz (Welch, 1967). The PSD is
+estimated via `scipy.signal.welch` using the modified periodogram method
+(Hann window, segment length = min(4096, N)). The power ratio at 50/60 Hz
+relative to the neighboring baseline band identifies mains interference.
 
 ---
 
@@ -906,6 +919,116 @@ For stimulus artefact suppression, three interpolation modes are available:
   [doi:10.1038/nmeth.1618](https://doi.org/10.1038/nmeth.1618)
   - **Used in:** Colorblind-safe palette for plot colors.
 
+### Array computation
+
+- **Harris, C. R., Millman, K. J., van der Walt, S. J., et al. (2020).**
+  Array programming with NumPy. *Nature*, 585, 357-362.
+  [doi:10.1038/s41586-020-2649-2](https://doi.org/10.1038/s41586-020-2649-2)
+  - **Used in:** All numerical array operations throughout the codebase:
+    `numpy.gradient` for dV/dt (§6.2, §6.9, §11, §15.2), `numpy.diff` for ISI
+    (§12), `numpy.trapezoid` for charge integration (§5.2), and `numpy.nanmean`
+    for numerically stable CV2/LV computations (§12).
+
+### Signal processing methods
+
+- **Butterworth, S. (1930).** On the Theory of Filter Amplifiers.
+  *Wireless Engineer*, 7, 536-541. (No formal DOI; original publication.)
+  - **Used in:** All IIR digital filters in §14.1: lowpass, highpass,
+    bandpass Butterworth designs implemented via `scipy.signal.butter` with
+    zero-phase forward-reverse application (`sosfiltfilt`).
+
+- **Welch, P. D. (1967).** The use of fast Fourier transform for the
+  estimation of power spectra: A method based on time averaging over short,
+  modified periodograms. *IEEE Transactions on Audio and Electroacoustics*,
+  15(2), 70-73.
+  [doi:10.1109/TAU.1967.1161901](https://doi.org/10.1109/TAU.1967.1161901)
+  - **Used in:** §14.4 trace quality assessment — line noise detection at
+    50/60 Hz via `scipy.signal.welch`; also used in the `compute_psd` utility
+    in `signal_processor.py`.
+
+### Robust noise estimation
+
+- **Hampel, F. R. (1974).** The influence curve and its role in robust
+  estimation. *Journal of the American Statistical Association*, 69(346),
+  383-393.
+  [doi:10.1080/01621459.1974.10482962](https://doi.org/10.1080/01621459.1974.10482962)
+  - **Used in:** §7.1, §7.2, §7.3 — the 1.4826 consistency factor applied to
+    the Median Absolute Deviation (MAD) to obtain a Gaussian-consistent
+    standard deviation estimate: $\hat{\sigma} = 1.4826 \times \text{MAD}$.
+    The factor 1.4826 = $1 / \Phi^{-1}(0.75)$ ensures the estimator is
+    equivalent to the sample SD for Gaussian distributions.
+
+- **Rousseeuw, P. J., & Croux, C. (1993).** Alternatives to the median
+  absolute deviation. *Journal of the American Statistical Association*,
+  88(424), 1273-1283.
+  [doi:10.1080/01621459.1993.10476408](https://doi.org/10.1080/01621459.1993.10476408)
+  - **Used in:** MAD noise estimator (§7.1, §7.2, §7.3) — robustness
+    properties and breakdown point of the MAD as a scale estimator for
+    contaminated electrophysiology data.
+
+### Preprocessing and electrode correction
+
+- **Barry, P. H., & Lynch, J. W. (1991).** Liquid junction potentials
+  and small cell effects in patch-clamp analysis. *Journal of Membrane
+  Biology*, 121(2), 101-117.
+  [doi:10.1007/BF01870526](https://doi.org/10.1007/BF01870526)
+  - **Used in:** §16 Step A — liquid junction potential subtraction
+    $V_{\text{true}} = V_{\text{recorded}} - \text{LJP}$. Defines the
+    correction procedure and its biophysical limitations for voltage-dependent
+    analyses.
+
+- **Armstrong, C. M., & Bezanilla, F. (1977).** Inactivation of the sodium
+  channel. II. Gating current experiments. *Journal of General Physiology*,
+  70(5), 567-590.
+  [doi:10.1085/jgp.70.5.567](https://doi.org/10.1085/jgp.70.5.567)
+  - **Used in:** §16 Step B — P/N leak subtraction protocol. Armstrong and
+    Bezanilla introduced the P/N subtraction technique for isolating
+    non-linear gating currents by scaling and subtracting linear leak sweeps.
+
+- **Bezanilla, F., & Armstrong, C. M. (1977).** Inactivation of the sodium
+  channel. I. Sodium current experiments. *Journal of General Physiology*,
+  70(5), 549-566.
+  [doi:10.1085/jgp.70.5.549](https://doi.org/10.1085/jgp.70.5.549)
+  - **Used in:** §16 Step B — companion paper establishing the P/N
+    subtraction protocol for leak correction in voltage-clamp recordings.
+
+### Foundational neuroscience
+
+- **Hodgkin, A. L., & Huxley, A. F. (1952).** A quantitative description
+  of membrane current and its application to conduction and excitation in
+  nerve. *Journal of Physiology*, 117(4), 500-544.
+  [doi:10.1113/jphysiol.1952.sp004764](https://doi.org/10.1113/jphysiol.1952.sp004764)
+  - **Used in:** §15.2 — foundational mathematical model of action potential
+    generation via voltage-gated Na$^+$ and K$^+$ conductances. Provides the
+    biophysical basis for AP threshold detection, dV/dt methods, and Na$^+$
+    channel inactivation effects on spike trains.
+
+- **Robinson, R. B., & Siegelbaum, S. A. (2003).** Hyperpolarization-activated
+  cation currents: From molecules to physiological function. *Annual Review of
+  Physiology*, 65, 453-480.
+  [doi:10.1146/annurev.physiol.65.092101.142734](https://doi.org/10.1146/annurev.physiol.65.092101.142734)
+  - **Used in:** §2.2 and §4 — physiological context for HCN channel-mediated
+    $I_h$ current, voltage sag during hyperpolarisation, and the distinction
+    between peak and steady-state input resistance as a diagnostic for $I_h$.
+
+- **Neher, E. (1992).** Correction for liquid junction potentials in patch
+  clamp experiments. *Methods in Enzymology*, 207, 123-131.
+  [doi:10.1016/0076-6879(92)07008-C](https://doi.org/10.1016/0076-6879(92)07008-C)
+  - **Used in:** §16 Step A — standard reference for LJP correction in
+    whole-cell patch-clamp. Provides the accepted procedure for calculating
+    and applying the junction potential offset.
+
+### Data handling and tabular output
+
+- **McKinney, W. (2010).** Data structures for statistical computing in
+  Python. *Proceedings of the 9th Python in Science Conference* (SciPy 2010),
+  51-56.
+  [doi:10.25080/Majora-92bf1922-00a](https://doi.org/10.25080/Majora-92bf1922-00a)
+  - **Used in:** Batch engine CSV export and result tabulation. The
+    `pandas.DataFrame` API is used to assemble wide-format (scalar metrics)
+    and long-format (event arrays) output tables compatible with Python/Pandas,
+    R, and MATLAB downstream workflows.
+
 
 ## 15. Advanced Biophysics (Publication Audit)
 
@@ -943,7 +1066,8 @@ reporting the Ohm's-law $R_s$.
 
 ### 15.2 Dynamic AP Threshold via Maximum Curvature ($d^2V/dt^2$)
 
-*(Method described in Sekerli et al., 2004; dynamic threshold motivated by Henze & Buzsaki, 2001.)*
+*(Method described in Sekerli et al., 2004; dynamic threshold motivated by Henze & Buzsaki, 2001.
+Foundational AP model: Hodgkin & Huxley, 1952.)*
 
 A fixed dV/dt threshold fails during spike trains because Na$^+$ channel
 inactivation progressively slows the AP upstroke.  The physiological onset is
@@ -1195,6 +1319,10 @@ voltage-dependent analysis (AP threshold, RMP, I-V curve).
 > about the voltage-dependence of active conductances.
 
 ### Step B - P/N Leak Subtraction
+
+*(Armstrong & Bezanilla, 1977; Bezanilla & Armstrong, 1977. The P/N subtraction
+protocol scales sub-threshold "leak" sweeps by 1/N and subtracts them from the
+test sweep to cancel linear leak current and capacitive transients.)*
 
 $$
 I_{\text{corrected}}(t) = I_{\text{signal}}(t)
