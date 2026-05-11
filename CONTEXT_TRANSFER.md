@@ -57,14 +57,14 @@
 
 ## Remaining Work (22 items)
 
-### 🔴 CRITICAL (1 remaining):
+### [CRITICAL] CRITICAL (1 remaining):
 - **CRITICAL-4:** GUI preprocessing visual indicator
   - **Location:** `src/Synaptipy/application/gui/analyser_tab.py`
   - **Action:** Add QLabel banner showing active filters
   - **Time:** 6 hours
   - **Status:** Requires GUI development
 
-### 🟠 HIGH Priority (7 remaining):
+### [HIGH] HIGH Priority (7 remaining):
 - **HIGH-5:** Parameter tooltips from registry
   - **Location:** `src/Synaptipy/application/gui/ui_generator.py`
   - **Action:** Add QLabel.setToolTip() from ui_params
@@ -100,7 +100,7 @@
   - **Action:** Pass trial_index through signal chain
   - **Time:** 3 hours
 
-### 🟡 MEDIUM Priority (8 remaining):
+### [MEDIUM] MEDIUM Priority (8 remaining):
 - **MEDIUM-5:** dV/dt threshold configurable
 - **MEDIUM-6:** Parameter validation visual feedback
 - **MEDIUM-7:** Batch error log UI button
@@ -112,12 +112,12 @@
 - **MEDIUM-13:** Preprocessing before/after comparison
 - **MEDIUM-14:** Session count badge
 
-### 🟢 LOW Priority (4 remaining):
+### [LOW] LOW Priority (4 remaining):
 - **LOW-5:** Statistical plot annotations
 - **LOW-6:** Lazy loading thread safety
 - **LOW-7:** Undo stack configurable
 
-### 📝 Test Files (2 remaining):
+### [notes] Test Files (2 remaining):
 - `test_ppr_baseline_correction.py`
 - `test_trial_selection_validation.py`
 

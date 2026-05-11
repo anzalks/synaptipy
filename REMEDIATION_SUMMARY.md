@@ -22,7 +22,7 @@
 
 ## Critical Fixes (DO FIRST - 3-5 days)
 
-### 🔴 CRITICAL-1: Fix PPR Baseline Correction (WRONG FORMULA)
+### [CRITICAL] CRITICAL-1: Fix PPR Baseline Correction (WRONG FORMULA)
 **File:** [evoked_responses.py:488](src/Synaptipy/core/analysis/evoked_responses.py#L488)  
 **Time:** 2 hours
 
@@ -44,7 +44,7 @@ else:
 
 ---
 
-### 🔴 CRITICAL-2: Fix Division by Zero in Spike Train Stats
+### [CRITICAL] CRITICAL-2: Fix Division by Zero in Spike Train Stats
 **File:** [firing_dynamics.py:623,626](src/Synaptipy/core/analysis/firing_dynamics.py#L623)  
 **Time:** 1 hour
 
@@ -65,7 +65,7 @@ cv2_val = float(np.nanmean(cv2_array))
 
 ---
 
-### 🔴 CRITICAL-3: Fix Sag Ratio Float Comparison
+### [CRITICAL] CRITICAL-3: Fix Sag Ratio Float Comparison
 **File:** [passive_properties.py:1202](src/Synaptipy/core/analysis/passive_properties.py#L1202)  
 **Time:** 30 minutes
 
@@ -84,7 +84,7 @@ if abs(delta_v_ss) < 1e-9:  # EPSILON COMPARISON
 
 ---
 
-### 🔴 CRITICAL-4: Add Preprocessing Visual Indicator
+### [CRITICAL] CRITICAL-4: Add Preprocessing Visual Indicator
 **File:** [analyser_tab.py:115-240](src/Synaptipy/application/gui/analyser_tab.py#L115)  
 **Time:** 4 hours
 
@@ -99,7 +99,7 @@ if abs(delta_v_ss) < 1e-9:  # EPSILON COMPARISON
 
 ---
 
-### 🔴 CRITICAL-5: Fix Preprocessing Context Contamination
+### [CRITICAL] CRITICAL-5: Fix Preprocessing Context Contamination
 **File:** [batch_engine.py:978-1007](src/Synaptipy/core/analysis/batch_engine.py#L978)  
 **Time:** 2 hours
 
@@ -123,7 +123,7 @@ finally:
 
 ---
 
-### 🔴 CRITICAL-6: Export Electrode Metadata to NWB
+### [CRITICAL] CRITICAL-6: Export Electrode Metadata to NWB
 **File:** [nwb_exporter.py](src/Synaptipy/infrastructure/exporters/nwb_exporter.py) + [data_model.py:154-163](src/Synaptipy/core/data_model.py#L154)  
 **Time:** 4 hours
 
@@ -145,7 +145,7 @@ electrode = IntracellularElectrode(
 
 ---
 
-### 🔴 CRITICAL-7: Document Preprocessing in Export
+### [CRITICAL] CRITICAL-7: Document Preprocessing in Export
 **Files:** [data_model.py](src/Synaptipy/core/data_model.py), [nwb_exporter.py](src/Synaptipy/infrastructure/exporters/nwb_exporter.py)  
 **Time:** 3 hours
 
@@ -172,7 +172,7 @@ for step in recording.metadata.get('processing_history', []):
 
 ---
 
-### 🔴 CRITICAL-8: Fix PPR Amplitude Bounds for Negative Polarity
+### [CRITICAL] CRITICAL-8: Fix PPR Amplitude Bounds for Negative Polarity
 **File:** [evoked_responses.py:419-425](src/Synaptipy/core/analysis/evoked_responses.py#L419)  
 **Time:** 1 hour
 
@@ -192,7 +192,7 @@ else:
 
 ---
 
-### 🔴 CRITICAL-9: Fix Tau Fitting Array Truncation
+### [CRITICAL] CRITICAL-9: Fix Tau Fitting Array Truncation
 **File:** [passive_properties.py:976-984](src/Synaptipy/core/analysis/passive_properties.py#L976)  
 **Time:** 1 hour
 
@@ -215,7 +215,7 @@ if _peak_idx > 2 and _peak_idx < len(V_fit) - 1 and _peak_idx >= len(V_fit) // 2
 
 ## High Priority Fixes (DO SECOND - 3-4 days)
 
-### 🟠 HIGH-1 through HIGH-12: UX and Scientific Issues
+### [HIGH] HIGH-1 through HIGH-12: UX and Scientific Issues
 
 | Priority | Issue | File | Time |
 |----------|-------|------|------|

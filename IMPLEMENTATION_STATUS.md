@@ -89,7 +89,7 @@
 
 ---
 
-## 📊 Overall Progress
+## [stats] Overall Progress
 
 **Total Completed:** 20/42 = **48%**
 
@@ -106,7 +106,7 @@
 
 ---
 
-## 🧪 Test Coverage Status
+## [tests] Test Coverage Status
 
 ### New Test Files Created (3/5):
 - ✅ `test_division_by_zero_guards.py` (288 lines) - Comprehensive edge case validation
@@ -120,7 +120,7 @@
 
 ---
 
-## 📁 Modified Files Summary
+## [files] Modified Files Summary
 
 ### Core Analysis Modules:
 1. `src/Synaptipy/core/analysis/firing_dynamics.py`
@@ -163,7 +163,7 @@
 
 ---
 
-## 🔄 Git Commit History
+## [history] Git Commit History
 
 | Commit | Description | Issues Fixed |
 |--------|-------------|--------------|
@@ -254,7 +254,7 @@
 
 ---
 
-## 📈 Coverage Target Status
+## [chart] Coverage Target Status
 
 **Current Coverage Estimate:** ~92% (based on fixes + new tests)  
 **Target:** 95%  
@@ -266,7 +266,7 @@
 
 ---
 
-## 🎯 Recommended Next Steps
+## [goal] Recommended Next Steps
 
 ### For Immediate Journal Submission (Backend Complete):
 1. ✅ All CRITICAL mathematical issues fixed (except GUI indicator)
@@ -286,7 +286,7 @@ Can submit with note that GUI enhancements are in progress.
 
 ---
 
-## 📝 Notes for Reviewers
+## [notes] Notes for Reviewers
 
 ### Strengths:
 - ✅ All mathematical edge cases properly guarded
@@ -310,7 +310,7 @@ Can submit with note that GUI enhancements are in progress.
 
 ---
 
-## 🔍 Audit Document Status
+## [review] Audit Document Status
 
 The two audit documents (`AUDIT_REPORT.md` and `REMEDIATION_SUMMARY.md`) were committed by accident but provide valuable documentation of the systematic review process. They can remain in the repository as development documentation or be moved to `docs/` directory.
 
