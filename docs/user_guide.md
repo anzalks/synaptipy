@@ -191,6 +191,12 @@ For the full list of Neo-supported formats, see the
 
 ## Using the Explorer Tab
 
+The Explorer tab has three resizable panels: the **Configuration panel** on the
+left, the **Plot area** in the centre, and the **File / Analysis panel** on the
+right. Drag the divider handles between the panels to resize them to suit your
+screen. The default widths are 320 px (left), 800 px (centre), and 360 px
+(right).
+
 ### Navigation Controls
 
 - **Zoom**: Use the mouse wheel, or zoom buttons
@@ -654,7 +660,7 @@ Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access 
 | Setting | Description |
 |---------|-------------|
 | **Scroll Behavior** | Choose Natural, Inverted, or System scroll direction for plots. |
-| **Appearance** | Switch between Light, Dark, or System color theme. |
+| **Appearance** | Switch between Light, Dark, or System color theme. **Light** and **Dark** use the cross-platform Fusion style with an explicit color palette. **System** restores the OS-native style and palette exactly as it was at application startup. Switching between all three modes is fully reversible at runtime with no restart required. |
 | **Enable Custom Plugins** | When checked, Synaptipy loads Python plugins from `~/.synaptipy/plugins/` and `examples/plugins/`. See below for the hot-reload mechanism. |
 
 ### Version Checking

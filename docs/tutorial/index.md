@@ -55,6 +55,12 @@ The Explorer tab is the starting point for loading, browsing, and inspecting
 electrophysiology data files. It supports all formats handled by the Neo library
 (`.abf`, `.smr`, `.smrx`, `.nex`, `.h5`, and many more).
 
+> **Resizable panels:** The Explorer tab has three side-by-side panels separated
+> by draggable dividers. Drag the handle between the Configuration panel and the
+> plot, or between the plot and the File/Analysis panel, to redistribute the
+> available width. Default widths are 320 px (left), 800 px (centre), and
+> 360 px (right).
+
 ### 1.1 File Sidebar
 
 - **File System Tree** - A live tree filtered to supported electrophysiology extensions.
@@ -1473,7 +1479,14 @@ export dialog with the following options:
 ### 7.1 Preferences Dialog (Edit → Preferences)
 
 - **Scroll Behavior** - Natural, Inverted, or System.
-- **Appearance** - Light, Dark, or System theme with live preview.
+- **Appearance** - Switch between **Light**, **Dark**, or **System** theme.
+  - *Light* and *Dark* switch to the cross-platform Fusion style and apply an
+    explicit color palette so the result is consistent across macOS, Windows,
+    and Linux.
+  - *System* restores the OS-native style and palette exactly as they were at
+    application startup. All three modes cycle fully at runtime with no restart.
+  - Opening the Preferences dialog no longer flashes a theme preview -
+    signals are blocked while the radio buttons are initialised.
 
 ### 7.2 Plot Customization Dialog (View → Plot Customization)
 
