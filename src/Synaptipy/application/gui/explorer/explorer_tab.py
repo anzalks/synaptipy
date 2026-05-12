@@ -216,7 +216,9 @@ class ExplorerTab(QtWidgets.QWidget):
         self._prev_file_folder()
 
     def _setup_layout(self):
-        layout = QtWidgets.QHBoxLayout(self)
+        outer_layout = QtWidgets.QHBoxLayout(self)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        outer_layout.addWidget(splitter)
 
         # LEFT PANEL (wrapped in scroll area for small screens)
         left_scroll = QtWidgets.QScrollArea()
@@ -224,8 +226,7 @@ class ExplorerTab(QtWidgets.QWidget):
         left_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         left_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         left_scroll.setWidget(self.config_panel)
-        left_scroll.setMaximumWidth(320)
-        layout.addWidget(left_scroll, 0)
+        splitter.addWidget(left_scroll)
 
         # CENTER PANEL
         center_widget = QtWidgets.QWidget()
@@ -342,7 +343,7 @@ class ExplorerTab(QtWidgets.QWidget):
         center_layout.setRowStretch(3, 0)
         center_layout.setRowStretch(4, 0)
 
-        layout.addWidget(center_widget, 1)
+        splitter.addWidget(center_widget)
 
         # RIGHT PANEL (wrapped in scroll area for small screens)
         right_widget = QtWidgets.QWidget()
@@ -358,8 +359,8 @@ class ExplorerTab(QtWidgets.QWidget):
         right_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         right_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         right_scroll.setWidget(right_widget)
-        right_scroll.setMaximumWidth(360)
-        layout.addWidget(right_scroll, 0)
+        splitter.addWidget(right_scroll)
+        splitter.setSizes([320, 800, 360])
 
     def _connect_signals(self):
         # Open File

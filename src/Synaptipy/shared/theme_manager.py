@@ -35,6 +35,10 @@ class ThemeSignals(QtCore.QObject):
 # Global signal instance
 _theme_signals: Optional[ThemeSignals] = None
 
+# The style name active at application startup (captured lazily on first apply).
+# Restored when the user switches back to System theme.
+_initial_style_name: Optional[str] = None
+
 
 def get_theme_signals() -> ThemeSignals:
     """Get the global theme signals instance."""
@@ -145,437 +149,42 @@ def apply_theme(mode: Optional[ThemeMode] = None) -> None:
         log.warning("No QApplication instance found, cannot apply theme")
         return
 
+    # Capture the native style name once, before we ever change it.
+    global _initial_style_name
+    if _initial_style_name is None:
+        _initial_style_name = app.style().objectName()
+        log.debug("Captured initial style name: %s", _initial_style_name)
+
     if mode == ThemeMode.SYSTEM:
-        # Windows: prefer registry via _detect_system_dark_mode(); falls back to
-        # palette luminance when the key is missing (same helper as is_dark_mode()).
-        if _detect_system_dark_mode():
-            _apply_dark_theme(app)
-            log.debug("Applied system theme (dark)")
-        else:
-            _apply_light_theme(app)
-            log.debug("Applied system theme (light)")
+        # Restore the OS-native appearance: reset to the original platform style,
+        # clear any custom CSS, and reset the palette to the platform default.
+        app.setStyle(_initial_style_name)
+        app.setStyleSheet("")
+        app.setPalette(app.style().standardPalette())
+        log.debug("Applied system theme (native: %s)", _initial_style_name)
 
     elif mode == ThemeMode.LIGHT:
         _apply_light_theme(app)
         log.debug("Applied light theme")
     elif mode == ThemeMode.DARK:
-        # Force dark stylesheet (custom)
         _apply_dark_theme(app)
         log.debug("Applied dark theme")
 
 
-def _get_light_stylesheet() -> str:
-    """Return comprehensive light theme stylesheet."""
-    return """
-    /* Menus */
-    QMenuBar {
-        background-color: #f0f0f0;
-        color: #000000;
-        border-bottom: 1px solid #d0d0d0;
-    }
-    QMenuBar::item {
-        background-color: transparent;
-        color: #000000;
-        padding: 4px 8px;
-    }
-    QMenuBar::item:selected {
-        background-color: #0078d7;
-        color: #ffffff;
-    }
-    QMenu {
-        background-color: #ffffff;
-        color: #000000;
-        border: 1px solid #c0c0c0;
-    }
-    QMenu::item {
-        padding: 6px 30px 6px 20px;
-        background-color: transparent;
-        color: #000000;
-    }
-    QMenu::item:selected {
-        background-color: #0078d7;
-        color: #ffffff;
-    }
-    QMenu::item:disabled {
-        color: #a0a0a0;
-    }
-    QMenu::separator {
-        height: 1px;
-        background-color: #d0d0d0;
-        margin: 4px 10px;
-    }
-
-    /* Tooltips */
-    QToolTip {
-        background-color: #ffffdc;
-        color: #000000;
-        border: 1px solid #c0c0c0;
-        padding: 4px;
-    }
-
-    /* Group boxes */
-    QGroupBox {
-        border: 1px solid #c0c0c0;
-        border-radius: 4px;
-        margin-top: 8px;
-        padding-top: 8px;
-        color: #000000;
-    }
-    QGroupBox::title {
-        subcontrol-origin: margin;
-        left: 10px;
-        padding: 0 3px;
-        color: #000000;
-    }
-
-    /* Tabs - only color styling, preserve default alignment */
-    QTabWidget::pane {
-        border: 1px solid #c0c0c0;
-        background-color: #ffffff;
-    }
-    QTabBar::tab {
-        background-color: #e0e0e0;
-        color: #000000;
-        padding: 6px 12px;
-    }
-    QTabBar::tab:selected {
-        background-color: #ffffff;
-        color: #000000;
-    }
-    QTabBar::tab:hover:!selected {
-        background-color: #d0d0d0;
-    }
-
-    /* Scrollbars */
-    QScrollBar:vertical {
-        background-color: #f0f0f0;
-        width: 14px;
-        border: none;
-    }
-    QScrollBar::handle:vertical {
-        background-color: #c0c0c0;
-        min-height: 30px;
-        border-radius: 4px;
-        margin: 2px;
-    }
-    QScrollBar::handle:vertical:hover {
-        background-color: #a0a0a0;
-    }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-        height: 0px;
-    }
-    QScrollBar:horizontal {
-        background-color: #f0f0f0;
-        height: 14px;
-        border: none;
-    }
-    QScrollBar::handle:horizontal {
-        background-color: #c0c0c0;
-        min-width: 30px;
-        border-radius: 4px;
-        margin: 2px;
-    }
-    QScrollBar::handle:horizontal:hover {
-        background-color: #a0a0a0;
-    }
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-        width: 0px;
-    }
-
-    /* Buttons */
-    QPushButton {
-        background-color: #e1e1e1;
-        color: #000000;
-        border: 1px solid #adadad;
-        padding: 5px 15px;
-        border-radius: 3px;
-    }
-    QPushButton:hover {
-        background-color: #d0d0d0;
-        border-color: #0078d7;
-    }
-    QPushButton:pressed {
-        background-color: #c0c0c0;
-    }
-    QPushButton:disabled {
-        background-color: #f0f0f0;
-        color: #a0a0a0;
-    }
-
-    /* Line edits and spin boxes */
-    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-        background-color: #ffffff;
-        color: #000000;
-        border: 1px solid #c0c0c0;
-        padding: 4px;
-        border-radius: 2px;
-    }
-    QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
-        border-color: #0078d7;
-    }
-
-    /* Combo box dropdown */
-    QComboBox::drop-down {
-        border: none;
-        width: 20px;
-    }
-    QComboBox QAbstractItemView {
-        background-color: #ffffff;
-        color: #000000;
-        border: 1px solid #c0c0c0;
-        selection-background-color: #0078d7;
-        selection-color: #ffffff;
-    }
-
-    /* Checkboxes and radio buttons */
-    QCheckBox, QRadioButton {
-        color: #000000;
-    }
-
-    /* Labels */
-    QLabel {
-        color: #000000;
-    }
-
-    /* List and tree views */
-    QListView, QTreeView, QTableView {
-        background-color: #ffffff;
-        color: #000000;
-        border: 1px solid #c0c0c0;
-        selection-background-color: #0078d7;
-        selection-color: #ffffff;
-    }
-    QHeaderView::section {
-        background-color: #f0f0f0;
-        color: #000000;
-        border: 1px solid #c0c0c0;
-        padding: 4px;
-    }
-
-    /* Status bar */
-    QStatusBar {
-        background-color: #f0f0f0;
-        color: #000000;
-    }
-
-    /* Splitters */
-    QSplitter::handle {
-        background-color: #c0c0c0;
-    }
-    """
-
-
-def _get_dark_stylesheet() -> str:
-    """Return comprehensive dark theme stylesheet."""
-    return """
-    /* Menus */
-    QMenuBar {
-        background-color: #353535;
-        color: #ffffff;
-        border-bottom: 1px solid #2a2a2a;
-    }
-    QMenuBar::item {
-        background-color: transparent;
-        color: #ffffff;
-        padding: 4px 8px;
-    }
-    QMenuBar::item:selected {
-        background-color: #2a82da;
-        color: #ffffff;
-    }
-    QMenu {
-        background-color: #2d2d2d;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-    }
-    QMenu::item {
-        padding: 6px 30px 6px 20px;
-        background-color: transparent;
-        color: #ffffff;
-    }
-    QMenu::item:selected {
-        background-color: #2a82da;
-        color: #ffffff;
-    }
-    QMenu::item:disabled {
-        color: #808080;
-    }
-    QMenu::separator {
-        height: 1px;
-        background-color: #3d3d3d;
-        margin: 4px 10px;
-    }
-
-    /* Tooltips */
-    QToolTip {
-        background-color: #1e1e1e;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-        padding: 4px;
-    }
-
-    /* Group boxes */
-    QGroupBox {
-        border: 1px solid #3d3d3d;
-        border-radius: 4px;
-        margin-top: 8px;
-        padding-top: 8px;
-        color: #ffffff;
-    }
-    QGroupBox::title {
-        subcontrol-origin: margin;
-        left: 10px;
-        padding: 0 3px;
-        color: #ffffff;
-    }
-
-    /* Tabs - only color styling, preserve default alignment */
-    QTabWidget::pane {
-        border: 1px solid #3d3d3d;
-        background-color: #2d2d2d;
-    }
-    QTabBar::tab {
-        background-color: #353535;
-        color: #ffffff;
-        padding: 6px 12px;
-    }
-    QTabBar::tab:selected {
-        background-color: #2d2d2d;
-        color: #ffffff;
-    }
-    QTabBar::tab:hover:!selected {
-        background-color: #404040;
-    }
-
-    /* Scrollbars */
-    QScrollBar:vertical {
-        background-color: #2d2d2d;
-        width: 14px;
-        border: none;
-    }
-    QScrollBar::handle:vertical {
-        background-color: #5a5a5a;
-        min-height: 30px;
-        border-radius: 4px;
-        margin: 2px;
-    }
-    QScrollBar::handle:vertical:hover {
-        background-color: #6a6a6a;
-    }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-        height: 0px;
-    }
-    QScrollBar:horizontal {
-        background-color: #2d2d2d;
-        height: 14px;
-        border: none;
-    }
-    QScrollBar::handle:horizontal {
-        background-color: #5a5a5a;
-        min-width: 30px;
-        border-radius: 4px;
-        margin: 2px;
-    }
-    QScrollBar::handle:horizontal:hover {
-        background-color: #6a6a6a;
-    }
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-        width: 0px;
-    }
-
-    /* Buttons */
-    QPushButton {
-        background-color: #414141;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-        padding: 5px 15px;
-        border-radius: 3px;
-    }
-    QPushButton:hover {
-        background-color: #505050;
-        border-color: #2a82da;
-    }
-    QPushButton:pressed {
-        background-color: #353535;
-    }
-    QPushButton:disabled {
-        background-color: #2d2d2d;
-        color: #808080;
-    }
-
-    /* Line edits and spin boxes */
-    QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-        background-color: #232323;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-        padding: 4px;
-        border-radius: 2px;
-    }
-    QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
-        border-color: #2a82da;
-    }
-
-    /* Combo box dropdown */
-    QComboBox::drop-down {
-        border: none;
-        width: 20px;
-    }
-    QComboBox QAbstractItemView {
-        background-color: #2d2d2d;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-        selection-background-color: #2a82da;
-        selection-color: #ffffff;
-    }
-
-    /* Checkboxes and radio buttons */
-    QCheckBox, QRadioButton {
-        color: #ffffff;
-    }
-
-    /* Labels */
-    QLabel {
-        color: #ffffff;
-    }
-
-    /* List and tree views */
-    QListView, QTreeView, QTableView {
-        background-color: #232323;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-        selection-background-color: #2a82da;
-        selection-color: #ffffff;
-    }
-    QHeaderView::section {
-        background-color: #353535;
-        color: #ffffff;
-        border: 1px solid #3d3d3d;
-        padding: 4px;
-    }
-
-    /* Status bar */
-    QStatusBar {
-        background-color: #353535;
-        color: #ffffff;
-    }
-
-    /* Splitters */
-    QSplitter::handle {
-        background-color: #3d3d3d;
-    }
-    """
-
-
 def _apply_light_theme(app: QtWidgets.QApplication) -> None:
-    """Apply complete light theme with palette and stylesheet."""
+    """Apply light theme using Fusion style and an explicit light QPalette."""
+    # Fusion style fully respects QPalette on all platforms (including macOS).
+    app.setStyle("Fusion")
+    app.setStyleSheet("")
     _apply_light_palette(app)
-    app.setStyleSheet(_get_light_stylesheet())
 
 
 def _apply_dark_theme(app: QtWidgets.QApplication) -> None:
-    """Apply complete dark theme with palette and stylesheet."""
+    """Apply dark theme using Fusion style and an explicit dark QPalette."""
+    # Fusion style fully respects QPalette on all platforms (including macOS).
+    app.setStyle("Fusion")
+    app.setStyleSheet("")
     _apply_dark_palette(app)
-    app.setStyleSheet(_get_dark_stylesheet())
 
 
 def _apply_light_palette(app: QtWidgets.QApplication) -> None:

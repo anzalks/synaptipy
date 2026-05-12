@@ -252,14 +252,18 @@ class PreferencesDialog(QtWidgets.QDialog):
         else:
             self.scroll_system_radio.setChecked(True)
 
-        # Theme
+        # Theme - block signals to prevent spurious theme preview on dialog open
         current_theme = get_theme_mode()
+        for _radio in (self.theme_light_radio, self.theme_dark_radio, self.theme_system_radio):
+            _radio.blockSignals(True)
         if current_theme == ThemeMode.LIGHT:
             self.theme_light_radio.setChecked(True)
         elif current_theme == ThemeMode.DARK:
             self.theme_dark_radio.setChecked(True)
         else:
             self.theme_system_radio.setChecked(True)
+        for _radio in (self.theme_light_radio, self.theme_dark_radio, self.theme_system_radio):
+            _radio.blockSignals(False)
 
         # Plugins toggle
         self.enable_plugins_checkbox.setChecked(self._settings.value("enable_plugins", True, type=bool))
