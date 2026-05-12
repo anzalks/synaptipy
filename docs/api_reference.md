@@ -237,6 +237,62 @@ PluginManager.reload_plugins()
 
 ### Exporters
 
+#### CSV Exporter
+
+```{eval-rst}
+.. automodule:: Synaptipy.infrastructure.exporters.csv_exporter
+   :members:
+   :undoc-members: False
+   :show-inheritance:
+```
+
+##### Usage Examples
+
+**Wide-format summary CSV (default)**
+
+```python
+from pathlib import Path
+from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
+
+exporter = CSVExporter()
+exporter.export_analysis_results(results, Path("summary.csv"))
+```
+
+**Tidy (long-format) CSV for R / seaborn**
+
+```python
+exporter.export_tidy(results, Path("tidy.csv"))
+```
+
+**GraphPad Prism grouped-column format**
+
+`export_to_prism_format` writes one column per experimental group, with each
+row being an individual observation.  Unequal-N groups are padded with empty
+cells so Prism can import the table directly.
+
+```python
+# Export input resistance grouped by treatment condition
+exporter.export_to_prism_format(
+    results,
+    Path("out.csv"),          # base path; actual file is out_prism_rin_mohm.csv
+    metric="rin_mohm",
+    group_by_key="Condition",  # key in each result row that labels the group
+)
+```
+
+The resulting CSV looks like:
+
+```
+Wild Type,Knockout
+150.2,98.4
+162.7,104.1
+145.0,
+```
+
+A companion `_provenance.json` is written alongside every exported file.
+
+---
+
 #### NWB Exporter
 
 ```{eval-rst}

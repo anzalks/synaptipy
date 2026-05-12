@@ -18,7 +18,7 @@ Exports ``detect_minis_threshold`` as a backward-compatibility alias.
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy import signal
@@ -670,6 +670,21 @@ def detect_events_threshold(  # noqa: C901
             n_artifacts_rejected = int(np.sum(~not_artifact_mask))
             peaks = peaks[not_artifact_mask]
 
+        # Refine each detected peak to the true raw-data maximum nearby.
+        # find_peaks runs on baseline-corrected work_data; the rolling-median baseline
+        # can shift the apparent peak by several milliseconds for slow events.  Searching
+        # in the polarity-adjusted raw data within a window of ±refractory/2 (clamped to
+        # at least 10 samples) ensures the marker lands on the actual signal peak.
+        if len(peaks) > 0:
+            _refine_r = max(10, distance_samples // 2)
+            _search = data if not is_negative else -data
+            _corr = np.empty_like(peaks)
+            for _i, _pk in enumerate(peaks):
+                _ws = max(0, _pk - _refine_r)
+                _we = min(len(data), _pk + _refine_r + 1)
+                _corr[_i] = _ws + int(np.argmax(_search[_ws:_we]))
+            peaks = np.unique(_corr)
+
         event_indices = peaks.astype(int)
         if len(event_indices) > 0:
             event_times = time[event_indices]
@@ -756,15 +771,6 @@ detect_minis_threshold = detect_events_threshold
             "max": 5000.0,
             "decimals": 1,
         },
-        {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
-        {
-            "name": "artifact_slope_threshold",
-            "label": "Artifact Slope Thresh:",
-            "type": "float",
-            "default": 20.0,
-            "min": 0.0,
-        },
-        {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
         {
             "name": "use_quiescent_noise_floor",
             "label": "Quiescent Noise Floor",
@@ -892,33 +898,40 @@ def detect_events_template(  # noqa: C901
     artifact_mask: Optional[np.ndarray] = None,
     time: Optional[np.ndarray] = None,
     min_event_distance_ms: float = 0.0,
+    kernel_multipliers: Optional[List[float]] = None,
+    kernel_shape: str = "bi-exponential",
 ) -> EventDetectionResult:
     """Detect events using a multi-kernel matched-filter bank.
 
-    Three kernels are built using the specified tau_rise and tau_decay × 1, 2, 3
-    to tolerate dendritic filtering that prolongs event decay (Cable theory
-    predicts a ~2-3× slowdown for distal inputs).  A combined z-score trace
-    (pointwise maximum across the three filtered traces) is used for peak
-    detection, improving sensitivity to both somatic and dendritic events.
+    Kernels are built using *tau_rise* and *tau_decay* scaled by each value in
+    *kernel_multipliers* (default ``[1.0, 2.0, 3.0]``) to tolerate dendritic
+    filtering that prolongs event decay (Cable theory predicts a ~2-3x slowdown
+    for distal inputs).  A combined z-score trace (pointwise maximum across all
+    filtered traces) is used for peak detection, improving sensitivity to both
+    somatic and dendritic events.
     """
     try:
         dt = 1.0 / sampling_rate
         n_points = len(data)
 
         def _build_kernel(td: float) -> np.ndarray:
-            """Alpha/bi-exponential kernel for a given tau_decay."""
-            kernel_duration = 5 * max(td, tau_rise)
-            t_k = np.arange(0, kernel_duration, dt)
-            if td == tau_rise:
-                k = t_k * np.exp(-t_k / td)
+            """Build normalised kernel: mono-exponential or bi-exponential (alpha-function)."""
+            if kernel_shape == "mono-exponential":
+                t_k = np.arange(0, 5 * td, dt)
+                k = np.exp(-t_k / td)
+            elif td == tau_rise:
+                t_k = np.arange(0, 5 * td, dt)
+                k = t_k * np.exp(-t_k / td)  # alpha function
             else:
-                k = np.exp(-t_k / td) - np.exp(-t_k / tau_rise)
+                t_k = np.arange(0, 5 * max(td, tau_rise), dt)
+                k = np.exp(-t_k / td) - np.exp(-t_k / tau_rise)  # bi-exponential
             max_abs = np.max(np.abs(k))
             if max_abs > 0:
                 k /= max_abs
             return k
 
-        kernels = [_build_kernel(tau_decay * scale) for scale in (1.0, 2.0, 3.0)]
+        _multipliers: List[float] = kernel_multipliers if kernel_multipliers else [1.0, 2.0, 3.0]
+        kernels = [_build_kernel(tau_decay * scale) for scale in _multipliers]
 
         if rolling_baseline_window_ms is not None and rolling_baseline_window_ms > 0:
             from scipy.ndimage import median_filter
@@ -984,15 +997,24 @@ def detect_events_template(  # noqa: C901
         # so apply only the primary kernel's offset when searching for the raw data peak.
         kernel_peak_idx = int(np.argmax(primary_kernel))
         template_offset = kernel_peak_idx - kernel_center_0
-        refine_window = max(3, int(tau_rise * sampling_rate))
+        # Refinement radius must cover events much slower than the template (e.g. an EPSP
+        # with tau_decay >> template tau_decay).  tau_rise was previously used here but it
+        # is far too narrow: for a 0.5 ms template vs a 30 ms EPSP the baseline-corrected
+        # work_data peak can be >200 samples earlier than the raw data peak.  Using
+        # tau_decay (×2 for the largest multiplier kernel) as the half-window ensures the
+        # search always brackets the true amplitude maximum even with template mismatch.
+        refine_radius = max(20, int(tau_decay * sampling_rate * max(_multipliers)))
+        # Search raw data (polarity-adjusted) so rolling-baseline distortion cannot
+        # shift the detected peak away from the true signal maximum.
+        _refine_search = -data if is_negative else data
 
         if len(peak_indices) > 0:
             corrected_indices = np.empty_like(peak_indices)
             for i, idx in enumerate(peak_indices):
                 shifted = idx + template_offset
-                win_start = max(0, shifted - refine_window)
-                win_end = min(n_points, shifted + refine_window + 1)
-                local_peak = np.argmax(work_data[win_start:win_end])
+                win_start = max(0, shifted - refine_radius)
+                win_end = min(n_points, shifted + refine_radius + 1)
+                local_peak = np.argmax(_refine_search[win_start:win_end])
                 corrected_indices[i] = win_start + local_peak
             peak_indices = np.unique(corrected_indices)
 
@@ -1045,6 +1067,17 @@ def detect_events_template(  # noqa: C901
     ],
     ui_params=[
         {
+            "name": "kernel_shape",
+            "label": "Kernel Shape:",
+            "type": "choice",
+            "choices": ["bi-exponential", "mono-exponential"],
+            "default": "bi-exponential",
+            "tooltip": (
+                "bi-exponential uses distinct tau_rise and tau_decay (alpha-function shape). "
+                "mono-exponential ignores tau_rise and uses only tau_decay."
+            ),
+        },
+        {
             "name": "tau_rise_ms",
             "label": "Tau Rise (ms):",
             "type": "float",
@@ -1052,6 +1085,7 @@ def detect_events_template(  # noqa: C901
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
+            "visible_when": {"param": "kernel_shape", "value": "bi-exponential"},
         },
         {
             "name": "tau_decay_ms",
@@ -1087,15 +1121,6 @@ def detect_events_template(  # noqa: C901
             "max": 5000.0,
             "decimals": 1,
         },
-        {"name": "reject_artifacts", "label": "Reject Artifacts", "type": "bool", "default": False},
-        {
-            "name": "artifact_slope_threshold",
-            "label": "Artifact Slope Thresh:",
-            "type": "float",
-            "default": 20.0,
-            "min": 0.0,
-        },
-        {"name": "artifact_padding_ms", "label": "Artifact Padding (ms):", "type": "float", "default": 2.0},
         {
             "name": "min_event_distance_ms",
             "label": "Min Event Distance (ms):",
@@ -1105,6 +1130,17 @@ def detect_events_template(  # noqa: C901
             "max": 1000.0,
             "decimals": 1,
             "tooltip": "Minimum distance between events (ms). 0 = use tau_decay.",
+        },
+        {
+            "name": "kernel_multipliers",
+            "label": "Kernel Multipliers:",
+            "type": "string",
+            "default": "1.0, 2.0, 3.0",
+            "tooltip": (
+                "Comma-separated scaling factors for tau_decay to handle dendritic "
+                "filtering. E.g. '1.0, 2.0, 3.0' (Cable theory predicts ~2-3x "
+                "slowdown for distal inputs)."
+            ),
         },
         {
             "name": "filter_freq_hz",
@@ -1130,6 +1166,19 @@ def run_event_detection_template_wrapper(
     tau_rise = tau_rise_ms / 1000.0
     tau_decay = tau_decay_ms / 1000.0
 
+    # Parse kernel_multipliers from the comma-separated string provided by the UI.
+    raw_multipliers: str = kwargs.get("kernel_multipliers", "1.0, 2.0, 3.0")
+    try:
+        kernel_multipliers: List[float] = [float(x.strip()) for x in raw_multipliers.split(",") if x.strip()]
+        if not kernel_multipliers:
+            raise ValueError("Empty multipliers list")
+    except (ValueError, AttributeError):
+        log.warning(
+            "kernel_multipliers '%s' could not be parsed; using default [1.0, 2.0, 3.0].",
+            raw_multipliers,
+        )
+        kernel_multipliers = [1.0, 2.0, 3.0]
+
     reject_artifacts = kwargs.get("reject_artifacts", False)
     artifact_mask = None
     if reject_artifacts:
@@ -1148,6 +1197,8 @@ def run_event_detection_template_wrapper(
         artifact_mask=artifact_mask,
         time=time,
         min_event_distance_ms=kwargs.get("min_event_distance_ms", 0.0),
+        kernel_multipliers=kernel_multipliers,
+        kernel_shape=kwargs.get("kernel_shape", "bi-exponential"),
     )
 
     if not result.is_valid:
@@ -1392,7 +1443,7 @@ def run_event_detection_baseline_peak_wrapper(
     label="Synaptic Events",
     method_selector={
         "Threshold Based": "event_detection_threshold",
-        "Deconvolution (Custom)": "event_detection_deconvolution",
+        "Template Match": "event_detection_deconvolution",
         "Baseline + Peak + Kinetics": "event_detection_baseline_peak",
     },
     ui_params=[],

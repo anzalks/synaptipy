@@ -25,6 +25,7 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
 from Synaptipy.core.analysis.synaptic_events import detect_events_template, detect_events_threshold
 from Synaptipy.core.results import AnalysisResult
+from Synaptipy.core.signal_processor import find_artifact_windows
 
 log = logging.getLogger(__name__)
 
@@ -638,12 +639,48 @@ def calculate_paired_pulse_ratio(  # noqa: C901
             "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
         },
         {
+            "name": "template_kernel_shape",
+            "label": "Template Kernel Shape:",
+            "type": "choice",
+            "choices": ["bi-exponential", "mono-exponential"],
+            "default": "bi-exponential",
+            "tooltip": (
+                "bi-exponential uses distinct tau_rise and tau_decay. " "mono-exponential uses only tau_decay."
+            ),
+            "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
+        },
+        {
+            "name": "template_kernel_multipliers",
+            "label": "Template Multipliers:",
+            "type": "string",
+            "default": "1.0, 2.0, 3.0",
+            "tooltip": (
+                "Comma-separated tau_decay scaling factors for the kernel bank. "
+                "E.g. '1.0, 2.0, 3.0' (Cable theory predicts ~2-3x slowdown for distal inputs)."
+            ),
+            "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
+        },
+        {
             "name": "response_polarity",
             "type": "choice",
             "label": "Peak Polarity:",
             "choices": ["max", "min", "abs"],
             "default": "max",
             "tooltip": "Direction to search for peak response voltage within the window.",
+        },
+        {
+            "name": "amplitude_window_ms",
+            "type": "float",
+            "label": "Amplitude Window (ms):",
+            "default": 100.0,
+            "min": 0.0,
+            "max": 10000.0,
+            "decimals": 1,
+            "tooltip": (
+                "Window (ms after stimulus onset) used to find the peak response amplitude. "
+                "Independent of the event-detection Response Window. Should be wide enough "
+                "to cover the full response (e.g. 100 ms for slow EPSPs/EPSCs)."
+            ),
         },
         {
             "name": "artifact_blanking_ms",
@@ -654,6 +691,39 @@ def calculate_paired_pulse_ratio(  # noqa: C901
             "max": 50.0,
             "decimals": 2,
             "tooltip": "Data within this window after each stimulus onset are excluded from peak detection.",
+        },
+        {
+            "name": "reject_artifacts",
+            "label": "Reject Slope Artifacts",
+            "type": "bool",
+            "default": False,
+            "tooltip": (
+                "Detect and mask sharp slope-transients (e.g. electrical stimulation "
+                "artefacts) before event detection.  Only applied when Event Type is "
+                "'Events (Threshold)' or 'Events (Template)'."
+            ),
+        },
+        {
+            "name": "artifact_slope_threshold",
+            "label": "Artifact Slope Thresh:",
+            "type": "float",
+            "default": 20.0,
+            "min": 0.0,
+            "max": 1e6,
+            "decimals": 1,
+            "tooltip": "Slope (units/ms) above which a transient is classified as an artefact.",
+            "visible_when": {"param": "reject_artifacts", "value": True},
+        },
+        {
+            "name": "artifact_padding_ms",
+            "label": "Artifact Padding (ms):",
+            "type": "float",
+            "default": 2.0,
+            "min": 0.0,
+            "max": 100.0,
+            "decimals": 1,
+            "tooltip": "Samples within this window around each detected artefact are also masked.",
+            "visible_when": {"param": "reject_artifacts", "value": True},
         },
     ],
     plots=[
@@ -672,9 +742,18 @@ def run_opto_sync_wrapper(  # noqa: C901
     """
     ttl_threshold = kwargs.get("ttl_threshold", 2.5)
     response_window_ms = kwargs.get("response_window_ms", 20.0)
+    amplitude_window_ms = float(kwargs.get("amplitude_window_ms", 100.0))
     event_detection_type = kwargs.get("event_detection_type", "Spikes")
     response_polarity = kwargs.get("response_polarity", "max")
     artifact_blanking_ms = float(kwargs.get("artifact_blanking_ms", 1.0))
+
+    # Build slope-based artifact mask for event detection types if requested.
+    _reject_artifacts = kwargs.get("reject_artifacts", False)
+    _artifact_mask = None
+    if _reject_artifacts and event_detection_type in ("Events (Threshold)", "Events (Template)"):
+        _slope_thresh = kwargs.get("artifact_slope_threshold", 20.0)
+        _padding_ms = kwargs.get("artifact_padding_ms", 2.0)
+        _artifact_mask = find_artifact_windows(data, sampling_rate, _slope_thresh, _padding_ms)
 
     ap_times = kwargs.get("action_potential_times", None)
 
@@ -698,6 +777,7 @@ def run_opto_sync_wrapper(  # noqa: C901
                 threshold=ev_threshold,
                 polarity=direction,
                 refractory_period=refractory,
+                artifact_mask=_artifact_mask,
             )
             if ev_result.is_valid and ev_result.event_times is not None and len(ev_result.event_times) > 0:
                 ap_times = ev_result.event_times
@@ -709,6 +789,13 @@ def run_opto_sync_wrapper(  # noqa: C901
             tau_decay = kwargs.get("template_tau_decay_ms", 5.0) / 1000.0
             threshold_sd = kwargs.get("template_threshold_sd", 4.0)
             direction = kwargs.get("template_direction", "negative")
+            _raw_km = kwargs.get("template_kernel_multipliers", "1.0, 2.0, 3.0")
+            try:
+                _km = [float(x.strip()) for x in _raw_km.split(",") if x.strip()]
+                if not _km:
+                    raise ValueError("empty")
+            except (ValueError, AttributeError):
+                _km = [1.0, 2.0, 3.0]
             ev_result = detect_events_template(
                 data=data,
                 sampling_rate=sampling_rate,
@@ -717,6 +804,9 @@ def run_opto_sync_wrapper(  # noqa: C901
                 tau_decay=tau_decay,
                 polarity=direction,
                 time=time,
+                artifact_mask=_artifact_mask,
+                kernel_multipliers=_km,
+                kernel_shape=kwargs.get("template_kernel_shape", "bi-exponential"),
             )
             if ev_result.is_valid and ev_result.event_times is not None and len(ev_result.event_times) > 0:
                 ap_times = ev_result.event_times
@@ -744,16 +834,18 @@ def run_opto_sync_wrapper(  # noqa: C901
         return {"module_used": "evoked_responses", "metrics": {"error": result.error_message}}
 
     # Find peak response voltage within each TTL stimulus window.
-    # The first artifact_blanking_ms after each stimulus onset are skipped so
-    # that the stimulus shock-wave artefact is never reported as the peak.
+    # Uses amplitude_window_ms (independent, default 100 ms) so that the
+    # peak search always covers the full response regardless of the narrower
+    # event-detection Response Window.  The first artifact_blanking_ms after
+    # each stimulus onset are skipped to exclude the stimulus artefact.
     _peak_times: List[float] = []
     _peak_amps: List[float] = []
-    _window_s = response_window_ms / 1000.0
+    _amp_window_s = amplitude_window_ms / 1000.0
     _blank_s = artifact_blanking_ms / 1000.0
     if result.stimulus_onsets is not None and len(data) > 0:
         for _onset in result.stimulus_onsets:
             _idx_start = int(np.searchsorted(time, _onset + _blank_s, side="left"))
-            _idx_end = int(np.searchsorted(time, _onset + _window_s, side="right"))
+            _idx_end = int(np.searchsorted(time, _onset + _amp_window_s, side="right"))
             _idx_start = max(0, min(_idx_start, len(data) - 1))
             _idx_end = max(_idx_start + 1, min(_idx_end, len(data)))
             _window_data = data[_idx_start:_idx_end]

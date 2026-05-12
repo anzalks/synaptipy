@@ -684,6 +684,7 @@ Detects events via a matched-filter approach using a bi-exponential template.
 | Rolling Baseline Window | float (ms) | Baseline subtraction window |
 | Reject Artifacts | bool | Enable artifact rejection |
 | Min Event Distance | float (ms) | Minimum event separation |
+| Kernel Multipliers | string | Comma-separated scaling factors for tau_decay (e.g. `1.0, 2.0, 3.0`). Allows the kernel bank to cover slower, dendritically filtered events. Cable theory predicts ~2-3x decay slowing for distal inputs. |
 
 #### Methods
 

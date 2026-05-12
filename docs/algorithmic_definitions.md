@@ -470,10 +470,11 @@ $$
 
 :::{note}
 **Template bank construction:** The filter scales a single user-defined decay
-constant by fixed multipliers (1×, 2×, 3×) to create a detection template
-bank, rather than extracting a dynamic, data-driven template.  The three
-kernels provide tolerance for dendritic filtering without requiring a
-representative example event from the recording.
+constant by user-configurable multipliers (default 1x, 2x, 3x) to create a
+detection template bank.  The multipliers can be changed in the GUI via the
+**Kernel Multipliers** field (comma-separated floats, e.g. ``1.0, 2.0, 3.0``).
+The three default kernels provide tolerance for dendritic filtering without
+requiring a representative example event from the recording.
 :::
 
 **Formal multi-scale matched filter specification:**
@@ -485,8 +486,9 @@ h_k(t) = \left(1 - e^{-t/\tau_{\text{rise}}}\right) \cdot e^{-t/\tau_{k,\text{de
 \quad \text{for } t \geq 0
 $$
 
-where $\tau_{k,\text{decay}} \in \{1 \cdot \tau_d,\; 2 \cdot \tau_d,\; 3 \cdot \tau_d\}$
-reflects cable-theory predictions of 2–3× slowing for distal synaptic
+where $\tau_{k,\text{decay}} \in \{m_1 \cdot \tau_d,\; m_2 \cdot \tau_d,\; \ldots,\; m_K \cdot \tau_d\}$
+and $\{m_k\}$ are the user-supplied **Kernel Multipliers** (default $\{1, 2, 3\}$),
+reflecting cable-theory predictions of 2-3x slowing for distal synaptic
 inputs (Rall, 1967; Major et al., 1994).
 
 Convolution is computed via FFT: $c_k = \mathcal{F}^{-1}\{\mathcal{F}\{x\} \cdot \mathcal{F}\{h_k\}^*\}$.

@@ -499,6 +499,31 @@ See [NWB Export Mapping](nwb_mapping.md) for full container mapping details.
 5. Click "Export Selected" to create the output.
  - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
 
+#### GraphPad Prism Export
+
+For direct import into GraphPad Prism, use `CSVExporter.export_to_prism_format`
+from the Python API.  The method writes a **grouped-column** CSV where each
+column represents one experimental condition and each row is an individual
+replicate observation.  Columns of unequal length are padded with empty cells
+so Prism can compute group statistics without warnings.
+
+```python
+from pathlib import Path
+from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
+
+exporter = CSVExporter()
+exporter.export_to_prism_format(
+    results,                      # list of result dicts from BatchAnalysisEngine
+    Path("my_experiment.csv"),    # base path; actual file: my_experiment_prism_rin_mohm.csv
+    metric="rin_mohm",            # which scalar metric to export
+    group_by_key="Condition",     # key in each result row that labels the group
+)
+```
+
+The output CSV columns are the unique group labels; each value is rounded to
+six significant figures.  A companion `_provenance.json` is written alongside
+the CSV recording the Synaptipy version, timestamp, and export parameters.
+
 ### Exporting Plots
 
 Every Explorer and Analyser sub-tab includes a **Save Plot** button. The export
