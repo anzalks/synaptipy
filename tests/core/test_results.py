@@ -158,3 +158,39 @@ class TestEventDetectionResult:
     def test_n_artifacts_rejected_default(self):
         r = EventDetectionResult(value=0, unit="count")
         assert r.n_artifacts_rejected == 0
+
+
+class TestCursorResultRepr:
+    def test_repr_valid(self):
+        from Synaptipy.core.results import CursorResult
+
+        r = CursorResult(value=(0.5, -65.0), unit="mV", x_cursor=0.5, y_cursor=-65.0)
+        s = repr(r)
+        assert "CursorResult" in s
+        assert "0.5000" in s
+
+    def test_repr_invalid(self):
+        from Synaptipy.core.results import CursorResult
+
+        r = CursorResult(value=None, unit="mV", is_valid=False, error_message="no data")
+        s = repr(r)
+        assert "Error" in s
+        assert "no data" in s
+
+
+class TestCursorDeltaResultRepr:
+    def test_repr_valid(self):
+        from Synaptipy.core.results import CursorDeltaResult
+
+        r = CursorDeltaResult(value=None, unit="mV", delta_x=0.1, delta_y=10.0, pair_id=1)
+        s = repr(r)
+        assert "CursorDeltaResult" in s
+        assert "Pair 1" in s
+
+    def test_repr_invalid(self):
+        from Synaptipy.core.results import CursorDeltaResult
+
+        r = CursorDeltaResult(value=None, unit="mV", is_valid=False, error_message="no pair")
+        s = repr(r)
+        assert "Error" in s
+        assert "no pair" in s

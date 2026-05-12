@@ -544,3 +544,46 @@ class TestWriteProvenanceException:
             )
         # Must not raise; a warning must have been logged
         assert any("provenance" in r.message.lower() or "could not" in r.message.lower() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# _prism_get_group — "Unknown" fallback (line 201)
+# ---------------------------------------------------------------------------
+
+
+class TestPrismGetGroup:
+    def test_returns_unknown_when_no_key_matches(self):
+        """Line 201: _prism_get_group returns 'Unknown' when no fallback key is found."""
+        from Synaptipy.infrastructure.exporters.csv_exporter import _prism_get_group
+
+        row = {"other_key": "value"}
+        result = _prism_get_group(row, ["missing_key1", "missing_key2"])
+        assert result == "Unknown"
+
+    def test_returns_first_non_none(self):
+        """Returns the first fallback key that has a non-None value."""
+        from Synaptipy.infrastructure.exporters.csv_exporter import _prism_get_group
+
+        row = {"k1": None, "k2": "group_A"}
+        result = _prism_get_group(row, ["k1", "k2"])
+        assert result == "group_A"
+
+
+# ---------------------------------------------------------------------------
+# export_to_prism_format — exception handler (lines 831-833)
+# ---------------------------------------------------------------------------
+
+
+class TestExportToPrismFormatException:
+    def test_exception_returns_false(self, tmp_path):
+        """Lines 831-833: exception inside prism export block returns False."""
+        exporter = CSVExporter()
+        results = [{"group": "A", "metrics": {"amp": 1.0}}]
+        with patch("builtins.open", side_effect=OSError("Disk full")):
+            ok = exporter.export_to_prism_format(
+                output_path=tmp_path / "out.csv",
+                results=results,
+                metric="amp",
+                group_by_key="group",
+            )
+        assert ok is False

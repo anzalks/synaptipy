@@ -55,3 +55,31 @@ class TestParseTrialSelectionString:
         """Line 27: empty part after split (e.g. '0,,2') → continue."""
         result = parse_trial_selection_string("0,,2")
         assert result == {0, 2}
+
+    def test_strict_mode_raises_on_invalid(self):
+        """strict=True → ValueError for invalid token."""
+        import pytest
+
+        with pytest.raises(ValueError):
+            parse_trial_selection_string("abc", strict=True)
+
+    def test_strict_mode_raises_on_negative_range(self):
+        """strict=True → ValueError when a range has negative bounds."""
+        import pytest
+
+        with pytest.raises(ValueError):
+            parse_trial_selection_string("-2-5", strict=True)
+
+    def test_lenient_negative_range_skipped(self):
+        """Negative-index range is silently skipped in lenient mode (default)."""
+        result = parse_trial_selection_string("-2-5")
+        # Should not raise; the negative-index part is discarded
+        assert isinstance(result, set)
+
+    def test_strict_mode_raises_on_incomplete_range(self):
+        """strict=True → ValueError for a range missing an endpoint."""
+        import pytest
+
+        # A token like '3-' has an empty end — strict mode should raise
+        with pytest.raises(ValueError):
+            parse_trial_selection_string("3-", strict=True)

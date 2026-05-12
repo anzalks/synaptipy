@@ -192,6 +192,30 @@ _TIDY_UNIT_MAP: Dict[str, str] = {
 }
 
 
+def _prism_get_group(row: Dict[str, Any], fallbacks: List[str]) -> str:
+    """Return the first non-None group label found in *row* using *fallbacks*."""
+    for k in fallbacks:
+        v = row.get(k)
+        if v is not None:
+            return str(v)
+    return "Unknown"
+
+
+def _prism_get_value(row: Dict[str, Any], metric: str) -> Optional[float]:
+    """Extract a scalar *metric* value from *row*, flattening nested 'metrics' dicts."""
+    flat: Dict[str, Any] = dict(row)
+    if isinstance(flat.get("metrics"), dict):
+        for k, v in flat.pop("metrics").items():
+            flat.setdefault(k, v)
+    raw = flat.get(metric)
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_tidy_row(
     flat: Dict[str, Any],
     file_val: str,
@@ -699,4 +723,111 @@ class CSVExporter:
             return True
         except Exception as exc:
             log.error("export_events failed: %s", exc, exc_info=True)
+            return False
+
+    def export_to_prism_format(
+        self,
+        results: List[Dict[str, Any]],
+        output_path: Path,
+        metric: str,
+        group_by_key: str = "Condition",
+    ) -> bool:
+        """Export one scalar metric in GraphPad Prism grouped-column format.
+
+        Prism expects data tables where **each column is one experimental
+        group** and each row under a column is an individual observation (cell,
+        sweep, or replicate).  Groups of unequal size are padded with empty
+        cells so that all columns share the same length.
+
+        The function writes two files:
+
+        * ``<stem>_prism_<metric>.csv`` - the data table (one column per group,
+          one row per replicate, header = group label).
+        * ``<stem>_prism_<metric>_provenance.json`` - provenance record.
+
+        Parameters
+        ----------
+        results:
+            Wide-format result rows as returned by
+            ``BatchAnalysisEngine.run_batch`` or
+            ``CSVExporter.export_analysis_results``.
+        output_path:
+            Base path; the prism file is placed next to it with the metric
+            name embedded in the stem.
+        metric:
+            The result key whose value should be exported (e.g.
+            ``"event_count"``, ``"rin_mohm"``).  Values that cannot be
+            coerced to ``float`` are silently skipped.
+        group_by_key:
+            Key in each result row that identifies the experimental group
+            (default ``"Condition"``; falls back to ``"group"`` then
+            ``"source_file_name"``).
+
+        Returns
+        -------
+        bool
+            ``True`` on success, ``False`` on failure or when no data is
+            found for the requested metric.
+        """
+        if not results:
+            log.warning("export_to_prism_format: no results provided.")
+            return False
+
+        import csv as _csv
+        from collections import defaultdict
+
+        # Resolve the group label for every result row.
+        _group_fallbacks = [group_by_key, "group", "source_file_name", "file_name", "file"]
+
+        # Accumulate values per group, preserving insertion order.
+        groups: Dict[str, List[float]] = defaultdict(list)
+        group_order: List[str] = []
+        for row in results:
+            grp = _prism_get_group(row, _group_fallbacks)
+            val = _prism_get_value(row, metric)
+            if val is not None:
+                if grp not in groups:
+                    group_order.append(grp)
+                groups[grp].append(val)
+
+        if not group_order:
+            log.warning("export_to_prism_format: metric '%s' not found in any result row.", metric)
+            return False
+
+        # Pad columns to equal length with empty strings (Prism ignores blank
+        # cells when computing statistics).
+        max_n = max(len(groups[g]) for g in group_order)
+        padded: Dict[str, List[Any]] = {}
+        for g in group_order:
+            vals: List[Any] = [_round_sig(v) for v in groups[g]]
+            vals += [""] * (max_n - len(vals))
+            padded[g] = vals
+
+        safe_metric = metric.replace(" ", "_").replace("/", "-")
+        prism_path = output_path.with_name(f"{output_path.stem}_prism_{safe_metric}.csv")
+
+        try:
+            prism_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(prism_path, "w", newline="", encoding="utf-8") as fh:
+                writer = _csv.DictWriter(fh, fieldnames=group_order)
+                writer.writeheader()
+                for i in range(max_n):
+                    writer.writerow({g: padded[g][i] for g in group_order})
+
+            log.info(
+                "export_to_prism_format: wrote %d groups x %d rows to %s",
+                len(group_order),
+                max_n,
+                prism_path,
+            )
+
+            self._write_provenance(
+                csv_path=prism_path,
+                results=results,
+                analysis_config={"metric": metric, "group_by_key": group_by_key},
+            )
+            return True
+
+        except Exception as exc:
+            log.error("export_to_prism_format failed: %s", exc, exc_info=True)
             return False

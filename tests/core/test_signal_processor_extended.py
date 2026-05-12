@@ -509,3 +509,19 @@ class TestMultiHarmonicNotch:
         # Use a fundamental that is just above nyquist so iircomb freq_norm >=1
         out = signal_processor.multi_harmonic_notch(data, FS * 0.6, FS)
         assert len(out) == len(data)
+
+
+# ---------------------------------------------------------------------------
+# check_trace_quality — high drift warning (line 97)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTraceQualityHighDrift:
+    def test_high_drift_triggers_warning(self):
+        """Line 97: mocked large slope → total_drift >> 5*std → drift warning."""
+        data = np.arange(100, dtype=float) * 0.01 + 1.0  # some variability
+        with patch("scipy.stats.linregress") as mock_lr:
+            # Return fake huge slope so total_drift >> 5 * std(data)
+            mock_lr.return_value = (1000.0, 0.0, 1.0, 0.001, 0.0)
+            result = signal_processor.check_trace_quality(data, 10000.0)
+        assert any("drift" in w.lower() for w in result["warnings"])

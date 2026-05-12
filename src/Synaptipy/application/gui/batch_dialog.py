@@ -381,6 +381,21 @@ class AddStepDialog(QtWidgets.QDialog):
                     self.params_layout.addRow(label, combo)
                     self.param_widgets[name] = combo
 
+                elif param_type == "bool":
+                    checkbox = QtWidgets.QCheckBox()
+                    checkbox.setChecked(bool(param.get("default", False)))
+                    self.params_layout.addRow(label, checkbox)
+                    self.param_widgets[name] = checkbox
+
+                elif param_type in ("string", "str"):
+                    line_edit = QtWidgets.QLineEdit()
+                    line_edit.setText(str(param.get("default", "")))
+                    tooltip = param.get("tooltip", "")
+                    if tooltip:
+                        line_edit.setToolTip(tooltip)
+                    self.params_layout.addRow(label, line_edit)
+                    self.param_widgets[name] = line_edit
+
         else:
             # Fallback for legacy/unmigrated analysis types
             # This ensures we don't break existing analyses that haven't been migrated yet
@@ -477,6 +492,10 @@ class AddStepDialog(QtWidgets.QDialog):
                 params[name] = widget.currentText()
             elif isinstance(widget, QtWidgets.QSpinBox):
                 params[name] = widget.value()
+            elif isinstance(widget, QtWidgets.QCheckBox):
+                params[name] = widget.isChecked()
+            elif isinstance(widget, QtWidgets.QLineEdit):
+                params[name] = widget.text()
 
         self._result_config = {"analysis": analysis_name, "scope": selected_scope, "params": params}
 

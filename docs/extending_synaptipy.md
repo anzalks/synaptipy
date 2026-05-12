@@ -20,8 +20,11 @@ and batch engine the next time the application starts.
    - [4.2 `int` Parameter](#42-int-parameter)
    - [4.3 `choice` / `combo` Parameter](#43-choice--combo-parameter)
    - [4.4 `bool` Parameter](#44-bool-parameter)
-   - [4.5 Common Optional Fields](#45-common-optional-fields)
-   - [4.6 Conditional Visibility (`visible_when`)](#46-conditional-visibility-visible_when)
+   - [4.5 `string` Parameter](#45-string-parameter)
+   - [4.6 `filepath` Parameter (with Browse button)](#46-filepath-parameter-with-browse-button)
+   - [4.7 `dirpath` Parameter (with Browse button)](#47-dirpath-parameter-with-browse-button)
+   - [4.8 Common Optional Fields](#48-common-optional-fields)
+   - [4.9 Conditional Visibility (`visible_when`)](#49-conditional-visibility-visible_when)
 5. [Defining Plot Overlays (`plots`)](#5-defining-plot-overlays-plots)
    - [5.1 `hlines` - Horizontal Lines](#51-hlines--horizontal-lines)
    - [5.2 `vlines` - Vertical Lines](#52-vlines--vertical-lines)
@@ -39,6 +42,9 @@ and batch engine the next time the application starts.
 8. [Testing Your Plugin](#8-testing-your-plugin)
 9. [Full Annotated Example - Synaptic Charge Transfer](#9-full-annotated-example--synaptic-charge-transfer)
 10. [Troubleshooting](#10-troubleshooting)
+11. [SpikeInterface Integration Plugin](#11-spikeinterface-integration-plugin)
+12. [Deep Learning & Third-Party Integrations (e.g., miniML)](#12-deep-learning--third-party-integrations-eg-miniml)
+13. [Troubleshooting (full table)](#13-troubleshooting)
 
 ---
 
@@ -343,7 +349,59 @@ Creates a check box.
 }
 ```
 
-### 4.5 Common Optional Fields
+### 4.5 `string` Parameter
+
+Creates a plain text entry field (`QLineEdit`).  Use this for free-form strings
+such as user labels or non-path text values.
+
+```python
+{
+    "name": "cell_label",
+    "label": "Cell Label:",
+    "type": "string",           # aliases: "str", "path"
+    "default": "",
+    "placeholder": "e.g. CA1 pyramidal",
+    "tooltip": "Optional label stored in the results table.",
+}
+```
+
+### 4.6 `filepath` Parameter (with Browse button)
+
+Creates a `QLineEdit` + **Browse...** button that opens a file-picker dialog.
+The dialog is pre-filtered to `*.h5 *.keras` model files; all files are also
+accessible.  The chosen path is written back into the text field.
+
+Use this for parameters that require an absolute path to a single file
+(e.g. a pre-trained model).
+
+```python
+{
+    "name": "model_path",
+    "label": "Model Path (.h5):",
+    "type": "filepath",
+    "default": "",
+    "placeholder": "/path/to/model.h5",
+    "tooltip": "Absolute path to the Keras model file.",
+}
+```
+
+### 4.7 `dirpath` Parameter (with Browse button)
+
+Like `filepath` but opens a directory-picker dialog.  Use this when the plugin
+needs a directory to be on `sys.path` (e.g. a source-only library like miniML).
+
+```python
+{
+    "name": "miniml_core_path",
+    "label": "miniML core/ Path:",
+    "type": "dirpath",
+    "default": "",
+    "placeholder": "/path/to/miniML/core",
+    "tooltip": "Folder containing miniML.py (click Browse to select).",
+}
+```
+
+### 4.8 Common Optional Fields
 
 These fields work on any parameter type:
 
@@ -353,7 +411,7 @@ These fields work on any parameter type:
 | `"hidden"` | `bool` | If `True`, the widget is not created at all.  Use for internal params that should not be user-editable. |
 | `"visible_when"` | `dict` | Conditional visibility - see below. |
 
-### 4.6 Conditional Visibility (`visible_when`)
+### 4.9 Conditional Visibility (`visible_when`)
 
 Show or hide a parameter widget based on the current value of another widget.
 
@@ -643,6 +701,22 @@ The user can customise both overlay types via
 > **Edit > Preferences > Extensions** (or **Synaptipy > Preferences** on
 > macOS).  This setting is on by default.  After changing it, restart
 > Synaptipy for the change to take effect.
+
+### Real-world templates in `examples/plugins/`
+
+> **Looking for a working starting point?**  The `examples/plugins/` directory
+> ships three fully annotated, copy-pasteable plugin templates that cover the
+> most common use cases:
+>
+> | File | What it demonstrates |
+> |---|---|
+> | `synaptic_charge.py` | Baseline subtraction, trapezoidal integration, `fill_between` + star overlays |
+> | `opto_jitter.py` | Multi-channel access (TTL + voltage), per-trial loop, jitter statistics |
+> | `ap_repolarization.py` | Derivative-based detection, `vlines` + `hlines` overlays |
+>
+> Copy any file to `~/.synaptipy/plugins/`, rename the function and the
+> `name=` / `label=` fields in the decorator, and you have a working plugin
+> in minutes -- no blank-page problem.
 
 ### Option A: Built-in Examples Directory
 
@@ -1048,7 +1122,181 @@ signals.preferences_updated.connect(my_popup_widget.update_pens)
 
 ---
 
-## 11. Troubleshooting
+## 11. SpikeInterface Integration Plugin
+
+Synaptipy ships a ready-to-use plugin that integrates
+[SpikeInterface](https://spikeinterface.readthedocs.io/) spike detection
+directly into the standard Analyser workflow.  Because SpikeInterface is an
+optional dependency it is **not** listed in `requirements.txt`; install it once
+with `pip install spikeinterface`.
+
+### What the plugin does
+
+1. You select the extracellular field channel in the Analyser tab (exactly like
+   any other built-in analysis).
+2. The plugin wraps the selected 1-D numpy array in a
+   `spikeinterface.core.NumpyRecording`, bandpass-filters it (default
+   300-6000 Hz), and runs `detect_peaks` with the `by_channel` method - no
+   external sorter binary is required.
+3. Detected spike times are shown as:
+   - **Red dashed vertical lines** on the trace (one line per spike).
+   - **Red scatter markers** at the filtered amplitude of each peak.
+4. Summary metrics appear in the Results panel: `Spike_Count`,
+   `Noise_Estimate`, `Threshold`, and `Mean_Firing_Rate_Hz`.
+
+### Before running
+
+![SpikeInterface plugin - parameters ready](screenshots/plugin_spike_interface_empty.png)
+
+The tab renders automatically when the plugin file is present in
+`examples/plugins/` or `~/.synaptipy/plugins/`.  The **Run Analysis** button
+(`run_button=True` in the decorator) means the analysis only executes when
+clicked - it does not re-run on every parameter change, which is appropriate
+for the relatively expensive bandpass + peak-detection pipeline.
+
+### After running - 3 detected spikes
+
+![SpikeInterface plugin - 3 spikes detected](screenshots/plugin_spike_interface_detected.png)
+
+Red dashed lines mark each detected spike time; red circles mark the filtered
+amplitude at each peak.  The Results panel shows all four metrics.
+
+### Installation
+
+```bash
+# Activate the Synaptipy environment and install SpikeInterface
+conda activate synaptipy
+pip install spikeinterface
+
+# The plugin is already present at:
+#   examples/plugins/spike_interface_integration.py
+# Copy it to your personal directory for auto-load on every launch:
+cp examples/plugins/spike_interface_integration.py ~/.synaptipy/plugins/
+```
+
+### Key parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `freq_min` | 300 Hz | Lower bandpass cutoff (removes LFP / baseline drift) |
+| `freq_max` | 6000 Hz | Upper bandpass cutoff (removes high-frequency noise) |
+| `threshold_mad` | 5 | Spike threshold as a multiple of the MAD noise estimate |
+| `peak_sign` | `neg` | Polarity: `neg` for field potentials, `pos` for some units |
+| `exclude_sweep_ms` | 5 ms | Refractory period - prevents double-counting secondary deflections |
+
+### Testing the plugin without running the full CI suite
+
+The plugin tests live in `examples/tests/` and are intentionally excluded from
+the core CI `testpaths` (which only scans `tests/`).  Run them manually:
+
+```bash
+conda run -n synaptipy python -m pytest examples/tests/ -v
+```
+
+---
+
+## 12. Deep Learning & Third-Party Integrations (e.g., miniML)
+
+Synaptipy's plugin architecture is intentionally decoupled from its core
+dependencies. You can integrate heavy machine-learning or third-party
+libraries -- such as [miniML](https://github.com/delvendahl/miniML), a
+deep-learning framework for synaptic event detection -- without modifying
+any Synaptipy source files and without adding those dependencies to
+`requirements.txt`, `pyproject.toml`, or `environment.yml`.
+
+> **CI contract:** `miniML`, `tensorflow`, `keras`, `ruptures`, and any other
+> third-party ML library must **never** be added to Synaptipy's core dependency
+> files. The CI pipelines are headless, fast, and must remain completely
+> decoupled from these optional dependencies.
+
+### 4-step workflow
+
+1. **Clone miniML once** (outside the Synaptipy directory):
+   ```bash
+   git clone https://github.com/delvendahl/miniML.git ~/miniML
+   ```
+   miniML is **not** a pip package -- it is a collection of Python source
+   files.  The plugin adds `miniML/core/` to `sys.path` at runtime.
+
+2. **Install miniML's Python dependencies** into the Synaptipy environment:
+   ```bash
+   conda activate synaptipy
+   pip install "tensorflow>=2.12,<2.16" scikit-learn ruptures==1.1.10
+   ```
+   > **Do NOT run `pip install -r ~/miniML/requirements.txt`.**
+   > That file pins `numpy==1.23.5` and `pandas==1.5.3`, which are
+   > incompatible with Synaptipy's `numpy>=2.0` requirement and will
+   > break `np.trapezoid` calls throughout the application.
+
+3. **Copy the plugin** to your personal plugin directory:
+   ```bash
+   # macOS / Linux
+   cp examples/plugins/miniml_integration.py ~/.synaptipy/plugins/
+
+   # Windows (PowerShell)
+   Copy-Item examples\plugins\miniml_integration.py ~\.synaptipy\plugins\
+   ```
+   Enable custom plugins under **Edit > Preferences**
+   (or **Synaptipy > Preferences** on macOS) and restart.
+
+4. **Use the Browse buttons in the GUI**:
+   - Open a recording, switch to the **Analyser** tab, click **miniML Events**.
+   - Click **Browse...** next to **miniML core/ Path** and navigate to the
+     `core/` sub-directory inside the cloned repo (e.g. `~/miniML/core/`).
+   - Click **Browse...** next to **Model Path (.h5)** and navigate to a
+     `.h5` model file (e.g. `~/miniML/models/GC_lstm_model.h5`).
+   - Adjust **Prediction Threshold** and **Direction**, then click **Run Analysis**.
+
+### miniML Integration Example
+
+Because Synaptipy plugins run in your local environment, you can easily
+integrate heavy ML frameworks like `miniML` without bloating Synaptipy's
+core dependencies. We provide a template at
+`examples/plugins/miniml_integration.py`.
+
+#### Installation warning
+
+Do NOT use `pip install miniML` (it targets an unrelated database package
+on PyPI) and do NOT use `git clone` inside the Synaptipy directory (to
+avoid git tracking conflicts). Install via the GitHub URL above.
+
+### Template: `examples/plugins/miniml_integration.py`
+
+A fully annotated, copy-pasteable template is provided at
+`examples/plugins/miniml_integration.py`. It demonstrates:
+
+- **Lazy `sys.path` import** -- the plugin adds the `miniML/core/` directory
+  to `sys.path` at analysis time (via `_import_miniml(miniml_core_path)`),
+  so the library is never imported at Synaptipy startup.  This means the tab
+  appears even when miniML is not installed; users only see an error if they
+  click **Run Analysis** without filling in the paths.
+- **`dirpath` Browse button** for `miniml_core_path` -- users click Browse
+  instead of typing a path.
+- **`filepath` Browse button** for `model_path` -- opens a file picker
+  pre-filtered to `.h5` / `.keras` model files.
+- How to expose `threshold`, `direction`, and `batch_size` as GUI widgets.
+- How to return private `_event_times` / `_event_peaks` keys for plot
+  overlays while keeping `Event_Count`, `Frequency_Hz`, and `Model_Used`
+  visible in the results table.
+- **`run_button=True`** in the decorator -- for analyses that should only run
+  on explicit user action (rather than on every parameter change), set this
+  flag to add a dedicated **Run Analysis** button to the tab.
+
+### Adapting the template to other ML tools
+
+The same pattern works for any inference library:
+
+| Part | What to change |
+|---|---|
+| `try/except Exception` block | Replace `miniML` imports with your library |
+| `model_path` `ui_params` entry | Use whatever path or identifier your model needs |
+| `run_*_detection()` function | Replace miniML API calls with your library's API |
+| `ui_params` | Expose whichever hyperparameters the user should control |
+| `plots` | Map returned private keys to the overlay type that fits |
+
+---
+
+## 13. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -1057,7 +1305,9 @@ signals.preferences_updated.connect(my_popup_widget.update_pens)
 | Tab does not appear | Missing `@AnalysisRegistry.register` decorator | The file must contain a decorated function. |
 | `ImportError` in log | Plugin imports a package not installed in your environment | Install the dependency: `pip install <package>` |
 | `name "X" is already registered` warning | Two plugins use the same `name=` string | Change one plugin's `name=` to something unique. |
-| Parameters don't show up | `ui_params` has a typo in `"type"` | Must be one of: `"float"`, `"int"`, `"bool"`, `"choice"` |
+| Parameters don't show up | `ui_params` has a typo in `"type"` | Must be one of: `"float"`, `"int"`, `"bool"`, `"choice"`, `"string"`, `"filepath"`, `"dirpath"` |
+| Browse button not shown | Using `"type": "string"` instead of `"filepath"` or `"dirpath"` | Change type to `"filepath"` (file picker) or `"dirpath"` (folder picker). |
+| miniML tab appears but shows error on Run | `miniml_core_path` not set or wrong folder | Browse to the `core/` sub-directory (the folder containing `miniML.py`). |
 | Plot overlay missing | Result dict key doesn't match `plots` data key | The key in `"data"` must exactly match a key in the returned dict. |
 | Results table shows `_private` keys | Keys must start with underscore | Prefix with `_`: `"_fit_data"` |
 | Built-in contrib: 0 tabs on Windows | Forgot to add `from . import X` in `__init__.py` | See §7, step 2. |

@@ -282,3 +282,23 @@ class TestGetCrossFileAverage:
         time_out, _, _, _ = get_cross_file_average(items, [0], 0, adapter)
 
         np.testing.assert_allclose(time_out, t_a)
+
+
+# ---------------------------------------------------------------------------
+# extract_per_file_trace — empty parsed_trials (line 78)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractPerFileTraceEmptyTrials:
+    def test_empty_parsed_trials_returns_none(self):
+        """Line 78: empty parsed_trials → file_traces stays empty → return None."""
+        ch = _make_channel({}, {})
+        rec = _make_recording({0: ch})
+        adapter = _make_adapter(rec)
+        result = extract_per_file_trace(
+            item={"path": Path("a.abf")},
+            parsed_trials=[],
+            channel_idx=0,
+            neo_adapter=adapter,
+        )
+        assert result is None

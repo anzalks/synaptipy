@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3b7] - 2026-05-12
+
+### Added
+
+- **Explorer tab - resizable panels**: Splitter-based layout allows users to
+  resize the file browser and plot area at runtime.
+- **Preferences dialog - theme handling**: Theme changes now propagate
+  correctly to all open dialogs and the main window.
+- **Docs - algorithmic definitions**: New `algorithmic_definitions.md` document
+  with full mathematical derivations for all analysis functions.
+- **Docs - references**: New `references.md` with curated scientific
+  bibliography cross-linked from algorithm descriptions.
+- **Examples - publication-quality figures**: `01_batch_analysis.ipynb` and
+  `02_optogenetics.ipynb` updated with matplotlib figure export.
+- **Examples - plugin tests**: Integration test suite added under
+  `examples/tests/` covering the spike_interface and miniML plugins.
+- **Plugin - miniML**: Browse buttons for filepath/dirpath inputs;
+  TF 2.18/tf_keras compatibility fix; detection markers shown on plot.
+- **Tests**: Comprehensive new tests added for analysis functions, CSV
+  exporter, session manager, signal processor, UI/UX fixes, and more.
+
+### Fixed
+
+- **Batch export**: Fixed export failures when channel names contain special
+  characters; progress dialog now closes reliably on completion.
+- **Event detection**: Threshold-based and deconvolution detection edge cases
+  fixed for recordings with very short sweeps.
+- **CSV exporter**: Column ordering and metadata headers corrected for
+  multi-channel recordings.
+
+### Changed
+
+- Bumped version to `0.1.3b7` across all canonical locations.
+
+
 ## [0.1.3b6] - 2026-05-11
 
 ### Fixed

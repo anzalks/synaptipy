@@ -4,18 +4,64 @@ Basic Usage Example for Synaptipy
 
 This example demonstrates programmatic usage of Synaptipy for loading
 electrophysiology data, analyzing input resistance, and exporting results.
+Figures are saved to disk as PDF (vector, publication-ready) and PNG (raster).
 
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
 """
 
+import matplotlib
 import numpy as np
 from matplotlib import pyplot as plt
 
 from Synaptipy.analysis.resistance_analysis import calculate_input_resistance
-
-# Import Synaptipy components
 from Synaptipy.core.data_model import Channel, Recording
+
+# ---------------------------------------------------------------------------
+# Publication-quality rcParams -- inject before any figure is created
+# ---------------------------------------------------------------------------
+matplotlib.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+        "font.size": 8,
+        "axes.titlesize": 8,
+        "axes.labelsize": 8,
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "legend.fontsize": 7,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.linewidth": 0.8,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
+        "lines.linewidth": 0.8,
+        "figure.dpi": 150,
+        "savefig.dpi": 300,
+        "pdf.fonttype": 42,  # editable text in Illustrator / Inkscape
+        "ps.fonttype": 42,
+    }
+)
+
+
+def _draw_l_scale_bar(ax, x0, y0, dx, dy, x_label, y_label, fontsize=7):
+    """Draw an L-shaped scale bar on *ax* and hide all axes decorations."""
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.plot([x0, x0 + dx], [y0, y0], color="k", linewidth=1.5, solid_capstyle="butt", clip_on=False)
+    ax.plot([x0, x0], [y0, y0 + dy], color="k", linewidth=1.5, solid_capstyle="butt", clip_on=False)
+    ax.text(x0 + dx / 2, y0 - 0.12 * dy, x_label, ha="center", va="top", fontsize=fontsize)
+    ax.text(
+        x0 - 0.01 * (ax.get_xlim()[1] - ax.get_xlim()[0]),
+        y0 + dy / 2,
+        y_label,
+        ha="right",
+        va="center",
+        fontsize=fontsize,
+        rotation=90,
+    )
 
 
 def create_synthetic_data():
@@ -114,26 +160,73 @@ def main():
     print(f"ΔV: {result['ΔV (mV)']:.2f} mV")
     print(f"ΔI: {result['ΔI (pA)']:.2f} pA")
 
-    # Plot the data and analysis
-    plt.figure(figsize=(10, 6))
+    # -----------------------------------------------------------------------
+    # Publication-quality figure: voltage + current traces with L-scale bars
+    # -----------------------------------------------------------------------
+    v_data = v_channel.data_trials[0]
+    i_data = i_channel.data_trials[0]
 
-    # Plot voltage trace
-    plt.subplot(2, 1, 1)
-    plt.plot(time_vec, v_channel.data_trials[0], "b-", label="Voltage")
-    plt.axvspan(baseline_window[0], baseline_window[1], alpha=0.2, color="green", label="Baseline")
-    plt.axvspan(response_window[0], response_window[1], alpha=0.2, color="red", label="Response")
-    plt.ylabel("Voltage (mV)")
-    plt.legend()
-    plt.title("Input Resistance Analysis")
+    fig, (ax_v, ax_i) = plt.subplots(
+        2,
+        1,
+        figsize=(3.5, 3.0),
+        gridspec_kw={"height_ratios": [3, 2], "hspace": 0.05},
+    )
 
-    # Plot current trace
-    plt.subplot(2, 1, 2)
-    plt.plot(time_vec, i_channel.data_trials[0], "r-", label="Current")
-    plt.axvspan(baseline_window[0], baseline_window[1], alpha=0.2, color="green", label="Baseline")
-    plt.axvspan(response_window[0], response_window[1], alpha=0.2, color="red", label="Response")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Current (pA)")
-    plt.legend()
+    # Voltage trace
+    ax_v.plot(time_vec, v_data, color="k", linewidth=0.6)
+    ax_v.set_title("Input Resistance Analysis", pad=4)
+
+    # Current trace
+    ax_i.plot(time_vec, i_data, color="#c0392b", linewidth=0.6)
+
+    # Highlight analysis windows on current panel only
+    ax_i.axvspan(baseline_window[0], baseline_window[1], alpha=0.15, color="#27ae60", label="Baseline")
+    ax_i.axvspan(response_window[0], response_window[1], alpha=0.15, color="#e74c3c", label="Response")
+    ax_i.legend(frameon=False, loc="lower right")
+
+    # L-shaped scale bars --------------------------------------------------
+    # Voltage panel: 100 ms, 5 mV
+    ax_v.set_xlim(time_vec[0], time_vec[-1])
+    ax_v.set_ylim(v_data.min() - 1, v_data.max() + 1)
+    _draw_l_scale_bar(
+        ax_v,
+        x0=time_vec[-1] - 0.18,
+        y0=v_data.min() + 0.05 * (v_data.max() - v_data.min()),
+        dx=0.100,
+        dy=5.0,
+        x_label="100 ms",
+        y_label="5 mV",
+    )
+
+    # Current panel: 100 ms, 20 pA
+    ax_i.set_xlim(time_vec[0], time_vec[-1])
+    ax_i.set_ylim(i_data.min() - 5, i_data.max() + 5)
+    _draw_l_scale_bar(
+        ax_i,
+        x0=time_vec[-1] - 0.18,
+        y0=i_data.min() + 0.05 * (i_data.max() - i_data.min()),
+        dx=0.100,
+        dy=20.0,
+        x_label="100 ms",
+        y_label="20 pA",
+    )
+
+    # Annotate Rin on the voltage panel
+    ax_v.text(
+        0.02,
+        0.95,
+        f"Rin = {result['Rin (MΩ)']:.1f} MΩ",
+        transform=ax_v.transAxes,
+        va="top",
+        ha="left",
+        fontsize=7,
+    )
+
+    plt.savefig("fig_input_resistance.pdf", bbox_inches="tight")
+    plt.savefig("fig_input_resistance.png", bbox_inches="tight")
+    plt.close("all")
+    print("Figures saved: fig_input_resistance.pdf / .png")
 
     # Option: Export to NWB (uncomment to use)
     """
@@ -160,8 +253,6 @@ def main():
     """
 
     print("\nExample completed.")
-    plt.tight_layout()
-    plt.show()
 
 
 if __name__ == "__main__":

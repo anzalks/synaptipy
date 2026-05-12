@@ -50,3 +50,117 @@ class TestPluginTemplateWrapper:
         wrapper = mod.run_my_custom_metric_wrapper
         result = wrapper(data=np.array([]), time=np.array([]), sampling_rate=10_000.0)
         assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# cli/__init__.py — lines 10-11 (module-level __all__)
+# ---------------------------------------------------------------------------
+
+
+class TestCliInit:
+    def test_cli_import_succeeds(self):
+        """Importing the CLI subpackage must not raise."""
+        import Synaptipy.application.cli as cli  # noqa: F401
+
+        assert hasattr(cli, "__all__")
+        assert cli.__all__ == []
+
+
+# ---------------------------------------------------------------------------
+# epoch_manager.py — lines 281-291 (remove_epoch, clear)
+# ---------------------------------------------------------------------------
+
+
+class TestEpochManagerMutations:
+    def _make_manager(self):
+        from Synaptipy.core.analysis.epoch_manager import EpochManager
+
+        return EpochManager()
+
+    def test_remove_epoch_existing_returns_true(self):
+        mgr = self._make_manager()
+        mgr.add_manual_epoch("stim", 0.1, 0.2)
+        assert mgr.remove_epoch("stim") is True
+
+    def test_remove_epoch_nonexistent_returns_false(self):
+        mgr = self._make_manager()
+        assert mgr.remove_epoch("ghost") is False
+
+    def test_remove_epoch_case_insensitive(self):
+        mgr = self._make_manager()
+        mgr.add_manual_epoch("Stim", 0.1, 0.2)
+        assert mgr.remove_epoch("stim") is True
+
+    def test_clear_removes_all_epochs(self):
+        mgr = self._make_manager()
+        mgr.add_manual_epoch("a", 0.0, 0.1)
+        mgr.add_manual_epoch("b", 0.2, 0.3)
+        mgr.clear()
+        assert mgr.epoch_names == []
+
+
+# ---------------------------------------------------------------------------
+# registry.py — lines 57-66 (collision: plugin shadows core analysis)
+# ---------------------------------------------------------------------------
+
+
+class TestRegistryCollision:
+    def setup_method(self):
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+        self._saved_registry = dict(AnalysisRegistry._registry)
+        self._saved_metadata = dict(AnalysisRegistry._metadata)
+        self._saved_original = dict(AnalysisRegistry._original_metadata)
+        self._saved_core = set(AnalysisRegistry._core_analyses)
+        AnalysisRegistry.clear()
+
+    def teardown_method(self):
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+        AnalysisRegistry.clear()
+        AnalysisRegistry._registry.update(self._saved_registry)
+        AnalysisRegistry._metadata.update(self._saved_metadata)
+        AnalysisRegistry._original_metadata.update(self._saved_original)
+        AnalysisRegistry._core_analyses = self._saved_core
+
+    def test_plugin_collision_with_core_gets_suffixed(self):
+        """Lines 57-66: plugin that shadows a core name is renamed."""
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+        @AnalysisRegistry.register("core_analysis")
+        def core_fn(**kwargs):
+            return {}
+
+        # Mark as core snapshot so the name is protected
+        AnalysisRegistry.mark_core_snapshot()
+
+        @AnalysisRegistry.register("core_analysis")
+        def plugin_fn(**kwargs):
+            return {}
+
+        # The plugin must NOT replace the core; it gets a suffixed name
+        assert "core_analysis" in AnalysisRegistry._registry
+        assert AnalysisRegistry._registry["core_analysis"] is core_fn
+        assert "core_analysis_1" in AnalysisRegistry._registry
+        assert AnalysisRegistry._registry["core_analysis_1"] is plugin_fn
+
+    def test_two_plugin_collisions_both_suffixed_incrementally(self):
+        """Counter keeps incrementing on repeated collisions."""
+        from Synaptipy.core.analysis.registry import AnalysisRegistry
+
+        @AnalysisRegistry.register("base")
+        def fn_core(**kwargs):
+            return {}
+
+        AnalysisRegistry.mark_core_snapshot()
+
+        @AnalysisRegistry.register("base")
+        def fn_plugin1(**kwargs):
+            return {}
+
+        @AnalysisRegistry.register("base")
+        def fn_plugin2(**kwargs):
+            return {}
+
+        assert "base_1" in AnalysisRegistry._registry
+        assert "base_2" in AnalysisRegistry._registry

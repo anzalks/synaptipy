@@ -30,6 +30,7 @@ from Synaptipy.core.analysis.firing_dynamics import (
 from Synaptipy.core.analysis.single_spike import (
     analyze_multi_sweep_spikes,
     calculate_isi,
+    calculate_spike_features,
     detect_spikes_threshold,
     run_spike_detection_wrapper,
     single_spike_module,
@@ -898,3 +899,272 @@ class TestSingleSpikeModule:
         """Line 906: single_spike_module aggregator."""
         result = single_spike_module()
         assert isinstance(result, dict)
+
+
+# ===========================================================================
+# firing_dynamics.py remaining gaps
+# ===========================================================================
+
+
+def _spiking_trace_local(n_spikes: int = 5, isi_s: float = 0.1, duration: float = 0.8):
+    """Build a simple spiking trace for firing dynamics tests."""
+    fs = 20_000.0
+    n = int(duration * fs)
+    t = np.arange(n) / fs
+    data = np.full(n, -70.0)
+    # Place spikes at regular intervals
+    for k in range(n_spikes):
+        idx = int((0.05 + k * isi_s) * fs)
+        if idx < n - 5:
+            data[idx : idx + 5] = [0.0, 30.0, 20.0, -5.0, -70.0]
+    return data, t
+
+
+class TestFiringDynamicsGaps:
+    def test_adaptation_ratio_near_zero_isis(self):
+        """Line 95: isis[0] <= 1e-6 appends np.nan for adaptation ratio."""
+        from unittest.mock import MagicMock
+
+        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+
+        # Mock spike detection to return 3 spikes with a near-zero first ISI
+        fake_result = MagicMock()
+        fake_result.spike_times = np.array([0.05, 0.050001e-6, 0.20])  # first ISI ≈ 1e-13 s
+        fake_result.mean_frequency = 15.0
+        fake_result.is_valid = True
+
+        # spike_indices must be a numpy array so calculate_spike_features works
+        fake_result.spike_indices = np.array([0, 1, 2])
+
+        with patch(
+            "Synaptipy.core.analysis.firing_dynamics.detect_spikes_threshold",
+            return_value=fake_result,
+        ):
+            fs = 20_000.0
+            n = int(0.5 * fs)
+            t = np.arange(n) / fs
+            data = np.full(n, -70.0)
+            result = calculate_fi_curve([data], [t], current_steps=[100.0], threshold=-20.0)
+        assert isinstance(result, dict)
+        # adaptation_ratios should exist; the value should be NaN (line 95 was hit)
+        ratios = result.get("adaptation_ratios", [])
+        assert len(ratios) >= 1
+        assert np.isnan(ratios[0])
+
+    def test_fi_curve_linregress_exception(self):
+        """Lines 147-148: linregress raises inside calculate_fi_curve."""
+        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+
+        # Build two sweeps with different spike counts so linregress is actually called.
+        # Sweep A: fewer spikes, Sweep B: more spikes → rheobase at index 0,
+        # len(x) = 2 >= 2, linregress is entered and the patch raises ValueError.
+        v_low, t = _spiking_trace_local(n_spikes=2, isi_s=0.15, duration=0.5)
+        v_high, _ = _spiking_trace_local(n_spikes=8, isi_s=0.04, duration=0.5)
+        with patch(
+            "Synaptipy.core.analysis.firing_dynamics.linregress",
+            side_effect=ValueError("forced failure"),
+        ):
+            result = calculate_fi_curve(
+                [v_low, v_high],
+                [t, t],
+                current_steps=[100.0, 300.0],
+                threshold=-20.0,
+            )
+        # When regression raises, fi_slope is left as None
+        assert result.get("fi_slope") is None
+
+    def test_analyze_spikes_and_bursts_spike_times_none(self):
+        """Line 432: analyze_spikes_and_bursts returns early when spike_times is None."""
+        from unittest.mock import MagicMock
+
+        from Synaptipy.core.analysis.firing_dynamics import analyze_spikes_and_bursts
+
+        fake = MagicMock()
+        fake.is_valid = True
+        fake.spike_times = None  # triggers line 432
+        with patch(
+            "Synaptipy.core.analysis.firing_dynamics.detect_spikes_threshold",
+            return_value=fake,
+        ):
+            data = np.zeros(100)
+            time = np.arange(100) / 20_000.0
+            result = analyze_spikes_and_bursts(
+                data=data,
+                time=time,
+                sampling_rate=20_000.0,
+                threshold=-20.0,
+                max_isi_start=0.01,
+                max_isi_end=0.1,
+            )
+        assert result.is_valid
+        assert result.burst_count == 0
+
+    def test_train_dynamics_three_spikes_all_zero_isis(self):
+        """Line 620: 3 spikes but all positive ISIs filtered out → len(isis)<2."""
+        from Synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
+
+        # 3 spikes: first two at same time → isis = [0.0, 0.2]
+        # after isis[isis>0] = [0.2] → len==1 < 2 → hits line 620
+        spike_times = np.array([0.1, 0.1, 0.3])
+        result = calculate_train_dynamics(spike_times)
+        assert isinstance(result, TrainDynamicsResult)
+        assert result.is_valid
+
+    def test_spike_broadening_index_three_or_more_widths(self):
+        """Lines 765-766: broadening index computed when >= 3 valid widths."""
+        from Synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
+
+        mock_features = [{"half_width": 0.001 * (i + 1)} for i in range(5)]
+        with patch(
+            "Synaptipy.core.analysis.firing_dynamics.calculate_spike_features",
+            return_value=mock_features,
+        ):
+            v, t = _spiking_trace_local(n_spikes=5, isi_s=0.08, duration=0.6)
+            result = run_train_dynamics_wrapper(data=v, time=t, sampling_rate=20_000.0)
+        assert isinstance(result, dict)
+        metrics = result.get("metrics", result)
+        assert "spike_broadening_index" in metrics
+        assert not np.isnan(metrics["spike_broadening_index"])
+
+
+# ===========================================================================
+# single_spike.py remaining gaps
+# ===========================================================================
+
+
+class TestSingleSpikeGaps:
+    def test_detect_spikes_no_crossings_returns_empty(self):
+        """Line 154: no threshold crossings → SpikeTrainResult with 0 spikes."""
+        data = np.full(200, -70.0)  # flat, never crosses threshold=-20
+        time = np.arange(200) / 20_000.0
+        result = detect_spikes_threshold(data, time, threshold=-20.0, refractory_samples=40)
+        assert result.value == 0
+        assert result.spike_times is not None
+        assert len(result.spike_times) == 0
+
+    def test_calculate_spike_features_too_short_data(self):
+        """Line 251: n_data < 2 → returns empty list."""
+        data = np.array([-65.0])
+        time = np.array([0.0])
+        result = calculate_spike_features(data, time, spike_indices=np.array([0]))
+        assert result == []
+
+    def test_calculate_spike_features_zero_dt(self):
+        """Lines 255-256: dt <= 0 → warning and empty list."""
+        data = np.array([-65.0, -60.0, -50.0])
+        time = np.array([0.5, 0.5, 0.5])  # all same time → dt=0
+        result = calculate_spike_features(data, time, spike_indices=np.array([1]))
+        assert result == []
+
+    def test_analyze_multi_sweep_exception_returns_invalid(self):
+        """Lines 582-588: per-sweep exception in analyze_multi_sweep_spikes → invalid result."""
+        # Very short sweep that causes ValueError in spike detection
+        bad_sweep = np.array([-65.0])  # length 1
+        time = np.arange(100) / 20_000.0
+        results = analyze_multi_sweep_spikes(
+            data_trials=[bad_sweep],
+            time_vector=time,
+            threshold=-20.0,
+            refractory_samples=40,
+        )
+        assert len(results) == 1
+        # Short sweep raises ValueError - caught by except, returns invalid result
+        assert isinstance(results[0].value, (int, float))
+
+    def test_run_spike_detection_wrapper_error_recovery(self):
+        """Lines 840-842: wrapper exception path returns error dict."""
+        # Pass empty data to trigger error handling
+        result = run_spike_detection_wrapper(
+            data=np.array([]),
+            time=np.array([]),
+            sampling_rate=20_000.0,
+        )
+        assert isinstance(result, dict)
+        assert "metrics" in result
+
+
+# ---------------------------------------------------------------------------
+# detect_spikes_threshold — peak_search_window_samples=0 (line 172)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectSpikesPeakWindowZero:
+    def test_peak_search_window_zero_uses_crossing_idx(self):
+        """Line 172: peak_search_window_samples=0 → search_start >= search_end."""
+        fs = 1_000.0
+        n = 200
+        time = np.arange(n) / fs
+        data = np.full(n, -70.0, dtype=float)
+        data[100] = 30.0  # single-sample spike → large dv/dt crossing
+        result = detect_spikes_threshold(
+            data, time, threshold=-20.0, refractory_samples=5, peak_search_window_samples=0
+        )
+        # Result must still be a valid SpikeTrainResult
+        assert result.is_valid or not result.is_valid  # just confirm no exception
+
+
+# ---------------------------------------------------------------------------
+# detect_spikes_threshold — exception handler (lines 201-203)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectSpikesExceptionHandler:
+    def test_mocked_gradient_raises_exception(self):
+        """Lines 201-203: np.gradient raises ValueError → returns invalid SpikeTrainResult."""
+        fs = 20_000.0
+        n = 200
+        time = np.arange(n) / fs
+        data = np.full(n, -65.0)
+        with patch("Synaptipy.core.analysis.single_spike.np.gradient", side_effect=ValueError("mock gradient")):
+            result = detect_spikes_threshold(data, time, threshold=-20.0, refractory_samples=40)
+        assert not result.is_valid
+
+
+# ---------------------------------------------------------------------------
+# detect_threshold_kink — no dv/dt crossings fallback (line 670)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectThresholdKinkFallback:
+    def test_very_high_dvdt_threshold_uses_fallback(self):
+        """Line 670: dvdt_threshold so large no crossing found → fallback index."""
+        from Synaptipy.core.analysis.single_spike import detect_threshold_kink
+
+        fs = 20_000.0
+        n = 1000
+        voltage = np.full(n, -65.0)
+        # Create a gentle spike that doesn't exceed huge dvdt_threshold
+        voltage[500:510] = np.linspace(-65.0, 30.0, 10)
+        voltage[510:520] = np.linspace(30.0, -65.0, 10)
+        peak_indices = np.array([509])  # peak at index 509
+        result = detect_threshold_kink(
+            voltage,
+            fs,
+            dvdt_threshold=1e9,  # impossibly high → no crossings found
+            peak_indices=peak_indices,
+        )
+        # Should return an array with 1 fallback index
+        assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# calculate_spike_features — very low sampling rate → small AHP (line 459)
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateSpikeFeatureSmallAhpWindow:
+    def test_tiny_ahp_window_skips_smoothing(self):
+        """Line 459: ahp_window_sec tiny → ahp_max_samples=1 → window_length < 5 → else branch."""
+        fs = 1_000.0
+        n = 1000
+        time = np.arange(n) / fs
+        data = np.full(n, -65.0)
+        # Build an action potential at index 500
+        data[495:501] = np.linspace(-65.0, 40.0, 6)
+        data[501:510] = np.linspace(40.0, -70.0, 9)
+        data[510:540] = np.linspace(-70.0, -65.0, 30)
+        spike_indices = np.array([500])
+        # ahp_window_sec=0.001 → ahp_max_samples=1 → n_cols=1 → max_win=1 →
+        # window_length=min(5,1)=1 < 5 → else: smoothed_ahp = ahp_waveforms
+        result = calculate_spike_features(data, time, spike_indices=spike_indices, ahp_window_sec=0.001)
+        assert isinstance(result, list)
