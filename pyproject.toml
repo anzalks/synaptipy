@@ -190,6 +190,20 @@ omit = [
     "*/exporters/nwb_exporter.py",
 ]
 
+[tool.coverage.paths]
+# Map GitHub Actions runner absolute paths → local src-layout paths.
+# coverage.py rewrites any match below to the first (canonical) entry before
+# generating reports, ensuring coverage.xml contains repo-relative paths.
+source = [
+    "src/Synaptipy",
+    # Linux runner  (anzalks/synaptipy → /home/runner/work/synaptipy/synaptipy/)
+    "/home/runner/work/synaptipy/synaptipy/src/Synaptipy",
+    # Windows runner (D:\a\synaptipy\synaptipy\)
+    "D:/a/synaptipy/synaptipy/src/Synaptipy",
+    # macOS self-hosted / any other runner prefix
+    "*/synaptipy/src/Synaptipy",
+]
+
 [tool.coverage.report]
 show_missing = true
 fail_under = 90

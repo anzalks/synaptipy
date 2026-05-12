@@ -1,5 +1,12 @@
 codecov:
   require_ci_to_pass: no
+  # Strip the GitHub Actions runner prefix so Codecov can match file paths
+  # against the repository tree.  Without this, coverage.xml entries like
+  # /home/runner/work/synaptipy/synaptipy/src/Synaptipy/core/analysis.py
+  # produce 0% because Codecov cannot find them in the git tree.
+  # Format: "old_prefix::new_prefix" — empty new_prefix strips the segment.
+  fixes:
+    - "/home/runner/work/synaptipy/synaptipy/::"
 
 coverage:
   precision: 2
@@ -9,12 +16,15 @@ coverage:
   status:
     project:
       default:
+        # Aspirational target is 95%.  A drop of up to 5% is tolerated, so the
+        # hard floor that fails the PR is 90%.  Anything below 90% is a failure.
         target: 95%
         threshold: 5%
         if_ci_failed: error
 
     patch:
       default:
+        # New code introduced by a PR must be at least 90% covered.
         target: 90%
         threshold: 5%
 

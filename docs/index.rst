@@ -35,6 +35,10 @@ Welcome to Synaptipy's Documentation
  :target: https://flake8.pycqa.org/en/latest/
  :alt: Code style: flake8
 
+.. image:: https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg
+ :target: https://codecov.io/gh/anzalks/synaptipy
+ :alt: Code Coverage
+
 .. image:: https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white
  :target: https://github.com/anzalks/synaptipy
  :alt: Collaborators Welcome

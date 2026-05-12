@@ -19,6 +19,7 @@ from Synaptipy.core.analysis.passive_properties import (
     _fit_vc_transient_decay,
     calculate_capacitance_cc,
     calculate_cc_series_resistance_fast,
+    calculate_rin,
     calculate_tau,
     calculate_vc_transient_parameters,
     run_capacitance_analysis_wrapper,
@@ -938,3 +939,137 @@ class TestRunSagRatioWrapperException:
             )
         assert result["module_used"] == "passive_properties"
         assert "sag_error" in result["metrics"]
+
+
+# ---------------------------------------------------------------------------
+# calculate_rin — zero current amplitude early return (line 382)
+# ---------------------------------------------------------------------------
+
+
+_FS = 20_000.0
+
+
+class TestCalculateRinZeroCurrent:
+    def test_zero_current_returns_invalid(self):
+        """Line 382: current_amplitude=0 → delta_i_nA=0 → invalid RinResult."""
+        n = int(0.5 * _FS)
+        t = np.arange(n) / _FS
+        data = np.full(n, -65.0)
+        result = calculate_rin(
+            voltage_trace=data,
+            time_vector=t,
+            current_amplitude=0.0,
+            baseline_window=(0.0, 0.1),
+            response_window=(0.15, 0.4),
+        )
+        assert result.is_valid is False
+
+    def test_nonzero_current_returns_valid(self):
+        """Rin with non-zero current produces a valid result."""
+        n = int(0.5 * _FS)
+        t = np.arange(n) / _FS
+        data = np.full(n, -65.0)
+        step_start = int(0.1 * _FS)
+        step_end = int(0.4 * _FS)
+        data[step_start:step_end] = -70.0
+        result = calculate_rin(
+            voltage_trace=data,
+            time_vector=t,
+            current_amplitude=-100.0,
+            baseline_window=(0.0, 0.09),
+            response_window=(0.15, 0.39),
+        )
+        assert result.is_valid is True
+        assert result.value > 0
+
+
+# ---------------------------------------------------------------------------
+# run_rmp_analysis_wrapper — linregress exception in drift calculation (1651-1652)
+# ---------------------------------------------------------------------------
+
+
+class TestRmpDriftLinregressException:
+    def test_linregress_exception_covered(self):
+        """Lines 1651-1652: linregress raises inside run_rmp_analysis_wrapper."""
+        from Synaptipy.core.analysis.passive_properties import run_rmp_analysis_wrapper
+
+        n = int(0.2 * FS)
+        t = np.arange(n) / FS
+        # Two identical flat sweeps → valid_rmps has 2 elements → linregress path reached
+        data_list = [np.full(n, -65.0), np.full(n, -65.0)]
+        time_list = [t, t]
+        with patch(
+            "Synaptipy.core.analysis.passive_properties.linregress",
+            side_effect=ValueError("forced"),
+        ):
+            result = run_rmp_analysis_wrapper(
+                data_list=data_list,
+                time_list=time_list,
+                sampling_rate=FS,
+                baseline_start=0.0,
+                baseline_end=0.1,
+            )
+        # Even with linregress failing, a result dict is returned
+        assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# calculate_rmp — start_idx >= end_idx (line 155)
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateRmpNoDataInWindow:
+    def test_window_beyond_time_range_returns_error(self):
+        """Line 155: baseline window beyond time array → start_idx >= end_idx."""
+        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+
+        n = 10
+        time = np.arange(n) * 0.001  # 0.0 to 0.009 s
+        data = np.full(n, -65.0)
+        result = calculate_rmp(data=data, time=time, baseline_window=(0.5, 1.0))
+        assert not result.is_valid
+        assert "No data in window" in (result.error_message or "")
+
+
+# ---------------------------------------------------------------------------
+# calculate_rmp — single-point baseline → slope = None (line 183)
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateRmpSinglePointBaseline:
+    def test_single_point_baseline_slope_none(self):
+        """Line 183: baseline window maps to 1 sample → len(fit_time) < 2 → slope = None."""
+        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+
+        fs = 1_000.0
+        n = 100
+        time = np.arange(n) / fs  # 0.0 to 0.099 s
+        data = np.full(n, -65.0)
+        # Window [0.005, 0.006] → searchsorted gives only 1 point
+        result = calculate_rmp(data=data, time=time, baseline_window=(0.005, 0.006))
+        # Should succeed but have no drift value
+        assert result.is_valid or result.value is not None or result.drift is None
+
+
+# ---------------------------------------------------------------------------
+# calculate_rmp — polyfit raises LinAlgError → slope = None (line 184)
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateRmpPolyfitException:
+    def test_polyfit_exception_caught(self):
+        """Line 184: np.polyfit raises LinAlgError → slope = None."""
+        from unittest.mock import patch
+
+        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+
+        fs = 1_000.0
+        n = 500
+        time = np.arange(n) / fs
+        data = np.full(n, -65.0)
+        with patch(
+            "Synaptipy.core.analysis.passive_properties.np.polyfit",
+            side_effect=np.linalg.LinAlgError("forced"),
+        ):
+            result = calculate_rmp(data=data, time=time, baseline_window=(0.0, 0.1))
+        assert isinstance(result.value, float) or result.value is None

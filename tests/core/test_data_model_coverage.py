@@ -19,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from Synaptipy.core.data_model import Channel, Recording
 
@@ -174,3 +175,54 @@ class TestRecordingMaxTrials:
         ch2 = Channel(id="1", name="Ch1", units="mV", sampling_rate=10_000.0, data_trials=[np.zeros(100)] * 5)
         rec.channels = {"0": ch1, "1": ch2}
         assert rec.max_trials == 5
+
+
+# ---------------------------------------------------------------------------
+# Channel.num_samples — no-valid-trials path (lines 214-215)
+# ---------------------------------------------------------------------------
+
+
+class TestChannelNumSamplesNoValid:
+    def test_no_valid_trials_returns_zero(self):
+        """Lines 214-215: all data_trials entries are non-ndarray → num_samples=0."""
+        ch = Channel(
+            id="0",
+            name="Ch0",
+            units="mV",
+            sampling_rate=10_000.0,
+            data_trials=[None, None],  # type: ignore[list-item]
+        )
+        assert ch.num_samples == 0
+
+
+# ---------------------------------------------------------------------------
+# Channel.get_data — negative trial_index returns None (lines 255-256)
+# ---------------------------------------------------------------------------
+
+
+class TestChannelGetDataNegativeIndex:
+    def test_negative_index_returns_none(self):
+        """Lines 255-256: get_data(-1) logs warning and returns None."""
+        ch = Channel(
+            id="0",
+            name="Ch0",
+            units="mV",
+            sampling_rate=10_000.0,
+            data_trials=[np.zeros(100)],
+        )
+        result = ch.get_data(-1)
+        assert result is None
+
+
+class TestGetConsistentSamplesInconsistent:
+    def test_mismatched_trial_lengths_raise(self):
+        """Lines 276-278: get_consistent_samples raises ValueError for inconsistent lengths."""
+        ch = Channel(
+            id="0",
+            name="Ch0",
+            units="mV",
+            sampling_rate=10_000.0,
+            data_trials=[np.zeros(100), np.zeros(200)],
+        )
+        with pytest.raises(ValueError, match="inconsistent"):
+            ch.get_consistent_samples()

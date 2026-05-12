@@ -409,3 +409,52 @@ class TestSessionPersistence:
         assert loaded is not None
         assert loaded["analysis_params"]["threshold"] == pytest.approx(-30.0)
         assert loaded["active_tab_index"] == 2
+
+
+# ---------------------------------------------------------------------------
+# global_settings / performance_settings getters + batch_load_context
+# ---------------------------------------------------------------------------
+
+
+class TestGettersCoverage:
+    def test_global_settings_getter(self):
+        """Line 95: global_settings property returns current settings dict."""
+        sm = SessionManager()
+        settings = sm.global_settings
+        assert isinstance(settings, dict)
+        assert "liquid_junction_potential_mv" in settings
+
+    def test_performance_settings_getter(self):
+        """Line 218: performance_settings getter returns a copy of settings."""
+        sm = SessionManager()
+        ps = sm.performance_settings
+        assert isinstance(ps, dict)
+        # It must be a copy — mutating it should not affect internal state
+        ps["new_key"] = 999
+        assert "new_key" not in sm._performance_settings
+
+    def test_batch_load_context_setter(self):
+        """Lines 371-372: batch_load_context setter stores value and logs."""
+        sm = SessionManager()
+        ctx = {"file": "test.abf", "channel": 0, "trial": 1}
+        sm.batch_load_context = ctx
+        assert sm.batch_load_context == ctx
+
+    def test_batch_load_context_clear(self):
+        """batch_load_context setter with None clears the stored context."""
+        sm = SessionManager()
+        sm.batch_load_context = {"file": "x.abf"}
+        sm.batch_load_context = None
+        assert sm.batch_load_context is None
+
+    def test_apply_session_with_global_and_performance(self):
+        """Line 366: apply_session triggers set_global_settings and perf setter."""
+        sm = SessionManager()
+        sm.apply_session(
+            {
+                "global_settings": {"liquid_junction_potential_mv": 5.5},
+                "performance_settings": {"max_cpu_cores": 2},
+            }
+        )
+        assert sm.liquid_junction_potential_mv == pytest.approx(5.5)
+        assert sm._performance_settings["max_cpu_cores"] == 2

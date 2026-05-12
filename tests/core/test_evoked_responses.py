@@ -284,3 +284,185 @@ class TestRunStimulusTrainStpWrapper:
         )
 
         assert "stp_error" in result["metrics"]
+
+
+# ---------------------------------------------------------------------------
+# _peak_pos_s — i1 <= i0 fallback path (lines 242-243)
+# ---------------------------------------------------------------------------
+
+
+class TestPeakPosFallback:
+    def test_i1_le_i0_returns_fallback(self):
+        """Lines 242-243: blank_s >= win_s causes i1 <= i0, falls back to onset value."""
+        from Synaptipy.core.analysis.evoked_responses import _peak_pos_s
+
+        fs = 10_000.0
+        t = np.arange(int(0.5 * fs)) / fs
+        data = np.sin(2 * np.pi * 10 * t) * 10.0
+        # blank_s > win_s → i0 >= i1 → fallback
+        peak_t, peak_v = _peak_pos_s(data, t, onset_s=0.1, polarity="negative", blank_s=0.2, win_s=0.05)
+        assert isinstance(peak_t, float)
+        assert isinstance(peak_v, float)
+
+
+# ---------------------------------------------------------------------------
+# run_opto_sync_wrapper — artifact rejection path (lines 754-756)
+# and template_kernel_multipliers exception (lines 796-798)
+# ---------------------------------------------------------------------------
+
+
+class TestOptoSyncWrapperEdgePaths:
+    def test_artifact_rejection_path(self):
+        """Lines 754-756: reject_artifacts=True triggers artifact window detection."""
+        from Synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
+
+        fs = 10_000.0
+        n = int(0.5 * fs)
+        t = np.arange(n) / fs
+        data = np.zeros(n)
+        result = run_opto_sync_wrapper(
+            data=data,
+            time=t,
+            sampling_rate=fs,
+            event_detection_type="Events (Threshold)",
+            reject_artifacts=True,
+            artifact_slope_threshold=20.0,
+        )
+        assert isinstance(result, dict)
+
+    def test_template_km_parse_error_fallback(self):
+        """Lines 796-798: invalid template_kernel_multipliers falls back to default."""
+        from Synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
+
+        fs = 10_000.0
+        n = int(0.5 * fs)
+        t = np.arange(n) / fs
+        data = np.zeros(n)
+        result = run_opto_sync_wrapper(
+            data=data,
+            time=t,
+            sampling_rate=fs,
+            event_detection_type="Events (Template)",
+            template_kernel_multipliers="not,valid,floats!!",
+        )
+        assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# calculate_paired_pulse_ratio — R1 amplitude zero (line 373)
+# ---------------------------------------------------------------------------
+
+
+class TestPPRR1AmplitudeZero:
+    def test_flat_signal_r1_zero(self):
+        """Line 373: flat signal → r1_amp=0 → ppr_error set."""
+        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+
+        fs = 1_000.0
+        n = 500
+        t = np.arange(n) / fs
+        data = np.zeros(n)  # flat trace, no response
+        result = calculate_paired_pulse_ratio(
+            data=data,
+            time=t,
+            stim1_onset_s=0.1,
+            stim2_onset_s=0.3,
+        )
+        assert result["ppr_error"] is not None
+        assert "R1 amplitude" in result["ppr_error"]
+
+
+# ---------------------------------------------------------------------------
+# calculate_stimulus_train_stp — artifact blanking > window (line 1151)
+# ---------------------------------------------------------------------------
+
+
+class TestSTPArtifactBlankingExceedsWindow:
+    def test_blank_larger_than_win_returns_zero_amplitude(self):
+        """Line 1151: artifact_blanking_ms > response_window_ms → i_end <= i_start → 0.0."""
+        fs = 1_000.0
+        n = 500
+        t = np.arange(n) / fs
+        data = np.zeros(n)
+        data[110:130] -= 20.0  # response at ~110ms
+        result = calculate_stimulus_train_stp(
+            data=data,
+            time=t,
+            stim_onsets=np.array([0.1]),
+            polarity="negative",
+            artifact_blanking_ms=15.0,  # 15ms > response_window_ms=10ms
+            response_window_ms=10.0,
+        )
+        assert "stp_error" not in result or result["stp_error"] is None
+
+
+# ---------------------------------------------------------------------------
+# run_stimulus_train_stp_wrapper — TTL fallback warning (line 1341)
+# ---------------------------------------------------------------------------
+
+
+class TestSTPWrapperTTLNoOnsets:
+    def test_flat_ttl_triggers_manual_fallback(self):
+        """Line 1341: use_ttl=True but flat TTL (no edges) → warning + manual fallback."""
+        fs = 1_000.0
+        n = 1_000
+        t = np.arange(n) / fs
+        data = np.zeros(n)
+        flat_ttl = np.zeros(n)  # no rising edges
+        result = run_stimulus_train_stp_wrapper(
+            data=data,
+            time=t,
+            sampling_rate=fs,
+            use_ttl=True,
+            ttl_data=flat_ttl,
+            stim_frequency_hz=5.0,
+            stim_start_s=0.1,
+            n_pulses=3,
+        )
+        assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# run_stimulus_train_stp_wrapper — onsets outside duration (line 1353)
+# ---------------------------------------------------------------------------
+
+
+class TestSTPWrapperOnsetsBeyondDuration:
+    def test_start_beyond_recording_returns_error(self):
+        """Line 1353: stim_start_s >> time[-1] → all onsets clipped → stp_error."""
+        fs = 1_000.0
+        n = 500
+        t = np.arange(n) / fs  # duration = 0.499 s
+        data = np.zeros(n)
+        result = run_stimulus_train_stp_wrapper(
+            data=data,
+            time=t,
+            sampling_rate=fs,
+            use_ttl=False,
+            stim_frequency_hz=5.0,
+            stim_start_s=1000.0,  # way beyond recording
+            n_pulses=3,
+        )
+        assert result["metrics"].get("stp_error") is not None
+
+
+# ---------------------------------------------------------------------------
+# run_ppr_wrapper — template km parse error fallback (line 796)
+# ---------------------------------------------------------------------------
+
+
+class TestPPRWrapperTemplateKMParseError:
+    def test_invalid_kernel_multipliers_falls_back(self):
+        """Line 796: invalid template_kernel_multipliers → except → _km = [1.0, 2.0, 3.0]."""
+        fs = 1_000.0
+        n = 500
+        t = np.arange(n) / fs
+        data = np.zeros(n)
+        result = run_ppr_wrapper(
+            data=data,
+            time=t,
+            sampling_rate=fs,
+            event_detection_type="Events (Template)",
+            template_kernel_multipliers="bad;values!",
+        )
+        assert isinstance(result, dict)

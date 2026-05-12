@@ -181,3 +181,70 @@ class TestTraceQuality:
         result = signal_processor.check_trace_quality(data, fs)
         # 60 Hz ratio should be elevated
         assert "line_noise_60hz_ratio" in result["metrics"]
+
+
+class TestValidateRecordingConditions:
+    """Tests for validate_recording_conditions (lines 858-922)."""
+
+    def test_valid_conditions_no_warnings(self):
+        warnings = signal_processor.validate_recording_conditions(
+            sampling_rate=20_000, temperature_c=22, duration_s=0.5
+        )
+        assert warnings == []
+
+    def test_low_sampling_rate_warns(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=5_000)
+        assert len(warnings) == 1
+        assert "below 10 kHz" in warnings[0]
+
+    def test_high_sampling_rate_warns(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=100_000)
+        assert len(warnings) == 1
+        assert "exceeds 50 kHz" in warnings[0]
+
+    def test_temperature_above_30_warns(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=20_000, temperature_c=35)
+        assert any("exceeds room temperature" in w for w in warnings)
+
+    def test_temperature_below_18_warns(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=20_000, temperature_c=15)
+        assert any("below typical range" in w for w in warnings)
+
+    def test_temperature_none_no_warning(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=20_000, temperature_c=None)
+        assert warnings == []
+
+    def test_short_duration_warns(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=20_000, duration_s=0.05)
+        assert any("very short" in w for w in warnings)
+
+    def test_duration_none_no_warning(self):
+        warnings = signal_processor.validate_recording_conditions(sampling_rate=20_000, duration_s=None)
+        assert warnings == []
+
+    def test_multiple_warnings_accumulated(self):
+        warnings = signal_processor.validate_recording_conditions(
+            sampling_rate=5_000, temperature_c=35, duration_s=0.05
+        )
+        assert len(warnings) == 3
+
+    def test_returns_list(self):
+        result = signal_processor.validate_recording_conditions(sampling_rate=20_000)
+        assert isinstance(result, list)
+
+
+class TestValidateSamplingRate:
+    """Tests for validate_sampling_rate."""
+
+    def test_valid_rate_returns_true(self):
+        assert signal_processor.validate_sampling_rate(20_000) is True
+
+    def test_zero_rate_returns_false(self):
+        assert signal_processor.validate_sampling_rate(0) is False
+
+    def test_negative_rate_returns_false(self):
+        assert signal_processor.validate_sampling_rate(-100) is False
+
+    def test_low_rate_returns_true_with_warning(self):
+        # Below 100 Hz triggers warning but still returns True
+        assert signal_processor.validate_sampling_rate(50) is True
