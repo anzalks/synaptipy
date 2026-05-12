@@ -299,7 +299,7 @@ using the metadata in [`CITATION.cff`](https://github.com/anzalks/synaptipy/blob
 
 ```
 Shahul, A. K. (2026). SynaptiPy: An Open-Source Electrophysiology
-Visualization and Analysis Suite (v0.1.3b6).
+Visualization and Analysis Suite (v0.1.3b7).
 https://github.com/anzalks/synaptipy
 ```
 

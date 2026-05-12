@@ -226,6 +226,9 @@ linkcheck_ignore = [
     r"https://elifesciences\.org/",  # eLife — blocks crawlers with 406
     r"https://physoc\.onlinelibrary\.wiley\.com/",  # Wiley/J.Physiol — blocks crawlers with 403
     r"https://www\.jneurosci\.org/",  # JNeurosci — blocks crawlers with 403
+    r"https://www\.tandfonline\.com/",  # Taylor & Francis — blocks crawler checks with 403
+    r"https://rupress\.org/",  # Rockefeller University Press — blocks crawler checks with 403
+    r"https://github\.com/anzalks/synaptipy#dependencies-and-citations",  # anchor check can be flaky in CI
 ]
 # Allow redirects without treating them as broken (DOI resolvers always redirect)
 linkcheck_allowed_redirects = {

@@ -114,8 +114,6 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 
 .. grid:: 2
 
-.. grid:: 2
-
    .. grid-item-card:: Plugin Development
       :link: extending_synaptipy
       :link-type: doc
@@ -129,8 +127,6 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 
       Full annotated bibliography — all algorithms, methods, and
       upstream libraries with verified DOIs.
-
-.. grid:: 2
 
    .. grid-item-card:: Source on GitHub
       :link: https://github.com/anzalks/synaptipy

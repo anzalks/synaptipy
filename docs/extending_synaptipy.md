@@ -1146,7 +1146,7 @@ with `pip install spikeinterface`.
 
 ### Before running
 
-![SpikeInterface plugin - parameters ready](screenshots/plugin_spike_interface_empty.png)
+![SpikeInterface plugin - parameters ready](tutorial/screenshots/plugin_spike_interface_empty.png)
 
 The tab renders automatically when the plugin file is present in
 `examples/plugins/` or `~/.synaptipy/plugins/`.  The **Run Analysis** button
@@ -1156,7 +1156,7 @@ for the relatively expensive bandpass + peak-detection pipeline.
 
 ### After running - 3 detected spikes
 
-![SpikeInterface plugin - 3 spikes detected](screenshots/plugin_spike_interface_detected.png)
+![SpikeInterface plugin - 3 spikes detected](tutorial/screenshots/plugin_spike_interface_detected.png)
 
 Red dashed lines mark each detected spike time; red circles mark the filtered
 amplitude at each peak.  The Results panel shows all four metrics.
