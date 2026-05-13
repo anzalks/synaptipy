@@ -34,9 +34,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ubuntu-20.04: use an older glibc baseline for broader AppImage
-          # compatibility across Linux distributions.
-          - os: ubuntu-20.04
+          # ubuntu-22.04: stable supported GitHub-hosted Linux runner.
+          - os: ubuntu-22.04
             artifact_name: Synaptipy-Linux.AppImage
             artifact_path: dist/*.AppImage
           - os: windows-latest
