@@ -14,8 +14,7 @@ on:
         type: boolean
         default: true
 
-# contents: write is only needed by the release job.  Declared at job level
-# so the build job runs with minimal permissions.
+# Minimal default permissions; the build job only needs read access.
 permissions: {}
 
 jobs:
@@ -35,10 +34,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ubuntu-22.04: oldest GitHub-hosted runner still supported for Linux;
-          # links against older glibc than ubuntu-latest so AppImage/Python ELF
-          # binaries tolerate older user distros.  ubuntu-20.04 image retired Apr 2025.
-          - os: ubuntu-22.04
+          # ubuntu-20.04: use an older glibc baseline for broader AppImage
+          # compatibility across Linux distributions.
+          - os: ubuntu-20.04
             artifact_name: Synaptipy-Linux.AppImage
             artifact_path: dist/*.AppImage
           - os: windows-latest
@@ -253,53 +251,3 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
-
-  release:
-    name: Upload to Release
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Always run after a successful build so we can inspect/list artifacts,
-    # but only push to GitHub Releases when triggered by a real tag push
-    # and dry_run is not enabled.
-    if: always() && needs.build.result == 'success'
-    permissions:
-      contents: write   # needed to upload assets to GitHub Release
-
-    steps:
-      - name: Download all installer artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist-artifacts
-
-      - name: List downloaded installer artifacts
-        run: find dist-artifacts -type f | sort
-
-      - name: Upload binaries to GitHub Release
-        # Only upload on real tag pushes, and only when dry_run is not set.
-        # On workflow_dispatch the binaries are already available as run
-        # artifacts from the build job above.
-        if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
-        uses: softprops/action-gh-release@v2
-        with:
-          # Explicitly set tag_name so this step correctly targets the tag
-          # release whether or not release.yml has finished creating it yet.
-          # softprops/action-gh-release@v2 will create the release if absent
-          # or append files to the existing release if release.yml got there
-          # first.  fail_on_unmatched_files=false prevents the job from
-          # failing when a platform's build was skipped via fail-fast.
-          tag_name: ${{ github.ref_name }}
-          files: |
-            dist-artifacts/**/*.AppImage
-            dist-artifacts/**/*.exe
-            dist-artifacts/**/*.dmg
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "Dry-run: binaries are available as run artifacts"
-        if: inputs.dry_run == true || !startsWith(github.ref, 'refs/tags/v')
-        run: |
-          echo "Dry-run mode: binaries were NOT uploaded to a GitHub Release."
-          echo "They are available as run artifacts from the build job:"
-          find dist-artifacts -type f | sort

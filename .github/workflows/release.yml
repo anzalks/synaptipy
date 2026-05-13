@@ -178,15 +178,13 @@ jobs:
           skip-existing: true
 
   # ── 4. Smoke-test the TestPyPI install ───────────────────────────────────────
-  # Informational only: verifies the package can be installed and imported.
-  # continue-on-error: true means a failure here never blocks the real PyPI
-  # publish — it only shows up as a warning annotation in the run summary.
+  # Blocking gate: verifies the package can be installed and imported before
+  # the official PyPI publish job is allowed to proceed.
   smoke_test_testpypi:
     name: Smoke test from TestPyPI
     needs: testpypi-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     # Only run when testpypi-publish actually succeeded (result is 'success').
     # If testpypi-publish was skipped or failed, skip the smoke test too so
     # the pypi-publish job falls through to its own if-guard correctly.
@@ -195,6 +193,8 @@ jobs:
       needs.testpypi-publish.result == 'success'
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -203,17 +203,17 @@ jobs:
       - name: Wait briefly for TestPyPI indexing
         run: sleep 30
 
+      - name: Read app version
+        run: |
+          APP_VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+
       - name: Install from TestPyPI and verify import
         # Use TestPyPI as the primary index; fall back to PyPI for all
         # dependencies that TestPyPI does not host (numpy, scipy, etc.).
-        # No version pin: avoids race conditions where TestPyPI's simple index
-        # lags behind the upload by several minutes.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install \
-            -i https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            synaptipy
+          python -m pip install --no-cache-dir synaptipy==${{ env.APP_VERSION }} -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/
           python -c "import Synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
 
   # ── 5. Publish to official PyPI (OIDC Trusted Publisher) ─────────────────────
@@ -263,6 +263,7 @@ jobs:
       needs.build.result == 'success' &&
       (needs.pypi-publish.result == 'success' || needs.pypi-publish.result == 'skipped')
     permissions:
+      actions: read
       contents: write   # needed to create/update GitHub Releases
 
     steps:
@@ -275,6 +276,73 @@ jobs:
         with:
           name: dist
           path: dist/
+
+      - name: Find installer workflow run for this commit
+        id: installer_run
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let run = null;
+
+            for (let i = 0; i < 30; i++) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'installer.yml',
+                head_sha: context.sha,
+                event: 'push',
+                per_page: 50,
+              });
+
+              run = runs.data.workflow_runs.find((r) => r.status === 'completed' && r.conclusion === 'success');
+              if (run) {
+                break;
+              }
+
+              core.info(`installer.yml run not ready yet (attempt ${i + 1}/30); waiting 20s...`);
+              await sleep(20000);
+            }
+
+            if (!run) {
+              core.setFailed('Could not find a successful installer.yml workflow run for this commit.');
+              return;
+            }
+
+            core.info(`Using installer run ID: ${run.id}`);
+            core.setOutput('run_id', String(run.id));
+
+      - name: Download Synaptipy-Linux.AppImage artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.installer_run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: Synaptipy-Linux.AppImage
+          path: installer-artifacts/
+
+      - name: Download Synaptipy_Setup.exe artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.installer_run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: Synaptipy_Setup.exe
+          path: installer-artifacts/
+
+      - name: Download Synaptipy.dmg artifact
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.installer_run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: Synaptipy.dmg
+          path: installer-artifacts/
 
       - name: Determine pre-release flag
         id: pre
@@ -326,7 +394,11 @@ jobs:
           name: "${{ github.ref_name }} (${{ steps.pre.outputs.label }})"
           body_path: release_notes.md
           prerelease: ${{ steps.pre.outputs.prerelease }}
-          files: dist/*
+          files: |
+            dist/*
+            installer-artifacts/**/*.AppImage
+            installer-artifacts/**/*.exe
+            installer-artifacts/**/*.dmg
           # Never overwrite files already uploaded by installer.yml
           fail_on_unmatched_files: false
         env:

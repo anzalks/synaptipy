@@ -70,7 +70,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     target_arch=None,
-    codesign_identity=None,
+    codesign_identity='-',
     entitlements_file=None,
     icon=icon_path if os.path.exists(icon_path) else None,
 )
