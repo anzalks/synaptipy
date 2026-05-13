@@ -200,21 +200,32 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Wait briefly for TestPyPI indexing
-        run: sleep 30
-
       - name: Read app version
         run: |
           APP_VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
           echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
 
       - name: Install from TestPyPI and verify import
-        # Use TestPyPI as the primary index; fall back to PyPI for all
-        # dependencies that TestPyPI does not host (numpy, scipy, etc.).
         run: |
+          APP_VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
           python -m pip install --upgrade pip
-          python -m pip install --no-cache-dir synaptipy==${{ env.APP_VERSION }} -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/
-          python -c "import Synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
+          
+          echo "Waiting for TestPyPI simple index CDN to update..."
+          MAX_RETRIES=10
+          RETRY_DELAY=30
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i: Installing synaptipy==$APP_VERSION..."
+            if python -m pip install --pre --no-cache-dir "synaptipy==$APP_VERSION" -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/; then
+              echo "Install successful!"
+              python -c "import Synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
+              exit 0
+            fi
+            echo "Version not found yet. Waiting $RETRY_DELAY seconds..."
+            sleep $RETRY_DELAY
+          done
+          echo "Failed to install from TestPyPI after 5 minutes of retries."
+          exit 1
 
   # ── 5. Publish to official PyPI (OIDC Trusted Publisher) ─────────────────────
   # Skipped on workflow_dispatch (dry_run).
