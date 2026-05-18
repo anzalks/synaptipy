@@ -57,7 +57,7 @@ synaptipy
 python -m Synaptipy
 ```
 
-![Synaptipy Explorer — multi-trial current-clamp recording with action potentials](docs/tutorial/screenshots/explorer_tab.png)
+![Synaptipy Explorer — multi-trial current-clamp recording with action potentials](https://raw.githubusercontent.com/anzalks/synaptipy/main/docs/tutorial/screenshots/explorer_tab.png)
 
 Load a recording by dragging a file into the **Explorer** tab, then navigate to the **Analyser** tab to select a channel and run an analysis. Results are displayed in a table and can be exported to CSV.
 
