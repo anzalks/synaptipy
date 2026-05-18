@@ -27,7 +27,7 @@
 | src/Synaptipy/application/session\_manager.py                       |      188 |        0 |    100% |           |
 | src/Synaptipy/core/\_\_init\_\_.py                                  |        2 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/\_\_init\_\_.py                         |       13 |        0 |    100% |           |
-| src/Synaptipy/core/analysis/batch\_engine.py                        |      513 |       40 |     92% |197, 680-681, 683, 731-733, 764-765, 818, 864-874, 883, 925, 933-935, 946-950, 988-990, 1020-1022, 1184-1206 |
+| src/Synaptipy/core/analysis/batch\_engine.py                        |      522 |       47 |     91% |197, 680-681, 683, 731-733, 764-765, 819, 865-875, 884, 887, 904-905, 945, 953-974, 985-989, 1027-1029, 1059-1061, 1231-1253 |
 | src/Synaptipy/core/analysis/cross\_file\_utils.py                   |       59 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/epoch\_manager.py                       |       96 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/evoked\_responses.py                    |      394 |       12 |     97% |373, 430, 434, 455-465, 796, 1038-1040, 1369 |
@@ -60,7 +60,7 @@
 | src/Synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/Synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
 | src/Synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **7103** |  **392** | **94%** |           |
+| **TOTAL**                                                           | **7112** |  **399** | **94%** |           |
 
 
 ## Setup coverage badge
