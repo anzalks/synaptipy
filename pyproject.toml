@@ -198,10 +198,10 @@ source = [
     "src/Synaptipy",
     # Linux runner  (anzalks/synaptipy → /home/runner/work/synaptipy/synaptipy/)
     "/home/runner/work/synaptipy/synaptipy/src/Synaptipy",
+    # macOS runner  (/Users/runner/work/synaptipy/synaptipy/)
+    "/Users/runner/work/synaptipy/synaptipy/src/Synaptipy",
     # Windows runner (D:\a\synaptipy\synaptipy\)
-    "D:/a/synaptipy/synaptipy/src/Synaptipy",
-    # macOS self-hosted / any other runner prefix
-    "*/synaptipy/src/Synaptipy",
+    "D:\\a\\synaptipy\\synaptipy\\src\\Synaptipy",
 ]
 
 [tool.coverage.report]

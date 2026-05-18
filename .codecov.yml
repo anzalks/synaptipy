@@ -7,6 +7,8 @@ codecov:
   # Format: "old_prefix::new_prefix" — empty new_prefix strips the segment.
   fixes:
     - "/home/runner/work/synaptipy/synaptipy/::"
+    - "/Users/runner/work/synaptipy/synaptipy/::"
+    - "D:\\a\\synaptipy\\synaptipy\\::"
 
 coverage:
   precision: 2

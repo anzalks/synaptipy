@@ -256,6 +256,9 @@ dedicated plot button. Auto-popup on file load is forbidden without exception.
 
 ## VIII. NATIVE CI/CD & TELEMETRY
 
+### RULE 0 - Codecov Pathing Integrity
+**Codecov Pathing Integrity:** When modifying testing or CI configurations, you MUST preserve the `[tool.coverage.paths]` mapping in `pyproject.toml`. GitHub Actions runners (Linux, macOS, Windows) execute in absolute paths that do not exist on the git tree. Stripping these mappings will result in a 0% coverage failure on Codecov.
+
 ### RULE 3 - Native CI/CD & Telemetry
 Never integrate third-party coverage dashboards or telemetry services (e.g., Codecov, Coveralls). All test coverage reporting, metrics, and CI analytics MUST remain strictly native to GitHub via standard Actions and PR comments.
 
