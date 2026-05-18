@@ -42,12 +42,29 @@ def test_register_with_metadata():
     assert len(metadata["ui_params"]) == 2
     assert metadata["ui_params"][0]["name"] == "param1"
     assert metadata["description"] == "A test analysis function"
+    # expects_list must default to False when not explicitly set
+    assert metadata.get("expects_list", False) is False
 
 
 def test_get_metadata_missing():
     """Test that get_metadata returns empty dict for unknown function."""
     metadata = AnalysisRegistry.get_metadata("non_existent_function")
     assert metadata == {}
+
+
+def test_register_expects_list_true():
+    """When expects_list=True is passed, metadata stores it as True."""
+
+    @AnalysisRegistry.register(
+        "test_jitter_analysis",
+        expects_list=True,
+        ui_params=[],
+    )
+    def test_jitter_func(**kwargs):
+        pass
+
+    metadata = AnalysisRegistry.get_metadata("test_jitter_analysis")
+    assert metadata.get("expects_list") is True
 
 
 def test_spike_detection_metadata():

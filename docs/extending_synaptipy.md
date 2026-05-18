@@ -216,6 +216,7 @@ from Synaptipy.core.analysis.registry import AnalysisRegistry
 @AnalysisRegistry.register(
     name="synaptic_charge",              # unique internal name
     label="Synaptic Charge (AUC)",       # display name in the tab
+    expects_list=False,                  # True only for multi-trial statistics
     ui_params=[...],                     # parameter widgets (see §4)
     plots=[...],                         # plot overlays (see §5)
 )
@@ -280,6 +281,50 @@ written to the CSV.
 | Numeric values in `metrics` (`int`, `float`) | Displayed as-is in the results table. |
 | `np.ndarray` values in `metrics` | Displayed as shape summary (e.g. `"array(150,)"`). |
 | `None` values in `metrics` | Displayed as `"N/A"`. |
+
+---
+
+### 3.3 The `expects_list` Parameter
+
+The `expects_list` keyword in `@AnalysisRegistry.register(...)` controls how
+the **batch engine** delivers data to your wrapper function.
+
+| Value | Data passed to wrapper | When to use |
+|---|---|---|
+| `False` (default) | A single 1-D `np.ndarray` - one trial or a pre-averaged master trace | Almost always - single-sweep metrics (charge, peak amplitude, tau, etc.) |
+| `True` | A Python `list` of per-trial `np.ndarray` objects | Only when you explicitly need trial-to-trial comparisons (jitter, variance, reliability) |
+
+**Why this matters in batch mode:**  when the batch scope is `"all_trials"` and
+`expects_list=False`, the batch engine automatically averages all trials into a
+single array before calling your function.  This prevents
+``TRIAL_LENGTH_MISMATCH`` errors in recordings where different sweeps have
+slightly different lengths (e.g. ABF files with truncated last sweeps).
+
+```python
+# Plugin that needs a list of trials (jitter / variance calculation)
+@AnalysisRegistry.register(
+    name="latency_jitter",
+    label="Latency Jitter",
+    expects_list=True,     # <-- batch engine passes list[np.ndarray]
+    ui_params=[...],
+)
+def run_jitter(data, time, sampling_rate, **kwargs):
+    # data is a list of 1-D arrays, one per trial
+    latencies = [find_first_spike(d, ...) for d in data]
+    return {"module_used": "latency_jitter", "metrics": {"Jitter_ms": np.std(latencies)}}
+
+
+# Plugin that operates on a single trace (most plugins)
+@AnalysisRegistry.register(
+    name="synaptic_charge",
+    label="Synaptic Charge (AUC)",
+    expects_list=False,    # <-- batch engine pre-averages if needed (default)
+    ui_params=[...],
+)
+def run_charge(data, time, sampling_rate, **kwargs):
+    # data is a single 1-D array
+    return calculate_area_under_curve(data, time, ...)
+```
 
 ---
 

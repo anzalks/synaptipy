@@ -234,6 +234,7 @@ def calculate_synaptic_charge(
 @AnalysisRegistry.register(
     name="synaptic_charge",
     label="Synaptic Charge (AUC)",
+    expects_list=False,
     ui_params=[
         {
             "name": "baseline_method",

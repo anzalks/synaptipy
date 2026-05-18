@@ -178,6 +178,7 @@ def run_miniml_detection(
 @AnalysisRegistry.register(
     name="miniml_events",
     label="miniML Events",
+    expects_list=False,
     run_button=True,
     ui_params=[
         {

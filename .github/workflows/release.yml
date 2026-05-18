@@ -67,9 +67,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-            xvfb-run python -m pytest --cov=Synaptipy --cov-report=xml
+            xvfb-run python -m pytest --cov=src/Synaptipy --cov-report=xml
           else
-            python -m pytest --cov=Synaptipy --cov-report=xml
+            python -m pytest --cov=src/Synaptipy --cov-report=xml
           fi
 
   # ── 1b. Build docs + linkcheck (must pass before release) ───────────────────
@@ -98,7 +98,7 @@ jobs:
           pip install -e ".[docs]"
 
       - name: Build HTML documentation
-        run: sphinx-build -b html docs docs/_build/html --keep-going --no-color 2>&1
+        run: sphinx-build -W --keep-going -b html docs docs/_build/html --no-color 2>&1
 
       - name: Run Sphinx linkcheck
         run: sphinx-build -b linkcheck docs docs/_build/linkcheck --no-color 2>&1

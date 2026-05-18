@@ -122,6 +122,7 @@ def calculate_ap_repolarization(
 @AnalysisRegistry.register(
     name="ap_repolarization",
     label="Max Repolarization Rate",
+    expects_list=False,
     ui_params=[
         {
             "name": "window_start",

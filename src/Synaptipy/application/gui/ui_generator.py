@@ -234,8 +234,8 @@ class ParameterWidgetGenerator:
             log.warning(f"Unknown parameter type '{param_type}' for {name}")
             return
 
-        # Add tooltip if provided
-        tooltip = param.get("tooltip")
+        # Add tooltip if provided, falling back to description if no tooltip key
+        tooltip = param.get("tooltip", param.get("description", ""))
         if tooltip:
             widget.setToolTip(tooltip)
             # Also add tooltip to label if it's a string

@@ -165,6 +165,7 @@ def detect_spikes_spikeinterface(
 @AnalysisRegistry.register(
     name="spike_interface_detection",
     label="Spike Detection (SpikeInterface)",
+    expects_list=False,
     run_button=True,
     ui_params=[
         {

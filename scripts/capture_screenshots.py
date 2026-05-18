@@ -323,81 +323,98 @@ def _grab_popups(tab: Any, dest_stem: str, output_dir: Path) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
+def _get_or_create_cursor_manager(canvas: Any) -> Optional[Any]:
+    """Return the canvas cursor manager, creating a headless instance if absent."""
+    cm = getattr(canvas, "cursor_manager", None)
+    if cm is None:
+        from Synaptipy.shared.cursor_manager import CursorToolManager  # noqa: PLC0415
+
+        plots = list(canvas.channel_plots.values())
+        if plots:
+            cm = CursorToolManager(canvas.widget, plots[0].scene())
+            cm.set_cursor_enabled(True)
+            cm.set_delta_mode_enabled(True)
+    return cm
+
+
+def _setup_and_capture_base_view(window: Any, output_dir: Path) -> List[str]:
+    """Load the primary current-clamp recording and capture the base Explorer view."""
+    _load_explorer(window, _ABF21, [_ABF21], 0)
+    _pump(5)
+    _grab(window, output_dir / "explorer_tab.png")
+    return ["explorer_tab.png"]
+
+
+def _setup_and_capture_cursors(window: Any, output_dir: Path) -> List[str]:
+    """Enable delta cursors on the loaded ABF21 recording and capture the Explorer.
+
+    Assumes ABF21 is already loaded in the Explorer (call after
+    ``_setup_and_capture_base_view``).  Cleans up cursor state before returning
+    so subsequent screenshots are not affected.
+    """
+    captured: List[str] = []
+    explorer = window.explorer_tab
+    try:
+        explorer.cursor_cb.setChecked(True)
+        _pump(3)
+        explorer.delta_cb.setChecked(True)
+        _pump(3)
+
+        canvas = explorer.plot_canvas
+        cm = _get_or_create_cursor_manager(canvas)
+
+        if cm is not None:
+            plots = list(canvas.channel_plots.values())
+            if plots:
+                plot = plots[0]
+                cm.set_cursor_enabled(True)
+                cm.set_delta_mode_enabled(True)
+                # Place first cursor at ~100 ms (mid-spike), second at ~250 ms.
+                cm.handle_delta_click(0.100, 40.0, plot)
+                _pump(3)
+                cm.handle_delta_click(0.250, 35.0, plot)
+                _pump(5)
+
+        _grab(window, output_dir / "explorer_tab_cursors.png")
+        captured.append("explorer_tab_cursors.png")
+
+        # Teardown: clear cursors and reset UI checkboxes.
+        if cm is not None:
+            cm.clear()
+        explorer.cursor_cb.setChecked(False)
+        explorer.delta_cb.setChecked(False)
+        _pump(3)
+    except Exception as exc:
+        print(f"  [warn] cursor screenshot: {exc}", file=sys.stderr)
+    return captured
+
+
+def _setup_and_capture_multichannel(window: Any, output_dir: Path) -> List[str]:
+    """Load the four-channel optogenetics recording and capture the Explorer."""
+    _load_explorer(window, _ABF22, [_ABF22], 0)
+    _pump(5)
+    _grab(window, output_dir / "explorer_tab_multichannel.png")
+    return ["explorer_tab_multichannel.png"]
+
+
+def _setup_and_capture_voltage_clamp(window: Any, output_dir: Path) -> List[str]:
+    """Load the voltage-clamp recording and capture the Explorer."""
+    _load_explorer(window, _WCP03, [_WCP03], 0)
+    _pump(5)
+    _grab(window, output_dir / "explorer_tab_voltageclamp.png")
+    return ["explorer_tab_voltageclamp.png"]
+
+
 def _capture_explorer_screenshots(window: Any, output_dir: Path) -> List[str]:
     """Load each example recording into the Explorer and capture the result."""
     captured: List[str] = []
-
-    abf21_files = [_ABF21]
-    abf22_files = [_ABF22]
-    wcp_files = [_WCP03]
-
-    # Single-channel current-clamp with action potentials - primary tutorial screenshot.
     if _ABF21.exists():
-        _load_explorer(window, _ABF21, abf21_files, 0)
-        _pump(5)
-        _grab(window, output_dir / "explorer_tab.png")
-        captured.append("explorer_tab.png")
-
-        # --- Cursor demonstration: enable cursors and place two delta markers ---
-        explorer = window.explorer_tab
-        try:
-            explorer.cursor_cb.setChecked(True)
-            _pump(3)
-            explorer.delta_cb.setChecked(True)
-            _pump(3)
-
-            # Place delta cursors programmatically via the plot canvas cursor manager
-            canvas = explorer.plot_canvas
-            cm = getattr(canvas, "cursor_manager", None)
-            if cm is None:
-                from Synaptipy.shared.cursor_manager import CursorToolManager  # noqa: PLC0415
-
-                plots = list(canvas.channel_plots.values())
-                if plots:
-                    plot = plots[0]
-                    scene = plot.scene()
-                    cm = CursorToolManager(canvas.widget, scene)
-                    cm.set_cursor_enabled(True)
-                    cm.set_delta_mode_enabled(True)
-
-            if cm is not None:
-                plots = list(canvas.channel_plots.values())
-                if plots:
-                    plot = plots[0]
-                    cm.set_cursor_enabled(True)
-                    cm.set_delta_mode_enabled(True)
-                    # Place first cursor at ~100 ms (mid-spike), second at ~250 ms
-                    cm.handle_delta_click(0.100, 40.0, plot)
-                    _pump(3)
-                    cm.handle_delta_click(0.250, 35.0, plot)
-                    _pump(5)
-
-            _grab(window, output_dir / "explorer_tab_cursors.png")
-            captured.append("explorer_tab_cursors.png")
-
-            # Clean up cursors
-            if cm is not None:
-                cm.clear()
-            explorer.cursor_cb.setChecked(False)
-            explorer.delta_cb.setChecked(False)
-            _pump(3)
-        except Exception as exc:
-            print(f"  [warn] cursor screenshot: {exc}", file=sys.stderr)
-
-    # Multichannel recording (four channels) - demonstrates channel stacking.
+        captured.extend(_setup_and_capture_base_view(window, output_dir))
+        captured.extend(_setup_and_capture_cursors(window, output_dir))
     if _ABF22.exists():
-        _load_explorer(window, _ABF22, abf22_files, 0)
-        _pump(5)
-        _grab(window, output_dir / "explorer_tab_multichannel.png")
-        captured.append("explorer_tab_multichannel.png")
-
-    # Voltage-clamp single-channel recording.
+        captured.extend(_setup_and_capture_multichannel(window, output_dir))
     if _WCP03.exists():
-        _load_explorer(window, _WCP03, wcp_files, 0)
-        _pump(5)
-        _grab(window, output_dir / "explorer_tab_voltageclamp.png")
-        captured.append("explorer_tab_voltageclamp.png")
-
+        captured.extend(_setup_and_capture_voltage_clamp(window, output_dir))
     return captured
 
 

@@ -7,7 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.5b1] - 2026-05-13
+### Fixed
+
+- **PPR baseline correction** (CRITICAL-1): Paired-pulse ratio R2 amplitude now uses
+  the pre-stimulation baseline (`bl1`) as reference instead of the contaminated local
+  baseline (`bl2`), correcting systematic facilitation/depression classification errors
+  per Zucker & Regehr (2002). Bi-exponential decay fit bounds now enforce polarity-matched
+  amplitude signs (negative events: negative amplitudes; positive: positive).
+- **Division-by-zero guards in spike-train statistics** (CRITICAL-2): CV2 and LV
+  calculations now use `np.where(denominator > EPSILON_ISI_SUM, ..., np.nan)` to
+  prevent `ZeroDivisionError` and silent NaN propagation on pathological ISI arrays
+  (e.g., perfectly identical spike timestamps or floating-point underflow).
+- **Sag ratio float comparison** (CRITICAL-3): `if delta_v_ss == 0` replaced with
+  `if abs(delta_v_ss) < 1e-9` to prevent fragile exact float equality causing
+  division-by-zero on near-zero hyperpolarising steps.
+- **NWB electrode metadata completeness** (CRITICAL-6): `IntracellularElectrode`
+  objects in NWB exports now actively include `electrode_resistance`, `electrode_seal`,
+  and `electrode_description` from the `Channel` data model, satisfying DANDI
+  compliance requirements.
+- **Batch preprocessing context restoration** (CRITICAL-5): Preprocessing failure
+  in the batch engine now restores the original `pipeline_context` so subsequent
+  tasks in the same pipeline are not poisoned by a partial or corrupted context.
+- **Trial averaging length mismatch** (HIGH-11): Cross-file and multi-trial averaging
+  now returns a structured `{"error": "Cannot average mixed-length trials",
+  "error_type": "TRIAL_LENGTH_MISMATCH"}` result dict instead of silently falling
+  through to NaN-producing source reloads.
+- **TTL auto-threshold** (HIGH-4): Data-range requirement lowered from `> 1.0` to
+  `> 0.3` to support 0.5 V logic-level TTL signals.
+- **Tau fitting truncation guard** (HIGH-2): Array truncation at sag peak now
+  validates `len(t_fit) >= 3` before applying; full window is restored when too few
+  points would remain, preventing exponential-fit crashes on short steps.
+
+### Added
+
+- **Global preprocessing visual indicator** (CRITICAL-4): A persistent amber banner
+  `[PREPROCESSING ACTIVE]` appears at the top of the Analyser tab parameter layout
+  whenever global preprocessing is enabled, listing the active baseline-correction
+  and filter steps. The banner is hidden automatically when preprocessing is cleared.
+- **Processing history in NWB export** (CRITICAL-7): `Recording.add_preprocessing_step()`
+  logs operations (lowpass filter, baseline subtraction, etc.) with ISO timestamps
+  and parameters into `metadata["processing_history"]`, which is then written as a
+  `DynamicTable` in the NWB `preprocessing` processing module for full FAIR
+  reproducibility.
+- **Parameter tooltips from registry** (HIGH-5): UI widgets generated from the
+  analysis registry now display tooltips falling back from `tooltip` to
+  `description` metadata keys, so all registered parameters have visible
+  help text in the GUI.
+
+
 
 ### Fixed
 

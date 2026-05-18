@@ -99,6 +99,7 @@ def calculate_my_metric(
 @AnalysisRegistry.register(
     name="my_custom_metric",  # CHANGE: unique internal name
     label="My Custom Metric",  # CHANGE: display name for the tab
+    expects_list=False,  # Set True only if your function needs the raw list of trials
     ui_params=[
         # CHANGE: define your parameter widgets here.
         # See docs/extending_synaptipy.md section 4 for all available types.
