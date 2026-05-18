@@ -290,7 +290,7 @@ jobs:
 
       - name: Find installer workflow run for this commit
         id: installer_run
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         uses: actions/github-script@v7
         with:
           script: |
@@ -304,7 +304,6 @@ jobs:
                 repo,
                 workflow_id: 'installer.yml',
                 head_sha: context.sha,
-                event: 'push',
                 per_page: 50,
               });
 
@@ -326,7 +325,7 @@ jobs:
             core.setOutput('run_id', String(run.id));
 
       - name: Download Synaptipy-Linux.AppImage artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -336,7 +335,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy_Setup.exe artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -346,7 +345,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy.dmg artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -398,7 +397,7 @@ jobs:
         # "gh release delete + recreate" pattern was destructive: it wiped any
         # .exe / .dmg binaries that installer.yml had already attached, because
         # both workflows fire in parallel on the same tag push.
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -420,7 +419,7 @@ jobs:
         # artifacts (the 'dist' artifact from the build job is also available).
         # This step provides a second copy with a distinct name so it is easy
         # to find in the Actions run summary.
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
         uses: actions/upload-artifact@v4
         with:
           name: dry-run-dist-${{ github.run_id }}

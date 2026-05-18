@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5b3] - 2026-05-18
+
+### Fixed
+
+- **Release workflow - missing installer assets**: `release.yml` steps guarded by
+  `github.event_name == 'push'` were all skipped when `auto-tag` dispatched the workflow
+  via `workflow_dispatch` (the only mechanism available when `GITHUB_TOKEN` pushes a tag).
+  All five guards updated to also accept `workflow_dispatch` with `dry_run == 'false'`.
+  The installer-run lookup no longer filters by `event: 'push'`, so `workflow_dispatch`
+  installer runs are found correctly. The dry-run upload step now only fires when
+  `dry_run != 'false'`. This was the root cause of v0.1.5b2 having no AppImage / .exe /
+  .dmg assets on the GitHub Release page.
+
+### Changed
+
+- Bumped version to `0.1.5b3` across all canonical locations.
+
+
 ## [0.1.5b2] - 2026-05-18
 
 ### Fixed

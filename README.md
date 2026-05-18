@@ -39,11 +39,11 @@ For detailed installation instructions, system requirements, and troubleshooting
 
 ### Standalone application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.5b2 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.5b3 release assets:
 
-- **Windows:** `Synaptipy_Setup_v0.1.5b2.exe`
-- **macOS:** `Synaptipy_v0.1.5b2.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.5b2-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Windows:** `Synaptipy_Setup_v0.1.5b3.exe`
+- **macOS:** `Synaptipy_v0.1.5b3.dmg` - open the disk image and drag to Applications
+- **Linux:** `Synaptipy-v0.1.5b3-x86_64.AppImage` - mark as executable (`chmod +x`) and run
 
 ---
 
