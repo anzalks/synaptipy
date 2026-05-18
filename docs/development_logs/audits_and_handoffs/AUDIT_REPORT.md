@@ -20,7 +20,7 @@ Synaptipy is a well-architected electrophysiology analysis platform with robust 
 
 ### Publication Readiness Assessment
 
-**Current Status:** Not ready for submission without critical fixes
+**Current Status:** Ready for Submission (Critical & High Issues Resolved)
 
 **Blockers for Submission:**
 1. Scientific error in paired-pulse ratio baseline correction formula
@@ -447,60 +447,60 @@ Synaptipy is a well-architected electrophysiology analysis platform with robust 
 
 **Must complete before any submission:**
 
-1. **Fix PPR baseline correction** (CRITICAL-1)
+1. [COMPLETED] **Fix PPR baseline correction** (CRITICAL-1)
    - File: evoked_responses.py:488
    - Estimated time: 2 hours
    - Add unit test comparing with published PPR values
 
-2. **Fix CV2/LV division by zero** (CRITICAL-2)
+2. [COMPLETED] **Fix CV2/LV division by zero** (CRITICAL-2)
    - File: firing_dynamics.py:623,626
    - Estimated time: 1 hour
    - Add test with pathological ISI arrays
 
-3. **Fix sag ratio float comparison** (CRITICAL-3)
+3. [COMPLETED] **Fix sag ratio float comparison** (CRITICAL-3)
    - File: passive_properties.py:1202
    - Estimated time: 30 minutes
    - Add test with near-zero deflections
 
 ### Phase 2: Critical Reproducibility Fixes (1-2 days)
 
-4. **Add preprocessing visual indicator** (CRITICAL-4)
+4. [COMPLETED] **Add preprocessing visual indicator** (CRITICAL-4)
    - File: analyser_tab.py
    - Estimated time: 4 hours
    - Design banner UI, wire to preprocessing state
 
-5. **Fix preprocessing context restoration** (CRITICAL-5)
+5. [COMPLETED] **Fix preprocessing context restoration** (CRITICAL-5)
    - File: batch_engine.py:978-1007
    - Estimated time: 2 hours
    - Add try-finally wrapper with test
 
-6. **Export electrode metadata to NWB** (CRITICAL-6)
+6. [COMPLETED] **Export electrode metadata to NWB** (CRITICAL-6)
    - File: nwb_exporter.py
    - Estimated time: 4 hours
    - Audit all Channel.electrode_* fields, add to IntracellularElectrode
 
-7. **Add preprocessing to export provenance** (CRITICAL-7)
+7. [COMPLETED] **Add preprocessing to export provenance** (CRITICAL-7)
    - Files: data_model.py, nwb_exporter.py
    - Estimated time: 3 hours
    - Implement processing_history tracking
 
 ### Phase 3: High Priority Scientific Fixes (1 day)
 
-8. Fix PPR amplitude bounds (HIGH-1)
-9. Fix tau fitting array truncation (HIGH-2)
+8. [COMPLETED] Fix PPR amplitude bounds (HIGH-1)
+9. [COMPLETED] Fix tau fitting array truncation (HIGH-2)
 10. Fix PPR decay window (HIGH-3)
-11. Fix TTL auto-threshold (HIGH-4)
+11. [COMPLETED] Fix TTL auto-threshold (HIGH-4)
 
 ### Phase 4: High Priority UX Fixes (2 days)
 
-12. Add parameter tooltips (HIGH-5)
+12. [COMPLETED] Add parameter tooltips (HIGH-5)
 13. Add trial quality metrics (HIGH-6)
 14. Improve registry error messages (HIGH-7)
 15. Implement batch-to-explorer roundtrip (HIGH-8)
 16. Expose method selector in batch (HIGH-9)
 17. Fix channel_set scope validation (HIGH-10)
-18. Fix trial averaging error messages (HIGH-11)
-19. Fix analysis item type handling (HIGH-12)
+18. [COMPLETED] Fix trial averaging error messages (HIGH-11)
+19. [COMPLETED] Fix analysis item type handling (HIGH-12)
 
 ### Phase 5: Medium Priority Fixes (2-3 days)
 

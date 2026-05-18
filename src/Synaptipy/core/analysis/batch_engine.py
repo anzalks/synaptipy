@@ -798,9 +798,10 @@ class BatchAnalysisEngine:
         scope = task.get("scope", "first_trial")
         params = task.get("params", {})
 
-        # Check metadata for type
+        # Check metadata for type and batch-dispatch flags
         meta = AnalysisRegistry.get_metadata(analysis_name)
         is_preprocessing = meta.get("type") == "preprocessing"
+        expects_list = meta.get("expects_list", False)
 
         # Get the registered analysis function
         analysis_func = AnalysisRegistry.get_function(analysis_name)
@@ -881,6 +882,25 @@ class BatchAnalysisEngine:
                         time = context["time"][0]
                     else:
                         log.warning("Context data empty, cannot average.")
+                except ValueError as e:
+                    if "Cannot average" in str(e) or "mismatched lengths" in str(e):
+                        return [
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": "Cannot average mixed-length trials",
+                                "error_type": "TRIAL_LENGTH_MISMATCH",
+                            }
+                        ], None
+                    log.warning(
+                        "Could not average trials from context (%s/%s): %s. Reloading from source.",
+                        file_path.name,
+                        channel_name,
+                        e,
+                    )
                 except Exception as e:
                     log.warning(
                         "Could not average trials from context (%s/%s): %s. Reloading from source.",
@@ -931,6 +951,25 @@ class BatchAnalysisEngine:
                         time = context["time"][0]
                     else:
                         log.warning("No valid trials selected for averaging from context.")
+                except ValueError as e:
+                    if "Cannot average" in str(e) or "mismatched lengths" in str(e):
+                        return [
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": "Cannot average mixed-length trials",
+                                "error_type": "TRIAL_LENGTH_MISMATCH",
+                            }
+                        ], None
+                    log.warning(
+                        "Could not average selected trials from context (%s/%s): %s. Reloading from source.",
+                        file_path.name,
+                        channel_name,
+                        e,
+                    )
                 except Exception as e:
                     log.warning(
                         "Could not average selected trials from context (%s/%s): %s. Reloading from source.",
@@ -1067,6 +1106,14 @@ class BatchAnalysisEngine:
                 }
             ], None
 
+        # --- expects_list enforcement ---
+        # Controls how multi-trial data is dispatched to the analysis function
+        # when scope="all_trials":
+        #   expects_list=False (default): iterate - call once per trial (existing behaviour)
+        #   expects_list=True: pass the complete list in a single call (like channel_set)
+        # No data transformation is applied here; the flag is used by the
+        # execution dispatcher below.
+
         # --- Execution ---
 
         if is_preprocessing:
@@ -1158,8 +1205,8 @@ class BatchAnalysisEngine:
                     # NOTE: Original code treated 'channel_set' as passing the list to func.
                     # 'all_trials' iterated.
 
-                    if scope == "channel_set":
-                        # Pass full list
+                    if scope == "channel_set" or (scope == "all_trials" and expects_list):
+                        # Pass full list (channel_set always, all_trials when expects_list=True)
                         res = analysis_func(data, time, sampling_rate, **params)
                         # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
                         if "metrics" in res and isinstance(res.get("metrics"), dict):

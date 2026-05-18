@@ -7,22 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.5b1] - 2026-05-13
+## [0.1.5b2] - 2026-05-18
 
 ### Fixed
 
+- **PPR baseline correction** (CRITICAL-1): Paired-pulse ratio R2 amplitude now uses
+  the pre-stimulation baseline (`bl1`) as reference instead of the contaminated local
+  baseline (`bl2`), correcting systematic facilitation/depression classification errors
+  per Zucker & Regehr (2002). Bi-exponential decay fit bounds now enforce polarity-matched
+  amplitude signs (negative events: negative amplitudes; positive: positive).
+- **Division-by-zero guards in spike-train statistics** (CRITICAL-2): CV2 and LV
+  calculations now use `np.where(denominator > EPSILON_ISI_SUM, ..., np.nan)` to
+  prevent `ZeroDivisionError` and silent NaN propagation on pathological ISI arrays
+  (e.g., perfectly identical spike timestamps or floating-point underflow).
+- **Sag ratio float comparison** (CRITICAL-3): `if delta_v_ss == 0` replaced with
+  `if abs(delta_v_ss) < 1e-9` to prevent fragile exact float equality causing
+  division-by-zero on near-zero hyperpolarising steps.
+- **NWB electrode metadata completeness** (CRITICAL-6): `IntracellularElectrode`
+  objects in NWB exports now actively include `electrode_resistance`, `electrode_seal`,
+  and `electrode_description` from the `Channel` data model, satisfying DANDI
+  compliance requirements.
+- **Batch preprocessing context restoration** (CRITICAL-5): Preprocessing failure
+  in the batch engine now restores the original `pipeline_context` so subsequent
+  tasks in the same pipeline are not poisoned by a partial or corrupted context.
+- **Trial averaging length mismatch** (HIGH-11): Cross-file and multi-trial averaging
+  now returns a structured `{"error": "Cannot average mixed-length trials",
+  "error_type": "TRIAL_LENGTH_MISMATCH"}` result dict instead of silently falling
+  through to NaN-producing source reloads.
+- **TTL auto-threshold** (HIGH-4): Data-range requirement lowered from `> 1.0` to
+  `> 0.3` to support 0.5 V logic-level TTL signals.
+- **Tau fitting truncation guard** (HIGH-2): Array truncation at sag peak now
+  validates `len(t_fit) >= 3` before applying; full window is restored when too few
+  points would remain, preventing exponential-fit crashes on short steps.
+- **`expects_list` batch dispatch** (HIGH-10): `AnalysisRegistry.register()` now
+  accepts an `expects_list` flag. When `True` and `scope="all_trials"`, the batch
+  engine passes the full trial list in a single call instead of iterating per trial,
+  enabling multi-trial statistics (e.g., jitter, CV) to operate correctly. Default
+  `False` preserves all existing per-trial behaviour. All example plugins, the plugin
+  template, and `docs/extending_synaptipy.md` updated accordingly.
 - **Installer CI - PyInstaller spec wrong path**: `synaptipy.spec` used
-  `os.path.dirname(os.path.abspath(SPECPATH))` which resolved to the
-  *parent* of the repository root on GitHub Actions, causing
-  `FileNotFoundError: pyproject.toml` on all platforms. Fixed by
-  removing the `os.path.dirname()` wrapper: `SPECPATH` is already the
-  directory of the spec file (i.e. the repo root).
+  `os.path.dirname(os.path.abspath(SPECPATH))` which resolved to the parent of the
+  repository root on GitHub Actions, causing `FileNotFoundError: pyproject.toml` on
+  all platforms. Fixed by removing the `os.path.dirname()` wrapper.
+- **CI - pandas minimum-viable pin** (`test.yml`): `minimum-viable` job pinned
+  `pandas==2.3.1` instead of the declared lower bound `pandas==2.3.0`; corrected.
+- **CI - Sphinx warnings silently ignored** (`docs.yml`, `release.yml`):
+  `sphinx-build` lacked `-W`; docstring syntax warnings would pass CI silently.
+  Added `-W --keep-going` so warnings are treated as errors while all issues are
+  reported before stopping.
+- **CI - coverage source path in release job** (`release.yml`): `--cov=Synaptipy`
+  changed to `--cov=src/Synaptipy` to align with `[tool.coverage.paths]` remapping
+  in `pyproject.toml` and produce correct release coverage artefacts.
+- **README - broken PyPI screenshot**: Relative image path replaced with the
+  absolute `raw.githubusercontent.com` URL so the screenshot renders on PyPI.
+- **`scripts/capture_screenshots.py` C901 complexity**: `_capture_explorer_screenshots`
+  (cyclomatic complexity 11) refactored into five focused helpers plus a slim
+  orchestrator (complexity 3), within the project `max-complexity = 10` constraint.
+
+### Added
+
+- **Global preprocessing visual indicator** (CRITICAL-4): A persistent amber banner
+  `[PREPROCESSING ACTIVE]` appears at the top of the Analyser tab parameter layout
+  whenever global preprocessing is enabled, listing the active baseline-correction
+  and filter steps. The banner is hidden automatically when preprocessing is cleared.
+- **Processing history in NWB export** (CRITICAL-7): `Recording.add_preprocessing_step()`
+  logs operations (lowpass filter, baseline subtraction, etc.) with ISO timestamps
+  and parameters into `metadata["processing_history"]`, which is then written as a
+  `DynamicTable` in the NWB `preprocessing` processing module for full FAIR
+  reproducibility.
+- **Parameter tooltips from registry** (HIGH-5): UI widgets generated from the
+  analysis registry now display tooltips falling back from `tooltip` to
+  `description` metadata keys, so all registered parameters have visible
+  help text in the GUI.
+- **`expects_list` registry parameter**: Formally documented in
+  `AnalysisRegistry.register()` docstring with usage examples and a reference table;
+  added to `plugin_template.py` and `docs/extending_synaptipy.md` (new section 3.3)
+  for plugin authors.
 
 ### Changed
 
-- Bumped version to `0.1.5b1` across all canonical locations.
-- Added `scripts/bump_version.py` to automate cross-file version bumps
-  in future releases.
+- Bumped version to `0.1.5b2` across all canonical locations.
+- Added `scripts/bump_version.py` to automate cross-file version bumps in future
+  releases.
 
 
 ## [0.1.1b9] - 2026-05-13

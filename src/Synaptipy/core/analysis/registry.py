@@ -32,18 +32,41 @@ class AnalysisRegistry:
         Decorator to register an analysis or preprocessing function.
 
         Args:
-            name: Unique identifier for the function (e.g., "spike_detection")
-            type: The type of function ("analysis" or "preprocessing")
-            **kwargs: Additional metadata to store with the function (e.g., ui_params)
+            name: Unique identifier for the function (e.g., ``"spike_detection"``).
+            type: The type of function - ``"analysis"`` (default) or
+                ``"preprocessing"``.
+            expects_list: ``bool``, default ``False``.  Controls how the batch
+                engine delivers data to the registered function.
+
+                - ``False`` (default) - the function receives a **single 1-D
+                  NumPy array** (one trial or a pre-averaged master trace).
+                  The batch engine automatically averages all available trials
+                  when the pipeline scope would otherwise yield a list.  Use
+                  this for all analyses that operate on a single sweep, e.g.
+                  synaptic charge, AP repolarization, or any metric derived
+                  from a single trace.
+                - ``True`` - the function receives the **raw list of per-trial
+                  NumPy arrays**.  Use this only when the analysis inherently
+                  requires comparing multiple trials, e.g. jitter calculations
+                  or trial-to-trial variance.
+
+                This flag is stored in the registry metadata so tools,
+                documentation generators, and the GUI can inspect it.
+            **kwargs: Additional metadata stored with the function
+                (e.g., ``ui_params``, ``plots``, ``label``).
 
         Returns:
-            Decorator function
+            Decorator function that registers *func* and returns it unchanged.
 
         Example::
 
-            @AnalysisRegistry.register("spike_detection", ui_params=[...])
+            @AnalysisRegistry.register(
+                "spike_detection",
+                expects_list=False,
+                ui_params=[...],
+            )
             def run_spike_detection(data, time, sampling_rate, **kwargs):
-                # ... analysis logic ...
+                # data is a single 1-D array (one trial or average)
                 return results_dict
         """
         import copy

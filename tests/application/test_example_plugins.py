@@ -237,13 +237,14 @@ class TestOptoJitterPlugin:
         assert func is not None
 
     def test_metadata_shape(self, opto_module):
-        """Metadata contains label, ui_params, and plots."""
+        """Metadata contains label, ui_params, plots, and expects_list=True."""
         meta = AnalysisRegistry.get_metadata("opto_jitter")
         assert meta.get("label") == "Opto Latency Jitter"
         assert isinstance(meta.get("ui_params"), list)
         assert len(meta["ui_params"]) >= 4
         assert isinstance(meta.get("plots"), list)
         assert len(meta["plots"]) >= 1
+        assert meta.get("expects_list") is True
 
     def test_output_schema(self, opto_module, synthetic_opto):
         """Wrapper returns the nested {module_used, metrics} schema."""
@@ -381,13 +382,14 @@ class TestAPRepolarizationPlugin:
         assert func is not None
 
     def test_metadata_shape(self, ap_module):
-        """Metadata contains label, ui_params, and plots."""
+        """Metadata contains label, ui_params, plots, and expects_list=False."""
         meta = AnalysisRegistry.get_metadata("ap_repolarization")
         assert meta.get("label") == "Max Repolarization Rate"
         assert isinstance(meta.get("ui_params"), list)
         assert len(meta["ui_params"]) >= 3
         assert isinstance(meta.get("plots"), list)
         assert len(meta["plots"]) >= 1
+        assert meta.get("expects_list", False) is False
 
     def test_output_schema(self, ap_module, synthetic_spike):
         """Wrapper returns the nested {module_used, metrics} schema."""

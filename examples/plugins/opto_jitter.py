@@ -190,6 +190,7 @@ def calculate_opto_jitter(
 @AnalysisRegistry.register(
     name="opto_jitter",
     label="Opto Latency Jitter",
+    expects_list=True,
     requires_secondary_channel=True,
     ui_params=[
         {
