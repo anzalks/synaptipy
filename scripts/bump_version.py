@@ -119,17 +119,8 @@ def bump(old_version: str, new_version: str) -> None:
     text = changelog.read_text(encoding="utf-8")
     new_section = (
         f"## [{new_version}] - {today}\n\n"
-        f"### Fixed\n\n"
-        f"- **Installer CI - PyInstaller spec wrong path**: `synaptipy.spec` used\n"
-        f"  `os.path.dirname(os.path.abspath(SPECPATH))` which resolved to the\n"
-        f"  *parent* of the repository root on GitHub Actions, causing\n"
-        f"  `FileNotFoundError: pyproject.toml` on all platforms. Fixed by\n"
-        f"  removing the `os.path.dirname()` wrapper: `SPECPATH` is already the\n"
-        f"  directory of the spec file (i.e. the repo root).\n\n"
         f"### Changed\n\n"
-        f"- Bumped version to `{new_version}` across all canonical locations.\n"
-        f"- Added `scripts/bump_version.py` to automate cross-file version bumps\n"
-        f"  in future releases.\n\n"
+        f"- Bumped version to `{new_version}` across all canonical locations.\n\n"
     )
     marker = "## [Unreleased]"
     if marker not in text:

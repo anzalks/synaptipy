@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5b2] - 2026-05-18
+
 ### Fixed
 
 - **PPR baseline correction** (CRITICAL-1): Paired-pulse ratio R2 amplitude now uses
@@ -37,6 +39,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tau fitting truncation guard** (HIGH-2): Array truncation at sag peak now
   validates `len(t_fit) >= 3` before applying; full window is restored when too few
   points would remain, preventing exponential-fit crashes on short steps.
+- **`expects_list` batch dispatch** (HIGH-10): `AnalysisRegistry.register()` now
+  accepts an `expects_list` flag. When `True` and `scope="all_trials"`, the batch
+  engine passes the full trial list in a single call instead of iterating per trial,
+  enabling multi-trial statistics (e.g., jitter, CV) to operate correctly. Default
+  `False` preserves all existing per-trial behaviour. All example plugins, the plugin
+  template, and `docs/extending_synaptipy.md` updated accordingly.
+- **Installer CI - PyInstaller spec wrong path**: `synaptipy.spec` used
+  `os.path.dirname(os.path.abspath(SPECPATH))` which resolved to the parent of the
+  repository root on GitHub Actions, causing `FileNotFoundError: pyproject.toml` on
+  all platforms. Fixed by removing the `os.path.dirname()` wrapper.
+- **CI - pandas minimum-viable pin** (`test.yml`): `minimum-viable` job pinned
+  `pandas==2.3.1` instead of the declared lower bound `pandas==2.3.0`; corrected.
+- **CI - Sphinx warnings silently ignored** (`docs.yml`, `release.yml`):
+  `sphinx-build` lacked `-W`; docstring syntax warnings would pass CI silently.
+  Added `-W --keep-going` so warnings are treated as errors while all issues are
+  reported before stopping.
+- **CI - coverage source path in release job** (`release.yml`): `--cov=Synaptipy`
+  changed to `--cov=src/Synaptipy` to align with `[tool.coverage.paths]` remapping
+  in `pyproject.toml` and produce correct release coverage artefacts.
+- **README - broken PyPI screenshot**: Relative image path replaced with the
+  absolute `raw.githubusercontent.com` URL so the screenshot renders on PyPI.
+- **`scripts/capture_screenshots.py` C901 complexity**: `_capture_explorer_screenshots`
+  (cyclomatic complexity 11) refactored into five focused helpers plus a slim
+  orchestrator (complexity 3), within the project `max-complexity = 10` constraint.
 
 ### Added
 
@@ -53,23 +79,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   analysis registry now display tooltips falling back from `tooltip` to
   `description` metadata keys, so all registered parameters have visible
   help text in the GUI.
-
-
-
-### Fixed
-
-- **Installer CI - PyInstaller spec wrong path**: `synaptipy.spec` used
-  `os.path.dirname(os.path.abspath(SPECPATH))` which resolved to the
-  *parent* of the repository root on GitHub Actions, causing
-  `FileNotFoundError: pyproject.toml` on all platforms. Fixed by
-  removing the `os.path.dirname()` wrapper: `SPECPATH` is already the
-  directory of the spec file (i.e. the repo root).
+- **`expects_list` registry parameter**: Formally documented in
+  `AnalysisRegistry.register()` docstring with usage examples and a reference table;
+  added to `plugin_template.py` and `docs/extending_synaptipy.md` (new section 3.3)
+  for plugin authors.
 
 ### Changed
 
-- Bumped version to `0.1.5b1` across all canonical locations.
-- Added `scripts/bump_version.py` to automate cross-file version bumps
-  in future releases.
+- Bumped version to `0.1.5b2` across all canonical locations.
+- Added `scripts/bump_version.py` to automate cross-file version bumps in future
+  releases.
 
 
 ## [0.1.1b9] - 2026-05-13
