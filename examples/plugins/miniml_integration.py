@@ -34,6 +34,8 @@ miniML class API (as of commit 9bab948):
     trace.sampling             # sampling interval in seconds (= 1/fs)
 """
 
+import contextlib
+import io
 import logging
 import sys
 import traceback
@@ -44,6 +46,30 @@ import numpy as np
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
+
+
+class _StreamToLogger(io.TextIOBase):
+    """Redirect a stream (stdout/stderr) to a Python logger line by line."""
+
+    def __init__(self, logger: logging.Logger, level: int = logging.INFO) -> None:
+        super().__init__()
+        self._logger = logger
+        self._level = level
+        self._buf = ""
+
+    def write(self, s: str) -> int:
+        self._buf += s
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            stripped = line.rstrip()
+            if stripped:
+                self._logger.log(self._level, "%s", stripped)
+        return len(s)
+
+    def flush(self) -> None:
+        if self._buf.strip():
+            self._logger.log(self._level, "%s", self._buf.rstrip())
+            self._buf = ""
 
 
 def _import_miniml(miniml_core_path: str):
@@ -79,6 +105,44 @@ def _import_miniml(miniml_core_path: str):
             "(the folder that contains miniML.py and miniML_functions.py)."
         ) from exc
     return MiniTrace, EventDetection
+
+
+def _locate_event_peaks(
+    data: np.ndarray,
+    ev_locs: np.ndarray,
+    valid_mask: np.ndarray,
+    direction: str,
+    window_size: int,
+    sampling_interval: float,
+    time_start: float,
+):
+    """Map validated onset indices to amplitude-peak times and data values."""
+    valid_locs = ev_locs[valid_mask]
+    if valid_locs.size == 0:
+        return [], []
+    half_win = max(1, window_size // 2)
+    find_extremum = np.argmin if direction == "negative" else np.argmax
+    peak_indices = np.empty(len(valid_locs), dtype=np.int64)
+    for k, onset in enumerate(valid_locs):
+        end_idx = min(int(onset) + half_win, len(data))
+        seg = data[int(onset) : end_idx]
+        peak_indices[k] = onset + find_extremum(seg) if len(seg) > 0 else onset
+    ev_times = (peak_indices * sampling_interval + time_start).tolist()
+    ev_peaks = data[peak_indices].tolist()
+    return ev_times, ev_peaks
+
+
+def _compute_event_scores(detector: Any, ev_locs: np.ndarray, valid_mask: np.ndarray):
+    """Extract per-event confidence scores from the detector if available."""
+    if hasattr(detector, "event_scores") and len(detector.event_scores) == len(ev_locs):
+        scores_arr = np.asarray(detector.event_scores)[valid_mask]
+        if len(scores_arr) > 0:
+            return (
+                scores_arr.tolist(),
+                round(float(np.mean(scores_arr)), 4),
+                round(float(np.min(scores_arr)), 4),
+            )
+    return None, None, None
 
 
 def run_miniml_detection(
@@ -172,12 +236,17 @@ def run_miniml_detection(
             threshold,
             direction,
         )
-        detector.detect_events(
-            eval=True,
-            rel_prom_cutoff=rel_prom_cutoff,
-            convolve_win=convolve_win,
-            gradient_convolve_win=gradient_convolve_win,
-        )
+        _stdout_capture = _StreamToLogger(log, logging.INFO)
+        _stderr_capture = _StreamToLogger(log, logging.WARNING)
+        with contextlib.redirect_stdout(_stdout_capture), contextlib.redirect_stderr(_stderr_capture):
+            detector.detect_events(
+                eval=True,
+                rel_prom_cutoff=rel_prom_cutoff,
+                convolve_win=convolve_win,
+                gradient_convolve_win=gradient_convolve_win,
+            )
+        _stdout_capture.flush()
+        _stderr_capture.flush()
         log.info(
             "miniML: inference done - %d raw locations",
             len(getattr(detector, "event_locations", [])),
@@ -190,33 +259,59 @@ def run_miniml_detection(
     # Shift each marker to the amplitude peak within the next window_size//2 samples.
     ev_locs = np.asarray(detector.event_locations, dtype=np.int64)
     valid_mask = (ev_locs >= 0) & (ev_locs < len(data))
-    valid_locs = ev_locs[valid_mask]
-    if valid_locs.size == 0:
-        ev_times: list = []
-        ev_peaks: list = []
-    else:
-        half_win = max(1, window_size // 2)
-        find_extremum = np.argmin if direction == "negative" else np.argmax
-        peak_indices = np.empty(len(valid_locs), dtype=np.int64)
-        for k, onset in enumerate(valid_locs):
-            end_idx = min(int(onset) + half_win, len(data))
-            seg = data[int(onset) : end_idx]
-            peak_indices[k] = onset + find_extremum(seg) if len(seg) > 0 else onset
-        ev_times = (peak_indices * sampling_interval + time[0]).tolist()
-        ev_peaks = data[peak_indices].tolist()
+    ev_times, ev_peaks = _locate_event_peaks(
+        data, ev_locs, valid_mask, direction, window_size, sampling_interval, time[0]
+    )
 
     duration = float(time[-1] - time[0]) if len(time) > 1 else 0.0
     freq = float(len(ev_times)) / duration if duration > 0 else 0.0
     model_label = active_model.replace("\\", "/").split("/")[-1]
 
-    log.info("miniML: %d events, %.2f Hz", len(ev_times), freq)
+    # Per-event amplitudes: data values at amplitude-peak positions.
+    if len(ev_peaks) > 0:
+        amps_arr = np.array(ev_peaks)
+        mean_amp = round(float(np.mean(amps_arr)), 4)
+        std_amp = round(float(np.std(amps_arr)), 4)
+    else:
+        mean_amp = None
+        std_amp = None
+
+    # Inter-event intervals in milliseconds.
+    if len(ev_times) >= 2:
+        iei_arr = np.diff(np.array(ev_times)) * 1000.0
+        mean_iei = round(float(np.mean(iei_arr)), 4)
+        std_iei = round(float(np.std(iei_arr)), 4)
+    else:
+        mean_iei = None
+        std_iei = None
+
+    # Per-event model confidence scores (miniML >= certain versions).
+    ev_scores, mean_score, min_score = _compute_event_scores(detector, ev_locs, valid_mask)
+
+    log.info(
+        "miniML: %d events | %.2f Hz | mean amplitude %.1f pA | mean IEI %.1f ms",
+        len(ev_times),
+        freq,
+        mean_amp if mean_amp is not None else float("nan"),
+        mean_iei if mean_iei is not None else float("nan"),
+    )
+    if mean_score is not None:
+        log.info("miniML: mean model score = %.3f (min = %.3f)", mean_score, min_score)
 
     return {
         "Event_Count": len(ev_times),
         "Frequency_Hz": round(freq, 2),
         "Model_Used": model_label,
+        "Mean_Amplitude_pA": mean_amp,
+        "Std_Amplitude_pA": std_amp,
+        "Mean_IEI_ms": mean_iei,
+        "Std_IEI_ms": std_iei,
+        "Mean_Score": mean_score,
+        "Min_Score": min_score,
         "_event_times": ev_times,
         "_event_peaks": ev_peaks,
+        "_event_scores": ev_scores,
+        "_event_amplitudes": ev_peaks,
     }
 
 
@@ -302,7 +397,7 @@ def run_miniml_detection(
             "default": 20,
             "min": 0,
             "max": 1000,
-            "tooltip": "Hann window size for data smoothing during event analysis (miniML default: 20; 0 = use lowpass filter instead)",
+            "tooltip": "Hann window size for smoothing (miniML default: 20; 0 = use lowpass filter instead)",
         },
         {
             "name": "gradient_convolve_win",
@@ -336,6 +431,26 @@ def run_miniml_events_wrapper(
     Delegates to :func:`run_miniml_detection`.  All keyword arguments are
     populated automatically from the ``ui_params`` widgets when the user
     clicks **Run Analysis**.
+
+    Columns returned in the results table / CSV export:
+
+    ========================  ================================================
+    Key                       Description
+    ========================  ================================================
+    ``Event_Count``           Number of detected events
+    ``Frequency_Hz``          Event frequency (events / recording duration)
+    ``Model_Used``            Filename of the .h5 model
+    ``Mean_Amplitude_pA``     Mean amplitude at the peak of each event
+    ``Std_Amplitude_pA``      Standard deviation of per-event amplitudes
+    ``Mean_IEI_ms``           Mean inter-event interval in milliseconds
+    ``Std_IEI_ms``            Standard deviation of IEI in milliseconds
+    ``Mean_Score``            Mean miniML model confidence score (if available)
+    ``Min_Score``             Minimum confidence score (quality filter proxy)
+    ``_event_times``          Per-event peak times (s) — drives marker overlay
+    ``_event_peaks``          Per-event amplitude values — drives marker overlay
+    ``_event_scores``         Per-event confidence scores list (private)
+    ``_event_amplitudes``     Per-event amplitudes list (private, same as peaks)
+    ========================  ================================================
     """
     return run_miniml_detection(
         data=data,
