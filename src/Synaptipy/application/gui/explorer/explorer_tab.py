@@ -228,21 +228,30 @@ class ExplorerTab(QtWidgets.QWidget):
         left_scroll.setWidget(self.config_panel)
         splitter.addWidget(left_scroll)
 
-        # CENTER PANEL
-        center_widget = QtWidgets.QWidget()
-        center_layout = QtWidgets.QGridLayout(center_widget)
+        # CENTER PANEL (vertical splitter: plot on top, controls below)
+        center_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+
+        # 1. Top widget: plot canvas + Y/X scrollbars
+        top_widget = QtWidgets.QWidget()
+        top_layout = QtWidgets.QGridLayout(top_widget)
         # (Row, Col, RowSpan, ColSpan)
 
-        # 1. Plot Area (0, 0)
-        center_layout.addWidget(self.plot_canvas.widget, 0, 0)
+        # Plot Area (0, 0)
+        top_layout.addWidget(self.plot_canvas.widget, 0, 0)
 
-        # 2. Y Scrollbar (Right of Plot) (0, 1)
-        center_layout.addWidget(self.y_controls.y_scroll_widget, 0, 1)
+        # Y Scrollbar (Right of Plot) (0, 1)
+        top_layout.addWidget(self.y_controls.y_scroll_widget, 0, 1)
 
-        # 3. X Scrollbar (Below Plot) (1, 0)
-        center_layout.addWidget(self.x_scrollbar, 1, 0)
+        # X Scrollbar (Below Plot) (1, 0)
+        top_layout.addWidget(self.x_scrollbar, 1, 0)
 
-        # 4. Navigation Row (Row 2: Prev File | Trial Cycle | Next File)
+        top_layout.setColumnStretch(0, 1)  # Plot takes max width
+        top_layout.setColumnStretch(1, 0)  # Scrollbar fixes width
+        top_layout.setRowStretch(0, 1)  # Plot takes max height
+        top_layout.setRowStretch(1, 0)
+        center_splitter.addWidget(top_widget)
+
+        # 2. Navigation Row (Prev File | Trial Cycle | Next File)
         # We need to construct this row by "stealing" widgets from the toolbar
         nav_row_widget = QtWidgets.QWidget()
         nav_row_layout = QtWidgets.QHBoxLayout(nav_row_widget)
@@ -328,22 +337,23 @@ class ExplorerTab(QtWidgets.QWidget):
 
         cursor_row_layout.addWidget(cursor_group)
 
-        center_layout.addWidget(nav_row_widget, 2, 0)
-        center_layout.addWidget(zoom_row_widget, 3, 0)
-        center_layout.addWidget(cursor_row_widget, 4, 0)
+        # 3. Bottom widget: nav + zoom + cursor controls (scrollable)
+        bottom_widget = QtWidgets.QWidget()
+        bottom_layout = QtWidgets.QVBoxLayout(bottom_widget)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.addWidget(nav_row_widget)
+        bottom_layout.addWidget(zoom_row_widget)
+        bottom_layout.addWidget(cursor_row_widget)
+        bottom_layout.addStretch()
 
-        # Adjust column stretch
-        center_layout.setColumnStretch(0, 1)  # Plot takes max width
-        center_layout.setColumnStretch(1, 0)  # Scrollbar fixes width
+        bottom_scroll = QtWidgets.QScrollArea()
+        bottom_scroll.setWidgetResizable(True)
+        bottom_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        bottom_scroll.setWidget(bottom_widget)
+        center_splitter.addWidget(bottom_scroll)
 
-        # Adjust row stretch
-        center_layout.setRowStretch(0, 1)  # Plot takes max height
-        center_layout.setRowStretch(1, 0)
-        center_layout.setRowStretch(2, 0)
-        center_layout.setRowStretch(3, 0)
-        center_layout.setRowStretch(4, 0)
-
-        splitter.addWidget(center_widget)
+        center_splitter.setSizes([800, 200])
+        splitter.addWidget(center_splitter)
 
         # RIGHT PANEL (wrapped in scroll area for small screens)
         right_widget = QtWidgets.QWidget()
@@ -651,6 +661,14 @@ class ExplorerTab(QtWidgets.QWidget):
         self._display_recording(recording)
         self.session_manager.current_recording = recording
 
+        if recording and recording.metadata.get("pyabf_synthetic_rescue"):
+            QtWidgets.QMessageBox.information(
+                self,
+                "Synthetic File Rescued",
+                "This file lacks standard Axon metadata headers. Synaptipy has filled in the "
+                "missing details using a pyABF fallback so the data can be opened, but some "
+                "proprietary hardware metadata is missing.",
+            )
         # Update Sidebar Indicator
         if recording and recording.source_file:
             self.sidebar.update_file_quality(recording.source_file, metrics)

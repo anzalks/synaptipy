@@ -70,6 +70,9 @@ Changelog = "https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"
 Source = "https://github.com/anzalks/synaptipy"
 
 [project.optional-dependencies]
+formats = [
+    "pyabf>=2.3.8",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-qt>=4.0.0",

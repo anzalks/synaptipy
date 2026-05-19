@@ -154,6 +154,73 @@ def test_lazy_loading_error_handling(neo_adapter_instance, sample_abf_path):
     assert data is not None
 
 
+# --- pyABF rescue fallback ---
+
+
+def test_pyabf_fallback_rescue(mocker, neo_adapter_instance, tmp_path):
+    """Test that _pyabf_to_neo_block rescue path returns a valid Recording.
+
+    Mocks neo.io.get_io to raise IndexError (simulating the exact failure observed
+    with synthetic ABF files), then mocks pyabf so the rescue loader returns a
+    correctly populated Recording through the standard downstream pipeline.
+    """
+    abf_file = tmp_path / "synthetic.abf"
+    abf_file.touch()
+
+    # Simulate the exact neo.io.get_io failure observed with synthetic ABF files
+    mocker.patch("neo.io.get_io", side_effect=IndexError("list index out of range"))
+
+    # Build a realistic mock pyabf.ABF object with multi-channel attributes
+    sweep_data = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+    mock_abf = mocker.MagicMock()
+    mock_abf.channelCount = 1
+    mock_abf.adcNames = ["IN_0"]
+    mock_abf.adcUnits = ["pA"]
+    mock_abf.sweepList = [0, 1]
+    mock_abf.sweepUnitsY = "pA"
+    mock_abf.dataRate = 10000
+    mock_abf.sweepY = sweep_data
+
+    mock_pyabf_mod = mocker.MagicMock()
+    mock_pyabf_mod.ABF.return_value = mock_abf
+    mocker.patch.dict("sys.modules", {"pyabf": mock_pyabf_mod})
+
+    recording = neo_adapter_instance.read_recording(abf_file)
+
+    assert isinstance(recording, Recording)
+    assert recording.source_file == abf_file
+    assert recording.metadata.get("pyabf_synthetic_rescue") is True
+    assert recording.sampling_rate == 10000.0
+
+    # Channel name comes from adcNames[0] via the downstream pipeline
+    assert "0" in recording.channels
+    ch = recording.channels["0"]
+    assert ch.name == "IN_0"
+    assert ch.units == "pA"
+    assert ch.sampling_rate == 10000.0
+    # 2 sweeps → 2 trials
+    assert len(ch.data_trials) == 2
+    np.testing.assert_array_equal(ch.data_trials[0], sweep_data)
+    np.testing.assert_array_equal(ch.data_trials[1], sweep_data)
+
+
+def test_pyabf_fallback_rescue_import_error(mocker, neo_adapter_instance, tmp_path):
+    """Test that a missing pyabf raises FileReadError with the install hint."""
+    from Synaptipy.shared.error_handling import FileReadError
+
+    abf_file = tmp_path / "synthetic.abf"
+    abf_file.touch()
+
+    mock_io_class = mocker.MagicMock(side_effect=Exception("Simulated neo failure"))
+    mocker.patch.object(neo_adapter_instance, "_get_neo_io_class", return_value=mock_io_class)
+
+    # Remove pyabf from sys.modules so the import fails
+    mocker.patch.dict("sys.modules", {"pyabf": None})
+
+    with pytest.raises(FileReadError, match="synaptipy\\[formats\\]"):
+        neo_adapter_instance.read_recording(abf_file)
+
+
 def test_read_recording_corrupted(neo_adapter_instance, tmp_path):
     """Test read_recording raises FileReadError (or similar) for corrupted binary data."""
     corrupted_file = tmp_path / "corrupted.abf"
