@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synaptipy"
-version = "0.1.5b3"
+version = "0.1.5b4"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
@@ -70,6 +70,9 @@ Changelog = "https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md"
 Source = "https://github.com/anzalks/synaptipy"
 
 [project.optional-dependencies]
+formats = [
+    "pyabf>=2.3.8",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-qt>=4.0.0",

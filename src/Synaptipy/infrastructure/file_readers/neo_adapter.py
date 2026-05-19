@@ -353,6 +353,119 @@ class NeoAdapter:
 
         self._cache_abf_epochs(reader, recording)
 
+    def _pyabf_to_neo_block(self, filepath: Path) -> Tuple[neo.Block, object]:
+        """Convert a pyabf ABF file to a neo Block for downstream processing.
+
+        Imports pyabf locally and maps sweeps/channels into a proper
+        ``neo.Block`` so that the standard ``read_recording`` downstream
+        pipeline (unit rescaling, NeoSourceHandle, channel naming, etc.)
+        processes the data identically to any other neo-supported format.
+
+        Args:
+            filepath: Path to the .abf file.
+
+        Returns:
+            A tuple ``(block, fake_reader)`` where *block* is a populated
+            :class:`neo.Block` and *fake_reader* is a minimal object whose
+            ``header`` attribute satisfies ``_discover_channels_from_header``.
+
+        Raises:
+            ImportError: If the ``pyabf`` package is not installed.
+            Exception: If pyabf fails to read or parse the file.
+        """
+        import pyabf  # type: ignore[import-untyped]  # raises ImportError when not installed
+        import quantities as pq  # bundled with neo
+
+        # ABF unit fields are stored as 8-byte strings; recording software sometimes
+        # saves only the SI prefix character ('p', 'n', 'm', …) without the base unit
+        # letter ('A' or 'V').  Map such truncated strings to the correct quantities
+        # unit.  Full strings like "pA" / "mV" are handled by the getattr() fallback.
+        _ABF_PREFIX_UNITS: Dict[str, object] = {
+            "pA": pq.pA,
+            "nA": pq.nA,
+            "uA": pq.uA,
+            "mA": pq.mA,
+            "A": pq.A,
+            "mV": pq.mV,
+            "V": pq.V,
+            # Truncated prefix-only strings (e.g. 'p' instead of 'pA')
+            # In patch-clamp ABF files:
+            #   'p' = pico  → picoampere  (standard whole-cell / loose-patch current)
+            #   'n' = nano  → nanoampere
+            #   'u' = micro → microampere
+            #   'm' = milli → millivolt   (voltage is far more common than milliampere)
+            "p": pq.pA,
+            "n": pq.nA,
+            "u": pq.uA,
+            "m": pq.mV,
+        }
+
+        def _resolve_units(units_str: str) -> object:
+            """Return a quantities unit for *units_str*, with ABF truncation handling."""
+            if units_str in _ABF_PREFIX_UNITS:
+                return _ABF_PREFIX_UNITS[units_str]
+            u = getattr(pq, units_str, None)
+            if u is not None and hasattr(u, "dimensionality"):
+                return u
+            return pq.dimensionless
+
+        abf = pyabf.ABF(str(filepath))
+        num_channels: int = int(abf.channelCount)
+        sampling_rate_hz: float = float(abf.dataRate)
+        adc_names: List[str] = list(abf.adcNames) if hasattr(abf, "adcNames") else []
+
+        log.warning(
+            "neo AxonIO failed for '%s'; building neo Block via pyabf rescue " "(%d sweep(s), %d channel(s)).",
+            filepath.name,
+            len(abf.sweepList),
+            num_channels,
+        )
+
+        block = neo.Block(name=filepath.stem)
+
+        for sweep_idx in abf.sweepList:  # type: ignore[attr-defined]
+            seg = neo.Segment(name=f"sweep_{sweep_idx}", index=sweep_idx)
+            for ch_idx in range(num_channels):
+                try:
+                    abf.setSweep(sweep_idx, channel=ch_idx)  # type: ignore[attr-defined]
+                    raw_data = np.asarray(abf.sweepY, dtype=np.float64)  # type: ignore[attr-defined]
+                    units_str = str(abf.sweepUnitsY) if hasattr(abf, "sweepUnitsY") else ""  # type: ignore
+                    sig_units = _resolve_units(units_str)
+                    ch_name = adc_names[ch_idx] if ch_idx < len(adc_names) else f"ch{ch_idx}"
+                    ch_id = str(ch_idx)
+                    signal = neo.AnalogSignal(
+                        raw_data * sig_units,
+                        sampling_rate=sampling_rate_hz * pq.Hz,
+                        name=ch_name,
+                        t_start=0.0 * pq.s,
+                    )
+                    signal.annotate(channel_id=ch_id, channel_names=[ch_name], channel_ids=[ch_id])
+                    seg.analogsignals.append(signal)
+                except Exception as exc:
+                    log.warning(
+                        "pyabf neo-block: sweep %d channel %d failed for '%s': %s",
+                        sweep_idx,
+                        ch_idx,
+                        filepath.name,
+                        exc,
+                    )
+            block.segments.append(seg)
+
+        block.create_relationship()
+
+        # Build header signal_channels list so _discover_channels_from_header
+        # can populate channel names without falling back to late-discovery.
+        header_channels = [
+            {"id": str(i), "name": adc_names[i] if i < len(adc_names) else f"ch{i}"} for i in range(num_channels)
+        ]
+
+        class _PyABFFakeReader:
+            """Minimal reader shim that satisfies the downstream header interface."""
+
+            header: Dict = {"signal_channels": header_channels}
+
+        return block, _PyABFFakeReader()
+
     def read_recording(  # noqa: C901
         self,
         filepath: Path,
@@ -367,6 +480,7 @@ class NeoAdapter:
         log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
         filepath = Path(filepath)
         io_class = self._get_neo_io_class(filepath)
+        _pyabf_rescue: bool = False
         try:
             reader = io_class(filename=str(filepath))
             try:
@@ -379,32 +493,67 @@ class NeoAdapter:
                     raise
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
-            log.error(
-                f"Failed to read block from {filepath} (Lazy: {lazy}): {e}",
-                exc_info=True,
-            )
-            # If not lazy, maybe try lazy as fallback?
-            if not lazy:
-                log.debug("Attempting lazy load fallback due to failure...")
-                try:
-                    reader = io_class(filename=str(filepath))  # Re-instantiate
-                    try:
-                        block = reader.read_block(lazy=True, signal_group_mode="split-all")
-                    except TypeError as te_lazy:
-                        if "signal_group_mode" in str(te_lazy):
-                            block = reader.read_block(lazy=True)
-                        else:
-                            raise
-                    log.debug("Lazy load fallback succeeded.")
-                    # If we fallback, we must treat this as lazy=True for the rest of function
-                    lazy = True
-                except Exception as e_lazy:
-                    log.error(f"Lazy fallback also failed: {e_lazy}")
-                    raise FileReadError(f"Could not read file (even lazily): {e}")
+            # For .abf files we have a pyabf rescue path, so a neo failure is
+            # expected and non-fatal.  Log at DEBUG to avoid alarming the user;
+            # an ERROR is only emitted below if the rescue also fails.
+            _is_abf = filepath.suffix.lower() == ".abf"
+            if _is_abf:
+                log.debug(
+                    "neo AxonIO could not read '%s' (Lazy: %s): %s — will attempt pyabf rescue.",
+                    filepath.name,
+                    lazy,
+                    e,
+                )
             else:
-                raise FileReadError(f"Could not read file: {e}")
+                log.error(
+                    f"Failed to read block from {filepath} (Lazy: {lazy}): {e}",
+                    exc_info=True,
+                )
+            # For .abf files: try pyabf rescue FIRST before any lazy fallback.
+            # neo's lazy=True succeeds (no data loaded) even when read_block(lazy=False)
+            # fails with an IndexError inside signal chunking.  The resulting
+            # AnalogSignalProxy objects are unusable and cause downstream errors.
+            # Bypassing straight to pyabf avoids that dead-end path entirely.
+            if _is_abf:
+                try:
+                    block, reader = self._pyabf_to_neo_block(filepath)
+                    lazy = False
+                    _pyabf_rescue = True
+                    log.info("pyabf rescue succeeded for '%s'.", filepath.name)
+                except ImportError:
+                    raise FileReadError(
+                        "ABF file could not be read by Neo and the optional pyabf "
+                        "rescue loader is not installed.  Run "
+                        "`pip install synaptipy[formats]` or `pip install pyabf`."
+                    )
+                except Exception as pyabf_err:
+                    log.error("pyabf rescue also failed for '%s': %s", filepath.name, pyabf_err)
+                    # fall through to the generic lazy fallback below
+
+            if not _pyabf_rescue:
+                if not lazy:
+                    log.debug("Attempting lazy load fallback due to failure...")
+                    try:
+                        reader = io_class(filename=str(filepath))  # Re-instantiate
+                        try:
+                            block = reader.read_block(lazy=True, signal_group_mode="split-all")
+                        except TypeError as te_lazy:
+                            if "signal_group_mode" in str(te_lazy):
+                                block = reader.read_block(lazy=True)
+                            else:
+                                raise
+                        log.debug("Lazy load fallback succeeded.")
+                        # If we fallback, we must treat this as lazy=True for the rest of function
+                        lazy = True
+                    except Exception as e_lazy:
+                        log.error(f"Lazy fallback also failed: {e_lazy}")
+                        raise FileReadError(f"Could not read file (even lazily): {e}") from e_lazy
+                else:
+                    raise FileReadError(f"Could not read file: {e}")
 
         recording = Recording(source_file=filepath)
+        if _pyabf_rescue:
+            recording.metadata["pyabf_synthetic_rescue"] = True
         if hasattr(block, "rec_datetime") and block.rec_datetime:
             recording.session_start_time_dt = block.rec_datetime
             log.debug(f"Extracted session start time: {recording.session_start_time_dt}")

@@ -111,16 +111,21 @@ jobs:
 
     # Push core test coverage badge endpoint.json to the data branch so the
     # README badge resolves on every branch, not only after merging to main.
+    - name: Remove .coverage database before Codecov upload
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: rm -f .coverage  # prevent codecov CLI from regenerating coverage.xml with wrong paths
+
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       uses: codecov/codecov-action@v5
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         files: coverage.xml
         flags: unittests
         name: synaptipy-coverage
         fail_ci_if_error: false   # network blip must not block a green build
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        disable_search: true      # prevent auto-discovery of python-coverage-comment-action.txt
+        verbose: true             # surface any path-matching or processing errors
 
     - name: Push coverage badge data
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'

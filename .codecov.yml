@@ -1,14 +1,13 @@
 codecov:
   require_ci_to_pass: no
-  # Strip the GitHub Actions runner prefix so Codecov can match file paths
-  # against the repository tree.  Without this, coverage.xml entries like
-  # /home/runner/work/synaptipy/synaptipy/src/Synaptipy/core/analysis.py
-  # produce 0% because Codecov cannot find them in the git tree.
-  # Format: "old_prefix::new_prefix" — empty new_prefix strips the segment.
-  fixes:
-    - "/home/runner/work/synaptipy/synaptipy/::"
-    - "/Users/runner/work/synaptipy/synaptipy/::"
-    - "D:\\a\\synaptipy\\synaptipy\\::"
+
+# NOTE: do NOT add a fixes: section here.
+# Our coverage.xml uses relative paths (relative_files=true in pyproject.toml),
+# so Codecov resolves src/Synaptipy/__init__.py directly in the git tree without
+# any prefix stripping.  Adding fixes: with absolute runner paths causes Codecov
+# to switch to strict (non-fuzzy) path matching, which fails because the paths
+# in the XML are already relative and the fixes are no-ops — yet Codecov still
+# returns "Unknown error" / state=error with 0 files matched.
 
 coverage:
   precision: 2

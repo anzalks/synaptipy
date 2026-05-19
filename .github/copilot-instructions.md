@@ -256,6 +256,109 @@ ranges.
   To find the nearest index use: insert with `"left"`, then compare `idx-1` vs `idx`.
 - Do not use deprecated numpy APIs (e.g. `np.bool`, `np.int` — use built-ins).
 
+## miniML plugin API rules — DO NOT VIOLATE
+
+### Parameter split: __init__ vs detect_events
+`EventDetection.__init__()` accepts only: `data`, `event_direction`, `model_path`,
+`model_threshold`, `batch_size`, `window_size` (plus `verbose`, `compile_model`,
+`callbacks`, `training_direction`).
+
+`rel_prom_cutoff`, `convolve_win`, and `gradient_convolve_win` belong in
+`detect_events()`, NOT in `__init__()`. Passing them to `__init__()` raises
+`TypeError: EventDetection.__init__() got an unexpected keyword argument`.
+
+```python
+# CORRECT
+detector = EventDetection(data=trace, event_direction=direction, model_path=...,
+                          model_threshold=threshold, batch_size=512, window_size=600)
+detector.detect_events(eval=True, rel_prom_cutoff=0.25, convolve_win=20,
+                       gradient_convolve_win=40)
+
+# WRONG — TypeError
+detector = EventDetection(data=trace, rel_prom_cutoff=0.25, convolve_win=20, ...)
+```
+
+### gradient_convolve_win=0 is dangerous — use ≥ 20
+`convolve_win=0` or `gradient_convolve_win=0` trigger a Python `-0` bug:
+`smth_gradient[-0:] = 0` evaluates to the whole array, silently zeroing the
+gradient signal. With NumPy ≥ 2.0, `np.std([])` then returns `NaN`, causing
+`ValueError: cannot convert float NaN to integer` inside miniML's peak finder.
+Always use the documented defaults: `convolve_win=20`, `gradient_convolve_win=40`.
+
+### Marker placement: use amplitude peak, not onset
+`detector.event_locations` are onset sample indices (steepest-slope point), not
+amplitude peaks. Plot markers at the peak found by searching forward
+`window_size // 2` samples from each onset using `np.argmin` (negative) or
+`np.argmax` (positive). Placing markers directly at `event_locations` produces
+dots shifted left of the visible peak.
+
+## pyabf rescue path in NeoAdapter — DO NOT VIOLATE
+
+`infrastructure/file_readers/neo_adapter.py` falls back to `pyabf` when Neo
+returns truncated unit strings (e.g. `"p"`, `"n"`, `"m"` instead of `"pA"`,
+`"nA"`, `"mV"`). Rules:
+- The `_is_abf` check must fire **before** the lazy-load fallback — not after.
+- Unit resolution uses `_ABF_PREFIX_UNITS` dict: `{"p": pq.pA, "n": pq.nA, "m": pq.mV, ...}`.
+- Log the rescue with `log.debug(...)` (not `log.error`). A successful pyabf
+  fallback is normal, not an error.
+
+## Codecov CI rules — DO NOT VIOLATE
+
+### token: must be under with:, not env:
+`codecov/codecov-action@v5` requires `token:` under `with:`, NOT under `env:`.
+
+```yaml
+# CORRECT (v5)
+- uses: codecov/codecov-action@v5
+  with:
+    token: ${{ secrets.CODECOV_TOKEN }}
+    files: coverage.xml
+
+# WRONG — token is silently ignored; upload fails or uses tokenless mode
+- uses: codecov/codecov-action@v5
+  with:
+    files: coverage.xml
+  env:
+    CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+```
+
+### Do NOT add fixes: to .codecov.yml when using relative_files=true
+When `pyproject.toml` sets `[tool.coverage.run] relative_files = true`, coverage.xml
+already contains repo-relative paths (e.g. `src/Synaptipy/__init__.py`). Codecov
+resolves these directly in the git tree without any prefix stripping.
+
+**DO NOT add a `fixes:` section** — even at the top level. When `fixes:` is present
+(valid YAML), Codecov switches to strict (non-fuzzy) path matching and the fixes
+are no-ops for relative paths, causing "Unknown error" / `state=error` with 0 files
+matched.
+
+Evidence: commits with INVALID `fixes:` (nested under `codecov:`, so Codecov ignores
+them) processed coverage at 94.21% correctly; the same commits with VALID top-level
+`fixes:` returned `state=error, files=0`.
+
+```yaml
+# CORRECT — no fixes: section; Codecov resolves relative paths automatically
+codecov:
+  require_ci_to_pass: no
+
+coverage:
+  precision: 2
+  ...
+
+# WRONG — fixes causes strict path matching failure for relative-path XML
+codecov:
+  require_ci_to_pass: no
+
+fixes:
+  - "/home/runner/work/synaptipy/synaptipy/::"
+  - "D:\\a\\synaptipy\\synaptipy\\::"
+```
+
+Always validate `.codecov.yml` after editing with:
+```bash
+curl --data-binary @.codecov.yml https://codecov.io/validate
+```
+
 ## Mandatory formatting and test gate — DO NOT SKIP
 After **every** code change run these four commands in order and fix all errors
 before declaring done:

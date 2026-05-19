@@ -716,6 +716,8 @@ With **Enable Custom Plugins** active they load automatically:
 | `synaptic_charge.py` | Synaptic Charge (AUC) | Area under a postsynaptic current trace (total charge in pC); shaded fill + peak star overlay |
 | `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in spike latency after an optogenetic TTL pulse |
 | `ap_repolarization.py` | AP Repolarization Rate | Maximum rate of membrane-potential decline (dV/dt minimum) during an action potential |
+| `miniml_integration.py` | miniML Events | Deep-learning miniature event detection via [miniML](https://github.com/delvendahl/miniML); requires additional setup (see [extending_synaptipy.md](extending_synaptipy.md#12-deep-learning--third-party-integrations-eg-miniml)) |
+| `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/); requires `pip install spikeinterface` (see [extending_synaptipy.md](extending_synaptipy.md#11-spikeinterface-integration-plugin)) |
 
 Copy any of these files to `~/.synaptipy/plugins/` and edit your copy to create
 a personalised variant without modifying the Synaptipy installation.

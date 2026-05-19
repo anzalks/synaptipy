@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5b4] - 2026-05-19
+
+### Changed
+
+- Bumped version to `0.1.5b4` across all canonical locations.
+
+
+## [0.1.5b4] - 2026-05-19
+
+### Added
+
+- **miniML event detection plugin**: New `miniML` analysis tab integrates the
+  miniML deep-learning mEPSC/mIPSC detector as an optional plugin. Configurable
+  parameters include model path, detection threshold, batch size, window size,
+  event direction, smoothing windows, and relative prominence cutoff. Markers are
+  placed at amplitude peaks (not onset indices) for correct visual alignment.
+- **SpikeInterface integration plugin**: New optional plugin wrapping
+  SpikeInterface's spike-sorting pipeline, enabling extracellular spike sorting
+  directly from the Analyser tab.
+- **pyABF fallback in Neo file reader**: `NeoAdapter` now falls back to `pyabf`
+  when Neo returns truncated unit strings (e.g. `"p"`, `"n"`, `"m"` instead of
+  `"pA"`, `"nA"`, `"mV"`), ensuring correct unit resolution for ABF files with
+  non-standard header encodings.
+
+### Fixed
+
+- **miniML parameter split** (`__init__` vs `detect_events`): `rel_prom_cutoff`,
+  `convolve_win`, and `gradient_convolve_win` are now passed to `detect_events()`
+  instead of `__init__()`, preventing `TypeError` on plugin load.
+- **miniML gradient_convolve_win=0 guard**: Default values `convolve_win=20` and
+  `gradient_convolve_win=40` enforced to prevent the NumPy `-0` slice bug that
+  zeros the gradient signal and causes `ValueError: cannot convert float NaN to
+  integer` inside miniML's peak finder.
+- **Codecov path resolution**: Removed `fixes:` section from `.codecov.yml`.
+  When `relative_files = true` in `pyproject.toml`, coverage.xml already contains
+  repo-relative paths; adding a `fixes:` block enables strict path matching in
+  the Codecov CLI which fails to resolve relative paths, producing `state=error`
+  with 0 files matched. Codecov's default fuzzy matching resolves relative paths
+  correctly without any configuration. Coverage badge now shows ~94%.
+- **CI coverage upload**: Added `rm -f .coverage` step before the Codecov upload
+  to prevent the Codecov CLI from regenerating `coverage.xml` from the `.coverage`
+  database (which can produce different path formats than the pytest-generated XML).
+  Added `disable_search: true` to prevent auto-discovery of unrelated report files.
+
 ## [0.1.5b3] - 2026-05-18
 
 ### Fixed

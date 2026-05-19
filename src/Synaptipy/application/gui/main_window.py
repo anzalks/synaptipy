@@ -87,7 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # Set maximum dimensions to prevent too large windows on big monitors
             max_width = min(1600, available_geometry.width() - 100)
-            max_height = min(1000, available_geometry.height() - 100)
+            max_height = min(850, available_geometry.height() - 100)
 
             # Apply constraints
             initial_width = min(initial_width, max_width)

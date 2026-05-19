@@ -89,7 +89,11 @@ def run_miniml_detection(
     direction: str = "negative",
     model_path: str = "",
     miniml_core_path: str = "",
-    batch_size: int = 64,
+    batch_size: int = 512,
+    window_size: int = 600,
+    rel_prom_cutoff: float = 0.25,
+    convolve_win: int = 20,
+    gradient_convolve_win: int = 40,
 ) -> Dict[str, Any]:
     """Run miniML inference on a single trial and return event metrics.
 
@@ -111,6 +115,14 @@ def run_miniml_detection(
         Absolute path to the miniML ``core/`` directory.
     batch_size:
         Inference batch size. Larger values are faster but use more RAM.
+    window_size:
+        Detection window size in samples.
+    rel_prom_cutoff:
+        Sensitivity for overlapping events (relative prominence cutoff).
+    convolve_win:
+        Smoothing filter window size in samples.
+    gradient_convolve_win:
+        Gradient filter window size in samples.
 
     Returns
     -------
@@ -144,25 +156,38 @@ def run_miniml_detection(
             model_path=active_model,
             model_threshold=threshold,
             batch_size=batch_size,
+            window_size=window_size,
         )
-        detector.detect_events()
+        detector.detect_events(
+            eval=True,
+            rel_prom_cutoff=rel_prom_cutoff,
+            convolve_win=convolve_win,
+            gradient_convolve_win=gradient_convolve_win,
+        )
     except Exception as e:
         log.error("miniML detection failed:\n%s", traceback.format_exc())
         return {"error": f"miniML inference error: {str(e)}"}
 
-    # event_locations: 1-D int array of sample indices
+    # event_locations: 1-D int array of onset sample indices (steepest-slope point).
+    # Shift each marker to the amplitude peak within the next window_size//2 samples.
     ev_locs = np.asarray(detector.event_locations, dtype=np.int64)
-    if ev_locs.size == 0:
-        ev_times: np.ndarray = np.array([], dtype=float)
-        ev_peaks: np.ndarray = np.array([], dtype=float)
+    valid_mask = (ev_locs >= 0) & (ev_locs < len(data))
+    valid_locs = ev_locs[valid_mask]
+    if valid_locs.size == 0:
+        ev_times: list = []
+        ev_peaks: list = []
     else:
-        ev_times = ev_locs * sampling_interval + time[0]
-        valid = ev_locs[ev_locs < len(data)]
-        ev_peaks = data[valid] if valid.size > 0 else np.array([], dtype=float)
-        if valid.size < ev_locs.size:
-            ev_times = ev_times[: valid.size]
+        half_win = max(1, window_size // 2)
+        find_extremum = np.argmin if direction == "negative" else np.argmax
+        peak_indices = np.empty(len(valid_locs), dtype=np.int64)
+        for k, onset in enumerate(valid_locs):
+            end_idx = min(int(onset) + half_win, len(data))
+            seg = data[int(onset) : end_idx]
+            peak_indices[k] = onset + find_extremum(seg) if len(seg) > 0 else onset
+        ev_times = (peak_indices * sampling_interval + time[0]).tolist()
+        ev_peaks = data[peak_indices].tolist()
 
-    duration = time[-1] - time[0] if len(time) > 1 else 0.0
+    duration = float(time[-1] - time[0]) if len(time) > 1 else 0.0
     freq = float(len(ev_times)) / duration if duration > 0 else 0.0
     model_label = active_model.replace("\\", "/").split("/")[-1]
 
@@ -226,10 +251,47 @@ def run_miniml_detection(
             "name": "batch_size",
             "label": "Batch Size:",
             "type": "int",
-            "default": 64,
+            "default": 512,
             "min": 1,
-            "max": 1024,
-            "tooltip": "Inference batch size. Larger values are faster but use more RAM.",
+            "max": 4096,
+            "tooltip": "Inference batch size (miniML default: 512). Reduce if out of memory.",
+        },
+        {
+            "name": "window_size",
+            "label": "Window Size (samples):",
+            "type": "int",
+            "default": 600,
+            "min": 1,
+            "max": 10000,
+            "tooltip": "Detection window size",
+        },
+        {
+            "name": "rel_prom_cutoff",
+            "label": "Rel. Prominence Cutoff:",
+            "type": "float",
+            "default": 0.25,
+            "min": 0.0,
+            "max": 1.0,
+            "decimals": 3,
+            "tooltip": "Sensitivity for overlapping events (miniML default: 0.25)",
+        },
+        {
+            "name": "convolve_win",
+            "label": "Convolve Window:",
+            "type": "int",
+            "default": 20,
+            "min": 0,
+            "max": 1000,
+            "tooltip": "Hann window size for data smoothing during event analysis (miniML default: 20; 0 = use lowpass filter instead)",
+        },
+        {
+            "name": "gradient_convolve_win",
+            "label": "Gradient Convolve Window:",
+            "type": "int",
+            "default": 40,
+            "min": 1,
+            "max": 500,
+            "tooltip": "Hann window size for gradient smoothing (miniML default: 2 x convolve_win = 40)",
         },
     ],
     plots=[
@@ -238,6 +300,7 @@ def run_miniml_detection(
             "x": "_event_times",
             "y": "_event_peaks",
             "color": "r",
+            "symbol": "o",
             "tooltip": "miniML Detected Events",
         }
     ],
@@ -260,7 +323,11 @@ def run_miniml_events_wrapper(
         sampling_rate=sampling_rate,
         threshold=kwargs.get("threshold", 0.5),
         direction=kwargs.get("direction", "negative"),
-        batch_size=kwargs.get("batch_size", 64),
+        batch_size=kwargs.get("batch_size", 512),
         model_path=kwargs.get("model_path", ""),
         miniml_core_path=kwargs.get("miniml_core_path", ""),
+        window_size=kwargs.get("window_size", 600),
+        rel_prom_cutoff=kwargs.get("rel_prom_cutoff", 0.25),
+        convolve_win=kwargs.get("convolve_win", 20),
+        gradient_convolve_win=kwargs.get("gradient_convolve_win", 40),
     )
