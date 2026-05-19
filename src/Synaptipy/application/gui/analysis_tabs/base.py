@@ -2464,6 +2464,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._on_analysis_result(results)
 
     # --- PHASE 2: Template Method Pattern ---
+
+    def _get_progress_dialog(self):
+        """Walk the parent-widget chain to find the AnalyserTab's progress dialog."""
+        p = self.parent()
+        while p is not None:
+            if hasattr(p, "analysis_progress_dialog"):
+                return p.analysis_progress_dialog
+            p = p.parent() if hasattr(p, "parent") else None
+        return None
+
     @QtCore.Slot()
     def _trigger_analysis(self):  # noqa: C901
         """
@@ -2500,12 +2510,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"{self.__class__.__name__}: Triggering analysis")
 
+        _dlg = self._get_progress_dialog()
+        _analysis_label = getattr(self, "_registry_name", self.__class__.__name__)
+
         # --- Cross-File Average Intercept ---
         # When this mode is active, data comes from all loaded files rather
         # than from _current_plot_data (which reflects only the selected file).
         if self.data_source_combobox is not None and self.data_source_combobox.currentData() == "cross_file_average":
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
             self._last_analysis_result = None
+            _dlg_ended_cross = False
+            if _dlg is not None:
+                _dlg.start_analysis(f"{_analysis_label} - Running")
             try:
                 params = self._gather_analysis_parameters()
                 if params:
@@ -2519,14 +2535,22 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                         params["t_start"] = min_t
                         params["t_end"] = max_t
                     self._execute_cross_file_average_analysis(params)
+                if _dlg is not None and not _dlg_ended_cross:
+                    _dlg_ended_cross = True
+                    _dlg.end_analysis(success=True)
             except Exception as e:
                 log.error(f"{self.__class__.__name__}: Cross-file analysis failed: {e}", exc_info=True)
+                if _dlg is not None and not _dlg_ended_cross:
+                    _dlg_ended_cross = True
+                    _dlg.end_analysis(success=False, message=str(e))
                 QtWidgets.QMessageBox.critical(
                     self, "Analysis Error", f"An error occurred during cross-file analysis:\n{str(e)}"
                 )
                 self._set_save_button_enabled(False)
             finally:
                 QtWidgets.QApplication.restoreOverrideCursor()
+                if _dlg is not None and not _dlg_ended_cross:
+                    _dlg.end_analysis(success=True)
             return
         # --- End Cross-File Average Intercept ---
 
@@ -2547,6 +2571,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Set wait cursor
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         self._last_analysis_result = None
+        _dlg_ended = False
+
+        if _dlg is not None:
+            _dlg.start_analysis(f"{_analysis_label} - Running")
 
         try:
             # Step 1: Gather parameters from subclass UI
@@ -2575,6 +2603,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 log.warning(f"{self.__class__.__name__}: Analysis returned None")
                 # If the tab is being torn down (hot-reload), stay silent.
                 if not getattr(self, "_unmounting", False):
+                    if _dlg is not None and not _dlg_ended:
+                        _dlg_ended = True
+                        _dlg.end_analysis(success=False, message="Analysis returned no results")
                     QtWidgets.QMessageBox.warning(
                         self,
                         "Analysis Failed",
@@ -2582,6 +2613,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     )
                 self._set_save_button_enabled(False)
                 return
+
+            if _dlg is not None and not _dlg_ended:
+                _dlg_ended = True
+                _dlg.end_analysis(success=True)
 
             # CRITICAL FIX: Call _on_analysis_result to allow subclasses to properly
             # store results in their own variables (e.g., _last_spike_result, _last_event_result)
@@ -2592,10 +2627,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         except Exception as e:
             log.error(f"{self.__class__.__name__}: Analysis failed: {e}", exc_info=True)
+            if _dlg is not None and not _dlg_ended:
+                _dlg_ended = True
+                _dlg.end_analysis(success=False, message=str(e))
             QtWidgets.QMessageBox.critical(self, "Analysis Error", f"An error occurred during analysis:\n{str(e)}")
             self._set_save_button_enabled(False)
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
+            if _dlg is not None and not _dlg_ended:
+                _dlg.end_analysis(success=True)
 
     # --- PHASE 3: Debounced Parameter Change Handler ---
     @QtCore.Slot()

@@ -97,6 +97,8 @@ def calculate_opto_jitter(
     if secondary_data.shape != data.shape:
         return {"error": f"Shape mismatch: data {data.shape} vs TTL {secondary_data.shape}"}
 
+    log.info("Opto jitter: processing %d sweeps", n_sweeps)
+
     dt = 1.0 / sampling_rate
     # Blanking window: enforce that the effective search start is at least
     # blanking_window ms after the TTL to skip the photo-electric artifact.
@@ -147,6 +149,11 @@ def calculate_opto_jitter(
         # Report counts so callers can distinguish 0% from low-N cases.
         n_detected = len(latencies_ms)
         n_failures = n_sweeps - n_detected
+        log.info(
+            "Opto jitter: TTL pulses found in %d/%d sweeps",
+            n_detected,
+            n_sweeps,
+        )
         return {
             "error": (
                 f"Too few sweeps with detected spikes ({n_detected}/{n_sweeps}) " "to compute jitter - need at least 2."
@@ -165,6 +172,16 @@ def calculate_opto_jitter(
 
     n_failures = n_sweeps - len(latencies_ms)
     resp_prob_pct = round(len(latencies_ms) / max(n_sweeps, 1) * 100.0, 2)
+
+    log.info(
+        "Opto jitter: valid responses in %d sweeps",
+        len(latencies_ms),
+    )
+    log.info(
+        "Opto jitter: mean latency = %.2f ms, jitter = %.2f ms",
+        mean_latency,
+        jitter_val,
+    )
 
     return {
         "module_used": "opto_jitter",

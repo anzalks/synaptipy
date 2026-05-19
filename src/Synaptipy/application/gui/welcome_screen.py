@@ -293,6 +293,21 @@ _DEMO_FILES = [
 #: Destination folder inside the user's Documents directory.
 _DEMO_DEST_DIR = Path.home() / "Documents" / "SynaptiPy_Demo"
 
+#: Base URL for the example plugin files hosted in the repository.
+_PLUGIN_BASE_URL = "https://raw.githubusercontent.com/anzalks/synaptipy/main/examples/plugins/"
+
+#: All example plugin files to download.
+_PLUGIN_FILES = [
+    "ap_repolarization.py",
+    "miniml_integration.py",
+    "opto_jitter.py",
+    "spike_interface_integration.py",
+    "synaptic_charge.py",
+]
+
+#: Destination folder for downloaded example plugins.
+_PLUGIN_DEST_DIR = Path.home() / ".synaptipy" / "plugins"
+
 
 class DemoDataDownloader(QtCore.QThread):
     """Background thread that downloads the demo ABF recording.
@@ -400,6 +415,85 @@ class DemoDataDownloader(QtCore.QThread):
             return str(exc)
 
 
+class PluginDownloader(QtCore.QThread):
+    """Background thread that downloads the example analysis plugins.
+
+    Unlike :class:`DemoDataDownloader`, this always downloads (allowing
+    updates) even if the files already exist.
+
+    Signals:
+        download_finished: Emitted with the local :class:`~pathlib.Path` of the
+            plugins directory on success.
+        download_failed: Emitted with a human-readable error message on failure.
+        download_progress: ``(files_done: int, total_files: int)`` — emitted
+            after each file completes.
+    """
+
+    download_finished = QtCore.Signal(object)  # Path
+    download_failed = QtCore.Signal(str)
+    download_progress = QtCore.Signal(int, int)
+
+    def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
+        super().__init__(parent)
+
+    def run(self) -> None:
+        """Download all plugin files.  Called automatically by :meth:`QThread.start`."""
+        dest_dir = _PLUGIN_DEST_DIR
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.download_failed.emit(f"Cannot create plugins folder: {exc}")
+            return
+
+        first, error = self._download_all(dest_dir)
+        if error:
+            self.download_failed.emit(error)
+            return
+
+        log.info("All plugin files downloaded to %s", dest_dir)
+        self.download_finished.emit(dest_dir)
+
+    def _download_all(self, dest_dir: Path) -> tuple:
+        """Download every file in :data:`_PLUGIN_FILES` sequentially.
+
+        Returns:
+            ``(dest_dir, None)`` on full success, or
+            ``(None, error_message)`` on the first failure.
+        """
+        for idx, fname in enumerate(_PLUGIN_FILES):
+            dest_file = dest_dir / fname
+            self.download_progress.emit(idx, len(_PLUGIN_FILES))
+            err = self._do_download(dest_file, _PLUGIN_BASE_URL + fname)
+            if err:
+                return None, err
+        self.download_progress.emit(len(_PLUGIN_FILES), len(_PLUGIN_FILES))
+        return dest_dir, None
+
+    def _do_download(self, dest_file: Path, url: str) -> Optional[str]:
+        """Stream *url* into *dest_file*.
+
+        Returns:
+            ``None`` on success, or an error string on failure.
+        """
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Synaptipy-PluginDownloader/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=60) as response:
+                with dest_file.open("wb") as fh:
+                    while True:
+                        data = response.read(8192)
+                        if not data:
+                            break
+                        fh.write(data)
+            return None
+        except urllib.error.URLError as exc:
+            return f"Network error: {exc.reason}"
+        except Exception as exc:
+            return str(exc)
+
+
 class DemoDownloadBanner(QtWidgets.QFrame):
     """Compact banner widget offering one-click demo data download.
 
@@ -419,6 +513,7 @@ class DemoDownloadBanner(QtWidgets.QFrame):
         self.setObjectName("DemoDownloadBanner")
         self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self._worker: Optional[DemoDataDownloader] = None
+        self._plugin_worker: Optional[PluginDownloader] = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -435,6 +530,14 @@ class DemoDownloadBanner(QtWidgets.QFrame):
         )
         self._download_btn.clicked.connect(self._start_download)
         layout.addWidget(self._download_btn)
+
+        self._plugin_download_btn = QtWidgets.QPushButton("Download Example Plugins")
+        self._plugin_download_btn.setToolTip(
+            "Downloads all example analysis plugins to ~/.synaptipy/plugins/. "
+            "Enable 'Enable Custom Plugins' in Edit > Preferences to activate them."
+        )
+        self._plugin_download_btn.clicked.connect(self._start_plugin_download)
+        layout.addWidget(self._plugin_download_btn)
 
         self._progress_bar = QtWidgets.QProgressBar()
         self._progress_bar.setVisible(False)
@@ -480,3 +583,46 @@ class DemoDownloadBanner(QtWidgets.QFrame):
         self._status_label.setText(f"Download failed: {error_msg}")
         self._download_btn.setEnabled(True)
         log.error("Demo data download failed: %s", error_msg)
+
+    # ------------------------------------------------------------------
+    # Plugin download methods
+    # ------------------------------------------------------------------
+
+    def _start_plugin_download(self) -> None:
+        """Start the background plugin download."""
+        self._plugin_download_btn.setEnabled(False)
+        self._progress_bar.setMaximum(0)
+        self._progress_bar.setVisible(True)
+        self._status_label.setText("Downloading plugins…")
+        self._status_label.setVisible(True)
+
+        self._plugin_worker = PluginDownloader(parent=self)
+        self._plugin_worker.download_progress.connect(self._on_plugin_progress)
+        self._plugin_worker.download_finished.connect(self._on_plugin_finished)
+        self._plugin_worker.download_failed.connect(self._on_plugin_failed)
+        self._plugin_worker.start()
+
+    def _on_plugin_progress(self, files_done: int, total_files: int) -> None:
+        if total_files > 0:
+            self._progress_bar.setMaximum(total_files)
+            self._progress_bar.setValue(files_done)
+        self._status_label.setText(f"Downloading plugins… {files_done}/{total_files} files")
+
+    def _on_plugin_finished(self, dest_path: object) -> None:
+        """Notify user that plugins downloaded and explain how to activate them."""
+        self._progress_bar.setVisible(False)
+        self._status_label.setVisible(False)
+        self._plugin_download_btn.setEnabled(True)
+        QtWidgets.QMessageBox.information(
+            self,
+            "Plugins Downloaded",
+            f"Example plugins saved to:\n{_PLUGIN_DEST_DIR}\n\n"
+            "To activate them, enable 'Enable Custom Plugins' in Edit \u2192 Preferences.",
+        )
+        log.info("Plugin download finished: %s", dest_path)
+
+    def _on_plugin_failed(self, error_msg: str) -> None:
+        self._progress_bar.setVisible(False)
+        self._status_label.setText(f"Plugin download failed: {error_msg}")
+        self._plugin_download_btn.setEnabled(True)
+        log.error("Plugin download failed: %s", error_msg)

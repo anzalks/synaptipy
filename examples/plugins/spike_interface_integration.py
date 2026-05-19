@@ -95,6 +95,8 @@ def detect_spikes_spikeinterface(
     if data.ndim != 1 or data.size == 0:
         return {"error": "data must be a non-empty 1-D array"}
 
+    log.info("SpikeInterface: starting sorting pipeline")
+
     # ------------------------------------------------------------------ #
     # 1. Wrap the numpy trace in a NumpyRecording (1 channel, 1 segment)  #
     # ------------------------------------------------------------------ #
@@ -107,6 +109,7 @@ def detect_spikes_spikeinterface(
     # ------------------------------------------------------------------ #
     # 2. Bandpass filter                                                   #
     # ------------------------------------------------------------------ #
+    log.info("SpikeInterface: running sorter 'bandpass_filter'...")
     recording_f = spp.bandpass_filter(
         recording,
         freq_min=float(freq_min),
@@ -141,6 +144,8 @@ def detect_spikes_spikeinterface(
     spike_count = len(spike_times_s)
     duration_s = float(data.size) / float(sampling_rate)
     firing_rate_hz = float(spike_count) / duration_s if duration_s > 0 else 0.0
+
+    log.info("SpikeInterface: sorting complete - %d units found", spike_count)
 
     return {
         "module_used": "spike_interface",

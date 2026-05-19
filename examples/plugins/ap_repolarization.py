@@ -75,6 +75,8 @@ def calculate_ap_repolarization(
     if win_data.size < 4:
         return {"error": "Analysis window too narrow (need >= 4 samples)"}
 
+    log.info("AP repolarization: window %.3f-%.3f s, %d samples", window_start, window_end, win_data.size)
+
     # Locate AP onset: first crossing of spike_threshold from below
     above = win_data > spike_threshold
     crossings = np.where(np.diff(above.astype(int)) == 1)[0]
@@ -82,6 +84,12 @@ def calculate_ap_repolarization(
         return {"error": f"No spike crossing {spike_threshold} mV found in window"}
 
     ap_start_idx = int(crossings[0]) + 1
+
+    log.info(
+        "AP repolarization: AP onset at sample %d (%.4f s)",
+        ap_start_idx,
+        float(win_time[ap_start_idx]) if ap_start_idx < win_time.size else 0.0,
+    )
 
     # Work on data from AP onset to end of window
     ap_data = win_data[ap_start_idx:]
@@ -98,6 +106,8 @@ def calculate_ap_repolarization(
     max_dvdt = float(dvdt[min_idx])  # negative value in V/s
     repol_time = float(ap_time[min_idx])
     repol_val = float(ap_data[min_idx])
+
+    log.info("AP repolarization: max dV/dt = %.2f V/s", max_dvdt)
 
     return {
         "module_used": "ap_repolarization",
