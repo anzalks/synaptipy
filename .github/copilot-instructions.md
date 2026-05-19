@@ -302,8 +302,9 @@ returns truncated unit strings (e.g. `"p"`, `"n"`, `"m"` instead of `"pA"`,
 - Log the rescue with `log.debug(...)` (not `log.error`). A successful pyabf
   fallback is normal, not an error.
 
-## Codecov CI rule — DO NOT VIOLATE
+## Codecov CI rules — DO NOT VIOLATE
 
+### token: must be under with:, not env:
 `codecov/codecov-action@v5` requires `token:` under `with:`, NOT under `env:`.
 
 ```yaml
@@ -319,6 +320,33 @@ returns truncated unit strings (e.g. `"p"`, `"n"`, `"m"` instead of `"pA"`,
     files: coverage.xml
   env:
     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+```
+
+### fixes: must be a top-level key in .codecov.yml — DO NOT nest under codecov:
+`fixes:` is a **top-level** key in `.codecov.yml`. Nesting it under `codecov:`
+causes `Error at ['codecov', 'fixes']: unknown field` and invalidates the entire
+YAML, preventing Codecov from displaying coverage data (the UI shows 0% even
+though the upload succeeded).
+
+```yaml
+# CORRECT — fixes at top level
+codecov:
+  require_ci_to_pass: no
+
+fixes:
+  - "/home/runner/work/synaptipy/synaptipy/::"
+  - "D:\\a\\synaptipy\\synaptipy\\::"
+
+# WRONG — fixes nested under codecov: causes YAML invalid error
+codecov:
+  require_ci_to_pass: no
+  fixes:
+    - "/home/runner/work/synaptipy/synaptipy/::"
+```
+
+Always validate `.codecov.yml` after editing with:
+```bash
+curl --data-binary @.codecov.yml https://codecov.io/validate
 ```
 
 ## Mandatory formatting and test gate — DO NOT SKIP
