@@ -221,6 +221,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_popup_windows_action.setToolTip("Show or restore any analysis popup windows (F-I curve, etc.)")
         self.show_popup_windows_action.triggered.connect(self._show_popup_windows)
 
+        # Show Analysis Status Action
+        self.show_analysis_status_action = view_menu.addAction("Show Analysis &Status...")
+        self.show_analysis_status_action.setToolTip(
+            "Open the live analysis log to monitor what Synaptipy is doing in real time"
+        )
+        self.show_analysis_status_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.show_analysis_status_action.triggered.connect(self._toggle_analysis_status_window)
+
         # --- Help Menu ---
         help_menu = menu_bar.addMenu("&Help")
         self.about_action = help_menu.addAction("&About Synaptipy...")
@@ -247,6 +255,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.demo_data_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.demo_data_action.triggered.connect(self._show_demo_download_banner)
+
+        self.example_plugins_action = help_menu.addAction("Download Example &Plugins...")
+        self.example_plugins_action.setToolTip(
+            "Download all example analysis plugins to ~/.synaptipy/plugins/ " "for use with the Custom Plugins feature"
+        )
+        self.example_plugins_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.example_plugins_action.triggered.connect(self._show_plugin_download_banner)
 
         log.debug("Menu bar and status bar setup complete.")
 
@@ -389,6 +404,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _show_demo_download_banner(self) -> None:
         """Show (or reveal if already visible) the demo download banner."""
+        if hasattr(self, "_demo_banner"):
+            self._demo_banner.setVisible(True)
+            self._demo_banner.raise_()
+
+    def _toggle_analysis_status_window(self) -> None:
+        """Show or hide the live Analysis Status window (View menu)."""
+        if hasattr(self, "analyser_tab") and hasattr(self.analyser_tab, "analysis_status_window"):
+            self.analyser_tab.analysis_status_window.toggle_visible()
+
+    def _show_plugin_download_banner(self) -> None:
+        """Show the download banner (which contains the plugin download button)."""
         if hasattr(self, "_demo_banner"):
             self._demo_banner.setVisible(True)
             self._demo_banner.raise_()

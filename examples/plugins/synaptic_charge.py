@@ -144,6 +144,8 @@ def calculate_synaptic_charge(
     if window_start >= window_end:
         return {"error": "window_start must be less than window_end"}
 
+    log.info("Synaptic charge: %d samples at %.0f Hz", data.size, sampling_rate)
+
     # ---- 1. Compute baseline ----
     if baseline_method == "Pre-Window":
         # Local dynamic baseline: use a short window (local_baseline_window_ms)
@@ -157,6 +159,8 @@ def calculate_synaptic_charge(
         baseline_val = float(np.mean(pre_slice)) if pre_slice.size > 0 else float(np.mean(data))
     else:
         baseline_val = float(np.mean(data))
+
+    log.info("Synaptic charge: baseline subtracted")
 
     # ---- 2. Slice the search window ----
     win_i0 = int(np.searchsorted(time, window_start, side="left"))
@@ -204,8 +208,7 @@ def calculate_synaptic_charge(
     # ---- 7. Integrate (trapezoidal rule, pA*s = pC) ----
     charge_pc = float(np.trapezoid(int_y_bs, int_x))
 
-    metrics: Dict[str, Any] = {
-        # Public metrics visible in results table
+    metrics: Dict[str, Any] = {  # Public metrics visible in results table
         "Charge_pC": round(charge_pc, 6),
         "Peak_Amp": round(peak_v_abs, 4),
         "Peak_Amp_Baseline_Subtracted": round(peak_v_bs, 4),
@@ -213,6 +216,8 @@ def calculate_synaptic_charge(
         "Integration_Start_s": round(float(int_x[0]), 6),
         "Integration_End_s": round(float(int_x[-1]), 6),
     }
+
+    log.info("Synaptic charge: charge = %.4f pC", charge_pc)
 
     return {
         "module_used": "synaptic_charge",

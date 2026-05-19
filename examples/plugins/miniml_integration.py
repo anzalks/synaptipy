@@ -147,9 +147,17 @@ def run_miniml_detection(
     except ImportError as exc:
         return {"error": str(exc)}
 
+    log.info("miniML: libraries imported from '%s'", miniml_core_path.strip())
+
     try:
         sampling_interval = 1.0 / sampling_rate  # seconds per sample
         trace = MiniTrace(data=data, sampling_interval=sampling_interval)
+        log.info(
+            "miniML: trace - %.3f s at %.0f Hz (%d samples)",
+            float(time[-1] - time[0]),
+            sampling_rate,
+            data.size,
+        )
         detector = EventDetection(
             data=trace,
             event_direction=direction,
@@ -158,11 +166,21 @@ def run_miniml_detection(
             batch_size=batch_size,
             window_size=window_size,
         )
+        log.info(
+            "miniML: running inference (batch=%d, threshold=%.2f, direction=%s)...",
+            batch_size,
+            threshold,
+            direction,
+        )
         detector.detect_events(
             eval=True,
             rel_prom_cutoff=rel_prom_cutoff,
             convolve_win=convolve_win,
             gradient_convolve_win=gradient_convolve_win,
+        )
+        log.info(
+            "miniML: inference done - %d raw locations",
+            len(getattr(detector, "event_locations", [])),
         )
     except Exception as e:
         log.error("miniML detection failed:\n%s", traceback.format_exc())
@@ -190,6 +208,8 @@ def run_miniml_detection(
     duration = float(time[-1] - time[0]) if len(time) > 1 else 0.0
     freq = float(len(ev_times)) / duration if duration > 0 else 0.0
     model_label = active_model.replace("\\", "/").split("/")[-1]
+
+    log.info("miniML: %d events, %.2f Hz", len(ev_times), freq)
 
     return {
         "Event_Count": len(ev_times),

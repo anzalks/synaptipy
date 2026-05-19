@@ -112,6 +112,20 @@ class AnalyserTab(QtWidgets.QWidget):
         # Track last active tab for zoom syncing
         self._last_active_tab = None
 
+        # Analysis status window - permanently attached; never auto-shown
+        from Synaptipy.application.gui.widgets.log_streamer import (
+            AnalysisStatusWindow,
+            QtLoggingHandler,
+        )
+
+        self._log_handler = QtLoggingHandler(parent=self)
+        root_logger = logging.getLogger()
+        if root_logger.level == logging.NOTSET or root_logger.level > logging.DEBUG:
+            root_logger.setLevel(logging.DEBUG)
+        root_logger.addHandler(self._log_handler)
+        self.analysis_status_window = AnalysisStatusWindow(parent=self)
+        self.analysis_status_window.connect_handler(self._log_handler)
+
     # --- Global Preprocessing Methods ---
     def get_global_preprocessing(self) -> Optional[Dict[str, Any]]:
         """Returns the currently active global preprocessing settings."""
