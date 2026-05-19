@@ -322,26 +322,36 @@ returns truncated unit strings (e.g. `"p"`, `"n"`, `"m"` instead of `"pA"`,
     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
 
-### fixes: must be a top-level key in .codecov.yml — DO NOT nest under codecov:
-`fixes:` is a **top-level** key in `.codecov.yml`. Nesting it under `codecov:`
-causes `Error at ['codecov', 'fixes']: unknown field` and invalidates the entire
-YAML, preventing Codecov from displaying coverage data (the UI shows 0% even
-though the upload succeeded).
+### Do NOT add fixes: to .codecov.yml when using relative_files=true
+When `pyproject.toml` sets `[tool.coverage.run] relative_files = true`, coverage.xml
+already contains repo-relative paths (e.g. `src/Synaptipy/__init__.py`). Codecov
+resolves these directly in the git tree without any prefix stripping.
+
+**DO NOT add a `fixes:` section** — even at the top level. When `fixes:` is present
+(valid YAML), Codecov switches to strict (non-fuzzy) path matching and the fixes
+are no-ops for relative paths, causing "Unknown error" / `state=error` with 0 files
+matched.
+
+Evidence: commits with INVALID `fixes:` (nested under `codecov:`, so Codecov ignores
+them) processed coverage at 94.21% correctly; the same commits with VALID top-level
+`fixes:` returned `state=error, files=0`.
 
 ```yaml
-# CORRECT — fixes at top level
+# CORRECT — no fixes: section; Codecov resolves relative paths automatically
+codecov:
+  require_ci_to_pass: no
+
+coverage:
+  precision: 2
+  ...
+
+# WRONG — fixes causes strict path matching failure for relative-path XML
 codecov:
   require_ci_to_pass: no
 
 fixes:
   - "/home/runner/work/synaptipy/synaptipy/::"
   - "D:\\a\\synaptipy\\synaptipy\\::"
-
-# WRONG — fixes nested under codecov: causes YAML invalid error
-codecov:
-  require_ci_to_pass: no
-  fixes:
-    - "/home/runner/work/synaptipy/synaptipy/::"
 ```
 
 Always validate `.codecov.yml` after editing with:
