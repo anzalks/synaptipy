@@ -48,7 +48,7 @@
 | src/Synaptipy/infrastructure/exporters/csv\_exporter.py             |      311 |        2 |     99% |     22-23 |
 | src/Synaptipy/infrastructure/file\_readers/\_\_init\_\_.py          |        2 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/file\_readers/abf\_reader.py           |        0 |        0 |    100% |           |
-| src/Synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      364 |       35 |     90% |52-53, 153, 166-168, 235, 263-265, 275-277, 374-379, 391-400, 405, 468-469, 677-679, 739-743 |
+| src/Synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      419 |       51 |     88% |52-53, 153, 166-168, 235, 263-265, 275-277, 407-410, 444-445, 488-493, 508, 529-530, 534-552, 617-618, 826-828, 888-892 |
 | src/Synaptipy/infrastructure/file\_readers/neo\_source\_handle.py   |       50 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/neo\_patches.py                        |      153 |       18 |     88% |49-50, 58-59, 87-90, 118-120, 128, 174, 187-189, 197-198 |
 | src/Synaptipy/shared/\_\_init\_\_.py                                |       10 |        0 |    100% |           |
@@ -60,7 +60,7 @@
 | src/Synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/Synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
 | src/Synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **7112** |  **399** | **94%** |           |
+| **TOTAL**                                                           | **7167** |  **415** | **94%** |           |
 
 
 ## Setup coverage badge
