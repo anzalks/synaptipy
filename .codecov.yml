@@ -1,14 +1,16 @@
 codecov:
   require_ci_to_pass: no
-  # Strip the GitHub Actions runner prefix so Codecov can match file paths
-  # against the repository tree.  Without this, coverage.xml entries like
-  # /home/runner/work/synaptipy/synaptipy/src/Synaptipy/core/analysis.py
-  # produce 0% because Codecov cannot find them in the git tree.
-  # Format: "old_prefix::new_prefix" — empty new_prefix strips the segment.
-  fixes:
-    - "/home/runner/work/synaptipy/synaptipy/::"
-    - "/Users/runner/work/synaptipy/synaptipy/::"
-    - "D:\\a\\synaptipy\\synaptipy\\::"
+
+# Strip the GitHub Actions runner prefix so Codecov can match file paths
+# against the repository tree.  Without this, coverage.xml entries like
+# /home/runner/work/synaptipy/synaptipy/src/Synaptipy/core/analysis.py
+# produce 0% because Codecov cannot find them in the git tree.
+# Format: "old_prefix::new_prefix" - empty new_prefix strips the segment.
+# NOTE: fixes must be a top-level key, NOT nested under codecov:.
+fixes:
+  - "/home/runner/work/synaptipy/synaptipy/::"
+  - "/Users/runner/work/synaptipy/synaptipy/::"
+  - "D:\\a\\synaptipy\\synaptipy\\::"
 
 coverage:
   precision: 2
