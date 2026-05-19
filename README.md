@@ -20,6 +20,7 @@
 | src/Synaptipy/application/gui/explorer/toolbar.py                   |       80 |        0 |    100% |           |
 | src/Synaptipy/application/gui/explorer/y\_controls.py               |      175 |       26 |     85% |131, 203-204, 210, 213-220, 223-225, 228-235, 238-240 |
 | src/Synaptipy/application/gui/ui\_generator.py                      |      201 |       60 |     70% |29-40, 48, 52, 56, 60-61, 69-81, 108, 113-118, 221, 224-235, 245, 280-281, 295, 302-307, 314, 334-335, 345-350 |
+| src/Synaptipy/application/gui/widgets/log\_streamer.py              |       97 |        6 |     94% |199, 240, 244-246, 250 |
 | src/Synaptipy/application/services/\_\_init\_\_.py                  |        0 |        0 |    100% |           |
 | src/Synaptipy/application/services/data\_loader\_service.py         |       32 |        1 |     97% |        92 |
 | src/Synaptipy/application/services/methods\_generator.py            |       33 |        0 |    100% |           |
@@ -60,7 +61,7 @@
 | src/Synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/Synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
 | src/Synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **7167** |  **415** | **94%** |           |
+| **TOTAL**                                                           | **7264** |  **421** | **94%** |           |
 
 
 ## Setup coverage badge
