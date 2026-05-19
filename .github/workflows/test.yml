@@ -120,6 +120,7 @@ jobs:
         flags: unittests
         name: synaptipy-coverage
         fail_ci_if_error: false   # network blip must not block a green build
+        disable_search: true      # prevent auto-discovery of python-coverage-comment-action.txt
 
     - name: Push coverage badge data
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
