@@ -189,6 +189,8 @@ automatically when **Enable Custom Plugins** is checked in Preferences:
 | `synaptic_charge.py` | Synaptic Charge (AUC) | Integrates postsynaptic current to compute total charge (pC) |
 | `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial spike latency variability after TTL pulse |
 | `ap_repolarization.py` | AP Repolarization Rate | Maximum repolarization rate (dV/dt minimum) of the first AP |
+| `miniml_integration.py` | miniML Events | Deep-learning event detection via miniML (optional dep; requires tensorflow + cloned miniML repo) |
+| `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via SpikeInterface (optional dep; `pip install spikeinterface`) |
 
 A ready-to-copy template is at `src/Synaptipy/templates/plugin_template.py`.
 For the complete reference - including all `ui_params` types, `plots` types,
@@ -434,6 +436,23 @@ is no real display available.
 Dropping Python references (step 5) **before** `widget.clear()` (step 4) causes
 PySide6 ≥ 6.7 to segfault on macOS when the C++ destructor tries to reach the
 Python side.
+
+### NeoAdapter ABF rescue path
+
+`infrastructure/file_readers/neo_adapter.py` loads electrophysiology files via
+Neo. For `.abf` files Neo sometimes reports truncated unit strings (e.g. `"p"`,
+`"n"`, `"m"` instead of `"pA"`, `"nA"`, `"mV"`). When this happens the
+adapter falls back to `pyabf` to read the file directly.
+
+Key implementation rules:
+- The pyabf rescue check (`_is_abf`) runs **before** the lazy-load fallback,
+  not after. Reversing the order causes Neo to fully load the file with wrong
+  units, which then propagates silently through the analysis.
+- Unit resolution uses the `_ABF_PREFIX_UNITS` dict in `neo_adapter.py`,
+  mapping single-character SI prefixes to the correct `pint`/`quantities` unit
+  object (`"p" -> pq.pA`, `"n" -> nA`, `"m" -> mV`, etc.).
+- The rescue log message is `log.debug(...)` (not `log.error`). A successful
+  pyabf fallback is a normal operating condition, not an error.
 
 ## Coding Standards
 

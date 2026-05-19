@@ -1327,6 +1327,69 @@ A fully annotated, copy-pasteable template is provided at
   on explicit user action (rather than on every parameter change), set this
   flag to add a dedicated **Run Analysis** button to the tab.
 
+### miniML API notes (common pitfalls)
+
+The miniML library splits its configuration across **two** call sites.
+Getting this wrong causes a `TypeError` or silent bad output.
+
+#### `EventDetection.__init__()` parameters
+
+Pass only these arguments to the constructor:
+
+```python
+detector = EventDetection(
+    data=trace,
+    event_direction=direction,   # "negative" or "positive"
+    model_path=active_model,
+    model_threshold=threshold,
+    batch_size=batch_size,
+    window_size=window_size,
+)
+```
+
+`rel_prom_cutoff`, `convolve_win`, and `gradient_convolve_win` are **not**
+accepted by `__init__()` -- passing them there raises a `TypeError`.
+
+#### `detect_events()` parameters
+
+All post-processing controls belong in the `detect_events()` call:
+
+```python
+detector.detect_events(
+    eval=True,
+    rel_prom_cutoff=rel_prom_cutoff,   # default 0.25
+    convolve_win=convolve_win,          # default 20
+    gradient_convolve_win=gradient_convolve_win,  # default 40
+)
+```
+
+> **Never pass `convolve_win=0` or `gradient_convolve_win=0`.**
+> miniML uses these as slice offsets: `smth_gradient[-0:]` in Python evaluates
+> to the entire array because `-0 == 0`, silently zeroing the gradient signal.
+> With all-zero gradient, `np.std([])` returns `NaN` in NumPy >= 2.0,
+> causing a `ValueError: cannot convert float NaN to integer` deep inside
+> miniML's peak-finding code.  Use the documented defaults (20 and 40) or
+> any positive non-zero value.
+
+#### Marker placement: onset vs. amplitude peak
+
+`detector.event_locations` contains **onset** indices (the steepest-slope
+sample), not amplitude peaks.  If you plot markers directly at those indices
+the dots appear shifted left relative to the visible peak.
+
+The plugin searches forward from each onset within `window_size // 2` samples
+using `np.argmin` (negative events) or `np.argmax` (positive events) to find
+the true peak:
+
+```python
+half_win = max(1, window_size // 2)
+find_extremum = np.argmin if direction == "negative" else np.argmax
+for k, onset in enumerate(valid_locs):
+    end_idx = min(int(onset) + half_win, len(data))
+    seg = data[int(onset):end_idx]
+    peak_indices[k] = onset + find_extremum(seg) if len(seg) > 0 else onset
+```
+
 ### Adapting the template to other ML tools
 
 The same pattern works for any inference library:
