@@ -110,6 +110,7 @@ Synaptipy = [
     "resources/**/*",
     "templates/**/*",
     "**/*.png", "**/*.svg", "**/*.ico",
+    "examples/plugins/*.py",
 ]
 
 [tool.pytest.ini_options]

@@ -149,7 +149,10 @@ class TestSettingsGate:
         before = dict(AnalysisRegistry._registry)
 
         with (
-            patch("Synaptipy.application.plugin_manager.EXAMPLES_PLUGIN_DIR", EXAMPLES_PLUGIN_DIR),
+            patch(
+                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                return_value=EXAMPLES_PLUGIN_DIR,
+            ),
             patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", _FAKE_USER_DIR),
             patch("Synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
         ):
@@ -166,7 +169,10 @@ class TestSettingsGate:
         from Synaptipy.application.plugin_manager import PluginManager
 
         with (
-            patch("Synaptipy.application.plugin_manager.EXAMPLES_PLUGIN_DIR", EXAMPLES_PLUGIN_DIR),
+            patch(
+                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                return_value=EXAMPLES_PLUGIN_DIR,
+            ),
             patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", _FAKE_USER_DIR),
             patch("Synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
         ):
