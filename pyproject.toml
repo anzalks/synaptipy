@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synaptipy"
-version = "0.1.5b5"
+version = "0.1.5b6"
 description = "Electrophysiology Visualization Suite"
 authors = [
     {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
@@ -110,6 +110,7 @@ Synaptipy = [
     "resources/**/*",
     "templates/**/*",
     "**/*.png", "**/*.svg", "**/*.ico",
+    "examples/plugins/*.py",
 ]
 
 [tool.pytest.ini_options]

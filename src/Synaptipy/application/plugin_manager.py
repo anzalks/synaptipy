@@ -21,12 +21,13 @@ See the LICENSE file in the root of the repository for full license details.
 """
 
 import hashlib
+import importlib.resources
 import importlib.util
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from PySide6.QtCore import QSettings
 
@@ -35,24 +36,51 @@ log = logging.getLogger(__name__)
 # Default location for 3rd-party user plugins
 PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 
-# Built-in example plugins shipped alongside the source tree (development) or
-# under sys._MEIPASS/Synaptipy/examples/plugins (PyInstaller one-folder bundle).
 _THIS_FILE = Path(__file__).resolve()
 
 
-def _project_root_from_source_tree() -> Path:
-    """Repository root when running from editable / pip-installed sources."""
-    return _THIS_FILE.parents[3]
+def _get_bundled_plugin_dir() -> Optional[Path]:
+    """Return the bundled examples/plugins/ directory if it exists.
 
-
-def _examples_plugin_directory() -> Path:
-    """Return the directory containing shipped example ``*.py`` plugins."""
+    Tries three strategies in order so the lookup works in all deployment
+    modes: editable / source-tree installs, regular pip wheel installs where
+    examples are shipped as Synaptipy package data, and PyInstaller bundles.
+    Returns ``None`` if the directory cannot be located -- callers must handle
+    this gracefully and continue to the user plugin dir.
+    """
+    # Strategy 0: PyInstaller one-folder bundle
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        return Path(sys._MEIPASS) / "Synaptipy" / "examples" / "plugins"
-    return _project_root_from_source_tree() / "examples" / "plugins"
+        candidate = Path(sys._MEIPASS) / "Synaptipy" / "examples" / "plugins"
+        if candidate.is_dir():
+            return candidate
 
+    # Strategy 1: repo / editable-install layout
+    # _THIS_FILE is src/Synaptipy/application/plugin_manager.py
+    # four parents up reaches the repository root
+    candidate = _THIS_FILE.parents[3] / "examples" / "plugins"
+    if candidate.is_dir():
+        return candidate
 
-EXAMPLES_PLUGIN_DIR = _examples_plugin_directory()
+    # Strategy 2: examples shipped as Synaptipy package data
+    # (works when pyproject.toml includes examples/plugins/*.py under
+    # [tool.setuptools.package-data] "Synaptipy")
+    try:
+        ref = importlib.resources.files("Synaptipy") / "examples" / "plugins"
+        resolved = Path(str(ref))
+        if resolved.is_dir():
+            return resolved
+    except (TypeError, FileNotFoundError, AttributeError):
+        pass
+
+    # Strategy 3: examples installed alongside the package in site-packages
+    pkg_spec = importlib.util.find_spec("Synaptipy")
+    if pkg_spec and pkg_spec.origin:
+        candidate = Path(pkg_spec.origin).parent.parent / "examples" / "plugins"
+        if candidate.is_dir():
+            return candidate
+
+    log.debug("Bundled plugin dir not found -- skipping")
+    return None
 
 
 class PluginManager:
@@ -71,13 +99,15 @@ class PluginManager:
     def get_plugin_files(cls) -> List[Path]:
         """
         Returns a deduplicated list of plugin ``.py`` files from both
-        ``examples/plugins/`` and ``~/.synaptipy/plugins/``.
+        ``examples/plugins/`` (if found) and ``~/.synaptipy/plugins/``.
 
         The user directory takes precedence: if a file with the same stem
         exists in both locations, the examples copy is skipped and a warning
         is emitted so the author knows their local version is active.
+        A missing bundled plugin dir is silently ignored.
         """
-        search_dirs = [EXAMPLES_PLUGIN_DIR, PLUGIN_DIR]
+        bundled_dir = _get_bundled_plugin_dir()
+        search_dirs = ([bundled_dir] if bundled_dir is not None else []) + [PLUGIN_DIR]
         seen_stems: dict = {}  # stem -> Path that claimed it first (user wins)
         result: List[Path] = []
 
@@ -91,9 +121,11 @@ class PluginManager:
                 stem = p_file.stem
                 if stem in seen_stems:
                     log.warning(
-                        f"Plugin name collision: '{p_file.name}' in {search_dir} "
-                        f"is shadowed by the user copy at {seen_stems[stem]}. "
-                        "The user copy will be used."
+                        "Plugin name collision: '%s' in %s is shadowed by the "
+                        "user copy at %s. The user copy will be used.",
+                        p_file.name,
+                        search_dir,
+                        seen_stems[stem],
                     )
                 else:
                     seen_stems[stem] = p_file
@@ -227,7 +259,7 @@ class PluginManager:
             log.debug("No plugins found.")
             return
 
-        log.info(f"Discovered {len(plugin_files)} plugin(s). Attempting to load...")
+        log.info("Discovered %d plugin(s). Attempting to load...", len(plugin_files))
 
         # Separate user plugins (require security confirmation) from bundled examples.
         user_plugins = [p for p in plugin_files if p.parent.resolve() == PLUGIN_DIR.resolve()]
@@ -240,7 +272,9 @@ class PluginManager:
 
         # Make both plugin directories importable so plugins can pull in
         # sibling helper modules if they need to.
-        for search_dir in (EXAMPLES_PLUGIN_DIR, PLUGIN_DIR):
+        bundled_dir = _get_bundled_plugin_dir()
+        sys_path_dirs = ([bundled_dir] if bundled_dir is not None else []) + [PLUGIN_DIR]
+        for search_dir in sys_path_dirs:
             dir_str = str(search_dir)
             if search_dir.is_dir() and dir_str not in sys.path:
                 sys.path.insert(0, dir_str)
@@ -266,7 +300,7 @@ class PluginManager:
         log.debug("Plugin analyses unregistered for hot-reload.")
 
         if not QSettings().value("enable_plugins", True, type=bool):
-            log.info("Plugin reload: enable_plugins is False — plugins will not be re-loaded.")
+            log.info("Plugin reload: enable_plugins is False - plugins will not be re-loaded.")
             return
 
         cls.create_plugin_directory()
@@ -276,9 +310,11 @@ class PluginManager:
             log.debug("No plugins found during hot-reload.")
             return
 
-        log.info(f"Hot-reloading {len(plugin_files)} plugin(s)...")
+        log.info("Hot-reloading %d plugin(s)...", len(plugin_files))
 
-        for search_dir in (EXAMPLES_PLUGIN_DIR, PLUGIN_DIR):
+        bundled_dir = _get_bundled_plugin_dir()
+        sys_path_dirs = ([bundled_dir] if bundled_dir is not None else []) + [PLUGIN_DIR]
+        for search_dir in sys_path_dirs:
             dir_str = str(search_dir)
             if search_dir.is_dir() and dir_str not in sys.path:
                 sys.path.insert(0, dir_str)

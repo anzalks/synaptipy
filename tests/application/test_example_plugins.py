@@ -181,7 +181,10 @@ class TestPluginDiscovery:
         fake_user_dir = EXAMPLES_PLUGIN_DIR.parent / "_no_user_plugins_for_test"
 
         with (
-            patch("Synaptipy.application.plugin_manager.EXAMPLES_PLUGIN_DIR", EXAMPLES_PLUGIN_DIR),
+            patch(
+                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                return_value=EXAMPLES_PLUGIN_DIR,
+            ),
             patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", fake_user_dir),
         ):
             PluginManager.load_plugins()
@@ -208,7 +211,10 @@ class TestPluginDiscovery:
         shutil.copy(EXAMPLES_PLUGIN_DIR / "ap_repolarization.py", user_plugins / "ap_repolarization.py")
 
         with (
-            patch("Synaptipy.application.plugin_manager.EXAMPLES_PLUGIN_DIR", EXAMPLES_PLUGIN_DIR),
+            patch(
+                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                return_value=EXAMPLES_PLUGIN_DIR,
+            ),
             patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", user_plugins),
         ):
             # The collision warning is logged at WARNING level, not raised as an exception.
