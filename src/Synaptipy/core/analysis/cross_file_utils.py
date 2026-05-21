@@ -184,3 +184,39 @@ def get_cross_file_average(
     reference_time = valid_times[longest_idx]
 
     return reference_time, grand_average, len(valid_traces), has_unequal_lengths
+
+
+def average_padded_trials(trial_list: List[np.ndarray]) -> Optional[np.ndarray]:
+    """Compute a NaN-padded mean across a flat list of 1-D trial arrays.
+
+    Shorter arrays are right-padded with NaN so that :func:`numpy.nanmean`
+    produces a smoothly decreasing effective N at the tail rather than an
+    artificial variance step at the truncation point.
+
+    Parameters
+    ----------
+    trial_list : list of np.ndarray
+        Flat collection of 1-D trial arrays to average (e.g. all trials from
+        all files pooled together for a cross-file batch average).
+
+    Returns
+    -------
+    np.ndarray or None
+        Grand-average array, or ``None`` when *trial_list* is empty.
+    """
+    if not trial_list:
+        return None
+
+    lengths = [len(t) for t in trial_list]
+    max_len = max(lengths)
+
+    if len(set(lengths)) == 1:
+        # Fast path: all arrays share the same length
+        return np.mean(np.array(trial_list), axis=0)
+
+    # NaN-pad shorter arrays so nanmean keeps the full time axis intact
+    padded = np.full((len(trial_list), max_len), np.nan)
+    for i, trace in enumerate(trial_list):
+        padded[i, : len(trace)] = trace
+
+    return np.nanmean(padded, axis=0)
