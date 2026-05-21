@@ -214,14 +214,26 @@ screen. The default widths are 320 px (left), 800 px (centre), and 360 px
 - **Cross-File Trial Averaging**:
   While in "Cycle Single Trial" mode, you can manually build a grand average
   from any combination of files and trials across the entire session:
-  1. Use the **"Add Current Trial to Avg Set"** button to add the currently
+  1. Use the **"Mark Current Trial"** button to add the currently
      displayed trial - including any active preprocessing transforms - to the
-     global selection set.
+     pending selection set.
   2. Navigate freely between files (even files of different durations or
-     sampling protocols) and continue adding trials. The selection accumulates
-     persistently until cleared.
-  3. Enable **"Plot Selected Avg"** to overlay the grand average on the current
+     sampling protocols) and continue marking trials. The pending selection
+     accumulates until you add it to the Analysis Set.
+  3. Click **"Add Marked Trials to Set"** to move the pending selections into
+     the Analysis Set used by the Analyser tab. Marks are cleared automatically
+     after adding, so clicking the button again without marking new trials
+     produces a "No trials marked" notice rather than an "already added" warning.
+  4. Enable **"Plot Selected Avg"** to overlay the grand average on the current
      recording view.
+
+  **Sending to the Analyser:** Once you have built an Analysis Set in the
+  Explorer, switch to the **Analyser** tab, select **"Cross-File Average"** as
+  the data source, and choose any registered analysis routine. The Analyser
+  will display faint per-trial traces alongside a bold grand average so that
+  trial-to-trial variability is always visible. The header label shows the
+  item count and file count (e.g. **"3 items (2 files)"**) so you always know
+  exactly how many trials are included.
 
   **Shape-mismatch handling:** Because recordings from different files may have
   different durations, the accumulator uses

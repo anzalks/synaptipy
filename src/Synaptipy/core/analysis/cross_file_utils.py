@@ -17,6 +17,20 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
+def _resolve_effective_trials(item: Dict[str, Any], channel: Any, parsed_trials: List[int]) -> List[int]:
+    """Return the list of trial indices to use for *item* within *channel*.
+
+    ``"Current Trial"`` items specify their own ``trial_index``; ``"Recording"``
+    items use every available trial; all other items fall back to *parsed_trials*.
+    """
+    if item.get("target_type") == "Current Trial" and item.get("trial_index") is not None:
+        return [item["trial_index"]]
+    if item.get("target_type") == "Recording":
+        n_avail = getattr(channel, "num_trials", 1)
+        return list(range(max(1, n_avail)))
+    return parsed_trials
+
+
 def extract_per_file_trace(
     item: Dict[str, Any],
     parsed_trials: List[int],
@@ -64,9 +78,12 @@ def extract_per_file_trace(
 
         _, channel = channels_sorted[channel_idx]
 
+        # Determine which trials to use for this item.
+        effective_trials = _resolve_effective_trials(item, channel, parsed_trials)
+
         file_traces: List[np.ndarray] = []
         file_times: List[np.ndarray] = []
-        for trial_idx in parsed_trials:
+        for trial_idx in effective_trials:
             trial_data = channel.get_data(trial_idx)
             trial_time = channel.get_relative_time_vector(trial_idx)
             if trial_data is None or trial_time is None:

@@ -802,7 +802,12 @@ class AnalyserTab(QtWidgets.QWidget):
                 unique_files.add(file_path)
 
         if unique_files:
-            self.files_info_label.setText(f"{len(unique_files)} file(s) loaded")
+            n_items = len(analysis_items)
+            n_files = len(unique_files)
+            if n_items == n_files:
+                self.files_info_label.setText(f"{n_items} item(s) loaded")
+            else:
+                self.files_info_label.setText(f"{n_items} items ({n_files} file(s))")
             self.files_info_label.setStyleSheet("")  # Reset to default color
         else:
             self.files_info_label.setText("No files loaded")

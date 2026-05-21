@@ -108,6 +108,9 @@ class ExplorerTab(QtWidgets.QWidget):
         # Limits State
         self.base_x_range: Optional[Tuple[float, float]] = None
         self.base_y_ranges: Dict[str, Optional[Tuple[float, float]]] = {}
+        # Snapshot of base_y_ranges from initial load/preprocessing so Reset View
+        # always restores the full-data Y extents (not the dynamically expanded ones).
+        self._initial_base_y_ranges: Dict[str, Optional[Tuple[float, float]]] = {}
         # self.manual_limits_enabled: bool = False  # Removed
 
         self._updating_viewranges: bool = False  # Lock to prevent feedback loops
@@ -194,6 +197,16 @@ class ExplorerTab(QtWidgets.QWidget):
         self.avg_add_analysis_btn.setEnabled(False)
         self.avg_add_analysis_btn.clicked.connect(self._add_cross_file_average_to_analysis_set)
         avg_btn_layout.addWidget(self.avg_add_analysis_btn)
+
+        self.add_marked_trials_btn = QtWidgets.QPushButton("Add Marked Trials to Set")
+        self.add_marked_trials_btn.setToolTip(
+            "Add each trial marked with 'Mark Current Trial' to the Analysis Set as a "
+            "separate Current Trial item.  When you then pick Cross-File Average in the "
+            "Analyser tab, each file contributes its own specific marked trial."
+        )
+        self.add_marked_trials_btn.setEnabled(False)
+        self.add_marked_trials_btn.clicked.connect(self._add_marked_trials_to_analysis_set)
+        avg_btn_layout.addWidget(self.add_marked_trials_btn)
         agl.addLayout(avg_btn_layout)
 
         # Open File Button
@@ -443,6 +456,10 @@ class ExplorerTab(QtWidgets.QWidget):
         # Analysis Buttons
         self.add_analysis_btn.clicked.connect(self._add_selection_to_analysis_set)
         self.clear_analysis_btn.clicked.connect(self._clear_analysis_set)
+
+        # Enable/disable the avg button whenever the project-tree selection changes
+        if hasattr(self.sidebar, "project_tree") and self.sidebar.project_tree is not None:
+            self.sidebar.project_tree.itemSelectionChanged.connect(self._update_all_ui_state)
 
         # Live Analysis Controls
         self.config_panel.threshold_changed.connect(self._request_live_analysis)
@@ -891,6 +908,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
         for cid, channel in self.current_recording.channels.items():
             self.base_y_ranges[cid] = self._compute_channel_y_range(channel)
+
+        # Snapshot for Reset View so it always restores full-data extents.
+        self._initial_base_y_ranges = dict(self.base_y_ranges)
 
     def _compute_base_x_range(self):
         """Compute X range from actual time vectors (always start at 0)."""
@@ -1457,6 +1477,7 @@ class ExplorerTab(QtWidgets.QWidget):
         if hasattr(self.sidebar, "get_selected_project_files"):
             n_project_files = len(self.sidebar.get_selected_project_files())
         self.avg_add_analysis_btn.setEnabled(n_project_files >= 2)
+        self.add_marked_trials_btn.setEnabled(bool(self.global_manual_trials))
 
         # Preprocessing state
         # Can enable/disable based on recording presence
@@ -1518,6 +1539,62 @@ class ExplorerTab(QtWidgets.QWidget):
         else:
             self.status_bar.showMessage("Selected items were already in the Analysis Set.", 3000)
 
+        self._update_all_ui_state()
+
+    def _add_marked_trials_to_analysis_set(self) -> None:
+        """Add each manually-marked trial to the Analysis Set as a Current Trial item.
+
+        Reads ``global_manual_trials`` (populated by the 'Mark Current Trial' button)
+        and creates one ``target_type='Current Trial'`` analysis item per entry, with
+        the file path and specific ``trial_index`` preserved.
+
+        When Cross-File Average is later computed in the Analyser tab,
+        ``extract_per_file_trace`` will use each item's own ``trial_index`` rather
+        than the global trial-selection string, so mixed selections like
+        trial 3 from file A and trial 7 from file B are handled correctly.
+        """
+        if not self.global_manual_trials:
+            self.status_bar.showMessage("No trials marked - use 'Mark Current Trial' first.", 3000)
+            return
+
+        added_count = 0
+        for mt in self.global_manual_trials:
+            item: dict = {
+                "path": mt["path"],
+                "target_type": "Current Trial",
+                "trial_index": mt["trial_index"],
+                "recording_ref": None,
+            }
+            is_duplicate = any(
+                a.get("path") == item["path"]
+                and a.get("target_type") == "Current Trial"
+                and a.get("trial_index") == item["trial_index"]
+                for a in self._analysis_items
+            )
+            if not is_duplicate:
+                self._analysis_items.append(item)
+                added_count += 1
+
+        total_marks = len(self.global_manual_trials)
+        if added_count > 0:
+            # Remove the newly-added items from global_manual_trials so that
+            # clicking "Add Marked Trials to Set" again doesn't produce spurious
+            # "already in set" messages.  Marks that were skipped (duplicates) are
+            # also cleared so the user starts fresh for the next batch.
+            self.global_manual_trials.clear()
+            self._update_global_avg_label()
+
+        self._update_analysis_set_display()
+        if self.session_manager:
+            self.session_manager.selected_analysis_items = self._analysis_items[:]
+        if added_count > 0:
+            self.status_bar.showMessage(f"Added {added_count} trial(s) to Analysis Set.", 3000)
+        else:
+            self.status_bar.showMessage(
+                f"All {total_marks} marked trial(s) already in Analysis Set - "
+                "mark different trials with 'Mark Current Trial' first.",
+                5000,
+            )
         self._update_all_ui_state()
 
     def _add_cross_file_average_to_analysis_set(self):  # noqa: C901
@@ -1663,6 +1740,8 @@ class ExplorerTab(QtWidgets.QWidget):
                 target = item["target_type"]
                 if target == "MultifileAverage":
                     display = item.get("display_label", item["path"].name)
+                elif target == "Current Trial" and item.get("trial_index") is not None:
+                    display = f"{item['path'].name} (Trial {item['trial_index'] + 1})"
                 else:
                     display = item["path"].name
                 tooltip_text += f"- {display} [{target}]\n"
@@ -1737,6 +1816,12 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _reset_view(self):
         """Reset plot ranges to base ranges and reset UI controls."""
+        # Restore base_y_ranges to the snapshot taken at load/preprocessing time
+        # so that dynamic expansion (caused by panning outside the initial range)
+        # does not permanently change what "Reset View" shows.
+        if self._initial_base_y_ranges:
+            self.base_y_ranges = dict(self._initial_base_y_ranges)
+
         # Block x/y range signal cascade while setting ranges on XLinked plots.
         prev = self._updating_viewranges
         self._updating_viewranges = True
@@ -1770,6 +1855,10 @@ class ExplorerTab(QtWidgets.QWidget):
             self._updating_viewranges = prev
 
         self._reset_zoom_scroll_controls()
+        # After sliders are reset to defaults, sync per-channel Y sliders to the
+        # actual ViewBox Y ranges (vb.updateAutoRange() may have set them to a
+        # different value during the reset with _updating_viewranges=True).
+        self._sync_y_sliders_from_view()
 
     def _reset_zoom_scroll_controls(self):
         """Reset all zoom sliders and scrollbars to their default positions."""
@@ -1802,6 +1891,39 @@ class ExplorerTab(QtWidgets.QWidget):
                 sb.blockSignals(True)
                 sb.setValue(self.y_controls.SCROLLBAR_MAX_RANGE // 2)
                 sb.blockSignals(False)
+
+    def _sync_y_sliders_from_view(self) -> None:
+        """Sync per-channel Y zoom sliders and scrollbars to the actual ViewBox Y ranges.
+
+        Called after ``_reset_view`` to reconcile slider positions with the Y ranges
+        that ``vb.updateAutoRange()`` may have set while ``_updating_viewranges`` was
+        ``True`` (and therefore bypassed the normal ``_on_vb_y_range_changed`` path).
+        """
+        for cid, plot in self.plot_canvas.channel_plots.items():
+            if not plot.isVisible():
+                continue
+            vb = plot.getViewBox()
+            if vb is None:
+                continue
+            base_range = self.base_y_ranges.get(cid)
+            if not base_range:
+                continue
+            try:
+                y_range = vb.viewRange()[1]
+                if y_range and len(y_range) == 2:
+                    z, s = self._calculate_controls_from_range(y_range[0], y_range[1], base_range[0], base_range[1])
+                    y_slider = self.y_controls.individual_y_sliders.get(cid)
+                    if y_slider is not None:
+                        y_slider.blockSignals(True)
+                        y_slider.setValue(z)
+                        y_slider.blockSignals(False)
+                    y_sb = self.y_controls.individual_y_scrollbars.get(cid)
+                    if y_sb is not None:
+                        y_sb.blockSignals(True)
+                        y_sb.setValue(s)
+                        y_sb.blockSignals(False)
+            except Exception:
+                pass
 
     # ... Implement Zoom/Scroll applying ...
     # --- Interaction Logic (Zoom/Scroll) ---
@@ -1920,6 +2042,15 @@ class ExplorerTab(QtWidgets.QWidget):
             scroll_val = scroll_max // 2
         else:
             scroll_ratio = (center - min_center) / (max_center - min_center)
+            # Mirror the inversion applied in _calculate_visible_range so that
+            # mouse-zoom/pan and slider-zoom/pan remain mutually consistent.
+            try:
+                from Synaptipy.shared.scroll_settings import is_scroll_inverted
+
+                if is_scroll_inverted():
+                    scroll_ratio = 1.0 - scroll_ratio
+            except ImportError:
+                pass
             scroll_val = int(scroll_ratio * scroll_max)
             scroll_val = max(0, min(scroll_max, scroll_val))
 
@@ -1965,6 +2096,8 @@ class ExplorerTab(QtWidgets.QWidget):
             self._update_plot()
             # Recalculate base Y ranges from current view to fix scroll range
             self._recalculate_base_y_ranges_from_view()
+            # Update the reset snapshot so Reset View uses post-preprocessing extents.
+            self._initial_base_y_ranges = dict(self.base_y_ranges)
         finally:
             self.preprocessing_widget.set_processing_state(False)
             self.status_bar.showMessage("Applied preprocessing settings via Pipeline.", 3000)
@@ -2229,6 +2362,16 @@ class ExplorerTab(QtWidgets.QWidget):
             # But here we want to update the UI
             self.y_controls.set_individual_scrollbar(chan_id, s)
 
+            # Also sync the individual Y zoom slider so manual Y adjustments start
+            # from the correct zoom level (Y auto-range can tighten/widen the view
+            # when X is scrolled; without this the slider would read "full zoom out"
+            # while the view is actually zoomed in, causing a jump on first interaction).
+            y_slider = self.y_controls.individual_y_sliders.get(chan_id)
+            if y_slider is not None:
+                y_slider.blockSignals(True)
+                y_slider.setValue(z)
+                y_slider.blockSignals(False)
+
             # Update Page Step (Handle Size) for individual scrollbar?
             current_span = cmax - cmin
             ratio = max(0.0, min(1.0, current_span / total_span))
@@ -2440,6 +2583,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 )
 
         self._update_global_avg_label()
+        self._update_all_ui_state()
 
         # Update plot if the global average is currently being shown
         if self.config_panel.show_avg_btn.isChecked():
