@@ -99,6 +99,20 @@ class DataLoaderService(QtCore.QObject):
         log.debug("DataLoaderService: starting async load for %s", path)
         self._thread_pool.start(worker)
 
+    def load_recording_direct(self, recording: Any) -> None:
+        """Emit a pre-loaded recording directly without spawning a background thread.
+
+        Use this for in-memory recordings (e.g. synthetic multi-file averages)
+        that do not need to be read from disk.
+
+        Args:
+            recording: A :class:`~Synaptipy.core.data_model.Recording` instance
+                       (or ``None``) to deliver to connected slots immediately.
+        """
+        log.debug("DataLoaderService: emitting in-memory recording directly.")
+        self.recording_loaded.emit(recording)
+        self.load_finished.emit()
+
     def wait_for_done(self) -> None:
         """Block until all pending load operations have completed.
 

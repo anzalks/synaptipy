@@ -1308,8 +1308,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.clear()
 
         # Delegate async load to DataLoaderService (signals already connected in __init__)
-        log.debug(f"{self.__class__.__name__}: Starting async load for {item_path}")
-        self._data_loader.load_recording(item_path)
+        recording_ref = selected_item.get("recording_ref")
+        if recording_ref is not None and item_type == "MultifileAverage":
+            # In-memory averaged recording: skip disk I/O entirely.
+            log.debug(
+                "%s: Using in-memory recording_ref for MultifileAverage item.",
+                self.__class__.__name__,
+            )
+            self._data_loader.load_recording_direct(recording_ref)
+        else:
+            log.debug(f"{self.__class__.__name__}: Starting async load for {item_path}")
+            self._data_loader.load_recording(item_path)
 
     def _on_item_load_success(self, recording: Optional[Recording]):
         """Callback when async loading completes successfully."""

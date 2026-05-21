@@ -186,6 +186,142 @@ def get_cross_file_average(
     return reference_time, grand_average, len(valid_traces), has_unequal_lengths
 
 
+def build_averaged_recording(
+    items: List[Dict[str, Any]],
+    trial_indices: List[int],
+    neo_adapter: Any,
+    label: str = "multifile_average",
+) -> Optional[Any]:
+    """Build a synthetic ``Recording`` whose channels each hold one averaged trial.
+
+    For every channel position found in the first loadable file the function
+    calls :func:`get_cross_file_average` to compute the grand average across
+    all *items*.  The resulting per-channel average is stored as the sole trial
+    of a new :class:`~Synaptipy.core.data_model.Recording` whose
+    ``source_file`` is set to ``Path("__mfa__/<label>")``.
+
+    Parameters
+    ----------
+    items : list of dict
+        Analysis-item dicts, each containing at least a ``"path"`` key.
+    trial_indices : list of int
+        0-based trial indices to average within every file.
+    neo_adapter : object
+        Adapter with ``read_recording(path)`` returning a Recording or None.
+    label : str
+        Short human-readable label embedded in the synthetic ``source_file``
+        path and ``Recording.metadata["label"]``.
+
+    Returns
+    -------
+    Recording or None
+        Populated synthetic Recording, or ``None`` if no valid data could be
+        obtained from any file.
+    """
+    from pathlib import Path
+
+    from Synaptipy.core.data_model import Channel, Recording
+
+    # Discover channel layout from the first loadable file
+    reference_recording = None
+    for item in items:
+        path = item.get("path")
+        if path:
+            try:
+                rec = neo_adapter.read_recording(path)
+                if rec is not None and rec.channels:
+                    reference_recording = rec
+                    break
+            except Exception as exc:
+                log.debug("build_averaged_recording: cannot load %s: %s", path, exc)
+
+    if reference_recording is None:
+        log.warning("build_averaged_recording: no loadable file found in items list.")
+        return None
+
+    channels_sorted = sorted(reference_recording.channels.items())
+    n_channels = len(channels_sorted)
+
+    averaged_channels: Dict[str, "Channel"] = {}
+    for ch_idx in range(n_channels):
+        ref_ch_id, ref_ch = channels_sorted[ch_idx]
+        time_arr, avg_arr, n_files, _ = get_cross_file_average(items, trial_indices, ch_idx, neo_adapter)
+        if time_arr is None or avg_arr is None:
+            log.debug(
+                "build_averaged_recording: channel %d produced no average - skipping.",
+                ch_idx,
+            )
+            continue
+
+        ch = Channel(
+            id=ref_ch_id,
+            name=ref_ch.name,
+            units=ref_ch.units,
+            sampling_rate=ref_ch.sampling_rate,
+            data_trials=[avg_arr],
+        )
+        ch.t_start = float(time_arr[0]) if len(time_arr) > 0 else 0.0
+        ch.metadata["n_files_averaged"] = n_files
+        ch.metadata["trial_indices"] = trial_indices
+        averaged_channels[ref_ch_id] = ch
+
+    if not averaged_channels:
+        log.warning("build_averaged_recording: all channels produced empty averages.")
+        return None
+
+    synthetic_path = Path(f"__mfa__/{label}")
+    rec = Recording(source_file=synthetic_path)
+    rec.channels = averaged_channels
+    rec.sampling_rate = reference_recording.sampling_rate
+    rec.duration = reference_recording.duration
+    rec.metadata["label"] = label
+    rec.metadata["is_multifile_average"] = True
+    rec.metadata["source_items"] = [str(item.get("path", "")) for item in items]
+    rec.metadata["trial_indices"] = trial_indices
+    log.debug(
+        "build_averaged_recording: built synthetic Recording '%s' with %d channel(s).",
+        label,
+        len(averaged_channels),
+    )
+    return rec
+
+
+def _make_mfa_label(file_paths: List[Any]) -> str:
+    """Derive the ``multifile_average(...)`` display label from a list of file paths.
+
+    Takes the last three characters of each file stem and joins them with
+    commas.  When more than five files are present the middle entries are
+    replaced with ``...`` to keep the label short.
+
+    Parameters
+    ----------
+    file_paths : list
+        Iterable of :class:`pathlib.Path` objects (or path-like strings).
+
+    Returns
+    -------
+    str
+        A compact label such as ``"multifile_average(001,002,003)"`` or
+        ``"multifile_average(001,002,...,099,100)"`` for longer sets.
+    """
+    from pathlib import Path
+
+    suffixes = []
+    for p in file_paths:
+        stem = Path(p).stem
+        suffixes.append(stem[-3:] if len(stem) >= 3 else stem)
+
+    if not suffixes:
+        return "multifile_average()"
+
+    if len(suffixes) <= 5:
+        inner = ",".join(suffixes)
+    else:
+        inner = f"{suffixes[0]},{suffixes[1]},...,{suffixes[-2]},{suffixes[-1]}"
+
+    return f"multifile_average({inner})"
+
+
 def average_padded_trials(trial_list: List[np.ndarray]) -> Optional[np.ndarray]:
     """Compute a NaN-padded mean across a flat list of 1-D trial arrays.
 

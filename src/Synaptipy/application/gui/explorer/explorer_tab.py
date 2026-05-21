@@ -184,6 +184,18 @@ class ExplorerTab(QtWidgets.QWidget):
         abtn_layout.addWidget(self.clear_analysis_btn)
         agl.addLayout(abtn_layout)
 
+        # Cross-file average button (second row of buttons)
+        avg_btn_layout = QtWidgets.QHBoxLayout()
+        self.avg_add_analysis_btn = QtWidgets.QPushButton("Avg Selected & Add to Analysis")
+        self.avg_add_analysis_btn.setToolTip(
+            "Average the selected trial(s) across all files selected in the Project Tree "
+            "and add the result to the Analysis Set as a single averaged recording."
+        )
+        self.avg_add_analysis_btn.setEnabled(False)
+        self.avg_add_analysis_btn.clicked.connect(self._add_cross_file_average_to_analysis_set)
+        avg_btn_layout.addWidget(self.avg_add_analysis_btn)
+        agl.addLayout(avg_btn_layout)
+
         # Open File Button
         self.open_file_btn = QtWidgets.QPushButton("Open File...")
 
@@ -1440,6 +1452,11 @@ class ExplorerTab(QtWidgets.QWidget):
         # Analysis Buttons
         self.add_analysis_btn.setEnabled(self.current_recording is not None)
         self.clear_analysis_btn.setEnabled(bool(self._analysis_items))
+        # Avg button: requires >= 2 files selected in the project tree
+        n_project_files = 0
+        if hasattr(self.sidebar, "get_selected_project_files"):
+            n_project_files = len(self.sidebar.get_selected_project_files())
+        self.avg_add_analysis_btn.setEnabled(n_project_files >= 2)
 
         # Preprocessing state
         # Can enable/disable based on recording presence
@@ -1503,6 +1520,116 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self._update_all_ui_state()
 
+    def _add_cross_file_average_to_analysis_set(self):  # noqa: C901
+        """Average selected trial(s) across project-tree files and add to the Analysis Set.
+
+        Reads the trial selection from the config panel (free-text range input).
+        Calls :func:`~Synaptipy.core.analysis.cross_file_utils.build_averaged_recording`
+        to compute the grand average across all files selected in the Project Tree,
+        then stores the resulting synthetic :class:`~Synaptipy.core.data_model.Recording`
+        as a ``MultifileAverage`` item in the Analysis Set.
+        """
+        from Synaptipy.core.analysis.cross_file_utils import (
+            _make_mfa_label,
+            build_averaged_recording,
+        )
+        from Synaptipy.shared.utils import parse_trial_selection_string
+
+        # 1. Collect selected files from the project tree
+        files: list = []
+        if hasattr(self.sidebar, "get_selected_project_files"):
+            files = self.sidebar.get_selected_project_files()
+        if len(files) < 2:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Select Files",
+                "Please select at least 2 files in the Project Tree to compute a cross-file average.",
+            )
+            return
+
+        # 2. Determine trial indices
+        selection_text = self.config_panel.trial_selection_input.text().strip()
+        if selection_text and self.current_recording:
+            ch0 = next(iter(self.current_recording.channels.values()), None)
+            n_trials = ch0.num_trials if ch0 else 0
+            if n_trials > 0:
+                parsed = parse_trial_selection_string(selection_text, n_trials)
+                trial_indices = sorted(parsed) if parsed else [0]
+            else:
+                trial_indices = [0]
+        elif self.selected_trial_indices:
+            trial_indices = sorted(self.selected_trial_indices)
+        else:
+            trial_indices = [0]
+
+        # 3. Build items list for cross_file_utils (path-only dicts)
+        items = [{"path": f, "target_type": "Recording"} for f in sorted(files)]
+
+        # 4. Derive display label
+        display_label = _make_mfa_label(files)
+
+        # 5. Check for duplicate label
+        is_duplicate = any(
+            a.get("display_label") == display_label and a.get("target_type") == "MultifileAverage"
+            for a in self._analysis_items
+        )
+        if is_duplicate:
+            self.status_bar.showMessage(f"'{display_label}' is already in the Analysis Set.", 3000)
+            return
+
+        # 6. Compute the average (may take a moment; show a wait cursor)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        self.status_bar.showMessage("Computing cross-file average...", 0)
+        try:
+            averaged_rec = build_averaged_recording(
+                items=items,
+                trial_indices=trial_indices,
+                neo_adapter=self.neo_adapter,
+                label=display_label,
+            )
+        except Exception as exc:
+            log.error("Cross-file average failed: %s", exc, exc_info=True)
+            averaged_rec = None
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+
+        if averaged_rec is None:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Average Failed",
+                "Could not compute a cross-file average. Check that the selected files share "
+                "compatible channels and that the trial index is valid for all files.",
+            )
+            self.status_bar.showMessage("Cross-file average failed.", 4000)
+            return
+
+        # 7. Build a synthetic path so the item dict is consistent with existing plumbing
+        from pathlib import Path as _Path
+
+        synthetic_path = _Path(f"__mfa__/{display_label}")
+
+        mfa_item = {
+            "path": synthetic_path,
+            "target_type": "MultifileAverage",
+            "trial_index": None,
+            "recording_ref": averaged_rec,
+            "display_label": display_label,
+            "source_files": [str(f) for f in files],
+            "trial_indices": trial_indices,
+        }
+        self._analysis_items.append(mfa_item)
+        self._update_analysis_set_display()
+
+        if self.session_manager:
+            self.session_manager.selected_analysis_items = self._analysis_items[:]
+
+        n_files = len(files)
+        self.status_bar.showMessage(
+            f"Added '{display_label}' (averaged {n_files} files, trials {trial_indices}) to Analysis Set.",
+            5000,
+        )
+        self._update_all_ui_state()
+
     def _clear_analysis_set(self):
         if not self._analysis_items:
             return
@@ -1533,9 +1660,12 @@ class ExplorerTab(QtWidgets.QWidget):
                 if i >= items_to_show:
                     tooltip_text += f"... ({count - items_to_show} more)"
                     break
-                path_name = item["path"].name
                 target = item["target_type"]
-                tooltip_text += f"- {path_name} [{target}]\n"
+                if target == "MultifileAverage":
+                    display = item.get("display_label", item["path"].name)
+                else:
+                    display = item["path"].name
+                tooltip_text += f"- {display} [{target}]\n"
             self.analysis_set_label.setToolTip(tooltip_text.strip())
         else:
             self.analysis_set_label.setToolTip("Analysis set is empty.")
