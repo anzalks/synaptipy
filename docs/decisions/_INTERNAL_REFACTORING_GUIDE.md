@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # AI Model Refactoring Guide for Synaptipy
 
 ## Introduction

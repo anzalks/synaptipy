@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-file trial averaging workflow**: The Explorer's "Mark Current Trial"
+  button (Cycle Single Trial mode) queues individual sweeps from any loaded file.
+  "Add Marked Trials to Set" transfers them into the Analysis Set.  The Analyser
+  tab then exposes a "Cross-File Average" data source that computes a grand
+  average across all marked trials with per-file background traces.  The
+  `files_info_label` now shows "N items (M files)" when items and files differ.
+
+### Fixed
+
+- **"Selected:" label in Manual Trial Averaging panel**: The label was being
+  overwritten by the "Plot Selected Trials" display-selection, making it appear
+  that trials were marked for analysis when they were not.  The label now
+  exclusively reflects `global_manual_trials` (trials queued via "Mark Current
+  Trial"), which is the only correct meaning in that panel.
+
+- **AI attribution removed from development log**: Removed "(via AI Assistant)"
+  from `docs/development_logs/PHASES_2_3_COMPLETE.md`.  Renamed
+  `docs/decisions/REFACTORING_GUIDE.md` to `_INTERNAL_REFACTORING_GUIDE.md`
+  to prevent the AI-instruction document from appearing in published docs.
+
 ## [0.1.5b6] - 2026-05-20
 
 ### Changed

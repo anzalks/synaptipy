@@ -1459,8 +1459,8 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _update_all_ui_state(self):
         # Delegate to subcomponents or handle locally?
-        # Update Config Panel
-        self.config_panel.update_selection_label(self.selected_trial_indices)
+        # Update Config Panel - show global analysis marks, not display-only selection
+        self._update_global_avg_label()
 
         # Update Toolbar
         self.toolbar.update_file_nav(self.current_file_index, len(self.file_list))
@@ -2498,9 +2498,6 @@ class ExplorerTab(QtWidgets.QWidget):
             self.config_panel.trial_selection_input.blockSignals(False)
 
         # Remove forced mode swap - user prefers to cycle while building an average.
-        # Ensure the selected label is updated to remove the "None" state visually on load.
-        self.config_panel.update_selection_label(self.selected_trial_indices)
-
         self._update_plot()
         self._update_all_ui_state()
 
@@ -2509,7 +2506,6 @@ class ExplorerTab(QtWidgets.QWidget):
         self.selected_trial_indices.clear()  # Empty means all
         self._current_trial_selection_params = None  # Clear params
         log.info("Reset trial filtering: All trials selected.")
-        self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
 
     def _on_interleaved_selection_requested(self, gap: int, start_index: int):
@@ -2542,7 +2538,6 @@ class ExplorerTab(QtWidgets.QWidget):
         sorted_indices = sorted(self.selected_trial_indices)
         self._current_trial_selection_params = ",".join(str(i) for i in sorted_indices)
 
-        self.config_panel.update_selection_label(self.selected_trial_indices)
         self._update_plot()
         self._update_all_ui_state()
 
