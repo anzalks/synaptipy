@@ -267,10 +267,14 @@ class TestPlotSelectedDataCrossFile:
         # Attach a mock plot_widget so title update doesn't fail
         analysis_tab.plot_widget = MagicMock()
 
-        # Should return early without raising
+        # Should not raise - calls _plot_cross_file_average_preview which handles empty set
         analysis_tab._plot_selected_data()
 
-        analysis_tab.plot_widget.setTitle.assert_called_once_with("Cross-File Average - Run analysis to compute")
+        # With no items in the analysis set the preview shows the "add files" prompt
+        analysis_tab.plot_widget.clear.assert_called()
+        analysis_tab.plot_widget.setTitle.assert_called_once_with(
+            "No files in analysis set - add files via the Explorer tab"
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import pandas as pd
 
 # Import analysis package to trigger all registrations
 import Synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
+from Synaptipy.core.analysis.cross_file_utils import average_padded_trials as get_cross_file_average
 from Synaptipy.core.analysis.registry import AnalysisRegistry
 from Synaptipy.core.data_model import Recording
 from Synaptipy.infrastructure.file_readers import NeoAdapter
@@ -491,6 +492,7 @@ class BatchAnalysisEngine:
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         channel_filter: Optional[List[str]] = None,
         rs_tolerance: float = 0.20,
+        cross_file_average: bool = False,
     ) -> pd.DataFrame:
         """
         Run analysis on a list of files/recordings using a flexible pipeline configuration.
@@ -522,6 +524,11 @@ class BatchAnalysisEngine:
             log.warning("Empty pipeline_config provided. No analyses will be run.")
             return pd.DataFrame()
 
+        # Route to cross-file average mode when requested
+        if cross_file_average:
+            log.info("BatchAnalysisEngine: cross-file average mode enabled (%d files).", total_files)
+            return self._run_cross_file_average(files, pipeline_config, progress_callback, channel_filter)
+
         # Route to parallel executor when max_workers > 1 and we have multiple files
         if self.max_workers > 1 and total_files > 1:
             log.info(
@@ -530,6 +537,176 @@ class BatchAnalysisEngine:
             return self._run_batch_parallel(files, pipeline_config, progress_callback, channel_filter)
 
         return self._run_batch_sequential(files, pipeline_config, progress_callback, channel_filter, rs_tolerance)
+
+    def _run_cross_file_average(  # noqa: C901
+        self,
+        files: List[Union[Path, "Recording"]],
+        pipeline_config: List[Dict[str, Any]],
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        channel_filter: Optional[List[str]],
+    ) -> pd.DataFrame:
+        """Aggregate all trials from all files per channel, compute the grand average,
+        then execute the pipeline ONCE per channel on that master trace.
+
+        The result DataFrame contains exactly one row per (channel, analysis) pair,
+        with ``file_name`` set to ``"CROSS_FILE_MASTER_AVERAGE"`` and
+        ``trial_count`` reflecting the total number of trials pooled.
+        """
+        batch_start_time = datetime.now()
+        total_files = len(files)
+
+        # ------------------------------------------------------------------
+        # Phase 1: collect all trial arrays per channel across every file
+        # ------------------------------------------------------------------
+        # {channel_name: {"trials": [...], "times": [...], "sampling_rate": float, "units": str}}
+        channel_data: Dict[str, Dict[str, Any]] = {}
+
+        for i, item in enumerate(files):
+            if self._cancelled:
+                break
+
+            file_name = "Unknown"
+            recording = None
+            try:
+                if isinstance(item, (str, Path)):
+                    file_path = Path(item)
+                    file_name = file_path.name
+                    if progress_callback:
+                        progress_callback(i, total_files, f"Loading {file_name}...")
+                    recording = self.neo_adapter.read_recording(file_path, channel_whitelist=channel_filter)
+                    if not recording:
+                        log.warning("Cross-file avg: failed to load %s", file_path)
+                        continue
+                else:
+                    recording = item
+                    src = getattr(recording, "source_file", None)
+                    file_name = src.name if src else f"InMemory_{i}"
+                    if progress_callback:
+                        progress_callback(i, total_files, f"Loading {file_name}...")
+
+                channels_to_process = list(recording.channels.items())
+                if channel_filter:
+                    channels_to_process = [
+                        (k, ch) for k, ch in channels_to_process if k in channel_filter or str(k) in channel_filter
+                    ]
+
+                for channel_key, channel in channels_to_process:
+                    native_name = getattr(channel, "name", None)
+                    channel_name = native_name if native_name else channel_key
+
+                    if channel_name not in channel_data:
+                        channel_data[channel_name] = {
+                            "trials": [],
+                            "times": [],
+                            "sampling_rate": channel.sampling_rate,
+                            "units": getattr(channel, "units", "unknown"),
+                        }
+
+                    for trial_idx in range(channel.num_trials):
+                        trial_data = channel.get_data(trial_idx)
+                        trial_time = channel.get_relative_time_vector(trial_idx)
+                        if trial_data is not None and trial_time is not None:
+                            channel_data[channel_name]["trials"].append(trial_data)
+                            channel_data[channel_name]["times"].append(trial_time)
+
+            except Exception as exc:  # noqa: BLE001
+                log.error("Cross-file avg: error loading %s: %s", file_name, exc, exc_info=True)
+            finally:
+                recording = None
+
+        if progress_callback:
+            progress_callback(total_files, total_files, "Computing cross-file averages...")
+
+        # ------------------------------------------------------------------
+        # Phase 2: compute grand average per channel, run pipeline once
+        # ------------------------------------------------------------------
+        results_list: List[Dict[str, Any]] = []
+
+        for channel_name, ch_data in channel_data.items():
+            master_trial_list = ch_data["trials"]
+            if not master_trial_list:
+                continue
+
+            master_array = get_cross_file_average(master_trial_list)
+            if master_array is None:
+                log.warning("Cross-file avg: no valid trials for channel %s", channel_name)
+                continue
+
+            # Derive a reference time vector from the longest contributing trial
+            lengths = [len(t) for t in ch_data["times"]]
+            longest_idx = int(np.argmax(lengths))
+            master_time = ch_data["times"][longest_idx][: len(master_array)]
+
+            sampling_rate = ch_data["sampling_rate"]
+            trial_count = len(master_trial_list)
+
+            ch_meta: Dict[str, Any] = {
+                "file_name": "CROSS_FILE_MASTER_AVERAGE",
+                "file_path": f"CROSS_FILE_MASTER_AVERAGE ({total_files} files)",
+                "channel": channel_name,
+                "channel_units": ch_data["units"],
+                "trial_count": trial_count,
+            }
+
+            for task in pipeline_config:
+                if self._cancelled:
+                    break
+
+                analysis_name = task.get("analysis")
+                params = task.get("params", {})
+                scope = task.get("scope", "average")
+
+                analysis_func = AnalysisRegistry.get_function(analysis_name)
+                if analysis_func is None:
+                    results_list.append(
+                        {
+                            **ch_meta,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": f"Analysis '{analysis_name}' not registered",
+                        }
+                    )
+                    continue
+
+                try:
+                    p = {k: v for k, v in params.items() if k != "trial_index"}
+                    res = analysis_func(master_array, master_time, sampling_rate, **p)
+                    # Flatten consolidated-module schema
+                    if "metrics" in res and isinstance(res.get("metrics"), dict):
+                        metrics = res.pop("metrics")
+                        res.update(metrics)
+                    res.update(
+                        {
+                            **ch_meta,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "sampling_rate": sampling_rate,
+                        }
+                    )
+                    self._sanitise_result_for_export(res)
+                    results_list.append(res)
+                except Exception as exc:  # noqa: BLE001
+                    log.error("Cross-file avg: analysis %s failed: %s", analysis_name, exc, exc_info=True)
+                    results_list.append(
+                        {
+                            **ch_meta,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "sampling_rate": sampling_rate,
+                            "error": str(exc),
+                            "debug_trace": traceback.format_exc(),
+                        }
+                    )
+
+        if progress_callback:
+            msg = "Cross-file average cancelled." if self._cancelled else "Cross-file average complete."
+            progress_callback(total_files, total_files, msg)
+
+        df = pd.DataFrame(results_list)
+        if not df.empty:
+            df["batch_timestamp"] = batch_start_time.isoformat()
+            df = self._order_columns(df)
+        return df
 
     def _run_batch_sequential(  # noqa: C901
         self,

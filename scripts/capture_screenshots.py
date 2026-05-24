@@ -865,6 +865,131 @@ def _capture_miniml_plugin(window: Any, analyser: Any, sm: Any, output_dir: Path
 
 
 # ---------------------------------------------------------------------------
+# Cross-File Averaging screenshots
+# ---------------------------------------------------------------------------
+
+
+def _mark_trial(explorer: Any, path: Path, trial_index: int) -> None:
+    """Directly inject a marked trial into the explorer's global_manual_trials list.
+
+    This avoids the need to click through the UI; the data is loaded on the fly
+    from the recording that is already in memory (via neo_adapter cache).
+    """
+    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter  # noqa: PLC0415
+
+    adapter = NeoAdapter()
+    rec = adapter.read_recording(path)
+    if rec is None:
+        return
+    raw_traces: dict = {}
+    time_vectors: dict = {}
+    for cid, ch in rec.channels.items():
+        d = ch.get_data(trial_index)
+        t = ch.get_relative_time_vector(trial_index)
+        if d is not None and t is not None:
+            raw_traces[cid] = d
+            time_vectors[cid] = t
+    if raw_traces:
+        # De-duplicate before appending (mirrors ExplorerTab logic).
+        already = any(m["path"] == path and m["trial_index"] == trial_index for m in explorer.global_manual_trials)
+        if not already:
+            explorer.global_manual_trials.append(
+                {"path": path, "trial_index": trial_index, "raw_traces": raw_traces, "time_vectors": time_vectors}
+            )
+
+
+def _capture_cross_file_average(window: Any, analyser: Any, sm: Any, output_dir: Path) -> List[str]:  # noqa: C901
+    """Capture the cross-file averaging workflow across two files.
+
+    Screenshots produced:
+      1. ``explorer_tab_mark_trials.png`` - Explorer in Cycle Single Trial mode
+         with two trials marked from ABF21 and the Analysis Set sidebar visible.
+      2. ``analyser_cross_file_average.png`` - Analyser with Cross-File Average
+         data source selected and the grand average plotted with per-file faint
+         traces visible, and the "N items (M files)" header label.
+    """
+    captured: List[str] = []
+    if not (_ABF21.exists() and _ABF19.exists()):
+        print("  [warn] ABF21 or ABF19 not found - skipping cross-file average screenshots", file=sys.stderr)
+        return captured
+
+    explorer = window.explorer_tab
+
+    # --- Step 1: Load ABF21 and switch to Cycle Single Trial mode ---
+    window.tab_widget.setCurrentIndex(0)
+    _pump(3)
+    _load_explorer(window, _ABF21, [_ABF21, _ABF19], 0)
+    explorer.config_panel.plot_mode_combo.setCurrentIndex(1)  # Cycle Single Trial
+    _pump(5)
+
+    # --- Step 2: Mark trial 5 and trial 12 from ABF21 ---
+    _mark_trial(explorer, _ABF21, 5)
+    _mark_trial(explorer, _ABF21, 12)
+    explorer._update_global_avg_label()
+    explorer._update_all_ui_state()
+    _pump(3)
+
+    # Screenshot: Explorer showing marked trials pending addition.
+    _grab(window, output_dir / "explorer_tab_mark_trials.png")
+    captured.append("explorer_tab_mark_trials.png")
+
+    # --- Step 3: Add marked trials to Analysis Set ---
+    explorer._add_marked_trials_to_analysis_set()
+    _pump(3)
+
+    # --- Step 4: Load ABF19 and mark one trial ---
+    _load_explorer(window, _ABF19, [_ABF21, _ABF19], 1)
+    explorer.config_panel.plot_mode_combo.setCurrentIndex(1)
+    _pump(5)
+    _mark_trial(explorer, _ABF19, 0)
+    explorer._update_global_avg_label()
+    explorer._update_all_ui_state()
+    _pump(3)
+    explorer._add_marked_trials_to_analysis_set()
+    _pump(5)
+
+    # analysis_items now has 3 "Current Trial" entries: ABF21 trials 5 & 12,
+    # ABF19 trial 0 — matching the "3 items (2 files)" label scenario.
+
+    # --- Step 5: Switch to Analyser and select Cross-File Average source ---
+    # Propagate the analysis items to the Analyser via SessionManager.
+    if sm and hasattr(sm, "selected_analysis_items"):
+        sm.selected_analysis_items = explorer._analysis_items[:]
+        _pump(5)
+
+    tab = _activate_sub_tab(window, analyser, "Intrinsic Properties")
+    if tab is None:
+        return captured
+
+    # Switch the data-source combobox to "Cross-File Average".
+    cb = getattr(tab, "data_source_combobox", None)
+    if cb is not None:
+        for i in range(cb.count()):
+            if cb.itemData(i) == "cross_file_average":
+                cb.setCurrentIndex(i)
+                _pump(5)
+                break
+
+    # Run analysis to produce per-file faint traces + grand average in the plot.
+    _run_analysis(tab)
+    _pump(5)
+
+    # Screenshot: Analyser showing "3 items (2 files)" label + per-file traces.
+    window.tab_widget.setCurrentIndex(1)
+    _pump(3)
+    _grab(window, output_dir / "analyser_cross_file_average.png")
+    captured.append("analyser_cross_file_average.png")
+
+    # Cleanup: clear the analysis set so subsequent captures start fresh.
+    explorer._analysis_items.clear()
+    if sm and hasattr(sm, "selected_analysis_items"):
+        sm.selected_analysis_items = []
+    _pump(3)
+
+    return captured
+
+
+# ---------------------------------------------------------------------------
 # Stale-file cleanup
 # ---------------------------------------------------------------------------
 
@@ -956,6 +1081,9 @@ def run(output_dir: Path) -> bool:  # noqa: C901
 
         print("[evoked responses]")
         captured.extend(_capture_evoked_responses(window, analyser, sm, output_dir))
+
+        print("[cross-file average]")
+        captured.extend(_capture_cross_file_average(window, analyser, sm, output_dir))
 
         print("[miniml plugin]")
         captured.extend(_capture_miniml_plugin(window, analyser, sm, output_dir))

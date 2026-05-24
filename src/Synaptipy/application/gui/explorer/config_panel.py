@@ -120,7 +120,13 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
 
         # Average Controls
         layout.addWidget(QtWidgets.QLabel("Manual Trial Averaging (Cycle Mode):"))
-        self.select_trial_btn = QtWidgets.QPushButton("Add Current Trial to Avg Set")
+        self.select_trial_btn = QtWidgets.QPushButton("Mark Current Trial")
+        self.select_trial_btn.setToolTip(
+            "Mark the current trial so it can be:\n"
+            "  • Shown as the Explorer overlay average (Plot Selected Avg)\n"
+            "  • Added to the Analysis Set via 'Add Marked Trials to Set'\n\n"
+            "Click again on the same trial to un-mark it."
+        )
         self.select_trial_btn.clicked.connect(self.select_current_trial_clicked.emit)
         layout.addWidget(self.select_trial_btn)
 

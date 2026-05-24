@@ -798,11 +798,16 @@ class AnalyserTab(QtWidgets.QWidget):
         unique_files: Set[Path] = set()
         for item in analysis_items:
             file_path = item.get("path")
-            if file_path and isinstance(file_path, Path):
+            if file_path and isinstance(file_path, Path) and not str(file_path).startswith("__mfa__"):
                 unique_files.add(file_path)
 
         if unique_files:
-            self.files_info_label.setText(f"{len(unique_files)} file(s) loaded")
+            n_items = len(analysis_items)
+            n_files = len(unique_files)
+            if n_items == n_files:
+                self.files_info_label.setText(f"{n_items} item(s) loaded")
+            else:
+                self.files_info_label.setText(f"{n_items} items ({n_files} file(s))")
             self.files_info_label.setStyleSheet("")  # Reset to default color
         else:
             self.files_info_label.setText("No files loaded")
@@ -818,7 +823,9 @@ class AnalyserTab(QtWidgets.QWidget):
             for item in analysis_items:
                 path_name = item["path"].name
                 target = item["target_type"]
-                if target == "Recording":
+                if target == "MultifileAverage":
+                    display_text = item.get("display_label", f"multifile_average({path_name})")
+                elif target == "Recording":
                     display_text = f"File: {path_name}"
                 elif target == "Current Trial":
                     trial_info = f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
@@ -838,16 +845,21 @@ class AnalyserTab(QtWidgets.QWidget):
         else:
             self.central_analysis_item_combo.setEnabled(True)
             for i, item in enumerate(analysis_items):
-                path_name = item.get("path", Path("Unknown")).name
                 target = item.get("target_type", "Unknown")
-                display_text = f"Item {i+1}: "
-                if target == "Recording":
-                    display_text += f"File: {path_name}"
-                elif target == "Current Trial":
-                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
-                    display_text += f"{path_name} [{target}{trial_info}]"
+                if target == "MultifileAverage":
+                    display_text = item.get("display_label", f"multifile_average({item.get('path', Path('?')).name})")
                 else:
-                    display_text += f"{path_name} [{target}]"
+                    path_name = item.get("path", Path("Unknown")).name
+                    display_text = f"Item {i+1}: "
+                    if target == "Recording":
+                        display_text += f"File: {path_name}"
+                    elif target == "Current Trial":
+                        trial_info = (
+                            f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
+                        )
+                        display_text += f"{path_name} [{target}{trial_info}]"
+                    else:
+                        display_text += f"{path_name} [{target}]"
                 self.central_analysis_item_combo.addItem(display_text)
         self.central_analysis_item_combo.blockSignals(False)
 

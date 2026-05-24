@@ -1270,6 +1270,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self.plot_widget:
             self.plot_widget.clear()
 
+        # If the user was viewing the Cross-File Average preview, auto-refresh it
+        # so the preview stays in sync with the updated analysis set without requiring
+        # any manual interaction.
+        if (
+            self.data_source_combobox
+            and self.data_source_combobox.currentData() == "cross_file_average"
+            and self.signal_channel_combobox
+            and self.signal_channel_combobox.isEnabled()
+        ):
+            self._plot_cross_file_average_preview()
+            return
+
         log.debug(f"{self.__class__.__name__}: State updated, ready for item selection from parent.")
 
     # --- Internal Slot for Item Selection Change ---
@@ -1308,8 +1320,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.clear()
 
         # Delegate async load to DataLoaderService (signals already connected in __init__)
-        log.debug(f"{self.__class__.__name__}: Starting async load for {item_path}")
-        self._data_loader.load_recording(item_path)
+        recording_ref = selected_item.get("recording_ref")
+        if recording_ref is not None and item_type == "MultifileAverage":
+            # In-memory averaged recording: skip disk I/O entirely.
+            log.debug(
+                "%s: Using in-memory recording_ref for MultifileAverage item.",
+                self.__class__.__name__,
+            )
+            self._data_loader.load_recording_direct(recording_ref)
+        else:
+            log.debug(f"{self.__class__.__name__}: Starting async load for {item_path}")
+            self._data_loader.load_recording(item_path)
 
     def _on_item_load_success(self, recording: Optional[Recording]):
         """Callback when async loading completes successfully."""
@@ -2076,11 +2097,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.clear()
             return
 
-        # Cross-File Average is computed on-demand when analysis runs;
-        # just update the title and preserve the existing plot.
+        # Cross-File Average: compute and show an immediate preview with per-file
+        # overlays (faint) and the grand average on top (bold).  The same data is
+        # re-used by _execute_cross_file_average_analysis when Run Analysis fires.
         if data_source == "cross_file_average":
-            if self.plot_widget:
-                self.plot_widget.setTitle("Cross-File Average - Run analysis to compute")
+            self._plot_cross_file_average_preview()
             return
 
         if not self._selected_item_recording or chan_id not in self._selected_item_recording.channels:
@@ -2373,6 +2394,97 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             pass
         return ""
 
+    def _plot_cross_file_average_preview(self) -> None:  # noqa: C901
+        """Compute and show a preview of the cross-file average.
+
+        Plots each file's per-trial average as a faint background trace and the
+        grand average on top in bold - mirroring the Explorer's overlay+average
+        mode but across files instead of trials.  Also caches the result in
+        ``_current_plot_data`` so that ``_execute_cross_file_average_analysis``
+        inherits the correct sampling-rate / units when Run Analysis is clicked.
+        """
+        if not self.plot_widget:
+            return
+
+        if not self.signal_channel_combobox or not self.signal_channel_combobox.isEnabled():
+            self.plot_widget.clear()
+            self.plot_widget.setTitle("Select a file item first to determine channel layout")
+            return
+
+        # Only use plain Recording / Current Trial items - skip MFA items
+        recording_items = [
+            item for item in self._analysis_items if item.get("target_type") in ("Recording", "Current Trial")
+        ]
+        if not recording_items:
+            self.plot_widget.clear()
+            self.plot_widget.setTitle("No files in analysis set - add files via the Explorer tab")
+            return
+
+        channel_idx = self.signal_channel_combobox.currentIndex()
+        parsed_trials = self._determine_cross_file_trials()
+
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        try:
+            per_file_traces = []
+            for item in recording_items:
+                result = extract_per_file_trace(item, parsed_trials, channel_idx, self.neo_adapter)
+                if result is not None:
+                    per_file_traces.append(result)
+
+            time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
+                recording_items, parsed_trials, channel_idx, self.neo_adapter
+            )
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+
+        if time_arr is None or grand_avg is None or n_files == 0:
+            self.plot_widget.clear()
+            self.plot_widget.setTitle("Cross-File Average: no valid data - check channel / trial selection")
+            return
+
+        self.plot_widget.clear()
+        trial_pen = get_single_trial_pen()
+        avg_pen = get_average_pen()
+
+        for file_time, file_data in per_file_traces:
+            self.plot_widget.plot(file_time, file_data, pen=trial_pen)
+
+        self.plot_widget.plot(time_arr, grand_avg, pen=avg_pen, name=f"Grand Avg (N={n_files})")
+
+        title = f"Cross-File Average - N={n_files} file(s)"
+        if has_unequal:
+            title += " [unequal lengths - shorter traces NaN-padded]"
+        self.plot_widget.setTitle(title)
+
+        chan_name = self.signal_channel_combobox.currentText()
+        units = ""
+        if self._selected_item_recording:
+            chan_id = self.signal_channel_combobox.currentData()
+            if chan_id and chan_id in self._selected_item_recording.channels:
+                units = getattr(self._selected_item_recording.channels[chan_id], "units", "")
+        self.plot_widget.setLabel("bottom", "Time", units="s")
+        self.plot_widget.setLabel("left", chan_name, units=units)
+        self.auto_range_plot()
+
+        # Cache so _execute_cross_file_average_analysis gets the right sampling rate / units
+        fs = 1.0
+        if self._selected_item_recording:
+            first_ch = next(iter(self._selected_item_recording.channels.values()), None)
+            if first_ch and getattr(first_ch, "sampling_rate", 0) > 0:
+                fs = first_ch.sampling_rate
+        self._current_plot_data = {
+            "data": grand_avg,
+            "time": time_arr,
+            "raw_data": grand_avg.copy(),
+            "raw_time": time_arr.copy(),
+            "data_source": "cross_file_average",
+            "sampling_rate": fs,
+            "channel_name": chan_name,
+            "units": units,
+            "channel_id": self.signal_channel_combobox.currentData(),
+        }
+        self._on_data_plotted()
+
     def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
         """
         Compute the cross-file grand average, apply preprocessing, plot the
@@ -2445,10 +2557,19 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             "units": units,
         }
 
-        # Plot the cross-file average
+        # Plot the cross-file average: per-file faint traces + bold grand average
         if self.plot_widget:
             self.plot_widget.clear()
+            trial_pen = get_single_trial_pen()
             avg_pen = get_average_pen()
+            # Per-file traces (faint) so the user can see the spread across files
+            recording_items = [
+                item for item in self._analysis_items if item.get("target_type") in ("Recording", "Current Trial")
+            ]
+            for item in recording_items:
+                per_result = extract_per_file_trace(item, parsed_trials, channel_idx, self.neo_adapter)
+                if per_result is not None:
+                    self.plot_widget.plot(per_result[0], per_result[1], pen=trial_pen)
             self.plot_widget.plot(time_arr, processed, pen=avg_pen, name="Cross-File Average")
             title = f"Cross-File Average (N={n_files} files){_unequal_warn_msg}"
             self.plot_widget.setTitle(title)
@@ -2849,9 +2970,28 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Add metadata about source
         entry = specific_data.copy()
 
-        # Add trial info
+        # Build a source_label that carries enough provenance for the results table / CSV
         if self.data_source_combobox and self.data_source_combobox.isEnabled():
-            entry["source_label"] = self.data_source_combobox.currentText()
+            source_text = self.data_source_combobox.currentText()
+            if source_text == "Cross-File Average" and self._analysis_items:
+                # Encode which files (and which trial per file) contributed
+                parts: List[str] = []
+                for item in self._analysis_items:
+                    target = item.get("target_type", "")
+                    stem = item.get("path", Path("unknown")).stem
+                    if target == "Current Trial" and item.get("trial_index") is not None:
+                        parts.append(f"{stem}(T{item['trial_index'] + 1})")
+                    elif target == "MultifileAverage":
+                        parts.append(item.get("display_label", stem))
+                    else:
+                        parts.append(stem)
+                n = len(parts)
+                short = ", ".join(parts[:4]) + ("..." if n > 4 else "")
+                entry["source_label"] = f"XFA(N={n}): {short}"
+                # Full provenance stored separately so CSV has the complete list
+                entry["xfa_sources"] = "; ".join(parts)
+            else:
+                entry["source_label"] = source_text
         else:
             entry["source_label"] = "Current"
 

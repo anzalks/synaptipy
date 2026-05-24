@@ -51,6 +51,7 @@ class BatchWorker(QtCore.QThread):
         files: List[Path],
         pipeline_config: List[Dict[str, Any]],
         channel_filter: Optional[List[str]] = None,
+        cross_file_average: bool = False,
         parent=None,
     ):
         super().__init__(parent)
@@ -58,6 +59,7 @@ class BatchWorker(QtCore.QThread):
         self.files = files
         self.pipeline_config = pipeline_config
         self.channel_filter = channel_filter
+        self.cross_file_average = cross_file_average
         self.signals = BatchWorkerSignals()
         self._cancelled = False
 
@@ -74,6 +76,7 @@ class BatchWorker(QtCore.QThread):
                 pipeline_config=self.pipeline_config,
                 progress_callback=progress_callback,
                 channel_filter=self.channel_filter,
+                cross_file_average=self.cross_file_average,
             )
 
             if not self._cancelled:
@@ -674,6 +677,19 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         pipeline_layout.addLayout(pipeline_btn_layout)
         main_layout.addWidget(pipeline_group)
 
+        # ==== Aggregation Options Section ====
+        options_group = QtWidgets.QGroupBox("Aggregation Options")
+        options_layout = QtWidgets.QVBoxLayout(options_group)
+
+        self.cross_file_avg_checkbox = QtWidgets.QCheckBox("Pool & Average All Files (Outputs 1 Master Row)")
+        self.cross_file_avg_checkbox.setToolTip(
+            "Aggregate all trials from every file into a single grand-average trace, "
+            "then run the analysis pipeline exactly once per channel. "
+            "Produces one result row per channel instead of one per file."
+        )
+        options_layout.addWidget(self.cross_file_avg_checkbox)
+        main_layout.addWidget(options_group)
+
         # ==== Progress Section ====
         progress_group = QtWidgets.QGroupBox("Progress")
         progress_layout = QtWidgets.QVBoxLayout(progress_group)
@@ -902,8 +918,13 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
             channel_filter = [c.strip() for c in channel_filter_text.split(",") if c.strip()]
 
         # Create and start worker
+        cross_file_average = self.cross_file_avg_checkbox.isChecked()
         self.worker = BatchWorker(
-            engine=self.engine, files=self.files, pipeline_config=self.pipeline_steps, channel_filter=channel_filter
+            engine=self.engine,
+            files=self.files,
+            pipeline_config=self.pipeline_steps,
+            channel_filter=channel_filter,
+            cross_file_average=cross_file_average,
         )
         self.worker.signals.progress.connect(self._on_progress)
         self.worker.signals.finished.connect(self._on_finished)

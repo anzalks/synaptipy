@@ -315,3 +315,34 @@ class TestErrorRowInSequentialBatch:
             if "_test_failing_analysis" in AnalysisRegistry._registry:
                 del AnalysisRegistry._registry["_test_failing_analysis"]
                 del AnalysisRegistry._metadata["_test_failing_analysis"]
+
+
+# ---------------------------------------------------------------------------
+# Cross-file batch aggregation mode
+# ---------------------------------------------------------------------------
+
+
+class TestCrossFileBatchMode:
+    def test_cross_file_batch_mode(self):
+        """cross_file_average=True must return exactly 1 result row, not 2."""
+        rec1, _ = _make_recording()
+        rec2, _ = _make_recording()
+
+        engine = BatchAnalysisEngine()
+        pipeline = [{"analysis": "rmp_analysis", "scope": "average", "params": {}}]
+        df = engine.run_batch([rec1, rec2], pipeline, cross_file_average=True)
+
+        # Exactly one row: one channel, one analysis, one master average
+        assert len(df) == 1
+        assert df.iloc[0]["file_name"] == "CROSS_FILE_MASTER_AVERAGE"
+
+    def test_cross_file_batch_mode_file_path_label(self):
+        """The file_path column should mention both file counts."""
+        rec1, _ = _make_recording()
+        rec2, _ = _make_recording()
+
+        engine = BatchAnalysisEngine()
+        pipeline = [{"analysis": "rmp_analysis", "scope": "average", "params": {}}]
+        df = engine.run_batch([rec1, rec2], pipeline, cross_file_average=True)
+
+        assert "2 files" in df.iloc[0]["file_path"]
