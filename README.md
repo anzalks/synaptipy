@@ -15,21 +15,21 @@
 | src/Synaptipy/application/gui/\_\_init\_\_.py                       |        1 |        0 |    100% |           |
 | src/Synaptipy/application/gui/analysis\_tabs/\_\_init\_\_.py        |        3 |        0 |    100% |           |
 | src/Synaptipy/application/gui/explorer/\_\_init\_\_.py              |        2 |        0 |    100% |           |
-| src/Synaptipy/application/gui/explorer/config\_panel.py             |      244 |       21 |     91% |295-298, 313, 320, 327, 340, 352-354, 357-363, 368-372 |
+| src/Synaptipy/application/gui/explorer/config\_panel.py             |      245 |       25 |     90% |301-304, 319, 326, 333, 346, 358-360, 363-369, 374-378, 381-385 |
 | src/Synaptipy/application/gui/explorer/plot\_canvas.py              |      324 |       77 |     76% |63, 66, 69-70, 78, 81, 91, 94, 98-99, 105, 109-110, 121, 128-129, 164, 185-186, 192-193, 206, 210-212, 245-247, 252, 261-262, 321-322, 325-326, 329-330, 333-336, 354-358, 386-390, 435-436, 459-467, 480, 485-486, 496-499, 503-506, 510-511, 515-516 |
 | src/Synaptipy/application/gui/explorer/toolbar.py                   |       80 |        0 |    100% |           |
 | src/Synaptipy/application/gui/explorer/y\_controls.py               |      175 |       26 |     85% |131, 203-204, 210, 213-220, 223-225, 228-235, 238-240 |
 | src/Synaptipy/application/gui/ui\_generator.py                      |      201 |       60 |     70% |29-40, 48, 52, 56, 60-61, 69-81, 108, 113-118, 221, 224-235, 245, 280-281, 295, 302-307, 314, 334-335, 345-350 |
 | src/Synaptipy/application/gui/widgets/log\_streamer.py              |       97 |        6 |     94% |199, 240, 244-246, 250 |
 | src/Synaptipy/application/services/\_\_init\_\_.py                  |        0 |        0 |    100% |           |
-| src/Synaptipy/application/services/data\_loader\_service.py         |       32 |        1 |     97% |        92 |
+| src/Synaptipy/application/services/data\_loader\_service.py         |       36 |        1 |     97% |        92 |
 | src/Synaptipy/application/services/methods\_generator.py            |       33 |        0 |    100% |           |
 | src/Synaptipy/application/services/parameter\_templates.py          |       42 |        0 |    100% |           |
 | src/Synaptipy/application/session\_manager.py                       |      188 |        0 |    100% |           |
 | src/Synaptipy/core/\_\_init\_\_.py                                  |        2 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/\_\_init\_\_.py                         |       13 |        0 |    100% |           |
-| src/Synaptipy/core/analysis/batch\_engine.py                        |      522 |       47 |     91% |197, 680-681, 683, 731-733, 764-765, 819, 865-875, 884, 887, 904-905, 945, 953-974, 985-989, 1027-1029, 1059-1061, 1231-1253 |
-| src/Synaptipy/core/analysis/cross\_file\_utils.py                   |       59 |        0 |    100% |           |
+| src/Synaptipy/core/analysis/batch\_engine.py                        |      614 |       72 |     88% |198, 566, 572-579, 585, 589, 612-613, 618, 628, 632-633, 653, 661-669, 688-690, 702-703, 857-858, 860, 908-910, 941-942, 996, 1042-1052, 1061, 1064, 1081-1082, 1122, 1130-1151, 1162-1166, 1204-1206, 1236-1238, 1408-1430 |
+| src/Synaptipy/core/analysis/cross\_file\_utils.py                   |      135 |       12 |     91% |27, 252-253, 267-271, 286-287, 361, 371-375 |
 | src/Synaptipy/core/analysis/epoch\_manager.py                       |       96 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/evoked\_responses.py                    |      394 |       12 |     97% |373, 430, 434, 455-465, 796, 1038-1040, 1369 |
 | src/Synaptipy/core/analysis/firing\_dynamics.py                     |      270 |        2 |     99% |   765-766 |
@@ -61,7 +61,7 @@
 | src/Synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/Synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
 | src/Synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **7264** |  **421** | **94%** |           |
+| **TOTAL**                                                           | **7437** |  **462** | **94%** |           |
 
 
 ## Setup coverage badge
