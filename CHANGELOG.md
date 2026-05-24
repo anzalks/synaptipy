@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5b7] - 2026-05-24
+
+### Changed
+
+- Bumped version to `0.1.5b7` across all canonical locations.
+
+
 ### Added
 
 - **Cross-file trial averaging workflow**: The Explorer's "Mark Current Trial"

@@ -60,8 +60,8 @@ try:
     release = _version
     version = _version
 except Exception:
-    version = "0.1.5b6"
-    release = "0.1.5b6"
+    version = "0.1.5b7"
+    release = "0.1.5b7"
 
 # ---------------------------------------------------------------------------
 # General configuration
