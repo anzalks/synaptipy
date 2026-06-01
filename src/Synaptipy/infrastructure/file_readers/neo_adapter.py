@@ -522,7 +522,7 @@ class NeoAdapter:
                     log.info("pyabf rescue succeeded for '%s'.", filepath.name)
                 except ImportError:
                     try:
-                        from PySide6 import QtWidgets, QtCore
+                        from PySide6 import QtCore, QtWidgets
 
                         def _show_pyabf_warning():
                             QtWidgets.QMessageBox.warning(
