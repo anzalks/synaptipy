@@ -69,12 +69,12 @@ def apply_stylesheet(app: QtWidgets.QApplication) -> QtWidgets.QApplication:
 # ==============================================================================
 
 
-def get_trial_pen():
+def get_trial_pen(trial_index: int = 0):
     """Get pen for trial data."""
     try:
         from .plot_customization import get_single_trial_pen
 
-        return get_single_trial_pen()
+        return get_single_trial_pen(trial_index)
     except ImportError:
         return pg.mkPen(color="b", width=1)
 
@@ -293,14 +293,13 @@ def style_error_message(widget):
 
 # Basic color constants for backward compatibility
 PLOT_COLORS = [
-    "#377eb8",  # Blue (original trial color)
-    "#000000",  # Black (average color)
-    "#2ecc71",  # Green
-    "#f39c12",  # Orange
-    "#9b59b6",  # Purple
-    "#1abc9c",  # Turquoise
-    "#34495e",  # Dark gray
-    "#e67e22",  # Darker orange
+    "#E69F00",  # Orange
+    "#56B4E9",  # Sky blue
+    "#009E73",  # Bluish green
+    "#F0E442",  # Yellow
+    "#0072B2",  # Blue
+    "#D55E00",  # Vermilion
+    "#CC79A7",  # Reddish purple
 ]
 
 # Expose main functions

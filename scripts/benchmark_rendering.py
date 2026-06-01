@@ -71,7 +71,21 @@ from pathlib import Path
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SCRIPT_DIR.parent
 _SRC_DIR = _REPO_ROOT / "src"
-_ABF_0021 = _REPO_ROOT / "examples" / "data" / "2023_04_11_0021.abf"
+
+
+def _get_abf_path():
+    target = _REPO_ROOT / "examples" / "data" / "2023_04_11_0021.abf"
+    if target.exists():
+        return target
+    data_dir = _REPO_ROOT / "examples" / "data"
+    if data_dir.exists():
+        abfs = list(data_dir.glob("*.abf"))
+        if abfs:
+            return abfs[0]
+    return target
+
+
+_ABF_0021 = _get_abf_path()
 
 # N=40 is excluded: the source file has 20 trials; at N=40 the i%20 indexing
 # cycles through all arrays twice per update, placing the entire dataset in L2
@@ -91,7 +105,8 @@ _OS_TAG = {"darwin": "macos", "win32": "windows"}.get(sys.platform, sys.platform
 
 def _run_child(mode: str) -> None:
     """Run the rendering benchmark in-process and print JSON to stdout."""
-    use_opengl = mode == "opengl"
+    use_opengl = mode.startswith("opengl")
+    force_opaque = "opaque" in mode
 
     if str(_SRC_DIR) not in sys.path:
         sys.path.insert(0, str(_SRC_DIR))
@@ -107,6 +122,10 @@ def _run_child(mode: str) -> None:
     pg.setConfigOption("antialias", False)
     pg.setConfigOption("background", "k")
     pg.setConfigOption("foreground", "w")
+
+    from Synaptipy.shared.plot_customization import set_force_opaque_trials
+
+    set_force_opaque_trials(force_opaque)
 
     from PySide6.QtWidgets import QApplication, QGridLayout, QWidget
 
@@ -245,18 +264,20 @@ def _spawn_child(mode: str) -> dict:
         print(f"WARNING: no output from child [{mode}]")
         return {}
     try:
-        return json.loads(lines[-1])
+        data = json.loads(lines[-1])
+        data["_mode"] = mode  # pass the mode back for identifying
+        return data
     except json.JSONDecodeError as exc:
         print(f"WARNING: could not parse child output [{mode}]: {exc}")
         return {}
 
 
-def _save_csv(opengl_data: dict, software_data: dict, output_path: Path) -> None:
+def _save_csv(results_dict: dict, output_path: Path) -> None:
     """Write rendering benchmark results to CSV."""
     import csv
 
     fieldnames = [
-        "renderer",
+        "renderer_mode",
         "n_trials",
         "total_samples",
         "median_ms",
@@ -264,24 +285,21 @@ def _save_csv(opengl_data: dict, software_data: dict, output_path: Path) -> None
         "p95_ms",
     ]
     rows = []
-    for n_trials, data in sorted(opengl_data.items(), key=lambda x: int(x[0])):
-        rows.append(
-            {
-                "renderer": "opengl",
-                "n_trials": n_trials,
-                "total_samples": int(n_trials) * 20000,
-                **data,
-            }
-        )
-    for n_trials, data in sorted(software_data.items(), key=lambda x: int(x[0])):
-        rows.append(
-            {
-                "renderer": "software",
-                "n_trials": n_trials,
-                "total_samples": int(n_trials) * 20000,
-                **data,
-            }
-        )
+    for mode_name, data_set in results_dict.items():
+        if not data_set:
+            continue
+        for n_trials, data in sorted(data_set.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 0):
+            if n_trials == "_mode":
+                continue
+            rows.append(
+                {
+                    "renderer_mode": mode_name,
+                    "n_trials": n_trials,
+                    "total_samples": int(n_trials) * 20000,
+                    **data,
+                }
+            )
+
     with open(output_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -403,34 +421,30 @@ def main(output_dir: Path) -> None:
     """Orchestrate child processes and save results."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Spawning software-renderer child process ...")
-    software_data = _spawn_child("software")
-    print("Spawning OpenGL-renderer child process ...")
-    opengl_data = _spawn_child("opengl")
+    results_dict = {}
+    modes = ["software_transparent", "software_opaque", "opengl_transparent", "opengl_opaque"]
 
-    if not software_data and not opengl_data:
-        print("ERROR: both child processes failed — no results to save.")
+    for m in modes:
+        print(f"Spawning {m} child process ...")
+        results_dict[m] = _spawn_child(m)
+
+    if not any(results_dict.values()):
+        print("ERROR: all child processes failed — no results to save.")
         sys.exit(1)
 
-    _save_csv(opengl_data, software_data, output_dir / f"rendering_results_{_OS_TAG}.csv")
-    tagged_png = output_dir / f"rendering_benchmark_{_OS_TAG}.png"
-    _save_plot(opengl_data, software_data, tagged_png)
-    # Copy to canonical filename referenced by paper/paper.md (Figure 2)
-    canonical_png = output_dir / "rendering_benchmark.png"
-    if tagged_png.exists():
-        import shutil as _shutil
-
-        _shutil.copy2(tagged_png, canonical_png)
-        print(f"Copied canonical: {canonical_png}")
+    _save_csv(results_dict, output_dir / f"rendering_results_{_OS_TAG}.csv")
 
     print("\nSummary (median ms per update cycle):")
-    print(f"  {'N trials':>8}  {'Samples':>8}  {'Software':>10}  {'OpenGL':>8}  {'Ratio (SW/GL)':>14}")
+    print(
+        f"  {'N trials':>8}  {'Samples':>8}  {'SW_Trans':>10}  {'SW_Opaque':>10}  {'GL_Trans':>10}  {'GL_Opaque':>10}"
+    )
     for n in _N_TRIALS_LEVELS:
         key = str(n)
-        sw = software_data.get(key, {}).get("median_ms", float("nan"))
-        gl = opengl_data.get(key, {}).get("median_ms", float("nan"))
-        ratio = sw / gl if gl and gl > 0 else float("nan")
-        print(f"  {n:>8}  {n * 20000:>8}  {sw:>10.2f}  {gl:>8.2f}  {ratio:>14.2f}")
+        st = results_dict["software_transparent"].get(key, {}).get("median_ms", float("nan"))
+        so = results_dict["software_opaque"].get(key, {}).get("median_ms", float("nan"))
+        gt = results_dict["opengl_transparent"].get(key, {}).get("median_ms", float("nan"))
+        go = results_dict["opengl_opaque"].get(key, {}).get("median_ms", float("nan"))
+        print(f"  {n:>8}  {n * 20000:>8}  {st:>10.2f}  {so:>10.2f}  {gt:>10.2f}  {go:>10.2f}")
 
 
 if __name__ == "__main__":
@@ -438,12 +452,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=_REPO_ROOT / "paper" / "results",
-        help="Output directory for CSV and PNG (default: paper/results/)",
+        default=_REPO_ROOT / "benchmarks" / "results",
+        help="Output directory for CSV and PNG (default: benchmarks/results/)",
     )
     parser.add_argument(
         "--_child",
-        choices=["opengl", "software"],
+        choices=["opengl_transparent", "opengl_opaque", "software_transparent", "software_opaque"],
         help=argparse.SUPPRESS,  # internal flag used by subprocess invocation
     )
     args = parser.parse_args()

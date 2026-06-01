@@ -315,15 +315,26 @@ class PlotCustomizationManager:
         self._cache_pen("average", pen)
         return pen
 
-    def get_single_trial_pen(self) -> pg.mkPen:
+    def get_single_trial_pen(self, trial_index: int = 0) -> pg.mkPen:
         """Get pen for single trial plots."""
-        # Check cache first
-        cached_pen = self._get_cached_pen("single_trial")
+        # Use trial index to cycle through colors if not specifically requested
+        from Synaptipy.shared.styling import PLOT_COLORS
+
+        # Check cache first for this specific index
+        cache_key = f"single_trial_{trial_index}"
+        cached_pen = self._get_cached_pen(cache_key)
         if cached_pen:
             return cached_pen
 
         # Create new pen with proper opacity handling
-        color_str = self.defaults["single_trial"]["color"]
+        # Use the customized single trial color as default, or cycle through PLOT_COLORS
+        base_color_str = self.defaults["single_trial"]["color"]
+        # If it's the default blue or matplotlib blue, use our new colorblind-safe cycle instead
+        if base_color_str.lower() in ["#377eb8", "#377eb8"]:
+            color_str = PLOT_COLORS[trial_index % len(PLOT_COLORS)]
+        else:
+            color_str = base_color_str
+
         try:
             width = float(self.defaults["single_trial"]["width"])
         except (ValueError, TypeError):
@@ -359,7 +370,7 @@ class PlotCustomizationManager:
             f"Created single trial pen: color={color}, width={width}, alpha={color.alpha()} "
             f"(opacity: {opacity}%, alpha: {alpha:.3f}, force_opaque: {_force_opaque_trials})"
         )
-        self._cache_pen("single_trial", pen)
+        self._cache_pen(cache_key, pen)
         return pen
 
     def get_grid_pen(self) -> Optional[pg.mkPen]:
@@ -736,9 +747,9 @@ def get_average_pen() -> pg.mkPen:
     return get_plot_customization_manager().get_average_pen()
 
 
-def get_single_trial_pen() -> pg.mkPen:
+def get_single_trial_pen(trial_index: int = 0) -> pg.mkPen:
     """Get pen for single trial plots."""
-    return get_plot_customization_manager().get_single_trial_pen()
+    return get_plot_customization_manager().get_single_trial_pen(trial_index)
 
 
 def get_grid_pen() -> pg.mkPen:

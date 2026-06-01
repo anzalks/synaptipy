@@ -58,7 +58,21 @@ from pathlib import Path
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SCRIPT_DIR.parent
 _SRC_DIR = _REPO_ROOT / "src"
-_ABF_0021 = _REPO_ROOT / "examples" / "data" / "2023_04_11_0021.abf"
+
+
+def _get_abf_path():
+    target = _REPO_ROOT / "examples" / "data" / "2023_04_11_0021.abf"
+    if target.exists():
+        return target
+    data_dir = _REPO_ROOT / "examples" / "data"
+    if data_dir.exists():
+        abfs = list(data_dir.glob("*.abf"))
+        if abfs:
+            return abfs[0]
+    return target
+
+
+_ABF_0021 = _get_abf_path()
 
 # N of trials overlaid in OVERLAY_AVG benchmark.
 # 0021.abf has 20 trials; levels are clamped to min(N, n_all).
@@ -535,9 +549,9 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=_REPO_ROOT / "paper" / "results",
+        default=_REPO_ROOT / "benchmarks" / "results",
         metavar="PATH",
-        help="Destination for CSV and PNG (default: paper/results/).",
+        help="Destination for CSV and PNG (default: benchmarks/results/).",
     )
     parser.add_argument(
         "--_child",
