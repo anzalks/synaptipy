@@ -197,6 +197,26 @@ For the complete reference - including all `ui_params` types, `plots` types,
 return-dict conventions, `visible_when` rules, and a fully annotated example -
 see the dedicated guide: **[Writing Custom Analysis Plugins](extending_synaptipy.md)**.
 
+## Architecture & Performance Patterns
+
+### Asynchronous UI & Background Loading
+
+Synaptipy leverages `QThread` and `QRunnable` to execute heavy data loading and analysis in the background. Specifically, `.abf` and `.wcp` files are loaded asynchronously to prevent UI freezes. 
+
+Because of this asynchronous architecture, direct UI assertions in tests can be flaky if they do not account for background processing. Developers must use `qtbot.waitUntil` to synchronize test execution with the completion of background threads.
+
+### UI Interaction Debouncing
+
+To ensure a smooth user experience, rapid interactions are debounced. For instance, zoom and pan signals in `explorer_tab.py` employ a 50ms interaction debouncing mechanism. This 50ms timer is imperceptible to the user but prevents the application from being overwhelmed by consecutive resize or scroll events, optimizing rendering performance.
+
+## UI & Styling Guidelines
+
+Synaptipy prioritizes visual accessibility. By default, multi-trial plotting utilizes a colorblind-safe palette (e.g., Okabe-Ito or Viridis). 
+
+When writing custom plugins or extending the core UI:
+- **Do not** hardcode overlapping red/green traces.
+- Rely on the application's predefined palette generators to maintain a coherent and seamless visual experience for all users.
+
 ## Development Workflow
 
 ### Feature Development

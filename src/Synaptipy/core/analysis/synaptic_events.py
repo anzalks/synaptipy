@@ -1280,8 +1280,41 @@ def detect_events_baseline_peak_kinetics(  # noqa: C901
     min_event_separation_ms: float = 5.0,
     auto_baseline: bool = True,
     rolling_baseline_window_ms: float = 0.0,
+    peak_prominence_factor: Optional[float] = None,
 ) -> EventDetectionResult:
-    """Detect events via stable-baseline estimation then prominence-based peak finding."""
+    """
+    Detect events via stable-baseline estimation then prominence-based peak finding.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Raw data trace.
+    sample_rate : float
+        Sampling rate in Hz.
+    direction : str, optional
+        "negative" or "positive", by default "negative".
+    baseline_window_s : float, optional
+        Window for stable baseline search in seconds, by default 0.5.
+    baseline_step_s : float, optional
+        Step size for stable baseline search in seconds, by default 0.1.
+    threshold_sd_factor : float, optional
+        Detection threshold as a multiple of baseline standard deviation, by default 3.0.
+    filter_freq_hz : float, optional
+        Low-pass filter frequency in Hz, by default None.
+    min_event_separation_ms : float, optional
+        Minimum separation between events in ms, by default 5.0.
+    auto_baseline : bool, optional
+        Whether to perform automatic baseline correction, by default True.
+    rolling_baseline_window_ms : float, optional
+        Window for rolling median baseline correction in ms, by default 0.0.
+    peak_prominence_factor : float, optional
+        Custom prominence for peak detection. If None, defaults to `threshold_val * 0.5`.
+
+    Returns
+    -------
+    EventDetectionResult
+        Detection results including indices and stats.
+    """
     if direction not in ["negative", "positive"]:
         return EventDetectionResult(value=0, unit="counts", is_valid=False, error_message="Invalid direction")
 
@@ -1327,10 +1360,13 @@ def detect_events_baseline_peak_kinetics(  # noqa: C901
 
     min_dist = max(1, int(min_event_separation_ms / 1000.0 * sample_rate))
     min_width = max(2, int(0.0002 * sample_rate))
+
+    prominence_val = peak_prominence_factor if peak_prominence_factor is not None else threshold_val * 0.5
+
     peaks, _ = signal.find_peaks(
         filtered,
         height=threshold_val,
-        prominence=threshold_val * 0.5,
+        prominence=prominence_val,
         distance=min_dist,
         width=min_width,
     )
@@ -1367,6 +1403,16 @@ def detect_events_baseline_peak_kinetics(  # noqa: C901
         },
         {"name": "auto_baseline", "label": "Auto-Detect Baseline", "type": "bool", "default": True},
         {"name": "threshold_sd_factor", "label": "Threshold (SD Factor):", "type": "float", "default": 3.0},
+        {
+            "name": "peak_prominence_factor",
+            "label": "Peak Prominence:",
+            "type": "float",
+            "default": 0.0,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 2,
+            "tooltip": "Custom prominence factor. 0.0 means default (Threshold * 0.5).",
+        },
         {
             "name": "min_event_separation_ms",
             "label": "Min Separation (ms):",
@@ -1410,6 +1456,9 @@ def run_event_detection_baseline_peak_wrapper(
 ) -> Dict[str, Any]:
     """Wrapper for baseline-peak event detection."""
     direction = kwargs.get("direction", "negative")
+    peak_prominence = kwargs.get("peak_prominence_factor", 0.0)
+    prominence_param = peak_prominence if peak_prominence > 0 else None
+
     result = detect_events_baseline_peak_kinetics(
         data,
         sampling_rate,
@@ -1420,6 +1469,7 @@ def run_event_detection_baseline_peak_wrapper(
         baseline_window_s=kwargs.get("baseline_window_s", 0.5),
         baseline_step_s=kwargs.get("baseline_step_s", 0.1),
         rolling_baseline_window_ms=kwargs.get("rolling_baseline_window_ms", 100.0),
+        peak_prominence_factor=prominence_param,
     )
     if not result.is_valid:
         return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
