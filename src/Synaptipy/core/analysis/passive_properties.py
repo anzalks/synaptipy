@@ -18,6 +18,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import quantities as pq
 from scipy.optimize import curve_fit
 from scipy.stats import linregress
 
@@ -256,7 +257,7 @@ def find_stable_baseline(
 # ---------------------------------------------------------------------------
 
 
-def calculate_rin(
+def calculate_rin(  # noqa: C901
     voltage_trace: np.ndarray,
     time_vector: np.ndarray,
     current_amplitude: float,
@@ -345,6 +346,16 @@ def calculate_rin(
             error_message="Invalid current amplitude",
             parameters=parameters or {},
         )
+
+    # Unit checks using quantities package
+    if hasattr(voltage_trace, "units") and hasattr(current_amplitude, "units"):
+        try:
+            voltage_trace.rescale(pq.V)
+            current_amplitude.rescale(pq.A)
+        except ValueError as e:
+            raise ValueError(
+                f"Incompatible units passed: voltage must be in V (e.g. mV) and current in A (e.g. pA) when calculating resistance. Details: {e}"  # noqa: E501
+            )
 
     if delta_i_pa == 0.0:
         log.warning("Cannot calculate Rin: Current amplitude is zero.")
@@ -742,6 +753,17 @@ def calculate_conductance(
             error_message="Voltage step is zero",
             parameters=parameters or {},
         )
+
+    # Unit checks using quantities package
+    if hasattr(current_trace, "units") and hasattr(voltage_step, "units"):
+        try:
+            current_trace.rescale(pq.A)
+            voltage_step.rescale(pq.V)
+        except ValueError as e:
+            raise ValueError(
+                f"Incompatible units passed: voltage must be in V (e.g. mV) and current in A (e.g. pA) when calculating conductance. Details: {e}"  # noqa: E501
+            )
+
     try:
         baseline_mask = (time_vector >= baseline_window[0]) & (time_vector < baseline_window[1])
         response_mask = (time_vector >= response_window[0]) & (time_vector < response_window[1])

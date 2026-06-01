@@ -69,6 +69,8 @@ class TestElectrodeMetadataExport:
                     "experimenter": "Test",
                     "lab": "Test Lab",
                     "institution": "Test University",
+                    "subject_id": "Mouse_01",
+                    "device_description": "Device_1",
                 },
             )
 
@@ -123,6 +125,8 @@ class TestElectrodeMetadataExport:
                     "experimenter": "Test",
                     "lab": "Test Lab",
                     "institution": "Test University",
+                    "subject_id": "Mouse_01",
+                    "device_description": "Device_1",
                 },
             )
 
@@ -166,6 +170,8 @@ class TestPreprocessingHistoryExport:
                     "experimenter": "Test",
                     "lab": "Test Lab",
                     "institution": "Test University",
+                    "subject_id": "Mouse_01",
+                    "device_description": "Device_1",
                 },
             )
 
@@ -224,6 +230,8 @@ class TestPreprocessingHistoryExport:
                     "experimenter": "Test",
                     "lab": "Test Lab",
                     "institution": "Test University",
+                    "subject_id": "Mouse_01",
+                    "device_description": "Device_1",
                 },
             )
 
@@ -275,6 +283,8 @@ class TestNWBValidation:
                     "experimenter": "Test",
                     "lab": "Test Lab",
                     "institution": "Test University",
+                    "subject_id": "Mouse_01",
+                    "device_description": "Device_1",
                 },
             )
 
@@ -324,6 +334,8 @@ class TestDANDICompliance:
                     "experimenter": "Jane Doe",
                     "lab": "Neuroscience Lab",
                     "institution": "University",
+                    "subject_id": "Mouse_01",
+                    "device_description": "Device_1",
                 },
             )
 

@@ -144,7 +144,6 @@ known_first_party = ["Synaptipy"]
 
 [tool.coverage.run]
 source = ["src/Synaptipy"]
-relative_files = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
@@ -198,15 +197,7 @@ omit = [
 # Map GitHub Actions runner absolute paths → local src-layout paths.
 # coverage.py rewrites any match below to the first (canonical) entry before
 # generating reports, ensuring coverage.xml contains repo-relative paths.
-source = [
-    "src/Synaptipy",
-    # Linux runner  (anzalks/synaptipy → /home/runner/work/synaptipy/synaptipy/)
-    "/home/runner/work/synaptipy/synaptipy/src/Synaptipy",
-    # macOS runner  (/Users/runner/work/synaptipy/synaptipy/)
-    "/Users/runner/work/synaptipy/synaptipy/src/Synaptipy",
-    # Windows runner (D:\a\synaptipy\synaptipy\)
-    "D:\\a\\synaptipy\\synaptipy\\src\\Synaptipy",
-]
+source = ["src", "/home/runner/work/synaptipy/synaptipy/src", "/Users/runner/work/synaptipy/synaptipy/src", "D:\\a\\synaptipy\\synaptipy\\src"]
 
 [tool.coverage.report]
 show_missing = true

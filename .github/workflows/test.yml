@@ -110,11 +110,6 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
 
     # Push core test coverage badge endpoint.json to the data branch so the
-    # README badge resolves on every branch, not only after merging to main.
-    - name: Remove .coverage database before Codecov upload
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-      run: rm -f .coverage  # prevent codecov CLI from regenerating coverage.xml with wrong paths
-
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       uses: codecov/codecov-action@v5

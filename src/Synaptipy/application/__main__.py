@@ -263,10 +263,15 @@ def run_gui():  # noqa: C901
     if dev_mode:
         log.info("Running in DEVELOPMENT mode with verbose logging")
 
-    # Create Qt Application with High DPI support
     app = QtWidgets.QApplication.instance()
     if app is None:
         # Enable High DPI scaling before creating QApplication
+        try:
+            QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
+            QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+        except Exception as e:
+            log.warning(f"Could not set High DPI attributes: {e}")
+
         # Check if HighDpiScaleFactorRoundingPolicy is available (Qt 6.0+)
         if hasattr(QtCore.Qt, "HighDpiScaleFactorRoundingPolicy"):
             try:

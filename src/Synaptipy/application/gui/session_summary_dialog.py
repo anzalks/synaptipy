@@ -41,6 +41,19 @@ class SessionSummaryDialog(QtWidgets.QDialog):
         self._populate_table()
         self._calculate_stats()
 
+        # 3. Methods Paragraph
+        methods_group = QtWidgets.QGroupBox("Methods Paragraph")
+        methods_layout = QtWidgets.QVBoxLayout(methods_group)
+        self.methods_text = QtWidgets.QTextEdit()
+        self.methods_text.setReadOnly(True)
+        self.methods_text.setText(self._generate_methods_paragraph())
+        methods_layout.addWidget(self.methods_text)
+
+        copy_btn = QtWidgets.QPushButton("Copy Methods")
+        copy_btn.clicked.connect(lambda: QtWidgets.QApplication.clipboard().setText(self.methods_text.toPlainText()))
+        methods_layout.addWidget(copy_btn)
+        layout.addWidget(methods_group)
+
         # Close button
         close_btn = QtWidgets.QPushButton("Close")
         close_btn.clicked.connect(self.accept)
@@ -95,3 +108,25 @@ class SessionSummaryDialog(QtWidgets.QDialog):
 
                 label = key.replace("_", " ").title()
                 self.stats_layout.addRow(f"{label}:", QtWidgets.QLabel(f"{mean_val:.4g} ± {std_val:.4g}"))
+
+    def _generate_methods_paragraph(self) -> str:
+        try:
+            from Synaptipy import __version__
+
+            version = __version__
+        except ImportError:
+            version = "unknown"
+
+        if not self.results:
+            return f"Data was analyzed using Synaptipy {version}."
+
+        sample = self.results[0]
+        freq = sample.get("matched_filter_freq", "X")
+        prominence = sample.get("prominence_factor", "Y")
+
+        # You can expand this logic to extract more actual parameters
+        return (
+            f"Data was analyzed using Synaptipy {version}. "
+            f"Event detection utilized a matched filter (freq: {freq} Hz) "
+            f"with a prominence factor of {prominence}."
+        )

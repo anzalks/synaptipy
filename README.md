@@ -19,6 +19,8 @@ Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/
 
 ## Installation
 
+**WARNING: PySide6 must remain pinned to version 6.7.3 due to QTBUG-130070.**
+
 ### Prerequisites
 
 - [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)

@@ -55,7 +55,7 @@ class PlotExporter:
         Returns True if successful, False otherwise.
         """
         try:
-            if fmt in ["svg", "pdf"]:
+            if fmt in ["pdf"]:
                 return self._save_via_matplotlib(filename, fmt, dpi)
             else:
                 return self._save_via_pyqtgraph(filename, fmt, dpi)
@@ -92,15 +92,21 @@ class PlotExporter:
             pass  # non-fatal — proceed with whatever background exists
 
         try:
-            exporter = pg.exporters.ImageExporter(target_item)
+            if fmt == "svg":
+                exporter = pg.exporters.SVGExporter(target_item)
+                exporter.export(filename)
+                log.info(f"Exported SVG plot to {filename}")
+                return True
+            else:
+                exporter = pg.exporters.ImageExporter(target_item)
 
-            # Scale for DPI (Screen DPI is usually ~96)
-            scale_factor = dpi / 96.0
-            exporter.parameters()["width"] = int(target_item.width() * scale_factor)
+                # Scale for DPI (Screen DPI is usually ~96)
+                scale_factor = dpi / 96.0
+                exporter.parameters()["width"] = int(target_item.width() * scale_factor)
 
-            exporter.export(filename)
-            log.info(f"Exported raster plot to {filename}")
-            return True
+                exporter.export(filename)
+                log.info(f"Exported raster plot to {filename}")
+                return True
         finally:
             # Restore original background
             try:

@@ -521,11 +521,22 @@ class NeoAdapter:
                     _pyabf_rescue = True
                     log.info("pyabf rescue succeeded for '%s'.", filepath.name)
                 except ImportError:
-                    raise FileReadError(
-                        "ABF file could not be read by Neo and the optional pyabf "
-                        "rescue loader is not installed.  Run "
-                        "`pip install synaptipy[formats]` or `pip install pyabf`."
-                    )
+                    try:
+                        from PySide6 import QtWidgets, QtCore
+
+                        def _show_pyabf_warning():
+                            QtWidgets.QMessageBox.warning(
+                                None,
+                                "Missing pyabf Dependency",
+                                "ABF file could not be read by Neo and the optional pyabf "
+                                "rescue loader is not installed.\n\n"
+                                "Please run 'pip install pyabf' to enable this file.",
+                            )
+
+                        QtCore.QTimer.singleShot(0, _show_pyabf_warning)
+                    except Exception:
+                        pass
+                    raise FileReadError("ABF rescue failed: pyabf not installed.")
                 except Exception as pyabf_err:
                     log.error("pyabf rescue also failed for '%s': %s", filepath.name, pyabf_err)
                     # fall through to the generic lazy fallback below

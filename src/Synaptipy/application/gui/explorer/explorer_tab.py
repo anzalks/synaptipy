@@ -599,6 +599,13 @@ class ExplorerTab(QtWidgets.QWidget):
             return
         self._is_loading = True
 
+        # Add visual loading indicator
+        self._loading_dialog = QtWidgets.QProgressDialog(f"Loading {filepath.name}...", None, 0, 0, self)
+        self._loading_dialog.setWindowTitle("Please Wait")
+        self._loading_dialog.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
+        self._loading_dialog.setCancelButton(None)
+        self._loading_dialog.show()
+
         if file_list is None:
             file_list = [filepath]
         if selected_index == -1:
@@ -1456,6 +1463,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _finalize_loading_state(self):
         self._is_loading = False
+        if hasattr(self, "_loading_dialog") and self._loading_dialog:
+            self._loading_dialog.close()
+            self._loading_dialog = None
 
     def _update_all_ui_state(self):
         # Delegate to subcomponents or handle locally?
