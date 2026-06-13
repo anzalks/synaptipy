@@ -135,9 +135,9 @@ jobs:
         # badge JSON is pushed.
         CORE_COVERAGE=$(python -m coverage report --include="*/Synaptipy/core/**" --format=total --fail-under=0 2>/dev/null | tail -n1 | tr -dc '0-9')
         [ -z "$CORE_COVERAGE" ] && CORE_COVERAGE="0"
-        if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="brightgreen"
-        elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="green"
-        elif [ "$CORE_COVERAGE" -ge 60 ]; then COLOR="yellow"
+        if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="green"
+        elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="yellow"
+        elif [ "$CORE_COVERAGE" -ge 60 ]; then COLOR="orange"
         else COLOR="red"
         fi
         printf '{"schemaVersion":1,"label":"core test coverage","message":"%s%%","color":"%s"}\n' \
