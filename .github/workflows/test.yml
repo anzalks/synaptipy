@@ -133,7 +133,8 @@ jobs:
         # pytest_sessionfinish, which kills the process before pytest-cov can
         # write coverage.xml, causing set -e to abort the script before the
         # badge JSON is pushed.
-        CORE_COVERAGE=$(python -m coverage report --include="*/Synaptipy/core/**" --format=total 2>/dev/null || echo "0")
+        CORE_COVERAGE=$(python -m coverage report --include="*/Synaptipy/core/**" --format=total --fail-under=0 2>/dev/null | tail -n1 | tr -dc '0-9')
+        [ -z "$CORE_COVERAGE" ] && CORE_COVERAGE="0"
         if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="brightgreen"
         elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="green"
         elif [ "$CORE_COVERAGE" -ge 60 ]; then COLOR="yellow"
