@@ -291,7 +291,7 @@ jobs:
       - name: Find installer workflow run for this commit
         id: installer_run
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -391,14 +391,14 @@ jobs:
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub Release
-        # softprops/action-gh-release@v2 creates the release if it does not exist
+        # softprops/action-gh-release@v3 creates the release if it does not exist
         # and updates (appends files to) the release if it was already created by
         # the installer.yml workflow running in parallel.  The old
         # "gh release delete + recreate" pattern was destructive: it wiped any
         # .exe / .dmg binaries that installer.yml had already attached, because
         # both workflows fire in parallel on the same tag push.
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: "${{ github.ref_name }} (${{ steps.pre.outputs.label }})"
