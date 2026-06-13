@@ -33,10 +33,10 @@
 | src/Synaptipy/core/analysis/epoch\_manager.py                       |       96 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/evoked\_responses.py                    |      394 |       12 |     97% |373, 430, 434, 455-465, 796, 1038-1040, 1369 |
 | src/Synaptipy/core/analysis/firing\_dynamics.py                     |      270 |        2 |     99% |   765-766 |
-| src/Synaptipy/core/analysis/passive\_properties.py                  |      776 |       16 |     98% |155, 184, 247, 382, 983-995, 1123-1128, 1186-1187 |
+| src/Synaptipy/core/analysis/passive\_properties.py                  |      789 |       26 |     97% |156, 185, 248, 352-356, 393, 759-763, 1005-1017, 1145-1150, 1208-1209 |
 | src/Synaptipy/core/analysis/registry.py                             |       96 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/single\_spike.py                        |      367 |       13 |     96% |154, 177-178, 454, 519, 582-588, 840-842 |
-| src/Synaptipy/core/analysis/synaptic\_events.py                     |      516 |       22 |     96% |285-287, 339, 422, 425-449, 856-857, 976, 992, 1304 |
+| src/Synaptipy/core/analysis/synaptic\_events.py                     |      519 |       22 |     96% |285-287, 339, 422, 425-449, 856-857, 976, 992, 1337 |
 | src/Synaptipy/core/constants.py                                     |       15 |        0 |    100% |           |
 | src/Synaptipy/core/data\_model.py                                   |      288 |        5 |     98% |214-215, 276-278 |
 | src/Synaptipy/core/error\_handler.py                                |       77 |        1 |     99% |       138 |
@@ -47,9 +47,10 @@
 | src/Synaptipy/infrastructure/\_\_init\_\_.py                        |        1 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/exporters/\_\_init\_\_.py              |        2 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/exporters/csv\_exporter.py             |      311 |        2 |     99% |     22-23 |
+| src/Synaptipy/infrastructure/exporters/nwb\_exporter.py             |      361 |      187 |     48% |36-37, 40-96, 103-121, 153-189, 203-224, 256-270, 277-291, 329, 336, 338, 343, 345, 347, 351, 359, 369, 379-380, 400-401, 409, 427-428, 480, 482, 502, 521-523, 528, 561-579, 631-633, 650-665, 676-716, 730, 758-759, 777-778, 785-788 |
 | src/Synaptipy/infrastructure/file\_readers/\_\_init\_\_.py          |        2 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/file\_readers/abf\_reader.py           |        0 |        0 |    100% |           |
-| src/Synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      419 |       51 |     88% |52-53, 153, 166-168, 235, 263-265, 275-277, 407-410, 444-445, 488-493, 508, 529-530, 534-552, 617-618, 826-828, 888-892 |
+| src/Synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      426 |       53 |     88% |52-53, 153, 166-168, 235, 263-265, 275-277, 407-410, 444-445, 488-493, 508, 537-538, 540-541, 545-563, 628-629, 837-839, 899-903 |
 | src/Synaptipy/infrastructure/file\_readers/neo\_source\_handle.py   |       50 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/neo\_patches.py                        |      153 |       18 |     88% |49-50, 58-59, 87-90, 118-120, 128, 174, 187-189, 197-198 |
 | src/Synaptipy/shared/\_\_init\_\_.py                                |       10 |        0 |    100% |           |
@@ -61,7 +62,7 @@
 | src/Synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/Synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
 | src/Synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **7437** |  **462** | **94%** |           |
+| **TOTAL**                                                           | **7821** |  **661** | **92%** |           |
 
 
 ## Setup coverage badge
