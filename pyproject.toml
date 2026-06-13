@@ -7,7 +7,7 @@ name = "synaptipy"
 version = "0.1.5b7"
 description = "Electrophysiology Visualization Suite"
 authors = [
-    {name = "Anzal K Shahul", email = "anzal.ks@gmail.com"}
+    {name = "Anzal K. Shahul", email = "anzal.ks@gmail.com"}
 ]
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
@@ -190,7 +190,6 @@ omit = [
     "*/controllers/analysis_plot_manager.py",
     "*/controllers/file_io_controller.py",
     # Infrastructure with heavy external format dependencies
-    "*/exporters/nwb_exporter.py",
 ]
 
 [tool.coverage.paths]

@@ -50,8 +50,8 @@ for _mod in _MOCK_MODULES:
 # Project information
 # ---------------------------------------------------------------------------
 project = "Synaptipy"
-copyright = f"2024-{_dt.datetime.now().year}, Anzal K Shahul"
-author = "Anzal K Shahul"
+copyright = f"2024-{_dt.datetime.now().year}, Anzal K. Shahul"
+author = "Anzal K. Shahul"
 
 # Retrieve version from the package itself
 try:
@@ -204,7 +204,7 @@ latex_documents = [
         master_doc,
         "Synaptipy.tex",
         "Synaptipy Documentation",
-        "Anzal K Shahul",
+        "Anzal K. Shahul",
         "manual",
     ),
 ]

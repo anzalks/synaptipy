@@ -67,6 +67,13 @@ Intan, Igor Pro, NWB, Open Ephys, and additional formats. NWB 2.x export is prov
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 
+.. note::
+   **Graphics Engine Architecture:** SynaptiPy utilizes *Matplotlib* strictly for offline,
+   high-resolution vector figure exporting and static validation reporting. The live,
+   real-time interactive plotting canvas and workspace window widgets are driven entirely
+   by hardware-accelerated, high-frequency **PyQtGraph** primitives to eliminate common
+   UI canvas rendering lag.
+
 .. grid:: 2
 
    .. grid-item-card:: Tutorial
@@ -166,12 +173,6 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
  development/index
  decisions/index
  manuals/index
-
-.. toctree::
- :maxdepth: 1
- :caption: Development Logs
- :hidden:
-
  development_logs/index
 
 Indices and Tables
