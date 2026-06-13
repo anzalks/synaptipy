@@ -62,11 +62,12 @@ def calculate_my_metric(
         # TODO: document your additional parameters here.
 
     Returns:
-        Dict with your results.  Keys become rows in the results table.
+        Dict with your results. Your main `process()` function should return a dictionary
+        with keys matching the `PluginResult` schema. Keys become rows in the results table.
         Keys starting with ``_`` are hidden from the table (use for plot data).
         A key named ``"error"`` triggers an error message in the GUI.
 
-        Recommended output schema::
+        Recommended output schema (matching PluginResult)::
 
             {
                 "module_used": "my_custom_metric",   # module identifier

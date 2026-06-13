@@ -1,0 +1,291 @@
+src/Synaptipy/core/analysis/synaptic_events.py::find_quiescent_baseline_rms:
+  In doc, not in sig: {'variance', 'Unlike', 'Tuple', 'window', 'considers', 'define', 'robust', 'Identify'}
+src/Synaptipy/core/analysis/synaptic_events.py::calculate_event_charge_dynamic:
+  In doc, not in sig: {'Signed', 'The', 'summating', 'Integrate', 'early'}
+src/Synaptipy/core/analysis/synaptic_events.py::fit_biexponential_decay:
+  In doc, not in sig: {'with', 'Dict', 'Tries', 'string', 'amplitudes', 'Fit'}
+src/Synaptipy/core/analysis/synaptic_events.py::compute_local_pre_event_baseline:
+  In doc, not in sig: {'peak', 'the', 'Compute', 'window', 'and', 'searches', 'begins', 'For'}
+src/Synaptipy/core/analysis/synaptic_events.py::_fit_p1_decay_residual:
+  In doc, not in sig: {'more', 'the', 'Tuple', 'back', 'Fit'}
+  In sig, not in doc: {'sample_rate', 'global_baseline', 'data', 'peak1_idx', 's2_t', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::_measure_ppr_peak:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'baseline', 'resp_samples', 'data', 'onset_s', 'polarity', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::calculate_paired_pulse_ratio:
+  In doc, not in sig: {'baseline', 'Keys', 'Sampling', 'tail', 'Duration', 'Calculate', 'PPR'}
+src/Synaptipy/core/analysis/synaptic_events.py::detect_events_threshold:
+  In doc, not in sig: {'Detect', 'noise', 'activity'}
+  In sig, not in doc: {'rolling_baseline_window_ms', 'threshold', 'refractory_period', 'data', 'quiescent_window_ms', 'polarity', 'use_quiescent_noise_floor', 'artifact_mask', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::run_event_detection_threshold_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::detect_events_template:
+  In doc, not in sig: {'Detect', 'for', 'somatic', 'filtering', 'filtered', 'Kernels'}
+  In sig, not in doc: {'kernel_shape', 'rolling_baseline_window_ms', 'tau_rise', 'data', 'kernel_multipliers', 'tau_decay', 'sampling_rate', 'polarity', 'threshold_std', 'min_event_distance_ms', 'artifact_mask', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::run_event_detection_template_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::_find_stable_baseline_segment:
+  In doc, not in sig: {'Find'}
+  In sig, not in doc: {'sample_rate', 'data', 'window_duration_s', 'step_duration_s'}
+src/Synaptipy/core/analysis/synaptic_events.py::detect_events_baseline_peak_kinetics:
+  In doc, not in sig: {'Minimum', 'Raw', 'Detect', 'Step', 'Window', 'Whether', 'Sampling', 'Custom', 'Detection'}
+src/Synaptipy/core/analysis/synaptic_events.py::run_event_detection_baseline_peak_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/synaptic_events.py::_build_kernel:
+  In doc, not in sig: {'Build'}
+  In sig, not in doc: {'td'}
+src/Synaptipy/core/analysis/registry.py::register:
+  In doc, not in sig: {'documentation', 'return', 'this', 'This', 'when', 'requires', 'def', 'expects_list', 'engine', 'The', 'from', 'Decorator', 'synaptic', 'NumPy'}
+src/Synaptipy/core/analysis/registry.py::register_processor:
+  In doc, not in sig: {'Decorator', 'Alias'}
+  In sig, not in doc: {'name'}
+src/Synaptipy/core/analysis/registry.py::get_function:
+  In doc, not in sig: {'Retrieve', 'The'}
+src/Synaptipy/core/analysis/registry.py::get_metadata:
+  In doc, not in sig: {'Retrieve', 'Dictionary'}
+src/Synaptipy/core/analysis/registry.py::list_registered:
+  In doc, not in sig: {'Get', 'List'}
+src/Synaptipy/core/analysis/registry.py::list_by_type:
+  In doc, not in sig: {'Get', 'List'}
+src/Synaptipy/core/analysis/registry.py::list_preprocessing:
+  In doc, not in sig: {'Get'}
+src/Synaptipy/core/analysis/registry.py::list_analysis:
+  In doc, not in sig: {'Get'}
+src/Synaptipy/core/analysis/registry.py::mark_core_snapshot:
+  In doc, not in sig: {'Call', 'Record', 'uses'}
+src/Synaptipy/core/analysis/registry.py::unregister_plugins:
+  In doc, not in sig: {'Safe', 'Remove', 'last'}
+src/Synaptipy/core/analysis/registry.py::clear:
+  In doc, not in sig: {'Clear'}
+src/Synaptipy/core/analysis/registry.py::update_default_params:
+  In doc, not in sig: {'Update'}
+src/Synaptipy/core/analysis/registry.py::reset_to_factory:
+  In doc, not in sig: {'Reset'}
+  In sig, not in doc: {'analysis_name'}
+src/Synaptipy/core/analysis/passive_properties.py::apply_ljp_correction:
+  In doc, not in sig: {'unnecessary', 'Corrected', 'Return', 'When'}
+src/Synaptipy/core/analysis/passive_properties.py::_sag_nan_payload:
+  In doc, not in sig: {'Return'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_rmp:
+  In doc, not in sig: {'samples', 'baseline', 'Attributes', 'Calculate', 'fits', 'length'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_baseline_stats:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'start_time', 'voltage', 'time', 'end_time'}
+src/Synaptipy/core/analysis/passive_properties.py::find_stable_baseline:
+  In doc, not in sig: {'Find'}
+  In sig, not in doc: {'sample_rate', 'data', 'window_duration_s', 'step_duration_s'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_rin:
+  In doc, not in sig: {'Three', 'the', 'negative', 'Attributes', 'Arbitrary', 'where', 'window', 'from', 'Amplitude', 'Duration', 'The', 'Calculate', 'Uses', 'samples', 'excluded'}
+src/Synaptipy/core/analysis/passive_properties.py::_fit_vc_transient_decay:
+  In doc, not in sig: {'Fit'}
+  In sig, not in doc: {'decay_segment', 't_decay', 'i_peak', 'cm_charge_pf', 'rs_mohm'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_vc_transient_parameters:
+  In doc, not in sig: {'Time', 'Keys', 'Amplitude', 'Duration', 'tau_c', 'All', 'whose', 'Fit', 'and'}
+src/Synaptipy/core/analysis/passive_properties.py::_extrapolate_rs_at_t0:
+  In doc, not in sig: {'Extrapolates', 'Fit', 'instantaneous', 'Falls'}
+  In sig, not in doc: {'t_art', 'artifact_window_ms', 'v_art'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_cc_series_resistance_fast:
+  In doc, not in sig: {'Time', 'the', 'Estimate', 'Keys', 'series', 'Membrane', 'derived', 'Amplitude', 'Duration', 'When', 'Values', 'Input', 'derive'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_conductance:
+  In doc, not in sig: {'Calculate'}
+  In sig, not in doc: {'parameters', 'baseline_window', 'time_vector', 'voltage_step', 'response_window', 'current_trace'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_iv_curve:
+  In doc, not in sig: {'Calculate'}
+  In sig, not in doc: {'time_vectors', 'sweeps', 'baseline_window', 'response_window', 'current_steps'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_tau:
+  In doc, not in sig: {'avoiding', 'dict', 'hyperpolarising', 'values', 'hippocampal', 'prevent', 'amplitude', 'Exponential', 'Onset', 'most', 'window', 'second', 'Duration', 'Calculate', 'applied', 'and', 'capacitive', 'For'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_sag_ratio:
+  In doc, not in sig: {'Calculate'}
+  In sig, not in doc: {'baseline_window', 'time_vector', 'peak_smoothing_ms', 'response_peak_window', 'voltage_trace', 'rebound_window_ms', 'response_steady_state_window'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_capacitance_cc:
+  In doc, not in sig: {'input', 'the', 'approximation', 'Membrane', 'Without', 'When', 'Calculate'}
+src/Synaptipy/core/analysis/passive_properties.py::_fit_cm_from_transient:
+  In doc, not in sig: {'Fit'}
+  In sig, not in doc: {'t_trans', 't_decay', 'rs_mohm', 'voltage_step_amplitude_mv', 'delta_i', 'i_decay'}
+src/Synaptipy/core/analysis/passive_properties.py::calculate_capacitance_vc:
+  In doc, not in sig: {'exponential', 'Dict', 'Method', 'Falls', 'Calculate'}
+src/Synaptipy/core/analysis/passive_properties.py::_coerce_trial_lists:
+  In doc, not in sig: {'Normalise'}
+  In sig, not in doc: {'data_list', 'time_list'}
+src/Synaptipy/core/analysis/passive_properties.py::_resolve_sweep_baseline:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'window_duration', 'sweep_time', 'baseline_start', 'step_duration', 'auto_detect', 'sampling_rate', 'rs_artifact_blanking_ms', 'sweep_data', 'baseline_end'}
+src/Synaptipy/core/analysis/passive_properties.py::run_rmp_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'data_list', 'sampling_rate', 'time_list'}
+src/Synaptipy/core/analysis/passive_properties.py::run_sag_ratio_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/passive_properties.py::run_rin_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/passive_properties.py::run_tau_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/passive_properties.py::run_iv_curve_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'data_list', 'sampling_rate', 'time_list'}
+src/Synaptipy/core/analysis/passive_properties.py::run_capacitance_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/firing_dynamics.py::calculate_fi_curve:
+  In doc, not in sig: {'Calculate', 'Dictionary'}
+src/Synaptipy/core/analysis/firing_dynamics.py::run_excitability_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'data_list', 'sampling_rate', 'time_list'}
+src/Synaptipy/core/analysis/firing_dynamics.py::calculate_bursts_logic:
+  In doc, not in sig: {'This', 'Detect', 'BurstResult', 'define', 'temporal'}
+  In sig, not in doc: {'parameters'}
+src/Synaptipy/core/analysis/firing_dynamics.py::analyze_spikes_and_bursts:
+  In doc, not in sig: {'Detect'}
+  In sig, not in doc: {'max_isi_start', 'parameters', 'burst_isi_fraction', 'threshold', 'dynamic_burst', 'data', 'sampling_rate', 'refractory_ms', 'max_isi_end', 'time'}
+src/Synaptipy/core/analysis/firing_dynamics.py::run_burst_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/firing_dynamics.py::calculate_train_dynamics:
+  In doc, not in sig: {'Compute'}
+src/Synaptipy/core/analysis/firing_dynamics.py::run_train_dynamics_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/batch_engine.py::_worker_process_file:
+  In doc, not in sig: {'This', 'List', 'OOM', 'Process', 'recursive', 'that'}
+src/Synaptipy/core/analysis/batch_engine.py::__init__:
+  In doc, not in sig: {'Initialize', 'Values'}
+src/Synaptipy/core/analysis/batch_engine.py::cancel:
+  In doc, not in sig: {'Request'}
+src/Synaptipy/core/analysis/batch_engine.py::update_performance_settings:
+  In doc, not in sig: {'Dynamically', 'This', 'immediately', 'Reads'}
+src/Synaptipy/core/analysis/batch_engine.py::list_available_analyses:
+  In doc, not in sig: {'Get', 'List'}
+src/Synaptipy/core/analysis/batch_engine.py::get_analysis_info:
+  In doc, not in sig: {'Get', 'Dictionary'}
+src/Synaptipy/core/analysis/batch_engine.py::_sanitise_value:
+  In doc, not in sig: {'Tuple', 'Sanitise'}
+  In sig, not in doc: {'key', 'value'}
+src/Synaptipy/core/analysis/batch_engine.py::_sanitise_ndarray:
+  In doc, not in sig: {'Summarise'}
+  In sig, not in doc: {'key', 'value'}
+src/Synaptipy/core/analysis/batch_engine.py::_sanitise_long_list:
+  In doc, not in sig: {'Summarise'}
+  In sig, not in doc: {'key', 'value'}
+src/Synaptipy/core/analysis/batch_engine.py::_sanitise_result_for_export:
+  In doc, not in sig: {'Cleaned', 'Make', 'tables', 'under', 'object', 'both'}
+  In sig, not in doc: {'result'}
+src/Synaptipy/core/analysis/batch_engine.py::_recording_metadata:
+  In doc, not in sig: {'Includes', 'that', 'Extract'}
+  In sig, not in doc: {'recording'}
+src/Synaptipy/core/analysis/batch_engine.py::_order_columns:
+  In doc, not in sig: {'Reorder'}
+  In sig, not in doc: {'df'}
+src/Synaptipy/core/analysis/batch_engine.py::_append_batch_error_log:
+  In doc, not in sig: {'Append', 'Writing', 'aborted'}
+src/Synaptipy/core/analysis/batch_engine.py::_run_batch_parallel:
+  In doc, not in sig: {'Distribute', 'are', 'through', 'OOM', 'Each'}
+  In sig, not in doc: {'files', 'pipeline_config', 'channel_filter', 'progress_callback'}
+src/Synaptipy/core/analysis/batch_engine.py::run_batch:
+  In doc, not in sig: {'blocked', 'pandas', 'Run', 'When'}
+  In sig, not in doc: {'cross_file_average'}
+src/Synaptipy/core/analysis/batch_engine.py::_run_cross_file_average:
+  In doc, not in sig: {'with', 'then', 'Aggregate', 'The'}
+  In sig, not in doc: {'files', 'pipeline_config', 'channel_filter', 'progress_callback'}
+src/Synaptipy/core/analysis/batch_engine.py::_run_batch_sequential:
+  In doc, not in sig: {'Sequential'}
+  In sig, not in doc: {'files', 'progress_callback', 'rs_tolerance', 'channel_filter', 'pipeline_config'}
+src/Synaptipy/core/analysis/batch_engine.py::_process_task:
+  In doc, not in sig: {'Tuple', 'Process'}
+src/Synaptipy/core/analysis/epoch_manager.py::duration:
+  In doc, not in sig: {'Epoch'}
+src/Synaptipy/core/analysis/epoch_manager.py::contains:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'t'}
+src/Synaptipy/core/analysis/epoch_manager.py::epochs:
+  In doc, not in sig: {'Sorted'}
+src/Synaptipy/core/analysis/epoch_manager.py::epoch_names:
+  In doc, not in sig: {'Names'}
+src/Synaptipy/core/analysis/epoch_manager.py::add_manual_epoch:
+  In doc, not in sig: {'Add', 'ValueError', 'The'}
+src/Synaptipy/core/analysis/epoch_manager.py::from_ttl:
+  In doc, not in sig: {'Detects', 'then', 'List'}
+  In sig, not in doc: {'post_stim_s', 'ttl_threshold', 'ttl_data', 'min_inter_epoch_s', 'pre_stim_s', 'stim_name', 'washout_name', 'time', 'baseline_name'}
+src/Synaptipy/core/analysis/epoch_manager.py::get_epoch:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'name'}
+src/Synaptipy/core/analysis/epoch_manager.py::epochs_at_time:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'t'}
+src/Synaptipy/core/analysis/epoch_manager.py::get_epoch_slices:
+  In doc, not in sig: {'Dict', 'Epochs', 'Extract'}
+src/Synaptipy/core/analysis/epoch_manager.py::remove_epoch:
+  In doc, not in sig: {'Remove'}
+  In sig, not in doc: {'name'}
+src/Synaptipy/core/analysis/epoch_manager.py::clear:
+  In doc, not in sig: {'Remove'}
+src/Synaptipy/core/analysis/cross_file_utils.py::_resolve_effective_trials:
+  In doc, not in sig: {'Return', 'items'}
+  In sig, not in doc: {'parsed_trials', 'item', 'channel'}
+src/Synaptipy/core/analysis/cross_file_utils.py::extract_per_file_trace:
+  In doc, not in sig: {'handle', 'across', 'contribute', 'Files', 'are', 'Load'}
+src/Synaptipy/core/analysis/cross_file_utils.py::get_cross_file_average:
+  In doc, not in sig: {'different', 'with', 'own', 'Ordered', 'shared', 'decreases', 'Delegates', 'where', 'Compute', 'scientifically', 'Adapter', 'whose', 'that'}
+src/Synaptipy/core/analysis/cross_file_utils.py::build_averaged_recording:
+  In doc, not in sig: {'calls', 'path', 'all', 'obtained', 'Recording', 'Short', 'Build', 'Populated', 'Adapter', 'For'}
+src/Synaptipy/core/analysis/cross_file_utils.py::_make_mfa_label:
+  In doc, not in sig: {'replaced', 'Derive', 'Takes', 'Iterable'}
+src/Synaptipy/core/analysis/cross_file_utils.py::average_padded_trials:
+  In doc, not in sig: {'artificial', 'Shorter', 'Compute', 'all', 'produces', 'Flat'}
+src/Synaptipy/core/analysis/single_spike.py::detect_spikes_threshold:
+  In doc, not in sig: {'Minimum', 'Number', 'Detect', 'first', 'Attributes', 'Converted', 'spike', 'Arbitrary', 'Convert', 'voltage', 'crossing', 'within', 'fewer', 'upward'}
+src/Synaptipy/core/analysis/single_spike.py::calculate_spike_features:
+  In doc, not in sig: {'Calculate', 'window', 'above'}
+src/Synaptipy/core/analysis/single_spike.py::calculate_isi:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'spike_times'}
+src/Synaptipy/core/analysis/single_spike.py::analyze_multi_sweep_spikes:
+  In doc, not in sig: {'Detect'}
+  In sig, not in doc: {'time_vector', 'threshold', 'refractory_samples', 'data_trials', 'dvdt_threshold'}
+src/Synaptipy/core/analysis/single_spike.py::calculate_dvdt:
+  In doc, not in sig: {'the', 'Calculate', 'which', 'next', 'Computes'}
+src/Synaptipy/core/analysis/single_spike.py::get_phase_plane_trajectory:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'sampling_rate', 'sigma_ms', 'voltage'}
+src/Synaptipy/core/analysis/single_spike.py::detect_threshold_kink:
+  In doc, not in sig: {'Detect'}
+  In sig, not in doc: {'kink_slope', 'search_window_ms', 'peak_indices', 'voltage', 'sampling_rate', 'dvdt_threshold'}
+src/Synaptipy/core/analysis/single_spike.py::run_spike_detection_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'threshold', 'refractory_period', 'data', 'ahp_window', 'sampling_rate', 'onset_lookback', 'peak_search_window', 'time', 'dvdt_threshold'}
+src/Synaptipy/core/analysis/single_spike.py::phase_plane_analysis_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'voltage', 'sampling_rate', 'sigma_ms', 'time', 'dvdt_threshold'}
+src/Synaptipy/core/analysis/single_spike.py::_window_min:
+  In doc, not in sig: {'Return'}
+  In sig, not in doc: {'end_s', 'start_s'}
+src/Synaptipy/core/analysis/evoked_responses.py::extract_ttl_epochs:
+  In doc, not in sig: {'Tuple', 'Extract'}
+  In sig, not in doc: {'ttl_data', 'auto_threshold', 'time', 'threshold'}
+src/Synaptipy/core/analysis/evoked_responses.py::_find_spikes_in_window:
+  In doc, not in sig: {'Vectorised'}
+  In sig, not in doc: {'spikes', 't_end', 't_start'}
+src/Synaptipy/core/analysis/evoked_responses.py::calculate_optogenetic_sync:
+  In doc, not in sig: {'Correlate'}
+src/Synaptipy/core/analysis/evoked_responses.py::_peak_pos_s:
+  In doc, not in sig: {'Searches', 'value', 'Tuple', 'Return', 'matching'}
+src/Synaptipy/core/analysis/evoked_responses.py::calculate_paired_pulse_ratio:
+  In doc, not in sig: {'Calculate', 'baseline', 'Dict', 'when', 'yielding', 'under', 'Without', 'Should', 'Algorithm', 'response', 'stimulus'}
+src/Synaptipy/core/analysis/evoked_responses.py::run_opto_sync_wrapper:
+  In doc, not in sig: {'Correlates', 'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/evoked_responses.py::run_ppr_wrapper:
+  In doc, not in sig: {'Wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/evoked_responses.py::calculate_stimulus_train_stp:
+  In doc, not in sig: {'preceding', 'Dictionary', 'yield', 'Compute', 'window', 'excluded', 'For'}
+src/Synaptipy/core/analysis/evoked_responses.py::run_stimulus_train_stp_wrapper:
+  In doc, not in sig: {'generated', 'Wrapper', 'series', 'Stimulus', 'wrapper'}
+  In sig, not in doc: {'sampling_rate', 'data', 'time'}
+src/Synaptipy/core/analysis/evoked_responses.py::_response_peak:
+  In doc, not in sig: {'Data', 'Return'}
+  In sig, not in doc: {'stim_onset_s', 'baseline'}

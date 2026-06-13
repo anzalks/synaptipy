@@ -46,6 +46,8 @@ def valid_session_metadata(mock_recording_for_export):
         "lab": "Test Lab",
         "institution": "Test Uni",
         "session_id": "SESSION001",
+        "subject_id": "SUBJ_123",
+        "device_description": "Axopatch 200B",
     }
 
 
@@ -98,8 +100,12 @@ def test_nwb_export_success(nwb_exporter_instance, mock_recording_for_export, va
 def test_nwb_export_missing_metadata(nwb_exporter_instance, mock_recording_for_export, tmp_path):
     """Test export fails if required metadata is missing."""
     output_file = tmp_path / "test_fail.nwb"
-    invalid_metadata = {"identifier": "xyz"}  # Missing description and start time
-    with pytest.raises(ValueError, match="Missing required NWB session metadata"):
+    invalid_metadata = {
+        "identifier": "xyz",
+        "subject_id": "SUBJ_123",
+        "device_description": "Axopatch",
+    }  # Missing description and start time
+    with pytest.raises(ValueError, match="Missing required NWB MINDS session metadata"):
         nwb_exporter_instance.export(mock_recording_for_export, output_file, invalid_metadata)
 
 

@@ -234,7 +234,7 @@ class SessionManager(QObject):
             log.warning("performance_settings must be a dict, got %s.", type(settings).__name__)
             return
         self._performance_settings.update(settings)
-        log.debug("SessionManager: performance_settings updated: %s", self._performance_settings)
+        log.debug(f"SessionManager: performance_settings updated: {self._performance_settings}")
         self.preferences_changed.emit(dict(self._performance_settings))
 
     def emit_preferences_changed(self) -> None:

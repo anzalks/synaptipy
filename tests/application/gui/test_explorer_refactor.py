@@ -84,8 +84,11 @@ def test_explorer_plotting(explorer_tab, qtbot):
     explorer_tab._display_recording(recording)
 
     # Check Plot Rebuild
-    assert "ch1" in explorer_tab.plot_canvas.channel_plots
-    assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) > 0
+    def check_load():
+        assert "ch1" in explorer_tab.plot_canvas.channel_plots
+        assert len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"]) > 0
+
+    qtbot.waitUntil(check_load, timeout=20000)
 
     # Pooling: overlay mode should not allocate new PlotDataItems on redraw
     overlay_pool = len(explorer_tab.plot_canvas.channel_plot_data_items["ch1"])

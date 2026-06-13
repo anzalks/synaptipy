@@ -300,6 +300,9 @@ class NWBExporter:
         output_path: Path,
         session_metadata: Dict[str, Any],
         analysis_results: Optional[Dict[str, Any]] = None,
+        subject_id: Optional[str] = None,
+        session_start_time: Optional[datetime] = None,
+        device_description: Optional[str] = None,
     ):
         """
         Exports the given Recording object to an NWB file.
@@ -335,24 +338,31 @@ class NWBExporter:
             raise ValueError("Recording object is missing 'channels' dictionary or is not a dictionary.")
 
         # --- Inject required metadata defaults for DANDI compliance ---
+        session_metadata = dict(session_metadata)  # avoid mutating caller's dict
+        if subject_id:
+            session_metadata["subject_id"] = subject_id
+        if session_start_time:
+            session_metadata["session_start_time"] = session_start_time
+        if device_description:
+            session_metadata["device_description"] = device_description
+
         # Subject ID and Species are required by NWB/DANDI validators.
         if not session_metadata.get("subject_id"):
-            session_metadata = dict(session_metadata)  # avoid mutating caller's dict
-            session_metadata.setdefault("subject_id", "unknown_subject")
-            log.warning("NWB export: 'subject_id' not provided; defaulting to 'unknown_subject'.")
+            raise ValueError("NWB export requires a valid 'subject_id' MINDS metadata field.")
         if not session_metadata.get("species"):
             session_metadata.setdefault("species", "unknown species")
             log.warning("NWB export: 'species' not provided; defaulting to 'unknown species'.")
         if not session_metadata.get("device_name"):
-            session_metadata = dict(session_metadata)
             session_metadata.setdefault("device_name", "Generic Amplifier")
             log.warning("NWB export: 'device_name' not provided; defaulting to 'Generic Amplifier'.")
+        if not session_metadata.get("device_description"):
+            raise ValueError("NWB export requires a valid 'device_description' MINDS metadata field.")
 
         # --- Validate Metadata & Prepare NWBFile ---
-        required_keys = ["session_description", "identifier", "session_start_time"]
+        required_keys = ["session_description", "identifier", "session_start_time", "subject_id", "device_description"]
         missing_keys = [key for key in required_keys if key not in session_metadata or not session_metadata[key]]
         if missing_keys:
-            raise ValueError(f"Missing required NWB session metadata: {missing_keys}")
+            raise ValueError(f"Missing required NWB MINDS session metadata: {missing_keys}")
 
         start_time = session_metadata["session_start_time"]
         if not isinstance(start_time, datetime):

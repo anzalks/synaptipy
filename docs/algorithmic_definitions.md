@@ -308,7 +308,7 @@ refractory period between crossings. The peak is the local maximum within
 
 *(See also §15.2 for the full maximum-curvature method; cited in Sekerli et al., 2004.)*
 *(Default threshold $\theta_{dV/dt}$ = 20 V/s, calibrated on rodent cortical pyramidal neurons; Bean, 2007.)*
-*(Artifact ceiling: 300 V/s — above this value the rising phase is flagged as non-physiological; Naundorf et al., 2006.)*
+*(Artifact ceiling: 300 V/s - above this value the rising phase is flagged as non-physiological; Naundorf et al., 2006.)*
 
 The action potential onset is defined as the first point where
 
@@ -533,7 +533,12 @@ p < 0.003 under Gaussian noise assumption.)*
 Uses sliding-window variance minimisation to find the most stable baseline
 segment, estimates noise as $\hat{\sigma} = 1.4826 \times \text{MAD}$
 (Hampel, 1974; Rousseeuw & Croux, 1993) in that region, and detects peaks
-with prominence $\ge 0.5 \times \text{threshold}$.
+with a specified prominence. The prominence is determined by `peak_prominence_factor`
+if provided; otherwise, it defaults to $\ge 0.5 \times \text{threshold}$.
+
+A low-pass Butterworth filter can be applied prior to peak detection by
+specifying `filter_freq_hz`. This attenuates high-frequency noise that might
+cause spurious local maxima.
 
 ### 7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)
 
@@ -747,6 +752,10 @@ eliminating group delay distortion critical for preserving AP waveform timing:
 | Notch | $H(z)$ from `scipy.signal.iirnotch` at centre $f_0$, quality $Q$ |
 | Comb | Cascaded notch at $f_0, 2f_0, \ldots, Nf_0$ |
 
+**Unit Enforcement:** All inputs passing through the `ProcessingPipeline` and
+signal processors are strictly validated and tracked using the `quantities` package
+to prevent dimensional mismatches.
+
 ### 14.2 Baseline subtraction
 
 | Method | Formula |
@@ -944,7 +953,7 @@ relative to the neighboring baseline band identifies mains interference.
   modified periodograms. *IEEE Transactions on Audio and Electroacoustics*,
   15(2), 70-73.
   [doi:10.1109/TAU.1967.1161901](https://doi.org/10.1109/TAU.1967.1161901)
-  - **Used in:** §14.4 trace quality assessment — line noise detection at
+  - **Used in:** §14.4 trace quality assessment - line noise detection at
     50/60 Hz via `scipy.signal.welch`; also used in the `compute_psd` utility
     in `signal_processor.py`.
 
@@ -954,7 +963,7 @@ relative to the neighboring baseline band identifies mains interference.
   estimation. *Journal of the American Statistical Association*, 69(346),
   383-393.
   [doi:10.1080/01621459.1974.10482962](https://doi.org/10.1080/01621459.1974.10482962)
-  - **Used in:** §7.1, §7.2, §7.3 — the 1.4826 consistency factor applied to
+  - **Used in:** §7.1, §7.2, §7.3 - the 1.4826 consistency factor applied to
     the Median Absolute Deviation (MAD) to obtain a Gaussian-consistent
     standard deviation estimate: $\hat{\sigma} = 1.4826 \times \text{MAD}$.
     The factor 1.4826 = $1 / \Phi^{-1}(0.75)$ ensures the estimator is
@@ -964,7 +973,7 @@ relative to the neighboring baseline band identifies mains interference.
   absolute deviation. *Journal of the American Statistical Association*,
   88(424), 1273-1283.
   [doi:10.1080/01621459.1993.10476408](https://doi.org/10.1080/01621459.1993.10476408)
-  - **Used in:** MAD noise estimator (§7.1, §7.2, §7.3) — robustness
+  - **Used in:** MAD noise estimator (§7.1, §7.2, §7.3) - robustness
     properties and breakdown point of the MAD as a scale estimator for
     contaminated electrophysiology data.
 
@@ -974,7 +983,7 @@ relative to the neighboring baseline band identifies mains interference.
   and small cell effects in patch-clamp analysis. *Journal of Membrane
   Biology*, 121(2), 101-117.
   [doi:10.1007/BF01870526](https://doi.org/10.1007/BF01870526)
-  - **Used in:** §16 Step A — liquid junction potential subtraction
+  - **Used in:** §16 Step A - liquid junction potential subtraction
     $V_{\text{true}} = V_{\text{recorded}} - \text{LJP}$. Defines the
     correction procedure and its biophysical limitations for voltage-dependent
     analyses.
@@ -983,7 +992,7 @@ relative to the neighboring baseline band identifies mains interference.
   channel. II. Gating current experiments. *Journal of General Physiology*,
   70(5), 567-590.
   [doi:10.1085/jgp.70.5.567](https://doi.org/10.1085/jgp.70.5.567)
-  - **Used in:** §16 Step B — P/N leak subtraction protocol. Armstrong and
+  - **Used in:** §16 Step B - P/N leak subtraction protocol. Armstrong and
     Bezanilla introduced the P/N subtraction technique for isolating
     non-linear gating currents by scaling and subtracting linear leak sweeps.
 
@@ -991,7 +1000,7 @@ relative to the neighboring baseline band identifies mains interference.
   channel. I. Sodium current experiments. *Journal of General Physiology*,
   70(5), 549-566.
   [doi:10.1085/jgp.70.5.549](https://doi.org/10.1085/jgp.70.5.549)
-  - **Used in:** §16 Step B — companion paper establishing the P/N
+  - **Used in:** §16 Step B - companion paper establishing the P/N
     subtraction protocol for leak correction in voltage-clamp recordings.
 
 ### Foundational neuroscience
@@ -1000,7 +1009,7 @@ relative to the neighboring baseline band identifies mains interference.
   of membrane current and its application to conduction and excitation in
   nerve. *Journal of Physiology*, 117(4), 500-544.
   [doi:10.1113/jphysiol.1952.sp004764](https://doi.org/10.1113/jphysiol.1952.sp004764)
-  - **Used in:** §15.2 — foundational mathematical model of action potential
+  - **Used in:** §15.2 - foundational mathematical model of action potential
     generation via voltage-gated Na$^+$ and K$^+$ conductances. Provides the
     biophysical basis for AP threshold detection, dV/dt methods, and Na$^+$
     channel inactivation effects on spike trains.
@@ -1009,14 +1018,14 @@ relative to the neighboring baseline band identifies mains interference.
   cation currents: From molecules to physiological function. *Annual Review of
   Physiology*, 65, 453-480.
   [doi:10.1146/annurev.physiol.65.092101.142734](https://doi.org/10.1146/annurev.physiol.65.092101.142734)
-  - **Used in:** §2.2 and §4 — physiological context for HCN channel-mediated
+  - **Used in:** §2.2 and §4 - physiological context for HCN channel-mediated
     $I_h$ current, voltage sag during hyperpolarisation, and the distinction
     between peak and steady-state input resistance as a diagnostic for $I_h$.
 
 - **Neher, E. (1992).** Correction for liquid junction potentials in patch
   clamp experiments. *Methods in Enzymology*, 207, 123-131.
   [doi:10.1016/0076-6879(92)07008-C](https://doi.org/10.1016/0076-6879(92)07008-C)
-  - **Used in:** §16 Step A — standard reference for LJP correction in
+  - **Used in:** §16 Step A - standard reference for LJP correction in
     whole-cell patch-clamp. Provides the accepted procedure for calculating
     and applying the junction potential offset.
 

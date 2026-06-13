@@ -211,6 +211,8 @@ screen. The default widths are 320 px (left), 800 px (centre), and 360 px
 - **Plot Mode**:
   - "Overlay All + Avg": Shows all trials with the average highlighted
   - "Cycle Single Trial": Shows one trial at a time with navigation controls
+- **Performance**:
+  - `_force_opaque_trials`: For datasets with >10 overlapping trials, you can enable "Force Opaque Trials" in Plot Preferences to improve rendering performance.
 - **Cross-File Trial Averaging**:
   While in "Cycle Single Trial" mode, you can manually build a grand average
   from any combination of files and trials across the entire session:

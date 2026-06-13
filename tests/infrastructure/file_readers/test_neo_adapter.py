@@ -217,7 +217,7 @@ def test_pyabf_fallback_rescue_import_error(mocker, neo_adapter_instance, tmp_pa
     # Remove pyabf from sys.modules so the import fails
     mocker.patch.dict("sys.modules", {"pyabf": None})
 
-    with pytest.raises(FileReadError, match="synaptipy\\[formats\\]"):
+    with pytest.raises(FileReadError, match="ABF rescue failed: pyabf not installed."):
         neo_adapter_instance.read_recording(abf_file)
 
 
