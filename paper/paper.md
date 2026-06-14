@@ -133,7 +133,7 @@ Within the current landscape of intracellular electrophysiology software, Synapt
 
 # Availability
 
-SynaptiPy is an open-source tool licensed under the MIT License.
+SynaptiPy is an open-source tool licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 - **Source Code**: [https://github.com/anzalks/synaptipy](https://github.com/anzalks/synaptipy)
 - **Documentation**: [https://synaptipy.readthedocs.io/](https://synaptipy.readthedocs.io/)
 - **PyPI Distribution**: `pip install synaptipy`
