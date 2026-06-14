@@ -337,26 +337,23 @@ def update_paper_md(t1_md: str, t2_md: str) -> None:
     text = paper_path.read_text(encoding="utf-8")
 
     T1_START = "**Extended Data Table 1:"
-    T2_START = "**Extended Data Table 2:"
+    T1_START = "**Extended Data Table 1:"
 
     idx1s = text.find(T1_START)
-    idx2s = text.find(T2_START)
-    if idx1s == -1 or idx2s == -1:
-        print("  WARNING: Could not locate table placeholders in paper.md.")
+    if idx1s == -1:
+        print("  WARNING: Could not locate Table 1 placeholder in paper.md.")
         return
 
-    # Find end of Table 2 block: next double-newline after the footnote '*' line
-    search_from = idx2s + len(T2_START)
-    t2_end = text.find("\n\n", search_from)
-    while t2_end != -1:
-        if text[idx2s:t2_end].strip().endswith("*"):
-            break
-        t2_end = text.find("\n\n", t2_end + 2)
-    if t2_end == -1:
-        t2_end = min(idx2s + 3000, len(text))
-
-    # Replace: everything between Table 1 start and end of Table 2
-    new_text = text[:idx1s] + t1_md + "\n\n" + t2_md + text[t2_end:]
+    import re
+    # Find the next section heading (### or #) after T1_START
+    match = re.search(r'\n#{1,3}\s', text[idx1s:])
+    if match:
+        end_idx = idx1s + match.start()
+    else:
+        end_idx = len(text)
+        
+    # Replace the chunk with both tables
+    new_text = text[:idx1s] + t1_md + "\n\n" + t2_md + "\n" + text[end_idx:]
     paper_path.write_text(new_text, encoding="utf-8")
     print(f"  paper.md updated → {paper_path}")
 
