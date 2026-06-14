@@ -176,6 +176,8 @@ Fitted via bounded non-linear least squares (`scipy.optimize.curve_fit`).
 An initial artifact-blanking period of `artifact_blanking_ms` is excluded from
 the fit window.
 
+**Fit Quality Gate**: To prevent returning biologically invalid metrics from unstable numerical fits, SynaptiPy enforces a strict fit quality gate. Fits with a coefficient of determination $R^2 < 0.8$ are rejected, and $\tau$ is returned as `NaN`.
+
 ### 3.2 Bi-exponential model
 
 $$
@@ -306,18 +308,19 @@ refractory period between crossings. The peak is the local maximum within
 
 ### 6.2 Onset detection (dV/dt-based)
 
-*(See also §15.2 for the full maximum-curvature method; cited in Sekerli et al., 2004.)*
 *(Default threshold $\theta_{dV/dt}$ = 20 V/s, calibrated on rodent cortical pyramidal neurons; Bean, 2007.)*
 *(Artifact ceiling: 300 V/s - above this value the rising phase is flagged as non-physiological; Naundorf et al., 2006.)*
 
-The action potential onset is defined as the first point where
+The action potential onset (threshold) is defined strictly as the first point where
 
 $$
 \frac{dV}{dt} > \theta_{dV/dt}
 $$
 
-in the `onset_lookback` window preceding the spike peak. The derivative is
-computed via `numpy.gradient(V) / dt` and reported in V/s.
+in the `onset_lookback` window preceding the spike peak. The discrete derivative is
+computed via `numpy.gradient(V) / dt` and reported in V/s. This strict gradient thresholding 
+replaces highly-sensitive second derivative ($d^2V/dt^2$) curvature methods to align natively 
+with IPFX standard scaling algorithms.
 
 ### 6.3 Amplitude
 
@@ -389,9 +392,10 @@ $$
 
 where $V_{\text{fAHP,trough}}$ is the fast AHP minimum within `fahp_window_ms`
 (default 5 ms) after the action potential peak, and $V_{\text{ADP,peak}}$ is
-the largest local maximum in the subsequent `adp_search_window_ms` (default
-20 ms). A point $V_i$ is a local maximum if $V_i > V_{i-1}$ and
-$V_i > V_{i+1}$.
+the largest local maximum in the dynamic search window. This search window
+is bounded strictly by either `adp_search_window_ms` (default 20 ms) or
+the exact onset of the **next** action potential, whichever occurs first.
+A point $V_i$ is a local maximum if $V_i > V_{i-1}$ and $V_i > V_{i+1}$.
 
 If no local maximum is found (monotonic recovery), $A_{\text{ADP}} = \text{NaN}$.
 

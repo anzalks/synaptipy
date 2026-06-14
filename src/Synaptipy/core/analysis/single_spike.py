@@ -227,15 +227,15 @@ def calculate_spike_features(  # noqa: C901
     rise_time_10_90, decay_time_90_10, fahp_depth, mahp_depth,
     ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
 
-    AP threshold is detected via the peak of d2V/dt2 in the pre-spike lookback
-    window (maximum curvature method).  Falls back to the first dV/dt crossing
-    above ``dvdt_threshold`` when d2V/dt2 gives a boundary result.
+    AP threshold (onset) is strictly defined as the first point in the pre-spike 
+    lookback window where the discrete derivative dV/dt exceeds the specified 
+    ``dvdt_threshold`` (default 20 V/s). This ensures alignment with IPFX scaling.
 
     Args:
         data: 1-D voltage array (mV).
         time: Corresponding time array (s).
         spike_indices: Array of sample indices for each spike peak.
-        dvdt_threshold: Fallback dV/dt threshold for AP onset (V/s).
+        dvdt_threshold: The dV/dt threshold for AP onset (V/s). Default 20.0.
         ahp_window_sec: Duration of AHP/ADP search window (s).
         onset_lookback: Lookback window before each spike peak (s).
         fahp_window_ms: (start, end) of fast-AHP window after peak (ms).
