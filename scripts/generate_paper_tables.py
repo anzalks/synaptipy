@@ -85,13 +85,13 @@ class SynaptiPyRunner:
                     "baseline_end": max(0.01, s_t - 0.01),
                     "response_start": max(s_t + 0.01, e_t - 0.15),
                     "response_end": max(s_t + 0.02, e_t - 0.01),
-                    "stimulus_amplitude_pa": -20.0,
+                    "current_amplitude": -20.0,
                 },
             },
             {
                 "analysis": "tau_analysis",
                 "scope": "all_trials",
-                "params": {"stimulus_start": s_t, "fit_duration": min(0.3, e_t - s_t), "model": "mono"}
+                "params": {"stim_start_time": s_t, "fit_duration": 0.05, "model": "mono"}
             }
         ]
         return engine.run_batch([file_path], pipeline)
@@ -176,7 +176,8 @@ class IPFXRunner:
         out = {}
         try:
             out["v_baseline"] = float(subT.baseline_voltage(t, v, start_t))
-            rin, tau = subT.time_constant(t, v, i, start_t, end_t)
+            rin = subT.input_resistance([t], [i], [v], start_t, end_t)
+            tau = subT.time_constant(t, v, i, start_t, end_t)
             out["input_resistance"] = float(rin)
             out["tau"] = float(tau) * 1000.0
         except Exception:

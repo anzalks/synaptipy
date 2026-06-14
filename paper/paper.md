@@ -96,8 +96,8 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
 | Resting Membrane Potential (mV) | 17 | -0.4900 (*p* 0.0459) | -0.6107 (*p* 0.0092) | +39.804 mV | +39.705 mV | Pearson correlation, two-sided *p* |
-| Input Resistance (MΩ) | 0 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
-| Membrane Time Constant (ms) | 1 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
+| Input Resistance (MΩ) | 17 | 0.2691 (*p* 0.2963) | 0.3410 (*p* 0.1805) | -77.591 MΩ | +46.501 MΩ | Pearson correlation, two-sided *p* |
+| Membrane Time Constant (ms) | 7 | 0.5401 (*p* 0.3474) | 0.7423 (*p* 0.0560) | -1.689 ms | -5.782 ms | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*
 
