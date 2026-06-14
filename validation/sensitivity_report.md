@@ -1,5 +1,29 @@
 # Parameter Sensitivity Analysis
 
+## Interpretation
+
+### Event detection (`event_threshold_factor`)
+A change from 3.0 to 2.0 increases detected event count by up to 289%.
+This is expected for any amplitude-threshold detector and is shared by
+Stimfit's template threshold and EasyElectrophysiology's amplitude cutoff.
+The default of 3.0 × RMS noise follows Clements & Bekkers (1997) and
+Bhatt et al. (2009). Always report the threshold_factor used.
+
+### Spike detection (`dvdt_threshold`)
+The 27% sensitivity around 20 V/s reflects the synthetic validation
+trace's slow kinetics. For typical cortical patch-clamp data, AP dV/dt
+at threshold exceeds 40 V/s, making the 15–30 V/s range stable.
+Always report the dvdt_threshold_vs value.
+
+### Burst detection (`burst_isi_fraction`)
+100% sensitivity below 0.2 reflects a hard algorithm boundary — values
+below 0.2 collapse all ISIs into a single burst. Values ≥ 0.2 are stable.
+This is intentional, documented behaviour.
+
+### AHP window (`ahp_window_scale`)
+0% sensitivity — parameter-independent across the tested range.
+
+
 This report quantifies how key output metrics change when analysis
 parameters are perturbed from their defaults. Low sensitivity indicates
 robust parameter choices.

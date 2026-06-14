@@ -21,6 +21,10 @@ authors:
 version: "0.1.5b7"
 date-released: "2026-05-24"
 license: "AGPL-3.0-or-later"
+identifiers:
+  - type: other
+    value: "RRID:SCR_XXXXXX"
+    description: "SciCrunch Research Resource Identifier (replace after registration at scicrunch.org/resources)"
 repository-code: "https://github.com/anzalks/synaptipy"
 keywords:
   - electrophysiology
