@@ -3,11 +3,14 @@ import efel
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
 from pathlib import Path
+import warnings
 
+from ipfx.feature_extractor import SpikeFeatureExtractor
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 from Synaptipy.core.analysis.single_spike import detect_spikes_threshold, calculate_spike_features
 
 def main():
+    warnings.filterwarnings("ignore")
     repo_root = Path(__file__).resolve().parent.parent
     abf_path = repo_root / "examples" / "data" / "2023_04_11_0021.abf"
     
@@ -24,11 +27,14 @@ def main():
     dt = 1.0 / fs
     
     metrics = {
-        'Peak Voltage': {'s': [], 'e': []},
-        'Half-Width': {'s': [], 'e': []},
-        'Max dV/dt': {'s': [], 'e': []},
-        'Min dV/dt': {'s': [], 'e': []}
+        'Peak Voltage': {'s': [], 'e': [], 'i': []},
+        'Half-Width': {'s': [], 'e': [], 'i': []},
+        'Max dV/dt': {'s': [], 'e': [], 'i': []},
+        'Min dV/dt': {'s': [], 'e': [], 'i': []}
     }
+
+    # IPFX initialization
+    ipfx_ext = SpikeFeatureExtractor(start=0.01, end=0.49, filter=9.9)
 
     # Process each trial (sweep)
     for trial in ch.data_trials:
@@ -42,18 +48,20 @@ def main():
         trace = {
             'T': t * 1000.0,  # eFEL expects ms
             'V': v,           # mV
-            'stim_start': [100.0],
-            'stim_end': [900.0]
+            'stim_start': [10.0],
+            'stim_end': [490.0]
         }
         efel_features = ['peak_voltage', 'AP_duration_half_width', 'AP_rise_rate', 'AP_fall_rate']
         efel_res = efel.get_feature_values([trace], efel_features)
         
-        if spikes.value > 0 and efel_res and efel_res[0]:
+        # --- IPFX Analysis ---
+        ipfx_res = ipfx_ext.process(t, v, np.zeros_like(v))
+        
+        if spikes.value > 0 and efel_res and efel_res[0] and not ipfx_res.empty:
             features_list = calculate_spike_features(v, t, spikes.spike_indices)
             r = efel_res[0]
             
-            # Match spikes between SynaptiPy and eFEL
-            # They should detect the same number of spikes, but let's be safe and zip up to min count
+            # eFEL
             e_peaks = r.get('peak_voltage', [])
             e_hws = r.get('AP_duration_half_width', [])
             e_maxdvs = r.get('AP_rise_rate', [])
@@ -64,7 +72,13 @@ def main():
             if e_maxdvs is None: e_maxdvs = []
             if e_mindvs is None: e_mindvs = []
             
-            n_spikes = min(len(features_list), len(e_peaks), len(e_hws), len(e_maxdvs), len(e_mindvs))
+            # IPFX
+            i_peaks = ipfx_res['peak_v'].values
+            i_hws = ipfx_res['width'].values * 1000.0  # s to ms
+            i_maxdvs = ipfx_res['upstroke'].values
+            i_mindvs = ipfx_res['downstroke'].values
+            
+            n_spikes = min(len(features_list), len(e_peaks), len(e_hws), len(e_maxdvs), len(e_mindvs), len(i_peaks))
             
             for i in range(n_spikes):
                 s_peak = v[spikes.spike_indices[i]]
@@ -73,29 +87,34 @@ def main():
                 s_mindv = features_list[i].get('min_dvdt', np.nan)
                 
                 if not np.isnan(s_hw) and not np.isnan(s_maxdv) and not np.isnan(s_mindv):
-                    metrics['Peak Voltage']['e'].append(e_peaks[i])
+                    # Peak V
                     metrics['Peak Voltage']['s'].append(s_peak)
+                    metrics['Peak Voltage']['e'].append(e_peaks[i])
+                    metrics['Peak Voltage']['i'].append(i_peaks[i])
                     
-                    metrics['Half-Width']['e'].append(e_hws[i])
+                    # Half-Width
                     metrics['Half-Width']['s'].append(s_hw)
+                    metrics['Half-Width']['e'].append(e_hws[i])
+                    metrics['Half-Width']['i'].append(i_hws[i])
                     
-                    metrics['Max dV/dt']['e'].append(e_maxdvs[i])
+                    # Max dV/dt
                     metrics['Max dV/dt']['s'].append(s_maxdv)
+                    metrics['Max dV/dt']['e'].append(e_maxdvs[i])
+                    metrics['Max dV/dt']['i'].append(i_maxdvs[i])
                     
-                    metrics['Min dV/dt']['e'].append(e_mindvs[i])
+                    # Min dV/dt
                     metrics['Min dV/dt']['s'].append(s_mindv)
+                    metrics['Min dV/dt']['e'].append(e_mindvs[i])
+                    metrics['Min dV/dt']['i'].append(i_mindvs[i])
 
     if not metrics['Peak Voltage']['s']:
         print("No spikes detected for validation!")
         return
 
-    # Apply eNeuro plotting styles
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
-    plt.rcParams['axes.spines.top'] = False
-    plt.rcParams['axes.spines.right'] = False
+    from plot_utils import set_paper_styles, add_panel_label, COLORS
+    set_paper_styles()
 
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 11))
     axes = axes.flatten()
     
     panel_labels = ['A', 'B', 'C', 'D']
@@ -103,52 +122,62 @@ def main():
     
     stats_output = []
 
+    def format_p(p):
+        if p < 0.0001: return "< 0.0001"
+        return f"= {p:.4f}"
+
     for i, (name, data) in enumerate(metrics.items()):
         ax = axes[i]
         
-        x = np.array(data['e'])
-        y = np.array(data['s'])
+        y_syn = np.array(data['s'])
+        x_efel = np.array(data['e'])
+        x_ipfx = np.array(data['i'])
         
         # Calculate statistics
-        r, p = pearsonr(x, y)
-        mean_bias = np.mean(y - x)
-        std_bias = np.std(y - x)
+        r_e, p_e = pearsonr(x_efel, y_syn)
+        mb_e = np.mean(y_syn - x_efel)
         
-        stats_output.append(f"{name}: Pearson r={r:.4f}, p={p:.4e}, Bias={mean_bias:.4f} {units[i]}")
+        r_i, p_i = pearsonr(x_ipfx, y_syn)
+        mb_i = np.mean(y_syn - x_ipfx)
+        
+        stats_output.append(f"{name} (eFEL): r={r_e:.4f}, p={p_e:.4e}, Bias={mb_e:.4f}")
+        stats_output.append(f"{name} (IPFX): r={r_i:.4f}, p={p_i:.4e}, Bias={mb_i:.4f}")
 
         # Scatter plot
-        ax.scatter(x, y, color='#1565C0', alpha=0.7, s=50, edgecolor='k')
+        ax.scatter(x_efel, y_syn, color=COLORS["blue"], alpha=0.7, s=50, edgecolor='k', label='eFEL')
+        ax.scatter(x_ipfx, y_syn, color=COLORS["orange"], alpha=0.7, s=50, edgecolor='k', label='IPFX', marker='^')
         
         # Unity line
-        min_val = min(np.min(x), np.min(y))
-        max_val = max(np.max(x), np.max(y))
+        min_val = min(np.min(x_efel), np.min(x_ipfx), np.min(y_syn))
+        max_val = max(np.max(x_efel), np.max(x_ipfx), np.max(y_syn))
         padding = (max_val - min_val) * 0.1
         min_val -= padding
         max_val += padding
         
         ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.5)
         
-        # Linear fit
-        m, b = np.polyfit(x, y, 1)
-        ax.plot([min_val, max_val], [m*min_val+b, m*max_val+b], color='#B71C1C')
+        # Linear fits
+        me, be = np.polyfit(x_efel, y_syn, 1)
+        ax.plot([min_val, max_val], [me*min_val+be, me*max_val+be], color=COLORS["blue"], alpha=0.5)
+        
+        mi, bi = np.polyfit(x_ipfx, y_syn, 1)
+        ax.plot([min_val, max_val], [mi*min_val+bi, mi*max_val+bi], color=COLORS["orange"], alpha=0.5)
 
-        ax.set_xlabel(f"eFEL {name} ({units[i]})", fontsize=11)
+        ax.set_xlabel(f"Benchmark {name} ({units[i]})", fontsize=11)
         ax.set_ylabel(f"SynaptiPy {name} ({units[i]})", fontsize=11)
         
-        # Add Panel Label (A, B, C, D)
-        ax.text(-0.15, 1.05, panel_labels[i], transform=ax.transAxes, 
-                fontsize=16, fontweight='bold', va='top', ha='right')
-
-        # Format p-value to decimal notation
-        if p < 0.0001:
-            p_str = "< 0.0001"
-        else:
-            p_str = f"= {p:.4f}"
+        # Add Panel Label
+        add_panel_label(ax, panel_labels[i])
 
         # Text box for stats
-        stats_text = f"$r$ = {r:.4f} ($p {p_str}$)\nBias = {mean_bias:.2f} {units[i]}"
+        stats_text = (
+            f"eFEL: Pearson $r$ = {r_e:.4f} ($p$ = {format_p(p_e)}) | Bias = {mb_e:.2f} {units[i]}\n"
+            f"IPFX: Pearson $r$ = {r_i:.4f} ($p$ = {format_p(p_i)}) | Bias = {mb_i:.2f} {units[i]}"
+        )
         ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, va='top', ha='left',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='#E0E0E0'))
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='#E0E0E0'), fontsize=9)
+        
+        ax.legend(loc='lower right')
 
     # Save
     out_path = repo_root / "paper" / "results" / "biological_validation.png"

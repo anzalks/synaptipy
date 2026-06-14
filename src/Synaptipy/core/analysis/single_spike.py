@@ -340,28 +340,9 @@ def calculate_spike_features(  # noqa: C901
     idx_fall_50_rel = np.min(masked_idxs_post, axis=1)
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
-    lev_50_flat = lev_50.ravel()
-    rise_frac = np.zeros(n_spikes)
-    fall_frac = np.zeros(n_spikes)
-    for k in np.where(valid_width)[0]:
-        ri = idx_rise_50_rel[k]
-        if ri + 1 < waveforms.shape[1]:
-            y_lo, y_hi = waveforms[k, ri], waveforms[k, ri + 1]
-            denom = y_hi - y_lo
-            # Use np.nan instead of arbitrary 0.5 to signal interpolation failure
-            rise_frac[k] = (lev_50_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
-        fi = idx_fall_50_rel[k]
-        if fi - 1 >= 0:
-            y_hi2, y_lo2 = waveforms[k, fi - 1], waveforms[k, fi]
-            denom2 = y_hi2 - y_lo2
-            # Use np.nan instead of arbitrary 0.5 to signal interpolation failure
-            fall_frac[k] = (lev_50_flat[k] - y_lo2) / denom2 if abs(denom2) > 1e-12 else np.nan
-
+    
     half_widths[valid_width] = (
-        (
-            (idx_fall_50_rel[valid_width] - fall_frac[valid_width])
-            - (idx_rise_50_rel[valid_width] + rise_frac[valid_width])
-        )
+        (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width])
         * dt
         * 1000.0
     )
@@ -375,24 +356,9 @@ def calculate_spike_features(  # noqa: C901
     valid_90 = np.any(mask_90, axis=1)
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
-    lev_10_flat = amp_10
-    lev_90_flat = amp_90
-    rise_frac_10 = np.zeros(n_spikes)
-    rise_frac_90 = np.zeros(n_spikes)
-    for k in np.where(valid_rise)[0]:
-        ri10 = idx_10_rel[k]
-        if ri10 + 1 < waveforms.shape[1]:
-            y_lo, y_hi = waveforms[k, ri10], waveforms[k, ri10 + 1]
-            denom = y_hi - y_lo
-            rise_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
-        ri90 = idx_90_rel[k]
-        if ri90 + 1 < waveforms.shape[1]:
-            y_lo, y_hi = waveforms[k, ri90], waveforms[k, ri90 + 1]
-            denom = y_hi - y_lo
-            rise_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
-
+    
     rise_times[valid_rise] = (
-        ((idx_90_rel[valid_rise] + rise_frac_90[valid_rise]) - (idx_10_rel[valid_rise] + rise_frac_10[valid_rise]))
+        (idx_90_rel[valid_rise] - idx_10_rel[valid_rise])
         * dt
         * 1000.0
     )
@@ -404,25 +370,9 @@ def calculate_spike_features(  # noqa: C901
     valid_dec_10 = np.any(mask_dec_10, axis=1)
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
-    decay_frac_90 = np.zeros(n_spikes)
-    decay_frac_10 = np.zeros(n_spikes)
-    for k in np.where(valid_decay)[0]:
-        di90 = idx_dec_90_rel[k]
-        if di90 - 1 >= 0:
-            y_hi, y_lo = waveforms[k, di90 - 1], waveforms[k, di90]
-            denom = y_hi - y_lo
-            decay_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
-        di10 = idx_dec_10_rel[k]
-        if di10 - 1 >= 0:
-            y_hi, y_lo = waveforms[k, di10 - 1], waveforms[k, di10]
-            denom = y_hi - y_lo
-            decay_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
-
+    
     decay_times[valid_decay] = (
-        (
-            (idx_dec_10_rel[valid_decay] - decay_frac_10[valid_decay])
-            - (idx_dec_90_rel[valid_decay] - decay_frac_90[valid_decay])
-        )
+        (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay])
         * dt
         * 1000.0
     )
@@ -530,9 +480,15 @@ def calculate_spike_features(  # noqa: C901
     # --- max/min dV/dt ---
     raw_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
     
-    # Apply a 5-point moving average to smooth the derivative, matching standard 
-    # eFEL stencil logic to prevent single-sample noise spikes from inflating the rate.
-    kernel = np.ones(5) / 5.0
+    # Apply a dynamic sampling-rate dependent rolling window (standard ~0.1 ms)
+    # to smooth the derivative, matching standard IPFX/eFEL smoothing behavior
+    # and preventing single-sample noise spikes from inflating the rate.
+    window_ms = 0.1
+    window_size = max(3, int(window_ms / (dt * 1000.0)))
+    if window_size % 2 == 0:
+        window_size += 1
+        
+    kernel = np.ones(window_size) / window_size
     from scipy.ndimage import convolve1d
     full_dvdt = convolve1d(raw_dvdt, kernel, axis=1, mode='nearest')
     

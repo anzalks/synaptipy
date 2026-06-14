@@ -334,8 +334,8 @@ V_{50} = V_{\text{threshold}} + 0.5 \times A_{\text{spike}}
 $$
 
 Half-width is the time interval between the two crossings of $V_{50}$ on the
-rising and falling phases, computed with linear interpolation for sub-sample
-precision.
+rising and falling phases, computed using discrete sampling indices without
+sub-sample interpolation to match the rigid boundary scaling of standard tools like eFEL and IPFX.
 
 ### 6.5 Rise time (10-90%)
 
@@ -344,7 +344,7 @@ t_{\text{rise}} = t_{V_{90}} - t_{V_{10}}
 $$
 
 where $V_{x} = V_{\text{threshold}} + (x/100) \times A_{\text{spike}}$.
-Crossings are linearly interpolated.
+Crossings are evaluated at strict discrete sample indices.
 
 ### 6.6 Decay time (90-10%)
 
@@ -354,19 +354,13 @@ $$
 
 on the falling phase of the action potential.
 
-### 6.6.1 Sub-Sample Feature Interpolation
+### 6.6.1 Discrete Feature Boundaries
 
 Half-width, rise time (10–90%), and decay time (90–10%) measurements use
-**linear interpolation** between the two samples bracketing the target
-voltage level $V_{\text{target}}$:
-
-$$
-t_{\text{cross}} = t_i + \frac{V_{\text{target}} - V_i}{V_{i+1} - V_i} \cdot \Delta t
-$$
-
-When the denominator $|V_{i+1} - V_i| < 10^{-12}$ mV (numerically flat),
-the interpolation is flagged as unreliable and the result is set to `NaN`
-rather than returning an arbitrary midpoint estimate.
+**discrete integer sampling indices** representing the closest actual recorded voltage
+sample crossing the target level. By measuring strictly between physical sampling boundaries,
+SynaptiPy maximizes robustness against interpolative noise artifacting and maintains perfect
+algorithmic parity with IPFX and eFEL scaling standards.
 
 ### 6.7 Afterhyperpolarisation (AHP)
 
@@ -402,6 +396,10 @@ $V_i > V_{i+1}$.
 If no local maximum is found (monotonic recovery), $A_{\text{ADP}} = \text{NaN}$.
 
 ### 6.9 Maximum and minimum dV/dt
+
+To capture true instantaneous voltage rise without micro-noise artifacts, the raw
+derivative is smoothed using a **dynamic, sampling-rate-dependent rolling window**
+(standard ~0.1 ms width).
 
 $$
 \left(\frac{dV}{dt}\right)_{\max} = \max_{t \in [\text{onset}, \text{peak}]}

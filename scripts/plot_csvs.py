@@ -5,22 +5,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Apply eNeuro aesthetic standards
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
-plt.rcParams['axes.spines.top'] = False
-plt.rcParams['axes.spines.right'] = False
-plt.rcParams['axes.labelsize'] = 11
-plt.rcParams['axes.titlesize'] = 12
-plt.rcParams['xtick.labelsize'] = 10
-plt.rcParams['ytick.labelsize'] = 10
-plt.rcParams['legend.fontsize'] = 9
+# Import unified plot formatting
+from plot_utils import set_paper_styles, add_panel_label, COLORS
+
+set_paper_styles()
 
 base = Path("paper/results")
-
-def add_panel_label(ax, label):
-    ax.text(-0.1, 1.05, label, transform=ax.transAxes, 
-            fontsize=14, fontweight='bold', va='top', ha='right')
 
 # ---------------------------------------------------------
 # Figure 1: benchmark_scaling.png
@@ -31,7 +21,7 @@ with open(base / "benchmark_results.csv", "r") as f:
         bench_res.append(row)
 
 datasets = list(dict.fromkeys(r["dataset"] for r in bench_res))
-colors = {"0021 spike_detection": "#1565C0", "0022 event_detection": "#B71C1C"}
+colors = {"0021 spike_detection": COLORS["blue"], "0022 event_detection": COLORS["red"]}
 markers = {"0021 spike_detection": "o", "0022 event_detection": "s"}
 panel_labels = ["A", "B", "C", "D"]
 
@@ -44,14 +34,14 @@ for row_idx, label in enumerate(datasets):
     err_lo = [float(r["median_time_s"]) - float(r["min_time_s"]) for r in rows]
     err_hi = [float(r["max_time_s"]) - float(r["median_time_s"]) for r in rows]
 
-    color = colors.get(label, "#424242")
+    color = colors.get(label, COLORS["dark_grey"])
     marker = markers.get(label, "o")
 
     # Time plot
     ax_time = axes1[row_idx, 0]
-    ax_time.errorbar(workers, times, yerr=[err_lo, err_hi], fmt=marker+'-', color=color, ecolor="#BDBDBD", capsize=5, linewidth=2, markersize=7, label="Median wall-clock time")
+    ax_time.errorbar(workers, times, yerr=[err_lo, err_hi], fmt=marker+'-', color=color, ecolor=COLORS["light_grey"], capsize=5, linewidth=2, markersize=7, label="Median wall-clock time (± min-max)")
     baseline = times[0]
-    ax_time.plot(workers, [baseline / w for w in workers], "--", color="#9E9E9E", linewidth=1, label="Ideal T\u2081/N")
+    ax_time.plot(workers, [baseline / w for w in workers], "--", color=COLORS["grey"], linewidth=1, label="Ideal T\u2081/N")
     ax_time.set_xlabel("CPU Cores (max_workers)")
     ax_time.set_ylabel("Elapsed Time (s)")
     add_panel_label(ax_time, panel_labels[row_idx * 2])
@@ -102,8 +92,8 @@ hi_sw = [software_data[n]["p95_ms"] - software_data[n]["median_ms"] for n in lev
 fig2, (ax_abs, ax_ratio) = plt.subplots(1, 2, figsize=(12, 4.5))
 
 # Line plot
-ax_abs.errorbar(levels, med_gl, yerr=[lo_gl, hi_gl], fmt="o-", color="#1565C0", ecolor="#90CAF9", capsize=4, linewidth=2, markersize=6, label="OpenGL (Metal)")
-ax_abs.errorbar(levels, med_sw, yerr=[lo_sw, hi_sw], fmt="s--", color="#B71C1C", ecolor="#EF9A9A", capsize=4, linewidth=2, markersize=6, label="Software (QPainter)")
+ax_abs.errorbar(levels, med_gl, yerr=[lo_gl, hi_gl], fmt="o-", color=COLORS["blue"], ecolor=COLORS["light_blue"], capsize=4, linewidth=2, markersize=6, label="OpenGL (Median ± 5th/95th pct)")
+ax_abs.errorbar(levels, med_sw, yerr=[lo_sw, hi_sw], fmt="s--", color=COLORS["red"], ecolor=COLORS["light_red"], capsize=4, linewidth=2, markersize=6, label="Software (Median ± 5th/95th pct)")
 ax_abs.set_xlabel("Overlaid trials (N)")
 ax_abs.set_ylabel("Per-frame update time (ms)")
 ax_abs.set_xticks(levels)
@@ -113,8 +103,8 @@ add_panel_label(ax_abs, "A")
 # Bar chart
 width = 0.35
 x = np.arange(len(levels))
-ax_ratio.bar(x - width/2, med_sw, width, label="Software", color="#B71C1C", yerr=[lo_sw, hi_sw], capsize=4, error_kw={"ecolor": "#EF9A9A"})
-ax_ratio.bar(x + width/2, med_gl, width, label="OpenGL", color="#1565C0", yerr=[lo_gl, hi_gl], capsize=4, error_kw={"ecolor": "#90CAF9"})
+ax_ratio.bar(x - width/2, med_sw, width, label="Software (Median ± 5th/95th pct)", color=COLORS["red"], yerr=[lo_sw, hi_sw], capsize=4, error_kw={"ecolor": COLORS["light_red"]})
+ax_ratio.bar(x + width/2, med_gl, width, label="OpenGL (Median ± 5th/95th pct)", color=COLORS["blue"], yerr=[lo_gl, hi_gl], capsize=4, error_kw={"ecolor": COLORS["light_blue"]})
 ax_ratio.set_xticks(x)
 ax_ratio.set_xticklabels([str(n) for n in levels])
 ax_ratio.set_xlabel("Overlaid trials (N)")
@@ -163,8 +153,8 @@ gl_hi = [e["p95_ms"] - e["median_ms"] for e in gl_ov]
 fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(12, 4.5))
 
 # Line plot
-ax3a.errorbar(levels3, sw_med, yerr=[sw_lo, sw_hi], fmt="s--", color="#B71C1C", ecolor="#EF9A9A", capsize=4, linewidth=2, markersize=6, label="Software (QPainter)")
-ax3a.errorbar(levels3, gl_med, yerr=[gl_lo, gl_hi], fmt="o-", color="#1565C0", ecolor="#90CAF9", capsize=4, linewidth=2, markersize=6, label="OpenGL (Metal)")
+ax3a.errorbar(levels3, sw_med, yerr=[sw_lo, sw_hi], fmt="s--", color=COLORS["red"], ecolor=COLORS["light_red"], capsize=4, linewidth=2, markersize=6, label="Software (Median ± 5th/95th pct)")
+ax3a.errorbar(levels3, gl_med, yerr=[gl_lo, gl_hi], fmt="o-", color=COLORS["blue"], ecolor=COLORS["light_blue"], capsize=4, linewidth=2, markersize=6, label="OpenGL (Median ± 5th/95th pct)")
 ax3a.set_xlabel("Overlaid trials (N)")
 ax3a.set_ylabel("_update_plot() time (ms)")
 ax3a.set_xticks(levels3)
@@ -173,8 +163,8 @@ add_panel_label(ax3a, "A")
 
 # Bar chart
 x3 = np.arange(len(levels3))
-ax3b.bar(x3 - width/2, sw_med, width, label="Software", color="#B71C1C", yerr=[sw_lo, sw_hi], capsize=4, error_kw={"ecolor": "#EF9A9A"})
-ax3b.bar(x3 + width/2, gl_med, width, label="OpenGL", color="#1565C0", yerr=[gl_lo, gl_hi], capsize=4, error_kw={"ecolor": "#90CAF9"})
+ax3b.bar(x3 - width/2, sw_med, width, label="Software (Median ± 5th/95th pct)", color=COLORS["red"], yerr=[sw_lo, sw_hi], capsize=4, error_kw={"ecolor": COLORS["light_red"]})
+ax3b.bar(x3 + width/2, gl_med, width, label="OpenGL (Median ± 5th/95th pct)", color=COLORS["blue"], yerr=[gl_lo, gl_hi], capsize=4, error_kw={"ecolor": COLORS["light_blue"]})
 ax3b.set_xticks(x3)
 ax3b.set_xticklabels([str(n) for n in levels3])
 ax3b.set_xlabel("Overlaid trials (N)")

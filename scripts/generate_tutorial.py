@@ -274,8 +274,8 @@ Automated detection and comprehensive parameterization of action potentials.
   More robust against baseline drift than amplitude thresholding.
 - **Per-spike features** (vectorized NumPy):
   - Amplitude = V_peak − V_threshold
-  - Half-width at 50% amplitude (linear interpolation)
-  - Rise time 10–90%, Decay time 90–10% (sub-sample precision)
+  - Half-width at 50% amplitude (discrete boundaries)
+  - Rise time 10–90%, Decay time 90–10%
   - AHP depth = V_threshold − V_min_post (Savitzky-Golay smoothed)
   - AHP duration = repolarization to AHP recovery
   - ADP amplitude = local max after AHP trough

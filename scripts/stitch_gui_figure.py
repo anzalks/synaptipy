@@ -1,94 +1,64 @@
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import shutil
+import numpy as np
+
+# Import unified plot formatting
+from plot_utils import set_paper_styles, add_panel_label
 
 def main():
+    set_paper_styles()
+    
     repo_root = Path(__file__).resolve().parent.parent
     docs_dir = repo_root / "docs" / "tutorial" / "screenshots"
     out_dir = repo_root / "paper" / "results"
     
-    # 1. Copy the overview image to paper/results
+    # 1. Ensure the overview image exists
     overview_src = repo_root / "docs" / "_build" / "html" / "_images" / "synaptipy_overview.png"
     if overview_src.exists():
         shutil.copy(overview_src, out_dir / "synaptipy_overview.png")
     else:
-        # Create a dummy image if it doesn't exist
-        dummy = Image.new("RGB", (1280, 800), "lightgray")
-        draw = ImageDraw.Draw(dummy)
-        try:
-            font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 60)
-        except:
-            font = ImageFont.load_default()
-        draw.text((400, 350), "Overview Placeholder", fill="black", font=font)
-        dummy.save(out_dir / "synaptipy_overview.png")
+        # Create dummy image if needed
+        dummy = np.ones((800, 1280, 3)) * 0.9 # Light gray
+        plt.imsave(out_dir / "synaptipy_overview.png", dummy)
         
-    img_a = Image.open(out_dir / "synaptipy_overview.png")
-    img_b = Image.open(docs_dir / "explorer_tab.png")
-    img_c = Image.open(docs_dir / "analyser_spike_analysis.png")
-    img_d = Image.open(docs_dir / "exporter_tab.png")
+    img_a_path = out_dir / "synaptipy_overview.png"
+    img_b_path = docs_dir / "explorer_tab.png"
+    img_c_path = docs_dir / "analyser_spike_analysis.png"
+    img_d_path = docs_dir / "exporter_tab.png"
     
-    # Target width for the whole canvas
-    target_width = 1600
+    paths = [img_a_path, img_b_path, img_c_path, img_d_path]
+    labels = ["A", "B", "C", "D"]
     
-    # 2x2 grid layout
-    padding = 30
-    panel_width = (target_width - padding) // 2
+    # Load images
+    images = []
+    for p in paths:
+        if p.exists():
+            images.append(mpimg.imread(str(p)))
+        else:
+            # Fallback to empty gray if missing
+            images.append(np.ones((800, 1280, 3)) * 0.9)
+            
+    # Create 2x2 grid using Matplotlib to ensure exact typography match
+    # A standard 12x11 inch layout matches the validation plot size
+    fig, axes = plt.subplots(2, 2, figsize=(12, 11))
+    axes = axes.flatten()
     
-    # Resize all to panel_width
-    def resize_img(img, width):
-        ratio = width / img.width
-        height = int(img.height * ratio)
-        return img.resize((width, height), Image.Resampling.LANCZOS)
+    for i, ax in enumerate(axes):
+        ax.imshow(images[i])
+        ax.axis('off')  # Hide spines, ticks, and labels
+        # Add standardized panel label!
+        # x=-0.05 is used instead of -0.15 because images have no Y-axis tick labels
+        add_panel_label(ax, labels[i], x=-0.05, y=1.05) 
         
-    img_a = resize_img(img_a, panel_width)
-    img_b = resize_img(img_b, panel_width)
-    img_c = resize_img(img_c, panel_width)
-    img_d = resize_img(img_d, panel_width)
+    plt.tight_layout(w_pad=2.0, h_pad=2.0)
     
-    row1_height = max(img_a.height, img_b.height)
-    row2_height = max(img_c.height, img_d.height)
-    
-    # Margin for letters on the OUTSIDE
-    top_margin = 80
-    left_margin = 80
-    bottom_margin = 20
-    right_margin = 20
-    
-    canvas_width = left_margin + panel_width*2 + padding + right_margin
-    canvas_height = top_margin + row1_height + padding + row2_height + bottom_margin
-    
-    canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
-    
-    # Paste images
-    # Row 1
-    canvas.paste(img_a, (left_margin, top_margin))
-    canvas.paste(img_b, (left_margin + panel_width + padding, top_margin))
-    # Row 2
-    canvas.paste(img_c, (left_margin, top_margin + row1_height + padding))
-    canvas.paste(img_d, (left_margin + panel_width + padding, top_margin + row1_height + padding))
-    
-    # Draw letters OUTSIDE the images
-    draw = ImageDraw.Draw(canvas)
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 72)
-    except IOError:
-        font = ImageFont.load_default()
-        
-    # Letters are offset to the top-left of each image block
-    # y-coordinate is the TOP of the text. Font is 72pt, so we need at least 72px above the image!
-    labels = [
-        ("A", (10, top_margin - 75)),
-        ("B", (left_margin + panel_width + padding - 60, top_margin - 75)),
-        ("C", (10, top_margin + row1_height + padding - 75)),
-        ("D", (left_margin + panel_width + padding - 60, top_margin + row1_height + padding - 75)),
-    ]
-    
-    for text, (x, y) in labels:
-        # Draw shadow
-        draw.text((x, y), text, fill="black", font=font)
-        
     final_path = out_dir / "gui_workflow.png"
-    canvas.save(final_path)
+    plt.savefig(final_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
     print(f"Stitched figure saved to {final_path}")
 
 if __name__ == "__main__":
