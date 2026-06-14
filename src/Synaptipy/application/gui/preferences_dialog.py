@@ -244,8 +244,8 @@ class PreferencesDialog(QtWidgets.QDialog):
         gpu_layout = QtWidgets.QVBoxLayout(gpu_group)
 
         gpu_desc = QtWidgets.QLabel(
-            "SynaptiPy supports experimental hardware acceleration via OpenGL. "
-            "If you experience application crashes, graphical glitches, or are running on Linux/headless environments, disable this."
+            "SynaptiPy supports experimental hardware acceleration via OpenGL. If you experience application "
+            "crashes, graphical glitches, or are running on Linux/headless environments, disable this."
         )
         gpu_desc.setWordWrap(True)
         gpu_desc.setStyleSheet("color: gray; font-size: 11px;")
