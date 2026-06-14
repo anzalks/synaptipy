@@ -91,7 +91,7 @@ class SynaptiPyRunner:
             {
                 "analysis": "tau_analysis",
                 "scope": "all_trials",
-                "params": {"stim_start_time": s_t, "fit_duration": 0.05, "model": "mono", "min_r_squared": 0.0}
+                "params": {"stim_start_time": s_t, "fit_duration": 0.05, "model": "mono"}
             }
         ]
         return engine.run_batch([file_path], pipeline)
@@ -189,6 +189,9 @@ class IPFXRunner:
 def build_table1() -> pd.DataFrame:
     file_path = DATA_DIR / "2023_04_11_0021.abf"
     syn_df = SynaptiPyRunner.run_spikes(file_path)
+    if "channel_index" in syn_df.columns:
+        syn_df = syn_df[syn_df["channel_index"] == 0]
+        
     abf = pyabf.ABF(file_path)
     sr = abf.dataRate
     dt = 1.0 / sr
@@ -278,7 +281,7 @@ def build_table2() -> pd.DataFrame:
                 "ipfx_rmp_mV": ipfx_r.get("v_baseline", np.nan),
                 
                 "syn_rin_mohm": float(row.get("rin_mohm", np.nan)),
-                "efel_rin_mohm": efel_r.get("ohmic_input_resistance", np.nan),
+                "efel_rin_mohm": efel_r.get("ohmic_input_resistance", np.nan) * 1000.0,
                 "ipfx_rin_mohm": ipfx_r.get("input_resistance", np.nan),
                 
                 "syn_tau_ms": float(row.get("tau_ms", np.nan)),

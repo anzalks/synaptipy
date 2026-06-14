@@ -81,13 +81,13 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
 | Peak voltage (mV) | 13 | 1.0000 (*p* < 0.0001) | 0.9998 (*p* < 0.0001) | +0.000 mV | +0.229 mV | Pearson correlation, two-sided *p* |
-| AP threshold (mV) | 13 | 0.8195 (*p* 0.0006) | 0.7641 (*p* 0.0024) | +32.092 mV | +31.696 mV | Pearson correlation, two-sided *p* |
-| AP amplitude (mV) | 13 | 0.9588 (*p* < 0.0001) | 0.9560 (*p* < 0.0001) | -32.092 mV | -31.467 mV | Pearson correlation, two-sided *p* |
-| AP half-width (ms) | 13 | 0.1691 (*p* 0.5808) | -0.1502 (*p* 0.6243) | -0.244 ms | -0.193 ms | Pearson correlation, two-sided *p* |
+| AP threshold (mV) | 13 | 0.7652 (*p* 0.0023) | 0.7778 (*p* 0.0017) | +1.312 mV | +0.916 mV | Pearson correlation, two-sided *p* |
+| AP amplitude (mV) | 13 | 0.9696 (*p* < 0.0001) | 0.9702 (*p* < 0.0001) | -1.312 mV | -0.686 mV | Pearson correlation, two-sided *p* |
+| AP half-width (ms) | 13 | 0.8843 (*p* < 0.0001) | 0.8306 (*p* 0.0004) | -0.018 ms | +0.033 ms | Pearson correlation, two-sided *p* |
 | Max dV/dt (V/s) | 13 | 0.9981 (*p* < 0.0001) | 0.9933 (*p* < 0.0001) | -57.323 V/s | +140.247 V/s | Pearson correlation, two-sided *p* |
 | Min dV/dt (V/s) | 13 | 0.9997 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | +1.095 V/s | -29.109 V/s | Pearson correlation, two-sided *p* |
-| Fast AHP depth (mV) | 13 | -0.6141 (*p* 0.0256) | -0.8355 (*p* 0.0004) | +32.381 mV | +31.640 mV | Pearson correlation, two-sided *p* |
-| ADP amplitude (mV) | 13 | -0.1797 (*p* 0.5568) | -0.5595 (*p* 0.0468) | +70.714 mV | +70.959 mV | Pearson correlation, two-sided *p* |
+| Fast AHP depth (mV) | 13 | 0.1035 (*p* 0.7364) | 0.3393 (*p* 0.2567) | +1.601 mV | +0.860 mV | Pearson correlation, two-sided *p* |
+| ADP amplitude (mV) | 13 | -0.2861 (*p* 0.3433) | -0.5222 (*p* 0.0671) | +1.712 mV | +1.957 mV | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter.*
 
@@ -96,8 +96,8 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
 | Resting Membrane Potential (mV) | 8 | 0.9822 (*p* < 0.0001) | 0.9063 (*p* 0.0019) | +0.018 mV | -0.085 mV | Pearson correlation, two-sided *p* |
-| Input Resistance (MΩ) | 8 | 0.3460 (*p* 0.4012) | 0.3863 (*p* 0.3445) | -28.098 MΩ | +97.854 MΩ | Pearson correlation, two-sided *p* |
-| Membrane Time Constant (ms) | 8 | 0.9929 (*p* < 0.0001) | 0.9994 (*p* < 0.0001) | +6.931 ms | -20.253 ms | Pearson correlation, two-sided *p* |
+| Input Resistance (MΩ) | 8 | 0.3460 (*p* 0.4012) | 0.3863 (*p* 0.3445) | -28.098 MΩ | -1.616 MΩ | Pearson correlation, two-sided *p* |
+| Membrane Time Constant (ms) | 7 | 0.5488 (*p* 0.2020) | 0.7423 (*p* 0.0560) | -0.767 ms | -5.782 ms | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*
 
