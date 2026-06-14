@@ -56,7 +56,7 @@ def run_efel_sweep(v: np.ndarray, t: np.ndarray) -> dict:
         "stim_start": [t[0] * 1000.0],
         "stim_end":   [t[-1] * 1000.0],
     }
-    want = ["peak_voltage", "AP_duration_half_width", "AP_rise_rate", "AP_fall_rate", "AP_begin_voltage", "AP_amplitude"]
+    want = ["peak_voltage", "AP_duration_half_width", "AP_rise_rate", "AP_fall_rate", "AP_begin_voltage", "AP_amplitude", "fast_AHP", "ADP_peak_amplitude", "AP_rise_time", "AP_fall_time"]
     res = efel.get_feature_values([trace], want)
     r = res[0] if res else {}
     out = {}
@@ -78,7 +78,7 @@ def run_ipfx_sweep(v: np.ndarray, t: np.ndarray) -> dict:
 
     if result is None or result.empty:
         return {"n_spikes": 0, "peak_v": np.nan, "width_ms": np.nan,
-                "upstroke": np.nan, "downstroke": np.nan, "threshold_v": np.nan, "amplitude": np.nan}
+                "upstroke": np.nan, "downstroke": np.nan, "threshold_v": np.nan, "amplitude": np.nan, "fast_ahp": np.nan, "adp_amp": np.nan}
     return {
         "n_spikes":    len(result),
         "peak_v":      float(result["peak_v"].mean()),
@@ -87,6 +87,8 @@ def run_ipfx_sweep(v: np.ndarray, t: np.ndarray) -> dict:
         "downstroke":  float(result["downstroke"].mean()),  # keep native sign
         "threshold_v": float(result["threshold_v"].mean()),
         "amplitude":   float((result["peak_v"] - result["threshold_v"]).mean()),
+        "fast_ahp":    float((result["threshold_v"] - result["fast_trough_v"]).mean()),
+        "adp_amp":     float((result["adp_v"] - result["fast_trough_v"]).mean()),
     }
 
 
@@ -144,6 +146,10 @@ def build_table1() -> pd.DataFrame:
         s_peak = float(row.get("absolute_peak_mv_mean", np.nan))
         s_thr  = float(row.get("ap_threshold_mean", np.nan))
         s_amp  = float(row.get("amplitude_mean", np.nan))
+        s_fahp = float(row.get("fahp_depth_mean", np.nan))
+        s_adp  = float(row.get("adp_amplitude_mean", np.nan))
+        s_rise = float(row.get("rise_time_10_90_mean", np.nan))
+        s_fall = float(row.get("decay_time_90_10_mean", np.nan))
 
         rows.append({
             "trial":         t_idx,
@@ -174,6 +180,22 @@ def build_table1() -> pd.DataFrame:
             "syn_mindvdt":   float(row.get("min_dvdt_mean", np.nan)),
             "efel_mindvdt":  efel_r.get("AP_fall_rate", np.nan),
             "ipfx_mindvdt":  ipfx_r.get("downstroke", np.nan),
+            # Fast AHP Depth
+            "syn_fahp_mV":   s_fahp,
+            "efel_fahp_mV":  efel_r.get("fast_AHP", np.nan),
+            "ipfx_fahp_mV":  ipfx_r.get("fast_ahp", np.nan),
+            # ADP Amplitude
+            "syn_adp_mV":    s_adp,
+            "efel_adp_mV":   efel_r.get("ADP_peak_amplitude", np.nan),
+            "ipfx_adp_mV":   ipfx_r.get("adp_amp", np.nan),
+            # Rise Time
+            "syn_rise_ms":   s_rise,
+            "efel_rise_ms":  efel_r.get("AP_rise_time", np.nan),
+            "ipfx_rise_ms":  np.nan,
+            # Fall Time
+            "syn_fall_ms":   s_fall,
+            "efel_fall_ms":  efel_r.get("AP_fall_time", np.nan),
+            "ipfx_fall_ms":  np.nan,
         })
 
     cmp_df = pd.DataFrame(rows)
@@ -267,6 +289,10 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         ("AP half-width (ms)", "syn_hw_ms",   "efel_hw_ms",    "ipfx_hw_ms",    "ms"),
         ("Max dV/dt (V/s)",   "syn_maxdvdt",  "efel_maxdvdt",  "ipfx_maxdvdt",  "V/s"),
         ("Min dV/dt (V/s)",   "syn_mindvdt",  "efel_mindvdt",  "ipfx_mindvdt",  "V/s"),
+        ("Fast AHP depth (mV)", "syn_fahp_mV",  "efel_fahp_mV",  "ipfx_fahp_mV",  "mV"),
+        ("ADP amplitude (mV)", "syn_adp_mV",   "efel_adp_mV",   "ipfx_adp_mV",   "mV"),
+        ("AP rise time (ms)", "syn_rise_ms",   "efel_rise_ms",  "ipfx_rise_ms",  "ms"),
+        ("AP fall time (ms)", "syn_fall_ms",   "efel_fall_ms",  "ipfx_fall_ms",  "ms"),
     ]
 
     header = (
@@ -288,9 +314,9 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
 
         r_i  = f"{vs_i['r']:.4f}" if not np.isnan(vs_i['r']) else "N/A"
         r_e  = f"{vs_e['r']:.4f}" if not np.isnan(vs_e['r']) else "N/A"
-        b_i  = f"{vs_i['bias']:+.3f} {unit}"
-        b_e  = f"{vs_e['bias']:+.3f} {unit}"
-        n    = vs_i['n']
+        b_i  = f"{vs_i['bias']:+.3f} {unit}" if not np.isnan(vs_i['bias']) else "N/A"
+        b_e  = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e['bias']) else "N/A"
+        n    = max(vs_i['n'], vs_e['n'])
 
         rows_md += (
             f"| {label} | {n} | {r_i} (*p* {fmt_p(vs_i['p'])}) | "

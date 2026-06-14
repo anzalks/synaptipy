@@ -86,6 +86,10 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 | AP half-width (ms) | 13 | 0.1691 (*p* 0.5808) | -0.1502 (*p* 0.6243) | -0.244 ms | -0.193 ms | Pearson correlation, two-sided *p* |
 | Max dV/dt (V/s) | 13 | 0.9981 (*p* < 0.0001) | 0.9933 (*p* < 0.0001) | -57.323 V/s | +140.247 V/s | Pearson correlation, two-sided *p* |
 | Min dV/dt (V/s) | 13 | 0.9997 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | +1.095 V/s | -29.109 V/s | Pearson correlation, two-sided *p* |
+| Fast AHP depth (mV) | 13 | -0.6141 (*p* 0.0256) | -0.8355 (*p* 0.0004) | +32.381 mV | +31.640 mV | Pearson correlation, two-sided *p* |
+| ADP amplitude (mV) | 13 | -0.1797 (*p* 0.5568) | -0.5595 (*p* 0.0468) | +70.714 mV | +70.959 mV | Pearson correlation, two-sided *p* |
+| AP rise time (ms) | 13 | N/A (*p* N/A) | 0.8952 (*p* < 0.0001) | N/A | -0.456 ms | Pearson correlation, two-sided *p* |
+| AP fall time (ms) | 13 | N/A (*p* N/A) | 0.1313 (*p* 0.6690) | N/A | -0.933 ms | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter.*
 
