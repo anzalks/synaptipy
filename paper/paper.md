@@ -19,6 +19,7 @@ affiliations:
    index: 2
 date: 2026-04-24
 bibliography: paper.bib
+link-citations: true
 ---
 
 <!--
@@ -141,4 +142,3 @@ SynaptiPy is an open-source tool licensed under the MIT License.
 In accordance with *eNeuro* guidelines for reproducible research, the source code and exact software version described in this manuscript are permanently archived on Zenodo at **DOI: [Zenodo DOI Placeholder]**. All biological data arrays used to generate the validation and performance figures (e.g., `2023_04_11_0021.abf`) are available within the open-source repository's `examples/data/` structure to ensure complete reproducibility of the described algorithms.
 
 # References
-*(References will be compiled via paper.bib)*
