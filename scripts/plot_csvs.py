@@ -176,4 +176,69 @@ fig3.tight_layout()
 fig3.savefig(base / "e2e_rendering_benchmark_macos.png", dpi=300)
 plt.close(fig3)
 
+# ---------------------------------------------------------
+# Figure 2: biological_validation.png
+# ---------------------------------------------------------
+import pandas as pd
+from scipy.stats import pearsonr
+
+bench_df = pd.read_csv(base / "benchmark_comparison.csv")
+
+fig_bio, axes_bio = plt.subplots(2, 2, figsize=(12, 11))
+axes_bio = axes_bio.flatten()
+
+metrics = [
+    ("Peak Voltage", "syn_peak_mV", "efel_peak_mV", "ipfx_peak_mV", "mV", "A"),
+    ("Half-Width", "syn_hw_ms", "efel_hw_ms", "ipfx_hw_ms", "ms", "B"),
+    ("Max dV/dt", "syn_maxdvdt", "efel_maxdvdt", "ipfx_maxdvdt", "V/s", "C"),
+    ("Min dV/dt", "syn_mindvdt", "efel_mindvdt", "ipfx_mindvdt", "V/s", "D")
+]
+
+def format_p(p):
+    if p < 0.0001: return "< 0.0001"
+    return f"= {p:.4f}"
+
+for i, (title, c_syn, c_efel, c_ipfx, unit, panel_label) in enumerate(metrics):
+    ax = axes_bio[i]
+    df_valid = bench_df.dropna(subset=[c_syn, c_efel, c_ipfx])
+    
+    y_syn = df_valid[c_syn].values
+    x_efel = df_valid[c_efel].values
+    x_ipfx = df_valid[c_ipfx].values
+    
+    r_e, p_e = pearsonr(x_efel, y_syn)
+    mb_e = np.mean(y_syn - x_efel)
+    
+    r_i, p_i = pearsonr(x_ipfx, y_syn)
+    mb_i = np.mean(y_syn - x_ipfx)
+    
+    ax.scatter(x_efel, y_syn, color=COLORS['blue'], s=80, edgecolors='white', linewidths=1.5,
+               label=f'eFEL\nr={r_e:.4f}, p{format_p(p_e)}\nBias: {mb_e:+.2f}')
+    
+    ax.scatter(x_ipfx, y_syn, color=COLORS['red'], s=80, edgecolors='white', linewidths=1.5, marker='s',
+               label=f'IPFX\nr={r_i:.4f}, p{format_p(p_i)}\nBias: {mb_i:+.2f}')
+    
+    min_val = min(np.min(y_syn), np.min(x_efel), np.min(x_ipfx))
+    max_val = max(np.max(y_syn), np.max(x_efel), np.max(x_ipfx))
+    margin = (max_val - min_val) * 0.1
+    lims = [min_val - margin, max_val + margin]
+    
+    ax.plot(lims, lims, '--', color=COLORS['grey'], alpha=0.5, zorder=0, label='Unity (y=x)')
+    
+    ax.set_xlabel(f'Benchmark Value ({unit})', fontweight='bold')
+    ax.set_ylabel(f'SynaptiPy Value ({unit})', fontweight='bold')
+    ax.set_title(title, pad=20)
+    ax.grid(True, linestyle='--', alpha=0.3)
+    ax.legend(loc='best', frameon=True, edgecolor=COLORS['light_grey'], fontsize=8, markerscale=0.7)
+    
+    for spine in ax.spines.values():
+        spine.set_color(COLORS['dark_grey'])
+        spine.set_linewidth(1.5)
+    
+    add_panel_label(ax, panel_label)
+
+fig_bio.tight_layout(pad=2.0)
+fig_bio.savefig(base / "biological_validation.png", dpi=300)
+plt.close(fig_bio)
+
 print("All figures generated successfully with eNeuro styling!")
