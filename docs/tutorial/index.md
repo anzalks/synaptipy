@@ -1,12 +1,9 @@
 # Synaptipy User Tutorial and Documentation
 
-Synaptipy is a comprehensive electrophysiology visualisation and analysis suite.
-The primary focus is whole-cell patch-clamp and intracellular recordings; however,
-any electrophysiology signal whose file format is supported by the
-[Neo](https://neo.readthedocs.io/en/latest/) I/O library can be loaded, visualised, and processed.
-Built on Python and Qt6, it provides OpenGL-accelerated signal visualisation,
-17 built-in analysis modules, a composable batch processing engine, and an extensible
-plugin interface. This tutorial covers every feature of the application in detail,
+Synaptipy is a modern desktop application for exploring, analysing, and exporting
+electrophysiology recordings. Built on Python and Qt6, it provides fast signal visualisation,
+a rich suite of automated analysis tools, and strict provenance tracking for
+reproducible science. This tutorial covers every feature of the application in detail,
 including the mathematical methods used in each analysis module.
 
 ```{note}
@@ -88,7 +85,7 @@ electrophysiology data files. It supports all formats handled by the Neo library
 
 - **Multi-Channel Display** - Each channel is plotted on a separate axis with linked
   X-axes for synchronized panning/zooming.
-- **Hardware-Accelerated Rendering** - PyQtGraph + OpenGL, up to 60 fps on large files.
+- **Hardware-Accelerated Rendering** - Experimental opt-in OpenGL hardware acceleration available in Settings -> Performance.
 - **Interactive Navigation** - Scroll to zoom, drag to pan, toolbar for fine control.
 - **Interactive Cursors** - Enable crosshair cursors via the **Interactive Cursor**
   group in the display panel. Clicking on the trace places a persistent marker at the

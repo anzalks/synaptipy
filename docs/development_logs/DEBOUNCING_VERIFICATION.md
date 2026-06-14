@@ -185,7 +185,7 @@ tests/shared/test_styling.py ........ [100%]
 4. **Check PyQtGraph Performance**
  - Enable downsampling: `plot_item.setDownsampling(auto=True, method='peak')`
  - Reduce number of visible data points
- - Consider using OpenGL rendering: `pg.setConfigOptions(useOpenGL=True)`
+ - Consider using the experimental OpenGL setting in Preferences
 
 ### If Tests Fail
 
@@ -208,7 +208,7 @@ tests/shared/test_styling.py ........ [100%]
  - Show high-res after debounce completes
 
 3. **OpenGL Acceleration**
- - Enable PyQtGraph OpenGL for ultra-fast rendering
+ - Enable the experimental OpenGL setting in Preferences for ultra-fast rendering on supported hardware
  - May require user opt-in due to driver compatibility
 
 4. **Smart Downsampling**

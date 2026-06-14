@@ -29,17 +29,21 @@ log = logging.getLogger(__name__)
 # ==============================================================================
 
 
-def configure_pyqtgraph_globally():
+def configure_pyqtgraph_globally(enable_opengl: bool = False):
     """Apply minimal PyQtGraph configuration for fast startup."""
     try:
         # Only essential configuration - minimal overhead
         pg.setConfigOption("imageAxisOrder", "row-major")
 
-        # Disable expensive features during startup
-        pg.setConfigOption("useOpenGL", False)  # Avoid OpenGL initialization delays
-        pg.setConfigOption("foreground", "k")  # Simple black foreground
+        # Set hardware acceleration based on user preference (defaults to False)
+        pg.setConfigOption("useOpenGL", enable_opengl)
+        if enable_opengl:
+            log.info("PyQtGraph configured: OpenGL Hardware Acceleration ENABLED (Experimental)")
+        else:
+            log.debug("PyQtGraph configured: Software Rendering (OpenGL DISABLED)")
 
-        log.debug("PyQtGraph configured with minimal overhead")
+        # Simple black foreground
+        pg.setConfigOption("foreground", "k")
 
     except Exception as e:
         log.warning(f"PyQtGraph configuration failed: {e}")

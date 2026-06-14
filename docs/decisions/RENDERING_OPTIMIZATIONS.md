@@ -326,7 +326,7 @@ collected 74 items
 ## Future Enhancements (Optional)
 
 1. **Adaptive downsampling** - Auto-adjust based on data size
-2. **GPU rendering** - Use OpenGL backend for even faster rendering
+2. **GPU rendering** - Use the experimental opt-in OpenGL hardware acceleration setting for faster rendering on supported systems
 3. **Progressive rendering** - Render lower quality first, then refine
 4. **Per-channel opaque control** - Force opaque per channel instead of globally
 5. **Debounce interval slider** - Let users adjust debounce delay

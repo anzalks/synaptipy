@@ -202,9 +202,14 @@ class StartupManager(QtCore.QObject):
     def _configure_pyqtgraph(self):
         """Configure PyQtGraph with minimal overhead."""
         try:
+            from Synaptipy.application.session_manager import SessionManager
             from Synaptipy.shared.styling import configure_pyqtgraph_globally
 
-            configure_pyqtgraph_globally()
+            # Extract user's OpenGL preference (default False)
+            session_manager = SessionManager()
+            enable_opengl = session_manager.global_settings.get("enable_opengl_experimental", False)
+
+            configure_pyqtgraph_globally(enable_opengl=enable_opengl)
             log.debug("PyQtGraph configuration complete")
         except Exception as e:
             log.warning(f"PyQtGraph configuration failed: {e}")
