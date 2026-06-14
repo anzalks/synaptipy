@@ -113,6 +113,30 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 ![Biological Validation](results/biological_validation.png)
 *Figure 2: Biological validation and algorithmic parity against established computational benchmarks. Scatter plots comparing Action Potential metrics between SynaptiPy, eFEL (Blue), and IPFX (Orange) across intrinsic sweeps. Statistical insets display the Pearson correlation coefficient ($r$) and corresponding two-sided $p$-value. Bias represents the mean mathematical difference between SynaptiPy and the respective benchmark, inheriting the units of the plotted metric. **(A)** Peak Voltage, showing perfect alignment. **(B)** Half-Width, calculated using discrete physical sampling boundaries across all three platforms. Absolute scaling differences occur purely due to distinct boundary definitions (e.g., eFEL's rigid 20 V/s threshold vs. SynaptiPy's maximum curvature method). **(C)** Max dV/dt and **(D)** Min dV/dt. SynaptiPy's derivative uses a dynamic 0.1 ms temporal smoothing window, situating its absolute scaling squarely between IPFX's 9.9 kHz Bessel filtering and eFEL's heavy discrete approximation, whilst maintaining excellent relative correlation with both.*
 
+**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (file: `2023_04_11_0021.abf`).**
+
+| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
+|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
+| Peak voltage (mV) | [N] | 1.00 | 0.99 | [bias] mV | [bias] mV | Pearson correlation, two-sided *p* |
+| AP half-width (ms) | [N] | [r] | [r] | [bias] ms | [bias] ms | Pearson correlation, two-sided *p* |
+| Max dV/dt (V/s) | [N] | 0.95 | 0.92 | [bias] V/s | [bias] V/s | Pearson correlation, two-sided *p* |
+| Min dV/dt (V/s) | [N] | >0.99 | 0.96 | [bias] V/s | [bias] V/s | Pearson correlation, two-sided *p* |
+
+*[N] = number of action potentials detected across all analysed sweeps. [bias] = mean signed difference (SynaptiPy − benchmark). Fill from the `biological_validation.png` figure insets or re-run the validation script.*
+
+**Extended Data Table 2: Passive membrane and AP properties from real recordings (examples/data/ ABF files, this study).**
+
+| Parameter | n cells | Mean | SD | 95% CI | Statistical approach |
+|-----------|---------|------|-----|--------|----------------------|
+| RMP (mV) | 3 | −58.44 | 5.97 | [CI] | Descriptive only |
+| Rin (MΩ) | [n] | [mean] | [SD] | [CI] | Descriptive only |
+| AP threshold (mV) | 3 | −16.05 | 5.28 | [CI] | Descriptive only |
+| AP amplitude (mV) | 3 | 58.37 | 10.03 | [CI] | Descriptive only |
+| AP half-width (ms) | 3 | 0.725 | 0.030 | [CI] | Descriptive only |
+
+*Values sourced from `paper/results/demo_results.csv` (BatchAnalysisEngine run on real patch-clamp ABF files). 95% CI = mean ± 1.96 × (SD / √n). RMP and spike metrics from sweeps with ≥1 detected action potential only.*
+
+
 ### 3. High-Throughput Processing and Rendering Optimization
 The integrated batch processing engine minimizes manual analysis bottlenecks, allowing for the rapid extraction of intrinsic properties and synaptic events across extensive experimental cohorts. To support this high-throughput capability, SynaptiPy utilizes significant rendering optimizations. End-to-end benchmarking indicates that the software maintains stable GUI execution times and smooth navigational frame rates even as the complexity and density of the multi-channel recordings scale. Specifically, full analytical processing completes in ~3.3 ms per recording, and the optimized PyQtGraph rendering pipeline maintains an interactive GUI frame rate exceeding 200 frames per second (4.79 ms median frame latency) even at maximum plot density (20 simultaneous overlaid traces).
 
