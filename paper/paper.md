@@ -81,20 +81,22 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
 | Peak voltage (mV) | 13 | 1.0000 (*p* < 0.0001) | 0.9998 (*p* < 0.0001) | +0.000 mV | +0.229 mV | Pearson correlation, two-sided *p* |
+| AP threshold (mV) | 13 | 0.8195 (*p* 0.0006) | 0.7641 (*p* 0.0024) | +32.092 mV | +31.696 mV | Pearson correlation, two-sided *p* |
+| AP amplitude (mV) | 13 | 0.9588 (*p* < 0.0001) | 0.9560 (*p* < 0.0001) | -32.092 mV | -31.467 mV | Pearson correlation, two-sided *p* |
 | AP half-width (ms) | 13 | 0.1691 (*p* 0.5808) | -0.1502 (*p* 0.6243) | -0.244 ms | -0.193 ms | Pearson correlation, two-sided *p* |
 | Max dV/dt (V/s) | 13 | 0.9981 (*p* < 0.0001) | 0.9933 (*p* < 0.0001) | -57.323 V/s | +140.247 V/s | Pearson correlation, two-sided *p* |
-| Min dV/dt (V/s) | 13 | -0.9997 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | -178.082 V/s | -29.109 V/s | Pearson correlation, two-sided *p* |
+| Min dV/dt (V/s) | 13 | 0.9997 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | +1.095 V/s | -29.109 V/s | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter.*
 
 **Extended Data Table 2: Passive membrane and AP properties from real recordings (examples/data/ ABF files, this study).**
 
-| Parameter | n trials | Mean | SD | 95% CI | Statistical approach |
-|-----------|---------|------|-----|--------|----------------------|
-| RMP (mV) | 26 | -58.44 mV | 5.97 mV | [-60.85, -56.02] mV | Descriptive only |
-| AP threshold (mV) | 13 | -16.05 mV | 5.28 mV | [-19.24, -12.85] mV | Descriptive only |
-| AP amplitude (mV) | 13 | 58.37 mV | 10.03 mV | [52.31, 64.44] mV | Descriptive only |
-| AP half-width (ms) | 13 | 0.72 ms | 0.03 ms | [0.71, 0.74] ms | Descriptive only |
+| Parameter | n trials | Mean ± SD | 95% CI | Statistical approach |
+|-----------|---------|-----------|--------|----------------------|
+| RMP (mV) | 26 | -58.44 ± 5.97 mV | [-60.85, -56.02] mV | Descriptive only |
+| AP threshold (mV) | 13 | -16.05 ± 5.28 mV | [-19.24, -12.85] mV | Descriptive only |
+| AP amplitude (mV) | 13 | 58.37 ± 10.03 mV | [52.31, 64.44] mV | Descriptive only |
+| AP half-width (ms) | 13 | 0.72 ± 0.03 ms | [0.71, 0.74] ms | Descriptive only |
 
 *Values from BatchAnalysisEngine `rmp_analysis` + `spike_detection` on real patch-clamp ABF files (macOS M1, SynaptiPy v0.1.5b7). n trials = number of sweeps with valid measurements. 95% CI = mean ± t × (SD / √n) computed using Student's t-distribution.*
 

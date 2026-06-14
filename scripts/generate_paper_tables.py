@@ -56,7 +56,7 @@ def run_efel_sweep(v: np.ndarray, t: np.ndarray) -> dict:
         "stim_start": [t[0] * 1000.0],
         "stim_end":   [t[-1] * 1000.0],
     }
-    want = ["peak_voltage", "AP_duration_half_width", "AP_rise_rate", "AP_fall_rate"]
+    want = ["peak_voltage", "AP_duration_half_width", "AP_rise_rate", "AP_fall_rate", "AP_begin_voltage", "AP_amplitude"]
     res = efel.get_feature_values([trace], want)
     r = res[0] if res else {}
     out = {}
@@ -78,13 +78,15 @@ def run_ipfx_sweep(v: np.ndarray, t: np.ndarray) -> dict:
 
     if result is None or result.empty:
         return {"n_spikes": 0, "peak_v": np.nan, "width_ms": np.nan,
-                "upstroke": np.nan, "downstroke": np.nan}
+                "upstroke": np.nan, "downstroke": np.nan, "threshold_v": np.nan, "amplitude": np.nan}
     return {
         "n_spikes":    len(result),
         "peak_v":      float(result["peak_v"].mean()),
         "width_ms":    float(result["width"].mean()) * 1000.0,  # s → ms
         "upstroke":    float(result["upstroke"].mean()),
-        "downstroke":  float(abs(result["downstroke"]).mean()),  # sign convention
+        "downstroke":  float(result["downstroke"].mean()),  # keep native sign
+        "threshold_v": float(result["threshold_v"].mean()),
+        "amplitude":   float((result["peak_v"] - result["threshold_v"]).mean()),
     }
 
 
@@ -140,6 +142,8 @@ def build_table1() -> pd.DataFrame:
 
         # SynaptiPy: peak voltage from absolute_peak_mv_mean
         s_peak = float(row.get("absolute_peak_mv_mean", np.nan))
+        s_thr  = float(row.get("ap_threshold_mean", np.nan))
+        s_amp  = float(row.get("amplitude_mean", np.nan))
 
         rows.append({
             "trial":         t_idx,
@@ -150,6 +154,14 @@ def build_table1() -> pd.DataFrame:
             "syn_peak_mV":   s_peak,
             "efel_peak_mV":  efel_r.get("peak_voltage", np.nan),
             "ipfx_peak_mV":  ipfx_r.get("peak_v", np.nan),
+            # Threshold
+            "syn_thr_mV":    s_thr,
+            "efel_thr_mV":   efel_r.get("AP_begin_voltage", np.nan),
+            "ipfx_thr_mV":   ipfx_r.get("threshold_v", np.nan),
+            # Amplitude
+            "syn_amp_mV":    s_amp,
+            "efel_amp_mV":   efel_r.get("AP_amplitude", np.nan),
+            "ipfx_amp_mV":   ipfx_r.get("amplitude", np.nan),
             # Half-width
             "syn_hw_ms":     float(row.get("half_width_mean", np.nan)),
             "efel_hw_ms":    efel_r.get("AP_duration_half_width", np.nan),
@@ -250,6 +262,8 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
 
     metrics = [
         ("Peak voltage (mV)", "syn_peak_mV",  "efel_peak_mV",  "ipfx_peak_mV",  "mV"),
+        ("AP threshold (mV)", "syn_thr_mV",   "efel_thr_mV",   "ipfx_thr_mV",   "mV"),
+        ("AP amplitude (mV)", "syn_amp_mV",   "efel_amp_mV",   "ipfx_amp_mV",   "mV"),
         ("AP half-width (ms)", "syn_hw_ms",   "efel_hw_ms",    "ipfx_hw_ms",    "ms"),
         ("Max dV/dt (V/s)",   "syn_maxdvdt",  "efel_maxdvdt",  "ipfx_maxdvdt",  "V/s"),
         ("Min dV/dt (V/s)",   "syn_mindvdt",  "efel_mindvdt",  "ipfx_mindvdt",  "V/s"),
@@ -297,13 +311,13 @@ def make_table2_md(df: pd.DataFrame) -> str:
     def stat_row(label: str, vals: np.ndarray, unit: str) -> str:
         vals = vals[~np.isnan(vals)]
         if len(vals) == 0:
-            return f"| {label} | 0 | N/A | N/A | N/A | Descriptive only |\n"
+            return f"| {label} | 0 | N/A | N/A | Descriptive only |\n"
         mean = np.mean(vals)
         sd   = np.std(vals, ddof=1) if len(vals) > 1 else 0.0
         ci   = ci95_str(vals)
         return (
-            f"| {label} | {len(vals)} | {mean:.2f} {unit} "
-            f"| {sd:.2f} {unit} | {ci} {unit} | Descriptive only |\n"
+            f"| {label} | {len(vals)} | {mean:.2f} ± {sd:.2f} {unit} "
+            f"| {ci} {unit} | Descriptive only |\n"
         )
 
     def numeric(col):
@@ -317,8 +331,8 @@ def make_table2_md(df: pd.DataFrame) -> str:
     header = (
         "**Extended Data Table 2: Passive membrane and AP properties from real recordings "
         "(examples/data/ ABF files, this study).**\n\n"
-        "| Parameter | n trials | Mean | SD | 95% CI | Statistical approach |\n"
-        "|-----------|---------|------|-----|--------|----------------------|\n"
+        "| Parameter | n trials | Mean ± SD | 95% CI | Statistical approach |\n"
+        "|-----------|---------|-----------|--------|----------------------|\n"
     )
     rows_md = (
         stat_row("RMP (mV)",            rmp,    "mV")
