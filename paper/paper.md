@@ -95,9 +95,9 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
-| Resting Membrane Potential (mV) | 17 | -0.4900 (*p* 0.0459) | -0.6107 (*p* 0.0092) | +39.804 mV | +39.705 mV | Pearson correlation, two-sided *p* |
-| Input Resistance (MΩ) | 17 | 0.2691 (*p* 0.2963) | 0.3410 (*p* 0.1805) | -77.591 MΩ | +46.501 MΩ | Pearson correlation, two-sided *p* |
-| Membrane Time Constant (ms) | 17 | -0.0386 (*p* 0.8831) | -0.0139 (*p* 0.9578) | +172.974 ms | +156.559 ms | Pearson correlation, two-sided *p* |
+| Resting Membrane Potential (mV) | 8 | 0.9822 (*p* < 0.0001) | 0.9063 (*p* 0.0019) | +0.018 mV | -0.085 mV | Pearson correlation, two-sided *p* |
+| Input Resistance (MΩ) | 8 | 0.3460 (*p* 0.4012) | 0.3863 (*p* 0.3445) | -28.098 MΩ | +97.854 MΩ | Pearson correlation, two-sided *p* |
+| Membrane Time Constant (ms) | 8 | 0.9929 (*p* < 0.0001) | 0.9994 (*p* < 0.0001) | +6.931 ms | -20.253 ms | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*
 

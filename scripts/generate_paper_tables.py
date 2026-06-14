@@ -244,6 +244,14 @@ def build_table2() -> pd.DataFrame:
     
     for file_path in files:
         syn_df = SynaptiPyRunner.run_passive(file_path)
+        if "channel_index" in syn_df.columns:
+            syn_df = syn_df[syn_df["channel_index"] == 0]
+        
+        # Collapse the separate analysis rows into a single row per trial
+        syn_df = syn_df.groupby("trial_index", as_index=False).agg(
+            lambda x: x.dropna().tolist()[0] if len(x.dropna()) > 0 else np.nan
+        )
+
         abf = pyabf.ABF(file_path)
         dt = 1.0 / abf.dataRate
         
