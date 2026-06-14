@@ -226,11 +226,15 @@ def corr_summary(x: np.ndarray, y: np.ndarray) -> dict:
 
 
 def ci95_str(vals: np.ndarray) -> str:
+    from scipy.stats import t
     vals = vals[~np.isnan(vals)]
-    if len(vals) < 2:
+    n = len(vals)
+    if n < 2:
         return "N/A"
-    se = np.std(vals, ddof=1) / np.sqrt(len(vals))
-    return f"[{np.mean(vals) - 1.96*se:.2f}, {np.mean(vals) + 1.96*se:.2f}]"
+    se = np.std(vals, ddof=1) / np.sqrt(n)
+    t_crit = t.ppf(0.975, n - 1)
+    mean_val = np.mean(vals)
+    return f"[{mean_val - t_crit * se:.2f}, {mean_val + t_crit * se:.2f}]"
 
 
 def fmt_p(p: float) -> str:
@@ -326,7 +330,7 @@ def make_table2_md(df: pd.DataFrame) -> str:
         "\n*Values from BatchAnalysisEngine `rmp_analysis` + `spike_detection` "
         "on real patch-clamp ABF files (macOS M1, SynaptiPy v0.1.5b7). "
         "n trials = number of sweeps with valid measurements. "
-        "95% CI = mean ± 1.96 × (SD / √n).*"
+        "95% CI = mean ± t × (SD / √n) computed using Student's t-distribution.*"
     )
     return header + rows_md + footer
 

@@ -91,12 +91,12 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 
 | Parameter | n trials | Mean | SD | 95% CI | Statistical approach |
 |-----------|---------|------|-----|--------|----------------------|
-| RMP (mV) | 26 | -58.44 mV | 5.97 mV | [-60.73, -56.14] mV | Descriptive only |
-| AP threshold (mV) | 13 | -16.05 mV | 5.28 mV | [-18.92, -13.17] mV | Descriptive only |
-| AP amplitude (mV) | 13 | 58.37 mV | 10.03 mV | [52.92, 63.83] mV | Descriptive only |
+| RMP (mV) | 26 | -58.44 mV | 5.97 mV | [-60.85, -56.02] mV | Descriptive only |
+| AP threshold (mV) | 13 | -16.05 mV | 5.28 mV | [-19.24, -12.85] mV | Descriptive only |
+| AP amplitude (mV) | 13 | 58.37 mV | 10.03 mV | [52.31, 64.44] mV | Descriptive only |
 | AP half-width (ms) | 13 | 0.72 ms | 0.03 ms | [0.71, 0.74] ms | Descriptive only |
 
-*Values from BatchAnalysisEngine `rmp_analysis` + `spike_detection` on real patch-clamp ABF files (macOS M1, SynaptiPy v0.1.5b7). n trials = number of sweeps with valid measurements. 95% CI = mean ± 1.96 × (SD / √n).*
+*Values from BatchAnalysisEngine `rmp_analysis` + `spike_detection` on real patch-clamp ABF files (macOS M1, SynaptiPy v0.1.5b7). n trials = number of sweeps with valid measurements. 95% CI = mean ± t × (SD / √n) computed using Student's t-distribution.*
 
 ### 3. High-Throughput Processing and Rendering Optimization
 The integrated batch processing engine minimizes manual analysis bottlenecks, allowing for the rapid extraction of intrinsic properties and synaptic events across extensive experimental cohorts. To support this high-throughput capability, SynaptiPy utilizes significant rendering optimizations. End-to-end benchmarking indicates that the software maintains stable GUI execution times and smooth navigational frame rates even as the complexity and density of the multi-channel recordings scale. Specifically, full analytical processing completes in ~3.3 ms per recording, and the optimized PyQtGraph rendering pipeline maintains an interactive GUI frame rate exceeding 200 frames per second (4.79 ms median frame latency) even at maximum plot density (20 simultaneous overlaid traces).
