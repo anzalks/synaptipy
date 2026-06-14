@@ -256,7 +256,6 @@ def calculate_spike_features(  # noqa: C901
         return []
 
     dvdt = np.gradient(data, dt)
-    
 
     lookback_samples = int(onset_lookback / dt)
     post_peak_samples = int(0.01 / dt)
