@@ -159,14 +159,14 @@ class StartupManager(QtCore.QObject):
         except Exception as e:
             log.error(f"Critical error loading plugins during startup: {e}")
 
-        # Step 1: Create main window and configure PyQtGraph in parallel
+        # Step 1: Configure PyQtGraph synchronously (no delay needed for simple config)
+        self._configure_pyqtgraph()
+
+        # Step 2: Create main window
         QtCore.QTimer.singleShot(50, self._load_gui_components)
 
-        # Step 2: Configure PyQtGraph (minimal delay)
-        QtCore.QTimer.singleShot(100, self._configure_pyqtgraph)
-
-        # Step 3: Complete loading (minimal delay)
-        QtCore.QTimer.singleShot(150, self._complete_loading)
+        # Step 3: Complete loading
+        QtCore.QTimer.singleShot(100, self._complete_loading)
 
     def _update_progress(self, step: int):
         """Update the progress display."""

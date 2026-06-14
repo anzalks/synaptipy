@@ -81,7 +81,7 @@ electrophysiology data files. It supports all formats handled by the Neo library
 
 - **Multi-Channel Display** — Each channel is plotted on a separate axis with linked
   X-axes for synchronized panning/zooming.
-- **Hardware-Accelerated Rendering** — PyQtGraph + OpenGL, up to 60 fps on large files.
+- **Hardware-Accelerated Rendering** — Experimental opt-in OpenGL hardware acceleration available in Settings -> Performance.
 - **Interactive Navigation** — Scroll to zoom, drag to pan, toolbar for fine control.
 
 ### 1.3 Display Configuration Panel
