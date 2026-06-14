@@ -87,7 +87,7 @@ print(results)
 
 ## Analysis Capabilities
 
-Synaptipy provides 17 built-in analysis routines organised into five module tabs. Each routine is available interactively in the graphical interface and as a composable unit in the batch processing pipeline.
+Synaptipy provides built-in analysis routines covering passive membrane properties, action potential characterisation, firing dynamics, synaptic event detection, and evoked responses — organised into five module tabs. Each routine is available interactively in the graphical interface and as a composable unit in the batch processing pipeline.
 
 ### Tab 1: Intrinsic Properties
 
@@ -100,7 +100,7 @@ Synaptipy provides 17 built-in analysis routines organised into five module tabs
 
 ### Tab 2: Spike Analysis
 
-- **Spike Detection** - threshold-crossing action-potential detection with refractory-period filtering; extracts per-spike amplitude, half-width, rise time, decay time, threshold voltage, and after-hyperpolarisation (AHP)
+- **Spike Detection** - threshold-crossing action-potential detection with refractory-period filtering; extracts per-spike amplitude, half-width, rise time, decay time, threshold voltage, after-hyperpolarisation (AHP), and afterdepolarisation amplitude (adp_amplitude; NaN when absent)
 - **Phase Plane** - dV/dt vs. voltage trajectory for action-potential initiation dynamics; threshold voltage is detected via a kink-slope criterion; reports mean threshold voltage and maximum dV/dt
 
 ### Tab 3: Excitability
@@ -118,14 +118,14 @@ Synaptipy provides 17 built-in analysis routines organised into five module tabs
 ### Tab 5: Evoked Responses
 
 - **Evoked Sync** - extracts TTL or digital stimulus pulses from a secondary channel and correlates them with detected spikes or synaptic events; reports optical latency, response probability, and trial-to-trial jitter
-- **Paired-Pulse Ratio** - measures R1 and R2 amplitudes for a two-pulse protocol; fits a mono- or bi-exponential decay to the R1 tail and subtracts the residual at the time of the second stimulus before computing the ratio, avoiding contamination of R2 by the decaying R1 baseline
-- **Stimulus Train (STP)** - measures response amplitudes across a multi-pulse stimulus train and normalises each pulse to R1 to generate a short-term plasticity (STP) profile; classifies the result as facilitation or depression
+- **Paired-Pulse Ratio** - stimulus-evoked PPR with residual decay correction: measures R1 and R2 amplitudes, fits a mono- or bi-exponential decay to the R1 tail, and subtracts the residual at the time of the second stimulus before computing the ratio. This is the GUI-accessible PPR analysis (Tab 5); there is no standalone PPR in Tab 4 (Synaptic Events).
+- **Stimulus Train** - measures response amplitudes across a multi-pulse stimulus train and normalises each pulse to R1; classifies the result as facilitation or depression
 
 ---
 
 ## Visualization
 
-Trace rendering is implemented via PyQtGraph (GPU-accelerated plotting library). The interface comprises a tree-based multi-file explorer with synchronized trial navigation and per-channel amplitude scaling. View-range management, zooming, and panning are performed explicitly via mouse interactions. Popup plots are generated for I-V curves, F-I curves, phase planes, and inter-spike interval distributions.
+Trace rendering is implemented via PyQtGraph. GPU-accelerated rendering via OpenGL is enabled automatically at startup when a hardware GPU is detected; the application falls back to software rendering on headless or CPU-only systems. The interface comprises a tree-based multi-file explorer with synchronized trial navigation and per-channel amplitude scaling. View-range management, zooming, and panning are performed explicitly via mouse interactions. Popup plots are generated for I-V curves, F-I curves, phase planes, and inter-spike interval distributions.
 
 ### Cross-file trial averaging
 
@@ -237,6 +237,17 @@ PySide6 is pinned to 6.7.3 on all platforms. PySide6 6.8.0 contains a known cras
 ## Contributing
 
 Contributions are welcome. The preferred contribution pathway for new analysis routines is the plugin interface, which requires no modification to the core package. For changes to the core, infrastructure, or application layers, refer to [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions, coding standards, and the contribution workflow.
+
+### Releasing a new version
+
+Use the bump script — never edit version strings by hand:
+
+```bash
+python scripts/bump_version.py 0.1.6b1   # for a beta
+python scripts/bump_version.py 1.0.0     # for a stable release
+```
+
+The script updates `pyproject.toml`, `src/Synaptipy/__init__.py`, `CITATION.cff` (version + date-released), `docs/conf.py`, installer files, installer filename references in `README.md`, and prepends a CHANGELOG header. It **never** touches dependency version constraints. After the file edits, it offers to create a local `git tag vX.Y.Z` — pushing to the remote is always a manual step.
 
 ---
 
