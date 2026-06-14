@@ -1,109 +1,141 @@
 #!/usr/bin/env python3
 """
 SynaptiPy eNeuro Demo Script
-Generates a demonstration dataset and performs automated extraction
-of electrophysiological properties (Task 14).
+============================
+Demonstrates SynaptiPy's public BatchAnalysisEngine API on real patch-clamp
+recordings from examples/data/.
+
+Analysis is performed exclusively through the engine's registered pipeline —
+no direct calls to internal analysis functions.
+
+Outputs:
+  paper/results/demo_results.csv — per-file/trial results table from the engine
+
+This file is part of Synaptipy, licensed under the GNU Affero General Public
+License v3.0. See the LICENSE file in the root of the repository for details.
 """
 
 import sys
 import time
-import numpy as np
-import pandas as pd
 from pathlib import Path
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.core.analysis.passive_properties import calculate_rin
-from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
-def create_demo_data():
-    """Create a realistic synthetic recording for the demo."""
-    recording = Recording(source_file=None)
-    recording.sampling_rate = 20000.0  # 20 kHz
-    recording.t_start = 0.0
-    recording.duration = 1.0  # 1 second
-    time_vec = np.linspace(0, 1, 20000)
+DATA_DIR = REPO_ROOT / "examples" / "data"
+OUT_DIR  = REPO_ROOT / "paper" / "results"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Voltage trace with a resting potential and a spike
-    voltage_data = np.ones_like(time_vec) * -70.0
-    # Add a step depolarization
-    voltage_data[4000:16000] = -50.0 
-    
-    # Simulate a spike
-    spike_idx = 8000
-    voltage_data[spike_idx:spike_idx+20] = np.linspace(-50, 30, 20)
-    voltage_data[spike_idx+20:spike_idx+60] = np.linspace(30, -80, 40)
-    voltage_data[spike_idx+60:spike_idx+200] = np.linspace(-80, -50, 140)
+# ── Public API imports only ──────────────────────────────────────────────────
+from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 
-    # Add noise
-    voltage_data += np.random.normal(0, 0.5, size=voltage_data.shape)
 
-    v_channel = Channel(
-        id="1", name="Vm", units="mV", sampling_rate=20000.0, data_trials=[voltage_data]
-    )
+# ── Files to analyse ─────────────────────────────────────────────────────────
+FILES = [
+    DATA_DIR / "2023_04_11_0018.abf",
+    DATA_DIR / "2023_04_11_0019.abf",
+    DATA_DIR / "2023_04_11_0021.abf",
+]
 
-    current_data = np.zeros_like(time_vec)
-    current_data[4000:16000] = -100.0  # -100 pA step for Rin
-    current_data += np.random.normal(0, 1.0, size=current_data.shape)
+# ── Pipeline: registered analysis names + their documented params ─────────────
+#   Params match the ui_params defaults declared in each @AnalysisRegistry.register
+#   block. Change values here to re-run with different settings.
+PIPELINE = [
+    {
+        "analysis": "rmp_analysis",
+        "scope": "all_trials",
+        "params": {
+            "baseline_start": 0.0,
+            "baseline_end":   0.2,   # first 200 ms
+        },
+    },
+    {
+        "analysis": "rin_analysis",
+        "scope": "all_trials",
+        "params": {
+            "baseline_start":   0.0,
+            "baseline_end":     0.15,
+            "response_start":   0.6,
+            "response_end":     0.75,
+        },
+    },
+    {
+        "analysis": "spike_detection",
+        "scope": "all_trials",
+        "params": {
+            "threshold":        -20.0,   # mV  — peak voltage threshold
+            "refractory_period": 0.002,  # s   — 2 ms refractory
+            "dvdt_threshold":   20.0,    # V/s — dV/dt onset criterion (Bean 2007)
+        },
+    },
+]
 
-    i_channel = Channel(
-        id="2", name="Im", units="pA", sampling_rate=20000.0, data_trials=[current_data]
-    )
 
-    recording.channels[v_channel.name] = v_channel
-    recording.channels[i_channel.name] = i_channel
-    return recording, time_vec
+def progress(current: int, total: int, msg: str) -> None:
+    print(f"  [{current}/{total}] {msg}")
 
-def main():
-    print("==================================================")
-    print("SynaptiPy eNeuro Demonstration Script")
-    print("==================================================")
-    
+
+def main() -> None:
+    print("=" * 55)
+    print("SynaptiPy — eNeuro real-data demonstration")
+    print("=" * 55)
+
+    # Print available registered analyses so readers can see what the API offers
+    available = BatchAnalysisEngine.list_available_analyses()
+    print(f"\nRegistered analyses ({len(available)}): {available}\n")
+
+    existing = [p for p in FILES if p.exists()]
+    missing  = [p for p in FILES if not p.exists()]
+    if missing:
+        for m in missing:
+            print(f"WARNING: file not found — skipping: {m.name}")
+    if not existing:
+        print("ERROR: no input files found.")
+        sys.exit(1)
+
+    engine = BatchAnalysisEngine(max_workers=1)
+
     t0 = time.time()
-    recording, time_vec = create_demo_data()
-    print(f"Created synthetic 2-channel recording ({recording.sampling_rate} Hz)")
-
-    v_channel = recording.channels["Vm"]
-    i_channel = recording.channels["Im"]
-
-    # 1. Passive Properties
-    print("\n[1/2] Analyzing Input Resistance...")
-    res_result = calculate_rin(
-        voltage_trace=v_channel.data_trials[0],
-        time_vector=time_vec,
-        current_amplitude=-100.0,
-        baseline_window=(0.0, 0.15),
-        response_window=(0.6, 0.75),
+    df = engine.run_batch(
+        files=existing,
+        pipeline_config=PIPELINE,
+        progress_callback=progress,
     )
-    print(f"  -> Rin: {res_result.value:.2f} MΩ")
-    print(f"  -> Conductance: {res_result.conductance:.3f} μS")
+    elapsed_ms = (time.time() - t0) * 1000
 
-    # 2. Spike Detection
-    print("\n[2/2] Detecting Action Potentials...")
-    spikes = detect_spikes_threshold(
-        data=v_channel.data_trials[0],
-        time=time_vec,
-        threshold=-20.0,
-        refractory_samples=int(0.002 * v_channel.sampling_rate),
-        dvdt_threshold=20.0
-    )
-    from Synaptipy.core.analysis.single_spike import calculate_spike_features
-    print(f"  -> Detected {spikes.value} spike(s)")
-    if spikes.value > 0:
-        features = calculate_spike_features(
-            data=v_channel.data_trials[0],
-            time=time_vec,
-            spike_indices=spikes.spike_indices,
-            dvdt_threshold=20.0
-        )
-        if len(features) > 0:
-            print(f"  -> First AP Peak: {features[0]['absolute_peak_mv']:.1f} mV")
-            print(f"  -> First AP Threshold: {features[0]['ap_threshold']:.1f} mV")
-            print(f"  -> First AP Amplitude: {features[0]['amplitude']:.1f} mV")
+    if df.empty:
+        print("Engine returned an empty DataFrame. Check file compatibility.")
+        sys.exit(1)
 
-    t1 = time.time()
-    print("\n==================================================")
-    print(f"Demo completed successfully in {(t1-t0)*1000:.1f} ms.")
-    print("==================================================")
+    # ── Save ─────────────────────────────────────────────────────────────────
+    csv_path = OUT_DIR / "demo_results.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"\nResults saved → {csv_path}")
+    print(f"Completed in {elapsed_ms:.1f} ms  |  {len(df)} rows  |  {len(df.columns)} columns\n")
+
+    # ── Summary statistics ────────────────────────────────────────────────────
+    print("--- Per-file summary ---")
+    summary_cols = [c for c in df.columns if any(
+        tag in c for tag in ["rmp", "rin", "spike_count", "ap_threshold",
+                             "amplitude", "half_width"]
+    )]
+    if summary_cols:
+        print(df[["file_name"] + summary_cols].to_string(index=False)
+              if "file_name" in df.columns
+              else df[summary_cols].to_string(index=False))
+    else:
+        print(df.to_string(index=False))
+
+    print("\n--- Grand mean ± SD ---")
+    import numpy as np
+    for col in summary_cols:
+        if col not in df.columns:
+            continue
+        numeric = df[col].apply(lambda x: x if isinstance(x, (int, float)) else None)
+        vals = numeric.dropna()
+        if len(vals):
+            print(f"  {col}: {float(vals.mean()):.3f} ± {float(vals.std()):.3f}  (n={len(vals)})")
+
 
 if __name__ == "__main__":
     main()
