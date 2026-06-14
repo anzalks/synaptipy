@@ -18,6 +18,7 @@ affiliations:
  - name: University of Strasbourg, Strasbourg, France.
    index: 2
 date: 2026-04-24
+bibliography: paper.bib
 ---
 
 <!--
