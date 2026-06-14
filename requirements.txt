@@ -1,4 +1,9 @@
-# Runtime dependencies for Synaptipy
+# requirements.txt — INSTALL RECIPE (range-pinned, cross-platform)
+# -----------------------------------------------------------------
+# Version ranges here are tested. Do not change constraints without
+# re-running the CI matrix (ubuntu/windows/macos × py3.10/3.11/3.12).
+# For paper reproducibility, see paper/frozen_environment_macos_arm64.txt
+#
 # Test dependencies are in pyproject.toml under [project.optional-dependencies] dev
 # Install via: pip install -e ".[dev]"
 

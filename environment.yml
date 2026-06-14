@@ -1,5 +1,11 @@
-# Fully pinned conda environment for exact reproducibility of published results.
-# For development with flexible version ranges, install via: pip install -e ".[dev]"
+# environment.yml — INSTALL RECIPE (pinned, cross-platform)
+# ----------------------------------------------------------------
+# This file is the user-facing install recipe. Version pins here are
+# tested and must not be changed without re-running the full test suite.
+#
+# For exact reproducibility of paper results, use instead:
+#   paper/frozen_environment_macos_arm64.txt  (pip freeze, Apple M1 Pro)
+#   paper/conda_env_macos_arm64.yml           (conda export, Apple M1 Pro)
 #
 # Usage:
 #   conda env create -f environment.yml

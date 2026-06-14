@@ -4,21 +4,30 @@
 Usage
 -----
     python scripts/bump_version.py 0.1.2b3
+    python scripts/bump_version.py 1.0.0
 
 Files updated
 -------------
-- pyproject.toml
-- src/Synaptipy/__init__.py
-- CITATION.cff  (version + date-released → today)
-- docs/conf.py
-- installer/windows_setup.iss
-- installer/linux/synaptipy.desktop
-- README.md     (inline version references in the Standalone section)
-- CHANGELOG.md  (prepends a new [NEW_VERSION] block under [Unreleased])
+- pyproject.toml          — version = "X.Y.Z"
+- src/Synaptipy/__init__.py — __version__ = "X.Y.Z"
+- CITATION.cff            — version: "X.Y.Z" and date-released → today
+- docs/conf.py            — version and release fields
+- installer/windows_setup.iss — installer version string
+- installer/linux/synaptipy.desktop — X-AppVersion field
+- README.md               — installer filename strings vX.Y.Z
+- CHANGELOG.md            — prepends a new [X.Y.Z] section under [Unreleased]
+
+What this script NEVER touches
+--------------------------------
+- Any >=, <, == dependency constraint in any file.
+- environment.yml or requirements.txt package pins.
 
 After running this script commit all changes with::
 
     git add -A && git commit -m "chore: bump version to <NEW_VERSION>"
+
+The script will then create a local git tag automatically.
+Pushing the commit and tag to the remote is always a manual step.
 """
 
 from __future__ import annotations
@@ -175,8 +184,25 @@ def main() -> None:
     print(f"\nDone. All files updated from {old} to {new}.")
     print("Next steps:")
     print(f"  git add -A && git commit -m 'chore: bump version to {new}'")
-    print("  git push origin main")
-    print(f"  git tag v{new} && git push origin v{new}")
+    print(f"  git tag v{new}   ← the script offers to do this for you below")
+    print("  git push origin <branch> --tags   ← always manual")
+    print()
+
+    # Offer to create the local tag automatically
+    import subprocess
+    answer = input(f"Create local tag v{new} now? [y/N] ").strip().lower()
+    if answer == "y":
+        try:
+            subprocess.run(
+                ["git", "tag", f"v{new}"],
+                check=True,
+                cwd=str(ROOT),
+            )
+            print(f"  Tagged v{new} locally. Push with: git push origin v{new}")
+        except subprocess.CalledProcessError as exc:
+            print(f"  WARNING: git tag failed: {exc}")
+    else:
+        print(f"  Skipped tagging. Run manually: git tag v{new}")
 
 
 if __name__ == "__main__":
