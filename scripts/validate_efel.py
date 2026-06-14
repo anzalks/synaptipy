@@ -37,18 +37,7 @@ def main():
         
         # --- SynaptiPy Analysis ---
         spikes = detect_spikes_threshold(v, t, threshold=-20.0, refractory_samples=int(0.005*fs))
-        if spikes.value > 0:
-            features_list = calculate_spike_features(v, t, spikes.spike_indices)
-            if not features_list:
-                continue
-            
-            s_peak = v[spikes.spike_indices[0]]
-            s_hw = features_list[0].get('half_width', np.nan) * 1000.0  # s to ms
-            s_maxdv = features_list[0].get('max_dvdt', np.nan)          # V/s
-            s_mindv = features_list[0].get('min_dvdt', np.nan)          # V/s
-        else:
-            continue
-
+        
         # --- eFEL Analysis ---
         trace = {
             'T': t * 1000.0,  # eFEL expects ms
@@ -56,34 +45,45 @@ def main():
             'stim_start': [100.0],
             'stim_end': [900.0]
         }
-        
-        # eFEL feature names mapping
-        # peak_voltage -> Peak Voltage
-        # AP_duration_half_width -> Half-Width
-        # maximum_voltage_derivative -> Max dV/dt
-        # minimum_voltage_derivative -> Min dV/dt
-        efel_features = ['peak_voltage', 'AP_duration_half_width', 'maximum_voltage_derivative', 'minimum_voltage_derivative']
+        efel_features = ['peak_voltage', 'AP_duration_half_width', 'AP_rise_rate', 'AP_fall_rate']
         efel_res = efel.get_feature_values([trace], efel_features)
         
-        if efel_res and efel_res[0]:
+        if spikes.value > 0 and efel_res and efel_res[0]:
+            features_list = calculate_spike_features(v, t, spikes.spike_indices)
             r = efel_res[0]
-            if (r.get('peak_voltage') is not None and 
-                r.get('AP_duration_half_width') is not None and 
-                r.get('maximum_voltage_derivative') is not None and 
-                r.get('minimum_voltage_derivative') is not None and
-                not np.isnan(s_hw) and not np.isnan(s_maxdv) and not np.isnan(s_mindv)):
+            
+            # Match spikes between SynaptiPy and eFEL
+            # They should detect the same number of spikes, but let's be safe and zip up to min count
+            e_peaks = r.get('peak_voltage', [])
+            e_hws = r.get('AP_duration_half_width', [])
+            e_maxdvs = r.get('AP_rise_rate', [])
+            e_mindvs = r.get('AP_fall_rate', [])
+            
+            if e_peaks is None: e_peaks = []
+            if e_hws is None: e_hws = []
+            if e_maxdvs is None: e_maxdvs = []
+            if e_mindvs is None: e_mindvs = []
+            
+            n_spikes = min(len(features_list), len(e_peaks), len(e_hws), len(e_maxdvs), len(e_mindvs))
+            
+            for i in range(n_spikes):
+                s_peak = v[spikes.spike_indices[i]]
+                s_hw = features_list[i].get('half_width', np.nan)
+                s_maxdv = features_list[i].get('max_dvdt', np.nan)
+                s_mindv = features_list[i].get('min_dvdt', np.nan)
                 
-                metrics['Peak Voltage']['e'].append(r['peak_voltage'][0])
-                metrics['Peak Voltage']['s'].append(s_peak)
-                
-                metrics['Half-Width']['e'].append(r['AP_duration_half_width'][0])
-                metrics['Half-Width']['s'].append(s_hw)
-                
-                metrics['Max dV/dt']['e'].append(r['maximum_voltage_derivative'][0])
-                metrics['Max dV/dt']['s'].append(s_maxdv)
-                
-                metrics['Min dV/dt']['e'].append(r['minimum_voltage_derivative'][0])
-                metrics['Min dV/dt']['s'].append(s_mindv)
+                if not np.isnan(s_hw) and not np.isnan(s_maxdv) and not np.isnan(s_mindv):
+                    metrics['Peak Voltage']['e'].append(e_peaks[i])
+                    metrics['Peak Voltage']['s'].append(s_peak)
+                    
+                    metrics['Half-Width']['e'].append(e_hws[i])
+                    metrics['Half-Width']['s'].append(s_hw)
+                    
+                    metrics['Max dV/dt']['e'].append(e_maxdvs[i])
+                    metrics['Max dV/dt']['s'].append(s_maxdv)
+                    
+                    metrics['Min dV/dt']['e'].append(e_mindvs[i])
+                    metrics['Min dV/dt']['s'].append(s_mindv)
 
     if not metrics['Peak Voltage']['s']:
         print("No spikes detected for validation!")
@@ -114,7 +114,7 @@ def main():
         mean_bias = np.mean(y - x)
         std_bias = np.std(y - x)
         
-        stats_output.append(f"{name}: Pearson r={r:.4f}, Bias={mean_bias:.4f} {units[i]}")
+        stats_output.append(f"{name}: Pearson r={r:.4f}, p={p:.4e}, Bias={mean_bias:.4f} {units[i]}")
 
         # Scatter plot
         ax.scatter(x, y, color='#1565C0', alpha=0.7, s=50, edgecolor='k')
@@ -138,9 +138,15 @@ def main():
         # Add Panel Label (A, B, C, D)
         ax.text(-0.15, 1.05, panel_labels[i], transform=ax.transAxes, 
                 fontsize=16, fontweight='bold', va='top', ha='right')
-        
+
+        # Format p-value to decimal notation
+        if p < 0.0001:
+            p_str = "< 0.0001"
+        else:
+            p_str = f"= {p:.4f}"
+
         # Text box for stats
-        stats_text = f"$r$ = {r:.4f}\nBias = {mean_bias:.2f} {units[i]}"
+        stats_text = f"$r$ = {r:.4f} ($p {p_str}$)\nBias = {mean_bias:.2f} {units[i]}"
         ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, va='top', ha='left',
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='#E0E0E0'))
 

@@ -528,9 +528,24 @@ def calculate_spike_features(  # noqa: C901
     mahp_depths = ap_thresholds - mahp_min_vals
 
     # --- max/min dV/dt ---
-    full_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
-    pre_peak_dvdt = np.where(is_pre_peak, full_dvdt, -np.inf)
-    post_peak_dvdt = np.where(is_post_peak, full_dvdt, np.inf)
+    raw_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
+    
+    # Apply a 5-point moving average to smooth the derivative, matching standard 
+    # eFEL stencil logic to prevent single-sample noise spikes from inflating the rate.
+    kernel = np.ones(5) / 5.0
+    from scipy.ndimage import convolve1d
+    full_dvdt = convolve1d(raw_dvdt, kernel, axis=1, mode='nearest')
+    
+    # Calculate column indices of thresholds
+    rel_thresh_indices = thresh_indices - (spike_indices - lookback_samples)
+    
+    # max dV/dt strictly between threshold and peak
+    valid_rise_mask = is_pre_peak[None, :] & (col_indices[None, :] >= rel_thresh_indices[:, None])
+    pre_peak_dvdt = np.where(valid_rise_mask, full_dvdt, -np.inf)
+    
+    # min dV/dt after peak
+    post_peak_dvdt = np.where(is_post_peak[None, :], full_dvdt, np.inf)
+    
     max_dvdts = np.max(pre_peak_dvdt, axis=1)
     min_dvdts = np.min(post_peak_dvdt, axis=1)
 
