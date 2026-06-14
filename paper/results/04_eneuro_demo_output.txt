@@ -1,0 +1,18 @@
+==================================================
+SynaptiPy eNeuro Demonstration Script
+==================================================
+Created synthetic 2-channel recording (20000.0 Hz)
+
+[1/2] Analyzing Input Resistance...
+  -> Rin: 200.11 MΩ
+  -> Conductance: 0.005 μS
+
+[2/2] Detecting Action Potentials...
+  -> Detected 1 spike(s)
+  -> First AP Peak: 30.3 mV
+  -> First AP Threshold: -49.9 mV
+  -> First AP Amplitude: 80.2 mV
+
+==================================================
+Demo completed successfully in 3.3 ms.
+==================================================
