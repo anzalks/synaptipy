@@ -88,21 +88,19 @@ To further demonstrate algorithmic robustness, SynaptiPy's Action Potential extr
 | Min dV/dt (V/s) | 13 | 0.9997 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | +1.095 V/s | -29.109 V/s | Pearson correlation, two-sided *p* |
 | Fast AHP depth (mV) | 13 | -0.6141 (*p* 0.0256) | -0.8355 (*p* 0.0004) | +32.381 mV | +31.640 mV | Pearson correlation, two-sided *p* |
 | ADP amplitude (mV) | 13 | -0.1797 (*p* 0.5568) | -0.5595 (*p* 0.0468) | +70.714 mV | +70.959 mV | Pearson correlation, two-sided *p* |
-| AP rise time (ms) | 13 | N/A (*p* N/A) | 0.8952 (*p* < 0.0001) | N/A | -0.456 ms | Pearson correlation, two-sided *p* |
-| AP fall time (ms) | 13 | N/A (*p* N/A) | 0.1313 (*p* 0.6690) | N/A | -0.933 ms | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter.*
 
-**Extended Data Table 2: Passive membrane and AP properties from real recordings (examples/data/ ABF files, this study).**
+**Extended Data Table 2: Subthreshold passive properties benchmark on -20 pA steps (files: `2023_04_11_0019.abf`, `0022.abf`).**
 
-| Parameter | n trials | Mean ± SD | 95% CI | Statistical approach |
-|-----------|---------|-----------|--------|----------------------|
-| RMP (mV) | 26 | -58.44 ± 5.97 mV | [-60.85, -56.02] mV | Descriptive only |
-| AP threshold (mV) | 13 | -16.05 ± 5.28 mV | [-19.24, -12.85] mV | Descriptive only |
-| AP amplitude (mV) | 13 | 58.37 ± 10.03 mV | [52.31, 64.44] mV | Descriptive only |
-| AP half-width (ms) | 13 | 0.72 ± 0.03 ms | [0.71, 0.74] ms | Descriptive only |
+| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
+|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
+| Resting Membrane Potential (mV) | 17 | -0.4900 (*p* 0.0459) | -0.6107 (*p* 0.0092) | +39.804 mV | +39.705 mV | Pearson correlation, two-sided *p* |
+| Input Resistance (MΩ) | 0 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
+| Membrane Time Constant (ms) | 1 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
 
-*Values from BatchAnalysisEngine `rmp_analysis` + `spike_detection` on real patch-clamp ABF files (macOS M1, SynaptiPy v0.1.5b7). n trials = number of sweeps with valid measurements. 95% CI = mean ± t × (SD / √n) computed using Student's t-distribution.*
+*n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*
+
 
 ### 3. High-Throughput Processing and Rendering Optimization
 The integrated batch processing engine minimizes manual analysis bottlenecks, allowing for the rapid extraction of intrinsic properties and synaptic events across extensive experimental cohorts. To support this high-throughput capability, SynaptiPy utilizes significant rendering optimizations. End-to-end benchmarking indicates that the software maintains stable GUI execution times and smooth navigational frame rates even as the complexity and density of the multi-channel recordings scale. Specifically, full analytical processing completes in ~3.3 ms per recording, and the optimized PyQtGraph rendering pipeline maintains an interactive GUI frame rate exceeding 200 frames per second (4.79 ms median frame latency) even at maximum plot density (20 simultaneous overlaid traces).
