@@ -23,12 +23,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 DATA_DIR = REPO_ROOT / "examples" / "data"
-OUT_DIR  = REPO_ROOT / "paper" / "results"
+OUT_DIR = REPO_ROOT / "paper" / "results"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Public API imports only ──────────────────────────────────────────────────
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-
 
 # ── Files to analyse ─────────────────────────────────────────────────────────
 FILES = [
@@ -46,26 +45,26 @@ PIPELINE = [
         "scope": "all_trials",
         "params": {
             "baseline_start": 0.0,
-            "baseline_end":   0.2,   # first 200 ms
+            "baseline_end": 0.2,  # first 200 ms
         },
     },
     {
         "analysis": "rin_analysis",
         "scope": "all_trials",
         "params": {
-            "baseline_start":   0.0,
-            "baseline_end":     0.15,
-            "response_start":   0.6,
-            "response_end":     0.75,
+            "baseline_start": 0.0,
+            "baseline_end": 0.15,
+            "response_start": 0.6,
+            "response_end": 0.75,
         },
     },
     {
         "analysis": "spike_detection",
         "scope": "all_trials",
         "params": {
-            "threshold":        -20.0,   # mV  — peak voltage threshold
+            "threshold": -20.0,  # mV  — peak voltage threshold
             "refractory_period": 0.002,  # s   — 2 ms refractory
-            "dvdt_threshold":   20.0,    # V/s — dV/dt onset criterion (Bean 2007)
+            "dvdt_threshold": 20.0,  # V/s — dV/dt onset criterion (Bean 2007)
         },
     },
 ]
@@ -85,7 +84,7 @@ def main() -> None:
     print(f"\nRegistered analyses ({len(available)}): {available}\n")
 
     existing = [p for p in FILES if p.exists()]
-    missing  = [p for p in FILES if not p.exists()]
+    missing = [p for p in FILES if not p.exists()]
     if missing:
         for m in missing:
             print(f"WARNING: file not found — skipping: {m.name}")
@@ -115,19 +114,23 @@ def main() -> None:
 
     # ── Summary statistics ────────────────────────────────────────────────────
     print("--- Per-file summary ---")
-    summary_cols = [c for c in df.columns if any(
-        tag in c for tag in ["rmp", "rin", "spike_count", "ap_threshold",
-                             "amplitude", "half_width"]
-    )]
+    summary_cols = [
+        c
+        for c in df.columns
+        if any(tag in c for tag in ["rmp", "rin", "spike_count", "ap_threshold", "amplitude", "half_width"])
+    ]
     if summary_cols:
-        print(df[["file_name"] + summary_cols].to_string(index=False)
-              if "file_name" in df.columns
-              else df[summary_cols].to_string(index=False))
+        print(
+            df[["file_name"] + summary_cols].to_string(index=False)
+            if "file_name" in df.columns
+            else df[summary_cols].to_string(index=False)
+        )
     else:
         print(df.to_string(index=False))
 
     print("\n--- Grand mean ± SD ---")
     import numpy as np
+
     for col in summary_cols:
         if col not in df.columns:
             continue

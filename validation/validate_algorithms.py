@@ -21,6 +21,7 @@ Reference values are derived from the synthetic waveform parameters
 (not from external software), making the suite self-contained.
 
 """
+
 import argparse
 import json
 import sys
@@ -104,9 +105,7 @@ class ValidationReport:
                 f"| {c.tolerance_pct:.1f} | {status} |"
             )
         lines.append("")
-        lines.append(
-            f"**{self.n_passed}/{len(self.checks)} passed**"
-        )
+        lines.append(f"**{self.n_passed}/{len(self.checks)} passed**")
         return "\n".join(lines)
 
 
@@ -208,9 +207,9 @@ def generate_spike_train(
         if idx - half_w < 0 or idx + half_w >= len(data):
             continue
         # Rising phase
-        data[idx - half_w: idx] = np.linspace(baseline_mv, spike_peak_mv, half_w)
+        data[idx - half_w : idx] = np.linspace(baseline_mv, spike_peak_mv, half_w)
         # Falling phase
-        data[idx: idx + half_w] = np.linspace(spike_peak_mv, baseline_mv, half_w)
+        data[idx : idx + half_w] = np.linspace(spike_peak_mv, baseline_mv, half_w)
         actual_peaks.append(st)
 
     n_spikes = len(actual_peaks)
@@ -279,24 +278,24 @@ def generate_exponential_decay(
 def validate_rmp(report: ValidationReport) -> None:
     """Validate RMP measurement on a flat trace."""
     rmp_expected = -65.0
-    data, time, gt = generate_step_trace(
-        baseline_mv=rmp_expected, step_mv=0.0, noise_sd=0.1
-    )
+    data, time, gt = generate_step_trace(baseline_mv=rmp_expected, step_mv=0.0, noise_sd=0.1)
     result = calculate_rmp(data, time, baseline_window=(0.0, 0.5))
-    report.add(ValidationCheck(
-        name="RMP (flat trace)",
-        expected=rmp_expected,
-        measured=result.value,
-        tolerance_pct=1.0,
-        unit="mV",
-    ))
+    report.add(
+        ValidationCheck(
+            name="RMP (flat trace)",
+            expected=rmp_expected,
+            measured=result.value,
+            tolerance_pct=1.0,
+            unit="mV",
+        )
+    )
 
 
 def validate_rin(report: ValidationReport) -> None:
     """Validate Rin on a rectangular step response."""
     baseline_mv = -70.0
-    current_pA = -50.0         # pA
-    deflection_mv = -10.0      # mV
+    current_pA = -50.0  # pA
+    deflection_mv = -10.0  # mV
     # Rin = |dV| / |dI/1000| = 10 / 0.05 = 200 MOhm
     rin_expected = abs(deflection_mv) / (abs(current_pA) / 1000.0)
 
@@ -313,13 +312,15 @@ def validate_rin(report: ValidationReport) -> None:
         baseline_window=(0.0, 0.15),
         response_window=(0.5, 0.65),
     )
-    report.add(ValidationCheck(
-        name="Rin (step response)",
-        expected=rin_expected,
-        measured=result.value if result.is_valid else float("nan"),
-        tolerance_pct=2.0,
-        unit="MOhm",
-    ))
+    report.add(
+        ValidationCheck(
+            name="Rin (step response)",
+            expected=rin_expected,
+            measured=result.value if result.is_valid else float("nan"),
+            tolerance_pct=2.0,
+            unit="MOhm",
+        )
+    )
 
 
 def validate_spike_count(report: ValidationReport) -> None:
@@ -331,18 +332,21 @@ def validate_spike_count(report: ValidationReport) -> None:
     )
     fs = 20000.0
     result = detect_spikes_threshold(
-        data, time,
+        data,
+        time,
         threshold=-20.0,
         refractory_samples=int(0.002 * fs),
     )
     n_detected = len(result.spike_times) if result.spike_times is not None else 0
-    report.add(ValidationCheck(
-        name="Spike count",
-        expected=gt["spike_count"],
-        measured=n_detected,
-        tolerance_pct=0.0,  # exact match
-        unit="spikes",
-    ))
+    report.add(
+        ValidationCheck(
+            name="Spike count",
+            expected=gt["spike_count"],
+            measured=n_detected,
+            tolerance_pct=0.0,  # exact match
+            unit="spikes",
+        )
+    )
 
 
 def validate_spike_timing(report: ValidationReport) -> None:
@@ -351,26 +355,26 @@ def validate_spike_timing(report: ValidationReport) -> None:
     fs = 20000.0
     data, time, gt = generate_spike_train(spike_times_s=expected_spikes)
     result = detect_spikes_threshold(
-        data, time,
+        data,
+        time,
         threshold=-20.0,
         refractory_samples=int(0.002 * fs),
     )
     if result.spike_times is not None and len(result.spike_times) > 0:
-        max_error = max(
-            abs(det - exp)
-            for det, exp in zip(result.spike_times, expected_spikes)
-        )
+        max_error = max(abs(det - exp) for det, exp in zip(result.spike_times, expected_spikes))
         max_error_ms = max_error * 1000
     else:
         max_error_ms = float("inf")
 
-    report.add(ValidationCheck(
-        name="Spike timing accuracy",
-        expected=0.0,
-        measured=max_error_ms,
-        tolerance_pct=100.0,  # absolute: < 0.1 ms
-        unit="ms",
-    ))
+    report.add(
+        ValidationCheck(
+            name="Spike timing accuracy",
+            expected=0.0,
+            measured=max_error_ms,
+            tolerance_pct=100.0,  # absolute: < 0.1 ms
+            unit="ms",
+        )
+    )
     # Override pass/fail with absolute tolerance
     report.checks[-1].passed = max_error_ms < 0.1
 
@@ -381,8 +385,8 @@ def validate_sag_ratio(report: ValidationReport) -> None:
     duration = 1.0
     time = _make_time(duration, fs)
     baseline_mv = -70.0
-    peak_mv = -90.0       # transient peak (20 mV deflection)
-    steady_mv = -80.0     # steady state (10 mV deflection)
+    peak_mv = -90.0  # transient peak (20 mV deflection)
+    steady_mv = -80.0  # steady state (10 mV deflection)
 
     data = np.full_like(time, baseline_mv)
     step_start = 0.2
@@ -392,9 +396,11 @@ def validate_sag_ratio(report: ValidationReport) -> None:
     mask = (time >= step_start) & (time < step_end)
     t_step = time[mask] - step_start
     tau_sag = 0.05  # 50 ms sag time constant
-    data[mask] = baseline_mv + (peak_mv - baseline_mv) * np.exp(-t_step / tau_sag) + (
-        steady_mv - baseline_mv
-    ) * (1 - np.exp(-t_step / tau_sag))
+    data[mask] = (
+        baseline_mv
+        + (peak_mv - baseline_mv) * np.exp(-t_step / tau_sag)
+        + (steady_mv - baseline_mv) * (1 - np.exp(-t_step / tau_sag))
+    )
 
     # Expected sag_ratio = (V_peak - V_baseline) / (V_ss - V_baseline)
     # = (-90 - (-70)) / (-80 - (-70)) = -20 / -10 = 2.0
@@ -408,13 +414,15 @@ def validate_sag_ratio(report: ValidationReport) -> None:
         response_steady_state_window=(step_end - 0.1, step_end),
     )
     sag_val = result.get("sag_ratio", float("nan"))
-    report.add(ValidationCheck(
-        name="Sag ratio",
-        expected=expected_ratio,
-        measured=sag_val if sag_val is not None else float("nan"),
-        tolerance_pct=5.0,
-        unit="",
-    ))
+    report.add(
+        ValidationCheck(
+            name="Sag ratio",
+            expected=expected_ratio,
+            measured=sag_val if sag_val is not None else float("nan"),
+            tolerance_pct=5.0,
+            unit="",
+        )
+    )
 
 
 def validate_artifact_blanking(report: ValidationReport) -> None:
@@ -433,13 +441,15 @@ def validate_artifact_blanking(report: ValidationReport) -> None:
     blanked = blank_artifact(data, time, art_start, art_dur_ms, method="zero")
     artifact_residual = np.max(np.abs(blanked[art_mask]))
 
-    report.add(ValidationCheck(
-        name="Artifact blanking (zero)",
-        expected=0.0,
-        measured=artifact_residual,
-        tolerance_pct=0.0,
-        unit="mV",
-    ))
+    report.add(
+        ValidationCheck(
+            name="Artifact blanking (zero)",
+            expected=0.0,
+            measured=artifact_residual,
+            tolerance_pct=0.0,
+            unit="mV",
+        )
+    )
     report.checks[-1].passed = artifact_residual < 1e-10
 
 
@@ -469,13 +479,15 @@ def validate_tau(report: ValidationReport) -> None:
         tau_measured = float(tau_measured_raw) / 1000.0
     else:
         tau_measured = float("nan")
-    report.add(ValidationCheck(
-        name="Tau (exp decay)",
-        expected=tau_expected,
-        measured=tau_measured if tau_measured is not None else float("nan"),
-        tolerance_pct=15.0,
-        unit="s",
-    ))
+    report.add(
+        ValidationCheck(
+            name="Tau (exp decay)",
+            expected=tau_expected,
+            measured=tau_measured if tau_measured is not None else float("nan"),
+            tolerance_pct=15.0,
+            unit="s",
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -511,10 +523,7 @@ def run_all(save_report: bool = True) -> ValidationReport:
         out_dir = Path(__file__).parent
         out_dir.mkdir(parents=True, exist_ok=True)
         report_path = out_dir / "report.md"
-        header = (
-            "# Synaptipy Algorithm Validation Report\n\n"
-            "Auto-generated by `validate_algorithms.py`.\n\n"
-        )
+        header = "# Synaptipy Algorithm Validation Report\n\n" "Auto-generated by `validate_algorithms.py`.\n\n"
         report_path.write_text(header + report.summary_table() + "\n")
         print(f"Report saved to {report_path}")
 
@@ -523,14 +532,16 @@ def run_all(save_report: bool = True) -> ValidationReport:
         json_path = out_dir / "report.json"
         checks_list = []
         for c in report.checks:
-            checks_list.append({
-                "name": c.name,
-                "expected": float(c.expected),
-                "measured": float(c.measured),
-                "tolerance_pct": float(c.tolerance_pct),
-                "unit": c.unit,
-                "passed": bool(c.passed),
-            })
+            checks_list.append(
+                {
+                    "name": c.name,
+                    "expected": float(c.expected),
+                    "measured": float(c.measured),
+                    "tolerance_pct": float(c.tolerance_pct),
+                    "unit": c.unit,
+                    "passed": bool(c.passed),
+                }
+            )
         json_path.write_text(json.dumps(checks_list, indent=2) + "\n")
 
     return report
@@ -539,7 +550,8 @@ def run_all(save_report: bool = True) -> ValidationReport:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Synaptipy validation suite")
     parser.add_argument(
-        "--no-save", action="store_true",
+        "--no-save",
+        action="store_true",
         help="Do not save report files",
     )
     args = parser.parse_args()

@@ -1,27 +1,23 @@
 import re
 
-with open('paper/paper.md', 'r', encoding='utf-8') as f:
+with open("paper/paper.md", "r", encoding="utf-8") as f:
     text = f.read()
 
 # 1. Add short_title
 text = text.replace(
     "title: 'SynaptiPy: An Open-Source Electrophysiology Visualization and Analysis Suite'",
-    "title: 'SynaptiPy: An Open-Source Electrophysiology Visualization and Analysis Suite'\nshort_title: 'SynaptiPy'"
+    "title: 'SynaptiPy: An Open-Source Electrophysiology Visualization and Analysis Suite'\nshort_title: 'SynaptiPy'",
 )
 
 # 2. Remove TODO block
-text = re.sub(r'<!--.*?MANUSCRIPT TODO.*?END TODO.*?-->\n+', '', text, flags=re.DOTALL)
+text = re.sub(r"<!--.*?MANUSCRIPT TODO.*?END TODO.*?-->\n+", "", text, flags=re.DOTALL)
 
 # 3. Fix broken sentence in Methods
-text = text.replace(
-    "dynamically generate Software Architecture",
-    "dynamically generate graphical user interfaces."
-)
+text = text.replace("dynamically generate Software Architecture", "dynamically generate graphical user interfaces.")
 
 # 4. Fix heading numbers
 text = text.replace(
-    "### 1. Extensible Data Parsing and Software Maintenance",
-    "### 2. Extensible Data Parsing and Software Maintenance"
+    "### 1. Extensible Data Parsing and Software Maintenance", "### 2. Extensible Data Parsing and Software Maintenance"
 )
 
 # 5. Fix duplicated Table 2 blocks
@@ -74,9 +70,9 @@ We thank the open-source scientific Python community for maintaining the foundat
 text = text.replace(old_availability, new_availability)
 
 # 8. Globally fix citations format from ([Author, Year](#ref)) to [(Author, Year)](#ref)
-text = re.sub(r'\(\[([^\]]+)\]\(#ref-([^\)]+)\)\)', r'[(\1)](#ref-\2)', text)
+text = re.sub(r"\(\[([^\]]+)\]\(#ref-([^\)]+)\)\)", r"[(\1)](#ref-\2)", text)
 
-with open('paper/paper.md', 'w', encoding='utf-8') as f:
+with open("paper/paper.md", "w", encoding="utf-8") as f:
     f.write(text)
 
 print("paper.md successfully fixed.")

@@ -1,12 +1,14 @@
 import csv
 from pathlib import Path
+
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
 # Import unified plot formatting
-from plot_utils import set_paper_styles, add_panel_label, COLORS
+from plot_utils import COLORS, add_panel_label, set_paper_styles
 
 set_paper_styles()
 
@@ -39,9 +41,22 @@ for row_idx, label in enumerate(datasets):
 
     # Time plot
     ax_time = axes1[row_idx, 0]
-    ax_time.errorbar(workers, times, yerr=[err_lo, err_hi], fmt=marker+'-', color=color, ecolor=COLORS["light_grey"], capsize=5, linewidth=2, markersize=7, label="Median wall-clock time (± min-max)")
+    ax_time.errorbar(
+        workers,
+        times,
+        yerr=[err_lo, err_hi],
+        fmt=marker + "-",
+        color=color,
+        ecolor=COLORS["light_grey"],
+        capsize=5,
+        linewidth=2,
+        markersize=7,
+        label="Median wall-clock time (± min-max)",
+    )
     baseline = times[0]
-    ax_time.plot(workers, [baseline / w for w in workers], "--", color=COLORS["grey"], linewidth=1, label="Ideal T\u2081/N")
+    ax_time.plot(
+        workers, [baseline / w for w in workers], "--", color=COLORS["grey"], linewidth=1, label="Ideal T\u2081/N"
+    )
     ax_time.set_xlabel("CPU Cores (max_workers)")
     ax_time.set_ylabel("Elapsed Time (s)")
     add_panel_label(ax_time, panel_labels[row_idx * 2])
@@ -51,7 +66,7 @@ for row_idx, label in enumerate(datasets):
     # Speedup plot
     ax_speedup = axes1[row_idx, 1]
     speedup = [baseline / t for t in times]
-    ax_speedup.plot(workers, speedup, marker+'-', color=color, linewidth=2, markersize=7, label="Measured speedup")
+    ax_speedup.plot(workers, speedup, marker + "-", color=color, linewidth=2, markersize=7, label="Measured speedup")
     ax_speedup.plot(workers, [float(w) for w in workers], "k--", linewidth=1, label="Ideal linear S=W")
     ax_speedup.set_xlabel("CPU Cores (max_workers)")
     ax_speedup.set_ylabel("Speedup (S = T\u2081 / T_W)")
@@ -72,13 +87,11 @@ with open(base / "rendering_results.csv", "r") as f:
     for row in csv.DictReader(f):
         mode = row["renderer"]
         n = int(row["n_trials"])
-        stats = {
-            "median_ms": float(row["median_ms"]),
-            "p05_ms": float(row["p05_ms"]),
-            "p95_ms": float(row["p95_ms"])
-        }
-        if mode == "opengl": opengl_data[n] = stats
-        elif mode == "software": software_data[n] = stats
+        stats = {"median_ms": float(row["median_ms"]), "p05_ms": float(row["p05_ms"]), "p95_ms": float(row["p95_ms"])}
+        if mode == "opengl":
+            opengl_data[n] = stats
+        elif mode == "software":
+            software_data[n] = stats
 
 levels = sorted(opengl_data.keys())
 med_gl = [opengl_data[n]["median_ms"] for n in levels]
@@ -92,8 +105,30 @@ hi_sw = [software_data[n]["p95_ms"] - software_data[n]["median_ms"] for n in lev
 fig2, (ax_abs, ax_ratio) = plt.subplots(1, 2, figsize=(12, 4.5))
 
 # Line plot
-ax_abs.errorbar(levels, med_gl, yerr=[lo_gl, hi_gl], fmt="o-", color=COLORS["blue"], ecolor=COLORS["light_blue"], capsize=4, linewidth=2, markersize=6, label="OpenGL (Median ± 5th/95th pct)")
-ax_abs.errorbar(levels, med_sw, yerr=[lo_sw, hi_sw], fmt="s--", color=COLORS["red"], ecolor=COLORS["light_red"], capsize=4, linewidth=2, markersize=6, label="Software (Median ± 5th/95th pct)")
+ax_abs.errorbar(
+    levels,
+    med_gl,
+    yerr=[lo_gl, hi_gl],
+    fmt="o-",
+    color=COLORS["blue"],
+    ecolor=COLORS["light_blue"],
+    capsize=4,
+    linewidth=2,
+    markersize=6,
+    label="OpenGL (Median ± 5th/95th pct)",
+)
+ax_abs.errorbar(
+    levels,
+    med_sw,
+    yerr=[lo_sw, hi_sw],
+    fmt="s--",
+    color=COLORS["red"],
+    ecolor=COLORS["light_red"],
+    capsize=4,
+    linewidth=2,
+    markersize=6,
+    label="Software (Median ± 5th/95th pct)",
+)
 ax_abs.set_xlabel("Overlaid trials (N)")
 ax_abs.set_ylabel("Per-frame update time (ms)")
 ax_abs.set_xticks(levels)
@@ -103,8 +138,26 @@ add_panel_label(ax_abs, "A")
 # Bar chart
 width = 0.35
 x = np.arange(len(levels))
-ax_ratio.bar(x - width/2, med_sw, width, label="Software (Median ± 5th/95th pct)", color=COLORS["red"], yerr=[lo_sw, hi_sw], capsize=4, error_kw={"ecolor": COLORS["light_red"]})
-ax_ratio.bar(x + width/2, med_gl, width, label="OpenGL (Median ± 5th/95th pct)", color=COLORS["blue"], yerr=[lo_gl, hi_gl], capsize=4, error_kw={"ecolor": COLORS["light_blue"]})
+ax_ratio.bar(
+    x - width / 2,
+    med_sw,
+    width,
+    label="Software (Median ± 5th/95th pct)",
+    color=COLORS["red"],
+    yerr=[lo_sw, hi_sw],
+    capsize=4,
+    error_kw={"ecolor": COLORS["light_red"]},
+)
+ax_ratio.bar(
+    x + width / 2,
+    med_gl,
+    width,
+    label="OpenGL (Median ± 5th/95th pct)",
+    color=COLORS["blue"],
+    yerr=[lo_gl, hi_gl],
+    capsize=4,
+    error_kw={"ecolor": COLORS["light_blue"]},
+)
 ax_ratio.set_xticks(x)
 ax_ratio.set_xticklabels([str(n) for n in levels])
 ax_ratio.set_xlabel("Overlaid trials (N)")
@@ -129,14 +182,18 @@ with open(base / "e2e_rendering_results_macos.csv", "r") as f:
             "n_trials": int(row["n_trials"]),
             "median_ms": float(row["median_ms"]),
             "p05_ms": float(row["p05_ms"]),
-            "p95_ms": float(row["p95_ms"])
+            "p95_ms": float(row["p95_ms"]),
         }
         if row["renderer"] == "software":
-            if row["benchmark_mode"] == "overlay_avg": sw_ov.append(entry)
-            else: sw_cs = entry
+            if row["benchmark_mode"] == "overlay_avg":
+                sw_ov.append(entry)
+            else:
+                sw_cs = entry
         elif row["renderer"] == "opengl":
-            if row["benchmark_mode"] == "overlay_avg": gl_ov.append(entry)
-            else: gl_cs = entry
+            if row["benchmark_mode"] == "overlay_avg":
+                gl_ov.append(entry)
+            else:
+                gl_cs = entry
 
 sw_ov = sorted(sw_ov, key=lambda x: x["n_trials"])
 gl_ov = sorted(gl_ov, key=lambda x: x["n_trials"])
@@ -153,8 +210,30 @@ gl_hi = [e["p95_ms"] - e["median_ms"] for e in gl_ov]
 fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(12, 4.5))
 
 # Line plot
-ax3a.errorbar(levels3, sw_med, yerr=[sw_lo, sw_hi], fmt="s--", color=COLORS["red"], ecolor=COLORS["light_red"], capsize=4, linewidth=2, markersize=6, label="Software (Median ± 5th/95th pct)")
-ax3a.errorbar(levels3, gl_med, yerr=[gl_lo, gl_hi], fmt="o-", color=COLORS["blue"], ecolor=COLORS["light_blue"], capsize=4, linewidth=2, markersize=6, label="OpenGL (Median ± 5th/95th pct)")
+ax3a.errorbar(
+    levels3,
+    sw_med,
+    yerr=[sw_lo, sw_hi],
+    fmt="s--",
+    color=COLORS["red"],
+    ecolor=COLORS["light_red"],
+    capsize=4,
+    linewidth=2,
+    markersize=6,
+    label="Software (Median ± 5th/95th pct)",
+)
+ax3a.errorbar(
+    levels3,
+    gl_med,
+    yerr=[gl_lo, gl_hi],
+    fmt="o-",
+    color=COLORS["blue"],
+    ecolor=COLORS["light_blue"],
+    capsize=4,
+    linewidth=2,
+    markersize=6,
+    label="OpenGL (Median ± 5th/95th pct)",
+)
 ax3a.set_xlabel("Overlaid trials (N)")
 ax3a.set_ylabel("_update_plot() time (ms)")
 ax3a.set_xticks(levels3)
@@ -163,8 +242,26 @@ add_panel_label(ax3a, "A")
 
 # Bar chart
 x3 = np.arange(len(levels3))
-ax3b.bar(x3 - width/2, sw_med, width, label="Software (Median ± 5th/95th pct)", color=COLORS["red"], yerr=[sw_lo, sw_hi], capsize=4, error_kw={"ecolor": COLORS["light_red"]})
-ax3b.bar(x3 + width/2, gl_med, width, label="OpenGL (Median ± 5th/95th pct)", color=COLORS["blue"], yerr=[gl_lo, gl_hi], capsize=4, error_kw={"ecolor": COLORS["light_blue"]})
+ax3b.bar(
+    x3 - width / 2,
+    sw_med,
+    width,
+    label="Software (Median ± 5th/95th pct)",
+    color=COLORS["red"],
+    yerr=[sw_lo, sw_hi],
+    capsize=4,
+    error_kw={"ecolor": COLORS["light_red"]},
+)
+ax3b.bar(
+    x3 + width / 2,
+    gl_med,
+    width,
+    label="OpenGL (Median ± 5th/95th pct)",
+    color=COLORS["blue"],
+    yerr=[gl_lo, gl_hi],
+    capsize=4,
+    error_kw={"ecolor": COLORS["light_blue"]},
+)
 ax3b.set_xticks(x3)
 ax3b.set_xticklabels([str(n) for n in levels3])
 ax3b.set_xlabel("Overlaid trials (N)")
@@ -191,50 +288,68 @@ metrics = [
     ("Peak Voltage", "syn_peak_mV", "efel_peak_mV", "ipfx_peak_mV", "mV", "A"),
     ("Half-Width", "syn_hw_ms", "efel_hw_ms", "ipfx_hw_ms", "ms", "B"),
     ("Max dV/dt", "syn_maxdvdt", "efel_maxdvdt", "ipfx_maxdvdt", "V/s", "C"),
-    ("Min dV/dt", "syn_mindvdt", "efel_mindvdt", "ipfx_mindvdt", "V/s", "D")
+    ("Min dV/dt", "syn_mindvdt", "efel_mindvdt", "ipfx_mindvdt", "V/s", "D"),
 ]
 
+
 def format_p(p):
-    if p < 0.0001: return "< 0.0001"
+    if p < 0.0001:
+        return "< 0.0001"
     return f"= {p:.4f}"
+
 
 for i, (title, c_syn, c_efel, c_ipfx, unit, panel_label) in enumerate(metrics):
     ax = axes_bio[i]
     df_valid = bench_df.dropna(subset=[c_syn, c_efel, c_ipfx])
-    
+
     y_syn = df_valid[c_syn].values
     x_efel = df_valid[c_efel].values
     x_ipfx = df_valid[c_ipfx].values
-    
+
     r_e, p_e = pearsonr(x_efel, y_syn)
     mb_e = np.mean(y_syn - x_efel)
-    
+
     r_i, p_i = pearsonr(x_ipfx, y_syn)
     mb_i = np.mean(y_syn - x_ipfx)
-    
-    ax.scatter(x_efel, y_syn, color=COLORS['blue'], s=80, edgecolors='white', linewidths=1.5,
-               label=f'eFEL\nr={r_e:.4f}, p{format_p(p_e)}\nBias: {mb_e:+.2f}')
-    
-    ax.scatter(x_ipfx, y_syn, color=COLORS['red'], s=80, edgecolors='white', linewidths=1.5, marker='s',
-               label=f'IPFX\nr={r_i:.4f}, p{format_p(p_i)}\nBias: {mb_i:+.2f}')
-    
+
+    ax.scatter(
+        x_efel,
+        y_syn,
+        color=COLORS["blue"],
+        s=80,
+        edgecolors="white",
+        linewidths=1.5,
+        label=f"eFEL\nr={r_e:.4f}, p{format_p(p_e)}\nBias: {mb_e:+.2f}",
+    )
+
+    ax.scatter(
+        x_ipfx,
+        y_syn,
+        color=COLORS["red"],
+        s=80,
+        edgecolors="white",
+        linewidths=1.5,
+        marker="s",
+        label=f"IPFX\nr={r_i:.4f}, p{format_p(p_i)}\nBias: {mb_i:+.2f}",
+    )
+
     min_val = min(np.min(y_syn), np.min(x_efel), np.min(x_ipfx))
     max_val = max(np.max(y_syn), np.max(x_efel), np.max(x_ipfx))
     margin = (max_val - min_val) * 0.1
     lims = [min_val - margin, max_val + margin]
-    
-    ax.plot(lims, lims, '--', color=COLORS['grey'], alpha=0.5, zorder=0, label='Unity (y=x)')
-    
-    ax.set_xlabel(f'Benchmark Value ({unit})', fontweight='bold')
-    ax.set_ylabel(f'SynaptiPy Value ({unit})', fontweight='bold')
+
+    ax.plot(lims, lims, "--", color=COLORS["grey"], alpha=0.5, zorder=0, label="Unity (y=x)")
+
+    ax.set_xlabel(f"Benchmark Value ({unit})", fontweight="bold")
+    ax.set_ylabel(f"SynaptiPy Value ({unit})", fontweight="bold")
     ax.set_title(title, pad=20)
-    ax.grid(True, linestyle='--', alpha=0.3)
-    ax.legend(loc='best', frameon=True, edgecolor=COLORS['light_grey'], fontsize=8, markerscale=0.7)
-    
+    ax.grid(True, linestyle="--", alpha=0.3)
+    ax.legend(loc="best", frameon=True, edgecolor=COLORS["light_grey"], fontsize=8, markerscale=0.7)
+
     for spine in ax.spines.values():
-        spine.set_color(COLORS['dark_grey'])
+        spine.set_color(COLORS["dark_grey"])
         spine.set_linewidth(1.5)
-    
+
     add_panel_label(ax, panel_label)
 
 fig_bio.tight_layout(pad=2.0)

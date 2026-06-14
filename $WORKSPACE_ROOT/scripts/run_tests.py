@@ -7,10 +7,11 @@ This script provides a convenient way to run tests with various options like
 coverage reporting and filtering by test name. It specifically targets the
 tests inside the project directory to avoid collecting tests from other projects.
 """
+
 import argparse
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 

@@ -227,8 +227,8 @@ def calculate_spike_features(  # noqa: C901
     rise_time_10_90, decay_time_90_10, fahp_depth, mahp_depth,
     ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
 
-    AP threshold (onset) is strictly defined as the first point in the pre-spike 
-    lookback window where the discrete derivative dV/dt exceeds the specified 
+    AP threshold (onset) is strictly defined as the first point in the pre-spike
+    lookback window where the discrete derivative dV/dt exceeds the specified
     ``dvdt_threshold`` (default 20 V/s). This ensures alignment with IPFX scaling.
 
     Args:
@@ -265,25 +265,25 @@ def calculate_spike_features(  # noqa: C901
     # --- AP Threshold (onset) via dV/dt threshold crossing ---
     # The true physiological base of the action potential is standardly defined
     # as the point where the rising phase crosses a specific dV/dt threshold (e.g. 20 V/s).
-    # The previous maximum curvature (d2vdt2) method was erroneously flagging the middle 
+    # The previous maximum curvature (d2vdt2) method was erroneously flagging the middle
     # of the upstroke due to extreme voltage acceleration.
     lookback_range = np.arange(-lookback_samples, 0)
     onset_window_indices = spike_indices[:, None] + lookback_range
     np.clip(onset_window_indices, 0, n_data - 1, out=onset_window_indices)
 
     onset_dvdt_windows = dvdt[onset_window_indices]
-    
+
     # We use the explicit dvdt_threshold parameter (converted to mV/s) to find the onset.
     target_thresh_mvs = dvdt_threshold * 1000.0
     crossings_mask = onset_dvdt_windows > target_thresh_mvs
     has_crossing = np.any(crossings_mask, axis=1)
-    
+
     # We want the FIRST crossing in the lookback window.
     first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
-    
+
     # If no crossing is found (e.g. extremely slow spike), fallback to a fixed window before peak.
     fallback_indices = np.maximum(0, spike_indices - int(0.002 / dt))
-    
+
     found_thresh_indices = onset_window_indices[np.arange(n_spikes), first_crossing_rel_idx]
     thresh_indices = np.where(has_crossing, found_thresh_indices, fallback_indices)
     ap_thresholds = data[thresh_indices]
@@ -293,7 +293,7 @@ def calculate_spike_features(  # noqa: C901
     # threshold-to-peak rising phase is shorter than 0.1 ms (false detection).
     onset_max_dvdt = np.max(onset_dvdt_windows, axis=1)
     rising_phase_s = (spike_indices - thresh_indices) * dt
-    at_edge = (first_crossing_rel_idx == 0)
+    at_edge = first_crossing_rel_idx == 0
     artifact_flag = at_edge & (
         (onset_max_dvdt > DVDT_ARTIFACT_CEILING_VS * 1000.0) | (rising_phase_s < MIN_RISING_PHASE_MS / 1000.0)
     )
@@ -336,12 +336,8 @@ def calculate_spike_features(  # noqa: C901
     idx_fall_50_rel = np.min(masked_idxs_post, axis=1)
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
-    
-    half_widths[valid_width] = (
-        (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width])
-        * dt
-        * 1000.0
-    )
+
+    half_widths[valid_width] = (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width]) * dt * 1000.0
 
     lev_10 = amp_10[:, None]
     lev_90 = amp_90[:, None]
@@ -352,12 +348,8 @@ def calculate_spike_features(  # noqa: C901
     valid_90 = np.any(mask_90, axis=1)
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
-    
-    rise_times[valid_rise] = (
-        (idx_90_rel[valid_rise] - idx_10_rel[valid_rise])
-        * dt
-        * 1000.0
-    )
+
+    rise_times[valid_rise] = (idx_90_rel[valid_rise] - idx_10_rel[valid_rise]) * dt * 1000.0
 
     mask_dec_90 = is_post_peak & (waveforms <= lev_90)
     valid_dec_90 = np.any(mask_dec_90, axis=1)
@@ -366,12 +358,8 @@ def calculate_spike_features(  # noqa: C901
     valid_dec_10 = np.any(mask_dec_10, axis=1)
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
-    
-    decay_times[valid_decay] = (
-        (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay])
-        * dt
-        * 1000.0
-    )
+
+    decay_times[valid_decay] = (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay]) * dt * 1000.0
 
     # --- AHP ---
     ahp_max_samples_per_spike = np.full(n_spikes, ahp_max_samples)
@@ -442,7 +430,9 @@ def calculate_spike_features(  # noqa: C901
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
         col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
-        valid_adp_mask = is_local_max & (col_idxs2 > ap_end_rel_indices[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+        valid_adp_mask = (
+            is_local_max & (col_idxs2 > ap_end_rel_indices[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+        )
         has_adp = np.any(valid_adp_mask, axis=1)
         temp_vals = ahp_waveforms.copy()
         temp_vals[~valid_adp_mask] = -np.inf
@@ -475,7 +465,7 @@ def calculate_spike_features(  # noqa: C901
 
     # --- max/min dV/dt ---
     raw_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
-    
+
     # Apply a dynamic sampling-rate dependent rolling window (standard ~0.1 ms)
     # to smooth the derivative, matching standard IPFX/eFEL smoothing behavior
     # and preventing single-sample noise spikes from inflating the rate.
@@ -483,21 +473,22 @@ def calculate_spike_features(  # noqa: C901
     window_size = max(3, int(window_ms / (dt * 1000.0)))
     if window_size % 2 == 0:
         window_size += 1
-        
+
     kernel = np.ones(window_size) / window_size
     from scipy.ndimage import convolve1d
-    full_dvdt = convolve1d(raw_dvdt, kernel, axis=1, mode='nearest')
-    
+
+    full_dvdt = convolve1d(raw_dvdt, kernel, axis=1, mode="nearest")
+
     # Calculate column indices of thresholds
     rel_thresh_indices = thresh_indices - (spike_indices - lookback_samples)
-    
+
     # max dV/dt strictly between threshold and peak
     valid_rise_mask = is_pre_peak[None, :] & (col_indices[None, :] >= rel_thresh_indices[:, None])
     pre_peak_dvdt = np.where(valid_rise_mask, full_dvdt, -np.inf)
-    
+
     # min dV/dt after peak
     post_peak_dvdt = np.where(is_post_peak[None, :], full_dvdt, np.inf)
-    
+
     max_dvdts = np.max(pre_peak_dvdt, axis=1)
     min_dvdts = np.min(post_peak_dvdt, axis=1)
 

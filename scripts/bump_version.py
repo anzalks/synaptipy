@@ -190,6 +190,7 @@ def main() -> None:
 
     # Offer to create the local tag automatically
     import subprocess
+
     answer = input(f"Create local tag v{new} now? [y/N] ").strip().lower()
     if answer == "y":
         try:
