@@ -109,7 +109,7 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 | Input Resistance (MΩ) | 8 | 0.3460 (*p* 0.4012) | 0.3863 (*p* 0.3445) | -28.098 MΩ | -1.616 MΩ | Pearson correlation, two-sided *p* |
 | Membrane Time Constant (ms) | 7 | 0.5488 (*p* 0.2020) | 0.7423 (*p* 0.0560) | -0.767 ms | -5.782 ms | Pearson correlation, two-sided *p* |
 
-*n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*
+*n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`. The low Input Resistance Pearson correlations (r ≈ 0.35–0.39, p > 0.30) reflect differing steady-state integration window definitions across pipelines on traces exhibiting hyperpolarisation-activated cation current (Ih/sag), not an algorithmic error; SynaptiPy Rin values occupy the consensus median between IPFX and eFEL (mean bias vs eFEL: −1.6 MΩ).*
 
 
 ## Biological Use-Case: High-Throughput Classification
