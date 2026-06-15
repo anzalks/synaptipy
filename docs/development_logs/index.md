@@ -1,3 +1,6 @@
+---
+orphan: true
+---
 # Development Logs
 
 Session-by-session development history: bug reports, verification guides, refactoring
