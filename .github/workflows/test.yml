@@ -123,7 +123,7 @@ jobs:
         verbose: true             # surface any path-matching or processing errors
 
     - name: Push coverage badge data
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && github.ref == 'refs/heads/main'
       continue-on-error: true   # badge push is informational; must not block the build
       env:
         GITHUB_TOKEN: ${{ github.token }}
