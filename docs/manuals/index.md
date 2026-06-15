@@ -1,3 +1,6 @@
+---
+orphan: true
+---
 # Manuals
 
 Extended manuals covering cross-platform setup and hands-on testing

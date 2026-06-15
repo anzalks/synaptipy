@@ -1,3 +1,6 @@
+---
+orphan: true
+---
 # Architecture & Design Decisions
 
 This section contains internal decision records documenting significant design
