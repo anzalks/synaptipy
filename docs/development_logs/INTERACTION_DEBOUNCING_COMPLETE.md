@@ -254,7 +254,7 @@ debounce_ms = max(50, min(200, render_time * 2))
 - Show high-res after debounce completes
 
 ### 3. OpenGL Acceleration
-- Enable PyQtGraph OpenGL: `pg.setConfigOptions(useOpenGL=True)`
+- Enable experimental OpenGL hardware acceleration via GUI settings
 - May require user opt-in due to driver compatibility
 
 ### 4. Smart Downsampling

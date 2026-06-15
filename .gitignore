@@ -65,3 +65,4 @@ coverage.json
 # CI runs build_offline_help.py before python -m build / PyInstaller to populate these.
 docs/_build/
 src/Synaptipy/resources/docs/
+coverage.xml

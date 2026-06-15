@@ -13,6 +13,7 @@ from typing import Optional
 
 from PySide6 import QtCore, QtWidgets
 
+from Synaptipy.application.session_manager import SessionManager
 from Synaptipy.shared.scroll_settings import (
     ScrollDirection,
     get_scroll_direction,
@@ -238,6 +239,24 @@ class PreferencesDialog(QtWidgets.QDialog):
         ram_layout.addRow("Max RAM allocation:", self.ram_spinbox)
         layout.addWidget(ram_group)
 
+        # --- Hardware Acceleration Group ---
+        gpu_group = QtWidgets.QGroupBox("Rendering")
+        gpu_layout = QtWidgets.QVBoxLayout(gpu_group)
+
+        gpu_desc = QtWidgets.QLabel(
+            "SynaptiPy supports experimental hardware acceleration via OpenGL. If you experience application "
+            "crashes, graphical glitches, or are running on Linux/headless environments, disable this."
+        )
+        gpu_desc.setWordWrap(True)
+        gpu_desc.setStyleSheet("color: gray; font-size: 11px;")
+        gpu_layout.addWidget(gpu_desc)
+
+        self.enable_opengl_checkbox = QtWidgets.QCheckBox("Enable Hardware Acceleration (OpenGL) - Experimental")
+        self.enable_opengl_checkbox.setToolTip("Requires application restart to take effect.")
+        gpu_layout.addWidget(self.enable_opengl_checkbox)
+
+        layout.addWidget(gpu_group)
+
         layout.addStretch()
         self.tab_widget.addTab(tab, "Performance")
 
@@ -273,6 +292,10 @@ class PreferencesDialog(QtWidgets.QDialog):
         self.cpu_cores_spinbox.setValue(max(1, min(saved_cores, self._cpu_count)))
         saved_ram = self._settings.value("performance/max_ram_allocation_gb", 4.0, type=float)
         self.ram_spinbox.setValue(max(0.5, saved_ram))
+
+        # OpenGL toggle
+        global_settings = SessionManager().global_settings
+        self.enable_opengl_checkbox.setChecked(global_settings.get("enable_opengl_experimental", False))
 
     def _get_selected_scroll_direction(self) -> ScrollDirection:
         """Get the currently selected scroll direction."""
@@ -331,6 +354,10 @@ class PreferencesDialog(QtWidgets.QDialog):
             perf = {"max_cpu_cores": new_cores, "max_ram_allocation_gb": new_ram}
             log.debug("Performance settings changed: %s", perf)
             self.sigPerformanceChanged.emit(perf)
+
+        # Save OpenGL setting
+        opengl_enabled = self.enable_opengl_checkbox.isChecked()
+        SessionManager().update_global_setting("enable_opengl_experimental", opengl_enabled)
 
         # Update original values (so cancel won't revert)
         self._original_scroll_direction = new_scroll

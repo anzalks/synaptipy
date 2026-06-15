@@ -22,7 +22,7 @@ from scipy.signal import savgol_filter
 
 from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.constants import DVDT_ARTIFACT_CEILING_VS, DVDT_THRESHOLD_VS, MIN_RISING_PHASE_MS
+from Synaptipy.core.constants import DVDT_ARTIFACT_CEILING_VS, MIN_RISING_PHASE_MS
 from Synaptipy.core.results import SpikeTrainResult
 
 log = logging.getLogger(__name__)
@@ -227,15 +227,15 @@ def calculate_spike_features(  # noqa: C901
     rise_time_10_90, decay_time_90_10, fahp_depth, mahp_depth,
     ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
 
-    AP threshold is detected via the peak of d2V/dt2 in the pre-spike lookback
-    window (maximum curvature method).  Falls back to the first dV/dt crossing
-    above ``dvdt_threshold`` when d2V/dt2 gives a boundary result.
+    AP threshold (onset) is strictly defined as the first point in the pre-spike
+    lookback window where the discrete derivative dV/dt exceeds the specified
+    ``dvdt_threshold`` (default 20 V/s). This ensures alignment with IPFX scaling.
 
     Args:
         data: 1-D voltage array (mV).
         time: Corresponding time array (s).
         spike_indices: Array of sample indices for each spike peak.
-        dvdt_threshold: Fallback dV/dt threshold for AP onset (V/s).
+        dvdt_threshold: The dV/dt threshold for AP onset (V/s). Default 20.0.
         ahp_window_sec: Duration of AHP/ADP search window (s).
         onset_lookback: Lookback window before each spike peak (s).
         fahp_window_ms: (start, end) of fast-AHP window after peak (ms).
@@ -256,48 +256,43 @@ def calculate_spike_features(  # noqa: C901
         return []
 
     dvdt = np.gradient(data, dt)
-    d2vdt2 = np.gradient(dvdt, dt)
 
     lookback_samples = int(onset_lookback / dt)
     post_peak_samples = int(0.01 / dt)
     ahp_max_samples = int(ahp_window_sec / dt)
 
-    # --- AP Threshold (onset) via d2V/dt2 peak (maximum curvature method) ---
-    # The kink in the voltage trace where the AP upstroke begins corresponds to
-    # the peak of the second derivative.  Falls back to the first dV/dt crossing
-    # when the d2V/dt2 peak falls at the window boundary (unreliable estimate).
+    # --- AP Threshold (onset) via dV/dt threshold crossing ---
+    # The true physiological base of the action potential is standardly defined
+    # as the point where the rising phase crosses a specific dV/dt threshold (e.g. 20 V/s).
+    # The previous maximum curvature (d2vdt2) method was erroneously flagging the middle
+    # of the upstroke due to extreme voltage acceleration.
     lookback_range = np.arange(-lookback_samples, 0)
     onset_window_indices = spike_indices[:, None] + lookback_range
     np.clip(onset_window_indices, 0, n_data - 1, out=onset_window_indices)
 
-    onset_d2vdt2_windows = d2vdt2[onset_window_indices]
-    d2vdt2_peak_rel = np.argmax(onset_d2vdt2_windows, axis=1)
-    thresh_indices_d2 = onset_window_indices[np.arange(n_spikes), d2vdt2_peak_rel]
-
-    # Fallback: first dV/dt crossing above a dynamic per-spike threshold.
-    # Using 20% of the per-spike peak rising dV/dt avoids a hardcoded 20 V/s
-    # that is invalid for smaller or inactivated spikes in fast trains.
     onset_dvdt_windows = dvdt[onset_window_indices]
-    onset_max_dvdt = np.max(onset_dvdt_windows, axis=1)  # (n_spikes,) in mV/s
-    # Floor at DVDT_THRESHOLD_VS (converted to mV/s) to prevent triggering at rest.
-    dynamic_thresh_mvs = np.maximum(0.2 * onset_max_dvdt, DVDT_THRESHOLD_VS * 1000.0)
-    crossings_mask = onset_dvdt_windows > dynamic_thresh_mvs[:, None]
-    has_crossing = np.any(crossings_mask, axis=1)
-    first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
-    fallback_indices = np.maximum(0, spike_indices - int(0.001 / dt))
-    found_thresh_indices = onset_window_indices[np.arange(n_spikes), first_crossing_rel_idx]
-    dvdt_thresh_indices = np.where(has_crossing, found_thresh_indices, fallback_indices)
 
-    # Use d2V/dt2 peak unless it sits at the edge of the lookback window
-    at_edge = (d2vdt2_peak_rel == 0) | (d2vdt2_peak_rel >= lookback_samples - 1)
-    thresh_indices = np.where(at_edge, dvdt_thresh_indices, thresh_indices_d2)
+    # We use the explicit dvdt_threshold parameter (converted to mV/s) to find the onset.
+    target_thresh_mvs = dvdt_threshold * 1000.0
+    crossings_mask = onset_dvdt_windows > target_thresh_mvs
+    has_crossing = np.any(crossings_mask, axis=1)
+
+    # We want the FIRST crossing in the lookback window.
+    first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
+
+    # If no crossing is found (e.g. extremely slow spike), fallback to a fixed window before peak.
+    fallback_indices = np.maximum(0, spike_indices - int(0.002 / dt))
+
+    found_thresh_indices = onset_window_indices[np.arange(n_spikes), first_crossing_rel_idx]
+    thresh_indices = np.where(has_crossing, found_thresh_indices, fallback_indices)
     ap_thresholds = data[thresh_indices]
 
-    # Biological QC on fallback-detected thresholds: flag as NaN when the
+    # Biological QC on detected thresholds: flag as NaN when the
     # per-spike peak rising rate exceeds 300 V/s (artifact ceiling) or the
-    # threshold-to-peak rising phase is shorter than 0.2 ms (false detection).
-    # onset_max_dvdt is in mV/s; 300 V/s = 300_000 mV/s.
+    # threshold-to-peak rising phase is shorter than 0.1 ms (false detection).
+    onset_max_dvdt = np.max(onset_dvdt_windows, axis=1)
     rising_phase_s = (spike_indices - thresh_indices) * dt
+    at_edge = first_crossing_rel_idx == 0
     artifact_flag = at_edge & (
         (onset_max_dvdt > DVDT_ARTIFACT_CEILING_VS * 1000.0) | (rising_phase_s < MIN_RISING_PHASE_MS / 1000.0)
     )
@@ -340,31 +335,8 @@ def calculate_spike_features(  # noqa: C901
     idx_fall_50_rel = np.min(masked_idxs_post, axis=1)
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
-    lev_50_flat = lev_50.ravel()
-    rise_frac = np.zeros(n_spikes)
-    fall_frac = np.zeros(n_spikes)
-    for k in np.where(valid_width)[0]:
-        ri = idx_rise_50_rel[k]
-        if ri + 1 < waveforms.shape[1]:
-            y_lo, y_hi = waveforms[k, ri], waveforms[k, ri + 1]
-            denom = y_hi - y_lo
-            # Use np.nan instead of arbitrary 0.5 to signal interpolation failure
-            rise_frac[k] = (lev_50_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
-        fi = idx_fall_50_rel[k]
-        if fi - 1 >= 0:
-            y_hi2, y_lo2 = waveforms[k, fi - 1], waveforms[k, fi]
-            denom2 = y_hi2 - y_lo2
-            # Use np.nan instead of arbitrary 0.5 to signal interpolation failure
-            fall_frac[k] = (lev_50_flat[k] - y_lo2) / denom2 if abs(denom2) > 1e-12 else np.nan
 
-    half_widths[valid_width] = (
-        (
-            (idx_fall_50_rel[valid_width] - fall_frac[valid_width])
-            - (idx_rise_50_rel[valid_width] + rise_frac[valid_width])
-        )
-        * dt
-        * 1000.0
-    )
+    half_widths[valid_width] = (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width]) * dt * 1000.0
 
     lev_10 = amp_10[:, None]
     lev_90 = amp_90[:, None]
@@ -375,27 +347,8 @@ def calculate_spike_features(  # noqa: C901
     valid_90 = np.any(mask_90, axis=1)
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
-    lev_10_flat = amp_10
-    lev_90_flat = amp_90
-    rise_frac_10 = np.zeros(n_spikes)
-    rise_frac_90 = np.zeros(n_spikes)
-    for k in np.where(valid_rise)[0]:
-        ri10 = idx_10_rel[k]
-        if ri10 + 1 < waveforms.shape[1]:
-            y_lo, y_hi = waveforms[k, ri10], waveforms[k, ri10 + 1]
-            denom = y_hi - y_lo
-            rise_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
-        ri90 = idx_90_rel[k]
-        if ri90 + 1 < waveforms.shape[1]:
-            y_lo, y_hi = waveforms[k, ri90], waveforms[k, ri90 + 1]
-            denom = y_hi - y_lo
-            rise_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else np.nan
 
-    rise_times[valid_rise] = (
-        ((idx_90_rel[valid_rise] + rise_frac_90[valid_rise]) - (idx_10_rel[valid_rise] + rise_frac_10[valid_rise]))
-        * dt
-        * 1000.0
-    )
+    rise_times[valid_rise] = (idx_90_rel[valid_rise] - idx_10_rel[valid_rise]) * dt * 1000.0
 
     mask_dec_90 = is_post_peak & (waveforms <= lev_90)
     valid_dec_90 = np.any(mask_dec_90, axis=1)
@@ -404,28 +357,8 @@ def calculate_spike_features(  # noqa: C901
     valid_dec_10 = np.any(mask_dec_10, axis=1)
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
-    decay_frac_90 = np.zeros(n_spikes)
-    decay_frac_10 = np.zeros(n_spikes)
-    for k in np.where(valid_decay)[0]:
-        di90 = idx_dec_90_rel[k]
-        if di90 - 1 >= 0:
-            y_hi, y_lo = waveforms[k, di90 - 1], waveforms[k, di90]
-            denom = y_hi - y_lo
-            decay_frac_90[k] = (lev_90_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
-        di10 = idx_dec_10_rel[k]
-        if di10 - 1 >= 0:
-            y_hi, y_lo = waveforms[k, di10 - 1], waveforms[k, di10]
-            denom = y_hi - y_lo
-            decay_frac_10[k] = (lev_10_flat[k] - y_lo) / denom if abs(denom) > 1e-12 else 0.5
 
-    decay_times[valid_decay] = (
-        (
-            (idx_dec_10_rel[valid_decay] - decay_frac_10[valid_decay])
-            - (idx_dec_90_rel[valid_decay] - decay_frac_90[valid_decay])
-        )
-        * dt
-        * 1000.0
-    )
+    decay_times[valid_decay] = (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay]) * dt * 1000.0
 
     # --- AHP ---
     ahp_max_samples_per_spike = np.full(n_spikes, ahp_max_samples)
@@ -496,7 +429,9 @@ def calculate_spike_features(  # noqa: C901
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
         col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
-        valid_adp_mask = is_local_max & (col_idxs2 > ap_end_rel_indices[:, None])
+        valid_adp_mask = (
+            is_local_max & (col_idxs2 > ap_end_rel_indices[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+        )
         has_adp = np.any(valid_adp_mask, axis=1)
         temp_vals = ahp_waveforms.copy()
         temp_vals[~valid_adp_mask] = -np.inf
@@ -528,9 +463,31 @@ def calculate_spike_features(  # noqa: C901
     mahp_depths = ap_thresholds - mahp_min_vals
 
     # --- max/min dV/dt ---
-    full_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
-    pre_peak_dvdt = np.where(is_pre_peak, full_dvdt, -np.inf)
-    post_peak_dvdt = np.where(is_post_peak, full_dvdt, np.inf)
+    raw_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
+
+    # Apply a dynamic sampling-rate dependent rolling window (standard ~0.1 ms)
+    # to smooth the derivative, matching standard IPFX/eFEL smoothing behavior
+    # and preventing single-sample noise spikes from inflating the rate.
+    window_ms = 0.1
+    window_size = max(3, int(window_ms / (dt * 1000.0)))
+    if window_size % 2 == 0:
+        window_size += 1
+
+    kernel = np.ones(window_size) / window_size
+    from scipy.ndimage import convolve1d
+
+    full_dvdt = convolve1d(raw_dvdt, kernel, axis=1, mode="nearest")
+
+    # Calculate column indices of thresholds
+    rel_thresh_indices = thresh_indices - (spike_indices - lookback_samples)
+
+    # max dV/dt strictly between threshold and peak
+    valid_rise_mask = is_pre_peak[None, :] & (col_indices[None, :] >= rel_thresh_indices[:, None])
+    pre_peak_dvdt = np.where(valid_rise_mask, full_dvdt, -np.inf)
+
+    # min dV/dt after peak
+    post_peak_dvdt = np.where(is_post_peak[None, :], full_dvdt, np.inf)
+
     max_dvdts = np.max(pre_peak_dvdt, axis=1)
     min_dvdts = np.min(post_peak_dvdt, axis=1)
 

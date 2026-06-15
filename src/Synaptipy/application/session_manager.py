@@ -48,7 +48,10 @@ class SessionManager(QObject):
         super().__init__()
         self._current_recording: Optional[Recording] = None
         self._selected_analysis_items: List[Dict[str, Any]] = []
-        self._global_settings: Dict[str, Any] = {"liquid_junction_potential_mv": 0.0}
+        self._global_settings: Dict[str, Any] = {
+            "liquid_junction_potential_mv": 0.0,
+            "enable_opengl_experimental": False,
+        }
         self._preprocessing_settings: Optional[Dict[str, Any]] = None
         self._file_list: List[Path] = []
         self._current_file_index: int = -1

@@ -123,7 +123,7 @@ jobs:
         verbose: true             # surface any path-matching or processing errors
 
     - name: Push coverage badge data
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && github.ref == 'refs/heads/main'
       continue-on-error: true   # badge push is informational; must not block the build
       env:
         GITHUB_TOKEN: ${{ github.token }}
@@ -133,7 +133,7 @@ jobs:
         # pytest_sessionfinish, which kills the process before pytest-cov can
         # write coverage.xml, causing set -e to abort the script before the
         # badge JSON is pushed.
-        CORE_COVERAGE=$(python -m coverage report --include="*/Synaptipy/core/**" --format=total --fail-under=0 2>/dev/null | tail -n1 | tr -dc '0-9')
+        CORE_COVERAGE=$(python -m coverage report --include="src/Synaptipy/core/*" --format=total --fail-under=0 2>/dev/null | tail -n1 | tr -dc '0-9')
         [ -z "$CORE_COVERAGE" ] && CORE_COVERAGE="0"
         if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="green"
         elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="yellow"

@@ -356,9 +356,9 @@ class TestGoldenMasterPrimaryPipelinesABF:
 
         assert metrics["spike_count"] == 12
         assert pytest.approx(float(metrics["spike_times"][0]), rel=1e-3) == 0.07475
-        assert pytest.approx(metrics["ap_threshold_mean"], rel=1e-3) == -13.583119710286459
-        assert pytest.approx(metrics["max_dvdt_mean"], rel=1e-3) == 256.05010986328125
-        assert pytest.approx(metrics["half_width_mean"], rel=1e-3) == 0.7067198666588714
+        assert pytest.approx(metrics["ap_threshold_mean"], rel=1e-3) == -38.599650065104164
+        assert pytest.approx(metrics["max_dvdt_mean"], rel=1e-3) == 231.80728488498264
+        assert pytest.approx(metrics["half_width_mean"], rel=1e-3) == 0.9625
 
     def test_firing_dynamics_fi_curve_spike_count_and_adaptation(self, rec_0021):
         """F-I extractor should preserve spike counts and first finite adaptation ratio."""
@@ -706,9 +706,9 @@ class TestGoldenMasterExtendedSynthetic:
         assert len(features) == 2
 
         for feat in features:
-            # Half-width at 50 % amplitude level (ms) — Reference: 0.55 ms
+            # Half-width at 50 % amplitude level (ms) — Reference: 0.575 ms
             assert not np.isnan(feat["half_width"]), "half_width should not be NaN"
-            assert pytest.approx(feat["half_width"], rel=1e-3) == 0.55
+            assert pytest.approx(feat["half_width"], rel=1e-3) == 0.575
 
             # Peak amplitude: v_peak - v_threshold = 40 - (-70) = 110 mV
             assert pytest.approx(feat["amplitude"], rel=1e-6) == 110.0

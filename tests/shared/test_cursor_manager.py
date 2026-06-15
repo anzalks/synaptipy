@@ -393,128 +393,75 @@ class TestGetHistory:
 
 
 # ---------------------------------------------------------------------------
-# _find_nearest_point — pure numpy computation (lines 65-81)
+# _on_mouse_clicked and _resolve_clicked_plot
 # ---------------------------------------------------------------------------
 
 
-class TestFindNearestPoint:
-    def test_finds_correct_nearest_point(self, cursor_manager):
-        """Lines 65-81: nearest-point search returns the closest data point."""
-        item = MagicMock()
-        item.xData = np.array([0.0, 1.0, 2.0, 3.0])
-        item.yData = np.array([0.0, 1.0, 2.0, 3.0])
-        x, y = cursor_manager._find_nearest_point(1.3, 1.3, 3.0, 3.0, [item])
-        assert x == pytest.approx(1.0)
-        assert y == pytest.approx(1.0)
+class TestOnMouseClicked:
+    def test_on_mouse_clicked_ignored_when_disabled(self, cursor_manager):
+        event = MagicMock()
+        cursor_manager._cursor_mode_enabled = False
+        cursor_manager._on_mouse_clicked(event)
+        assert not event.scenePos.called
 
-    def test_returns_none_when_no_items(self, cursor_manager):
-        """Empty items list → (None, None)."""
-        x, y = cursor_manager._find_nearest_point(0.5, 0.5, 2.0, 2.0, [])
-        assert x is None
-        assert y is None
+    def test_on_mouse_clicked_ignored_wrong_button(self, cursor_manager):
+        from PySide6 import QtCore
 
-    def test_skips_item_with_none_data(self, cursor_manager):
-        """Item with xData=None is skipped."""
-        item = MagicMock()
-        item.xData = None
-        item.yData = np.array([1.0, 2.0])
-        x, y = cursor_manager._find_nearest_point(0.5, 0.5, 2.0, 2.0, [item])
-        assert x is None and y is None
+        event = MagicMock()
+        event.button.return_value = QtCore.Qt.MouseButton.RightButton
+        cursor_manager._cursor_mode_enabled = True
+        cursor_manager._on_mouse_clicked(event)
+        assert not event.scenePos.called
 
-    def test_skips_item_with_empty_xdata(self, cursor_manager):
-        """Item with empty xData is skipped."""
-        item = MagicMock()
-        item.xData = np.array([])
-        item.yData = np.array([])
-        x, y = cursor_manager._find_nearest_point(0.5, 0.5, 2.0, 2.0, [item])
-        assert x is None and y is None
+    def test_on_mouse_clicked_adds_single_cursor(self, cursor_manager, mock_plot_item):
+        from PySide6 import QtCore
 
-    def test_skips_item_with_mismatched_lengths(self, cursor_manager):
-        """Item where len(xData) != len(yData) is skipped."""
-        item = MagicMock()
-        item.xData = np.array([0.0, 1.0, 2.0])
-        item.yData = np.array([0.0, 1.0])
-        x, y = cursor_manager._find_nearest_point(0.5, 0.5, 2.0, 2.0, [item])
-        assert x is None and y is None
+        event = MagicMock()
+        event.button.return_value = QtCore.Qt.MouseButton.LeftButton
 
-    def test_picks_closest_of_multiple_items(self, cursor_manager):
-        """When two items overlap, the truly nearest point wins."""
-        item1 = MagicMock()
-        item1.xData = np.array([0.0, 5.0])
-        item1.yData = np.array([0.0, 5.0])
-        item2 = MagicMock()
-        item2.xData = np.array([1.0, 4.0])
-        item2.yData = np.array([1.0, 4.0])
-        # Click near (1.0, 1.0) — item2's first point should win
-        x, y = cursor_manager._find_nearest_point(1.0, 1.0, 5.0, 5.0, [item1, item2])
-        assert x == pytest.approx(1.0)
-        assert y == pytest.approx(1.0)
+        # Mock scene position
+        pos = MagicMock()
+        event.scenePos.return_value = pos
 
+        # Need a data item inside mock_plot_item so find_nearest_point works
+        data_item = MagicMock()
+        data_item.xData = np.array([0.5])
+        data_item.yData = np.array([0.25])
+        mock_plot_item.listDataItems.return_value = [data_item]
 
-# ---------------------------------------------------------------------------
-# _get_all_plots — PlotWidget branch (lines 47-54)
-# ---------------------------------------------------------------------------
+        cursor_manager._get_all_plots = MagicMock(return_value=[mock_plot_item])
 
+        with patch.object(cursor_manager, "add_cursor_box") as mock_add:
+            cursor_manager._on_mouse_clicked(event)
+            mock_add.assert_called_once_with(0.5, 0.25, mock_plot_item)
 
-class TestGetAllPlots:
-    def test_get_all_plots_with_plot_widget(self, cursor_manager):
-        """Lines 47-48: when widget is a pg.PlotWidget return [getPlotItem()]."""
-        import pyqtgraph as pg
+    def test_on_mouse_clicked_delta_mode(self, cursor_manager, mock_plot_item):
+        from PySide6 import QtCore
 
-        fake_plot_item = MagicMock()
-        mock_pw = MagicMock(spec=pg.PlotWidget)
-        mock_pw.getPlotItem.return_value = fake_plot_item
-        cursor_manager.widget = mock_pw
-        plots = cursor_manager._get_all_plots()
-        assert len(plots) == 1
-        assert plots[0] is fake_plot_item
+        event = MagicMock()
+        event.button.return_value = QtCore.Qt.MouseButton.LeftButton
 
-    def test_get_all_plots_from_scene_items(self, cursor_manager):
-        """Lines 50-54: when widget is not PlotWidget, fall back to scene.items()."""
-        import pyqtgraph as pg
+        # Mock scene position
+        pos = MagicMock()
+        event.scenePos.return_value = pos
 
-        fake_plot = MagicMock(spec=pg.PlotItem)
-        not_plot = MagicMock()  # not a PlotItem
-        cursor_manager.widget = MagicMock()  # not a pg.PlotWidget
-        cursor_manager.scene = MagicMock()
-        cursor_manager.scene.items.return_value = [fake_plot, not_plot]
-        plots = cursor_manager._get_all_plots()
-        assert fake_plot in plots
-        assert not_plot not in plots
+        data_item = MagicMock()
+        data_item.xData = np.array([0.5])
+        data_item.yData = np.array([0.25])
+        mock_plot_item.listDataItems.return_value = [data_item]
 
+        cursor_manager._get_all_plots = MagicMock(return_value=[mock_plot_item])
+        cursor_manager._delta_mode_enabled = True
 
-# ---------------------------------------------------------------------------
-# zoom_theme ImportError branches (lines 130-131, 214-215)
-# ---------------------------------------------------------------------------
+        with patch.object(cursor_manager, "handle_delta_click") as mock_handle:
+            cursor_manager._on_mouse_clicked(event)
+            mock_handle.assert_called_once_with(0.5, 0.25, mock_plot_item)
 
+    def test_resolve_clicked_plot_miss(self, cursor_manager, mock_plot_item):
+        # sceneBoundingRect().contains returns False
+        mock_rect = MagicMock()
+        mock_rect.contains.return_value = False
+        mock_plot_item.sceneBoundingRect.return_value = mock_rect
+        cursor_manager._get_all_plots = MagicMock(return_value=[mock_plot_item])
 
-class TestZoomThemeImportFallback:
-    def test_handle_delta_click_zoom_theme_import_error(self, cursor_manager, mock_plot_item):
-        """Lines 130-131: if zoom_theme ImportError, fall back to default colour."""
-        import sys
-
-        with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
-            patch.dict(sys.modules, {"Synaptipy.shared.zoom_theme": None}),
-        ):
-            ms.return_value = MagicMock()
-            mt.return_value = MagicMock()
-            # Should not raise — falls back to default colour
-            cursor_manager.handle_delta_click(0.5, 0.5, mock_plot_item)
-        # Only first click sets anchor
-        assert cursor_manager._delta_anchor is not None
-
-    def test_add_cursor_box_zoom_theme_import_error(self, cursor_manager, mock_plot_item):
-        """Lines 214-215: if zoom_theme ImportError in add_cursor_box, fall back."""
-        import sys
-
-        with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
-            patch.dict(sys.modules, {"Synaptipy.shared.zoom_theme": None}),
-        ):
-            ms.return_value = MagicMock()
-            mt.return_value = MagicMock()
-            cursor_manager.add_cursor_box(1.0, 2.0, mock_plot_item)
-        assert len(cursor_manager._cursor_history) == 1
+        assert cursor_manager._resolve_clicked_plot(MagicMock()) is None

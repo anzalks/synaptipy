@@ -5,7 +5,7 @@ software to demonstrate its contribution and positioning within the ecosystem.
 
 ## Tool Overview
 
-| Feature | Synaptipy | Stimfit | EasyElectrophysiology | pyABF | Clampfit | AxoGraph |
+| Feature | Synaptipy | Stimfit[^1] | EasyElectrophysiology[^2] | pyABF[^5] | Clampfit[^3] | AxoGraph[^4] |
 |---------|-----------|---------|----------------------|-------|----------|----------|
 | **License** | AGPL-3.0 | GPL-2.0 | GPL-3.0 | MIT | Commercial | Commercial |
 | **Language** | Python | C++/Python | Python | Python | C++ | C++ |
@@ -76,3 +76,25 @@ software to demonstrate its contribution and positioning within the ecosystem.
 5. **Extensible plugin system** — custom analyses can be added without modifying core code, using a decorator-based registry.
 
 6. **Statistical rigor** — confidence intervals on fitted parameters, goodness-of-fit metrics (R^2, p-values), and quality flags on results.
+
+## Sources
+
+All competitor feature claims are drawn from published documentation or
+peer-reviewed descriptions listed below. Last verified: June 2026.
+
+[^1]: Guzman SN et al. (2014). Stimfit: quantifying electrophysiological
+data with Python. *Frontiers in Neuroinformatics* 8:16.
+https://doi.org/10.3389/fninf.2014.00016
+
+[^2]: EasyElectrophysiology documentation.
+https://easyelectrophysiology.com/documentation (accessed June 2026)
+
+[^3]: pCLAMP 11 User Guide. Molecular Devices, 2021.
+https://support.moleculardevices.com
+
+[^4]: AxoGraph Scientific User Manual.
+https://axograph.com/manual (accessed June 2026)
+
+[^5]: Harden SW (2022). pyABF: A Python interface for files in Axon
+Binary Format. *Journal of Open Source Software* 7(71):4517.
+https://doi.org/10.21105/joss.04517

@@ -170,9 +170,6 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 
  developer_guide
  development/index
- decisions/index
- manuals/index
- development_logs/index
 
 Indices and Tables
 ==================

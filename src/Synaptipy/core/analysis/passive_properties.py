@@ -898,6 +898,7 @@ def calculate_tau(  # noqa: C901
     model: str = "mono",
     tau_bounds: Optional[Tuple[float, float]] = None,
     artifact_blanking_ms: float = 0.5,
+    min_r_squared: float = 0.80,
 ) -> Optional[Union[float, Dict[str, float]]]:
     """
     Calculate the membrane time constant (tau) by fitting an exponential model.
@@ -1064,16 +1065,18 @@ def calculate_tau(  # noqa: C901
             except RuntimeError:
                 log.warning("Optimal parameters not found for Tau (mono exponential fit).")
                 return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": []}
+                return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": [], "r_squared": 0.0}
 
-            # R² quality-control gate: reject fits that explain < 95% of variance.
+            # R² quality-control gate: reject fits that explain < min_r_squared of variance.
             _V_fitted = _exp_growth(t_fit, *popt)
             _ss_res = np.sum((V_fit - _V_fitted) ** 2)
             _ss_tot = np.sum((V_fit - np.mean(V_fit)) ** 2)
             r_squared = float(1.0 - _ss_res / _ss_tot) if _ss_tot > 1e-12 else 0.0
-            if r_squared < 0.80:
+            if r_squared < min_r_squared:
                 log.warning(
-                    "Tau (mono): R\u00b2=%.3f < 0.80 -- fit quality insufficient; returning NaN.",
+                    "Tau (mono): R\u00b2=%.3f < %.3f -- fit quality insufficient; returning NaN.",
                     r_squared,
+                    min_r_squared,
                 )
                 return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": [], "r_squared": r_squared}
 
@@ -1134,6 +1137,7 @@ def calculate_tau(  # noqa: C901
                     "V_ss": nan,
                     "_fit_time": [],
                     "_fit_values": [],
+                    "r_squared": 0.0,
                 }
 
             # R² quality-control gate for bi-exponential.
@@ -1141,10 +1145,11 @@ def calculate_tau(  # noqa: C901
             _ss_res_bi = np.sum((V_fit - _V_fitted_bi) ** 2)
             _ss_tot_bi = np.sum((V_fit - np.mean(V_fit)) ** 2)
             r_squared_bi = float(1.0 - _ss_res_bi / _ss_tot_bi) if _ss_tot_bi > 1e-12 else 0.0
-            if r_squared_bi < 0.80:
+            if r_squared_bi < min_r_squared:
                 log.warning(
-                    "Tau (bi): R\u00b2=%.3f < 0.80 -- fit quality insufficient; returning NaN.",
+                    "Tau (bi): R\u00b2=%.3f < %.3f -- fit quality insufficient; returning NaN.",
                     r_squared_bi,
+                    min_r_squared,
                 )
                 nan = float(np.nan)
                 return {
@@ -2076,6 +2081,15 @@ def run_rin_analysis_wrapper(  # noqa: C901
             "max": 100.0,
             "decimals": 4,
         },
+        {
+            "name": "min_r_squared",
+            "label": "Min R²:",
+            "type": "float",
+            "default": 0.80,
+            "min": 0.0,
+            "max": 1.0,
+            "decimals": 2,
+        },
     ],
 )
 def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) -> Dict[str, Any]:
@@ -2086,6 +2100,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
         model = kwargs.get("tau_model", "mono")
         tau_bounds = (kwargs.get("tau_bound_min", 0.0001), kwargs.get("tau_bound_max", 1.0))
         artifact_blanking_ms = kwargs.get("artifact_blanking_ms", 0.5)
+        min_r_squared = kwargs.get("min_r_squared", 0.80)
 
         result = calculate_tau(
             data,
@@ -2095,6 +2110,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             model=model,
             tau_bounds=tau_bounds,
             artifact_blanking_ms=artifact_blanking_ms,
+            min_r_squared=min_r_squared,
         )
 
         params = {
