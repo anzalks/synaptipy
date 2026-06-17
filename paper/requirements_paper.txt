@@ -1,0 +1,10 @@
+# Isolated reproducibility environment for paper validation scripts.
+# Install with: pip install -r paper/requirements_paper.txt
+# Do NOT add these to the core SynaptiPy package.
+-e .
+allensdk>=2.16.0
+ipfx @ git+https://github.com/AllenInstitute/ipfx.git
+efel
+pandas
+matplotlib
+scipy
