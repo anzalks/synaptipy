@@ -179,6 +179,11 @@ and multi-channel data, provided the file format is supported. Confirmed formats
 For the full list of Neo-supported formats, see the
 [Neo I/O documentation](https://neo.readthedocs.io/en/latest/iolist.html).
 
+> **Note:** Allen Cell Types Database NWB files (NWB format 2.2–2.3) may
+> produce `UserWarning: ignoring namespace` messages when opened. These are
+> benign version-mismatch warnings from pynwb and do not affect data
+> integrity. All voltage traces and stimulus waveforms are read correctly.
+
 ### Opening Files
 
 1. Click "Open File..." in the menu or use the shortcut (Ctrl+O or Cmd+O)
