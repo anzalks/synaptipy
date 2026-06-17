@@ -3,49 +3,10 @@
 Welcome to Synaptipy's Documentation
 ======================================
 
-.. image:: https://img.shields.io/badge/source-GitHub-181717?logo=github&logoColor=white
- :target: https://github.com/anzalks/synaptipy
- :alt: GitHub repository
-
-.. image:: https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white
- :target: https://www.python.org/
- :alt: Python 3.10-3.12
-
-.. image:: https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey
- :target: https://github.com/anzalks/synaptipy
- :alt: Platform: Windows | macOS | Linux
-
-.. image:: https://img.shields.io/badge/license-AGPL--3.0-blue
- :target: https://github.com/anzalks/synaptipy/blob/main/LICENSE
- :alt: License: AGPL-3.0
-
-.. image:: https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg?branch=main
- :target: https://github.com/anzalks/synaptipy/actions/workflows/test.yml
- :alt: CI status
-
-.. image:: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml/badge.svg?branch=main
- :target: https://github.com/anzalks/synaptipy/actions/workflows/docs.yml
- :alt: Docs build
-
-.. image:: https://app.readthedocs.org/projects/synaptipy/badge/?version=latest
- :target: https://synaptipy.readthedocs.io/en/latest/
- :alt: Documentation Status
-
-.. image:: https://img.shields.io/badge/code%20style-flake8-black
- :target: https://flake8.pycqa.org/en/latest/
- :alt: Code style: flake8
-
-.. image:: https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg
- :target: https://codecov.io/gh/anzalks/synaptipy
- :alt: Code Coverage
-
-.. image:: https://img.shields.io/badge/collaborators-welcome-brightgreen?logo=github&logoColor=white
- :target: https://github.com/anzalks/synaptipy
- :alt: Collaborators Welcome
-
-.. image:: https://img.shields.io/github/v/release/anzalks/synaptipy?include_prereleases&label=release&color=orange
- :target: https://github.com/anzalks/synaptipy/releases
- :alt: Release
+.. include:: ../README.md
+   :parser: myst_parser.sphinx_
+   :start-after: <!-- BADGES_START -->
+   :end-before: <!-- BADGES_END -->
 
 |
 

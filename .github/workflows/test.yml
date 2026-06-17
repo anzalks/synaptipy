@@ -122,47 +122,7 @@ jobs:
         disable_search: true      # prevent auto-discovery of python-coverage-comment-action.txt
         verbose: true             # surface any path-matching or processing errors
 
-    - name: Push coverage badge data
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && github.ref == 'refs/heads/main'
-      continue-on-error: true   # badge push is informational; must not block the build
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        # Read coverage collected during the main test run and filter to core/.
-        # Do NOT re-run pytest here: conftest.py calls os._exit() in
-        # pytest_sessionfinish, which kills the process before pytest-cov can
-        # write coverage.xml, causing set -e to abort the script before the
-        # badge JSON is pushed.
-        CORE_COVERAGE=$(python -m coverage report --include="src/Synaptipy/core/*" --format=total --fail-under=0 2>/dev/null | tail -n1 | tr -dc '0-9')
-        [ -z "$CORE_COVERAGE" ] && CORE_COVERAGE="0"
-        if   [ "$CORE_COVERAGE" -ge 90 ]; then COLOR="green"
-        elif [ "$CORE_COVERAGE" -ge 75 ]; then COLOR="yellow"
-        elif [ "$CORE_COVERAGE" -ge 60 ]; then COLOR="orange"
-        else COLOR="red"
-        fi
-        printf '{"schemaVersion":1,"label":"core test coverage","message":"%s%%","color":"%s"}\n' \
-          "$CORE_COVERAGE" "$COLOR" > /tmp/endpoint.json
-        # Clone into a fresh /tmp directory to avoid .git/objects permission
-        # conflicts that occur when switching orphan branches inside the
-        # actions/checkout working directory.
-        REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-        WORK_DIR="/tmp/coverage-badge-$$"
-        git clone --depth=1 --no-single-branch "$REPO_URL" "$WORK_DIR"
-        cd "$WORK_DIR"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git config user.name "github-actions[bot]"
-        if git ls-remote --exit-code --heads origin python-coverage-comment-action-data; then
-          git checkout -B python-coverage-comment-action-data \
-            origin/python-coverage-comment-action-data
-        else
-          git checkout --orphan python-coverage-comment-action-data
-          git rm -rf . --quiet || true
-        fi
-        cp /tmp/endpoint.json ./endpoint.json
-        git add endpoint.json
-        git diff --cached --quiet || \
-          git commit -m "chore: update coverage badge data [skip ci]"
-        git push origin python-coverage-comment-action-data
+
 
   # ---------------------------------------------------------------------------
   # Minimum-viable slot: oldest supported Python + pinned lower-bound versions.
