@@ -126,7 +126,17 @@ def detect_spikes_threshold(  # noqa: C901
 
     try:
         dt = time[1] - time[0] if len(time) > 1 else 1.0
-        dvdt = np.gradient(data, dt)
+        
+        # Apply 5 kHz low-pass filter
+        from scipy.signal import butter, sosfiltfilt
+        nyq = 0.5 / dt
+        if 5000.0 < nyq:
+            sos = butter(4, 5000.0, btype='low', output='sos', fs=1.0/dt)
+            data_filtered = sosfiltfilt(sos, data)
+        else:
+            data_filtered = data
+
+        dvdt = np.gradient(data_filtered, dt)
         dvdt_thresh_mvs = dvdt_threshold * 1000.0
 
         crossings = np.where((dvdt[:-1] < dvdt_thresh_mvs) & (dvdt[1:] >= dvdt_thresh_mvs))[0] + 1
@@ -255,7 +265,16 @@ def calculate_spike_features(  # noqa: C901
         log.warning("Invalid time vector (dt <= 0). Cannot calculate features.")
         return []
 
-    dvdt = np.gradient(data, dt)
+    # Apply 5 kHz low-pass filter for clean derivative calculation
+    from scipy.signal import butter, sosfiltfilt
+    nyq = 0.5 / dt
+    if 5000.0 < nyq:
+        sos = butter(4, 5000.0, btype='low', output='sos', fs=1.0/dt)
+        data_filtered = sosfiltfilt(sos, data)
+    else:
+        data_filtered = data
+
+    dvdt = np.gradient(data_filtered, dt)
 
     lookback_samples = int(onset_lookback / dt)
     post_peak_samples = int(0.01 / dt)
@@ -274,13 +293,21 @@ def calculate_spike_features(  # noqa: C901
 
     # We use the explicit dvdt_threshold parameter (converted to mV/s) to find the onset.
     target_thresh_mvs = dvdt_threshold * 1000.0
-    crossings_mask = onset_dvdt_windows > target_thresh_mvs
-    has_crossing = np.any(crossings_mask, axis=1)
+    
+    # PHASE-PLANE BACKWARD SEARCH:
+    # Instead of scanning forward and getting tricked by noise, we search backward 
+    # from the peak to find the point where dV/dt drops BELOW the threshold.
+    below_thresh_mask = onset_dvdt_windows < target_thresh_mvs
+    has_crossing = np.any(below_thresh_mask, axis=1)
+    
+    # Reverse the mask to search backward from the peak (right side of the window)
+    rev_below = below_thresh_mask[:, ::-1]
+    first_below_rev_idx = np.argmax(rev_below, axis=1)
+    
+    # Convert reversed index back to original window index
+    first_crossing_rel_idx = lookback_samples - 1 - first_below_rev_idx
 
-    # We want the FIRST crossing in the lookback window.
-    first_crossing_rel_idx = np.argmax(crossings_mask, axis=1)
-
-    # If no crossing is found (e.g. extremely slow spike), fallback to a fixed window before peak.
+    # If no crossing is found, fallback to a fixed window before peak.
     fallback_indices = np.maximum(0, spike_indices - int(0.002 / dt))
 
     found_thresh_indices = onset_window_indices[np.arange(n_spikes), first_crossing_rel_idx]
@@ -393,7 +420,18 @@ def calculate_spike_features(  # noqa: C901
 
     temp_ahp = smoothed_ahp.copy()
     temp_ahp[~valid_ahp_mask] = np.inf
-    ahp_min_rel_indices = np.argmin(temp_ahp, axis=1)
+    
+    # DYNAMIC AHP BOUNDING:
+    # Instead of unbounded argmin, use the first zero-crossing of the derivative
+    # (negative to positive) indicating the end of repolarization.
+    ahp_dvdt = dvdt[ahp_indices]
+    ahp_dvdt[~valid_ahp_mask] = -1.0 # Ignore invalid regions
+    crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0)
+    has_crossing = np.any(crossing_mask, axis=1)
+    first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1
+    
+    # Fallback to argmin if no clean zero-crossing is found
+    ahp_min_rel_indices = np.where(has_crossing, first_crossing_idx, np.argmin(temp_ahp, axis=1))
 
     mean_window = int(0.001 / dt)
     ahp_min_vals = np.zeros(n_spikes)
@@ -430,7 +468,7 @@ def calculate_spike_features(  # noqa: C901
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
         col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
         valid_adp_mask = (
-            is_local_max & (col_idxs2 > ap_end_rel_indices[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+            is_local_max & (col_idxs2 > ahp_min_rel_indices[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
         )
         has_adp = np.any(valid_adp_mask, axis=1)
         temp_vals = ahp_waveforms.copy()

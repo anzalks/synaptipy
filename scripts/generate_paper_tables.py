@@ -447,14 +447,17 @@ class IPFXRunner:
         end_t = t[stim_ends[0]]
 
         out = {}
+        baseline_int = min(0.1, start_t)
+        out["v_baseline"] = float(subT.baseline_voltage(t, v, start_t, baseline_interval=baseline_int))
+        rin = subT.input_resistance([t], [i], [v], start_t, end_t, baseline_interval=baseline_int)
+        
         try:
-            out["v_baseline"] = float(subT.baseline_voltage(t, v, start_t))
-            rin = subT.input_resistance([t], [i], [v], start_t, end_t)
+            tau = subT.time_constant(t, v, i, start_t, end_t, min_snr=0.0, baseline_interval=baseline_int)
+        except TypeError: # Some versions of IPFX don't accept baseline_interval in time_constant
             tau = subT.time_constant(t, v, i, start_t, end_t, min_snr=0.0)
-            out["input_resistance"] = float(rin)
-            out["tau"] = float(tau) * 1000.0
-        except Exception:
-            pass
+            
+        out["input_resistance"] = float(rin)
+        out["tau"] = float(tau) * 1000.0
         return out
 
 
