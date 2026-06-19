@@ -1,24 +1,73 @@
+#!/usr/bin/env python3
+"""
+SynaptiPy modular runner for generating paper tables.
+
+Downloads NWB files from the Allen Institute Cell Types Database,
+runs SynaptiPy, eFEL, and IPFX, and generates Extended Data Tables 1 & 2
+(Active and Passive properties) to fully reproduce the benchmarks.
+Also plots raw traces for manual verification.
+
+Usage:
+    python scripts/generate_paper_tables.py
+"""
+
+import argparse
+import logging
 import sys
 import warnings
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import neo
 import numpy as np
 import pandas as pd
-import pyabf
+import quantities as pq
 from scipy.stats import pearsonr, t
 
-# Provide access to src/
+# Fix for xarray/allensdk with NumPy 2.0+
+if not hasattr(np, 'unicode_'):
+    np.unicode_ = np.str_
+if not hasattr(np, 'VisibleDeprecationWarning'):
+    np.VisibleDeprecationWarning = UserWarning
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from Synaptipy.core.data_model import Channel, Recording
+from Synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
 
-DATA_DIR = REPO_ROOT / "examples" / "data"
+CACHE_DIR = REPO_ROOT / "paper" / "allen_cache"
 OUT_DIR = REPO_ROOT / "paper" / "results"
+PLOTS_DIR = OUT_DIR / "plots"
+
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Patch numpy 2.0 breaking changes inside allensdk before heavy use
+if not hasattr(np, "unicode_"):
+    np.unicode_ = np.str_
+if not hasattr(np, "VisibleDeprecationWarning"):
+    np.VisibleDeprecationWarning = DeprecationWarning
+
+from allensdk.core.cell_types_cache import CellTypesCache
+from allensdk.api.queries.cell_types_api import CellTypesApi
+
+# Global ctc instance so it can be used for sweep metadata
+ctc = CellTypesCache(manifest_file=str(CACHE_DIR / "manifest.json"))
+
+TARGET_N = 10
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)
+
 
 # ── Stats Helpers ─────────────────────────────────────────────────────────────
-
 
 def corr_summary(x: np.ndarray, y: np.ndarray) -> dict:
     mask = ~(np.isnan(x) | np.isnan(y))
@@ -30,30 +79,137 @@ def corr_summary(x: np.ndarray, y: np.ndarray) -> dict:
     return dict(n=n, r=round(r, 4), p=p, bias=round(float(np.mean(y - x)), 3))
 
 
-def ci95_str(vals: np.ndarray) -> str:
-    vals = vals[~np.isnan(vals)]
-    n = len(vals)
-    if n < 2:
-        return "N/A"
-    se = np.std(vals, ddof=1) / np.sqrt(n)
-    t_crit = t.ppf(0.975, n - 1)
-    mean_val = np.mean(vals)
-    return f"[{mean_val - t_crit * se:.2f}, {mean_val + t_crit * se:.2f}]"
-
-
 def fmt_p(p: float) -> str:
     if np.isnan(p):
         return "N/A"
     return "< 0.0001" if p < 0.0001 else f"{p:.4f}"
 
 
-# ── Runners ───────────────────────────────────────────────────────────────────
+# ── Allen Helpers ─────────────────────────────────────────────────────────────
 
+def get_stimulus_name(ephys_data, sn):
+    meta = ephys_data.get_sweep_metadata(sn)
+    name = meta.get("aibs_stimulus_name") or meta.get("stimulus_name") or b"Unknown"
+    if isinstance(name, bytes):
+        name = name.decode("utf-8", errors="ignore")
+    return name
+
+def get_valid_sweeps(ephys_data, cell_id):
+    """Return sweep numbers whose stimulus type contains 'Square' or 'Ramp'."""
+    out = []
+    # Fetch sweep metadata 
+    sweeps_meta = ctc.get_ephys_sweeps(cell_id)
+    valid_sweep_nums = {s["sweep_number"] for s in sweeps_meta}
+
+    for sn in ephys_data.get_sweep_numbers():
+        if sn not in valid_sweep_nums:
+            continue
+        name = get_stimulus_name(ephys_data, sn)
+        if any(p in name for p in ["Square", "Ramp"]):
+            out.append(sn)
+    return out
+
+
+# ── Plotting Helper ───────────────────────────────────────────────────────────
+
+def plot_cell_summaries(downloaded_cells):
+    log.info("Generating overlaid summary plots for each cell...")
+    
+    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+    adapter = NeoAdapter()
+
+    for cell_id, structure, ephys_data, nwb_path in downloaded_cells:
+        sweeps = get_valid_sweeps(ephys_data, cell_id)
+        
+        # Load the recording once for speed
+        syn_rec = adapter.read_recording(nwb_path)
+        ch_v = syn_rec.channels.get("0")
+        ch_i = syn_rec.channels.get("1")
+        if not ch_v or not ch_i:
+            continue
+            
+        # Map sweep names to trial index
+        sweep_to_trial = {}
+        for idx, t_name in enumerate(ch_v._trial_names if hasattr(ch_v, '_trial_names') else range(len(ch_v.data_trials))):
+            seg_name = getattr(syn_rec.source_handle._block.segments[idx], 'name', f"Sweep_{idx}")
+            if seg_name.startswith("Sweep_"):
+                s_num = int(seg_name.split("_")[-1])
+                sweep_to_trial[s_num] = idx
+
+        # Group sweeps by protocol
+        protocols = {}
+        for sn in sweeps:
+            protocol = get_stimulus_name(ephys_data, sn)
+            if protocol not in protocols:
+                protocols[protocol] = []
+            protocols[protocol].append(sn)
+            
+        for protocol, p_sweeps in protocols.items():
+            fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+            ax_act, ax_pass = axs[0, 0], axs[0, 1]
+            ax_act_i, ax_pass_i = axs[1, 0], axs[1, 1]
+            
+            # Paper-style spine removal
+            for ax in [ax_act, ax_pass, ax_act_i, ax_pass_i]:
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+            
+            colors = plt.cm.viridis(np.linspace(0, 0.8, len(p_sweeps)))
+            
+            for sn, c in zip(p_sweeps, colors):
+                t_idx = sweep_to_trial.get(sn)
+                if t_idx is None:
+                    continue
+                
+                # Fetch directly from memory arrays and downsample by 10 for performance
+                v = ch_v.data_trials[t_idx][::10]
+                i = ch_i.data_trials[t_idx][::10]
+                sr = ch_v.sampling_rate / 10.0
+                t = np.arange(len(v)) / sr
+
+                if any(i < -15):
+                    ax_pass.plot(t, v, color=c, linewidth=0.8, alpha=0.7, rasterized=True)
+                    ax_pass_i.plot(t, i, color=c, linewidth=0.8, alpha=0.7, rasterized=True)
+                if any(i > 15):
+                    ax_act.plot(t, v, color=c, linewidth=0.8, alpha=0.7, rasterized=True)
+                    ax_act_i.plot(t, i, color=c, linewidth=0.8, alpha=0.7, rasterized=True)
+
+            # Panel A: Active Sweeps (Voltage)
+            ax_act.text(-0.05, 1.15, 'A', transform=ax_act.transAxes, fontsize=18, fontweight='bold', va='top', ha='right')
+            ax_act.set_title("Active Sweeps", loc="left", fontsize=14)
+            ax_act.set_ylabel("Membrane Potential (mV)", fontsize=12)
+
+            # Panel B: Passive Sweeps (Voltage)
+            ax_pass.text(-0.05, 1.15, 'B', transform=ax_pass.transAxes, fontsize=18, fontweight='bold', va='top', ha='right')
+            ax_pass.set_title("Passive Sweeps", loc="left", fontsize=14)
+
+            # Panel C: Active Protocol (Current)
+            ax_act_i.text(-0.05, 1.15, 'C', transform=ax_act_i.transAxes, fontsize=18, fontweight='bold', va='top', ha='right')
+            ax_act_i.set_title("Active Protocol", loc="left", fontsize=14)
+            ax_act_i.set_ylabel("Injected Current (pA)", fontsize=12)
+            ax_act_i.set_xlabel("Time (s)", fontsize=12)
+
+            # Panel D: Passive Protocol (Current)
+            ax_pass_i.text(-0.05, 1.15, 'D', transform=ax_pass_i.transAxes, fontsize=18, fontweight='bold', va='top', ha='right')
+            ax_pass_i.set_title("Passive Protocol", loc="left", fontsize=14)
+            ax_pass_i.set_xlabel("Time (s)", fontsize=12)
+
+            # Add tight layout and subtle sub-titles
+            fig.suptitle(f"Cell {cell_id} | {protocol}", fontsize=16, y=0.98)
+            plt.tight_layout(rect=[0.05, 0.03, 1, 0.92])
+            
+            clean_proto = protocol.replace(" ", "_").lower()
+            plot_filename = PLOTS_DIR / f"cell_{cell_id}_{clean_proto}_summary.png"
+            plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+
+# ── Runners ───────────────────────────────────────────────────────────────────
 
 class SynaptiPyRunner:
     @staticmethod
-    def run_spikes(file_path: Path) -> pd.DataFrame:
-        engine = BatchAnalysisEngine(max_workers=1)
+    def run_spikes(syn_rec, sweep_name: str) -> dict:
+        # Provide pipeline directly to the loaded recording
         pipeline = [
             {
                 "analysis": "spike_detection",
@@ -61,24 +217,103 @@ class SynaptiPyRunner:
                 "params": {"threshold": -20.0, "refractory_period": 0.002, "dvdt_threshold": 20.0},
             }
         ]
-        return engine.run_batch([file_path], pipeline)
+        
+        # Filter for the specific trial matching the sweep_name 
+        # (Since we just want to benchmark this trial specifically)
+        # But actually BatchAnalysisEngine runs on the whole recording, 
+        # so we extract the single trial into a temporary recording for benchmark parity
+        ch_0 = syn_rec.channels.get("0")
+        if not ch_0:
+            return {}
+            
+        trial_idx = -1
+        for i, t_name in enumerate(ch_0._trial_names if hasattr(ch_0, '_trial_names') else range(len(ch_0.data_trials))):
+            # The h5py fallback names segments "Sweep_N"
+            if getattr(syn_rec.source_handle._block.segments[i], 'name', f"Sweep_{i}") == sweep_name:
+                trial_idx = i
+                break
+                
+        if trial_idx == -1:
+            return {}
+            
+        v = ch_0.data_trials[trial_idx]
+        sr = ch_0.sampling_rate
+
+        blk = neo.Block()
+        seg = neo.Segment(name=sweep_name)
+        blk.segments.append(seg)
+        import quantities as pq
+        anasig = neo.AnalogSignal(v, units="mV", sampling_rate=sr * pq.Hz, name="Voltage")
+        seg.analogsignals.append(anasig)
+
+        ch = Channel(
+            id="CH_0", 
+            name="Voltage", 
+            units="mV", 
+            sampling_rate=float(sr), 
+            data_trials=[v]
+        )
+        
+        recording = Recording(source_file=syn_rec.source_file)
+        recording.channels = {"CH_0": ch}
+        recording.source_handle = NeoSourceHandle(source_path=syn_rec.source_file, block=blk)
+        
+        engine = BatchAnalysisEngine(max_workers=1)
+        df = engine.run_batch([recording], pipeline)
+        if df.empty:
+            return {}
+        return df.to_dict("records")[0]
 
     @staticmethod
-    def run_passive(file_path: Path) -> pd.DataFrame:
-        abf = pyabf.ABF(file_path)
-        abf.setSweep(0)
-        i = abf.sweepC
-        t = abf.sweepX
-        stim_starts = np.where(np.diff(i) < -5)[0]
-        stim_ends = np.where(np.diff(i) > 5)[0]
+    def run_passive(syn_rec, sweep_name: str, i: np.ndarray, t: np.ndarray) -> dict:
+        ch_0 = syn_rec.channels.get("0")
+        if not ch_0:
+            return {}
+            
+        trial_idx = -1
+        for idx, t_name in enumerate(ch_0._trial_names if hasattr(ch_0, '_trial_names') else range(len(ch_0.data_trials))):
+            if getattr(syn_rec.source_handle._block.segments[idx], 'name', f"Sweep_{idx}") == sweep_name:
+                trial_idx = idx
+                break
+                
+        if trial_idx == -1:
+            return {}
+            
+        v = ch_0.data_trials[trial_idx]
+        sr = ch_0.sampling_rate
 
-        if len(stim_starts) == 0 or len(stim_ends) == 0:
+        stim_starts = np.where(np.diff(i) < -5)[0]
+        if len(stim_starts) == 0:
+            return {}
+        stim_ends = np.where(np.diff(i) > 5)[0]
+        stim_ends = stim_ends[stim_ends > stim_starts[0]]
+        if len(stim_ends) == 0:
             s_t, e_t = 0.15, 0.65
+            amp = -20.0
         else:
             s_t = float(t[stim_starts[0]])
             e_t = float(t[stim_ends[0]])
+            amp = np.mean(i[stim_starts[0] + 10 : stim_ends[0] - 10]) - np.mean(i[: stim_starts[0] - 10])
 
-        engine = BatchAnalysisEngine(max_workers=1)
+        blk = neo.Block()
+        seg = neo.Segment(name=sweep_name)
+        blk.segments.append(seg)
+        import quantities as pq
+        anasig = neo.AnalogSignal(v, units="mV", sampling_rate=sr * pq.Hz, name="Voltage")
+        seg.analogsignals.append(anasig)
+
+        ch = Channel(
+            id="CH_0", 
+            name="Voltage", 
+            units="mV", 
+            sampling_rate=float(sr), 
+            data_trials=[v]
+        )
+        
+        recording = Recording(source_file=syn_rec.source_file)
+        recording.channels = {"CH_0": ch}
+        recording.source_handle = NeoSourceHandle(source_path=syn_rec.source_file, block=blk)
+
         pipeline = [
             {
                 "analysis": "rmp_analysis",
@@ -93,7 +328,7 @@ class SynaptiPyRunner:
                     "baseline_end": max(0.01, s_t - 0.01),
                     "response_start": max(s_t + 0.01, e_t - 0.15),
                     "response_end": max(s_t + 0.02, e_t - 0.01),
-                    "current_amplitude": -20.0,
+                    "current_amplitude": float(amp),
                 },
             },
             {
@@ -102,14 +337,26 @@ class SynaptiPyRunner:
                 "params": {"stim_start_time": s_t, "fit_duration": 0.05, "model": "mono"},
             },
         ]
-        return engine.run_batch([file_path], pipeline)
+        
+        engine = BatchAnalysisEngine(max_workers=1)
+        df = engine.run_batch([recording], pipeline)
+        if df.empty:
+            return {}
+        # Collapse multiple rows from different modules
+        row_dict = {}
+        for row in df.to_dict("records"):
+            for k, val in row.items():
+                if val is not None:
+                    if isinstance(val, float) and np.isnan(val):
+                        continue
+                    row_dict[k] = val
+        return row_dict
 
 
 class EFELRunner:
     @staticmethod
     def run_sweep_spikes(v: np.ndarray, t: np.ndarray) -> dict:
         import efel
-
         trace = {"T": t * 1000.0, "V": v, "stim_start": [t[0] * 1000.0], "stim_end": [t[-1] * 1000.0]}
         want = [
             "peak_voltage",
@@ -132,10 +379,12 @@ class EFELRunner:
     @staticmethod
     def run_sweep_passive(v: np.ndarray, i: np.ndarray, t: np.ndarray) -> dict:
         import efel
-
         stim_starts = np.where(np.diff(i) < -5)[0]
+        if len(stim_starts) == 0:
+            return {}
         stim_ends = np.where(np.diff(i) > 5)[0]
-        if len(stim_starts) == 0 or len(stim_ends) == 0:
+        stim_ends = stim_ends[stim_ends > stim_starts[0]]
+        if len(stim_ends) == 0:
             return {}
 
         s_idx = stim_starts[0]
@@ -165,23 +414,12 @@ class IPFXRunner:
     @staticmethod
     def run_sweep_spikes(v: np.ndarray, t: np.ndarray) -> dict:
         from ipfx.feature_extractor import SpikeFeatureExtractor
-
         ext = SpikeFeatureExtractor(start=t[0], end=t[-1], filter=9.9)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = ext.process(t, v, np.zeros_like(v))
         if result is None or result.empty:
-            return {
-                "n_spikes": 0,
-                "peak_v": np.nan,
-                "width_ms": np.nan,
-                "upstroke": np.nan,
-                "downstroke": np.nan,
-                "threshold_v": np.nan,
-                "amplitude": np.nan,
-                "fast_ahp": np.nan,
-                "adp_amp": np.nan,
-            }
+            return {"n_spikes": 0}
         return {
             "n_spikes": len(result),
             "peak_v": float(result["peak_v"].mean()),
@@ -197,10 +435,12 @@ class IPFXRunner:
     @staticmethod
     def run_sweep_passive(v: np.ndarray, i: np.ndarray, t: np.ndarray) -> dict:
         import ipfx.subthresh_features as subT
-
         stim_starts = np.where(np.diff(i) < -5)[0]
+        if len(stim_starts) == 0:
+            return {}
         stim_ends = np.where(np.diff(i) > 5)[0]
-        if len(stim_starts) == 0 or len(stim_ends) == 0:
+        stim_ends = stim_ends[stim_ends > stim_starts[0]]
+        if len(stim_ends) == 0:
             return {}
 
         start_t = t[stim_starts[0]]
@@ -220,124 +460,127 @@ class IPFXRunner:
 
 # ── Builders ──────────────────────────────────────────────────────────────────
 
-
-def build_table1() -> pd.DataFrame:
-    file_path = DATA_DIR / "2023_04_11_0021.abf"
-    syn_df = SynaptiPyRunner.run_spikes(file_path)
-    if "channel_index" in syn_df.columns:
-        syn_df = syn_df[syn_df["channel_index"] == 0]
-
-    abf = pyabf.ABF(file_path)
-    sr = abf.dataRate
-    dt = 1.0 / sr
-
+def build_table1(downloaded_cells: list) -> pd.DataFrame:
+    log.info("Building Table 1 (Active Properties)...")
     rows = []
-    for _, row in syn_df.iterrows():
-        t_idx = int(row.get("trial_index", 0))
-        n_syn = int(row.get("spike_count", 0))
-        if n_syn == 0 or t_idx >= abf.sweepCount:
-            continue
+    
+    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+    adapter = NeoAdapter()
 
-        abf.setSweep(t_idx)
-        v = abf.sweepY
-        t = np.arange(len(v)) * dt
+    for cell_id, structure, ephys_data, nwb_path in downloaded_cells:
+        sweeps = get_valid_sweeps(ephys_data, cell_id)
+        syn_rec = adapter.read_recording(nwb_path)
+        
+        for sn in sweeps:
+            protocol = get_stimulus_name(ephys_data, sn).lower()
+            if "long square" not in protocol:
+                continue
+                
+            sweep = ephys_data.get_sweep(sn)
+            v = sweep["response"] * 1e3
+            i = sweep["stimulus"] * 1e12
+            sr = sweep["sampling_rate"]
+            t = np.arange(len(v)) / sr
 
-        efel_r = EFELRunner.run_sweep_spikes(v, t)
-        ipfx_r = IPFXRunner.run_sweep_spikes(v, t)
-        if efel_r["n_spikes"] == 0 or ipfx_r["n_spikes"] == 0:
-            continue
+            stim_amp = np.max(i) - np.median(i)
+            if stim_amp <= 120:
+                continue
 
-        rows.append(
-            {
-                "trial": t_idx,
-                "syn_peak_mV": float(row.get("absolute_peak_mv_mean", np.nan)),
+            syn_r = SynaptiPyRunner.run_spikes(syn_rec, f"Sweep_{sn}")
+            if not syn_r or syn_r.get("spike_count", 0) == 0:
+                continue
+
+            efel_r = EFELRunner.run_sweep_spikes(v, t)
+            ipfx_r = IPFXRunner.run_sweep_spikes(v, t)
+            if efel_r.get("n_spikes", 0) == 0 or ipfx_r.get("n_spikes", 0) == 0:
+                continue
+
+            rows.append({
+                "cell_id": cell_id,
+                "trial": sn,
+                "syn_peak_mV": float(syn_r.get("absolute_peak_mv_mean", np.nan)),
                 "efel_peak_mV": efel_r.get("peak_voltage", np.nan),
                 "ipfx_peak_mV": ipfx_r.get("peak_v", np.nan),
-                "syn_thr_mV": float(row.get("ap_threshold_mean", np.nan)),
+                "syn_thr_mV": float(syn_r.get("ap_threshold_mean", np.nan)),
                 "efel_thr_mV": efel_r.get("AP_begin_voltage", np.nan),
                 "ipfx_thr_mV": ipfx_r.get("threshold_v", np.nan),
-                "syn_amp_mV": float(row.get("amplitude_mean", np.nan)),
+                "syn_amp_mV": float(syn_r.get("amplitude_mean", np.nan)),
                 "efel_amp_mV": efel_r.get("AP_amplitude", np.nan),
                 "ipfx_amp_mV": ipfx_r.get("amplitude", np.nan),
-                "syn_hw_ms": float(row.get("half_width_mean", np.nan)),
+                "syn_hw_ms": float(syn_r.get("half_width_mean", np.nan)),
                 "efel_hw_ms": efel_r.get("AP_duration_half_width", np.nan),
                 "ipfx_hw_ms": ipfx_r.get("width_ms", np.nan),
-                "syn_maxdvdt": float(row.get("max_dvdt_mean", np.nan)),
+                "syn_maxdvdt": float(syn_r.get("max_dvdt_mean", np.nan)),
                 "efel_maxdvdt": efel_r.get("AP_rise_rate", np.nan),
                 "ipfx_maxdvdt": ipfx_r.get("upstroke", np.nan),
-                "syn_mindvdt": float(row.get("min_dvdt_mean", np.nan)),
+                "syn_mindvdt": float(syn_r.get("min_dvdt_mean", np.nan)),
                 "efel_mindvdt": efel_r.get("AP_fall_rate", np.nan),
                 "ipfx_mindvdt": ipfx_r.get("downstroke", np.nan),
-                "syn_fahp_mV": float(row.get("fahp_depth_mean", np.nan)),
+                "syn_fahp_mV": float(syn_r.get("fahp_depth_mean", np.nan)),
                 "efel_fahp_mV": efel_r.get("fast_AHP", np.nan),
                 "ipfx_fahp_mV": ipfx_r.get("fast_ahp", np.nan),
-                "syn_adp_mV": float(row.get("adp_amplitude_mean", np.nan)),
+                "syn_adp_mV": float(syn_r.get("adp_amplitude_mean", np.nan)),
                 "efel_adp_mV": efel_r.get("ADP_peak_amplitude", np.nan),
                 "ipfx_adp_mV": ipfx_r.get("adp_amp", np.nan),
-            }
-        )
+            })
+    
     df = pd.DataFrame(rows)
     df.to_csv(OUT_DIR / "benchmark_comparison.csv", index=False)
+    log.info(f"Table 1 built. {len(df)} sweeps extracted.")
     return df
 
 
-def build_table2() -> pd.DataFrame:
-    files = [DATA_DIR / "2023_04_11_0019.abf", DATA_DIR / "2023_04_11_0022.abf"]
+def build_table2(downloaded_cells: list) -> pd.DataFrame:
+    log.info("Building Table 2 (Passive Properties)...")
     rows = []
 
-    for file_path in files:
-        syn_df = SynaptiPyRunner.run_passive(file_path)
-        if "channel_index" in syn_df.columns:
-            syn_df = syn_df[syn_df["channel_index"] == 0]
+    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+    adapter = NeoAdapter()
 
-        # Collapse the separate analysis rows into a single row per trial
-        syn_df = syn_df.groupby("trial_index", as_index=False).agg(
-            lambda x: x.dropna().tolist()[0] if len(x.dropna()) > 0 else np.nan
-        )
-
-        abf = pyabf.ABF(file_path)
-        dt = 1.0 / abf.dataRate
-
-        for _, row in syn_df.iterrows():
-            t_idx = int(row.get("trial_index", 0))
-            if t_idx >= abf.sweepCount:
+    for cell_id, structure, ephys_data, nwb_path in downloaded_cells:
+        sweeps = get_valid_sweeps(ephys_data, cell_id)
+        syn_rec = adapter.read_recording(nwb_path)
+        
+        for sn in sweeps:
+            protocol = get_stimulus_name(ephys_data, sn).lower()
+            if "long square" not in protocol:
                 continue
+                
+            sweep = ephys_data.get_sweep(sn)
+            v = sweep["response"] * 1e3
+            i = sweep["stimulus"] * 1e12
+            sr = sweep["sampling_rate"]
+            t = np.arange(len(v)) / sr
 
-            abf.setSweep(t_idx)
-            v = abf.sweepY
-            i = abf.sweepC
-            t = np.arange(len(v)) * dt
-
-            # Verify it's a -20pA step
+            # Look for hyperpolarizing steps (e.g. < -15 pA)
             if not any(i < -15):
                 continue
 
+            syn_r = SynaptiPyRunner.run_passive(syn_rec, f"Sweep_{sn}", i, t)
             efel_r = EFELRunner.run_sweep_passive(v, i, t)
             ipfx_r = IPFXRunner.run_sweep_passive(v, i, t)
 
-            rows.append(
-                {
-                    "trial": t_idx,
-                    "file": file_path.name,
-                    "syn_rmp_mV": float(row.get("rmp_mv", np.nan)),
-                    "efel_rmp_mV": efel_r.get("voltage_base", np.nan),
-                    "ipfx_rmp_mV": ipfx_r.get("v_baseline", np.nan),
-                    "syn_rin_mohm": float(row.get("rin_mohm", np.nan)),
-                    "efel_rin_mohm": efel_r.get("ohmic_input_resistance", np.nan) * 1000.0,
-                    "ipfx_rin_mohm": ipfx_r.get("input_resistance", np.nan),
-                    "syn_tau_ms": float(row.get("tau_ms", np.nan)),
-                    "efel_tau_ms": efel_r.get("time_constant", np.nan),
-                    "ipfx_tau_ms": ipfx_r.get("tau", np.nan),
-                }
-            )
+            rows.append({
+                "cell_id": cell_id,
+                "trial": sn,
+                "syn_rmp_mV": float(syn_r.get("rmp_mv", np.nan)),
+                "efel_rmp_mV": efel_r.get("voltage_base", np.nan),
+                "ipfx_rmp_mV": ipfx_r.get("v_baseline", np.nan),
+                "syn_rin_mohm": float(syn_r.get("rin_mohm", np.nan)),
+                "efel_rin_mohm": efel_r.get("ohmic_input_resistance", np.nan) * 1000.0,
+                "ipfx_rin_mohm": ipfx_r.get("input_resistance", np.nan),
+                "syn_tau_ms": float(syn_r.get("tau_ms", np.nan)),
+                "efel_tau_ms": efel_r.get("time_constant", np.nan),
+                "ipfx_tau_ms": ipfx_r.get("tau", np.nan),
+            })
 
     df = pd.DataFrame(rows)
     df.to_csv(OUT_DIR / "passive_properties.csv", index=False)
+    log.info(f"Table 2 built. {len(df)} sweeps extracted.")
     return df
 
 
 # ── Render Markdown ───────────────────────────────────────────────────────────
-
 
 def make_table1_md(cmp_df: pd.DataFrame) -> str:
     metrics = [
@@ -350,7 +593,7 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         ("Fast AHP depth (mV)", "syn_fahp_mV", "efel_fahp_mV", "ipfx_fahp_mV", "mV"),
         ("ADP amplitude (mV)", "syn_adp_mV", "efel_adp_mV", "ipfx_adp_mV", "mV"),
     ]
-    md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (file: `2023_04_11_0021.abf`, per-sweep means).**\n\n"
+    md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
     md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
     md += "|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|\n"
     for label, s_col, e_col, i_col, unit in metrics:
@@ -373,7 +616,7 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         ("Input Resistance (MΩ)", "syn_rin_mohm", "efel_rin_mohm", "ipfx_rin_mohm", "MΩ"),
         ("Membrane Time Constant (ms)", "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
     ]
-    md = "**Extended Data Table 2: Subthreshold passive properties benchmark on -20 pA steps (files: `2023_04_11_0019.abf`, `0022.abf`).**\n\n"
+    md = "**Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**\n\n"
     md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
     md += "|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|\n"
     for label, s_col, e_col, i_col, unit in metrics:
@@ -386,37 +629,60 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
         md += f"| {label} | {n} | {r_i} (*p* {fmt_p(vs_i['p'])}) | {r_e} (*p* {fmt_p(vs_e['p'])}) | {b_i} | {b_e} | Pearson correlation, two-sided *p* |\n"
 
-    md += "\n*n sweeps = number of valid sweeps containing a -20 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*"
+    md += "\n*n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*"
     return md
 
 
 def main():
     print("=" * 60)
-    print("SynaptiPy — generate_paper_tables.py (Modular Runner)")
-    print("Computes Extended Data Tables 1 (Active) & 2 (Passive)")
+    print("SynaptiPy — generate_paper_tables.py (Unified Benchmark)")
+    
+    # Hardcoded requested Allen cells
+    requested_cells = [480087928, 323865917, 476135066, 481127932, 502614426, 504615116]
+    print(f"Targeting {len(requested_cells)} Allen Institute cells")
     print("=" * 60)
+    
+    log.info(f"Targeting {len(requested_cells)} hardcoded high-quality cells...")
 
-    t1_df = build_table1()
+    downloaded_cells = []
+    for cell_id in requested_cells:
+        structure = "VISp"
+        nwb_path = CACHE_DIR / f"cell_{cell_id}.nwb"
+
+        try:
+            if not nwb_path.exists():
+                log.info(f"[Download {len(downloaded_cells) + 1}/{len(requested_cells)}] Fetching Cell {cell_id} ...")
+            ephys_data = ctc.get_ephys_data(cell_id, file_name=str(nwb_path))
+            downloaded_cells.append((cell_id, structure, ephys_data, nwb_path))
+        except Exception as exc:
+            log.warning(f"  Failed to download Cell {cell_id}: {exc}")
+
+    log.info("Phase 2: Analysis")
+    t1_df = build_table1(downloaded_cells)
     t1_md = make_table1_md(t1_df)
-    print("Generated Table 1 Markdown.")
 
-    t2_df = build_table2()
+    t2_df = build_table2(downloaded_cells)
     t2_md = make_table2_md(t2_df)
-    print("Generated Table 2 Markdown.")
+    
+    plot_cell_summaries(downloaded_cells)
 
+    log.info("Phase 3: Updating Paper")
     paper_path = REPO_ROOT / "paper" / "paper.md"
     text = paper_path.read_text(encoding="utf-8")
 
     T1_START = "**Extended Data Table 1:"
     idx1s = text.find(T1_START)
-    import re
+    if idx1s == -1:
+        log.error("Could not find Extended Data Table 1 in paper.md")
+        return
 
+    import re
     match = re.search(r"\n#{1,3}\s", text[idx1s:])
     end_idx = idx1s + match.start() if match else len(text)
 
     new_text = text[:idx1s] + t1_md + "\n\n" + t2_md + "\n\n" + text[end_idx:]
     paper_path.write_text(new_text, encoding="utf-8")
-    print(f"Success! Updated paper at {paper_path}")
+    log.info(f"Success! Updated paper at {paper_path}")
 
 
 if __name__ == "__main__":

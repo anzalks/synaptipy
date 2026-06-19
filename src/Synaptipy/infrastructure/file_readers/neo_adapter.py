@@ -119,6 +119,7 @@ class NeoAdapter:
     - No assumptions are made about data structure
     - Versatile support for WCP, ABF, and other formats
     """
+    _has_warned_nwbv1 = False
 
     def _get_neo_io_class(self, filepath: Path) -> Type:  # Use generic Type hint
         """Determines appropriate neo IO class using neo.io.get_io first, then fallback to IODict."""
@@ -466,6 +467,88 @@ class NeoAdapter:
 
         return block, _PyABFFakeReader()
 
+    def _allen_nwb_rescue(self, filepath: Path) -> Tuple[neo.Block, object]:
+        """Convert an old Allen SDK NWBv1 file to a neo Block using raw h5py.
+        
+        PyNWB strictly enforces NWBv2 schemas and throws a TypeError for NWBv1.
+        This fallback bypasses PyNWB entirely and extracts the sweeps directly 
+        from the HDF5 structure.
+        """
+        import h5py
+        import quantities as pq
+        
+        if not self.__class__._has_warned_nwbv1:
+            log.warning("Old NWB file detected. Using patch to show data, some metadata features might be missing.")
+            self.__class__._has_warned_nwbv1 = True
+            
+        block = neo.Block(name=filepath.stem)
+        
+        with h5py.File(str(filepath), 'r') as f:
+            if 'acquisition/timeseries' not in f:
+                raise ValueError("NWBv1 fallback failed: 'acquisition/timeseries' group not found.")
+                
+            acq_group = f['acquisition/timeseries']
+            stim_group = f.get('stimulus/presentation')
+            
+            sweep_names = list(acq_group.keys())
+            
+            for sweep_name in sweep_names:
+                acq_sweep = acq_group[sweep_name]
+                if 'data' not in acq_sweep:
+                    continue
+                    
+                # Extract Voltage
+                v_data = acq_sweep['data'][:]
+                v_rate = acq_sweep['starting_time'].attrs.get('rate', 200000.0)
+                v_unit = acq_sweep['data'].attrs.get('unit', b'V').decode('utf-8', 'ignore') if isinstance(acq_sweep['data'].attrs.get('unit'), bytes) else 'V'
+                if v_unit.lower() == 'volts':
+                    v_unit = 'V'
+                    
+                sweep_idx = int(sweep_name.split('_')[-1]) if '_' in sweep_name else 0
+                seg = neo.Segment(name=sweep_name, index=sweep_idx)
+                
+                v_sig = neo.AnalogSignal(
+                    v_data * getattr(pq, v_unit, pq.V),
+                    sampling_rate=float(v_rate) * pq.Hz,
+                    name='Voltage',
+                    t_start=0.0 * pq.s,
+                )
+                v_sig.annotate(channel_id='0', channel_names=['Voltage'], channel_ids=['0'])
+                seg.analogsignals.append(v_sig)
+                
+                # Extract Current (if available)
+                if stim_group and sweep_name in stim_group:
+                    stim_sweep = stim_group[sweep_name]
+                    if 'data' in stim_sweep:
+                        i_data = stim_sweep['data'][:]
+                        i_rate = stim_sweep['starting_time'].attrs.get('rate', 200000.0)
+                        i_unit = stim_sweep['data'].attrs.get('unit', b'A').decode('utf-8', 'ignore') if isinstance(stim_sweep['data'].attrs.get('unit'), bytes) else 'A'
+                        if i_unit.lower() == 'amperes':
+                            i_unit = 'A'
+                        
+                        i_sig = neo.AnalogSignal(
+                            i_data * getattr(pq, i_unit, pq.A),
+                            sampling_rate=float(i_rate) * pq.Hz,
+                            name='Current',
+                            t_start=0.0 * pq.s,
+                        )
+                        i_sig.annotate(channel_id='1', channel_names=['Current'], channel_ids=['1'])
+                        seg.analogsignals.append(i_sig)
+                
+                block.segments.append(seg)
+                
+        block.create_relationship()
+        
+        header_channels = [
+            {"id": "0", "name": "Voltage"},
+            {"id": "1", "name": "Current"}
+        ]
+        
+        class _NwbFakeReader:
+            header: Dict = {"signal_channels": header_channels}
+            
+        return block, _NwbFakeReader()
+
     def read_recording(  # noqa: C901
         self,
         filepath: Path,
@@ -493,16 +576,22 @@ class NeoAdapter:
                     raise
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
-            # For .abf files we have a pyabf rescue path, so a neo failure is
-            # expected and non-fatal.  Log at DEBUG to avoid alarming the user;
-            # an ERROR is only emitted below if the rescue also fails.
+            # For .abf files we have a pyabf rescue path.
+            # For old .nwb files we have a h5py rescue path.
             _is_abf = filepath.suffix.lower() == ".abf"
+            _is_nwb = filepath.suffix.lower() == ".nwb"
+            
             if _is_abf:
                 log.debug(
                     "neo AxonIO could not read '%s' (Lazy: %s): %s — will attempt pyabf rescue.",
                     filepath.name,
                     lazy,
                     e,
+                )
+            elif _is_nwb and "Missing NWB version" in str(e):
+                log.debug(
+                    "neo NWBIO rejected old NWBv1 '%s' — will attempt h5py rescue.",
+                    filepath.name,
                 )
             else:
                 log.error(
@@ -539,6 +628,18 @@ class NeoAdapter:
                     raise FileReadError("ABF rescue failed: pyabf not installed.")
                 except Exception as pyabf_err:
                     log.error("pyabf rescue also failed for '%s': %s", filepath.name, pyabf_err)
+                    # fall through to the generic lazy fallback below
+            
+            elif _is_nwb and "Missing NWB version" in str(e):
+                try:
+                    block, reader = self._allen_nwb_rescue(filepath)
+                    lazy = False
+                    _pyabf_rescue = True  # We reuse this flag to skip standard fallback and tag synthetic
+                    log.info("NWB h5py rescue succeeded for '%s'.", filepath.name)
+                except ImportError:
+                    raise FileReadError("NWB rescue failed: h5py not installed.")
+                except Exception as nwb_err:
+                    log.error("NWB h5py rescue failed for '%s': %s", filepath.name, nwb_err)
                     # fall through to the generic lazy fallback below
 
             if not _pyabf_rescue:

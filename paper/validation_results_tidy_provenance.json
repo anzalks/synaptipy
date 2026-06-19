@@ -1,0 +1,14 @@
+{
+  "synaptipy_version": "0.1.5b7",
+  "timestamp_utc": "2026-06-19T08:38:54.294708+00:00",
+  "csv_file": "validation_results_tidy.csv",
+  "source_files": [],
+  "analysis_types": [],
+  "analysis_config": {},
+  "dependencies": {
+    "numpy": "2.0.2",
+    "scipy": "1.17.1",
+    "neo": "0.14.4",
+    "pyqtgraph": "0.13.7"
+  }
+}
