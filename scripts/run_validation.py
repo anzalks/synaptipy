@@ -102,7 +102,7 @@ def run_synaptipy_on_nwb(nwb_path: Path, out_csv: Path) -> dict | None:
 
         # 1. Load recording
         adapter   = NeoAdapter()
-        recording = adapter.load(str(nwb_path))
+        recording = adapter.read_recording(str(nwb_path))
 
         # 2. Define pipeline — use exact registered analysis names
         pipeline = [
