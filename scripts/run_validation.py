@@ -97,7 +97,8 @@ def run_synaptipy_on_sweep(ephys_data, sweep_number: int, out_csv: Path) -> dict
     try:
         import neo
         import quantities as pq
-        from Synaptipy.core.data_model import Recording, Channel, NeoSourceHandle
+        from Synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
+        from Synaptipy.core.data_model import Recording, Channel
         from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
         from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 
@@ -112,18 +113,22 @@ def run_synaptipy_on_sweep(ephys_data, sweep_number: int, out_csv: Path) -> dict
         anasig = neo.AnalogSignal(v, units="mV", sampling_rate=sr * pq.Hz, name="Voltage")
         seg.analogsignals.append(anasig)
 
-        ch = Channel(id="CH_0", name="Voltage", is_primary=True, is_command=False, segments=[anasig])
-        recording = Recording(
-            id=f"sweep_{sweep_number}",
-            name=f"sweep_{sweep_number}",
-            channels=[ch],
-            source_handle=NeoSourceHandle(filepath=Path("mock.nwb"), original_block=blk)
+        ch = Channel(
+            id="CH_0", 
+            name="Voltage", 
+            units="mV", 
+            sampling_rate=float(sr), 
+            data_trials=[v]
         )
+        
+        recording = Recording(source_file=Path(f"mock_{sweep_number}.nwb"))
+        recording.channels = {"CH_0": ch}
+        recording.source_handle = NeoSourceHandle(source_path=Path("mock.nwb"), block=blk)
 
         # 2. Define pipeline
         pipeline = [
             {"analysis": "spike_detection", "scope": "all_trials", "params": {"dvdt_threshold": 20.0, "refractory_ms": 2.0}},
-            {"analysis": "spike_analysis", "scope": "all_trials", "params": {}},
+            {"analysis": "single_spike", "scope": "all_trials", "params": {}},
             {"analysis": "rmp_analysis", "scope": "average", "params": {"baseline_start": 0.0, "baseline_end": 0.1}},
         ]
 
