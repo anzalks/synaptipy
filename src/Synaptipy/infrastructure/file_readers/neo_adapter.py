@@ -635,6 +635,13 @@ class NeoAdapter:
             filepath = Path(base_path_str)
             if protocol is None:
                 protocol = embedded_proto
+                
+        if protocol is None:
+            # Try to auto-detect and use first protocol to prevent loading mixed sweeps into a ragged recording
+            protos = self.get_file_protocols(filepath)
+            if protos and len(protos) >= 1:
+                protocol = protos[0]
+                log.info(f"No protocol specified for file. Defaulting to first protocol: {protocol}")
         
         io_class = self._get_neo_io_class(filepath)
         _pyabf_rescue: bool = False
@@ -747,6 +754,9 @@ class NeoAdapter:
                     raise FileReadError(f"Could not read file: {e}")
 
         recording = Recording(source_file=filepath)
+        if protocol is not None:
+            recording.protocol_name = protocol
+            
         if _pyabf_rescue:
             recording.metadata["pyabf_synthetic_rescue"] = True
         if hasattr(block, "rec_datetime") and block.rec_datetime:

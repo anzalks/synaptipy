@@ -2003,6 +2003,18 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if first_channel:
             num_trials = getattr(first_channel, "num_trials", 0)
 
+        # Check if trials have equal lengths to allow averaging
+        has_average = False
+        if first_channel and num_trials > 0:
+            trials = getattr(first_channel, "data_trials", [])
+            loaded_trials = [t for t in trials if t is not None]
+            if len(loaded_trials) == num_trials:
+                lengths = set(len(t) for t in loaded_trials)
+                has_average = len(lengths) <= 1
+            else:
+                # Not fully loaded. Default to Trial 1 for safety.
+                has_average = False
+
         # Force population of ALL options (Average + All Trials) to allow navigation
         # regardless of what was clicked in Explorer.
 
@@ -2028,8 +2040,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             if index >= 0:
                 self.data_source_combobox.setCurrentIndex(index)
         else:
-            # Default to Average
-            index = self.data_source_combobox.findData("average")
+            # Default to Average if valid, else Trial 1
+            if has_average:
+                index = self.data_source_combobox.findData("average")
+            else:
+                index = self.data_source_combobox.findData(0)  # Trial 1
+                
             if index >= 0:
                 self.data_source_combobox.setCurrentIndex(index)
 

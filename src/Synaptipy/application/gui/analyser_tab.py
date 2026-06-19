@@ -20,14 +20,15 @@ from .analysis_tabs.base import BaseAnalysisTab
 log = logging.getLogger(__name__)
 
 
-class AnalysisSourceListWidget(QtWidgets.QListWidget):
-    """Custom ListWidget that accepts file drops for analysis."""
+class AnalysisSourceListWidget(QtWidgets.QTreeWidget):
+    """Custom TreeWidget that accepts file drops for analysis."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.DropOnly)
         self.session_manager = SessionManager()  # Access singleton
+        self.setHeaderHidden(True)
 
     def dragEnterEvent(self, event: QtGui.QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -813,28 +814,81 @@ class AnalyserTab(QtWidgets.QWidget):
             self.files_info_label.setText("No files loaded")
             self.files_info_label.setStyleSheet("color: gray;")
 
-        # Update the List Widget display
+        # Update the Tree Widget display
         self.source_list_widget.clear()
         if not analysis_items:
-            self.source_list_widget.addItem("No items selected for analysis.")
+            no_item = QtWidgets.QTreeWidgetItem(["No items selected for analysis."])
+            self.source_list_widget.addTopLevelItem(no_item)
             self.source_list_widget.setEnabled(False)
         else:
             self.source_list_widget.setEnabled(True)
-            for item in analysis_items:
-                path_name = item["path"].name
-                target = item["target_type"]
+            
+            # Group by protocol, then file
+            protocol_nodes = {}
+            for i, item in enumerate(analysis_items):
+                target = item.get("target_type", "Unknown")
+                path = item.get("path", Path("Unknown"))
+                
                 if target == "MultifileAverage":
-                    display_text = item.get("display_label", f"multifile_average({path_name})")
-                elif target == "Recording":
-                    display_text = f"File: {path_name}"
-                elif target == "Current Trial":
-                    trial_info = f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
-                    display_text = f"{path_name} [{target}{trial_info}]"
+                    display_text = item.get("display_label", f"multifile_average({path.name})")
+                    tree_item = QtWidgets.QTreeWidgetItem([display_text])
+                    tree_item.setToolTip(0, str(path))
+                    tree_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, i)
+                    self.source_list_widget.addTopLevelItem(tree_item)
+                    continue
+                
+                recording = item.get("recording_ref")
+                
+                # Extract file and protocol
+                path_str = str(path)
+                if "::" in path_str:
+                    file_str, protocol = path_str.split("::", 1)
                 else:
-                    display_text = f"{path_name} [{target}]"
-                list_item = QtWidgets.QListWidgetItem(display_text)
-                list_item.setToolTip(str(item["path"]))  # Show full path on hover
-                self.source_list_widget.addItem(list_item)
+                    file_str = path_str
+                    protocol = getattr(recording, "protocol_name", None) if recording else None
+                
+                file_name = Path(file_str).name
+                
+                if protocol:
+                    # Get or create Protocol node
+                    if protocol not in protocol_nodes:
+                        proto_item = QtWidgets.QTreeWidgetItem([f"Protocol: {protocol}"])
+                        self.source_list_widget.addTopLevelItem(proto_item)
+                        protocol_nodes[protocol] = {"node": proto_item, "files": {}}
+                        proto_item.setExpanded(True)
+                    
+                    proto_dict = protocol_nodes[protocol]
+                    parent_node = proto_dict["node"]
+                    
+                    # Get or create File node under Protocol
+                    if file_str not in proto_dict["files"]:
+                        file_item = QtWidgets.QTreeWidgetItem([f"File: {file_name}"])
+                        parent_node.addChild(file_item)
+                        proto_dict["files"][file_str] = file_item
+                        file_item.setExpanded(True)
+                    
+                    parent_node = proto_dict["files"][file_str]
+                else:
+                    # No protocol (e.g. ABF file), place File at top level
+                    # We can store these in protocol_nodes under a special key, or just a separate dict
+                    if file_str not in protocol_nodes.setdefault("__no_protocol__", {}):
+                        file_item = QtWidgets.QTreeWidgetItem([f"File: {file_name}"])
+                        self.source_list_widget.addTopLevelItem(file_item)
+                        protocol_nodes["__no_protocol__"][file_str] = file_item
+                        file_item.setExpanded(True)
+                    
+                    parent_node = protocol_nodes["__no_protocol__"][file_str]
+                
+                if target == "Current Trial":
+                    trial_idx = item.get("trial_index")
+                    trial_info = f"Trial {trial_idx + 1}" if trial_idx is not None else "Trial"
+                    leaf_item = QtWidgets.QTreeWidgetItem([trial_info])
+                else:
+                    leaf_item = QtWidgets.QTreeWidgetItem(["Recording"])
+                    
+                leaf_item.setToolTip(0, str(path))
+                leaf_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, i)
+                parent_node.addChild(leaf_item)
 
         # Update the Central ComboBox
         self.central_analysis_item_combo.blockSignals(True)
@@ -848,18 +902,35 @@ class AnalyserTab(QtWidgets.QWidget):
                 target = item.get("target_type", "Unknown")
                 if target == "MultifileAverage":
                     display_text = item.get("display_label", f"multifile_average({item.get('path', Path('?')).name})")
-                else:
-                    path_name = item.get("path", Path("Unknown")).name
-                    display_text = f"Item {i+1}: "
-                    if target == "Recording":
-                        display_text += f"File: {path_name}"
-                    elif target == "Current Trial":
-                        trial_info = (
-                            f" (Trial {item['trial_index'] + 1})" if item.get("trial_index") is not None else ""
-                        )
-                        display_text += f"{path_name} [{target}{trial_info}]"
+                elif target == "Recording":
+                    recording = item.get("recording_ref")
+                    path_str = str(item['path'])
+                    if "::" in path_str:
+                        file_name, protocol = path_str.split("::", 1)
+                        file_name = Path(file_name).name
+                        display_text = f"{protocol} [{file_name}]"
                     else:
-                        display_text += f"{path_name} [{target}]"
+                        protocol = getattr(recording, "protocol_name", None) if recording else None
+                        if protocol:
+                            display_text = f"{protocol} [{item['path'].name}]"
+                        else:
+                            display_text = f"{item['path'].name}"
+                elif target == "Current Trial":
+                    recording = item.get("recording_ref")
+                    trial_info = f" (Trial {item.get('trial_index', 0) + 1})"
+                    path_str = str(item['path'])
+                    if "::" in path_str:
+                        file_name, protocol = path_str.split("::", 1)
+                        file_name = Path(file_name).name
+                        display_text = f"{protocol} [{file_name}] - {trial_info}"
+                    else:
+                        protocol = getattr(recording, "protocol_name", None) if recording else None
+                        if protocol:
+                            display_text = f"{protocol} [{item['path'].name}] - {trial_info}"
+                        else:
+                            display_text = f"{item['path'].name} [{target}{trial_info}]"
+                else:
+                    display_text = f"{item.get('path', Path('?')).name} [{target}]"
                 self.central_analysis_item_combo.addItem(display_text)
         self.central_analysis_item_combo.blockSignals(False)
 
@@ -982,8 +1053,8 @@ class AnalyserTab(QtWidgets.QWidget):
                 log.error(f"Error updating state for tab '{tab.get_display_name()}': {e_update}", exc_info=True)
 
     # --- Cross-Tab Navigation Handler ---
-    @QtCore.Slot(QtWidgets.QListWidgetItem, QtWidgets.QListWidgetItem)
-    def _on_sidebar_selection_changed(self, current: QtWidgets.QListWidgetItem, previous: QtWidgets.QListWidgetItem):
+    @QtCore.Slot(QtWidgets.QTreeWidgetItem, QtWidgets.QTreeWidgetItem)
+    def _on_sidebar_selection_changed(self, current: QtWidgets.QTreeWidgetItem, previous: QtWidgets.QTreeWidgetItem):
         """
         Handle selection changes in the sidebar (Analysis Source List).
         If a specific trial is selected, notify the current analysis tab to highlight it.
@@ -992,12 +1063,21 @@ class AnalyserTab(QtWidgets.QWidget):
             return
 
         # Determine index in the list
-        row = self.source_list_widget.row(current)
+        row_data = current.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        if row_data is None:
+            return  # Clicked on a parent node (File or Protocol)
+            
+        row = int(row_data)
         if row < 0 or row >= len(self._analysis_items):
             return
 
         selected_item = self._analysis_items[row]
         target_type = selected_item.get("target_type")
+
+        # Sync the central combo box to match the sidebar selection
+        self.central_analysis_item_combo.blockSignals(True)
+        self.central_analysis_item_combo.setCurrentIndex(row)
+        self.central_analysis_item_combo.blockSignals(False)
 
         # Check if it's a specific trial selection (from Explorer expansion)
         # Note: The item dictionary structure from ExplorerTab typically is:

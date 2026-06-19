@@ -327,13 +327,8 @@ class PlotCustomizationManager:
             return cached_pen
 
         # Create new pen with proper opacity handling
-        # Use the customized single trial color as default, or cycle through PLOT_COLORS
-        base_color_str = self.defaults["single_trial"]["color"]
-        # If it's the default blue or matplotlib blue, use our new colorblind-safe cycle instead
-        if base_color_str.lower() in ["#377eb8", "#377eb8"]:
-            color_str = PLOT_COLORS[trial_index % len(PLOT_COLORS)]
-        else:
-            color_str = base_color_str
+        # Use the customized single trial color as default
+        color_str = self.defaults["single_trial"]["color"]
 
         try:
             width = float(self.defaults["single_trial"]["width"])

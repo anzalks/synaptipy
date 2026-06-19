@@ -613,6 +613,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self.file_list = file_list
         self.current_file_index = selected_index
+        self.current_loaded_path = Path(filepath)
 
         # --- Capture State if Requested ---
         if preserve_state:
@@ -859,7 +860,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Update State
         self._update_all_ui_state()
-        self.sidebar.sync_to_file(recording.source_file)
+        self.sidebar.sync_to_file(getattr(self, "current_loaded_path", recording.source_file))
         self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'", 5000)
 
         # Final scene update: FullViewportUpdate mode (set in rebuild_plots)
@@ -924,11 +925,18 @@ class ExplorerTab(QtWidgets.QWidget):
         x_max = None
         for channel in self.current_recording.channels.values():
             try:
-                t = channel.get_relative_time_vector(0)
-                if t is not None and len(t) > 0:
-                    t_end = float(t[-1])
+                # Find the maximum length across all trials to prevent clipping
+                if hasattr(channel, "data_trials") and channel.data_trials:
+                    max_len = max(len(d) for d in channel.data_trials if d is not None)
+                    t_end = (max_len - 1) / channel.sampling_rate
                     if x_max is None or t_end > x_max:
                         x_max = t_end
+                else:
+                    t = channel.get_relative_time_vector(0)
+                    if t is not None and len(t) > 0:
+                        t_end = float(t[-1])
+                        if x_max is None or t_end > x_max:
+                            x_max = t_end
             except Exception:
                 pass
         if x_max is None:
@@ -1406,6 +1414,13 @@ class ExplorerTab(QtWidgets.QWidget):
     # --- Event Handlers ---
     def _on_recording_changed_from_session(self, recording):
         if recording and recording != self.current_recording:
+            # Reconstruct the virtual path for the loaded recording to fix analysis set additions on startup
+            protocol = getattr(recording, "protocol_name", None)
+            if protocol:
+                self.current_loaded_path = Path(f"{recording.source_file}::{protocol}")
+            else:
+                self.current_loaded_path = recording.source_file
+                
             self._display_recording(recording)
 
     def _on_analysis_items_changed_from_session(self, items):
@@ -1515,9 +1530,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     files_to_add.append(item)
 
         # 2. Add current recording if no batch selection
-        if not files_to_add and self.current_recording and self.current_recording.source_file:
+        if not files_to_add and hasattr(self, "current_loaded_path") and self.current_recording:
             item = {
-                "path": self.current_recording.source_file,
+                "path": self.current_loaded_path,
                 "target_type": "Recording",
                 "trial_index": None,
                 "recording_ref": self.current_recording,

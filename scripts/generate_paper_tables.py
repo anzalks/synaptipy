@@ -154,7 +154,9 @@ def plot_cell_summaries(downloaded_cells):
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].set_visible(False)
             
-            colors = plt.cm.viridis(np.linspace(0, 0.8, len(p_sweeps)))
+            from Synaptipy.shared.constants import TRIAL_COLOR
+            rgb_color = tuple(c/255.0 for c in TRIAL_COLOR)
+            colors = [rgb_color] * len(p_sweeps)
             
             for sn, c in zip(p_sweeps, colors):
                 t_idx = sweep_to_trial.get(sn)

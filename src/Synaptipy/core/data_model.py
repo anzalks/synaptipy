@@ -325,6 +325,13 @@ class Channel:
 
     def get_averaged_data(self, trial_indices: Optional[List[int]] = None) -> Optional[np.ndarray]:
         # Returns the averaged data across all (or specified) trials.
+        
+        # Ensure trials are loaded (lazy loading support)
+        indices_to_load = trial_indices if trial_indices is not None else list(range(self.num_trials))
+        for idx in indices_to_load:
+            # get_data handles the lock and lazy load internally
+            self.get_data(idx)
+
         if self.data_trials:
             try:
                 # Determine which trials to use
@@ -350,9 +357,23 @@ class Channel:
                 if all(len(trial) == first_len for trial in trials_to_avg):
                     return np.mean(np.array(trials_to_avg), axis=0)
                 else:
-                    # Handle differing lengths (e.g., pad or error)
-                    log.warning(f"Channel {self.id}: Trials have different lengths, cannot average directly.")
-                    return None
+                    # Handle differing lengths by padding with NaNs and using nanmean
+                    max_len = max(len(t) for t in trials_to_avg)
+                    padded_trials = []
+                    for t in trials_to_avg:
+                        if len(t) < max_len:
+                            # Use np.nan so nanmean ignores the padded region
+                            padded = np.full(max_len, np.nan, dtype=float)
+                            padded[:len(t)] = t
+                            padded_trials.append(padded)
+                        else:
+                            padded_trials.append(t)
+                    log.info(f"Channel {self.id}: Trials have different lengths. Used NaN padding for averaging.")
+                    # Using nanmean ignores the nan pads.
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=RuntimeWarning)
+                        return np.nanmean(np.array(padded_trials), axis=0)
             except (TypeError, ValueError, IndexError) as e:
                 log.error(f"Channel {self.id}: Error averaging trials: {e}")
                 return None

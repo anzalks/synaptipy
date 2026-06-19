@@ -260,14 +260,21 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         """Ensure the file explorer shows and selects the given file."""
         if not file_path or not self.file_model:
             return
+        # Strip virtual protocol suffix for the physical file system tree
+        physical_path = file_path
+        if "::" in str(file_path):
+            physical_path = Path(str(file_path).split("::")[0])
 
-        self._pending_sync_path = file_path
+        self._pending_sync_path = physical_path
+
+        # Clear project tree selection to prevent stale batch additions
+        self.project_tree.clearSelection()
 
         # 1. Ask model to watch this path (triggers loading)
-        self.file_model.setRootPath(str(file_path.parent))
+        self.file_model.setRootPath(str(physical_path.parent))
 
         # 2. Try to sync immediately if already loaded
-        self._attempt_sync(file_path)
+        self._attempt_sync(physical_path)
 
     def _attempt_sync(self, file_path: Path):
         """Try to set root index and select file if model is ready."""
