@@ -1205,7 +1205,8 @@ class ExplorerTab(QtWidgets.QWidget):
                         avg_data = channel.get_averaged_data(
                             trial_indices=list(self.selected_trial_indices) if self.selected_trial_indices else None
                         )
-                        avg_t = channel.get_relative_time_vector(0)  # Use trial 0 time as Ref
+                        avg_t = channel.get_relative_averaged_time_vector()
+
 
                         # APPLY PREPROCESSING (via Pipeline - same as trials)
                         if avg_data is not None:
