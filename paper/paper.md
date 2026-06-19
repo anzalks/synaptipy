@@ -89,7 +89,7 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 To assess generalisability beyond the laboratory's own recordings, an
 automated validation pipeline (`scripts/run_validation.py`) retrieved
 standardised intracellular waveforms from the Allen Institute Cell Types
-Database [(Gouwens et al., 2020)](#ref-ipfx) for n=20 mouse
+Database [(Gouwens et al., 2020)](#ref-ipfx) for n=5 mouse
 cortical cells. SynaptiPy's `BatchAnalysisEngine` processed each NWB
 file headlessly via `NeoAdapter`, without user intervention. Results were
 exported directly to CSV using `CSVExporter` with a companion provenance
