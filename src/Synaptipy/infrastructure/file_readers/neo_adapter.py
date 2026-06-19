@@ -467,7 +467,56 @@ class NeoAdapter:
 
         return block, _PyABFFakeReader()
 
-    def _allen_nwb_rescue(self, filepath: Path) -> Tuple[neo.Block, object]:
+    def get_file_protocols(self, filepath: Path) -> List[str]:
+        """
+        Scans a file and returns a list of unique protocol names found inside it.
+        If the file format does not support nesting or contains only one protocol,
+        an empty list is returned.
+        """
+        filepath = Path(filepath)
+        protocols = []
+        
+        try:
+            # Check for NWBv1 first as PyNWB crashes on it
+            if filepath.suffix.lower() == ".nwb":
+                import h5py
+                with h5py.File(str(filepath), 'r') as f:
+                    if 'epochs' in f:
+                        ep_group = f['epochs']
+                        for ep_name in ep_group:
+                            if 'description' in ep_group[ep_name]:
+                                desc = ep_group[ep_name]['description'][()]
+                                desc_str = desc.decode('utf-8') if isinstance(desc, bytes) else str(desc)
+                                if "Stimulus was " in desc_str:
+                                    # Extract "Short Square" from "Stimulus was Short Square, 400 pa"
+                                    proto_part = desc_str.split("Stimulus was ")[1]
+                                    proto_name = proto_part.split(",")[0].strip()
+                                    if proto_name and proto_name not in protocols:
+                                        protocols.append(proto_name)
+                        
+                        if protocols:
+                            return protocols
+            
+            # Generic Neo approach
+            io_class = self._get_neo_io_class(filepath)
+            reader = io_class(filename=str(filepath))
+            
+            # read() returns a list of blocks
+            blocks = reader.read(lazy=True)
+            for block in blocks:
+                if block.name and block.name not in protocols:
+                    protocols.append(block.name)
+            
+            # If there's only one block, we don't consider it "nested"
+            if len(protocols) <= 1:
+                return []
+                
+        except Exception as e:
+            log.debug(f"Could not extract protocols for {filepath.name}: {e}")
+            
+        return protocols
+
+    def _allen_nwb_rescue(self, filepath: Path, protocol: Optional[str] = None) -> Tuple[neo.Block, object]:
         """Convert an old Allen SDK NWBv1 file to a neo Block using raw h5py.
         
         PyNWB strictly enforces NWBv2 schemas and throws a TypeError for NWBv1.
@@ -494,6 +543,23 @@ class NeoAdapter:
             
             for sweep_name in sweep_names:
                 acq_sweep = acq_group[sweep_name]
+                
+                # Check if this sweep belongs to the requested protocol
+                if protocol is not None and 'epochs' in f:
+                    # Match sweep_name (e.g. Sweep_10) to epoch name (e.g. Experiment_10)
+                    epoch_name = sweep_name.replace("Sweep_", "Experiment_")
+                    if epoch_name in f['epochs']:
+                        desc = f['epochs'][epoch_name].get('description', None)
+                        if desc is not None:
+                            desc_val = desc[()]
+                            desc_str = desc_val.decode('utf-8') if isinstance(desc_val, bytes) else str(desc_val)
+                            search_str = f"Stimulus was {protocol}"
+                            # log.debug(f"Sweep {sweep_name} desc: {desc_str} | search: {search_str}")
+                            if search_str not in desc_str:
+                                continue  # Skip this sweep, it doesn't match the protocol
+                    else:
+                        continue # If requested protocol, but sweep has no epoch, skip it.
+                
                 if 'data' not in acq_sweep:
                     continue
                     
@@ -555,25 +621,42 @@ class NeoAdapter:
         lazy: bool = False,
         channel_whitelist: Optional[List[str]] = None,
         force_kHz_to_Hz: bool = False,
+        protocol: Optional[str] = None,
     ) -> Recording:
         """
         Reads any neo-supported electrophysiology file and translates it into a
         robust Recording object. This is the definitive, file-format-agnostic implementation.
         """
-        log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist})")
-        filepath = Path(filepath)
+        log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist}, protocol: {protocol})")
+        
+        filepath_str = str(filepath)
+        if "::" in filepath_str:
+            base_path_str, embedded_proto = filepath_str.split("::", 1)
+            filepath = Path(base_path_str)
+            if protocol is None:
+                protocol = embedded_proto
+        
         io_class = self._get_neo_io_class(filepath)
         _pyabf_rescue: bool = False
         try:
             reader = io_class(filename=str(filepath))
-            try:
-                block = reader.read_block(lazy=lazy, signal_group_mode="split-all")
-            except TypeError as te:
-                if "signal_group_mode" in str(te):
-                    log.debug("Reader does not support signal_group_mode, retrying without it.")
-                    block = reader.read_block(lazy=lazy)
-                else:
-                    raise
+            
+            if protocol is not None:
+                # Read all blocks and find the one matching the protocol
+                blocks = reader.read(lazy=lazy)
+                block = next((b for b in blocks if b.name == protocol), None)
+                if block is None:
+                    raise ValueError(f"Protocol '{protocol}' not found in file {filepath.name}")
+            else:
+                try:
+                    block = reader.read_block(lazy=lazy, signal_group_mode="split-all")
+                except TypeError as te:
+                    if "signal_group_mode" in str(te):
+                        log.debug("Reader does not support signal_group_mode, retrying without it.")
+                        block = reader.read_block(lazy=lazy)
+                    else:
+                        raise
+                        
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
             # For .abf files we have a pyabf rescue path.
@@ -632,7 +715,7 @@ class NeoAdapter:
             
             elif _is_nwb and "Missing NWB version" in str(e):
                 try:
-                    block, reader = self._allen_nwb_rescue(filepath)
+                    block, reader = self._allen_nwb_rescue(filepath, protocol=protocol)
                     lazy = False
                     _pyabf_rescue = True  # We reuse this flag to skip standard fallback and tag synthetic
                     log.info("NWB h5py rescue succeeded for '%s'.", filepath.name)

@@ -301,7 +301,7 @@ class CSVExporter:
 
         success_count = 0
         error_count = 0
-        source_stem = recording.source_file.stem
+        source_stem = recording.source_file.stem.replace("::", "_")
 
         for chan_id, channel in recording.channels.items():
             if not channel.data_trials:

@@ -132,20 +132,38 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
                 item = QtWidgets.QTreeWidgetItem(parent_item)
                 item.setText(0, key)
                 full_path = current_path / key
-                item.setData(0, QtCore.Qt.ItemDataRole.UserRole, str(full_path))
                 if val:  # is directory
+                    item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), None))
                     dict_to_tree(val, item, full_path)
                 else:  # is file
-                    pass
+                    # Fetch protocols
+                    protocols = self.neo_adapter.get_file_protocols(full_path)
+                    if protocols and len(protocols) > 1:
+                        # Parent file item doesn't load a specific protocol (or loads first by default)
+                        item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), protocols[0]))
+                        for proto in protocols:
+                            child_item = QtWidgets.QTreeWidgetItem(item)
+                            child_item.setText(0, proto)
+                            # Custom icon for protocols
+                            child_item.setIcon(0, QtGui.QIcon.fromTheme("format-text-bold"))
+                            child_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), proto))
+                    else:
+                        item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), None))
 
         dict_to_tree(tree_dict, self.project_tree.invisibleRootItem(), root_path)
         self.project_tree.expandToDepth(2)  # Expand first few levels
 
     def _on_project_tree_double_clicked(self, item: QtWidgets.QTreeWidgetItem, column: int):
         """Handle double click on project tree to load file."""
-        path_str = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-        if not path_str:
+        data = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        if not data:
             return
+            
+        if isinstance(data, tuple):
+            path_str, protocol = data
+        else:
+            path_str = data
+            protocol = None
 
         file_path = Path(path_str)
         if file_path.is_file():
@@ -158,26 +176,46 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
 
             if parent_dir.exists():
                 supported_exts = self.neo_adapter.get_supported_extensions()
+                raw_file_list = []
                 for ext in supported_exts:
-                    file_list.extend(parent_dir.glob(f"*.{ext}"))
-                file_list = sorted(list(set(file_list)))
+                    raw_file_list.extend(parent_dir.glob(f"*.{ext}"))
+                raw_file_list = sorted(list(set(raw_file_list)))
 
+                file_list = []
+                for f in raw_file_list:
+                    if f == file_path:
+                        protocols = self.neo_adapter.get_file_protocols(f)
+                        if protocols and len(protocols) > 1:
+                            for p in protocols:
+                                file_list.append(Path(f"{f}::{p}"))
+                        else:
+                            file_list.append(f)
+                    else:
+                        file_list.append(f)
+
+                target_path = Path(f"{file_path}::{protocol}") if protocol else file_path
                 try:
-                    selected_index = file_list.index(file_path)
+                    selected_index = file_list.index(target_path)
                 except ValueError:
                     selected_index = 0
 
-            self.file_selected.emit(file_path, file_list, selected_index)
+            self.file_selected.emit(target_path, file_list, selected_index)
 
     def get_selected_project_files(self) -> list[Path]:
         """Returns a list of selected files from the project tree (batch selection)."""
         files = []
         for item in self.project_tree.selectedItems():
-            path_str = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-            if path_str:
+            data = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if data:
+                if isinstance(data, tuple):
+                    path_str, protocol = data
+                else:
+                    path_str = data
+                    protocol = None
+                    
                 path = Path(path_str)
                 if path.is_file():
-                    files.append(path)
+                    files.append(Path(f"{path_str}::{protocol}") if protocol else path)
                 elif path.is_dir():
                     # If directory selected, grab all supported files inside
                     supported_exts = self.neo_adapter.get_supported_extensions()

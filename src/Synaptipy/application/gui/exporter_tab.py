@@ -284,7 +284,7 @@ class ExporterTab(QtWidgets.QWidget):
         default_dir = self._settings.value("lastExportDirectory", "", type=str)
         default_filename = "exported_data.nwb"
         if current_recording:
-            default_filename = current_recording.source_file.with_suffix(".nwb").name
+            default_filename = current_recording.source_file.with_suffix(".nwb").name.replace("::", "_")
             if not default_dir:
                 default_dir = str(current_recording.source_file.parent)
         default_save_path = str(Path(default_dir) / default_filename) if default_dir else default_filename
