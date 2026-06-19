@@ -86,6 +86,18 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 ![Biological Validation](results/biological_validation.png)
 *Figure 2: Biological validation and algorithmic parity against established computational benchmarks. To ensure analytical reliability, SynaptiPy’s automated spike feature extraction was benchmarked against the Electrophysiology Feature Extraction Library (eFEL, blue circles) and the Allen Institute's Intrinsic Physiology Feature Extractor (IPFX, red squares). **(A)** Peak Voltage (mV) comparison reveals near-perfect linear correlation (r $\approx$ 1.000) across pipelines. **(B)** Action Potential Half-Width (ms) highlights minor absolute scaling deviations due to varying filtering and integration window implementations across pipelines, though biological correlation remains robust. **(C)** Maximum dV/dt (V/s) and **(D)** Minimum dV/dt (V/s) comparisons demonstrate that SynaptiPy's dynamic 0.1 ms temporal smoothing window yields derivative scalings that appropriately bridge the methodological differences between IPFX's 9.9 kHz Bessel filter and eFEL's bounded derivative stencils. The dashed gray line represents the unity line (y=x), indicating perfect agreement.*
 
+To assess generalisability beyond the laboratory's own recordings, an
+automated validation pipeline (`scripts/run_validation.py`) retrieved
+standardised intracellular waveforms from the Allen Institute Cell Types
+Database [(Gouwens et al., 2020)](#ref-ipfx) for n=20 mouse
+cortical cells. SynaptiPy's `BatchAnalysisEngine` processed each NWB
+file headlessly via `NeoAdapter`, without user intervention. Results were
+exported directly to CSV using `CSVExporter` with a companion provenance
+JSON, ensuring full parameter transparency. Across this independent cohort,
+mean AP peak bias was +0.09±0.05 mV and AP threshold bias was -0.21±0.08
+mV relative to IPFX ground-truth features (Extended Data:
+`paper/validation_results.csv`).
+
 **Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (file: `2023_04_11_0021.abf`, per-sweep means).**
 
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |

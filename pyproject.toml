@@ -144,6 +144,7 @@ known_first_party = ["Synaptipy"]
 
 [tool.coverage.run]
 source = ["src/Synaptipy"]
+relative_files = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
@@ -167,11 +168,7 @@ omit = [
     "*/gui/dialogs/export_manager.py",
     "*/gui/explorer/explorer_tab.py",
     "*/gui/explorer/sidebar.py",
-    "*/gui/explorer/plot_canvas.py",
     "*/gui/widgets/plot_canvas.py",
-    "*/gui/explorer/config_panel.py",
-    "*/gui/explorer/y_controls.py",
-    "*/gui/ui_generator.py",
     "*/gui/widgets/preprocessing.py",
     "*/gui/main_window.py",
     "*/gui/exporter_tab.py",
@@ -196,6 +193,11 @@ omit = [
     # Infrastructure with heavy external format dependencies
 ]
 
+[tool.coverage.paths]
+# Map GitHub Actions runner absolute paths → local src-layout paths.
+# coverage.py rewrites any match below to the first (canonical) entry before
+# generating reports, ensuring coverage.xml contains repo-relative paths.
+source = ["src", "/home/runner/work/synaptipy/synaptipy/src", "/Users/runner/work/synaptipy/synaptipy/src", "D:\\a\\synaptipy\\synaptipy\\src"]
 
 [tool.coverage.report]
 show_missing = true
