@@ -36,7 +36,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 CACHE_DIR = REPO / "paper" / "allen_cache"
 OUT_CSV   = REPO / "paper" / "validation_results.csv"
-TARGET_N  = 1
+TARGET_N  = 5
 
 logging.basicConfig(
     level=logging.INFO,
@@ -183,23 +183,30 @@ def main(target_n: int = TARGET_N, out_csv: Path = OUT_CSV):
     )
     log.info("Found %d candidate cells. Target: %d with spikes.", len(cells), target_n)
 
-    rows      = []
-    attempted = 0
-
+    # ── Phase 1: Download ──
+    downloaded_cells = []
     for cell in cells:
-        if len(rows) >= target_n:
+        if len(downloaded_cells) >= target_n:
             break
 
         cell_id   = cell["id"]
         structure = (cell.get("structure") or {}).get("acronym", "unknown")
-        attempted += 1
-        log.info("[%d/%d] Cell %s (%s) ...", len(rows) + 1, target_n, cell_id, structure)
+        nwb_path  = CACHE_DIR / f"cell_{cell_id}.nwb"
 
         try:
-            # Download NWB + pre-computed features
-            nwb_path      = CACHE_DIR / f"cell_{cell_id}.nwb"
-            ephys_data    = ctc.get_ephys_data(cell_id, file_name=str(nwb_path))
+            log.info("[Download %d/%d] Fetching Cell %s ...", len(downloaded_cells) + 1, target_n, cell_id)
+            ephys_data = ctc.get_ephys_data(cell_id, file_name=str(nwb_path))
+            downloaded_cells.append((cell_id, structure, ephys_data))
+        except Exception as exc:
+            log.warning("  Failed to download Cell %s: %s", cell_id, exc)
 
+    log.info("Download phase complete. Proceeding to analysis phase.")
+
+    # ── Phase 2: Analysis ──
+    rows = []
+    for i, (cell_id, structure, ephys_data) in enumerate(downloaded_cells, start=1):
+        log.info("[Analysis %d/%d] Analyzing Cell %s (%s) ...", i, len(downloaded_cells), cell_id, structure)
+        try:
             # Find Long Square sweeps
             sweeps = get_long_square_sweeps(ephys_data)
             if not sweeps:
