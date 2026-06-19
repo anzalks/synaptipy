@@ -88,61 +88,63 @@ def run_ipfx_on_sweep(ephys_data, sweep_number):
 
 # ── SynaptiPy headless helpers ───────────────────────────────────────────────
 
-def run_synaptipy_on_nwb(nwb_path: Path, out_csv: Path) -> dict | None:
+def run_synaptipy_on_sweep(ephys_data, sweep_number: int, out_csv: Path) -> dict | None:
     """
-    Load an NWB file via NeoAdapter, run BatchAnalysisEngine headlessly,
+    Run BatchAnalysisEngine headlessly on a single sweep loaded via AllenSDK,
     save results to CSV via CSVExporter, and return the first row as a dict.
-
     Returns None if no spikes found or any step fails.
     """
     try:
-        from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+        import neo
+        import quantities as pq
+        from Synaptipy.core.data_model import Recording, Channel, NeoSourceHandle
         from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
         from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 
-        # 1. Load recording
-        adapter   = NeoAdapter()
-        recording = adapter.read_recording(str(nwb_path))
+        # 1. Manually build neo.Block and Recording from AllenSDK sweep data
+        sweep = ephys_data.get_sweep(sweep_number)
+        v = sweep["response"] * 1e3
+        sr = sweep["sampling_rate"]
+        
+        blk = neo.Block()
+        seg = neo.Segment(name=f"Sweep_{sweep_number}")
+        blk.segments.append(seg)
+        anasig = neo.AnalogSignal(v, units="mV", sampling_rate=sr * pq.Hz, name="Voltage")
+        seg.analogsignals.append(anasig)
 
-        # 2. Define pipeline — use exact registered analysis names
+        ch = Channel(id="CH_0", name="Voltage", is_primary=True, is_command=False, segments=[anasig])
+        recording = Recording(
+            id=f"sweep_{sweep_number}",
+            name=f"sweep_{sweep_number}",
+            channels=[ch],
+            source_handle=NeoSourceHandle(filepath=Path("mock.nwb"), original_block=blk)
+        )
+
+        # 2. Define pipeline
         pipeline = [
-            {
-                "analysis": "spike_detection",
-                "scope":    "all_trials",
-                "params":   {"dvdt_threshold": 20.0, "refractory_ms": 2.0},
-            },
-            {
-                "analysis": "spike_analysis",
-                "scope":    "all_trials",
-                "params":   {},
-            },
-            {
-                "analysis": "rmp_analysis",
-                "scope":    "average",
-                "params":   {"baseline_start": 0.0, "baseline_end": 0.1},
-            },
+            {"analysis": "spike_detection", "scope": "all_trials", "params": {"dvdt_threshold": 20.0, "refractory_ms": 2.0}},
+            {"analysis": "spike_analysis", "scope": "all_trials", "params": {}},
+            {"analysis": "rmp_analysis", "scope": "average", "params": {"baseline_start": 0.0, "baseline_end": 0.1}},
         ]
 
         # 3. Run batch — returns pd.DataFrame
-        engine     = BatchAnalysisEngine()
+        engine = BatchAnalysisEngine()
         results_df = engine.run_batch([recording], pipeline)
 
         if results_df.empty:
-            log.debug("SynaptiPy: empty results for %s", nwb_path.name)
+            log.debug("SynaptiPy: empty results for sweep %s", sweep_number)
             return None
 
-        # 4. Save to CSV headlessly via CSVExporter
+        # 4. Save to CSV headlessly
         exporter = CSVExporter()
-        rows     = results_df.to_dict("records")
+        rows = results_df.to_dict("records")
 
-        # Wide-format CSV (one row per file)
         exporter.export_analysis_results(
             results=rows,
             output_path=out_csv,
-            analysis_config={"pipeline": pipeline, "source": str(nwb_path)},
+            analysis_config={"pipeline": pipeline, "source": f"sweep_{sweep_number}"},
         )
 
-        # Tidy long-format CSV alongside it
         tidy_path = out_csv.with_name(out_csv.stem + "_tidy.csv")
         exporter.export_tidy(
             results=rows,
@@ -153,17 +155,14 @@ def run_synaptipy_on_nwb(nwb_path: Path, out_csv: Path) -> dict | None:
         # 5. Extract scalar metrics from first row for comparison table
         row = rows[0]
         return {
-            "syn_peak_mV":   row.get("peak_voltage_mean")
-                             or row.get("ap_peak_voltage_mean"),
-            "syn_thr_mV":    row.get("threshold_mean")
-                             or row.get("ap_threshold_mean"),
-            "syn_amp_mV":    row.get("amplitude_mean")
-                             or row.get("ap_amplitude_mean"),
+            "syn_peak_mV":   row.get("peak_voltage_mean") or row.get("ap_peak_voltage_mean"),
+            "syn_thr_mV":    row.get("threshold_mean") or row.get("ap_threshold_mean"),
+            "syn_amp_mV":    row.get("amplitude_mean") or row.get("ap_amplitude_mean"),
             "syn_n_spikes":  row.get("spike_count") or row.get("n_spikes"),
         }
 
     except Exception as exc:
-        log.debug("SynaptiPy failed on %s: %s", nwb_path.name, exc)
+        log.debug("SynaptiPy failed on sweep %s: %s", sweep_number, exc)
         return None
 
 
@@ -209,9 +208,11 @@ def main(target_n: int = TARGET_N, out_csv: Path = OUT_CSV):
 
             # Run IPFX on first sweep that yields spikes
             ipfx_res = None
+            target_sweep = None
             for sn in sweeps:
                 ipfx_res = run_ipfx_on_sweep(ephys_data, sn)
                 if ipfx_res:
+                    target_sweep = sn
                     break
             if not ipfx_res:
                 log.info("  Skipped — IPFX found no spikes")
@@ -219,7 +220,7 @@ def main(target_n: int = TARGET_N, out_csv: Path = OUT_CSV):
 
             # Run SynaptiPy headlessly, save per-cell CSV to allen_cache
             cell_csv  = CACHE_DIR / f"cell_{cell_id}_results.csv"
-            syn_res   = run_synaptipy_on_nwb(nwb_path, cell_csv)
+            syn_res   = run_synaptipy_on_sweep(ephys_data, target_sweep, cell_csv)
             if not syn_res:
                 log.info("  Skipped — SynaptiPy found no spikes")
                 continue
