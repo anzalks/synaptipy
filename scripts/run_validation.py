@@ -36,7 +36,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 CACHE_DIR = REPO / "paper" / "allen_cache"
 OUT_CSV   = REPO / "paper" / "validation_results.csv"
-TARGET_N  = 5
+TARGET_N  = 2
 
 logging.basicConfig(
     level=logging.INFO,
