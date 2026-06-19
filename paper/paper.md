@@ -91,10 +91,10 @@ automated validation pipeline (`scripts/run_validation.py`) retrieved
 standardised intracellular waveforms from the Allen Institute Cell Types
 Database [(Gouwens et al., 2020)](#ref-ipfx) for n=5 mouse
 cortical cells. SynaptiPy's `BatchAnalysisEngine` processed each NWB
-file headlessly via `NeoAdapter`, without user intervention. Results were
+file headlessly, without user intervention. Results were
 exported directly to CSV using `CSVExporter` with a companion provenance
 JSON, ensuring full parameter transparency. Across this independent cohort,
-mean AP peak bias was +0.09±0.05 mV and AP threshold bias was -0.21±0.08
+mean AP peak bias was -26.94±11.91 mV and AP threshold bias was +0.51±0.39
 mV relative to IPFX ground-truth features (Extended Data:
 `paper/validation_results.csv`).
 

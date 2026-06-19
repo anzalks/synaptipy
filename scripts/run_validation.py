@@ -128,7 +128,6 @@ def run_synaptipy_on_sweep(ephys_data, sweep_number: int, out_csv: Path) -> dict
         # 2. Define pipeline
         pipeline = [
             {"analysis": "spike_detection", "scope": "all_trials", "params": {"dvdt_threshold": 20.0, "refractory_ms": 2.0}},
-            {"analysis": "single_spike", "scope": "all_trials", "params": {}},
             {"analysis": "rmp_analysis", "scope": "average", "params": {"baseline_start": 0.0, "baseline_end": 0.1}},
         ]
 
@@ -283,7 +282,7 @@ def main(target_n: int = TARGET_N, out_csv: Path = OUT_CSV):
     )
 
     log.info("=" * 60)
-    log.info("Completed: %d cells processed (%d attempted)", len(rows), attempted)
+    log.info("Completed: %d cells processed out of %d downloaded", len(rows), len(downloaded_cells))
     log.info("Results → %s", out_csv)
     log.info("Tidy    → %s", tidy_out)
     log.info("=" * 60)

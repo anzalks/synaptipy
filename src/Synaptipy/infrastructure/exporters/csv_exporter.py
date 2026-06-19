@@ -494,11 +494,8 @@ class CSVExporter:
             # Key fix: Drop columns that are completely NA across all rows
             df.dropna(axis=1, how="all", inplace=True)
 
-            # Replace NaN back to empty string for clean CSV
-            df.fillna("", inplace=True)
-
             # Create the CSV file
-            df.to_csv(output_path, index=False, encoding="utf-8")
+            df.to_csv(output_path, index=False, encoding="utf-8", na_rep="")
 
             log.info(f"Successfully exported {len(results)} analysis results to {output_path}")
 
