@@ -1665,62 +1665,91 @@ class ExplorerTab(QtWidgets.QWidget):
         else:
             trial_indices = [0]
 
-        # 3. Build items list for cross_file_utils (path-only dicts)
-        items = [{"path": f, "target_type": "Recording"} for f in sorted(files)]
+        # 3. Group files by protocol to ensure we don't mix different protocols in the average
+        from collections import defaultdict
+        protocol_groups = defaultdict(list)
+        
+        for f in sorted(files):
+            path_str = str(f)
+            if "::" in path_str:
+                _, protocol = path_str.split("::", 1)
+                protocol_groups[protocol].append(f)
+            else:
+                protos = self.neo_adapter.get_file_protocols(f)
+                if protos and len(protos) >= 1:
+                    for p in protos:
+                        protocol_groups[p].append(Path(f"{f}::{p}"))
+                else:
+                    protocol_groups["__no_protocol__"].append(f)
 
-        # 4. Derive display label
-        display_label = _make_mfa_label(files)
-
-        # 5. Check for duplicate label
-        is_duplicate = any(
-            a.get("display_label") == display_label and a.get("target_type") == "MultifileAverage"
-            for a in self._analysis_items
-        )
-        if is_duplicate:
-            self.status_bar.showMessage(f"'{display_label}' is already in the Analysis Set.", 3000)
-            return
-
-        # 6. Compute the average (may take a moment; show a wait cursor)
+        added_any = False
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
-        self.status_bar.showMessage("Computing cross-file average...", 0)
+        self.status_bar.showMessage("Computing cross-file averages...", 0)
+        
         try:
-            averaged_rec = build_averaged_recording(
-                items=items,
-                trial_indices=trial_indices,
-                neo_adapter=self.neo_adapter,
-                label=display_label,
-            )
-        except Exception as exc:
-            log.error("Cross-file average failed: %s", exc, exc_info=True)
-            averaged_rec = None
+            for protocol, group_files in protocol_groups.items():
+                if len(group_files) < 2:
+                    continue
+
+                items = [{"path": f, "target_type": "Recording"} for f in group_files]
+
+                # 4. Derive display label
+                base_label = _make_mfa_label(group_files)
+                display_label = f"{base_label} [{protocol}]" if protocol != "__no_protocol__" else base_label
+
+                # 5. Check for duplicate label
+                is_duplicate = any(
+                    a.get("display_label") == display_label and a.get("target_type") == "MultifileAverage"
+                    for a in self._analysis_items
+                )
+                if is_duplicate:
+                    self.status_bar.showMessage(f"'{display_label}' is already in the Analysis Set.", 3000)
+                    continue
+
+                # 6. Compute the average
+                try:
+                    averaged_rec = build_averaged_recording(
+                        items=items,
+                        trial_indices=trial_indices,
+                        neo_adapter=self.neo_adapter,
+                        label=display_label,
+                    )
+                except Exception as exc:
+                    log.error("Cross-file average failed for %s: %s", display_label, exc, exc_info=True)
+                    averaged_rec = None
+
+                if averaged_rec is None:
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Average Failed",
+                        f"Could not compute cross-file average for {display_label}. Check that the selected files share "
+                        "compatible channels and that the trial index is valid for all files.",
+                    )
+                    continue
+
+                # 7. Add to analysis set
+                mfa_item = {
+                    "path": averaged_rec.source_file,
+                    "target_type": "MultifileAverage",
+                    "trial_index": None,
+                    "recording_ref": averaged_rec,
+                    "display_label": display_label,
+                    "source_files": [str(f) for f in group_files],
+                    "trial_indices": trial_indices,
+                }
+                self._analysis_items.append(mfa_item)
+                added_any = True
+                
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
 
-        if averaged_rec is None:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Average Failed",
-                "Could not compute a cross-file average. Check that the selected files share "
-                "compatible channels and that the trial index is valid for all files.",
-            )
-            self.status_bar.showMessage("Cross-file average failed.", 4000)
+        if not added_any:
+            if len(files) < 2:
+                self.status_bar.showMessage("Not enough files to average.", 4000)
+            else:
+                self.status_bar.showMessage("No new cross-file averages added.", 4000)
             return
 
-        # 7. Build a synthetic path so the item dict is consistent with existing plumbing
-        from pathlib import Path as _Path
-
-        synthetic_path = _Path(f"__mfa__/{display_label}")
-
-        mfa_item = {
-            "path": synthetic_path,
-            "target_type": "MultifileAverage",
-            "trial_index": None,
-            "recording_ref": averaged_rec,
-            "display_label": display_label,
-            "source_files": [str(f) for f in files],
-            "trial_indices": trial_indices,
-        }
-        self._analysis_items.append(mfa_item)
         self._update_analysis_set_display()
 
         if self.session_manager:
@@ -1728,7 +1757,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         n_files = len(files)
         self.status_bar.showMessage(
-            f"Added '{display_label}' (averaged {n_files} files, trials {trial_indices}) to Analysis Set.",
+            f"Added cross-file averages ({n_files} files, trials {trial_indices}) to Analysis Set.",
             5000,
         )
         self._update_all_ui_state()

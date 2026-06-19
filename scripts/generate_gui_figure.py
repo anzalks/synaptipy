@@ -3,7 +3,14 @@ import sys
 import time
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
+# Add scripts directory to path to import plot_utils
+sys.path.append(str(Path(__file__).resolve().parent))
+from plot_utils import add_panel_label, set_paper_styles
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from PySide6.QtCore import QTimer
@@ -69,59 +76,49 @@ def main():
     pm_c = win.exporter_tab.grab()
     pm_c.save(str(out_dir / "temp_c.png"))
 
-    print("UI grabs successful. Stitching composite image...")
+    print("UI grabs successful. Stitching composite image using unified Matplotlib styling...")
 
-    img_a = Image.open(out_dir / "temp_a.png")
-    img_b = Image.open(out_dir / "temp_b.png")
-    img_c = Image.open(out_dir / "temp_c.png")
+    set_paper_styles()
 
-    target_width = 1600
-    a_ratio = target_width / img_a.width
-    a_height = int(img_a.height * a_ratio)
-    img_a = img_a.resize((target_width, a_height), Image.Resampling.LANCZOS)
+    img_a_path = out_dir / "temp_a.png"
+    img_b_path = out_dir / "temp_b.png"
+    img_c_path = out_dir / "temp_c.png"
 
-    padding = 20
-    bottom_width = (target_width - padding) // 2
+    img_a = mpimg.imread(str(img_a_path))
+    img_b = mpimg.imread(str(img_b_path))
+    img_c = mpimg.imread(str(img_c_path))
 
-    b_ratio = bottom_width / img_b.width
-    b_height = int(img_b.height * b_ratio)
-    img_b = img_b.resize((bottom_width, b_height), Image.Resampling.LANCZOS)
+    # Create a figure with a customized gridspec
+    fig = plt.figure(figsize=(14, 10))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 1])
 
-    c_ratio = bottom_width / img_c.width
-    c_height = int(img_c.height * c_ratio)
-    img_c = img_c.resize((bottom_width, c_height), Image.Resampling.LANCZOS)
+    # Top row: full width (img_a)
+    ax1 = fig.add_subplot(gs[0, :])
+    ax1.imshow(img_a)
+    ax1.axis("off")
+    add_panel_label(ax1, "A", x=-0.02, y=1.05)
 
-    canvas_height = a_height + padding + max(b_height, c_height)
-    canvas = Image.new("RGB", (target_width, canvas_height), "white")
+    # Bottom row: two columns (img_b and img_c)
+    ax2 = fig.add_subplot(gs[1, 0])
+    ax2.imshow(img_b)
+    ax2.axis("off")
+    add_panel_label(ax2, "B", x=-0.05, y=1.05)
 
-    canvas.paste(img_a, (0, 0))
-    canvas.paste(img_b, (0, a_height + padding))
-    canvas.paste(img_c, (bottom_width + padding, a_height + padding))
+    ax3 = fig.add_subplot(gs[1, 1])
+    ax3.imshow(img_c)
+    ax3.axis("off")
+    add_panel_label(ax3, "C", x=-0.05, y=1.05)
 
-    draw = ImageDraw.Draw(canvas)
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 60)
-    except IOError:
-        font = ImageFont.load_default()
-
-    labels = [
-        ("A", (20, 20)),
-        ("B", (20, a_height + padding + 20)),
-        ("C", (bottom_width + padding + 20, a_height + padding + 20)),
-    ]
-
-    for text, (x, y) in labels:
-        draw.text((x - 2, y - 2), text, fill="white", font=font)
-        draw.text((x + 2, y + 2), text, fill="white", font=font)
-        draw.text((x, y), text, fill="black", font=font)
+    plt.tight_layout()
 
     final_path = out_dir / "gui_workflow.png"
-    canvas.save(final_path)
+    plt.savefig(final_path, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
     print(f"Final real-data composite saved to {final_path}")
 
-    (out_dir / "temp_a.png").unlink()
-    (out_dir / "temp_b.png").unlink()
-    (out_dir / "temp_c.png").unlink()
+    img_a_path.unlink()
+    img_b_path.unlink()
+    img_c_path.unlink()
 
 
 if __name__ == "__main__":
