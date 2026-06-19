@@ -53,7 +53,10 @@ def get_long_square_sweeps(ephys_data):
     out = []
     for sn in ephys_data.get_sweep_numbers():
         meta = ephys_data.get_sweep_metadata(sn)
-        if "Long Square" in meta.get("stimulus_name", ""):
+        name = meta.get("aibs_stimulus_name") or meta.get("stimulus_name") or b""
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", errors="ignore")
+        if "Long Square" in name:
             out.append(sn)
     return out
 
