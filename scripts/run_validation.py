@@ -197,10 +197,6 @@ def main(target_n: int = TARGET_N, out_csv: Path = OUT_CSV):
             # Download NWB + pre-computed features
             nwb_path      = CACHE_DIR / f"cell_{cell_id}.nwb"
             ephys_data    = ctc.get_ephys_data(cell_id, file_name=str(nwb_path))
-            allen_features = ctc.get_ephys_features(
-                dataframe=True,
-                id=cell_id,
-            )
 
             # Find Long Square sweeps
             sweeps = get_long_square_sweeps(ephys_data)

@@ -66,3 +66,6 @@ coverage.json
 docs/_build/
 src/Synaptipy/resources/docs/
 coverage.xml
+
+# Validation data cache
+paper/allen_cache/
