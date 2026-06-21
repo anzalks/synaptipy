@@ -394,6 +394,8 @@ class EFELRunner:
             "AP_duration_half_width",
             "AP_rise_rate",
             "AP_fall_rate",
+            "AP_rise_time",
+            "AP_fall_time",
             "AP_begin_voltage",
             "AP_amplitude",
             "fast_AHP",
@@ -402,6 +404,7 @@ class EFELRunner:
             "adaptation_index2",
             "time_to_first_spike",
             "time_to_second_spike",
+            "min_voltage_between_spikes",
         ]
         res = efel.get_feature_values([trace], want)
         r = res[0] if res else {}
@@ -435,7 +438,7 @@ class EFELRunner:
             "stimulus_current": [stim_amp],
         }
 
-        want = ["voltage_base", "ohmic_input_resistance", "time_constant", "sag_amplitude", "sag_ratio1", "sag_ratio2"]
+        want = ["voltage_base", "ohmic_input_resistance", "ohmic_input_resistance_vb_ssse", "time_constant", "sag_amplitude", "sag_ratio1", "sag_ratio2"]
         res = efel.get_feature_values([trace], want)
         r = res[0] if res else {}
 
@@ -457,19 +460,33 @@ class IPFXRunner:
         if result is None or result.empty:
             return {"n_spikes": 0}
         
+        # Safely read optional columns with fallback to nan
+        def _col_mean(col):
+            if col in result.columns:
+                return float(result[col].mean())
+            return np.nan
+
+        slow_trough = _col_mean("slow_trough_v")
+        thresh_mean = float(result["threshold_v"].mean())
+        mahp = thresh_mean - slow_trough if not np.isnan(slow_trough) else np.nan
+
         out = {
             "n_spikes": len(result),
             "peak_v": float(result["peak_v"].mean()),
             "width_ms": float(result["width"].mean()) * 1000.0,
             "upstroke": float(result["upstroke"].mean()),
             "downstroke": float(result["downstroke"].mean()),
-            "threshold_v": float(result["threshold_v"].mean()),
+            "threshold_v": thresh_mean,
             "amplitude": float((result["peak_v"] - result["threshold_v"]).mean()),
             "fast_ahp": float((result["threshold_v"] - result["fast_trough_v"]).mean()),
+            "mahp": mahp,
             "adp_amp": float((result["adp_v"] - result["fast_trough_v"]).mean()),
             "avg_rate": float(len(result) - 1) / (result["peak_t"].iloc[-1] - result["peak_t"].iloc[0]) if len(result) > 1 else 0.0,
-            "first_isi": float(result["width"].iloc[0]*0.0 + (result["peak_t"].iloc[1] - result["peak_t"].iloc[0])*1000.0) if len(result) > 1 else np.nan,
-            "adaptation": np.nan, # Fallback, filled below if train extractor works
+            "first_isi": float((result["peak_t"].iloc[1] - result["peak_t"].iloc[0]) * 1000.0) if len(result) > 1 else np.nan,
+            "peak_t": float(result["peak_t"].iloc[0]) * 1000.0 if len(result) > 0 else np.nan,
+            "upstroke_downstroke_ratio": float(result["upstroke_downstroke_ratio"].mean()) if "upstroke_downstroke_ratio" in result else np.nan,
+            "trough_v": float(result["fast_trough_v"].mean()) if "fast_trough_v" in result else np.nan,
+            "adaptation": np.nan,  # filled below if train extractor works
         }
         
         try:
@@ -501,21 +518,32 @@ class IPFXRunner:
         baseline_int = min(0.03, start_t * 0.9)  # Keep it safe and slightly smaller than start_t
         try:
             # IPFX 1.0.8 compatibility for sag
-            sag_v = subT.sag(t, v, i, start_t, end_t, baseline_interval=baseline_int)
+            out["sag"] = float(subT.sag(t, v, i, start_t, end_t, baseline_interval=baseline_int))
         except Exception:
-            sag_v = np.nan
-
-        out["v_baseline"] = float(subT.baseline_voltage(t, v, start_t, baseline_interval=baseline_int))
-        rin = subT.input_resistance([t], [i], [v], start_t, end_t, baseline_interval=baseline_int)
+            out["sag"] = np.nan
+        
+        try:
+            v_def = float(subT.voltage_deflection(t, v, i, start_t, end_t))
+            out["v_deflect"] = v_def
+            if stim_amp != 0:
+                out["peak_rin"] = abs(v_def / stim_amp) * 1000.0
+            if "sag" in out and out["sag"] is not np.nan and v_def != 0:
+                out["sag_pct"] = abs(out["sag"] / v_def) * 100.0
+        except Exception:
+            pass
+        
+        try:
+            out["input_resistance"] = float(subT.input_resistance(t, v, i, start_t, end_t, baseline_interval=baseline_int))
+        except Exception:
+            out["input_resistance"] = np.nan
         
         try:
             tau = subT.time_constant(t, v, i, start_t, end_t, min_snr=0.0, baseline_interval=baseline_int)
         except TypeError: # Some versions of IPFX don't accept baseline_interval in time_constant
             tau = subT.time_constant(t, v, i, start_t, end_t, min_snr=0.0)
             
-        out["input_resistance"] = float(rin)
         out["tau"] = float(tau) * 1000.0
-        out["sag"] = float(sag_v)
+        out["v_baseline"] = float(subT.baseline_voltage(t, v, start_t, baseline_interval=baseline_int))
         return out
 
 
@@ -556,54 +584,114 @@ def build_table1(downloaded_cells: list) -> pd.DataFrame:
             if efel_r.get("n_spikes", 0) == 0 or ipfx_r.get("n_spikes", 0) == 0:
                 continue
 
+            # Compute first ISI from train_dynamics output (ms)
+            syn_first_isi = float(syn_r.get("first_isi_ms", np.nan))
+            # Compute adaptation index from train_dynamics output
+            syn_sfa = float(syn_r.get("adaptation_index", np.nan))
+            # Compute eFEL first ISI from time_to_second - time_to_first (ms)
+            t1 = efel_r.get("time_to_first_spike", np.nan)
+            t2 = efel_r.get("time_to_second_spike", np.nan)
+            efel_first_isi = (t2 - t1) if (not np.isnan(t1) and not np.isnan(t2)) else np.nan
+
             rows.append({
                 "cell_id": cell_id,
                 "trial": sn,
+                # Peak voltage
                 "syn_peak_mV": float(syn_r.get("absolute_peak_mv_mean", np.nan)),
                 "efel_peak_mV": efel_r.get("peak_voltage", np.nan),
                 "ipfx_peak_mV": ipfx_r.get("peak_v", np.nan),
+                # AP threshold
                 "syn_thr_mV": float(syn_r.get("ap_threshold_mean", np.nan)),
                 "efel_thr_mV": efel_r.get("AP_begin_voltage", np.nan),
                 "ipfx_thr_mV": ipfx_r.get("threshold_v", np.nan),
+                # AP amplitude
                 "syn_amp_mV": float(syn_r.get("amplitude_mean", np.nan)),
                 "efel_amp_mV": efel_r.get("AP_amplitude", np.nan),
                 "ipfx_amp_mV": ipfx_r.get("amplitude", np.nan),
+                # AP half-width
                 "syn_hw_ms": float(syn_r.get("half_width_mean", np.nan)),
                 "efel_hw_ms": efel_r.get("AP_duration_half_width", np.nan),
                 "ipfx_hw_ms": ipfx_r.get("width_ms", np.nan),
-                "syn_maxdvdt": syn_r.get("mean_max_dvdt", np.nan),
+                # Rise time 10-90%
+                "syn_rise_time_ms": float(syn_r.get("rise_time_10_90_mean", np.nan)),
+                "efel_rise_time_ms": efel_r.get("AP_rise_time", np.nan),
+                "ipfx_rise_time_ms": np.nan,
+                # Decay time 90-10%
+                "syn_decay_time_ms": float(syn_r.get("decay_time_90_10_mean", np.nan)),
+                "efel_decay_time_ms": efel_r.get("AP_fall_time", np.nan),
+                "ipfx_decay_time_ms": np.nan,
+                # Max dV/dt
+                "syn_maxdvdt": syn_r.get("max_dvdt_mean", np.nan),
                 "efel_maxdvdt": efel_r.get("AP_rise_rate", np.nan),
                 "ipfx_maxdvdt": ipfx_r.get("upstroke", np.nan),
-                "syn_mindvdt": syn_r.get("mean_min_dvdt", np.nan),
+                # Min dV/dt
+                "syn_mindvdt": syn_r.get("min_dvdt_mean", np.nan),
                 "efel_mindvdt": efel_r.get("AP_fall_rate", np.nan),
                 "ipfx_mindvdt": ipfx_r.get("downstroke", np.nan),
-                "syn_ap_delay": syn_r.get("mean_ap_delay", np.nan),
+                # AP delay (time to first spike)
+                "syn_ap_delay": syn_r.get("ap_delay_mean", np.nan) * 1000.0 if not np.isnan(syn_r.get("ap_delay_mean", np.nan)) else np.nan,
                 "efel_ap_delay": efel_r.get("time_to_first_spike", np.nan),
                 "ipfx_ap_delay": ipfx_r.get("peak_t", np.nan),
-                "syn_upstroke_downstroke_ratio": syn_r.get("mean_upstroke_downstroke_ratio", np.nan),
-                "efel_upstroke_downstroke_ratio": np.nan,
+                # Upstroke/downstroke ratio
+                "syn_upstroke_downstroke_ratio": syn_r.get("upstroke_downstroke_ratio_mean", np.nan),
+                "efel_upstroke_downstroke_ratio": abs(efel_r.get("AP_rise_rate", np.nan) / efel_r.get("AP_fall_rate", np.nan)) if not np.isnan(efel_r.get("AP_fall_rate", np.nan)) else np.nan,
                 "ipfx_upstroke_downstroke_ratio": ipfx_r.get("upstroke_downstroke_ratio", np.nan),
-                "syn_trough_v": syn_r.get("mean_trough_v", np.nan),
+                # Trough voltage (fAHP trough)
+                "syn_trough_v": syn_r.get("trough_v_mean", np.nan),
                 "efel_trough_v": efel_r.get("min_voltage_between_spikes", np.nan),
                 "ipfx_trough_v": ipfx_r.get("trough_v", np.nan),
-                "syn_phase_plane_area": syn_r.get("mean_phase_plane_area", np.nan),
+                # Phase-plane area
+                "syn_phase_plane_area": syn_r.get("phase_plane_area_mean", np.nan),
                 "efel_phase_plane_area": np.nan,
                 "ipfx_phase_plane_area": np.nan,
-                "syn_fahp_mV": syn_r.get("mean_fahp_depth", np.nan),
+                # Fast AHP depth
+                "syn_fahp_mV": syn_r.get("fahp_depth_mean", np.nan),
                 "efel_fahp_mV": efel_r.get("fast_AHP", np.nan),
                 "ipfx_fahp_mV": ipfx_r.get("fast_ahp", np.nan),
+                # Medium AHP depth
+                "syn_mahp_mV": float(syn_r.get("mahp_depth_mean", np.nan)),
+                "efel_mahp_mV": np.nan,
+                "ipfx_mahp_mV": ipfx_r.get("mahp", np.nan),
+                # AHP half-duration
+                "syn_ahp_dur_ms": float(syn_r.get("ahp_duration_half_mean", np.nan)),
+                "efel_ahp_dur_ms": np.nan,
+                "ipfx_ahp_dur_ms": np.nan,
+                # ADP amplitude
                 "syn_adp_mV": float(syn_r.get("adp_amplitude_mean", np.nan)),
                 "efel_adp_mV": efel_r.get("ADP_peak_amplitude", np.nan),
                 "ipfx_adp_mV": ipfx_r.get("adp_amp", np.nan),
+                # Mean firing frequency
                 "syn_rate_hz": float(syn_r.get("mean_freq_hz", np.nan)),
                 "efel_rate_hz": efel_r.get("mean_frequency", np.nan),
                 "ipfx_rate_hz": ipfx_r.get("avg_rate", np.nan),
-                "syn_first_isi_ms": float(syn_r.get("first_isi_ms", np.nan)),
-                "efel_first_isi_ms": efel_r.get("time_to_second_spike", np.nan) - efel_r.get("time_to_first_spike", np.nan) if not np.isnan(efel_r.get("time_to_second_spike", np.nan)) else np.nan,
+                # Max firing frequency
+                "syn_max_freq_hz": float(syn_r.get("max_freq_hz", np.nan)),
+                "efel_max_freq_hz": np.nan,
+                "ipfx_max_freq_hz": np.nan,
+                # First ISI
+                "syn_first_isi_ms": syn_first_isi,
+                "efel_first_isi_ms": efel_first_isi,
                 "ipfx_first_isi_ms": ipfx_r.get("first_isi", np.nan),
-                "syn_sfa": float(syn_r.get("adaptation_index", np.nan)),
+                # Spike frequency adaptation
+                "syn_sfa": syn_sfa,
                 "efel_sfa": efel_r.get("adaptation_index2", np.nan),
                 "ipfx_sfa": ipfx_r.get("adaptation", np.nan),
+                # ISI coefficient of variation
+                "syn_cv_isi": float(syn_r.get("cv", np.nan)),
+                "efel_cv_isi": efel_r.get("CV_ISI", np.nan),
+                "ipfx_cv_isi": np.nan,
+                # Spike broadening index
+                "syn_broadening": float(syn_r.get("spike_broadening_index", np.nan)),
+                "efel_broadening": np.nan,
+                "ipfx_broadening": np.nan,
+                # Rheobase
+                "syn_rheobase_pa": float(syn_r.get("rheobase_pa", np.nan)),
+                "efel_rheobase_pa": np.nan,
+                "ipfx_rheobase_pa": np.nan,
+                # F-I gain
+                "syn_fi_gain": float(syn_r.get("fi_slope", np.nan)),
+                "efel_fi_gain": np.nan,
+                "ipfx_fi_gain": np.nan,
             })
     
     df = pd.DataFrame(rows)
@@ -642,24 +730,42 @@ def build_table2(downloaded_cells: list) -> pd.DataFrame:
             efel_r = EFELRunner.run_sweep_passive(v, i, t)
             ipfx_r = IPFXRunner.run_sweep_passive(v, i, t)
 
+            efel_rin = efel_r.get("ohmic_input_resistance", np.nan)
             rows.append({
                 "cell_id": cell_id,
                 "trial": sn,
+                # RMP
                 "syn_rmp_mV": float(syn_r.get("rmp_mv", np.nan)),
                 "efel_rmp_mV": efel_r.get("voltage_base", np.nan),
                 "ipfx_rmp_mV": ipfx_r.get("v_baseline", np.nan),
+                # Input resistance (steady-state)
                 "syn_rin_mohm": syn_r.get("rin_mohm", np.nan),
-                "efel_rin_mohm": efel_r.get("ohmic_input_resistance", np.nan) * 1000.0,
+                "efel_rin_mohm": efel_rin * 1000.0 if not np.isnan(efel_rin) else np.nan,
                 "ipfx_rin_mohm": ipfx_r.get("input_resistance", np.nan),
+                # Peak input resistance
+                "syn_rin_peak_mohm": syn_r.get("rin_peak_mohm", np.nan),
+                "efel_rin_peak_mohm": efel_r.get("ohmic_input_resistance_vb_ssse", np.nan) * 1000.0 if not np.isnan(efel_r.get("ohmic_input_resistance_vb_ssse", np.nan)) else np.nan,
+                "ipfx_rin_peak_mohm": ipfx_r.get("peak_rin", np.nan),
+                # Membrane time constant
                 "syn_tau_ms": syn_r.get("tau_ms", np.nan),
                 "efel_tau_ms": efel_r.get("time_constant", np.nan),
-                "ipfx_tau_ms": ipfx_r.get("tau", np.nan) * 1000.0 if not np.isnan(ipfx_r.get("tau", np.nan)) else np.nan,
+                "ipfx_tau_ms": ipfx_r.get("tau", np.nan),
+                # Decay tau after stimulus
                 "syn_tau_decay_ms": syn_r.get("tau_decay_after_stimulus_ms", np.nan),
                 "efel_tau_decay_ms": efel_r.get("decay_time_constant_after_stim", np.nan),
                 "ipfx_tau_decay_ms": np.nan,
-                "syn_sag": syn_r.get("sag_ratio", np.nan),
-                "efel_sag": efel_r.get("sag_ratio1", np.nan),
-                "ipfx_sag": ipfx_r.get("sag", np.nan),
+                # Sag ratio
+                "syn_sag_ratio": syn_r.get("sag_ratio", np.nan),
+                "efel_sag_ratio": efel_r.get("sag_ratio1", np.nan),
+                "ipfx_sag_ratio": ipfx_r.get("sag", np.nan),
+                # Sag percentage
+                "syn_sag_pct": syn_r.get("sag_percentage", np.nan),
+                "efel_sag_pct": efel_r.get("sag_ratio2", np.nan) * 100.0 if not np.isnan(efel_r.get("sag_ratio2", np.nan)) else np.nan,
+                "ipfx_sag_pct": ipfx_r.get("sag_pct", np.nan),
+                # Rebound depolarization
+                "syn_rebound_mv": syn_r.get("rebound_depolarization_amplitude_mv", np.nan),
+                "efel_rebound_mv": np.nan,
+                "ipfx_rebound_mv": np.nan,
             })
 
     df = pd.DataFrame(rows)
@@ -692,16 +798,22 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
     md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
     md += "|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|\n"
     for label, s_col, e_col, i_col, unit in metrics:
-        s, e, i = cmp_df[s_col].values, cmp_df[e_col].values, cmp_df[i_col].values
+        if s_col not in cmp_df.columns:
+            continue
+        s = cmp_df[s_col].values
+        e = cmp_df[e_col].values if e_col in cmp_df.columns else np.full(len(s), np.nan)
+        i = cmp_df[i_col].values if i_col in cmp_df.columns else np.full(len(s), np.nan)
         vs_i, vs_e = corr_summary(i, s), corr_summary(e, s)
         n = max(vs_i["n"], vs_e["n"])
+        if n == 0:
+            n = len(s[~np.isnan(s)])
         r_i = f"{vs_i['r']:.4f}" if not np.isnan(vs_i["r"]) else "N/A"
         r_e = f"{vs_e['r']:.4f}" if not np.isnan(vs_e["r"]) else "N/A"
         b_i = f"{vs_i['bias']:+.3f} {unit}" if not np.isnan(vs_i["bias"]) else "N/A"
         b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
         md += f"| {label} | {n} | {r_i} (*p* {fmt_p(vs_i['p'])}) | {r_e} (*p* {fmt_p(vs_e['p'])}) | {b_i} | {b_e} | Pearson correlation, two-sided *p* |\n"
 
-    md += "\n*n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter.*"
+    md += "\n*n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*"
     return md
 
 
@@ -709,15 +821,22 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
     metrics = [
         ("Resting Membrane Potential (mV)", "syn_rmp_mV", "efel_rmp_mV", "ipfx_rmp_mV", "mV"),
         ("Input Resistance (MΩ)", "syn_rin_mohm", "efel_rin_mohm", "ipfx_rin_mohm", "MΩ"),
+        ("Peak Input Resistance (MΩ)", "syn_rin_peak_mohm", "efel_rin_peak_mohm", "ipfx_rin_peak_mohm", "MΩ"),
         ("Membrane Time Constant (ms)", "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
         ("Decay Time Constant (ms)", "syn_tau_decay_ms", "efel_tau_decay_ms", "ipfx_tau_decay_ms", "ms"),
-        ("Sag Ratio", "syn_sag", "efel_sag", "ipfx_sag", "Ratio"),
+        ("Sag Ratio", "syn_sag_ratio", "efel_sag_ratio", "ipfx_sag_ratio", "Ratio"),
+        ("Sag Percentage (%)", "syn_sag_pct", "efel_sag_pct", "ipfx_sag_pct", "%"),
+        ("Rebound Depolarization (mV)", "syn_rebound_mv", "efel_rebound_mv", "ipfx_rebound_mv", "mV"),
     ]
     md = "**Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**\n\n"
     md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
     md += "|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|\n"
     for label, s_col, e_col, i_col, unit in metrics:
-        s, e, i = cmp_df[s_col].values, cmp_df[e_col].values, cmp_df[i_col].values
+        if s_col not in cmp_df.columns:
+            continue
+        s = cmp_df[s_col].values
+        e = cmp_df[e_col].values if e_col in cmp_df.columns else np.full(len(s), np.nan)
+        i = cmp_df[i_col].values if i_col in cmp_df.columns else np.full(len(s), np.nan)
         vs_i, vs_e = corr_summary(i, s), corr_summary(e, s)
         n = len(s[~np.isnan(s)])
         r_i = f"{vs_i['r']:.4f}" if not np.isnan(vs_i["r"]) else "N/A"
@@ -726,7 +845,7 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
         md += f"| {label} | {n} | {r_i} (*p* {fmt_p(vs_i['p'])}) | {r_e} (*p* {fmt_p(vs_e['p'])}) | {b_i} | {b_e} | Pearson correlation, two-sided *p* |\n"
 
-    md += "\n*n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*"
+    md += "\n*n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*"
     return md
 
 

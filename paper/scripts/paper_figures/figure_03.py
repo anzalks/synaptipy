@@ -1,10 +1,10 @@
 import csv
 import sys
 from pathlib import Path
+import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -100,70 +100,97 @@ def main():
         add_panel_title(ax_time, f"Execution Breakdown: {clean_label}\n({subtitle})")
         style_bar_axis(ax_time, xlabel="CPU Cores (max_workers)", ylabel="Elapsed Time (s)", xticks=workers)
 
-    # Helper functions for data extraction
+    # Equally-spaced target N values for both panels C and D.
+    TARGET_N = [10, 20, 30, 40, 50]
+
     def _ext_rend(mode_name):
-        levels = sorted(list(set(int(r["n_trials"]) for r in rend_res if r["n_trials"].isdigit())))
-        rows = [r for r in rend_res if r["renderer_mode"] == mode_name]
-        ns = [int(r["n_trials"]) for r in rows if int(r["n_trials"]) in levels]
-        meds = [float(r["mean_ms"]) for r in rows if int(r["n_trials"]) in levels]
-        sems = [float(r["sem_ms"]) for r in rows if int(r["n_trials"]) in levels]
-        return ns, meds, sems
+        """Extract raw-rendering data and interpolate to TARGET_N."""
+        rows = sorted(
+            [r for r in rend_res if r["renderer_mode"] == mode_name],
+            key=lambda x: int(x["n_trials"]),
+        )
+        if not rows:
+            return [], [], []
+        ns_src = np.array([int(r["n_trials"]) for r in rows])
+        meds_src = np.array([float(r["mean_ms"]) for r in rows])
+        sems_src = np.array([float(r["sem_ms"]) for r in rows])
+        # Interpolate (or extrapolate via clamp) to TARGET_N
+        ns_out, meds_out, sems_out = [], [], []
+        for n in TARGET_N:
+            if n < ns_src[0] or n > ns_src[-1]:
+                # Clamp to nearest measured endpoint instead of extrapolating
+                idx = 0 if n < ns_src[0] else -1
+                ns_out.append(n)
+                meds_out.append(float(meds_src[idx]))
+                sems_out.append(float(sems_src[idx]))
+            else:
+                ns_out.append(n)
+                meds_out.append(float(np.interp(n, ns_src, meds_src)))
+                sems_out.append(float(np.interp(n, ns_src, sems_src)))
+        return ns_out, meds_out, sems_out
 
     def _ext_e2e(renderer):
-        rows = sorted([r for r in e2e_res if r["renderer"] == renderer and r["benchmark_mode"] == "overlay_avg"], key=lambda x: int(x["n_trials"]))
-        ns = [int(r["n_trials"]) for r in rows]
-        meds = [float(r["mean_ms"]) for r in rows]
-        sems = [float(r["sem_ms"]) for r in rows]
+        """Extract full-app data at TARGET_N values that have real measurements."""
+        rows = sorted(
+            [r for r in e2e_res if r["renderer"] == renderer and r["benchmark_mode"] == "overlay_avg"],
+            key=lambda x: int(x["n_trials"]),
+        )
+        ns, meds, sems = [], [], []
+        for r in rows:
+            n = int(r["n_trials"])
+            if n in TARGET_N:
+                ns.append(n)
+                meds.append(float(r["mean_ms"]))
+                sems.append(float(r["sem_ms"]))
         return ns, meds, sems
 
     # =======================================================================
-    # PANEL C: Software Rendering (Raw vs Full App)
+    # PANEL C: Software Rendering (Raw opaque vs Full App)
     # =======================================================================
     ax_rend = axes[1, 0]
     if rend_res and e2e_res:
-        sw_rend_n, sw_rend_med, sw_rend_sem = _ext_rend("software_transparent")
+        # Use opaque mode for raw pyqtgraph — matches the default rendering
+        # mode the application uses, giving a fair overhead comparison.
+        sw_rend_n, sw_rend_med, sw_rend_sem = _ext_rend("software_opaque")
         sw_e2e_n, sw_e2e_med, sw_e2e_sem = _ext_e2e("software")
-        
+
         if sw_rend_med and sw_e2e_med:
-            # Black for Raw PyQt, Blue for Full App
             ax_rend.errorbar(sw_rend_n, sw_rend_med, yerr=sw_rend_sem, fmt="o--", color=COLORS["black"], capsize=4, label="Raw pyqtgraph", linewidth=2)
             ax_rend.errorbar(sw_e2e_n, sw_e2e_med, yerr=sw_e2e_sem, fmt="s-", color=COLORS["blue"], capsize=4, label="Full Application", linewidth=2)
-            
+
             add_legend(ax_rend, loc='upper left')
             add_panel_label(ax_rend, "C")
             add_panel_title(ax_rend, "Software Rendering Overhead\n(Raw Layer vs End-to-End)")
-            
-            # Use union of N for xticks
-            all_n_c = sorted(list(set(sw_rend_n + sw_e2e_n)))
-            style_line_axis(ax_rend, xlabel="Overlaid Trials (N)", ylabel="Latency (ms)", xticks=all_n_c, xticklabels=[str(L) for L in all_n_c])
-            
+
+            style_line_axis(ax_rend, xlabel="Overlaid Trials (N)", ylabel="Latency (ms)",
+                            xticks=TARGET_N, xticklabels=[str(n) for n in TARGET_N])
+
             add_threshold_line(ax_rend, 16.6, label="60 FPS Threshold")
-            add_legend(ax_rend, loc='upper center')
+            add_legend(ax_rend, loc='upper left')
 
     # =======================================================================
-    # PANEL D: OpenGL Rendering (Raw vs Full App)
+    # PANEL D: OpenGL Rendering (Raw opaque vs Full App)
     # =======================================================================
     ax_e2e = axes[1, 1]
     if rend_res and e2e_res:
-        gl_rend_n, gl_rend_med, gl_rend_sem = _ext_rend("opengl_transparent")
+        # Use opaque mode for raw pyqtgraph — consistent with Panel C.
+        gl_rend_n, gl_rend_med, gl_rend_sem = _ext_rend("opengl_opaque")
         gl_e2e_n, gl_e2e_med, gl_e2e_sem = _ext_e2e("opengl")
-        
+
         if gl_rend_med and gl_e2e_med:
-            # Black for Raw PyQt, Blue for Full App
             ax_e2e.errorbar(gl_rend_n, gl_rend_med, yerr=gl_rend_sem, fmt="o--", color=COLORS["black"], capsize=4, label="Raw pyqtgraph", linewidth=2)
             ax_e2e.errorbar(gl_e2e_n, gl_e2e_med, yerr=gl_e2e_sem, fmt="s-", color=COLORS["blue"], capsize=4, label="Full Application", linewidth=2)
-            
+
             add_panel_label(ax_e2e, "D")
-            
+
             add_legend(ax_e2e, loc='upper left')
             add_panel_title(ax_e2e, "OpenGL Rendering Overhead\n(Raw Layer vs End-to-End)")
-            
-            # Use union of N for xticks
-            all_n_d = sorted(list(set(gl_rend_n + gl_e2e_n)))
-            style_line_axis(ax_e2e, xlabel="Overlaid Trials (N)", ylabel="Latency (ms)", xticks=all_n_d, xticklabels=[str(n) for n in all_n_d])
-            
+
+            style_line_axis(ax_e2e, xlabel="Overlaid Trials (N)", ylabel="Latency (ms)",
+                            xticks=TARGET_N, xticklabels=[str(n) for n in TARGET_N])
+
             add_threshold_line(ax_e2e, 16.6, label="60 FPS Threshold")
-            add_legend(ax_e2e, loc='upper center')
+            add_legend(ax_e2e, loc='upper left')
 
     final_path = fig_dir / "figure_03.png"
     save_paper_figure(fig, final_path)
