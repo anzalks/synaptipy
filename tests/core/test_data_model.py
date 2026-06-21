@@ -96,7 +96,8 @@ def test_channel_get_averaged_data_unequal_length(sample_channel):
     # Use original fixture with unequal lengths
     sample_channel.data_trials = [DATA_TRIAL_1, DATA_TRIAL_2]
     avg_data = sample_channel.get_averaged_data()
-    assert avg_data is None  # Should fail or return None
+    assert avg_data is not None
+    assert len(avg_data) == len(DATA_TRIAL_1)
 
 
 def test_channel_get_averaged_data_no_trials(sample_channel):
@@ -118,7 +119,8 @@ def test_channel_get_averaged_time_vector(sample_channel):
 def test_channel_get_averaged_time_vector_fail(sample_channel):
     sample_channel.data_trials = [DATA_TRIAL_1, DATA_TRIAL_2]  # Unequal lengths
     avg_time = sample_channel.get_averaged_time_vector()
-    assert avg_time is None
+    assert avg_time is not None
+    assert len(avg_time) == len(DATA_TRIAL_1)
 
 
 # ---------------------------------------------------------------------------

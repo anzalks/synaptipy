@@ -372,21 +372,24 @@ def calculate_spike_features(  # noqa: C901
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
 
+    safe_idx_rise_50 = np.clip(idx_rise_50_rel, 0, full_window_len - 2)
+    safe_idx_fall_50 = np.clip(idx_fall_50_rel, 1, full_window_len - 1)
+
     # Linear interpolation for 50% rise
-    y0_rise = waveforms[np.arange(n_spikes), idx_rise_50_rel]
-    y1_rise = waveforms[np.arange(n_spikes), idx_rise_50_rel + 1]
+    y0_rise = waveforms[np.arange(n_spikes), safe_idx_rise_50]
+    y1_rise = waveforms[np.arange(n_spikes), safe_idx_rise_50 + 1]
     dy_rise = y1_rise - y0_rise
     dy_rise[dy_rise == 0] = 1e-9
     frac_rise = (amp_50 - y0_rise) / dy_rise
-    x_rise = idx_rise_50_rel + frac_rise
+    x_rise = safe_idx_rise_50 + frac_rise
 
     # Linear interpolation for 50% fall
-    y0_fall = waveforms[np.arange(n_spikes), idx_fall_50_rel - 1]
-    y1_fall = waveforms[np.arange(n_spikes), idx_fall_50_rel]
+    y0_fall = waveforms[np.arange(n_spikes), safe_idx_fall_50 - 1]
+    y1_fall = waveforms[np.arange(n_spikes), safe_idx_fall_50]
     dy_fall = y1_fall - y0_fall
     dy_fall[dy_fall == 0] = -1e-9
     frac_fall = (amp_50 - y0_fall) / dy_fall
-    x_fall = (idx_fall_50_rel - 1) + frac_fall
+    x_fall = (safe_idx_fall_50 - 1) + frac_fall
 
     half_widths[valid_width] = (x_fall[valid_width] - x_rise[valid_width]) * dt * 1000.0
 
@@ -400,21 +403,24 @@ def calculate_spike_features(  # noqa: C901
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
 
+    safe_idx_10 = np.clip(idx_10_rel, 0, full_window_len - 2)
+    safe_idx_90 = np.clip(idx_90_rel, 0, full_window_len - 2)
+
     # Linear interpolation for 10%
-    y0_10 = waveforms[np.arange(n_spikes), idx_10_rel]
-    y1_10 = waveforms[np.arange(n_spikes), idx_10_rel + 1]
+    y0_10 = waveforms[np.arange(n_spikes), safe_idx_10]
+    y1_10 = waveforms[np.arange(n_spikes), safe_idx_10 + 1]
     dy_10 = y1_10 - y0_10
     dy_10[dy_10 == 0] = 1e-9
     frac_10 = (amp_10 - y0_10) / dy_10
-    x_10 = idx_10_rel + frac_10
+    x_10 = safe_idx_10 + frac_10
 
     # Linear interpolation for 90%
-    y0_90 = waveforms[np.arange(n_spikes), idx_90_rel]
-    y1_90 = waveforms[np.arange(n_spikes), idx_90_rel + 1]
+    y0_90 = waveforms[np.arange(n_spikes), safe_idx_90]
+    y1_90 = waveforms[np.arange(n_spikes), safe_idx_90 + 1]
     dy_90 = y1_90 - y0_90
     dy_90[dy_90 == 0] = 1e-9
     frac_90 = (amp_90 - y0_90) / dy_90
-    x_90 = idx_90_rel + frac_90
+    x_90 = safe_idx_90 + frac_90
 
     rise_times[valid_rise] = (x_90[valid_rise] - x_10[valid_rise]) * dt * 1000.0
 
@@ -426,21 +432,24 @@ def calculate_spike_features(  # noqa: C901
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
 
+    safe_idx_dec_10 = np.clip(idx_dec_10_rel, 1, full_window_len - 1)
+    safe_idx_dec_90 = np.clip(idx_dec_90_rel, 1, full_window_len - 1)
+
     # Linear interpolation for decay 90%
-    y0_d90 = waveforms[np.arange(n_spikes), idx_dec_90_rel - 1]
-    y1_d90 = waveforms[np.arange(n_spikes), idx_dec_90_rel]
+    y0_d90 = waveforms[np.arange(n_spikes), safe_idx_dec_90 - 1]
+    y1_d90 = waveforms[np.arange(n_spikes), safe_idx_dec_90]
     dy_d90 = y1_d90 - y0_d90
     dy_d90[dy_d90 == 0] = -1e-9
     frac_d90 = (amp_90 - y0_d90) / dy_d90
-    x_d90 = (idx_dec_90_rel - 1) + frac_d90
+    x_d90 = (safe_idx_dec_90 - 1) + frac_d90
 
     # Linear interpolation for decay 10%
-    y0_d10 = waveforms[np.arange(n_spikes), idx_dec_10_rel - 1]
-    y1_d10 = waveforms[np.arange(n_spikes), idx_dec_10_rel]
+    y0_d10 = waveforms[np.arange(n_spikes), safe_idx_dec_10 - 1]
+    y1_d10 = waveforms[np.arange(n_spikes), safe_idx_dec_10]
     dy_d10 = y1_d10 - y0_d10
     dy_d10[dy_d10 == 0] = -1e-9
     frac_d10 = (amp_10 - y0_d10) / dy_d10
-    x_d10 = (idx_dec_10_rel - 1) + frac_d10
+    x_d10 = (safe_idx_dec_10 - 1) + frac_d10
 
     decay_times[valid_decay] = (x_d10[valid_decay] - x_d90[valid_decay]) * dt * 1000.0
 
@@ -484,8 +493,8 @@ def calculate_spike_features(  # noqa: C901
     ahp_dvdt = dvdt[ahp_indices]
     ahp_dvdt[~valid_ahp_mask] = -1.0 # Ignore invalid regions
     crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0)
-    has_crossing = np.any(crossing_mask, axis=1)
-    first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1
+    has_crossing = np.any(crossing_mask, axis=1) if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=bool)
+    first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1 if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=int)
     
     # Fallback to argmin if no clean zero-crossing is found
     ahp_min_rel_indices = np.where(has_crossing, first_crossing_idx, np.argmin(temp_ahp, axis=1))

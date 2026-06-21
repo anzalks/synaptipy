@@ -49,11 +49,11 @@ def test_spike_kinetics_ideal():
     # Check Rise Time
     # Expected: 0.8 ms
     # Allow small error due to discrete sampling
-    assert abs(f["rise_time_10_90"] - 0.8) < 0.15
+    assert abs(f.rise_time_10_90 - 0.8) < 0.15
 
     # Check Decay Time
     # Expected: 1.6 ms
-    assert abs(f["decay_time_90_10"] - 1.6) < 0.15
+    assert abs(f.decay_time_90_10 - 1.6) < 0.15
 
 
 def test_adp_detection():
@@ -84,6 +84,6 @@ def test_adp_detection():
     # Note: calculate_spike_features calculates ADP relative to 'ap_end_idx' voltage.
     # If ap_end_idx is at -70, then ADP amp is ~5.
 
-    assert f["adp_amplitude"] is not None
-    assert f["adp_amplitude"] > 2.0  # At least detected
-    assert abs(f["adp_amplitude"] - 5.0) < 2.0
+    assert f.adp_amplitude is not None
+    assert f.adp_amplitude > 2.0  # At least detected
+    assert abs(f.adp_amplitude - 5.0) < 2.0

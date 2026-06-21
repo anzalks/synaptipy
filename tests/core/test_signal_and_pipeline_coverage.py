@@ -234,6 +234,7 @@ class TestSignalProcessingPipelineProcess:
         result = pipeline.process(np.array([]), FS)
         assert result is not None
 
+
     def test_none_data_returns_early(self):
         pipeline = SignalProcessingPipeline()
         result = pipeline.process(None, FS)
@@ -448,8 +449,8 @@ class TestChannelGetAveragedData:
         result = ch.get_averaged_data(trial_indices=[99, 100])
         assert result is None
 
-    def test_differing_lengths_returns_none(self):
-        """Lines 321-323: trials with different lengths."""
+    def test_differing_lengths_padded(self):
+        """Lines 321-323: trials with different lengths padding."""
         ch = Channel(
             id="ch0",
             name="V",
@@ -458,7 +459,8 @@ class TestChannelGetAveragedData:
             data_trials=[np.zeros(50), np.zeros(100)],
         )
         result = ch.get_averaged_data()
-        assert result is None
+        assert result is not None
+        assert len(result) == 100
 
     def test_no_trials(self):
         ch = Channel(id="ch0", name="V", units="mV", sampling_rate=FS, data_trials=[])

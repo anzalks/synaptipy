@@ -369,7 +369,7 @@ class TestRecordingWithoutSourceFile:
         df = engine._run_batch_sequential([rec], pipeline, None, None)
         assert len(df) >= 1
         # Should have InMemory placeholder in file_name
-        assert "InMemory" in df["file_name"].iloc[0] or True
+        assert "InMemory" in df.file_name.iloc[0] or True
 
 
 # ---------------------------------------------------------------------------

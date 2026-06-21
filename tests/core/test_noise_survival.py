@@ -214,7 +214,7 @@ class TestSpikeFeatureNoiseRobustness:
         variants, t, known = spike_arrays
         _, features = self._detect(variants["pink"], t, known)
         assert len(features) == 1, "Expected exactly 1 set of features."
-        peak_mv = features[0]["absolute_peak_mv"]
+        peak_mv = features[0].absolute_peak_mv
         # Known peak is 30 mV
         np.testing.assert_allclose(peak_mv, known["peak_mv"], rtol=0.30)
 

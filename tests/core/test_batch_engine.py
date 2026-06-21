@@ -322,7 +322,7 @@ class TestBatchAnalysisSystem:
         assert df.iloc[0]["mean"] == 10.0
         assert df.iloc[1]["mean"] == 20.0
         assert df.iloc[2]["mean"] == 30.0
-        assert all(df["trial_index"] == [0, 1, 2])
+        assert all(df.trial_index == [0, 1, 2])
 
     def test_batch_engine_multiple_analyses(self):
         """Test running multiple analyses in a pipeline."""
@@ -379,7 +379,7 @@ class TestBatchAnalysisSystem:
 
         # Should have 2 rows (one per filtered channel)
         assert len(df) == 2
-        assert set(df["channel"]) == {"Ch1", "Ch3"}
+        assert set(df.channel) == {"Ch1", "Ch3"}
 
     def test_batch_engine_progress_callback(self):
         """Test that progress callback is called correctly."""
@@ -1170,7 +1170,7 @@ class TestBatchAllAnalysisTypes:
             trials,
         )
         assert len(df) == 4
-        assert list(df["trial_index"]) == [0, 1, 2, 3]
+        assert list(df.trial_index) == [0, 1, 2, 3]
 
     # ------------------------------------------------------------------
     # Cross-cutting: average scope

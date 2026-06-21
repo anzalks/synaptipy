@@ -287,7 +287,7 @@ class TestADPEdgeCases:
         )
         assert features is not None
         if len(features) > 0:
-            adp = features[0].get("adp_amplitude")
+            adp = getattr(features[0], "adp_amplitude", None)
             if adp is not None:
                 assert np.isnan(adp), "Monotonic recovery should yield NaN ADP"
 
@@ -835,9 +835,9 @@ class TestFAHPMAHP:
 
         assert len(features) == 1
         feat = features[0]
-        assert "fahp_depth" in feat, "Missing 'fahp_depth' key"
-        assert "mahp_depth" in feat, "Missing 'mahp_depth' key"
-        assert "ahp_depth" not in feat, "Old 'ahp_depth' key must not be present"
+        assert hasattr(feat, "fahp_depth"), "Missing 'fahp_depth' key"
+        assert hasattr(feat, "mahp_depth"), "Missing 'mahp_depth' key"
+        assert not hasattr(feat, "ahp_depth"), "Old 'ahp_depth' key must not be present"
 
     def test_fahp_is_finite_and_positive(self):
         """fAHP depth must be a finite positive value for a spike with clear AHP."""
@@ -845,8 +845,8 @@ class TestFAHPMAHP:
         features = calculate_spike_features(v, t, spikes)
 
         feat = features[0]
-        assert np.isfinite(feat["fahp_depth"]), f"fahp_depth is not finite: {feat['fahp_depth']}"
-        assert feat["fahp_depth"] > 0, f"fahp_depth must be positive, got {feat['fahp_depth']}"
+        assert np.isfinite(feat.fahp_depth), f"fahp_depth is not finite: {feat['fahp_depth']}"
+        assert feat.fahp_depth > 0, f"fahp_depth must be positive, got {feat['fahp_depth']}"
 
     def test_mahp_is_finite_and_positive(self):
         """mAHP depth must be a finite positive value for a spike with clear mAHP."""
@@ -854,8 +854,8 @@ class TestFAHPMAHP:
         features = calculate_spike_features(v, t, spikes)
 
         feat = features[0]
-        assert np.isfinite(feat["mahp_depth"]), f"mahp_depth is not finite: {feat['mahp_depth']}"
-        assert feat["mahp_depth"] > 0, f"mahp_depth must be positive, got {feat['mahp_depth']}"
+        assert np.isfinite(feat.mahp_depth), f"mahp_depth is not finite: {feat['mahp_depth']}"
+        assert feat.mahp_depth > 0, f"mahp_depth must be positive, got {feat['mahp_depth']}"
 
     def test_fahp_and_mahp_are_distinct(self):
         """fAHP (early, deep) and mAHP (late, shallower) must yield different values."""
@@ -864,7 +864,7 @@ class TestFAHPMAHP:
 
         feat = features[0]
         # fAHP (2 ms post-peak) is deeper than mAHP (20 ms post-peak) in this fixture
-        assert feat["fahp_depth"] != feat["mahp_depth"], (
+        assert feat.fahp_depth != feat.mahp_depth, (
             f"fahp_depth ({feat['fahp_depth']:.3f}) and mahp_depth ({feat['mahp_depth']:.3f}) "
             "must be distinct for a spike with explicit dual-AHP structure"
         )
@@ -1016,11 +1016,11 @@ class TestBluntedSpikeDetection:
             feat = features[0]
             # The absolute peak must be close to -5 mV
             assert (
-                feat["absolute_peak_mv"] <= -3.0
+                feat.absolute_peak_mv <= -3.0
             ), f"Expected blunted spike peak near -5 mV, got {feat['absolute_peak_mv']:.1f} mV"
             # Overshoot should be 0 (spike did not cross 0 mV)
             assert (
-                feat["overshoot_mv"] == 0.0
+                feat.overshoot_mv == 0.0
             ), f"Blunted spike (-5 mV peak) overshoot must be 0, got {feat['overshoot_mv']}"
 
     def test_train_dynamics_default_threshold_allows_blunted_spikes(self):

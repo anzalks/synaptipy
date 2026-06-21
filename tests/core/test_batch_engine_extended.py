@@ -308,7 +308,7 @@ class TestErrorRowInSequentialBatch:
             assert len(df) >= 1
             # At least one row should contain an error
             if "error" in df.columns:
-                has_error = df["error"].notna().any()
+                has_error = df.error.notna().any()
                 assert has_error
         finally:
             # Clean up test registration

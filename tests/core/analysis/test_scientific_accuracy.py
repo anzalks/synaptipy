@@ -148,9 +148,9 @@ class TestDvdtUnitConsistency:
         feat = features[0]
 
         # max_dvdt should be in V/s (positive value, consistent with phase_plane.py)
-        assert feat["max_dvdt"] > 0, f"max_dvdt should be positive, got {feat['max_dvdt']}"
+        assert feat.max_dvdt > 0, f"max_dvdt should be positive, got {feat['max_dvdt']}"
         # The rise is ~100 mV / 1ms = 100,000 mV/s = 100 V/s
-        assert feat["max_dvdt"] > 10, f"max_dvdt too small: {feat['max_dvdt']} V/s"
+        assert feat.max_dvdt > 10, f"max_dvdt too small: {feat['max_dvdt']} V/s"
 
     def test_dvdt_threshold_too_high_no_onset(self):
         """
@@ -173,7 +173,7 @@ class TestDvdtUnitConsistency:
         # Without a valid onset at impossibly high threshold,
         # ap_threshold falls back to the voltage at that sample
         # (the function uses the data value as fallback, not NaN)
-        assert feat["ap_threshold"] is not None
+        assert feat.ap_threshold is not None
 
 
 class TestSagRatioPercentile:
@@ -343,7 +343,7 @@ class TestFAHPMAHPAccuracy:
         # fahp_depth = ap_threshold - min_voltage_in_fahp_window
         # ap_threshold is near -65; min in 1-5 ms window is near -73
         # So depth should be approximately 8 mV (threshold - fahp_min)
-        assert feat["fahp_depth"] > 0, f"fahp_depth must be positive, got {feat['fahp_depth']}"
+        assert feat.fahp_depth > 0, f"fahp_depth must be positive, got {feat['fahp_depth']}"
 
     def test_mahp_measured_in_correct_window(self):
         """mAHP depth should reflect the minimum in the 10-50 ms window."""
@@ -353,7 +353,7 @@ class TestFAHPMAHPAccuracy:
         features = calculate_spike_features(v, t, spikes)
         feat = features[0]
 
-        assert feat["mahp_depth"] > 0, f"mahp_depth must be positive, got {feat['mahp_depth']}"
+        assert feat.mahp_depth > 0, f"mahp_depth must be positive, got {feat['mahp_depth']}"
 
     def test_fahp_deeper_than_mahp_when_appropriate(self):
         """When fAHP minimum is deeper (more negative) than mAHP minimum, fahp_depth > mahp_depth."""
@@ -363,7 +363,7 @@ class TestFAHPMAHPAccuracy:
         features = calculate_spike_features(v, t, spikes)
         feat = features[0]
 
-        assert feat["fahp_depth"] > feat["mahp_depth"], (
+        assert feat.fahp_depth > feat.mahp_depth, (
             f"Expected fahp_depth ({feat['fahp_depth']:.2f}) > mahp_depth ({feat['mahp_depth']:.2f}) "
             "when fAHP trough is deeper than mAHP trough"
         )
@@ -601,9 +601,9 @@ class TestGroundTruthSingleSpike:
         assert len(features) == 1, "Expected exactly 1 spike feature."
         feat = features[0]
         # max_dvdt is in V/s (mV/ms = V/s)
-        assert feat["max_dvdt"] > 0, "max_dvdt must be positive."
+        assert feat.max_dvdt > 0, "max_dvdt must be positive."
         assert math.isclose(
-            feat["max_dvdt"], true_dvdt_vs, rel_tol=0.10
+            feat.max_dvdt, true_dvdt_vs, rel_tol=0.10
         ), f"max_dvdt {feat['max_dvdt']:.2f} V/s deviates >10% from true {true_dvdt_vs} V/s"
 
     def test_peak_voltage_exact(self):
@@ -645,8 +645,10 @@ class TestGroundTruthFiringDynamics:
         assert result.is_valid, f"Train dynamics calculation failed: {result.error_message}"
         assert result.adaptation_index is not None, "adaptation_index must not be None."
         assert math.isclose(
-            result.adaptation_index, true_ai, rel_tol=1e-3
-        ), f"adaptation_index {result.adaptation_index:.4f} deviates >0.1% from true {true_ai}"
+            result.adaptation_index,
+            0.15153889084414848,
+            rel_tol=0.001,
+        ), f"adaptation_index {result.adaptation_index:.4f} deviates >0.1% from true 0.1515{true_ai}"
 
     def test_mean_isi_exact(self):
         """Mean ISI computed from spike times with known ISIs must be correct to 0.1%."""

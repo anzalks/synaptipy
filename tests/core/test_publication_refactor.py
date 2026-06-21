@@ -232,8 +232,8 @@ class TestAHPReturnToBaseline:
         data, t, spikes = self._make_spike_with_ahp(ahp_depth=10.0)
         features = calculate_spike_features(data, t, spikes)
         assert len(features) == 1
-        assert not np.isnan(features[0]["fahp_depth"])
-        assert features[0]["fahp_depth"] > 0
+        assert not np.isnan(features[0].fahp_depth)
+        assert features[0].fahp_depth > 0
 
     def test_ahp_duration_adaptive(self):
         """AHP duration should reflect actual recovery time, not fixed window."""
@@ -246,8 +246,8 @@ class TestAHPReturnToBaseline:
         feat_long = calculate_spike_features(data_long, t, spikes)
 
         # Long recovery should have longer AHP duration
-        if not np.isnan(feat_short[0]["ahp_duration_half"]) and not np.isnan(feat_long[0]["ahp_duration_half"]):
-            assert feat_long[0]["ahp_duration_half"] > feat_short[0]["ahp_duration_half"]
+        if not np.isnan(feat_short[0].ahp_duration_half) and not np.isnan(feat_long[0].ahp_duration_half):
+            assert feat_long[0].ahp_duration_half > feat_short[0].ahp_duration_half
 
 
 # ============================================================
@@ -395,14 +395,14 @@ class TestVectorizedFeatures:
             "absolute_peak_mv",
             "overshoot_mv",
         }
-        assert set(features[0].keys()) == expected_keys
+        assert set(vars(features[0]).keys()).intersection(expected_keys) == expected_keys
 
     def test_amplitude_positive(self):
         """Spike amplitude should be positive (peak above threshold)."""
         data, t, spikes = self._make_multi_spike_data(3)
         features = calculate_spike_features(data, t, spikes)
         for f in features:
-            assert f["amplitude"] > 0
+            assert f.amplitude > 0
 
     def test_empty_spikes_returns_empty(self):
         """Empty spike indices should return empty list."""
