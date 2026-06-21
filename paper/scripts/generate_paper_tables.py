@@ -337,17 +337,33 @@ class SynaptiPyRunner:
             {
                 "analysis": "rmp_analysis",
                 "scope": "all_trials",
-                "params": {"baseline_start": max(0.0, s_t - 0.2), "baseline_end": max(0.01, s_t - 0.01)},
+                "params": {"baseline_start": 0.0, "baseline_end": s_t},
             },
             {
                 "analysis": "rin_analysis",
                 "scope": "all_trials",
                 "params": {
-                    "baseline_start": max(0.0, s_t - 0.1),
-                    "baseline_end": max(0.01, s_t - 0.01),
+                    "baseline_start": 0.0,
+                    "baseline_end": s_t,
                     "response_start": e_t - 0.1,
                     "response_end": e_t,
                     "current_amplitude": float(amp),
+                },
+            },
+            {
+                "analysis": "train_dynamics",
+                "scope": "all_trials",
+                "params": {
+                    "analysis_start_s": s_t,
+                    "analysis_end_s": e_t,
+                },
+            },
+            {
+                "analysis": "excitability_analysis",
+                "scope": "all_trials",
+                "params": {
+                    "analysis_start_s": s_t,
+                    "analysis_end_s": e_t,
                 },
             },
             {
@@ -638,7 +654,7 @@ def build_table1(downloaded_cells: list) -> pd.DataFrame:
                 "efel_mindvdt": efel_r.get("AP_peak_downstroke", np.nan),
                 "ipfx_mindvdt": ipfx_r.get("downstroke", np.nan),
                 # AP delay (time to first spike)
-                "syn_ap_delay": syn_r.get("ap_delay_mean", np.nan) * 1000.0 if not np.isnan(syn_r.get("ap_delay_mean", np.nan)) else np.nan,
+                "syn_ap_delay": syn_r.get("first_spike_delay_ms", np.nan) if not np.isnan(syn_r.get("first_spike_delay_ms", np.nan)) else np.nan,
                 "efel_ap_delay": efel_r.get("time_to_first_spike", np.nan),
                 "ipfx_ap_delay": ipfx_r.get("peak_t", np.nan),
                 # Upstroke/downstroke ratio

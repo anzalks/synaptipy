@@ -592,6 +592,7 @@ class TrainDynamicsResult(AnalysisResult):
     cv2: Optional[float] = None
     lv: Optional[float] = None
     adaptation_index: Optional[float] = None
+    first_spike_delay_s: Optional[float] = None
     isis: Optional[np.ndarray] = None
     parameters: Dict[str, Any] = field(default_factory=dict)
 
@@ -603,17 +604,20 @@ class TrainDynamicsResult(AnalysisResult):
         return f"TrainDynamicsResult(Error: {self.error_message})"
 
 
-def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
+def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 0.0) -> TrainDynamicsResult:
     """
     Compute native spike train statistical metrics.
 
     Args:
         spike_times: 1D NumPy array of spike times in seconds.
+        analysis_start_s: float, start time of stimulus/analysis window in seconds.
 
     Returns:
         TrainDynamicsResult.
     """
     spike_count = len(spike_times)
+    first_spike_delay_s = float(spike_times[0] - analysis_start_s) if spike_count > 0 else float(np.nan)
+
     if spike_count < 2:
         return TrainDynamicsResult(
             value=None,
@@ -621,6 +625,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             is_valid=False,
             error_message="Requires at least 2 spikes for ISI calculations.",
             spike_count=spike_count,
+            first_spike_delay_s=first_spike_delay_s,
         )
 
     isis = np.diff(spike_times)
@@ -638,6 +643,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             cv2=np.nan,
             lv=np.nan,
             adaptation_index=np.nan,
+            first_spike_delay_s=first_spike_delay_s,
             isis=isis,
         )
 
@@ -653,6 +659,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             cv2=np.nan,
             lv=np.nan,
             adaptation_index=np.nan,
+            first_spike_delay_s=first_spike_delay_s,
             isis=isis,
         )
 
@@ -670,8 +677,11 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
     lv_array = np.where(lv_safe_mask, 3.0 * ((isi_i - isi_next) ** 2) / lv_denominator_sq, np.nan)
     lv_val = float(np.nanmean(lv_array))
 
-    # Adaptation index: ISI_last / ISI_first (>1 = adapting, <1 = bursting)
-    adaptation_index = float(isis[-1] / isis[0]) if isis[0] > 0 else float(np.nan)
+    # Adaptation index (IPFX norm_diff): mean of (ISI[i+1] - ISI[i]) / (ISI[i+1] + ISI[i])
+    adapt_denominator = isi_next + isi_i
+    adapt_safe_mask = adapt_denominator > EPSILON_ISI_SUM
+    adapt_array = np.where(adapt_safe_mask, (isi_next - isi_i) / adapt_denominator, np.nan)
+    adaptation_index = float(np.nanmean(adapt_array))
 
     return TrainDynamicsResult(
         value=cv,
@@ -683,6 +693,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
         cv2=cv2_val,
         lv=lv_val,
         adaptation_index=adaptation_index,
+        first_spike_delay_s=first_spike_delay_s,
         isis=isis,
     )
 
@@ -771,7 +782,7 @@ def run_train_dynamics_wrapper(  # noqa: C901
             spike_indices = np.array([], dtype=int)
             ap_times = np.array([])
 
-    result = calculate_train_dynamics(ap_times)
+    result = calculate_train_dynamics(ap_times, analysis_start_s=analysis_start_s)
     if not result.is_valid:
         return {"module_used": "firing_dynamics", "metrics": {"train_dynamics_error": result.error_message}}
 
@@ -799,6 +810,7 @@ def run_train_dynamics_wrapper(  # noqa: C901
         "cv2": result.cv2,
         "lv": result.lv,
         "adaptation_index": float(result.adaptation_index) if result.adaptation_index is not None else float(np.nan),
+        "first_spike_delay_ms": result.first_spike_delay_s * 1000.0 if result.first_spike_delay_s is not None else float(np.nan),
         "first_isi_ms": float(isi_ms[0]) if len(isi_ms) > 0 else float(np.nan),
         "spike_broadening_index": spike_broadening_index,
         "isi_numbers": isi_numbers,

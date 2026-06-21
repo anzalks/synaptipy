@@ -539,11 +539,7 @@ def calculate_spike_features(  # noqa: C901
         
         valid_max_mask = is_local_max & (col_idxs2 > first_trough_idx[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
         
-        # IPFX temporal constraint: ADP must occur within 5 ms of fast trough
-        delta_t_mask = (col_idxs2 - first_trough_idx[:, None]) <= int(0.005 / dt)
-        valid_max_mask = valid_max_mask & delta_t_mask
-        
-        # Find highest valid local maximum
+        # Find highest valid local maximum between fast trough and next spike / end of window
         temp_vals = ahp_waveforms.copy()
         temp_vals[~valid_max_mask] = -np.inf
         adp_peaks = np.max(temp_vals, axis=1)
@@ -552,9 +548,7 @@ def calculate_spike_features(  # noqa: C901
         fast_trough_vals = ahp_waveforms[np.arange(n_spikes), first_trough_idx]
         calced_adps = adp_peaks - fast_trough_vals
         
-        # IPFX amplitude constraint: ADP must be <= 10 mV above fast trough
-        valid_amp = calced_adps <= 10.0
-        adp_amplitudes = np.where(has_trough & has_adp & valid_amp, calced_adps, np.nan)
+        adp_amplitudes = np.where(has_trough & has_adp, calced_adps, np.nan)
 
     # --- fAHP and mAHP (separate physiological windows) ---
     # fAHP: fast AHP (default 1-5 ms post-peak): Na+ channel-mediated repolarisation overshoot

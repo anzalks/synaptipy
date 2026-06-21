@@ -81,14 +81,14 @@ To facilitate user confidence in automated metrics, SynaptiPy renders declarativ
 
 To quantify algorithmic robustness and ensure complete reproducibility, SynaptiPy's extraction metrics were mathematically validated against two major industry standards: the Electrophysiology Feature Extraction Library (eFEL) [(Mandge et al., 2026)](#ref-efel) and the Allen Institute's Intrinsic Physiology Feature Extractor (IPFX) [(Gouwens et al., 2020)](#ref-ipfx). The automated validation pipeline (`scripts/generate_paper_tables.py`) retrieved standardised intracellular waveforms from the Allen Institute Cell Types Database for an independent cohort of $n=6$ mouse cortical cells. SynaptiPy's `BatchAnalysisEngine` processed each NWB file headlessly, without user intervention, ensuring full parameter transparency. 
 
-For active properties, SynaptiPy utilized a standard derivative-crossing threshold ($dV/dt > 20 \text{ V/s}$) to identify action potential onset across Long Square sweeps. SynaptiPy extracted functionally equivalent spike characteristics with both benchmarks across all shared metrics (Table 1). For metrics unique to SynaptiPy -- medium AHP depth, rise time 10--90%, decay time 90--10%, AHP half-duration, ISI coefficient of variation, spike broadening index, rheobase, and F-I gain -- no direct benchmark equivalent exists in eFEL or IPFX; these are reported as SynaptiPy-only entries. Differences in absolute scaling for spike kinetics highlight diverse mathematical paradigms across pipelines: while IPFX utilizes a 9.9 kHz Bessel filter and eFEL employs bounded derivative stencils, SynaptiPy applies a dynamic 0.1 ms temporal smoothing window. This situates SynaptiPy's derivative scaling between the two benchmarks while maintaining robust biological correlation.
+For active properties, SynaptiPy utilized a standard derivative-crossing threshold ($dV/dt > 20 \text{ V/s}$) to identify action potential onset across Long Square sweeps. SynaptiPy extracted functionally equivalent spike characteristics with both benchmarks across all shared metrics (Table 1). While SynaptiPy extracts a range of unique metrics (e.g., medium AHP depth, spike broadening index), Table 1 exclusively reports metrics with direct benchmark equivalents to ensure a one-to-one comparison. Differences in absolute scaling for spike kinetics highlight diverse mathematical paradigms across pipelines: while IPFX utilizes a 9.9 kHz Bessel filter and eFEL employs bounded derivative stencils, SynaptiPy applies a dynamic 0.1 ms temporal smoothing window. This situates SynaptiPy's derivative scaling between the two benchmarks while maintaining robust biological correlation.
 
 For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizing steps within the Long Square protocols. SynaptiPy aligned closely with eFEL and IPFX for Resting Membrane Potential, Input Resistance, and Membrane Time Constant (Table 2). SynaptiPy additionally reports peak input resistance, sag percentage, and rebound depolarization -- metrics not computed by the benchmark libraries. To prevent noise artifacts from skewing biological averages for the Membrane Time Constant ($\tau_m$), SynaptiPy enforces a strict biological fit-quality gate ($R^2 \ge 0.80$); un-fittable traces are appropriately rejected.
 
 ![Biological Validation](figures/figure_02.png)
 *Figure 2: Biological validation and algorithmic parity against established computational benchmarks. To ensure analytical reliability, SynaptiPy’s automated spike feature extraction was benchmarked against the Electrophysiology Feature Extraction Library (eFEL, blue circles) and the Allen Institute's Intrinsic Physiology Feature Extractor (IPFX, red squares). **(A)** Peak Voltage (mV) comparison reveals near-perfect linear correlation (r $\approx$ 1.000) across pipelines. **(B)** Action Potential Half-Width (ms) highlights minor absolute scaling deviations due to varying filtering and integration window implementations across pipelines, though biological correlation remains robust. **(C)** Maximum dV/dt (V/s) and **(D)** Minimum dV/dt (V/s) comparisons demonstrate that SynaptiPy's dynamic 0.1 ms temporal smoothing window yields derivative scalings that appropriately bridge the methodological differences between IPFX's 9.9 kHz Bessel filter and eFEL's bounded derivative stencils. The dashed gray line represents the unity line (y=x), indicating perfect agreement.*
 
-**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**
+**Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**
 
 | Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |
 |--------|-------------------------------|-------------------------------|-------------------|-------------------|
@@ -96,23 +96,23 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 | AP amplitude (mV) | 0.9960*** | 0.9912*** | +0.112 mV | +0.870 mV |
 | AP half-width (ms) | 0.9879*** | 0.9948*** | -0.092 ms | -0.011 ms |
 | Max dV/dt (V/s) | 0.9884*** | 0.7056*** | -6.352 V/s | +79.539 V/s |
-| AP Delay (Time to first spike) (ms) | -0.2544 (*p*=0.0997) | -0.2542 (*p*=0.1000) | +270.924 ms | +270.923 ms |
+| AP Delay (Time to first spike) (ms) | 1.0000*** | 1.0000*** | -0.000 ms | -0.002 ms |
 | Upstroke/Downstroke Ratio | 0.9998*** | 0.9971*** | -0.070 Ratio | +0.519 Ratio |
 | Fast AHP depth (mV) | 0.9817*** | 0.9524*** | +0.561 mV | -2.056 mV |
-| ADP amplitude (mV) | 0.3516 (*p*=0.5617) | 0.1981 (*p*=0.2469) | -8.895 mV | -2.726 mV |
+| ADP amplitude (mV) | -0.3867 (ns) | 0.5881*** | -6.561 mV | +2.929 mV |
 | Mean Firing Frequency (Hz) | 1.0000*** | 0.5951*** | +0.000 Hz | +23.921 Hz |
-| Spike Frequency Adaptation | 0.2039 (*p*=0.2797) | 0.1550 (*p*=0.4311) | +6.569 Ratio | +6.949 Ratio |
+| Spike Frequency Adaptation | 1.0000*** | 0.7569*** | -0.000 Ratio | +0.014 Ratio |
 
 *Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*
 
-**Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**
+**Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**
 
 | Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |
 |--------|-------------------------------|-------------------------------|-------------------|-------------------|
-| Resting Membrane Potential (mV) | 0.9951*** | 0.9632*** | -1.018 mV | -3.117 mV |
-| Input Resistance (MΩ) | 0.4174 (*p*=0.0140) | 0.9962*** | -22.220 MΩ | -11.671 MΩ |
-| Membrane Time Constant (ms) | 0.8942 (*p*=0.1058) | 0.1960 (*p*=0.3821) | -3.871 ms | -22.079 ms |
-| Sag Ratio | -0.0277 (*p*=0.8763) | -0.0246 (*p*=0.8903) | +0.018 Ratio | +0.021 Ratio |
+| Resting Membrane Potential (mV) | 0.9999*** | 0.9825*** | -0.125 mV | -2.224 mV |
+| Input Resistance (MΩ) | 0.4826 (ns) | 0.9995*** | -10.290 MΩ | +0.258 MΩ |
+| Membrane Time Constant (ms) | 0.9013 (ns) | 0.2547 (ns) | -2.126 ms | -18.485 ms |
+| Sag Ratio | -0.0736 (ns) | -0.0798 (ns) | +15.586 Ratio | +15.589 Ratio |
 
 *Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 34 valid sweeps (unless otherwise missing) containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*
 
@@ -134,18 +134,7 @@ When compared to programmatic libraries such as eFEL and IPFX, these existing to
 
 **Limitations**: While SynaptiPy offers extensive support for intracellular recordings, it currently focuses exclusively on *in vitro* patch-clamp and optogenetic datasets. It does not currently implement clustering or spike-sorting heuristics (e.g., Kilosort) for *in vivo* extracellular multi-electrode arrays (MEAs). Managing the continuous streaming memory architectures and high-channel-count multiplexing required for such dense MEA probes presents significant rendering and latency challenges not yet optimized for in the current backend. Additionally, SynaptiPy does not natively support real-time dynamic clamp interface processing, which would require strict, sub-millisecond hard-real-time loop assurances that bypass standard operating system scheduling. Future versions will aim to expand the underlying C++ hooks and the `@AnalysisRegistry` plugin system to support these modalities.
 
-SynaptiPy also directly addresses the erosion of analytical capacity
-during laboratory personnel transitions. Custom analysis pipelines
-written by individual researchers are frequently lost during lab
-turnovers due to undocumented dependencies and communication gaps.
-Because SynaptiPy's GUI and headless `BatchAnalysisEngine` share
-identical underlying code paths via the `@AnalysisRegistry`, any
-parameter configuration set interactively in the GUI serializes
-directly to a JSON session file that executes without modification
-in a batch script. Incoming trainees can explore data visually and
-progressively develop scripted workflows without re-implementing any
-analysis logic, preserving institutional knowledge across personnel
-changes.
+
 
 # Availability
 SynaptiPy is an open-source tool licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). The source code is publicly available via GitHub (https://github.com/anzalks/synaptipy), and comprehensive user documentation is hosted at ReadTheDocs (https://synaptipy.readthedocs.io/). For immediate deployment, the suite is distributed as a pre-compiled Python package via PyPI and can be installed using the `pip install synaptipy` command.

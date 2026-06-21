@@ -1,0 +1,16 @@
+def norm_diff(a):
+    """Calculate average of (a[i] - a[i+1]) / (a[i] + a[i+1])."""
+
+    if len(a) <= 1:
+        return np.nan
+
+    a = a.astype(float)
+    if np.allclose((a[1:] + a[:-1]), 0.):
+        return 0.
+    norm_diffs = (a[1:] - a[:-1]) / (a[1:] + a[:-1])
+    norm_diffs[(a[1:] == 0) & (a[:-1] == 0)] = 0.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="numpy")
+        avg = np.nanmean(norm_diffs)
+    return avg
+
