@@ -92,7 +92,7 @@ _ABF_0021 = _get_abf_path()
 # cache for the second pass and triggering QPainter dirty-rect optimisation for
 # repeated identical data.  The resulting anomalously low median (~2 ms vs ~17 ms
 # at N=30) is a measurement artefact, not a genuine renderer difference.
-_N_TRIALS_LEVELS = [10, 20, 30, 50]
+_N_TRIALS_LEVELS = [5, 10, 15, 20]
 _N_WARMUP = 100
 _N_CYCLES = 1000  # total cycles; first _N_WARMUP are discarded
 _OS_TAG = {"darwin": "macos", "win32": "windows"}.get(sys.platform, sys.platform)

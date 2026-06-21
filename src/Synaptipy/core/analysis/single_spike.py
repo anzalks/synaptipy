@@ -608,6 +608,44 @@ def calculate_spike_features(  # noqa: C901
     max_dvdts = np.max(pre_peak_dvdt, axis=1)
     min_dvdts = np.min(post_peak_dvdt, axis=1)
 
+    # --- New Active Features ---
+    ap_delays = time[thresh_indices]
+    
+    ahp_times = np.zeros(n_spikes)
+    for i in range(n_spikes):
+        ahp_times[i] = time[ahp_indices[i, ahp_min_rel_indices[i]]]
+        
+    trough_vs = ahp_min_vals
+    
+    upstroke_downstroke_ratios = np.full(n_spikes, np.nan)
+    valid_ratio = min_dvdts != 0
+    upstroke_downstroke_ratios[valid_ratio] = max_dvdts[valid_ratio] / np.abs(min_dvdts[valid_ratio])
+    
+    phase_plane_areas = np.full(n_spikes, np.nan)
+    ap_widths_arbitrary = [None] * n_spikes
+    
+    for i in range(n_spikes):
+        start_idx = thresh_indices[i]
+        end_idx = spike_indices[i] + ap_end_rel_indices[i]
+        
+        # Calculate Phase Plane Area (Shoelace formula)
+        if start_idx < end_idx:
+            # Find the local slice within the full_dvdt window
+            rel_start = (start_idx - spike_indices[i]) + lookback_samples
+            rel_end = (end_idx - spike_indices[i]) + lookback_samples
+            
+            # Ensure boundaries are within full_dvdt shape
+            rel_start = max(0, min(rel_start, full_window_len - 1))
+            rel_end = max(0, min(rel_end, full_window_len))
+            
+            if rel_end > rel_start + 2:
+                x = data[start_idx:start_idx + (rel_end - rel_start)]
+                y = full_dvdt[i, rel_start:rel_end]
+                
+                if len(x) == len(y):
+                    area = 0.5 * np.abs(np.dot(x[:-1], y[1:]) - np.dot(x[1:], y[:-1]))
+                    phase_plane_areas[i] = area
+
     features_list = []
     for i in range(n_spikes):
         features_list.append(
@@ -627,6 +665,12 @@ def calculate_spike_features(  # noqa: C901
                 min_dvdt=float(min_dvdts[i]),
                 absolute_peak_mv=float(peak_vals[i]),
                 overshoot_mv=float(max(0.0, peak_vals[i])),
+                ap_delay=float(ap_delays[i]),
+                ap_width_arbitrary=ap_widths_arbitrary[i],
+                ahp_time=float(ahp_times[i]),
+                upstroke_downstroke_ratio=float(upstroke_downstroke_ratios[i]),
+                phase_plane_area=float(phase_plane_areas[i]),
+                trough_v=float(trough_vs[i]),
             )
         )
     return features_list

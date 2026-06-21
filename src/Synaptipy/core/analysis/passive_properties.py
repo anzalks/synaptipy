@@ -2049,6 +2049,16 @@ def run_rin_analysis_wrapper(  # noqa: C901
             "max": 1e9,
             "decimals": 4,
         },
+        {
+            "name": "stim_end_time",
+            "label": "Stim End (s):",
+            "type": "float",
+            "default": 0.6,
+            "min": 0.0,
+            "max": 1e9,
+            "decimals": 4,
+            "tooltip": "End of stimulus to calculate the decay time constant.",
+        },
         {"name": "tau_model", "label": "Model:", "type": "choice", "default": "mono", "options": ["mono", "bi"]},
         {
             "name": "artifact_blanking_ms",
@@ -2092,6 +2102,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     """Wrapper for Tau analysis. Returns namespaced schema."""
     try:
         stim_start_time = kwargs.get("stim_start_time", 0.1)
+        stim_end_time = kwargs.get("stim_end_time", 0.6)
         fit_duration = kwargs.get("fit_duration", 0.05)
         model = kwargs.get("tau_model", "mono")
         tau_bounds = (kwargs.get("tau_bound_min", 0.0001), kwargs.get("tau_bound_max", 1.0))
@@ -2108,6 +2119,21 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             artifact_blanking_ms=artifact_blanking_ms,
             min_r_squared=min_r_squared,
         )
+        
+        # Post-stimulus decay tau calculation
+        decay_result = calculate_tau(
+            data,
+            time,
+            stim_end_time,
+            fit_duration,
+            model="mono",
+            tau_bounds=tau_bounds,
+            artifact_blanking_ms=artifact_blanking_ms,
+            min_r_squared=min_r_squared,
+        )
+        tau_decay_ms = np.nan
+        if isinstance(decay_result, dict) and "tau_ms" in decay_result:
+            tau_decay_ms = decay_result["tau_ms"]
 
         params = {
             "stim_start_time": stim_start_time,
@@ -2148,7 +2174,9 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                 metrics = _with_tau_fit_error(
                     {
                         "tau_ms": result["tau_ms"],
+                        "r_squared": result["r_squared"],
                         "tau_model": model,
+                        "tau_decay_after_stimulus_ms": tau_decay_ms,
                         "parameters": params,
                         "_fit_time": result.get("_fit_time", []),
                         "_fit_values": result.get("_fit_values", []),

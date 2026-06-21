@@ -66,8 +66,19 @@ def set_paper_styles():
     plt.rcParams["lines.markeredgewidth"] = 1.5 # Controls cap thickness globally
 
 # ---------------------------------------------------------------------------
-# 2. Typography Standardizers
+# 2. Figure Generation & Typography Standardizers
 # ---------------------------------------------------------------------------
+def create_paper_figure(nrows=1, ncols=1, figsize=None):
+    """Standardized figure creation for eNeuro sizing."""
+    if nrows == 0 and ncols == 0:
+        return plt.figure(figsize=figsize if figsize else (18, 12))
+    return plt.subplots(nrows, ncols, figsize=figsize if figsize else (12, 10))
+
+def save_paper_figure(fig, filename, rect=[0, 0, 1, 0.95], dpi=300):
+    """Standardized layout application and saving."""
+    fig.tight_layout(rect=rect)
+    fig.savefig(filename, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
 def add_figure_suptitle(fig, title, y=1.02):
     """Standardized overarching figure title."""
     fig.suptitle(title, fontsize=SUPTITLE_SIZE, fontweight="bold", y=y)
@@ -87,22 +98,32 @@ def add_legend(ax, loc='best', **kwargs):
 # ---------------------------------------------------------------------------
 # 3. Axis Formatters by Plot Type
 # ---------------------------------------------------------------------------
-def style_line_axis(ax):
+def _apply_axis_labels(ax, xlabel, ylabel, xticks, xticklabels):
+    """Internal helper to apply standardized labels and ticks."""
+    if xlabel is not None: ax.set_xlabel(xlabel)
+    if ylabel is not None: ax.set_ylabel(ylabel)
+    if xticks is not None: ax.set_xticks(xticks)
+    if xticklabels is not None: ax.set_xticklabels(xticklabels)
+
+def style_line_axis(ax, xlabel=None, ylabel=None, xticks=None, xticklabels=None):
     """Standard styling for line/errorbar plots (time series, speedup curves)."""
+    _apply_axis_labels(ax, xlabel, ylabel, xticks, xticklabels)
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-def style_bar_axis(ax):
+def style_bar_axis(ax, xlabel=None, ylabel=None, xticks=None, xticklabels=None):
     """Standard styling for bar plots (absolute values, fractions)."""
+    _apply_axis_labels(ax, xlabel, ylabel, xticks, xticklabels)
     # Grid only on y-axis for bar plots
     ax.grid(axis='y', alpha=0.3, linestyle='--')
     ax.grid(axis='x', visible=False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-def style_scatter_axis(ax, unity_line=False, lims=None):
+def style_scatter_axis(ax, unity_line=False, lims=None, xlabel=None, ylabel=None, xticks=None, xticklabels=None):
     """Standard styling for scatter plots (e.g. biological validation)."""
+    _apply_axis_labels(ax, xlabel, ylabel, xticks, xticklabels)
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -110,6 +131,10 @@ def style_scatter_axis(ax, unity_line=False, lims=None):
     # Optional unity line for correlation scatters
     if unity_line and lims is not None:
         ax.plot(lims, lims, "--", color=COLORS["grey"], alpha=0.5, zorder=0, label="Unity (y=x)")
+
+def add_threshold_line(ax, y_val, label="Threshold"):
+    """Standardized grey threshold line."""
+    ax.axhline(y_val, color=COLORS["grey"], linestyle=":", alpha=0.5, label=label)
 
 def style_trace_axis(ax, hide_x=False):
     """Standard styling for raw electrophysiology traces (removes all spines)."""

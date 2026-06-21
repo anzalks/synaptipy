@@ -10,8 +10,10 @@ import matplotlib.image as mpimg
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from plot_utils import add_panel_label, set_paper_styles, add_panel_title, add_figure_suptitle
-
+from plot_utils import (
+    add_panel_label, set_paper_styles, add_panel_title, add_figure_suptitle,
+    create_paper_figure, save_paper_figure
+)
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -103,7 +105,7 @@ def main():
     img_d = mpimg.imread(str(img_d_path))
 
     # Create a figure with a 2x2 gridspec
-    fig = plt.figure(figsize=(18, 12))
+    fig = create_paper_figure(0, 0, figsize=(18, 12))
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], width_ratios=[1, 1])
 
     # Top-left: img_a
@@ -136,10 +138,8 @@ def main():
 
     # Removed suptitle to comply with eNeuro publishing guidelines
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-
     final_path = out_dir / "figure_01.png"
-    plt.savefig(final_path, dpi=300)
+    save_paper_figure(fig, final_path)
     print(f"Figure 1 saved to {final_path}")
     
     # Cleanup temporary screenshots
@@ -147,8 +147,6 @@ def main():
         if temp_img.exists():
             temp_img.unlink()
     print("Cleaned up temporary screenshot files.")
-    plt.close(fig)
-    print(f"Figure 1 saved to {final_path}")
 
     
     # Safe exit to prevent Qt crash

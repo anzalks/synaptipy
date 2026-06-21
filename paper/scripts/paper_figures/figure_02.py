@@ -11,7 +11,12 @@ import matplotlib.pyplot as plt
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from plot_utils import COLORS, add_panel_label, set_paper_styles, add_panel_title, add_legend, style_scatter_axis, add_figure_suptitle, SCATTER_AREA, SCATTER_EDGE_WIDTH
+from plot_utils import (
+    COLORS, add_panel_label, set_paper_styles, add_panel_title, 
+    add_legend, style_scatter_axis, add_figure_suptitle, 
+    SCATTER_AREA, SCATTER_EDGE_WIDTH,
+    create_paper_figure, save_paper_figure
+)
 
 def main():
     set_paper_styles()
@@ -23,7 +28,7 @@ def main():
     
     bench_df = pd.read_csv(data_dir / "benchmark_comparison.csv")
     
-    fig_bio, axes_bio = plt.subplots(2, 2, figsize=(12, 11))
+    fig_bio, axes_bio = create_paper_figure(2, 2, figsize=(12, 11))
     axes_bio = axes_bio.flatten()
     
     metrics = [
@@ -86,28 +91,22 @@ def main():
             zorder=4
         )
     
-        # Remove manual lims/unity plotting here since style_scatter_axis can handle it
         min_val = min(np.min(y_syn), np.min(x_efel), np.min(x_ipfx))
         max_val = max(np.max(y_syn), np.max(x_efel), np.max(x_ipfx))
         margin = (max_val - min_val) * 0.1
         lims = [min_val - margin, max_val + margin]
-    
-        ax.set_xlabel(f"Benchmark Value ({unit})")
-        ax.set_ylabel(f"SynaptiPy Value ({unit})")
         
         # Apply standard typography
         add_panel_title(ax, title)
         add_panel_label(ax, panel_label)
         add_legend(ax, loc="best", markerscale=0.7)
         
-        # Apply standard axis styles
-        style_scatter_axis(ax, unity_line=True, lims=lims)
+        # Apply standard axis styles and pass labels
+        style_scatter_axis(ax, unity_line=True, lims=lims, xlabel=f"Benchmark Value ({unit})", ylabel=f"SynaptiPy Value ({unit})")
     
     # Removed suptitle to comply with eNeuro publishing guidelines
-    fig_bio.tight_layout(rect=[0, 0, 1, 0.95])
     final_path = fig_dir / "figure_02.png"
-    fig_bio.savefig(final_path, dpi=300)
-    plt.close(fig_bio)
+    save_paper_figure(fig_bio, final_path)
     print(f"Figure 2 saved to {final_path}")
 
 if __name__ == "__main__":

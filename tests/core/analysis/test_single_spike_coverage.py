@@ -92,8 +92,13 @@ def test_calculate_spike_features_edge_cases():
 
     # Because it hits the edge, half_width and AHP depths should safely return NaN or handle gracefully
     assert len(features) == 1
-    assert "half_width" in features[0]
-    assert "fahp_depth" in features[0]
+    assert hasattr(features[0], "half_width")
+    assert hasattr(features[0], "fahp_depth")
+    assert hasattr(features[0], "ap_delay")
+    assert hasattr(features[0], "ahp_time")
+    assert hasattr(features[0], "upstroke_downstroke_ratio")
+    assert hasattr(features[0], "trough_v")
+    assert hasattr(features[0], "phase_plane_area")
 
     # Noisy downstroke forcing None / NaN fallbacks
     voltage2 = np.ones(100) * -70.0

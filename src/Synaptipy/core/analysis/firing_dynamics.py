@@ -102,7 +102,7 @@ def calculate_fi_curve(  # noqa: C901
             try:
                 spike_idx_arr = result.spike_indices
                 features = calculate_spike_features(data, time, spike_idx_arr)
-                widths = [f.get("half_width") for f in features if f.get("half_width") is not None]
+                widths = [getattr(f, "half_width", None) for f in features]
                 valid_widths = [w for w in widths if w is not None and not np.isnan(w) and w > 0]
                 if len(valid_widths) >= 2:
                     broadening_idx = float(valid_widths[-1] / valid_widths[0])
@@ -320,6 +320,8 @@ def calculate_bursts_logic(
     dynamic_burst: bool = False,
     burst_isi_fraction: float = 0.3,
     parameters: Optional[Dict[str, Any]] = None,
+    data: Optional[np.ndarray] = None,
+    time: Optional[np.ndarray] = None,
 ) -> BurstResult:
     """
     Detect bursts in a spike train.
@@ -398,6 +400,25 @@ def calculate_bursts_logic(
     duration = spike_times[-1] - spike_times[0] if len(spike_times) > 0 else 0
     burst_freq = num_bursts / duration if duration > 0 else 0.0
 
+    intra_burst_freqs = []
+    for b in bursts:
+        dur = b[-1] - b[0]
+        if dur > 0:
+            intra_burst_freqs.append((len(b) - 1) / dur)
+    burst_mean_frequency_hz = float(np.mean(intra_burst_freqs)) if intra_burst_freqs else None
+
+    inter_burst_voltage_mv = None
+    if data is not None and time is not None and num_bursts > 1:
+        inter_burst_v_list = []
+        for i in range(num_bursts - 1):
+            end_burst1 = bursts[i][-1]
+            start_burst2 = bursts[i + 1][0]
+            mask = (time > end_burst1) & (time < start_burst2)
+            if np.any(mask):
+                inter_burst_v_list.append(np.mean(data[mask]))
+        if inter_burst_v_list:
+            inter_burst_voltage_mv = float(np.mean(inter_burst_v_list))
+
     return BurstResult(
         value=num_bursts,
         unit="bursts",
@@ -406,6 +427,8 @@ def calculate_bursts_logic(
         spikes_per_burst_avg=float(np.mean(spikes_per_burst)),
         burst_duration_avg=float(np.mean(burst_durations)),
         burst_freq_hz=burst_freq,
+        burst_mean_frequency_hz=burst_mean_frequency_hz,
+        inter_burst_voltage_mv=inter_burst_voltage_mv,
         bursts=bursts,
         parameters=parameters or {},
     )
@@ -437,6 +460,8 @@ def analyze_spikes_and_bursts(
         dynamic_burst=dynamic_burst,
         burst_isi_fraction=burst_isi_fraction,
         parameters=parameters,
+        data=data,
+        time=time,
     )
 
 
@@ -758,7 +783,7 @@ def run_train_dynamics_wrapper(  # noqa: C901
     if spike_indices is not None and len(spike_indices) >= 3:
         try:
             features_list = calculate_spike_features(data, time, spike_indices)
-            widths = [f.get("half_width") for f in features_list if f.get("half_width") is not None]
+            widths = [getattr(f, "half_width", None) for f in features_list]
             valid_widths = [w for w in widths if w is not None and not np.isnan(w)]
             if len(valid_widths) >= 3:
                 spike_broadening_index = (
