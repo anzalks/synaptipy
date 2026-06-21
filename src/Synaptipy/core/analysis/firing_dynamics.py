@@ -612,6 +612,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             cv=cv,
             cv2=np.nan,
             lv=np.nan,
+            adaptation_index=np.nan,
             isis=isis,
         )
 
@@ -626,6 +627,7 @@ def calculate_train_dynamics(spike_times: np.ndarray) -> TrainDynamicsResult:
             cv=cv,
             cv2=np.nan,
             lv=np.nan,
+            adaptation_index=np.nan,
             isis=isis,
         )
 
@@ -771,7 +773,8 @@ def run_train_dynamics_wrapper(  # noqa: C901
         "cv": result.cv,
         "cv2": result.cv2,
         "lv": result.lv,
-        "adaptation_index": result.adaptation_index,
+        "adaptation_index": float(result.adaptation_index) if result.adaptation_index is not None else float(np.nan),
+        "first_isi_ms": float(isi_ms[0]) if len(isi_ms) > 0 else float(np.nan),
         "spike_broadening_index": spike_broadening_index,
         "isi_numbers": isi_numbers,
         "isi_ms": isi_ms,

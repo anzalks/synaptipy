@@ -101,8 +101,8 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 | Fast AHP depth (mV) | 43 | 0.9817 (*p* < 0.0001) | 0.9524 (*p* < 0.0001) | +0.561 mV | -2.056 mV | Pearson correlation, two-sided *p* |
 | ADP amplitude (mV) | 36 | 0.3516 (*p* 0.5617) | 0.1981 (*p* 0.2469) | -8.895 mV | -2.726 mV | Pearson correlation, two-sided *p* |
 | Mean Firing Frequency (Hz) | 43 | 1.0000 (*p* < 0.0001) | 0.5951 (*p* < 0.0001) | +0.000 Hz | +23.921 Hz | Pearson correlation, two-sided *p* |
-| First ISI (ms) | 0 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
-| Spike Frequency Adaptation | 0 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
+| First ISI (ms) | 36 | 1.0000 (*p* < 0.0001) | 1.0000 (*p* < 0.0001) | -0.000 ms | -0.007 ms | Pearson correlation, two-sided *p* |
+| Spike Frequency Adaptation | 30 | 0.2039 (*p* 0.2797) | 0.1550 (*p* 0.4311) | +6.569 Ratio | +6.949 Ratio | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter.*
 
@@ -110,10 +110,10 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
-| Resting Membrane Potential (mV) | 34 | 0.9968 (*p* < 0.0001) | 0.9632 (*p* < 0.0001) | -0.835 mV | -3.117 mV | Pearson correlation, two-sided *p* |
-| Input Resistance (MΩ) | 34 | 0.4567 (*p* 0.0066) | 0.9972 (*p* < 0.0001) | -15.838 MΩ | -7.942 MΩ | Pearson correlation, two-sided *p* |
-| Membrane Time Constant (ms) | 22 | 0.7413 (*p* 0.1517) | 0.1960 (*p* 0.3821) | -1.019 ms | -22.079 ms | Pearson correlation, two-sided *p* |
-| Sag Ratio | 34 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
+| Resting Membrane Potential (mV) | 34 | 0.9951 (*p* < 0.0001) | 0.9632 (*p* < 0.0001) | -1.018 mV | -3.117 mV | Pearson correlation, two-sided *p* |
+| Input Resistance (MΩ) | 34 | 0.4423 (*p* 0.0088) | 0.9972 (*p* < 0.0001) | -18.491 MΩ | -7.942 MΩ | Pearson correlation, two-sided *p* |
+| Membrane Time Constant (ms) | 22 | 0.8942 (*p* 0.1058) | 0.1960 (*p* 0.3821) | -3.871 ms | -22.079 ms | Pearson correlation, two-sided *p* |
+| Sag Ratio | 34 | -0.0277 (*p* 0.8763) | -0.0246 (*p* 0.8903) | +0.018 Ratio | +0.021 Ratio | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, and `tau_analysis` modules. IPFX extraction via `subthresh_features`.*
 

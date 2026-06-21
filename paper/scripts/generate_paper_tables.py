@@ -220,8 +220,8 @@ class SynaptiPyRunner:
             },
             {
                 "analysis": "train_dynamics",
-                "scope": "all_trials",
-                "params": {"spike_threshold": -20.0},
+                "scope": "average",
+                "params": {"spike_threshold": -20.0, "analysis_end_s": 0.0},
             },
             {
                 "analysis": "excitability_analysis",
@@ -405,7 +405,8 @@ class EFELRunner:
         ]
         res = efel.get_feature_values([trace], want)
         r = res[0] if res else {}
-        out = {"n_spikes": len(r.get("peak_voltage", []))}
+        pv = r.get("peak_voltage")
+        out = {"n_spikes": len(pv) if pv is not None else 0}
         for k in want:
             vals = r.get(k)
             out[k] = float(np.mean(vals)) if (vals is not None and len(vals) > 0) else np.nan
@@ -434,7 +435,7 @@ class EFELRunner:
             "stimulus_current": [stim_amp],
         }
 
-        want = ["voltage_base", "ohmic_input_resistance", "time_constant"]
+        want = ["voltage_base", "ohmic_input_resistance", "time_constant", "sag_amplitude", "sag_ratio1", "sag_ratio2"]
         res = efel.get_feature_values([trace], want)
         r = res[0] if res else {}
 
@@ -475,8 +476,8 @@ class IPFXRunner:
             from ipfx.feature_extractor import SpikeTrainFeatureExtractor
             train_ext = SpikeTrainFeatureExtractor(start=t[0], end=t[-1])
             train_res = train_ext.process(t, v, np.zeros_like(v), result)
-            if train_res and "adaptation" in train_res:
-                out["adaptation"] = float(train_res["adaptation"])
+            if train_res and "adapt" in train_res:
+                out["adaptation"] = float(train_res["adapt"])
         except Exception:
             pass
             
@@ -493,17 +494,17 @@ class IPFXRunner:
         if len(stim_ends) == 0:
             return {}
             
-        try:
-            # IPFX 1.0.8 compatibility for sag
-            sag_v = subT.sag(t, v, i, t[stim_starts[0]], t[stim_ends[0]])
-        except Exception:
-            sag_v = np.nan
-
         start_t = t[stim_starts[0]]
         end_t = t[stim_ends[0]]
 
         out = {}
-        baseline_int = min(0.1, start_t)
+        baseline_int = min(0.03, start_t * 0.9)  # Keep it safe and slightly smaller than start_t
+        try:
+            # IPFX 1.0.8 compatibility for sag
+            sag_v = subT.sag(t, v, i, start_t, end_t, baseline_interval=baseline_int)
+        except Exception:
+            sag_v = np.nan
+
         out["v_baseline"] = float(subT.baseline_voltage(t, v, start_t, baseline_interval=baseline_int))
         rin = subT.input_resistance([t], [i], [v], start_t, end_t, baseline_interval=baseline_int)
         
@@ -585,7 +586,7 @@ def build_table1(downloaded_cells: list) -> pd.DataFrame:
                 "syn_rate_hz": float(syn_r.get("mean_freq_hz", np.nan)),
                 "efel_rate_hz": efel_r.get("mean_frequency", np.nan),
                 "ipfx_rate_hz": ipfx_r.get("avg_rate", np.nan),
-                "syn_first_isi_ms": float(syn_r.get("isi_ms", [np.nan])[0]) if "isi_ms" in syn_r and len(syn_r.get("isi_ms", [])) > 0 else np.nan,
+                "syn_first_isi_ms": float(syn_r.get("first_isi_ms", np.nan)),
                 "efel_first_isi_ms": efel_r.get("time_to_second_spike", np.nan) - efel_r.get("time_to_first_spike", np.nan) if not np.isnan(efel_r.get("time_to_second_spike", np.nan)) else np.nan,
                 "ipfx_first_isi_ms": ipfx_r.get("first_isi", np.nan),
                 "syn_sfa": float(syn_r.get("adaptation_index", np.nan)),
