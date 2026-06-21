@@ -92,20 +92,15 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
-| Peak voltage (mV) | 43 | 1.0000 (*p* < 0.0001) | 0.9946 (*p* < 0.0001) | +0.000 mV | +0.707 mV | Pearson correlation, two-sided *p* |
 | AP threshold (mV) | 43 | 0.9381 (*p* < 0.0001) | 0.9440 (*p* < 0.0001) | -0.112 mV | -0.163 mV | Pearson correlation, two-sided *p* |
 | AP amplitude (mV) | 43 | 0.9960 (*p* < 0.0001) | 0.9912 (*p* < 0.0001) | +0.112 mV | +0.870 mV | Pearson correlation, two-sided *p* |
 | AP half-width (ms) | 43 | 0.9879 (*p* < 0.0001) | 0.9948 (*p* < 0.0001) | -0.092 ms | -0.011 ms | Pearson correlation, two-sided *p* |
-| Max dV/dt (V/s) | 43 | 0.9884 (*p* < 0.0001) | 0.8267 (*p* < 0.0001) | -6.352 V/s | +173.706 V/s | Pearson correlation, two-sided *p* |
-| Min dV/dt (V/s) | 43 | 0.9979 (*p* < 0.0001) | 0.9903 (*p* < 0.0001) | -0.563 V/s | -74.740 V/s | Pearson correlation, two-sided *p* |
+| Max dV/dt (V/s) | 43 | 0.9884 (*p* < 0.0001) | 0.7056 (*p* < 0.0001) | -6.352 V/s | +79.539 V/s | Pearson correlation, two-sided *p* |
 | AP Delay (Time to first spike) (ms) | 43 | -0.2544 (*p* 0.0997) | -0.2542 (*p* 0.1000) | +270.924 ms | +270.923 ms | Pearson correlation, two-sided *p* |
-| Upstroke/Downstroke Ratio | 43 | 0.9998 (*p* < 0.0001) | 0.9281 (*p* < 0.0001) | -0.070 Ratio | +0.250 Ratio | Pearson correlation, two-sided *p* |
-| Trough V (mV) | 43 | 0.5825 (*p* < 0.0001) | 0.6241 (*p* < 0.0001) | +0.934 mV | +5.076 mV | Pearson correlation, two-sided *p* |
-| Phase Plane Area | 43 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
+| Upstroke/Downstroke Ratio | 43 | 0.9998 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | -0.070 Ratio | +0.519 Ratio | Pearson correlation, two-sided *p* |
 | Fast AHP depth (mV) | 43 | 0.9817 (*p* < 0.0001) | 0.9524 (*p* < 0.0001) | +0.561 mV | -2.056 mV | Pearson correlation, two-sided *p* |
 | ADP amplitude (mV) | 36 | 0.3516 (*p* 0.5617) | 0.1981 (*p* 0.2469) | -8.895 mV | -2.726 mV | Pearson correlation, two-sided *p* |
 | Mean Firing Frequency (Hz) | 43 | 1.0000 (*p* < 0.0001) | 0.5951 (*p* < 0.0001) | +0.000 Hz | +23.921 Hz | Pearson correlation, two-sided *p* |
-| First ISI (ms) | 36 | 1.0000 (*p* < 0.0001) | 1.0000 (*p* < 0.0001) | -0.000 ms | -0.007 ms | Pearson correlation, two-sided *p* |
 | Spike Frequency Adaptation | 30 | 0.2039 (*p* 0.2797) | 0.1550 (*p* 0.4311) | +6.569 Ratio | +6.949 Ratio | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*
@@ -115,13 +110,9 @@ For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizin
 | Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
 |--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
 | Resting Membrane Potential (mV) | 34 | 0.9951 (*p* < 0.0001) | 0.9632 (*p* < 0.0001) | -1.018 mV | -3.117 mV | Pearson correlation, two-sided *p* |
-| Input Resistance (MΩ) | 34 | N/A (*p* N/A) | 0.9962 (*p* < 0.0001) | N/A | -11.671 MΩ | Pearson correlation, two-sided *p* |
-| Peak Input Resistance (MΩ) | 34 | N/A (*p* N/A) | 0.9624 (*p* < 0.0001) | N/A | -39.580 MΩ | Pearson correlation, two-sided *p* |
+| Input Resistance (MΩ) | 34 | 0.4174 (*p* 0.0140) | 0.9962 (*p* < 0.0001) | -22.220 MΩ | -11.671 MΩ | Pearson correlation, two-sided *p* |
 | Membrane Time Constant (ms) | 22 | 0.8942 (*p* 0.1058) | 0.1960 (*p* 0.3821) | -3.871 ms | -22.079 ms | Pearson correlation, two-sided *p* |
-| Decay Time Constant (ms) | 0 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
 | Sag Ratio | 34 | -0.0277 (*p* 0.8763) | -0.0246 (*p* 0.8903) | +0.018 Ratio | +0.021 Ratio | Pearson correlation, two-sided *p* |
-| Sag Percentage (%) | 34 | N/A (*p* N/A) | -0.0798 (*p* 0.6539) | N/A | -1558.875 % | Pearson correlation, two-sided *p* |
-| Rebound Depolarization (mV) | 0 | N/A (*p* N/A) | N/A (*p* N/A) | N/A | N/A | Pearson correlation, two-sided *p* |
 
 *n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*
 
@@ -137,7 +128,7 @@ The integrated batch processing engine minimizes manual analysis bottlenecks. En
 *Figure 3: Computational Performance and Rendering Benchmarks. **(A)** Elapsed wall-clock time for the I/O-bound `BatchAnalysisEngine` task across increasing CPU core counts (max_workers). The upward trend at high worker counts reflects concurrent disk-access contention on a shared SSD. **(B)** The measured parallel speedup for the I/O-bound task (blue) falls below the ideal linear threshold (dashed), indicating that I/O saturation limits throughput gains. **(C)** Software rendering overhead: per-frame `_update_plot()` latency (mean ± SEM) for the raw PyQtGraph canvas in the application's default opaque mode (black, dashed) versus the full end-to-end application loop (blue, solid) across N = 10–50 overlaid trials. Both remain well below the 16.6 ms threshold for smooth 60 Hz display. **(D)** OpenGL rendering overhead: same comparison as Panel C under OpenGL (Metal-translated on Apple Silicon). OpenGL yields progressively lower raw-canvas latency than software rendering at N ≥ 30, reflecting GPU parallelism advantages for large trial overlays. The application-loop overhead (gap between lines) remains consistent across both rendering modes.*
 
 # Discussion
-Within the current landscape of intracellular electrophysiology software, SynaptiPy provides a unified analytical utility. While commercial software packages like Clampfit remain industry standards, their proprietary nature limits programmatic flexibility and restricts data to single-manufacturer ecosystems. SynaptiPy addresses this by providing native multi-hardware support, allowing entire research laboratories to sync up their analysis protocols regardless of the recording equipment utilized. 
+Within the current landscape of intracellular electrophysiology software, SynaptiPy provides a unified analytical utility. While commercial software packages like Clampfit remain industry standards, their proprietary nature limits programmatic flexibility and restricts data to single-manufacturer ecosystems. SynaptiPy addresses this by providing native multi-hardware support, allowing entire research laboratories to sync up their analysis protocols regardless of the recording equipment utilized. Furthermore, it introduces unique programmatic extractions—such as action potential phase-plane integrals and post-stimulus rebound depolarization amplitudes—that extend beyond the standard feature sets of legacy programmatic pipelines like eFEL and IPFX.
 
 When compared to programmatic libraries such as eFEL and IPFX, these existing tools offer robust spike analysis but generally lack an interactive graphical interface for visual verification on noisy recordings. Furthermore, relative to GUI-based open-source applications like Stimfit [(Guzman et al., 2014)](#ref-guzman_stimfit_2014) which require low-level C++ expertise, SynaptiPy relies entirely on a Python-based architecture. This ensures easy access for a wide audience of neuroscientists. Packaged for deployment across macOS, Windows, and Linux via simple `pip`, `conda`, or source installation modes, SynaptiPy ensures that different researchers can perform the exact same analysis on different local machines.
 
