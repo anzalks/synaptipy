@@ -26,8 +26,8 @@ def main():
         "--figures", 
         nargs="+", 
         type=int, 
-        default=[1, 2, 3, 4, 5],
-        help="List of figure numbers to plot (e.g., --figures 1 2). Default is all (1-5)."
+        default=[1, 2, 3],
+        help="List of figure numbers to plot (e.g., --figures 1 2). Default is all (1-3)."
     )
     args = parser.parse_args()
 

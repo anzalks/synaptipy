@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from plot_utils import COLORS, add_panel_label, set_paper_styles, add_panel_title, add_legend, style_bar_axis, style_line_axis, add_figure_suptitle
+from plot_utils import COLORS, add_panel_label, set_paper_styles, add_panel_title, add_legend, style_bar_axis, style_line_axis, BAR_WIDTH, ALPHA_SOLID, ALPHA_MUTED, ALPHA_FAINT
 
 def main():
     set_paper_styles()
@@ -15,45 +15,53 @@ def main():
     repo_root = Path(__file__).resolve().parent.parent.parent.parent
     data_dir = repo_root / "paper" / "analysis_results"
     fig_dir = repo_root / "paper" / "figures"
+    fig_dir.mkdir(parents=True, exist_ok=True)
     
     os_tag = "macos" if sys.platform == "darwin" else "linux"
-    csv_path = data_dir / f"benchmark_results_{os_tag}.csv"
     
-    if not csv_path.exists():
-        csv_path = data_dir / "benchmark_results.csv" # fallback
+    csv_cpu = data_dir / f"cpu_benchmark_results_{os_tag}.csv"
+    if not csv_cpu.exists():
+        csv_cpu = data_dir / f"benchmark_results_{os_tag}.csv"
+    if not csv_cpu.exists():
+        csv_cpu = data_dir / "benchmark_results.csv" # fallback
         
     bench_res = []
-    with open(csv_path, "r") as f:
+    with open(csv_cpu, "r") as f:
         for row in csv.DictReader(f):
             bench_res.append(row)
     
     datasets = list(dict.fromkeys(r["dataset"] for r in bench_res))
-    colors = {"0021 spike_detection": COLORS["blue"], "0022 event_detection": COLORS["red"]}
-    markers = {"0021 spike_detection": "o", "0022 event_detection": "s"}
     
-    # Highly contrasty colors for the components
-    COMP_COLOR = "#4CAF50" # Green for Compute
-    IO_COLOR = "#FFC107"   # Amber for IO
-    OVER_COLOR = "#E0E0E0" # Light Grey for Overhead
+    # We map datasets to line markers and colors based on eNeuro guidelines
+    colors_map = {
+        "0021 spike_detection": COLORS["blue"], 
+        "0022 event_detection": COLORS["dark_grey"]
+    }
+    markers_map = {
+        "0021 spike_detection": "o", 
+        "0022 event_detection": "s"
+    }
+    
+    # Colors for the components
+    COMP_COLOR = COLORS["blue"] # Blue for Compute
+    OVER_COLOR = COLORS["very_light_grey"] # Light Grey for Overhead
     
     panel_labels = ["A", "B", "C", "D"]
     
-    fig1, axes1 = plt.subplots(2, 2, figsize=(14, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(14, 11))
     
     for row_idx, label in enumerate(datasets):
         rows = [r for r in bench_res if r["dataset"] == label]
-        workers = [int(r["max_workers"]) for r in rows]
-        times = [float(r["mean_time_s"]) for r in rows]
-        sem_times = [float(r["sem_time_s"]) for r in rows]
+        workers = [int(r.get("max_workers", r.get("workers", 1))) for r in rows]
+        times = [float(r.get("mean_time_s", r.get("mean_wall_time_s", 0))) for r in rows]
+        sem_times = [float(r.get("sem_time_s", r.get("sem_wall_time_s", 0))) for r in rows]
     
-        color = colors.get(label, COLORS["dark_grey"])
-        marker = markers.get(label, "o")
+        color = colors_map.get(label, COLORS["black"])
+        marker = markers_map.get(label, "o")
     
         # Time plot with stacked bars
-        ax_time = axes1[row_idx, 0]
+        ax_time = axes[row_idx, 0]
         
-        n_files = int(rows[0]["n_files"])
-        io_component = []
         compute_component = []
         overhead_component = []
         
@@ -72,22 +80,21 @@ def main():
             sem_overhead_component.append(io_sem)
 
         # Stacked bars for absolute time breakdown (Linear Scale)
-        bar_width = 0.6
-        ax_time.bar(workers, compute_component, bar_width, label="Active Compute Time", color=COMP_COLOR, alpha=0.9)
-        ax_time.bar(workers, overhead_component, bar_width, bottom=compute_component, label="File I/O & Overhead", color=OVER_COLOR, alpha=0.8)
+        ax_time.bar(workers, compute_component, BAR_WIDTH, label="Active Compute Time", color=COMP_COLOR, alpha=ALPHA_SOLID, edgecolor="none")
+        ax_time.bar(workers, overhead_component, BAR_WIDTH, bottom=compute_component, label="File I/O & Overhead", color=OVER_COLOR, alpha=ALPHA_MUTED, edgecolor="none")
 
-        # Plot tracking lines with SEM error bars
+        # Plot tracking lines with SEM error bars based on exactly what the old script did
         # 1. Solid black line tracking the top of Compute
         ax_time.errorbar(
             workers,
             compute_component,
             yerr=sem_compute_component,
-            fmt="k-",
+            fmt="-",
+            color=color,
             marker=marker,
-            capsize=4,
-            linewidth=2,
             label="Compute Track",
-            zorder=3
+            zorder=3,
+            capsize=6
         )
         
         # 2. Dashed black line tracking Overhead
@@ -95,26 +102,25 @@ def main():
             workers,
             overhead_component,
             yerr=sem_overhead_component,
-            fmt="k--",
+            fmt="--",
+            color=color,
             marker=marker,
-            capsize=4,
-            linewidth=2,
             label="Overhead Track",
-            zorder=3
+            zorder=3,
+            capsize=6
         )
 
-        # 3. Distinct dashed line for Total Wall Time (Grey dash-dot)
+        # 3. Distinct dashed line for Total Wall Time
         ax_time.errorbar(
             workers,
             times,
             yerr=sem_times,
             fmt="-.",
-            color="#555555",
-            marker=marker,
-            capsize=4,
-            linewidth=2.5,
+            color=COLORS["black"],
+            marker="^",
             label="Total Wall Time",
-            zorder=4
+            zorder=4,
+            capsize=6
         )
         
         ax_time.set_xlabel("CPU Cores (max_workers)")
@@ -126,12 +132,11 @@ def main():
         style_bar_axis(ax_time)
 
         # Speedup plot
-        ax_speedup = axes1[row_idx, 1]
+        ax_speedup = axes[row_idx, 1]
         
         baseline = times[0]
         speedup = [baseline / t for t in times]
         
-        # Approximate SEM for speedup: S = T1/T. Error propagation: dS/S = dT/T (assuming T1 is exact for baseline)
         sem_speedup = [s * (err / t) for s, t, err in zip(speedup, times, sem_times)]
         
         # Plot Measured Speedup with SEM
@@ -139,13 +144,13 @@ def main():
             workers, 
             speedup, 
             yerr=sem_speedup,
-            fmt="k-", 
+            fmt="-",
+            color=color,
             marker=marker,
-            capsize=4,
-            linewidth=2.5, 
-            label="Measured Speedup"
+            label="Measured Speedup",
+            capsize=6
         )
-        ax_speedup.plot(workers, [float(w) for w in workers], "--", color="#555555", linewidth=1.5, alpha=0.6, label="Ideal Linear (S=W)")
+        ax_speedup.plot(workers, [float(w) for w in workers], "--", color=COLORS["dark_grey"], alpha=ALPHA_FAINT, label="Ideal Linear (S=W)")
         
         ax_speedup.set_ylabel("Parallel Speedup")
         ax_speedup.set_xlabel("CPU Cores (max_workers)")
@@ -156,11 +161,10 @@ def main():
         add_panel_title(ax_speedup, f"{label} - Parallel Scaling")
         style_line_axis(ax_speedup)
     
-    add_figure_suptitle(fig1, "Figure 3: Multi-Core Computational Scaling & Profiling", y=0.98)
-    fig1.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     final_path = fig_dir / "figure_03.png"
-    fig1.savefig(final_path, dpi=300)
-    plt.close(fig1)
+    fig.savefig(final_path, dpi=300)
+    plt.close(fig)
     print(f"Figure 3 saved to {final_path}")
 
 if __name__ == "__main__":

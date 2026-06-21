@@ -9,11 +9,14 @@ COLORS = {
     "red": "#B71C1C",
     "light_red": "#EF9A9A",
     "orange": "#E65100",
+    "green": "#4CAF50",
+    "light_green": "#81C784",
     "dark_grey": "#424242",
     "grey": "#9E9E9E",
     "light_grey": "#BDBDBD",
     "very_light_grey": "#E0E0E0",
     "black": "#000000",
+    "white": "#FFFFFF",
 }
 
 # ---------------------------------------------------------------------------
@@ -23,17 +26,25 @@ FONT_FAMILY = "sans-serif"
 FONT_SANS_SERIF = ["Arial", "Helvetica", "DejaVu Sans"]
 
 # Font Sizes
-SUPTITLE_SIZE = 18
-TITLE_SIZE = 14
-PANEL_LABEL_SIZE = 16
-AXES_LABEL_SIZE = 12
-TICK_LABEL_SIZE = 10
-LEGEND_SIZE = 10
+SUPTITLE_SIZE = 14
+TITLE_SIZE = 12
+PANEL_LABEL_SIZE = 14
+AXES_LABEL_SIZE = 10
+TICK_LABEL_SIZE = 8
+LEGEND_SIZE = 8
 
 # Aesthetics
-LINE_WIDTH = 2.5
-MARKER_SIZE = 8
-ERRORBAR_CAPSIZE = 5
+LINE_WIDTH = 2.0
+MARKER_SIZE = 5
+ERRORBAR_CAPSIZE = 6
+
+# Geometry & Transparencies
+BAR_WIDTH = 0.6
+SCATTER_AREA = 50
+SCATTER_EDGE_WIDTH = 0.75
+ALPHA_SOLID = 0.9
+ALPHA_MUTED = 0.8
+ALPHA_FAINT = 0.6
 
 # ---------------------------------------------------------------------------
 # 1. Global Setup
@@ -52,6 +63,7 @@ def set_paper_styles():
     plt.rcParams["lines.linewidth"] = LINE_WIDTH
     plt.rcParams["lines.markersize"] = MARKER_SIZE
     plt.rcParams["errorbar.capsize"] = ERRORBAR_CAPSIZE
+    plt.rcParams["lines.markeredgewidth"] = 1.5 # Controls cap thickness globally
 
 # ---------------------------------------------------------------------------
 # 2. Typography Standardizers

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from plot_utils import COLORS, add_panel_label, set_paper_styles, add_panel_title, add_legend, style_scatter_axis, add_figure_suptitle
+from plot_utils import COLORS, add_panel_label, set_paper_styles, add_panel_title, add_legend, style_scatter_axis, add_figure_suptitle, SCATTER_AREA, SCATTER_EDGE_WIDTH
 
 def main():
     set_paper_styles()
@@ -56,9 +56,9 @@ def main():
             x_efel,
             y_syn,
             color=COLORS["blue"],
-            s=80,
-            edgecolors="white",
-            linewidths=0.75,
+            s=SCATTER_AREA,
+            edgecolors=COLORS["white"],
+            linewidths=SCATTER_EDGE_WIDTH,
             label=f"eFEL\nr={r_e:.4f}, p{format_p(p_e)}\nBias: {mb_e:+.2f}",
         )
     
@@ -66,9 +66,9 @@ def main():
             x_ipfx,
             y_syn,
             color=COLORS["red"],
-            s=80,
-            edgecolors="white",
-            linewidths=0.75,
+            s=SCATTER_AREA,
+            edgecolors=COLORS["white"],
+            linewidths=SCATTER_EDGE_WIDTH,
             marker="s",
             label=f"IPFX\nr={r_i:.4f}, p{format_p(p_i)}\nBias: {mb_i:+.2f}",
             zorder=3
@@ -77,10 +77,10 @@ def main():
         ax.scatter(
             y_syn,
             y_syn,
-            color="black",
-            s=80,
-            edgecolors="white",
-            linewidths=0.75,
+            color=COLORS["black"],
+            s=SCATTER_AREA,
+            edgecolors=COLORS["white"],
+            linewidths=SCATTER_EDGE_WIDTH,
             marker="^",
             label="SynaptiPy",
             zorder=4
@@ -103,7 +103,7 @@ def main():
         # Apply standard axis styles
         style_scatter_axis(ax, unity_line=True, lims=lims)
     
-    add_figure_suptitle(fig_bio, "Biological Validation: Feature Extraction Benchmark", y=0.98)
+    # Removed suptitle to comply with eNeuro publishing guidelines
     fig_bio.tight_layout(rect=[0, 0, 1, 0.95])
     final_path = fig_dir / "figure_02.png"
     fig_bio.savefig(final_path, dpi=300)

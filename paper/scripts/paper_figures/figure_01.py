@@ -24,6 +24,8 @@ QMessageBox.question = lambda *args, **kwargs: QMessageBox.StandardButton.Yes
 
 app = QApplication.instance() or QApplication(sys.argv)
 
+repo_root = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(repo_root / "src"))
 from Synaptipy.application.gui.main_window import MainWindow
 from Synaptipy.infrastructure.file_readers import NeoAdapter
 
@@ -132,18 +134,22 @@ def main():
     add_panel_title(ax4, "D. Data Exporter & Summary Results")
     add_panel_label(ax4, "D", x=-0.05, y=1.05)
 
-    add_figure_suptitle(fig, "SynaptiPy GUI Workflow: Complete End-to-End Analysis", y=0.98)
+    # Removed suptitle to comply with eNeuro publishing guidelines
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     final_path = out_dir / "figure_01.png"
-    plt.savefig(final_path, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.savefig(final_path, dpi=300)
+    print(f"Figure 1 saved to {final_path}")
+    
+    # Cleanup temporary screenshots
+    for temp_img in [img_b_path, img_c_path, img_d_path]:
+        if temp_img.exists():
+            temp_img.unlink()
+    print("Cleaned up temporary screenshot files.")
     plt.close(fig)
     print(f"Figure 1 saved to {final_path}")
 
-    img_b_path.unlink(missing_ok=True)
-    img_c_path.unlink(missing_ok=True)
-    img_d_path.unlink(missing_ok=True)
     
     # Safe exit to prevent Qt crash
     app.quit()
