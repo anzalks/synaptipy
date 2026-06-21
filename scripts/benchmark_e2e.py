@@ -200,18 +200,20 @@ def _run_child(mode: str) -> None:  # noqa: C901
             if cycle >= _N_WARMUP:
                 times_ms.append(elapsed_ms)
 
-        times_ms.sort()
-        k = len(times_ms)
+        import numpy as np
+        times_arr = np.array(times_ms)
+        mean_val = np.mean(times_arr)
+        sem_val = np.std(times_arr, ddof=1) / np.sqrt(len(times_arr)) if len(times_arr) > 1 else 0.0
+        
         entry = {
             "n_trials": n,
             "total_samples": n * n_samples,
-            "median_ms": round(times_ms[k // 2], 3),
-            "p05_ms": round(times_ms[max(0, int(0.05 * k))], 3),
-            "p95_ms": round(times_ms[min(k - 1, int(0.95 * k))], 3),
+            "mean_ms": round(mean_val, 3),
+            "sem_ms": round(sem_val, 3),
         }
         results["overlay"].append(entry)
         print(
-            f"  [{mode}] overlay N={n:>2}: median={entry['median_ms']:.2f} ms",
+            f"  [{mode}] overlay N={n:>2}: mean={entry['mean_ms']:.2f} ± {entry['sem_ms']:.2f} ms",
             file=sys.stderr,
             flush=True,
         )
@@ -236,17 +238,19 @@ def _run_child(mode: str) -> None:  # noqa: C901
         if cycle >= _N_WARMUP:
             times_ms.append(elapsed_ms)
 
-    times_ms.sort()
-    k = len(times_ms)
+    import numpy as np
+    times_arr = np.array(times_ms)
+    mean_val = np.mean(times_arr)
+    sem_val = np.std(times_arr, ddof=1) / np.sqrt(len(times_arr)) if len(times_arr) > 1 else 0.0
+
     results["cycle_single"] = {
         "n_trials": 1,
         "total_samples": n_samples,
-        "median_ms": round(times_ms[k // 2], 3),
-        "p05_ms": round(times_ms[max(0, int(0.05 * k))], 3),
-        "p95_ms": round(times_ms[min(k - 1, int(0.95 * k))], 3),
+        "mean_ms": round(mean_val, 3),
+        "sem_ms": round(sem_val, 3),
     }
     print(
-        f"  [{mode}] cycle_single: median={results['cycle_single']['median_ms']:.2f} ms",
+        f"  [{mode}] cycle_single: mean={results['cycle_single']['mean_ms']:.2f} ms",
         file=sys.stderr,
         flush=True,
     )
@@ -311,9 +315,8 @@ def _save_csv(sw: dict, gl: dict, output_path: Path) -> None:
         "benchmark_mode",
         "n_trials",
         "total_samples",
-        "median_ms",
-        "p05_ms",
-        "p95_ms",
+        "mean_ms",
+        "sem_ms",
     ]
     rows = []
     for label, data in [("software", sw), ("opengl", gl)]:
@@ -324,9 +327,8 @@ def _save_csv(sw: dict, gl: dict, output_path: Path) -> None:
                     "benchmark_mode": "overlay_avg",
                     "n_trials": entry["n_trials"],
                     "total_samples": entry["total_samples"],
-                    "median_ms": entry["median_ms"],
-                    "p05_ms": entry["p05_ms"],
-                    "p95_ms": entry["p95_ms"],
+                    "mean_ms": entry["mean_ms"],
+                    "sem_ms": entry["sem_ms"],
                 }
             )
         cs = data.get("cycle_single")
@@ -337,9 +339,8 @@ def _save_csv(sw: dict, gl: dict, output_path: Path) -> None:
                     "benchmark_mode": "cycle_single",
                     "n_trials": cs["n_trials"],
                     "total_samples": cs["total_samples"],
-                    "median_ms": cs["median_ms"],
-                    "p05_ms": cs["p05_ms"],
-                    "p95_ms": cs["p95_ms"],
+                    "mean_ms": cs["mean_ms"],
+                    "sem_ms": cs["sem_ms"],
                 }
             )
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -525,15 +526,15 @@ def _print_summary(sw: dict, gl: dict) -> None:
     print(f"{'Mode':<20} {'N':>4}  {'Software':>12}  {'OpenGL':>12}  {'SW/GL ratio':>12}")
     for sw_e, gl_e in zip(sw.get("overlay", []), gl.get("overlay", [])):
         n = sw_e["n_trials"]
-        s = sw_e["median_ms"]
-        g = gl_e["median_ms"]
+        s = sw_e["mean_ms"]
+        g = gl_e["mean_ms"]
         ratio = s / g if g else float("nan")
         print(f"  OVERLAY_AVG     {n:>4}  {s:>10.2f}ms  {g:>10.2f}ms  {ratio:>12.2f}x")
     sw_cs = sw.get("cycle_single")
     gl_cs = gl.get("cycle_single")
     if sw_cs and gl_cs:
-        s = sw_cs["median_ms"]
-        g = gl_cs["median_ms"]
+        s = sw_cs["mean_ms"]
+        g = gl_cs["mean_ms"]
         ratio = s / g if g else float("nan")
         print(f"  CYCLE_SINGLE    {'1':>4}  {s:>10.2f}ms  {g:>10.2f}ms  {ratio:>12.2f}x")
 

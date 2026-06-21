@@ -746,8 +746,11 @@ class BatchAnalysisEngine:
                     if progress_callback:
                         progress_callback(i, total_files, f"Processing {file_name}...")
 
+                    import time
+                    t0_io = time.perf_counter()
                     # Load recording from disk with whitelist (Memory Optimization)
                     recording = self.neo_adapter.read_recording(file_path, channel_whitelist=channel_filter)
+                    file_io_time = time.perf_counter() - t0_io
                     if not recording:
                         log.warning(f"Failed to load {file_path}")
                         results_list.append(
@@ -770,6 +773,7 @@ class BatchAnalysisEngine:
 
                     if progress_callback:
                         progress_callback(i, total_files, f"Processing {file_name}...")
+                    file_io_time = 0.0
 
                 # Filter channels if specified
                 channels_to_process = recording.channels.items()
@@ -787,6 +791,9 @@ class BatchAnalysisEngine:
 
                 # Extract recording-level metadata once per file
                 rec_meta = self._recording_metadata(recording)
+
+                import time
+                t0_compute = time.perf_counter()
 
                 # Iterate through channels
                 for channel_key, channel in channels_to_process:
@@ -913,6 +920,14 @@ class BatchAnalysisEngine:
                     # held in pipeline_context (which can be 10–200 MB for a long ABF)
                     # are freed before processing the next channel in this file.
                     pipeline_context = {"scope": None, "data": None, "time": None}
+
+                file_compute_time = time.perf_counter() - t0_compute
+                
+                # Append the IO and compute times to all rows generated for this file
+                for row in results_list:
+                    if row.get("file_path") == file_path_str:
+                        row["io_time_s"] = file_io_time
+                        row["compute_time_s"] = file_compute_time
 
             except Exception as e:  # noqa: BLE001 - broad catch intentional; Domino Defense
                 # A single corrupted or unreadable file must never abort the entire batch run.

@@ -216,7 +216,17 @@ class SynaptiPyRunner:
             {
                 "analysis": "spike_detection",
                 "scope": "all_trials",
-                "params": {"threshold": -20.0, "refractory_period": 0.002, "dvdt_threshold": 20.0},
+                "params": {"threshold": -20.0, "refractory_period": 0.002, "dvdt_threshold": 20.0, "sigma_ms": 0.0},
+            },
+            {
+                "analysis": "train_dynamics",
+                "scope": "all_trials",
+                "params": {"spike_threshold": -20.0},
+            },
+            {
+                "analysis": "excitability_analysis",
+                "scope": "all_trials",
+                "params": {"threshold": -20.0},
             }
         ]
         
@@ -264,7 +274,14 @@ class SynaptiPyRunner:
         df = engine.run_batch([recording], pipeline)
         if df.empty:
             return {}
-        return df.to_dict("records")[0]
+        row_dict = {}
+        for row in df.to_dict("records"):
+            for k, val in row.items():
+                if val is not None:
+                    if isinstance(val, float) and np.isnan(val):
+                        continue
+                    row_dict[k] = val
+        return row_dict
 
     @staticmethod
     def run_passive(syn_rec, sweep_name: str, i: np.ndarray, t: np.ndarray) -> dict:
@@ -328,15 +345,27 @@ class SynaptiPyRunner:
                 "params": {
                     "baseline_start": max(0.0, s_t - 0.1),
                     "baseline_end": max(0.01, s_t - 0.01),
-                    "response_start": max(s_t + 0.01, e_t - 0.15),
-                    "response_end": max(s_t + 0.02, e_t - 0.01),
+                    "response_start": e_t - 0.1,
+                    "response_end": e_t,
                     "current_amplitude": float(amp),
                 },
             },
             {
                 "analysis": "tau_analysis",
                 "scope": "all_trials",
-                "params": {"stim_start_time": s_t, "fit_duration": 0.05, "model": "mono"},
+                "params": {"stim_start_time": s_t, "fit_duration": 0.02, "model": "mono"},
+            },
+            {
+                "analysis": "sag_ratio_analysis",
+                "scope": "all_trials",
+                "params": {
+                    "baseline_start": max(0.0, s_t - 0.1),
+                    "baseline_end": max(0.01, s_t - 0.01),
+                    "peak_window_start": s_t,
+                    "peak_window_end": s_t + 0.3,
+                    "ss_window_start": e_t - 0.1,
+                    "ss_window_end": e_t - 0.01,
+                },
             },
         ]
         
@@ -369,6 +398,10 @@ class EFELRunner:
             "AP_amplitude",
             "fast_AHP",
             "ADP_peak_amplitude",
+            "mean_frequency",
+            "adaptation_index2",
+            "time_to_first_spike",
+            "time_to_second_spike",
         ]
         res = efel.get_feature_values([trace], want)
         r = res[0] if res else {}
@@ -422,7 +455,8 @@ class IPFXRunner:
             result = ext.process(t, v, np.zeros_like(v))
         if result is None or result.empty:
             return {"n_spikes": 0}
-        return {
+        
+        out = {
             "n_spikes": len(result),
             "peak_v": float(result["peak_v"].mean()),
             "width_ms": float(result["width"].mean()) * 1000.0,
@@ -432,7 +466,21 @@ class IPFXRunner:
             "amplitude": float((result["peak_v"] - result["threshold_v"]).mean()),
             "fast_ahp": float((result["threshold_v"] - result["fast_trough_v"]).mean()),
             "adp_amp": float((result["adp_v"] - result["fast_trough_v"]).mean()),
+            "avg_rate": float(len(result) - 1) / (result["peak_t"].iloc[-1] - result["peak_t"].iloc[0]) if len(result) > 1 else 0.0,
+            "first_isi": float(result["width"].iloc[0]*0.0 + (result["peak_t"].iloc[1] - result["peak_t"].iloc[0])*1000.0) if len(result) > 1 else np.nan,
+            "adaptation": np.nan, # Fallback, filled below if train extractor works
         }
+        
+        try:
+            from ipfx.feature_extractor import SpikeTrainFeatureExtractor
+            train_ext = SpikeTrainFeatureExtractor(start=t[0], end=t[-1])
+            train_res = train_ext.process(t, v, np.zeros_like(v), result)
+            if train_res and "adaptation" in train_res:
+                out["adaptation"] = float(train_res["adaptation"])
+        except Exception:
+            pass
+            
+        return out
 
     @staticmethod
     def run_sweep_passive(v: np.ndarray, i: np.ndarray, t: np.ndarray) -> dict:
@@ -444,6 +492,12 @@ class IPFXRunner:
         stim_ends = stim_ends[stim_ends > stim_starts[0]]
         if len(stim_ends) == 0:
             return {}
+            
+        try:
+            # IPFX 1.0.8 compatibility for sag
+            sag_v = subT.sag(t, v, i, t[stim_starts[0]], t[stim_ends[0]])
+        except Exception:
+            sag_v = np.nan
 
         start_t = t[stim_starts[0]]
         end_t = t[stim_ends[0]]
@@ -460,6 +514,7 @@ class IPFXRunner:
             
         out["input_resistance"] = float(rin)
         out["tau"] = float(tau) * 1000.0
+        out["sag"] = float(sag_v)
         return out
 
 
@@ -527,6 +582,15 @@ def build_table1(downloaded_cells: list) -> pd.DataFrame:
                 "syn_adp_mV": float(syn_r.get("adp_amplitude_mean", np.nan)),
                 "efel_adp_mV": efel_r.get("ADP_peak_amplitude", np.nan),
                 "ipfx_adp_mV": ipfx_r.get("adp_amp", np.nan),
+                "syn_rate_hz": float(syn_r.get("mean_freq_hz", np.nan)),
+                "efel_rate_hz": efel_r.get("mean_frequency", np.nan),
+                "ipfx_rate_hz": ipfx_r.get("avg_rate", np.nan),
+                "syn_first_isi_ms": float(syn_r.get("isi_ms", [np.nan])[0]) if "isi_ms" in syn_r and len(syn_r.get("isi_ms", [])) > 0 else np.nan,
+                "efel_first_isi_ms": efel_r.get("time_to_second_spike", np.nan) - efel_r.get("time_to_first_spike", np.nan) if not np.isnan(efel_r.get("time_to_second_spike", np.nan)) else np.nan,
+                "ipfx_first_isi_ms": ipfx_r.get("first_isi", np.nan),
+                "syn_sfa": float(syn_r.get("adaptation_index", np.nan)),
+                "efel_sfa": efel_r.get("adaptation_index2", np.nan),
+                "ipfx_sfa": ipfx_r.get("adaptation", np.nan),
             })
     
     df = pd.DataFrame(rows)
@@ -571,12 +635,15 @@ def build_table2(downloaded_cells: list) -> pd.DataFrame:
                 "syn_rmp_mV": float(syn_r.get("rmp_mv", np.nan)),
                 "efel_rmp_mV": efel_r.get("voltage_base", np.nan),
                 "ipfx_rmp_mV": ipfx_r.get("v_baseline", np.nan),
-                "syn_rin_mohm": float(syn_r.get("rin_mohm", np.nan)),
+                "syn_rin_mohm": float(syn_r.get("rin_peak_mohm", syn_r.get("rin_mohm", np.nan))),
                 "efel_rin_mohm": efel_r.get("ohmic_input_resistance", np.nan) * 1000.0,
                 "ipfx_rin_mohm": ipfx_r.get("input_resistance", np.nan),
                 "syn_tau_ms": float(syn_r.get("tau_ms", np.nan)),
                 "efel_tau_ms": efel_r.get("time_constant", np.nan),
                 "ipfx_tau_ms": ipfx_r.get("tau", np.nan),
+                "syn_sag": float(syn_r.get("sag_ratio", np.nan)),
+                "efel_sag": efel_r.get("sag_ratio1", np.nan),
+                "ipfx_sag": ipfx_r.get("sag", np.nan),
             })
 
     df = pd.DataFrame(rows)
@@ -597,6 +664,9 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         ("Min dV/dt (V/s)", "syn_mindvdt", "efel_mindvdt", "ipfx_mindvdt", "V/s"),
         ("Fast AHP depth (mV)", "syn_fahp_mV", "efel_fahp_mV", "ipfx_fahp_mV", "mV"),
         ("ADP amplitude (mV)", "syn_adp_mV", "efel_adp_mV", "ipfx_adp_mV", "mV"),
+        ("Mean Firing Frequency (Hz)", "syn_rate_hz", "efel_rate_hz", "ipfx_rate_hz", "Hz"),
+        ("First ISI (ms)", "syn_first_isi_ms", "efel_first_isi_ms", "ipfx_first_isi_ms", "ms"),
+        ("Spike Frequency Adaptation", "syn_sfa", "efel_sfa", "ipfx_sfa", "Ratio"),
     ]
     md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
     md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
@@ -620,6 +690,7 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         ("Resting Membrane Potential (mV)", "syn_rmp_mV", "efel_rmp_mV", "ipfx_rmp_mV", "mV"),
         ("Input Resistance (MΩ)", "syn_rin_mohm", "efel_rin_mohm", "ipfx_rin_mohm", "MΩ"),
         ("Membrane Time Constant (ms)", "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
+        ("Sag Ratio", "syn_sag", "efel_sag", "ipfx_sag", "Ratio"),
     ]
     md = "**Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**\n\n"
     md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"

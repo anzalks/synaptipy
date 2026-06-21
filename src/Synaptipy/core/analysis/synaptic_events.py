@@ -788,6 +788,13 @@ detect_minis_threshold = detect_events_threshold
             "decimals": 1,
             "visible_when": {"param": "use_quiescent_noise_floor", "value": True},
         },
+        {
+            "name": "compute_kinetics",
+            "label": "Compute Kinetics",
+            "type": "bool",
+            "default": False,
+            "tooltip": "Fit exponential decays to every detected event. Warning: computationally heavy.",
+        },
     ],
 )
 def run_event_detection_threshold_wrapper(
@@ -800,6 +807,7 @@ def run_event_detection_threshold_wrapper(
     rolling_baseline_window_ms = kwargs.get("rolling_baseline_window_ms", 100.0)
     use_quiescent_noise_floor = kwargs.get("use_quiescent_noise_floor", True)
     quiescent_window_ms = float(kwargs.get("quiescent_window_ms", 20.0))
+    compute_kinetics = kwargs.get("compute_kinetics", False)
 
     reject_artifacts = kwargs.get("reject_artifacts", False)
     artifact_mask = None
@@ -847,18 +855,20 @@ def run_event_detection_threshold_wrapper(
     tau_fast_list = []
     tau_slow_list = []
     tau_mono_list = []
-    for k, idx in enumerate(_idx):
-        lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))
-        kin = fit_biexponential_decay(data, idx, sampling_rate, lb, polarity=direction)
-        if kin["tau_mono_ms"] is not None:
-            tau_mono_list.append(kin["tau_mono_ms"])
-        if kin["bi_exp_converged"]:
-            tau_fast_list.append(kin["tau_fast_ms"])
-            tau_slow_list.append(kin["tau_slow_ms"])
+    
+    if compute_kinetics:
+        for k, idx in enumerate(_idx):
+            lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))
+            kin = fit_biexponential_decay(data, idx, sampling_rate, lb, polarity=direction)
+            if kin["tau_mono_ms"] is not None:
+                tau_mono_list.append(kin["tau_mono_ms"])
+            if kin["bi_exp_converged"]:
+                tau_fast_list.append(kin["tau_fast_ms"])
+                tau_slow_list.append(kin["tau_slow_ms"])
 
     mean_tau_mono = float(np.mean(tau_mono_list)) if tau_mono_list else float("nan")
-    mean_tau_fast = float(np.mean(tau_fast_list)) if tau_fast_list else None
-    mean_tau_slow = float(np.mean(tau_slow_list)) if tau_slow_list else None
+    mean_tau_fast = float(np.mean(tau_fast_list)) if tau_fast_list else float("nan")
+    mean_tau_slow = float(np.mean(tau_slow_list)) if tau_slow_list else float("nan")
 
     return {
         "module_used": "synaptic_events",

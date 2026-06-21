@@ -129,12 +129,27 @@ def _build_file_list(source: Path, tmp_dir: Path) -> list:
     return file_list
 
 
-def _timed_run(file_list: list, pipeline: list, max_workers: int) -> float:
-    """Run one batch pass and return elapsed wall-clock seconds."""
+def _timed_run(file_list: list, pipeline: list, max_workers: int) -> dict:
+    """Run one batch pass and return elapsed wall-clock and internal breakdown seconds."""
     engine = BatchAnalysisEngine(max_workers=max_workers)
     t0 = time.perf_counter()
-    engine.run_batch(file_list, pipeline)
-    return time.perf_counter() - t0
+    df = engine.run_batch(file_list, pipeline)
+    wall_time = time.perf_counter() - t0
+    
+    io_and_overhead_time_s = 0.0
+    active_compute_time_s = 0.0
+    
+    if not df.empty and "compute_time_s" in df.columns:
+        df_files = df.drop_duplicates(subset=["file_path"])
+        total_compute_s = float(df_files["compute_time_s"].sum())
+        active_compute_time_s = total_compute_s / max_workers
+        
+        io_and_overhead_time_s = wall_time - active_compute_time_s
+        if io_and_overhead_time_s < 0:
+            io_and_overhead_time_s = 0.0
+            active_compute_time_s = wall_time
+            
+    return {"wall_time": wall_time, "io_and_overhead_time_s": io_and_overhead_time_s, "active_compute_time_s": active_compute_time_s}
 
 
 def _run_dataset(label: str, file_list: list, pipeline: list) -> list:
@@ -143,19 +158,35 @@ def _run_dataset(label: str, file_list: list, pipeline: list) -> list:
     for workers in _WORKER_COUNTS:
         print(f"  [{label}] max_workers={workers} ...", end=" ", flush=True)
         times = []
+        io_times = []
+        compute_times = []
         for rep in range(_N_REPEATS):
             elapsed = _timed_run(file_list, pipeline, max_workers=workers)
-            times.append(elapsed)
-            print(f"rep{rep + 1}={elapsed:.1f}s", end=" ", flush=True)
-        median_time = sorted(times)[len(times) // 2]
-        print(f"-> median={median_time:.2f}s")
+            times.append(elapsed["wall_time"])
+            io_times.append(elapsed["io_and_overhead_time_s"])
+            compute_times.append(elapsed["active_compute_time_s"])
+            print(f"rep{rep + 1}={elapsed['wall_time']:.1f}s", end=" ", flush=True)
+        import numpy as np
+        mean_time = np.mean(times)
+        sem_time = np.std(times, ddof=1) / np.sqrt(len(times)) if len(times) > 1 else 0.0
+        
+        mean_io = np.mean(io_times)
+        sem_io = np.std(io_times, ddof=1) / np.sqrt(len(io_times)) if len(io_times) > 1 else 0.0
+        
+        mean_compute = np.mean(compute_times)
+        sem_compute = np.std(compute_times, ddof=1) / np.sqrt(len(compute_times)) if len(compute_times) > 1 else 0.0
+        
+        print(f"-> mean={mean_time:.2f}s ± {sem_time:.3f}s")
         results.append(
             {
                 "dataset": label,
                 "max_workers": workers,
-                "median_time_s": round(median_time, 3),
-                "min_time_s": round(min(times), 3),
-                "max_time_s": round(max(times), 3),
+                "mean_time_s": round(mean_time, 3),
+                "sem_time_s": round(sem_time, 3),
+                "mean_io_s": round(mean_io, 3),
+                "sem_io_s": round(sem_io, 3),
+                "mean_compute_s": round(mean_compute, 3),
+                "sem_compute_s": round(sem_compute, 3),
                 "n_files": _N_FILES,
                 "n_repeats": _N_REPEATS,
             }
@@ -168,9 +199,12 @@ def _save_csv(results: list, output_path: Path) -> None:
     fieldnames = [
         "dataset",
         "max_workers",
-        "median_time_s",
-        "min_time_s",
-        "max_time_s",
+        "mean_time_s",
+        "sem_time_s",
+        "mean_io_s",
+        "sem_io_s",
+        "mean_compute_s",
+        "sem_compute_s",
         "n_files",
         "n_repeats",
     ]
@@ -202,9 +236,9 @@ def _save_plot(results: list, output_path: Path) -> None:
     for row_idx, label in enumerate(datasets):
         rows = [r for r in results if r["dataset"] == label]
         workers = [r["max_workers"] for r in rows]
-        times = [r["median_time_s"] for r in rows]
-        err_lo = [r["median_time_s"] - r["min_time_s"] for r in rows]
-        err_hi = [r["max_time_s"] - r["median_time_s"] for r in rows]
+        times = [r["mean_time_s"] for r in rows]
+        err_lo = [r["sem_time_s"] for r in rows]
+        err_hi = [r["sem_time_s"] for r in rows]
 
         color = colors.get(label, "#424242")
         marker = markers.get(label, "o")
@@ -305,11 +339,11 @@ def main(output_dir: Path) -> None:
         print(f"Copied canonical: {canonical_png}")
 
     print("\nSummary:")
-    print(f"  {'Dataset':<28}  {'Workers':>7}  {'Median (s)':>10}  {'Min':>7}  {'Max':>7}")
+    print(f"  {'Dataset':<28}  {'Workers':>7}  {'Median (s)':>10}  {'I/O (s)':>7}  {'Compute (s)':>11}")
     for r in all_results:
         print(
             f"  {r['dataset']:<28}  {r['max_workers']:>7}  "
-            f"{r['median_time_s']:>10.3f}  {r['min_time_s']:>7.3f}  {r['max_time_s']:>7.3f}"
+            f"{r['mean_time_s']:>10.3f}  {r.get('mean_io_s', 0):>7.3f}  {r.get('mean_compute_s', 0):>11.3f}"
         )
 
 

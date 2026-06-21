@@ -265,11 +265,11 @@ def calculate_spike_features(  # noqa: C901
         log.warning("Invalid time vector (dt <= 0). Cannot calculate features.")
         return []
 
-    # Apply 5 kHz low-pass filter for clean derivative calculation
-    from scipy.signal import butter, sosfiltfilt
+    # Apply 9.9 kHz low-pass Bessel filter for clean derivative calculation (matches IPFX standard)
+    from scipy.signal import bessel, sosfiltfilt
     nyq = 0.5 / dt
-    if 5000.0 < nyq:
-        sos = butter(4, 5000.0, btype='low', output='sos', fs=1.0/dt)
+    if 9900.0 < nyq:
+        sos = bessel(4, 9900.0, btype='low', output='sos', fs=1.0/dt)
         data_filtered = sosfiltfilt(sos, data)
     else:
         data_filtered = data
@@ -295,12 +295,18 @@ def calculate_spike_features(  # noqa: C901
     target_thresh_mvs = dvdt_threshold * 1000.0
     
     # PHASE-PLANE BACKWARD SEARCH:
-    # Instead of scanning forward and getting tricked by noise, we search backward 
-    # from the peak to find the point where dV/dt drops BELOW the threshold.
-    below_thresh_mask = onset_dvdt_windows < target_thresh_mvs
+    # Instead of scanning backward from the peak (where dV/dt drops to 0),
+    # we must scan backward from the point of MAXIMUM dV/dt to find the true onset crossing.
+    max_dvdt_rel_idx = np.argmax(onset_dvdt_windows, axis=1)
+    
+    # Create a mask that is only valid BEFORE the max dV/dt point
+    col_idxs = np.tile(np.arange(lookback_samples), (n_spikes, 1))
+    valid_search_mask = col_idxs <= max_dvdt_rel_idx[:, None]
+    
+    below_thresh_mask = (onset_dvdt_windows < target_thresh_mvs) & valid_search_mask
     has_crossing = np.any(below_thresh_mask, axis=1)
     
-    # Reverse the mask to search backward from the peak (right side of the window)
+    # Reverse the mask to search backward from the max dV/dt
     rev_below = below_thresh_mask[:, ::-1]
     first_below_rev_idx = np.argmax(rev_below, axis=1)
     
@@ -363,7 +369,23 @@ def calculate_spike_features(  # noqa: C901
 
     valid_width = has_pre_50 & has_post_50 & (idx_rise_50_rel != -1) & (idx_fall_50_rel != 999999)
 
-    half_widths[valid_width] = (idx_fall_50_rel[valid_width] - idx_rise_50_rel[valid_width]) * dt * 1000.0
+    # Linear interpolation for 50% rise
+    y0_rise = waveforms[np.arange(n_spikes), idx_rise_50_rel]
+    y1_rise = waveforms[np.arange(n_spikes), idx_rise_50_rel + 1]
+    dy_rise = y1_rise - y0_rise
+    dy_rise[dy_rise == 0] = 1e-9
+    frac_rise = (amp_50 - y0_rise) / dy_rise
+    x_rise = idx_rise_50_rel + frac_rise
+
+    # Linear interpolation for 50% fall
+    y0_fall = waveforms[np.arange(n_spikes), idx_fall_50_rel - 1]
+    y1_fall = waveforms[np.arange(n_spikes), idx_fall_50_rel]
+    dy_fall = y1_fall - y0_fall
+    dy_fall[dy_fall == 0] = -1e-9
+    frac_fall = (amp_50 - y0_fall) / dy_fall
+    x_fall = (idx_fall_50_rel - 1) + frac_fall
+
+    half_widths[valid_width] = (x_fall[valid_width] - x_rise[valid_width]) * dt * 1000.0
 
     lev_10 = amp_10[:, None]
     lev_90 = amp_90[:, None]
@@ -375,7 +397,23 @@ def calculate_spike_features(  # noqa: C901
     idx_90_rel = np.max(np.where(mask_90, idxs, -1), axis=1)
     valid_rise = valid_10 & valid_90 & (idx_90_rel > idx_10_rel)
 
-    rise_times[valid_rise] = (idx_90_rel[valid_rise] - idx_10_rel[valid_rise]) * dt * 1000.0
+    # Linear interpolation for 10%
+    y0_10 = waveforms[np.arange(n_spikes), idx_10_rel]
+    y1_10 = waveforms[np.arange(n_spikes), idx_10_rel + 1]
+    dy_10 = y1_10 - y0_10
+    dy_10[dy_10 == 0] = 1e-9
+    frac_10 = (amp_10 - y0_10) / dy_10
+    x_10 = idx_10_rel + frac_10
+
+    # Linear interpolation for 90%
+    y0_90 = waveforms[np.arange(n_spikes), idx_90_rel]
+    y1_90 = waveforms[np.arange(n_spikes), idx_90_rel + 1]
+    dy_90 = y1_90 - y0_90
+    dy_90[dy_90 == 0] = 1e-9
+    frac_90 = (amp_90 - y0_90) / dy_90
+    x_90 = idx_90_rel + frac_90
+
+    rise_times[valid_rise] = (x_90[valid_rise] - x_10[valid_rise]) * dt * 1000.0
 
     mask_dec_90 = is_post_peak & (waveforms <= lev_90)
     valid_dec_90 = np.any(mask_dec_90, axis=1)
@@ -385,7 +423,23 @@ def calculate_spike_features(  # noqa: C901
     idx_dec_10_rel = np.min(np.where(mask_dec_10, idxs, 999999), axis=1)
     valid_decay = valid_dec_90 & valid_dec_10 & (idx_dec_10_rel > idx_dec_90_rel)
 
-    decay_times[valid_decay] = (idx_dec_10_rel[valid_decay] - idx_dec_90_rel[valid_decay]) * dt * 1000.0
+    # Linear interpolation for decay 90%
+    y0_d90 = waveforms[np.arange(n_spikes), idx_dec_90_rel - 1]
+    y1_d90 = waveforms[np.arange(n_spikes), idx_dec_90_rel]
+    dy_d90 = y1_d90 - y0_d90
+    dy_d90[dy_d90 == 0] = -1e-9
+    frac_d90 = (amp_90 - y0_d90) / dy_d90
+    x_d90 = (idx_dec_90_rel - 1) + frac_d90
+
+    # Linear interpolation for decay 10%
+    y0_d10 = waveforms[np.arange(n_spikes), idx_dec_10_rel - 1]
+    y1_d10 = waveforms[np.arange(n_spikes), idx_dec_10_rel]
+    dy_d10 = y1_d10 - y0_d10
+    dy_d10[dy_d10 == 0] = -1e-9
+    frac_d10 = (amp_10 - y0_d10) / dy_d10
+    x_d10 = (idx_dec_10_rel - 1) + frac_d10
+
+    decay_times[valid_decay] = (x_d10[valid_decay] - x_d90[valid_decay]) * dt * 1000.0
 
     # --- AHP ---
     ahp_max_samples_per_spike = np.full(n_spikes, ahp_max_samples)
@@ -464,18 +518,40 @@ def calculate_spike_features(  # noqa: C901
         val_mid = ahp_waveforms[:, 1:-1]
         val_left = ahp_waveforms[:, :-2]
         val_right = ahp_waveforms[:, 2:]
+        
+        # Find all local minima (troughs)
+        is_local_min_inner = (val_mid < val_left) & (val_mid < val_right)
+        is_local_min = np.pad(is_local_min_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
+        
+        col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
+        
+        # The fast trough is the FIRST local minimum
+        valid_min_mask = is_local_min & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+        has_trough = np.any(valid_min_mask, axis=1)
+        first_trough_idx = np.argmax(valid_min_mask, axis=1)
+        
+        # The ADP peak is the FIRST local maximum after the fast trough (IPFX gating rules)
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
-        col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
-        valid_adp_mask = (
-            is_local_max & (col_idxs2 > ahp_min_rel_indices[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
-        )
-        has_adp = np.any(valid_adp_mask, axis=1)
+        
+        valid_max_mask = is_local_max & (col_idxs2 > first_trough_idx[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+        
+        # IPFX temporal constraint: ADP must occur within 5 ms of fast trough
+        delta_t_mask = (col_idxs2 - first_trough_idx[:, None]) <= int(0.005 / dt)
+        valid_max_mask = valid_max_mask & delta_t_mask
+        
+        # Find highest valid local maximum
         temp_vals = ahp_waveforms.copy()
-        temp_vals[~valid_adp_mask] = -np.inf
+        temp_vals[~valid_max_mask] = -np.inf
         adp_peaks = np.max(temp_vals, axis=1)
-        calced_adps = adp_peaks - ahp_min_vals
-        adp_amplitudes = np.where(has_adp, calced_adps, np.nan)
+        
+        has_adp = np.any(valid_max_mask, axis=1) & ~np.isinf(adp_peaks)
+        fast_trough_vals = ahp_waveforms[np.arange(n_spikes), first_trough_idx]
+        calced_adps = adp_peaks - fast_trough_vals
+        
+        # IPFX amplitude constraint: ADP must be <= 10 mV above fast trough
+        valid_amp = calced_adps <= 10.0
+        adp_amplitudes = np.where(has_trough & has_adp & valid_amp, calced_adps, np.nan)
 
     # --- fAHP and mAHP (separate physiological windows) ---
     # fAHP: fast AHP (default 1-5 ms post-peak): Na+ channel-mediated repolarisation overshoot

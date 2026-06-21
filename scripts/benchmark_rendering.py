@@ -221,10 +221,11 @@ def _run_child(mode: str) -> None:
 
         valid = sorted(cycle_times[_N_WARMUP:])
         n_valid = len(valid)
-        median_ms = round(valid[n_valid // 2] * 1000, 3)
-        p05_ms = round(valid[max(0, int(n_valid * 0.05))] * 1000, 3)
-        p95_ms = round(valid[min(n_valid - 1, int(n_valid * 0.95))] * 1000, 3)
-        results[n_trials] = {"median_ms": median_ms, "p05_ms": p05_ms, "p95_ms": p95_ms}
+        import numpy as np
+        valid_arr = np.array(valid) * 1000.0
+        mean_ms = round(float(np.mean(valid_arr)), 3)
+        sem_ms = round(float(np.std(valid_arr, ddof=1) / np.sqrt(len(valid_arr))) if len(valid_arr) > 1 else 0.0, 3)
+        results[n_trials] = {"mean_ms": mean_ms, "sem_ms": sem_ms}
 
     parent_widget.close()
     app.quit()
@@ -279,10 +280,8 @@ def _save_csv(results_dict: dict, output_path: Path) -> None:
     fieldnames = [
         "renderer_mode",
         "n_trials",
-        "total_samples",
-        "median_ms",
-        "p05_ms",
-        "p95_ms",
+        "mean_ms",
+        "sem_ms",
     ]
     rows = []
     for mode_name, data_set in results_dict.items():
@@ -295,7 +294,6 @@ def _save_csv(results_dict: dict, output_path: Path) -> None:
                 {
                     "renderer_mode": mode_name,
                     "n_trials": n_trials,
-                    "total_samples": int(n_trials) * 20000,
                     **data,
                 }
             )
@@ -321,19 +319,18 @@ def _save_plot(opengl_data: dict, software_data: dict, output_path: Path) -> Non
     levels = sorted(int(k) for k in opengl_data)
 
     def _extract(data: dict) -> tuple:
-        med = [data[str(n)]["median_ms"] for n in levels]
-        lo = [data[str(n)]["median_ms"] - data[str(n)]["p05_ms"] for n in levels]
-        hi = [data[str(n)]["p95_ms"] - data[str(n)]["median_ms"] for n in levels]
-        return med, lo, hi
+        med = [data[str(n)]["mean_ms"] for n in levels]
+        sem = [data[str(n)]["sem_ms"] for n in levels]
+        return med, sem
 
     fig, (ax_abs, ax_ratio) = plt.subplots(1, 2, figsize=(12, 4.5))
 
     if opengl_data:
-        med_gl, lo_gl, hi_gl = _extract(opengl_data)
+        med_gl, sem_gl = _extract(opengl_data)
         ax_abs.errorbar(
             levels,
             med_gl,
-            yerr=[lo_gl, hi_gl],
+            yerr=sem_gl,
             fmt="o-",
             color="#1565C0",
             ecolor="#90CAF9",
@@ -344,11 +341,11 @@ def _save_plot(opengl_data: dict, software_data: dict, output_path: Path) -> Non
         )
 
     if software_data:
-        med_sw, lo_sw, hi_sw = _extract(software_data)
+        med_sw, sem_sw = _extract(software_data)
         ax_abs.errorbar(
             levels,
             med_sw,
-            yerr=[lo_sw, hi_sw],
+            yerr=sem_sw,
             fmt="s--",
             color="#B71C1C",
             ecolor="#EF9A9A",
@@ -367,8 +364,8 @@ def _save_plot(opengl_data: dict, software_data: dict, output_path: Path) -> Non
 
     # Grouped bar chart: Software and OpenGL bars side by side for each N.
     if opengl_data and software_data:
-        med_gl, lo_gl, hi_gl = _extract(opengl_data)
-        med_sw, lo_sw, hi_sw = _extract(software_data)
+        med_gl, sem_gl = _extract(opengl_data)
+        med_sw, sem_sw = _extract(software_data)
         width = 0.35
         x = list(range(len(levels)))
         x_sw = [xi - width / 2 for xi in x]
@@ -380,7 +377,7 @@ def _save_plot(opengl_data: dict, software_data: dict, output_path: Path) -> Non
             label="Software (QPainter)",
             color="#B71C1C",
             alpha=0.8,
-            yerr=[lo_sw, hi_sw],
+            yerr=sem_sw,
             capsize=4,
             error_kw={"ecolor": "#EF9A9A"},
         )
@@ -391,7 +388,7 @@ def _save_plot(opengl_data: dict, software_data: dict, output_path: Path) -> Non
             label="OpenGL (Metal)",
             color="#1565C0",
             alpha=0.8,
-            yerr=[lo_gl, hi_gl],
+            yerr=sem_gl,
             capsize=4,
             error_kw={"ecolor": "#90CAF9"},
         )
