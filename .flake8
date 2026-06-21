@@ -23,3 +23,7 @@ per-file-ignores =
     src/Synaptipy/application/gui/ui_generator.py:C901
     src/Synaptipy/core/data_model.py:C901
     src/Synaptipy/shared/utils.py:C901
+    src/Synaptipy/application/gui/explorer/sidebar.py:C901
+    src/Synaptipy/core/analysis/firing_dynamics.py:C901
+    src/Synaptipy/core/analysis/passive_properties.py:C901
+    src/Synaptipy/infrastructure/file_readers/neo_adapter.py:C901

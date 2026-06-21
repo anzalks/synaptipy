@@ -2119,7 +2119,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             artifact_blanking_ms=artifact_blanking_ms,
             min_r_squared=min_r_squared,
         )
-        
+
         # Post-stimulus decay tau calculation
         decay_result = calculate_tau(
             data,

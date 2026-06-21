@@ -119,6 +119,7 @@ class NeoAdapter:
     - No assumptions are made about data structure
     - Versatile support for WCP, ABF, and other formats
     """
+
     _has_warned_nwbv1 = False
 
     def _get_neo_io_class(self, filepath: Path) -> Type:  # Use generic Type hint
@@ -475,144 +476,150 @@ class NeoAdapter:
         """
         filepath = Path(filepath)
         protocols = []
-        
+
         try:
             # Check for NWBv1 first as PyNWB crashes on it
             if filepath.suffix.lower() == ".nwb":
                 import h5py
-                with h5py.File(str(filepath), 'r') as f:
-                    if 'epochs' in f:
-                        ep_group = f['epochs']
+
+                with h5py.File(str(filepath), "r") as f:
+                    if "epochs" in f:
+                        ep_group = f["epochs"]
                         for ep_name in ep_group:
-                            if 'description' in ep_group[ep_name]:
-                                desc = ep_group[ep_name]['description'][()]
-                                desc_str = desc.decode('utf-8') if isinstance(desc, bytes) else str(desc)
+                            if "description" in ep_group[ep_name]:
+                                desc = ep_group[ep_name]["description"][()]
+                                desc_str = desc.decode("utf-8") if isinstance(desc, bytes) else str(desc)
                                 if "Stimulus was " in desc_str:
                                     # Extract "Short Square" from "Stimulus was Short Square, 400 pa"
                                     proto_part = desc_str.split("Stimulus was ")[1]
                                     proto_name = proto_part.split(",")[0].strip()
                                     if proto_name and proto_name not in protocols:
                                         protocols.append(proto_name)
-                        
+
                         if protocols:
                             return protocols
-            
+
             # Generic Neo approach
             io_class = self._get_neo_io_class(filepath)
             reader = io_class(filename=str(filepath))
-            
+
             # read() returns a list of blocks
             blocks = reader.read(lazy=True)
             for block in blocks:
                 if block.name and block.name not in protocols:
                     protocols.append(block.name)
-            
+
             # If there's only one block, we don't consider it "nested"
             if len(protocols) <= 1:
                 return []
-                
+
         except Exception as e:
             log.debug(f"Could not extract protocols for {filepath.name}: {e}")
-            
+
         return protocols
 
     def _allen_nwb_rescue(self, filepath: Path, protocol: Optional[str] = None) -> Tuple[neo.Block, object]:
         """Convert an old Allen SDK NWBv1 file to a neo Block using raw h5py.
-        
+
         PyNWB strictly enforces NWBv2 schemas and throws a TypeError for NWBv1.
-        This fallback bypasses PyNWB entirely and extracts the sweeps directly 
+        This fallback bypasses PyNWB entirely and extracts the sweeps directly
         from the HDF5 structure.
         """
         import h5py
         import quantities as pq
-        
+
         if not self.__class__._has_warned_nwbv1:
             log.warning("Old NWB file detected. Using patch to show data, some metadata features might be missing.")
             self.__class__._has_warned_nwbv1 = True
-            
+
         block = neo.Block(name=filepath.stem)
-        
-        with h5py.File(str(filepath), 'r') as f:
-            if 'acquisition/timeseries' not in f:
+
+        with h5py.File(str(filepath), "r") as f:
+            if "acquisition/timeseries" not in f:
                 raise ValueError("NWBv1 fallback failed: 'acquisition/timeseries' group not found.")
-                
-            acq_group = f['acquisition/timeseries']
-            stim_group = f.get('stimulus/presentation')
-            
+
+            acq_group = f["acquisition/timeseries"]
+            stim_group = f.get("stimulus/presentation")
+
             sweep_names = list(acq_group.keys())
-            
+
             for sweep_name in sweep_names:
                 acq_sweep = acq_group[sweep_name]
-                
+
                 # Check if this sweep belongs to the requested protocol
-                if protocol is not None and 'epochs' in f:
+                if protocol is not None and "epochs" in f:
                     # Match sweep_name (e.g. Sweep_10) to epoch name (e.g. Experiment_10)
                     epoch_name = sweep_name.replace("Sweep_", "Experiment_")
-                    if epoch_name in f['epochs']:
-                        desc = f['epochs'][epoch_name].get('description', None)
+                    if epoch_name in f["epochs"]:
+                        desc = f["epochs"][epoch_name].get("description", None)
                         if desc is not None:
                             desc_val = desc[()]
-                            desc_str = desc_val.decode('utf-8') if isinstance(desc_val, bytes) else str(desc_val)
+                            desc_str = desc_val.decode("utf-8") if isinstance(desc_val, bytes) else str(desc_val)
                             search_str = f"Stimulus was {protocol}"
                             # log.debug(f"Sweep {sweep_name} desc: {desc_str} | search: {search_str}")
                             if search_str not in desc_str:
                                 continue  # Skip this sweep, it doesn't match the protocol
                     else:
-                        continue # If requested protocol, but sweep has no epoch, skip it.
-                
-                if 'data' not in acq_sweep:
+                        continue  # If requested protocol, but sweep has no epoch, skip it.
+
+                if "data" not in acq_sweep:
                     continue
-                    
+
                 # Extract Voltage
-                v_data = acq_sweep['data'][:]
-                v_rate = acq_sweep['starting_time'].attrs.get('rate', 200000.0)
-                v_unit = acq_sweep['data'].attrs.get('unit', b'V').decode('utf-8', 'ignore') if isinstance(acq_sweep['data'].attrs.get('unit'), bytes) else 'V'
-                if v_unit.lower() == 'volts':
-                    v_unit = 'V'
-                    
-                sweep_idx = int(sweep_name.split('_')[-1]) if '_' in sweep_name else 0
+                v_data = acq_sweep["data"][:]
+                v_rate = acq_sweep["starting_time"].attrs.get("rate", 200000.0)
+                v_unit = (
+                    acq_sweep["data"].attrs.get("unit", b"V").decode("utf-8", "ignore")
+                    if isinstance(acq_sweep["data"].attrs.get("unit"), bytes)
+                    else "V"
+                )
+                if v_unit.lower() == "volts":
+                    v_unit = "V"
+
+                sweep_idx = int(sweep_name.split("_")[-1]) if "_" in sweep_name else 0
                 seg = neo.Segment(name=sweep_name, index=sweep_idx)
-                
+
                 v_sig = neo.AnalogSignal(
                     v_data * getattr(pq, v_unit, pq.V),
                     sampling_rate=float(v_rate) * pq.Hz,
-                    name='Voltage',
+                    name="Voltage",
                     t_start=0.0 * pq.s,
                 )
-                v_sig.annotate(channel_id='0', channel_names=['Voltage'], channel_ids=['0'])
+                v_sig.annotate(channel_id="0", channel_names=["Voltage"], channel_ids=["0"])
                 seg.analogsignals.append(v_sig)
-                
+
                 # Extract Current (if available)
                 if stim_group and sweep_name in stim_group:
                     stim_sweep = stim_group[sweep_name]
-                    if 'data' in stim_sweep:
-                        i_data = stim_sweep['data'][:]
-                        i_rate = stim_sweep['starting_time'].attrs.get('rate', 200000.0)
-                        i_unit = stim_sweep['data'].attrs.get('unit', b'A').decode('utf-8', 'ignore') if isinstance(stim_sweep['data'].attrs.get('unit'), bytes) else 'A'
-                        if i_unit.lower() == 'amperes':
-                            i_unit = 'A'
-                        
+                    if "data" in stim_sweep:
+                        i_data = stim_sweep["data"][:]
+                        i_rate = stim_sweep["starting_time"].attrs.get("rate", 200000.0)
+                        i_unit = (
+                            stim_sweep["data"].attrs.get("unit", b"A").decode("utf-8", "ignore")
+                            if isinstance(stim_sweep["data"].attrs.get("unit"), bytes)
+                            else "A"
+                        )
+                        if i_unit.lower() == "amperes":
+                            i_unit = "A"
+
                         i_sig = neo.AnalogSignal(
                             i_data * getattr(pq, i_unit, pq.A),
                             sampling_rate=float(i_rate) * pq.Hz,
-                            name='Current',
+                            name="Current",
                             t_start=0.0 * pq.s,
                         )
-                        i_sig.annotate(channel_id='1', channel_names=['Current'], channel_ids=['1'])
+                        i_sig.annotate(channel_id="1", channel_names=["Current"], channel_ids=["1"])
                         seg.analogsignals.append(i_sig)
-                
+
                 block.segments.append(seg)
-                
+
         block.create_relationship()
-        
-        header_channels = [
-            {"id": "0", "name": "Voltage"},
-            {"id": "1", "name": "Current"}
-        ]
-        
+
+        header_channels = [{"id": "0", "name": "Voltage"}, {"id": "1", "name": "Current"}]
+
         class _NwbFakeReader:
             header: Dict = {"signal_channels": header_channels}
-            
+
         return block, _NwbFakeReader()
 
     def read_recording(  # noqa: C901
@@ -627,8 +634,10 @@ class NeoAdapter:
         Reads any neo-supported electrophysiology file and translates it into a
         robust Recording object. This is the definitive, file-format-agnostic implementation.
         """
-        log.debug(f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist}, protocol: {protocol})")
-        
+        log.debug(
+            f"Attempting to read file: {filepath} (lazy: {lazy}, whitelist: {channel_whitelist}, protocol: {protocol})"
+        )
+
         filepath_str = str(filepath)
         if "::" in filepath_str:
             base_path_str, embedded_proto = filepath_str.split("::", 1)
@@ -638,12 +647,11 @@ class NeoAdapter:
         else:
             filepath = Path(filepath)
 
-        
         io_class = self._get_neo_io_class(filepath)
         _pyabf_rescue: bool = False
         try:
             reader = io_class(filename=str(filepath))
-            
+
             if protocol is not None:
                 # Read all blocks and find the one matching the protocol
                 blocks = reader.read(lazy=lazy)
@@ -659,14 +667,14 @@ class NeoAdapter:
                         block = reader.read_block(lazy=lazy)
                     else:
                         raise
-                        
+
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
             # For .abf files we have a pyabf rescue path.
             # For old .nwb files we have a h5py rescue path.
             _is_abf = filepath.suffix.lower() == ".abf"
             _is_nwb = filepath.suffix.lower() == ".nwb"
-            
+
             if _is_abf:
                 log.debug(
                     "neo AxonIO could not read '%s' (Lazy: %s): %s — will attempt pyabf rescue.",
@@ -715,7 +723,7 @@ class NeoAdapter:
                 except Exception as pyabf_err:
                     log.error("pyabf rescue also failed for '%s': %s", filepath.name, pyabf_err)
                     # fall through to the generic lazy fallback below
-            
+
             elif _is_nwb and "Missing NWB version" in str(e):
                 try:
                     block, reader = self._allen_nwb_rescue(filepath, protocol=protocol)
@@ -752,7 +760,7 @@ class NeoAdapter:
         recording = Recording(source_file=filepath)
         if protocol is not None:
             recording.protocol_name = protocol
-            
+
         if _pyabf_rescue:
             recording.metadata["pyabf_synthetic_rescue"] = True
         if hasattr(block, "rec_datetime") and block.rec_datetime:

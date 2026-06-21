@@ -855,7 +855,7 @@ def run_event_detection_threshold_wrapper(
     tau_fast_list = []
     tau_slow_list = []
     tau_mono_list = []
-    
+
     if compute_kinetics:
         for k, idx in enumerate(_idx):
             lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))

@@ -18,12 +18,12 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.signal import find_peaks, savgol_filter
+from scipy.signal import savgol_filter
 
 from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
 from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.results import SingleSpikeResult, SpikeTrainResult
 from Synaptipy.core.constants import DVDT_ARTIFACT_CEILING_VS, MIN_RISING_PHASE_MS
+from Synaptipy.core.results import SingleSpikeResult, SpikeTrainResult
 
 log = logging.getLogger(__name__)
 
@@ -126,12 +126,13 @@ def detect_spikes_threshold(  # noqa: C901
 
     try:
         dt = time[1] - time[0] if len(time) > 1 else 1.0
-        
+
         # Apply 5 kHz low-pass filter
         from scipy.signal import butter, sosfiltfilt
+
         nyq = 0.5 / dt
         if 5000.0 < nyq:
-            sos = butter(4, 5000.0, btype='low', output='sos', fs=1.0/dt)
+            sos = butter(4, 5000.0, btype="low", output="sos", fs=1.0 / dt)
             data_filtered = sosfiltfilt(sos, data)
         else:
             data_filtered = data
@@ -233,13 +234,16 @@ def calculate_spike_features(  # noqa: C901
     """
     Calculate detailed features for each detected spike (vectorised NumPy).
 
-    Returns list of dicts per spike: ap_threshold, amplitude, half_width,
-    rise_time_10_90, decay_time_90_10, fahp_depth, mahp_depth,
-    ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
+    Returns list of SingleSpikeResult instances per spike, containing metrics like:
+    ap_threshold, amplitude, half_width, rise_time_10_90, decay_time_90_10,
+    fahp_depth, mahp_depth, ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
 
-    AP threshold (onset) is strictly defined as the first point in the pre-spike
-    lookback window where the discrete derivative dV/dt exceeds the specified
-    ``dvdt_threshold`` (default 20 V/s). This ensures alignment with IPFX scaling.
+    Methodology aligns with IPFX standards:
+    - AP threshold (onset) is strictly defined as the first point in the pre-spike
+      lookback window where the discrete derivative dV/dt exceeds the specified
+      ``dvdt_threshold`` (default 20 V/s).
+    - ADP and AHP logic strictly follows the exact trough/peak finding methodology
+      to ensure results mirror eFEL and IPFX algorithms.
 
     Args:
         data: 1-D voltage array (mV).
@@ -250,7 +254,7 @@ def calculate_spike_features(  # noqa: C901
         onset_lookback: Lookback window before each spike peak (s).
         fahp_window_ms: (start, end) of fast-AHP window after peak (ms).
         mahp_window_ms: (start, end) of medium-AHP window after peak (ms).
-        
+
     Returns:
         A list of SingleSpikeResult objects.
     """
@@ -270,9 +274,10 @@ def calculate_spike_features(  # noqa: C901
 
     # Apply 9.9 kHz low-pass Bessel filter for clean derivative calculation (matches IPFX standard)
     from scipy.signal import bessel, sosfiltfilt
+
     nyq = 0.5 / dt
     if 9900.0 < nyq:
-        sos = bessel(4, 9900.0, btype='low', output='sos', fs=1.0/dt)
+        sos = bessel(4, 9900.0, btype="low", output="sos", fs=1.0 / dt)
         data_filtered = sosfiltfilt(sos, data)
     else:
         data_filtered = data
@@ -296,23 +301,23 @@ def calculate_spike_features(  # noqa: C901
 
     # We use the explicit dvdt_threshold parameter (converted to mV/s) to find the onset.
     target_thresh_mvs = dvdt_threshold * 1000.0
-    
+
     # PHASE-PLANE BACKWARD SEARCH:
     # Instead of scanning backward from the peak (where dV/dt drops to 0),
     # we must scan backward from the point of MAXIMUM dV/dt to find the true onset crossing.
     max_dvdt_rel_idx = np.argmax(onset_dvdt_windows, axis=1)
-    
+
     # Create a mask that is only valid BEFORE the max dV/dt point
     col_idxs = np.tile(np.arange(lookback_samples), (n_spikes, 1))
     valid_search_mask = col_idxs <= max_dvdt_rel_idx[:, None]
-    
+
     below_thresh_mask = (onset_dvdt_windows < target_thresh_mvs) & valid_search_mask
     has_crossing = np.any(below_thresh_mask, axis=1)
-    
+
     # Reverse the mask to search backward from the max dV/dt
     rev_below = below_thresh_mask[:, ::-1]
     first_below_rev_idx = np.argmax(rev_below, axis=1)
-    
+
     # Convert reversed index back to original window index
     first_crossing_rel_idx = lookback_samples - 1 - first_below_rev_idx
 
@@ -486,16 +491,18 @@ def calculate_spike_features(  # noqa: C901
 
     temp_ahp = smoothed_ahp.copy()
     temp_ahp[~valid_ahp_mask] = np.inf
-    
+
     # DYNAMIC AHP BOUNDING:
     # Instead of unbounded argmin, use the first zero-crossing of the derivative
     # (negative to positive) indicating the end of repolarization.
     ahp_dvdt = dvdt[ahp_indices]
-    ahp_dvdt[~valid_ahp_mask] = -1.0 # Ignore invalid regions
+    ahp_dvdt[~valid_ahp_mask] = -1.0  # Ignore invalid regions
     crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0)
     has_crossing = np.any(crossing_mask, axis=1) if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=bool)
-    first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1 if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=int)
-    
+    first_crossing_idx = (
+        np.argmax(crossing_mask, axis=1) + 1 if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=int)
+    )
+
     # Fallback to argmin if no clean zero-crossing is found
     ahp_min_rel_indices = np.where(has_crossing, first_crossing_idx, np.argmin(temp_ahp, axis=1))
 
@@ -530,33 +537,35 @@ def calculate_spike_features(  # noqa: C901
         val_mid = ahp_waveforms[:, 1:-1]
         val_left = ahp_waveforms[:, :-2]
         val_right = ahp_waveforms[:, 2:]
-        
+
         # Find all local minima (troughs)
         is_local_min_inner = (val_mid < val_left) & (val_mid < val_right)
         is_local_min = np.pad(is_local_min_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
-        
+
         col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
-        
+
         # The fast trough is the FIRST local minimum
         valid_min_mask = is_local_min & (col_idxs2 < ahp_max_samples_per_spike[:, None])
         has_trough = np.any(valid_min_mask, axis=1)
         first_trough_idx = np.argmax(valid_min_mask, axis=1)
-        
+
         # The ADP peak is the FIRST local maximum after the fast trough (IPFX gating rules)
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
-        
-        valid_max_mask = is_local_max & (col_idxs2 > first_trough_idx[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
-        
+
+        valid_max_mask = (
+            is_local_max & (col_idxs2 > first_trough_idx[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
+        )
+
         # Find highest valid local maximum between fast trough and next spike / end of window
         temp_vals = ahp_waveforms.copy()
         temp_vals[~valid_max_mask] = -np.inf
         adp_peaks = np.max(temp_vals, axis=1)
-        
+
         has_adp = np.any(valid_max_mask, axis=1) & ~np.isinf(adp_peaks)
         fast_trough_vals = ahp_waveforms[np.arange(n_spikes), first_trough_idx]
         calced_adps = adp_peaks - fast_trough_vals
-        
+
         adp_amplitudes = np.where(has_trough & has_adp, calced_adps, np.nan)
 
     # --- fAHP and mAHP (separate physiological windows) ---
@@ -613,38 +622,38 @@ def calculate_spike_features(  # noqa: C901
 
     # --- New Active Features ---
     ap_delays = time[thresh_indices]
-    
+
     ahp_times = np.zeros(n_spikes)
     for i in range(n_spikes):
         ahp_times[i] = time[ahp_indices[i, ahp_min_rel_indices[i]]]
-        
+
     trough_vs = ahp_min_vals
-    
+
     upstroke_downstroke_ratios = np.full(n_spikes, np.nan)
     valid_ratio = min_dvdts != 0
     upstroke_downstroke_ratios[valid_ratio] = max_dvdts[valid_ratio] / np.abs(min_dvdts[valid_ratio])
-    
+
     phase_plane_areas = np.full(n_spikes, np.nan)
     ap_widths_arbitrary = [None] * n_spikes
-    
+
     for i in range(n_spikes):
         start_idx = thresh_indices[i]
         end_idx = spike_indices[i] + ap_end_rel_indices[i]
-        
+
         # Calculate Phase Plane Area (Shoelace formula)
         if start_idx < end_idx:
             # Find the local slice within the full_dvdt window
             rel_start = (start_idx - spike_indices[i]) + lookback_samples
             rel_end = (end_idx - spike_indices[i]) + lookback_samples
-            
+
             # Ensure boundaries are within full_dvdt shape
             rel_start = max(0, min(rel_start, full_window_len - 1))
             rel_end = max(0, min(rel_end, full_window_len))
-            
+
             if rel_end > rel_start + 2:
-                x = data[start_idx:start_idx + (rel_end - rel_start)]
+                x = data[start_idx : start_idx + (rel_end - rel_start)]
                 y = full_dvdt[i, rel_start:rel_end]
-                
+
                 if len(x) == len(y):
                     area = 0.5 * np.abs(np.dot(x[:-1], y[1:]) - np.dot(x[1:], y[:-1]))
                     phase_plane_areas[i] = area
@@ -925,13 +934,32 @@ def run_spike_detection_wrapper(
             stats: Dict[str, Any] = {}
             if features_list:
                 import dataclasses
+
                 # Collect attributes dynamically from the first valid result
                 first_feat = features_list[0]
                 feat_dict = dataclasses.asdict(first_feat)
-                valid_keys = [k for k in feat_dict.keys() if k not in ["value", "unit", "is_valid", "error_message", "quality_flags", "confidence", "metadata", "parameters"]]
-                
+                valid_keys = [
+                    k
+                    for k in feat_dict.keys()
+                    if k
+                    not in [
+                        "value",
+                        "unit",
+                        "is_valid",
+                        "error_message",
+                        "quality_flags",
+                        "confidence",
+                        "metadata",
+                        "parameters",
+                    ]
+                ]
+
                 for key in valid_keys:
-                    values = [getattr(f, key) for f in features_list if getattr(f, key) is not None and not np.isnan(getattr(f, key))]
+                    values = [
+                        getattr(f, key)
+                        for f in features_list
+                        if getattr(f, key) is not None and not np.isnan(getattr(f, key))
+                    ]
                     if values:
                         stats[f"{key}_mean"] = float(np.mean(values))
                         stats[f"{key}_std"] = float(np.std(values))

@@ -158,7 +158,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
         data = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
         if not data:
             return
-            
+
         if isinstance(data, tuple):
             path_str, protocol = data
         else:
@@ -212,7 +212,7 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
                 else:
                     path_str = data
                     protocol = None
-                    
+
                 path = Path(path_str)
                 if path.is_file():
                     files.append(Path(f"{path_str}::{protocol}") if protocol else path)

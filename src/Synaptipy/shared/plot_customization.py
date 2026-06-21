@@ -318,7 +318,6 @@ class PlotCustomizationManager:
     def get_single_trial_pen(self, trial_index: int = 0) -> pg.mkPen:
         """Get pen for single trial plots."""
         # Use trial index to cycle through colors if not specifically requested
-        from Synaptipy.shared.styling import PLOT_COLORS
 
         # Check cache first for this specific index
         cache_key = f"single_trial_{trial_index}"

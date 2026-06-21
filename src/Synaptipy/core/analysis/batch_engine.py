@@ -747,6 +747,7 @@ class BatchAnalysisEngine:
                         progress_callback(i, total_files, f"Processing {file_name}...")
 
                     import time
+
                     t0_io = time.perf_counter()
                     # Load recording from disk with whitelist (Memory Optimization)
                     recording = self.neo_adapter.read_recording(file_path, channel_whitelist=channel_filter)
@@ -793,6 +794,7 @@ class BatchAnalysisEngine:
                 rec_meta = self._recording_metadata(recording)
 
                 import time
+
                 t0_compute = time.perf_counter()
 
                 # Iterate through channels
@@ -922,7 +924,7 @@ class BatchAnalysisEngine:
                     pipeline_context = {"scope": None, "data": None, "time": None}
 
                 file_compute_time = time.perf_counter() - t0_compute
-                
+
                 # Append the IO and compute times to all rows generated for this file
                 for row in results_list:
                     if row.get("file_path") == file_path_str:

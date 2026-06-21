@@ -608,12 +608,15 @@ def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 
     """
     Compute native spike train statistical metrics.
 
+    Includes Spike Frequency Adaptation (SFA) logic that mirrors eFEL/IPFX
+    adaptation index methodologies (normalized differences between consecutive ISIs).
+
     Args:
         spike_times: 1D NumPy array of spike times in seconds.
         analysis_start_s: float, start time of stimulus/analysis window in seconds.
 
     Returns:
-        TrainDynamicsResult.
+        TrainDynamicsResult object encapsulating calculated dynamics metrics.
     """
     spike_count = len(spike_times)
     first_spike_delay_s = float(spike_times[0] - analysis_start_s) if spike_count > 0 else float(np.nan)
@@ -810,7 +813,9 @@ def run_train_dynamics_wrapper(  # noqa: C901
         "cv2": result.cv2,
         "lv": result.lv,
         "adaptation_index": float(result.adaptation_index) if result.adaptation_index is not None else float(np.nan),
-        "first_spike_delay_ms": result.first_spike_delay_s * 1000.0 if result.first_spike_delay_s is not None else float(np.nan),
+        "first_spike_delay_ms": (
+            result.first_spike_delay_s * 1000.0 if result.first_spike_delay_s is not None else float(np.nan)
+        ),
         "first_isi_ms": float(isi_ms[0]) if len(isi_ms) > 0 else float(np.nan),
         "spike_broadening_index": spike_broadening_index,
         "isi_numbers": isi_numbers,

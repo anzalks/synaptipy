@@ -2045,7 +2045,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 index = self.data_source_combobox.findData("average")
             else:
                 index = self.data_source_combobox.findData(0)  # Trial 1
-                
+
             if index >= 0:
                 self.data_source_combobox.setCurrentIndex(index)
 

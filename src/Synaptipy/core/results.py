@@ -90,6 +90,7 @@ class SingleSpikeResult(AnalysisResult):
     """
     Result of single-spike morphological analysis (e.g., width, thresholds, peaks).
     """
+
     ap_threshold: Optional[float] = None
     amplitude: Optional[float] = None
     half_width: Optional[float] = None
@@ -103,7 +104,7 @@ class SingleSpikeResult(AnalysisResult):
     min_dvdt: Optional[float] = None
     absolute_peak_mv: Optional[float] = None
     overshoot_mv: Optional[float] = None
-    
+
     # Missing extra features to be implemented later
     ap_delay: Optional[float] = None
     ap_width_arbitrary: Optional[np.ndarray] = None
@@ -111,9 +112,9 @@ class SingleSpikeResult(AnalysisResult):
     upstroke_downstroke_ratio: Optional[float] = None
     phase_plane_area: Optional[float] = None
     trough_v: Optional[float] = None
-    
+
     parameters: Dict[str, Any] = field(default_factory=dict)
-    
+
     def __repr__(self):
         if self.is_valid:
             amp_str = f"{self.amplitude:.2f}" if self.amplitude is not None else "N/A"

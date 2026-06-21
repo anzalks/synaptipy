@@ -1207,7 +1207,6 @@ class ExplorerTab(QtWidgets.QWidget):
                         )
                         avg_t = channel.get_relative_averaged_time_vector()
 
-
                         # APPLY PREPROCESSING (via Pipeline - same as trials)
                         if avg_data is not None:
                             try:
@@ -1421,7 +1420,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 self.current_loaded_path = Path(f"{recording.source_file}::{protocol}")
             else:
                 self.current_loaded_path = recording.source_file
-                
+
             self._display_recording(recording)
 
     def _on_analysis_items_changed_from_session(self, items):
@@ -1667,8 +1666,9 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # 3. Group files by protocol to ensure we don't mix different protocols in the average
         from collections import defaultdict
+
         protocol_groups = defaultdict(list)
-        
+
         for f in sorted(files):
             path_str = str(f)
             if "::" in path_str:
@@ -1685,7 +1685,7 @@ class ExplorerTab(QtWidgets.QWidget):
         added_any = False
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         self.status_bar.showMessage("Computing cross-file averages...", 0)
-        
+
         try:
             for protocol, group_files in protocol_groups.items():
                 if len(group_files) < 2:
@@ -1722,7 +1722,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     QtWidgets.QMessageBox.warning(
                         self,
                         "Average Failed",
-                        f"Could not compute cross-file average for {display_label}. Check that the selected files share "
+                        f"Could not compute cross-file average for {display_label}. Check that the selected files share "  # noqa: E501
                         "compatible channels and that the trial index is valid for all files.",
                     )
                     continue
@@ -1739,7 +1739,7 @@ class ExplorerTab(QtWidgets.QWidget):
                 }
                 self._analysis_items.append(mfa_item)
                 added_any = True
-                
+
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
 

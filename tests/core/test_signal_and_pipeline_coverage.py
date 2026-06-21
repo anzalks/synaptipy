@@ -234,7 +234,6 @@ class TestSignalProcessingPipelineProcess:
         result = pipeline.process(np.array([]), FS)
         assert result is not None
 
-
     def test_none_data_returns_early(self):
         pipeline = SignalProcessingPipeline()
         result = pipeline.process(None, FS)

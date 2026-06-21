@@ -822,13 +822,13 @@ class AnalyserTab(QtWidgets.QWidget):
             self.source_list_widget.setEnabled(False)
         else:
             self.source_list_widget.setEnabled(True)
-            
+
             # Group by protocol, then file
             protocol_nodes = {}
             for i, item in enumerate(analysis_items):
                 target = item.get("target_type", "Unknown")
                 path = item.get("path", Path("Unknown"))
-                
+
                 if target == "MultifileAverage":
                     display_text = item.get("display_label", f"multifile_average({path.name})")
                     tree_item = QtWidgets.QTreeWidgetItem([display_text])
@@ -836,9 +836,9 @@ class AnalyserTab(QtWidgets.QWidget):
                     tree_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, i)
                     self.source_list_widget.addTopLevelItem(tree_item)
                     continue
-                
+
                 recording = item.get("recording_ref")
-                
+
                 # Extract file and protocol
                 path_str = str(path)
                 if "::" in path_str:
@@ -846,9 +846,9 @@ class AnalyserTab(QtWidgets.QWidget):
                 else:
                     file_str = path_str
                     protocol = getattr(recording, "protocol_name", None) if recording else None
-                
+
                 file_name = Path(file_str).name
-                
+
                 if protocol:
                     # Get or create Protocol node
                     if protocol not in protocol_nodes:
@@ -856,17 +856,17 @@ class AnalyserTab(QtWidgets.QWidget):
                         self.source_list_widget.addTopLevelItem(proto_item)
                         protocol_nodes[protocol] = {"node": proto_item, "files": {}}
                         proto_item.setExpanded(True)
-                    
+
                     proto_dict = protocol_nodes[protocol]
                     parent_node = proto_dict["node"]
-                    
+
                     # Get or create File node under Protocol
                     if file_str not in proto_dict["files"]:
                         file_item = QtWidgets.QTreeWidgetItem([f"File: {file_name}"])
                         parent_node.addChild(file_item)
                         proto_dict["files"][file_str] = file_item
                         file_item.setExpanded(True)
-                    
+
                     parent_node = proto_dict["files"][file_str]
                 else:
                     # No protocol (e.g. ABF file), place File at top level
@@ -876,16 +876,16 @@ class AnalyserTab(QtWidgets.QWidget):
                         self.source_list_widget.addTopLevelItem(file_item)
                         protocol_nodes["__no_protocol__"][file_str] = file_item
                         file_item.setExpanded(True)
-                    
+
                     parent_node = protocol_nodes["__no_protocol__"][file_str]
-                
+
                 if target == "Current Trial":
                     trial_idx = item.get("trial_index")
                     trial_info = f"Trial {trial_idx + 1}" if trial_idx is not None else "Trial"
                     leaf_item = QtWidgets.QTreeWidgetItem([trial_info])
                 else:
                     leaf_item = QtWidgets.QTreeWidgetItem(["Recording"])
-                    
+
                 leaf_item.setToolTip(0, str(path))
                 leaf_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, i)
                 parent_node.addChild(leaf_item)
@@ -904,7 +904,7 @@ class AnalyserTab(QtWidgets.QWidget):
                     display_text = item.get("display_label", f"multifile_average({item.get('path', Path('?')).name})")
                 elif target == "Recording":
                     recording = item.get("recording_ref")
-                    path_str = str(item['path'])
+                    path_str = str(item["path"])
                     if "::" in path_str:
                         file_name, protocol = path_str.split("::", 1)
                         file_name = Path(file_name).name
@@ -918,7 +918,7 @@ class AnalyserTab(QtWidgets.QWidget):
                 elif target == "Current Trial":
                     recording = item.get("recording_ref")
                     trial_info = f" (Trial {item.get('trial_index', 0) + 1})"
-                    path_str = str(item['path'])
+                    path_str = str(item["path"])
                     if "::" in path_str:
                         file_name, protocol = path_str.split("::", 1)
                         file_name = Path(file_name).name
@@ -1066,7 +1066,7 @@ class AnalyserTab(QtWidgets.QWidget):
         row_data = current.data(0, QtCore.Qt.ItemDataRole.UserRole)
         if row_data is None:
             return  # Clicked on a parent node (File or Protocol)
-            
+
         row = int(row_data)
         if row < 0 or row >= len(self._analysis_items):
             return
