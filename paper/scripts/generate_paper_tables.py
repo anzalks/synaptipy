@@ -803,8 +803,8 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         ("Spike Frequency Adaptation", "syn_sfa", "efel_sfa", "ipfx_sfa", "Ratio"),
     ]
     md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
-    md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
-    md += "|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|\n"
+    md += "| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |\n"
+    md += "|--------|-------------------------------|-------------------------------|-------------------|-------------------|\n"
     for label, s_col, e_col, i_col, unit in metrics:
         if s_col not in cmp_df.columns:
             continue
@@ -812,16 +812,21 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         e = cmp_df[e_col].values if e_col in cmp_df.columns else np.full(len(s), np.nan)
         i = cmp_df[i_col].values if i_col in cmp_df.columns else np.full(len(s), np.nan)
         vs_i, vs_e = corr_summary(i, s), corr_summary(e, s)
-        n = max(vs_i["n"], vs_e["n"])
-        if n == 0:
-            n = len(s[~np.isnan(s)])
+        
         r_i = f"{vs_i['r']:.4f}" if not np.isnan(vs_i["r"]) else "N/A"
+        if not np.isnan(vs_i.get('p', np.nan)):
+            r_i += "***" if vs_i['p'] < 0.0001 else f" (*p*={vs_i['p']:.4f})"
+            
         r_e = f"{vs_e['r']:.4f}" if not np.isnan(vs_e["r"]) else "N/A"
+        if not np.isnan(vs_e.get('p', np.nan)):
+            r_e += "***" if vs_e['p'] < 0.0001 else f" (*p*={vs_e['p']:.4f})"
+            
         b_i = f"{vs_i['bias']:+.3f} {unit}" if not np.isnan(vs_i["bias"]) else "N/A"
         b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
-        md += f"| {label} | {n} | {r_i} (*p* {fmt_p(vs_i['p'])}) | {r_e} (*p* {fmt_p(vs_e['p'])}) | {b_i} | {b_e} | Pearson correlation, two-sided *p* |\n"
+        
+        md += f"| {label} | {r_i} | {r_e} | {b_i} | {b_e} |\n"
 
-    md += "\n*n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*"
+    md += "\n*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*"
     return md
 
 
@@ -836,8 +841,8 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         # ("Sag Percentage (%)", "syn_sag_pct", "efel_sag_pct", "ipfx_sag_pct", "%"),
     ]
     md = "**Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**\n\n"
-    md += "| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |\n"
-    md += "|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|\n"
+    md += "| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |\n"
+    md += "|--------|-------------------------------|-------------------------------|-------------------|-------------------|\n"
     for label, s_col, e_col, i_col, unit in metrics:
         if s_col not in cmp_df.columns:
             continue
@@ -845,14 +850,21 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         e = cmp_df[e_col].values if e_col in cmp_df.columns else np.full(len(s), np.nan)
         i = cmp_df[i_col].values if i_col in cmp_df.columns else np.full(len(s), np.nan)
         vs_i, vs_e = corr_summary(i, s), corr_summary(e, s)
-        n = len(s[~np.isnan(s)])
+        
         r_i = f"{vs_i['r']:.4f}" if not np.isnan(vs_i["r"]) else "N/A"
+        if not np.isnan(vs_i.get('p', np.nan)):
+            r_i += "***" if vs_i['p'] < 0.0001 else f" (*p*={vs_i['p']:.4f})"
+            
         r_e = f"{vs_e['r']:.4f}" if not np.isnan(vs_e["r"]) else "N/A"
+        if not np.isnan(vs_e.get('p', np.nan)):
+            r_e += "***" if vs_e['p'] < 0.0001 else f" (*p*={vs_e['p']:.4f})"
+            
         b_i = f"{vs_i['bias']:+.3f} {unit}" if not np.isnan(vs_i["bias"]) else "N/A"
         b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
-        md += f"| {label} | {n} | {r_i} (*p* {fmt_p(vs_i['p'])}) | {r_e} (*p* {fmt_p(vs_e['p'])}) | {b_i} | {b_e} | Pearson correlation, two-sided *p* |\n"
+        
+        md += f"| {label} | {r_i} | {r_e} | {b_i} | {b_e} |\n"
 
-    md += "\n*n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*"
+    md += "\n*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 34 valid sweeps (unless otherwise missing) containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*"
     return md
 
 

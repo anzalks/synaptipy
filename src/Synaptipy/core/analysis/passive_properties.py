@@ -563,14 +563,14 @@ def calculate_vc_transient_parameters(
         # Rs: mV/pA = (1e-3 V)/(1e-12 A) = 1e9 Ohm = 1000 MOhm
         rs_mohm = float(abs(voltage_step_mv) / abs(i_peak) * 1e3)
 
-        # Charge = integral of transient (after peak)
-        q_total = float(np.trapezoid(i_trans, t_trans))  # pA*s = pC
-        cm_charge_pf = abs(q_total) / abs(voltage_step_mv) * 1e3 if abs(voltage_step_mv) > 0 else nan
-        # Q(pA*s)/V_step(mV) * 1e6 -> pF  [pA*s/mV = 1e-12/1e-3 F = 1e-9 F; *1e6 -> 1e-3 pF? no]
-        # pA*s / mV = (1e-12 C)/(1e-3 V) = 1e-9 F = 1 nF; * 1e6 -> MOhm? Correct derivation:
-        # Cm(F) = Q(C)/V(V); Q(pA*s)=Q*1e-12 C; V(mV)=V*1e-3 V
-        # Cm = Q*1e-12 / (V*1e-3) = (Q/V)*1e-9 F = (Q/V)*1000 pF
-        # so Cm(pF) = (Q_pAs / V_mV) * 1e-9 / 1e-12 = (Q_pAs / V_mV) * 1000
+        # Steady-state: mean of the last 20% of the transient window
+        n_trans = len(i_trans)
+        ss_start = max(0, int(n_trans * 0.8))
+        i_ss = float(np.mean(i_trans[ss_start:])) if ss_start < n_trans else float(i_trans[-1])
+        delta_i = i_trans - i_ss
+
+        # Charge = integral of purely capacitive transient
+        q_total = float(np.trapezoid(delta_i, t_trans))  # pA*s = pC
         cm_charge_pf = float(abs(q_total) / abs(voltage_step_mv) * 1e3) if abs(voltage_step_mv) > 0 else nan
 
         # Mono-exponential fit to transient decay for tau_c
@@ -994,7 +994,7 @@ def calculate_tau(  # noqa: C901
         # the mono-exponential fit.  For depolarising steps the "peak" is
         # the local maximum; for hyperpolarising steps it is the minimum.
         if len(V_fit) >= 3:
-            _peak_idx = int(np.argmin(V_fit)) if V_fit[-1] > V_fit[0] else int(np.argmax(V_fit))
+            _peak_idx = int(np.argmax(V_fit)) if V_fit[-1] > V_fit[0] else int(np.argmin(V_fit))
             # Only truncate when:
             #   1. The peak is not at the extremes (indices 0 or end)
             #      enough pre-peak data to reliably estimate tau. (Removed IPFX half-window constraint)
@@ -1269,10 +1269,10 @@ def calculate_sag_ratio(  # noqa: C901
         delta_v_ss = v_ss - v_baseline
 
         # Guard against division by zero with epsilon comparison (float equality is fragile)
-        if abs(delta_v_ss) < 1e-9:
+        if abs(delta_v_peak) < 1e-9:
             return _sag_nan_payload()
 
-        sag_ratio = float(delta_v_peak / delta_v_ss)
+        sag_ratio = float(delta_v_ss / delta_v_peak)
         sag_percentage = 0.0 if abs(delta_v_peak) < 1e-9 else float(100.0 * (v_peak - v_ss) / delta_v_peak)
 
         rebound_start = response_steady_state_window[1]

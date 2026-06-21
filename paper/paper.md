@@ -54,7 +54,7 @@ To maximize long-term extensibility, SynaptiPy utilizes a decoupled, metadata-dr
 
 SynaptiPy's architecture strictly separates core data processing (Headless CLI/API) from graphical rendering (GUI), ensuring identical analytical paths across paradigms. The GUI wraps the core algorithms using a model-view-controller paradigm heavily optimized via PyQtGraph for high-performance software rendering.
 
-![Software Architecture & GUI Workflow](results/gui_workflow.png)
+![Software Architecture & GUI Workflow](figures/figure_01.png)
 *Figure 1: SynaptiPy architectural data flow and graphical user interface. **(A)** Conceptual overview detailing the core capabilities of SynaptiPy, including built-in analysis routines, dual interactive and batch processing engines, and a metadata-driven extensible plugin architecture. It highlights native Neurodata Without Borders (NWB) compliance and PyQtGraph-powered high-performance visualization. **(B)** The primary Explorer interface. Users navigate hierarchical file systems (left) and visually inspect raw electrophysiological traces (center), demonstrating interactive sweep selection and plotting. **(C)** The Analysis interface showcasing an intrinsic properties analysis workflow. A representative average trace (black) is overlaid on raw interleaved trials (blue). The left panel displays configurable parameters such as baseline correction methods and dynamic thresholding. **(D)** The NWB Export module interface. This module translates proprietary manufacturer formats into the FAIR-compliant NWB standard, ensuring raw waveforms and extracted metrics are bundled for reproducible open-science downstream analysis.*
 
 ## Multi-Hardware Parsing and Software Maintenance
@@ -85,36 +85,36 @@ For active properties, SynaptiPy utilized a standard derivative-crossing thresho
 
 For subthreshold passive properties, SynaptiPy was benchmarked on hyperpolarizing steps within the Long Square protocols. SynaptiPy aligned closely with eFEL and IPFX for Resting Membrane Potential, Input Resistance, and Membrane Time Constant (Table 2). SynaptiPy additionally reports peak input resistance, sag percentage, and rebound depolarization -- metrics not computed by the benchmark libraries. To prevent noise artifacts from skewing biological averages for the Membrane Time Constant ($\tau_m$), SynaptiPy enforces a strict biological fit-quality gate ($R^2 \ge 0.80$); un-fittable traces are appropriately rejected.
 
-![Biological Validation](results/biological_validation.png)
+![Biological Validation](figures/figure_02.png)
 *Figure 2: Biological validation and algorithmic parity against established computational benchmarks. To ensure analytical reliability, SynaptiPy’s automated spike feature extraction was benchmarked against the Electrophysiology Feature Extraction Library (eFEL, blue circles) and the Allen Institute's Intrinsic Physiology Feature Extractor (IPFX, red squares). **(A)** Peak Voltage (mV) comparison reveals near-perfect linear correlation (r $\approx$ 1.000) across pipelines. **(B)** Action Potential Half-Width (ms) highlights minor absolute scaling deviations due to varying filtering and integration window implementations across pipelines, though biological correlation remains robust. **(C)** Maximum dV/dt (V/s) and **(D)** Minimum dV/dt (V/s) comparisons demonstrate that SynaptiPy's dynamic 0.1 ms temporal smoothing window yields derivative scalings that appropriately bridge the methodological differences between IPFX's 9.9 kHz Bessel filter and eFEL's bounded derivative stencils. The dashed gray line represents the unity line (y=x), indicating perfect agreement.*
 
 **Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**
 
-| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
-|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
-| AP threshold (mV) | 43 | 0.9381 (*p* < 0.0001) | 0.9440 (*p* < 0.0001) | -0.112 mV | -0.163 mV | Pearson correlation, two-sided *p* |
-| AP amplitude (mV) | 43 | 0.9960 (*p* < 0.0001) | 0.9912 (*p* < 0.0001) | +0.112 mV | +0.870 mV | Pearson correlation, two-sided *p* |
-| AP half-width (ms) | 43 | 0.9879 (*p* < 0.0001) | 0.9948 (*p* < 0.0001) | -0.092 ms | -0.011 ms | Pearson correlation, two-sided *p* |
-| Max dV/dt (V/s) | 43 | 0.9884 (*p* < 0.0001) | 0.7056 (*p* < 0.0001) | -6.352 V/s | +79.539 V/s | Pearson correlation, two-sided *p* |
-| AP Delay (Time to first spike) (ms) | 43 | -0.2544 (*p* 0.0997) | -0.2542 (*p* 0.1000) | +270.924 ms | +270.923 ms | Pearson correlation, two-sided *p* |
-| Upstroke/Downstroke Ratio | 43 | 0.9998 (*p* < 0.0001) | 0.9971 (*p* < 0.0001) | -0.070 Ratio | +0.519 Ratio | Pearson correlation, two-sided *p* |
-| Fast AHP depth (mV) | 43 | 0.9817 (*p* < 0.0001) | 0.9524 (*p* < 0.0001) | +0.561 mV | -2.056 mV | Pearson correlation, two-sided *p* |
-| ADP amplitude (mV) | 36 | 0.3516 (*p* 0.5617) | 0.1981 (*p* 0.2469) | -8.895 mV | -2.726 mV | Pearson correlation, two-sided *p* |
-| Mean Firing Frequency (Hz) | 43 | 1.0000 (*p* < 0.0001) | 0.5951 (*p* < 0.0001) | +0.000 Hz | +23.921 Hz | Pearson correlation, two-sided *p* |
-| Spike Frequency Adaptation | 30 | 0.2039 (*p* 0.2797) | 0.1550 (*p* 0.4311) | +6.569 Ratio | +6.949 Ratio | Pearson correlation, two-sided *p* |
+| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |
+|--------|-------------------------------|-------------------------------|-------------------|-------------------|
+| AP threshold (mV) | 0.9381*** | 0.9440*** | -0.112 mV | -0.163 mV |
+| AP amplitude (mV) | 0.9960*** | 0.9912*** | +0.112 mV | +0.870 mV |
+| AP half-width (ms) | 0.9879*** | 0.9948*** | -0.092 ms | -0.011 ms |
+| Max dV/dt (V/s) | 0.9884*** | 0.7056*** | -6.352 V/s | +79.539 V/s |
+| AP Delay (Time to first spike) (ms) | -0.2544 (*p*=0.0997) | -0.2542 (*p*=0.1000) | +270.924 ms | +270.923 ms |
+| Upstroke/Downstroke Ratio | 0.9998*** | 0.9971*** | -0.070 Ratio | +0.519 Ratio |
+| Fast AHP depth (mV) | 0.9817*** | 0.9524*** | +0.561 mV | -2.056 mV |
+| ADP amplitude (mV) | 0.3516 (*p*=0.5617) | 0.1981 (*p*=0.2469) | -8.895 mV | -2.726 mV |
+| Mean Firing Frequency (Hz) | 1.0000*** | 0.5951*** | +0.000 Hz | +23.921 Hz |
+| Spike Frequency Adaptation | 0.2039 (*p*=0.2797) | 0.1550 (*p*=0.4311) | +6.569 Ratio | +6.949 Ratio |
 
-*n sweeps = number of sweeps in which all three pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*
+*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*
 
 **Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**
 
-| Metric | n sweeps | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL | Statistical approach |
-|--------|----------|-------------------------------|-------------------------------|-------------------|-------------------|----------------------|
-| Resting Membrane Potential (mV) | 34 | 0.9951 (*p* < 0.0001) | 0.9632 (*p* < 0.0001) | -1.018 mV | -3.117 mV | Pearson correlation, two-sided *p* |
-| Input Resistance (MΩ) | 34 | 0.4174 (*p* 0.0140) | 0.9962 (*p* < 0.0001) | -22.220 MΩ | -11.671 MΩ | Pearson correlation, two-sided *p* |
-| Membrane Time Constant (ms) | 22 | 0.8942 (*p* 0.1058) | 0.1960 (*p* 0.3821) | -3.871 ms | -22.079 ms | Pearson correlation, two-sided *p* |
-| Sag Ratio | 34 | -0.0277 (*p* 0.8763) | -0.0246 (*p* 0.8903) | +0.018 Ratio | +0.021 Ratio | Pearson correlation, two-sided *p* |
+| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |
+|--------|-------------------------------|-------------------------------|-------------------|-------------------|
+| Resting Membrane Potential (mV) | 0.9951*** | 0.9632*** | -1.018 mV | -3.117 mV |
+| Input Resistance (MΩ) | 0.4174 (*p*=0.0140) | 0.9962*** | -22.220 MΩ | -11.671 MΩ |
+| Membrane Time Constant (ms) | 0.8942 (*p*=0.1058) | 0.1960 (*p*=0.3821) | -3.871 ms | -22.079 ms |
+| Sag Ratio | -0.0277 (*p*=0.8763) | -0.0246 (*p*=0.8903) | +0.018 Ratio | +0.021 Ratio |
 
-*n sweeps = number of valid sweeps containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*
+*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 34 valid sweeps (unless otherwise missing) containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*
 
 
 ## Biological Use-Case: High-Throughput Classification
