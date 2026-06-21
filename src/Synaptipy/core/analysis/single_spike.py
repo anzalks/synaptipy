@@ -18,12 +18,12 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.signal import savgol_filter
+from scipy.signal import find_peaks, savgol_filter
 
 from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
 from Synaptipy.core.analysis.registry import AnalysisRegistry
+from Synaptipy.core.results import SingleSpikeResult, SpikeTrainResult
 from Synaptipy.core.constants import DVDT_ARTIFACT_CEILING_VS, MIN_RISING_PHASE_MS
-from Synaptipy.core.results import SpikeTrainResult
 
 log = logging.getLogger(__name__)
 
@@ -250,6 +250,9 @@ def calculate_spike_features(  # noqa: C901
         onset_lookback: Lookback window before each spike peak (s).
         fahp_window_ms: (start, end) of fast-AHP window after peak (ms).
         mahp_window_ms: (start, end) of medium-AHP window after peak (ms).
+        
+    Returns:
+        A list of SingleSpikeResult objects.
     """
     if spike_indices is None or spike_indices.size == 0:
         return []
@@ -608,21 +611,23 @@ def calculate_spike_features(  # noqa: C901
     features_list = []
     for i in range(n_spikes):
         features_list.append(
-            {
-                "ap_threshold": float(ap_thresholds[i]),
-                "amplitude": float(amplitudes[i]),
-                "half_width": float(half_widths[i]),
-                "rise_time_10_90": float(rise_times[i]),
-                "decay_time_90_10": float(decay_times[i]),
-                "fahp_depth": float(fahp_depths[i]),
-                "mahp_depth": float(mahp_depths[i]),
-                "ahp_duration_half": float(ahp_durations[i]),
-                "adp_amplitude": float(adp_amplitudes[i]),
-                "max_dvdt": float(max_dvdts[i]),
-                "min_dvdt": float(min_dvdts[i]),
-                "absolute_peak_mv": float(peak_vals[i]),
-                "overshoot_mv": float(max(0.0, peak_vals[i])),
-            }
+            SingleSpikeResult(
+                value=None,
+                unit="mV",
+                ap_threshold=float(ap_thresholds[i]),
+                amplitude=float(amplitudes[i]),
+                half_width=float(half_widths[i]),
+                rise_time_10_90=float(rise_times[i]),
+                decay_time_90_10=float(decay_times[i]),
+                fahp_depth=float(fahp_depths[i]),
+                mahp_depth=float(mahp_depths[i]),
+                ahp_duration_half=float(ahp_durations[i]),
+                adp_amplitude=float(adp_amplitudes[i]),
+                max_dvdt=float(max_dvdts[i]),
+                min_dvdt=float(min_dvdts[i]),
+                absolute_peak_mv=float(peak_vals[i]),
+                overshoot_mv=float(max(0.0, peak_vals[i])),
+            )
         )
     return features_list
 
@@ -872,8 +877,14 @@ def run_spike_detection_wrapper(
             )
             stats: Dict[str, Any] = {}
             if features_list:
-                for key in features_list[0].keys():
-                    values = [f[key] for f in features_list if not np.isnan(f[key])]
+                import dataclasses
+                # Collect attributes dynamically from the first valid result
+                first_feat = features_list[0]
+                feat_dict = dataclasses.asdict(first_feat)
+                valid_keys = [k for k in feat_dict.keys() if k not in ["value", "unit", "is_valid", "error_message", "quality_flags", "confidence", "metadata", "parameters"]]
+                
+                for key in valid_keys:
+                    values = [getattr(f, key) for f in features_list if getattr(f, key) is not None and not np.isnan(getattr(f, key))]
                     if values:
                         stats[f"{key}_mean"] = float(np.mean(values))
                         stats[f"{key}_std"] = float(np.std(values))

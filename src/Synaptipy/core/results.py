@@ -86,6 +86,42 @@ class SpikeTrainResult(AnalysisResult):
 
 
 @dataclass
+class SingleSpikeResult(AnalysisResult):
+    """
+    Result of single-spike morphological analysis (e.g., width, thresholds, peaks).
+    """
+    ap_threshold: Optional[float] = None
+    amplitude: Optional[float] = None
+    half_width: Optional[float] = None
+    rise_time_10_90: Optional[float] = None
+    decay_time_90_10: Optional[float] = None
+    fahp_depth: Optional[float] = None
+    mahp_depth: Optional[float] = None
+    ahp_duration_half: Optional[float] = None
+    adp_amplitude: Optional[float] = None
+    max_dvdt: Optional[float] = None
+    min_dvdt: Optional[float] = None
+    absolute_peak_mv: Optional[float] = None
+    overshoot_mv: Optional[float] = None
+    
+    # Missing extra features to be implemented later
+    ap_delay: Optional[float] = None
+    ap_width_arbitrary: Optional[np.ndarray] = None
+    ahp_time: Optional[float] = None
+    upstroke_downstroke_ratio: Optional[float] = None
+    phase_plane_area: Optional[float] = None
+    trough_v: Optional[float] = None
+    
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    
+    def __repr__(self):
+        if self.is_valid:
+            amp_str = f"{self.amplitude:.2f}" if self.amplitude is not None else "N/A"
+            return f"SingleSpikeResult(amp={amp_str} mV)"
+        return f"SingleSpikeResult(Error: {self.error_message})"
+
+
+@dataclass
 class RinResult(AnalysisResult):
     """
     Result of Input Resistance (Rin) analysis.
@@ -105,6 +141,7 @@ class RinResult(AnalysisResult):
     steady_state_voltage: Optional[float] = None  # Steady state V in mV
     rin_peak_mohm: Optional[float] = None  # Peak Rin (Ih-corrected) in MOhm
     rin_steady_state_mohm: Optional[float] = None  # Steady-state Rin in MOhm
+    holding_current_pa: Optional[float] = None  # Baseline current in pA
     parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
 
     def __repr__(self):
@@ -143,6 +180,8 @@ class BurstResult(AnalysisResult):
     spikes_per_burst_avg: float = 0.0
     burst_duration_avg: float = 0.0
     burst_freq_hz: float = 0.0
+    inter_burst_voltage_mv: Optional[float] = None
+    burst_mean_frequency_hz: Optional[float] = None
     parameters: Dict[str, Any] = field(default_factory=dict)  # Analysis parameters used
     bursts: List[List[float]] = field(default_factory=list)  # List of lists of spike times
 
