@@ -68,4 +68,6 @@ src/Synaptipy/resources/docs/
 coverage.xml
 
 # Validation data cache
-paper/allen_cache/
+paper/data/allen_cache/
+paper/analysis_results/
+paper/raw_nwb_plots/
