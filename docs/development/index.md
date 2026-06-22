@@ -58,4 +58,6 @@ without modifying core code.
 :caption: Development
 
 styling_guide
+decisions/index
+manuals/index
 ```
