@@ -1230,6 +1230,10 @@ def calculate_sag_ratio(  # noqa: C901
     """
     Calculate Sag Potential Ratio from a hyperpolarising current step.
 
+    The Sag Ratio is calculated as:
+    (V_ss - V_baseline) / (V_peak - V_baseline)
+    A value < 1.0 indicates the presence of hyperpolarisation-activated sag (I_h).
+
     Returns dict with keys sag_ratio, sag_percentage, v_peak, v_ss,
     v_baseline, rebound_depolarization.
     """

@@ -164,7 +164,7 @@ columns by the batch exporter.
 
 ## 3. Membrane Time Constant ($\tau$)
 
-**Module:** `intrinsic_properties.py` · **Registry name:** `tau_analysis`
+**Module:** `passive_properties.py` · **Registry name:** `tau_analysis`
 
 ### 3.1 Mono-exponential model
 
@@ -193,18 +193,18 @@ violated).
 
 ## 4. Sag Ratio
 
-**Module:** `intrinsic_properties.py` · **Registry name:** `sag_ratio_analysis`
+**Module:** `passive_properties.py` · **Registry name:** `sag_ratio_analysis`
 
 ### 4.1 Ratio form (default)
 
 $$
-\text{Sag Ratio} = \frac{V_{\text{peak}} - V_{\text{baseline}}}{V_{\text{ss}} - V_{\text{baseline}}}
+\text{Sag Ratio} = \frac{V_{\text{ss}} - V_{\text{baseline}}}{V_{\text{peak}} - V_{\text{baseline}}}
 $$
 
-A value > 1 indicates hyperpolarisation-activated sag (I_h current).
+A value < 1 indicates hyperpolarisation-activated sag (I_h current).
 A value of 1 indicates no sag.
 
-**Numerical stability guard:** when $|V_{\text{ss}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$ (effectively zero denominator, e.g. during a flat or noise-only trace), the ratio is set to `NaN` to prevent division by zero rather than returning an arbitrary large value. Similarly, the percentage form (Section 4.2) returns 0 % when $|V_{\text{peak}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$.
+**Numerical stability guard:** when $|V_{\text{peak}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$ (effectively zero denominator, e.g. during a flat or noise-only trace), the ratio is set to `NaN` to prevent division by zero rather than returning an arbitrary large value. Similarly, the percentage form (Section 4.2) returns 0 % when $|V_{\text{peak}} - V_{\text{baseline}}| < 10^{-9}\,\text{mV}$.
 
 ### 4.2 Percentage form
 
@@ -268,8 +268,9 @@ transfer of the capacitive transient, computed via trapezoidal integration
 
 ### 5.3 Current-clamp series resistance ($R_s^{\text{CC}}$)
 
-The fast resistive voltage artifact at current-step onset, measured within
-a **0.1 ms** window immediately after the step, reflects the series resistance
+The fast resistive voltage artifact at current-step onset is evaluated by fitting a
+mono-exponential decay to the first **0.1 ms** of the trace immediately after the step.
+This decay curve is mathematically extrapolated back to $t=0$ to estimate the instantaneous voltage drop
 before the membrane has had time to charge:
 
 $$
@@ -282,7 +283,7 @@ The artifact window is intentionally kept to 0.1 ms (down from a previous
 would artifactually inflate the $R_s$ estimate.
 
 > **Sampling-rate dependency and stability warning.**  This calculation
-> resolves a 0.1 ms window to detect the fast resistive jump.
+> resolves a 0.1 ms window and relies on a decay fit to extrapolate the fast resistive jump.
 > At 10 kHz sampling the window contains only **one sample**, making the
 > estimate highly unstable (a single noisy sample determines the entire
 > $R_s^{\text{CC}}$ value).  At 20 kHz the window contains two samples;
@@ -298,7 +299,7 @@ would artifactually inflate the $R_s$ estimate.
 
 ## 6. Spike Detection and Action Potential Features
 
-**Module:** `spike_analysis.py` · **Registry name:** `spike_detection`
+**Module:** `single_spike.py` · **Registry name:** `spike_detection`
 
 ### 6.1 Threshold crossing
 
@@ -337,10 +338,9 @@ V_{50} = V_{\text{threshold}} + 0.5 \times A_{\text{spike}}
 $$
 
 Half-width is the time interval between the two crossings of $V_{50}$ on the
-rising and falling phases, computed using discrete sampling indices without
-sub-sample interpolation. Measuring strictly between physical sampling boundaries
-maximises robustness against interpolative noise and preserves compatibility with
-widely-used electrophysiology analysis conventions.
+rising and falling phases. To maximize temporal precision independently of the
+sampling rate, SynaptiPy uses sub-sample linear interpolation to find the exact
+crossing points between discrete sampling boundaries.
 
 ### 6.5 Rise time (10-90%)
 
@@ -349,7 +349,7 @@ t_{\text{rise}} = t_{V_{90}} - t_{V_{10}}
 $$
 
 where $V_{x} = V_{\text{threshold}} + (x/100) \times A_{\text{spike}}$.
-Crossings are evaluated at strict discrete sample indices.
+Crossings are evaluated using sub-sample linear interpolation for maximum precision.
 
 ### 6.6 Decay time (90-10%)
 
@@ -359,13 +359,12 @@ $$
 
 on the falling phase of the action potential.
 
-### 6.6.1 Discrete Feature Boundaries
+### 6.6.1 Sub-Sample Interpolation for Kinetics
 
 Half-width, rise time (10–90%), and decay time (90–10%) measurements use
-**discrete integer sampling indices** representing the closest actual recorded voltage
-sample crossing the target level. By measuring strictly between physical sampling boundaries,
-SynaptiPy maximizes robustness against interpolative noise artifacting by measuring
-strictly between physical sampling boundaries rather than relying on sub-sample interpolation.
+**sub-sample linear interpolation** between the two recorded voltage samples that
+bound the target level. By interpolating the exact crossing point, SynaptiPy
+maximizes the temporal precision of kinetic measurements independently of the hardware sampling rate.
 
 ### 6.7 Afterhyperpolarisation (AHP)
 
@@ -384,7 +383,7 @@ The window is rounded up to the nearest odd integer to satisfy the Savitzky-Gola
 constraint, ensuring the filter width tracks the recording's sampling rate.
 
 **AHP duration** is the time from the repolarisation crossing of
-$V_{\text{threshold}}$ to recovery back to $V_{\text{threshold}}$.
+$V_{\text{threshold}}$ to recovery back to 10% below the action potential threshold ($V_{\text{threshold}} - 0.1 \times A_{\text{spike}}$).
 
 ### 6.8 Afterdepolarisation (ADP)
 
@@ -505,7 +504,7 @@ z_k[n] = \frac{c_k[n] - \mu_{c_k}}{\sigma_{c_k}}
 $$
 
 **Peak selection rule:** Events are detected at local maxima of
-$\max_k z_k[n]$ exceeding $z_{\min}$ (default 3.5), subject to a minimum
+$\max_k z_k[n]$ exceeding $z_{\min}$ (default 4.0), subject to a minimum
 inter-event interval of $\tau_{\text{rise}}$:
 
 $$
@@ -587,7 +586,7 @@ with the scalar summary `mean_local_amplitude`.
 
 ## 8. I-V Curve
 
-**Module:** `intrinsic_properties.py` · **Registry name:** `iv_curve_analysis`
+**Module:** `passive_properties.py` · **Registry name:** `iv_curve_analysis`
 
 For each sweep $n$:
 
@@ -610,7 +609,7 @@ reported with $R^2$ goodness-of-fit.
 
 ## 9. Burst Analysis
 
-**Module:** `burst_analysis.py` · **Registry name:** `burst_analysis`
+**Module:** `firing_dynamics.py` · **Registry name:** `burst_analysis`
 
 *(Criterion adapted from Grace & Bunney, 1984; dynamic ISI fraction (30% of mean ISI) motivated by Harris et al., 2001.)*
 
@@ -630,7 +629,7 @@ $$
 
 ## 10. Excitability (F-I Curve)
 
-**Module:** `excitability.py` · **Registry name:** `excitability_analysis`
+**Module:** `firing_dynamics.py` · **Registry name:** `excitability_analysis`
 
 Per sweep $n$ with injected current $I_n$:
 
@@ -667,7 +666,7 @@ with fewer than 3 spikes.
 
 ## 11. Phase Plane Analysis
 
-**Module:** `phase_plane.py` · **Registry name:** `phase_plane_analysis`
+**Module:** `single_spike.py` · **Registry name:** `phase_plane_analysis`
 
 $$
 \frac{dV}{dt}(t) = \text{gaussian\_filter1d}\!\left(

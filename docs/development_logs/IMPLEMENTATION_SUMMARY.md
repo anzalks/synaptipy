@@ -187,7 +187,6 @@ The downsampling fix ensures compatibility with PyQtGraph 0.13.x by using the co
 | HIGH-2 | `passive_properties.py` | Tau fitting bi-exp fallback correctly validates that tau1 < tau2 before accepting the bi-exponential result | a0ba646 |
 | HIGH-3 | `evoked_responses.py` | PPR decay window clamped to non-negative values; negative window from protocol edge cases now raises `ValueError` | a0ba646 |
 | HIGH-4 | `evoked_responses.py` | TTL auto-threshold computes 50th-percentile of the signal amplitude distribution rather than a hardcoded voltage level | a0ba646 |
-| MEDIUM-1 | `passive_properties.py` | RMP polynomial fit validated against minimum 10-sample baseline; fit is rejected if `R^2 < 0.5` | a0ba646 |
 | MEDIUM-3 | `passive_properties.py` | Capacitance calculation guarded against zero-duration transient window | a0ba646 |
 | MEDIUM-4 | `passive_properties.py` | Bi-exp tau comparison uses relative tolerance (`abs(tau1 - tau2) / max(tau1, tau2) > 0.05`) rather than absolute equality | a0ba646 |
 | HIGH-11 | `batch_engine.py` | Mixed-length trial arrays no longer raise `ValueError`; the batch engine pads to the longest trial with `NaN` before stacking | 38984ce |

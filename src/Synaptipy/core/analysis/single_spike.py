@@ -320,7 +320,10 @@ def calculate_spike_features(  # noqa: C901
     first_below_rev_idx = np.argmax(rev_below, axis=1)
 
     # Convert reversed index back to original window index
-    first_crossing_rel_idx = lookback_samples - 1 - first_below_rev_idx
+    first_below_idx = lookback_samples - 1 - first_below_rev_idx
+    # The actual onset is the first sample >= threshold, which is one sample
+    # after it falls below threshold.
+    first_crossing_rel_idx = np.minimum(first_below_idx + 1, lookback_samples - 1)
 
     # If no crossing is found, fallback to a fixed window before peak.
     fallback_indices = np.maximum(0, spike_indices - int(0.002 / dt))
