@@ -441,8 +441,8 @@ valid ranges, and conditional visibility based on clamp mode.
 
 **Excitability tab:**
 - **Excitability (F-I Curve)** - Multi-trial rheobase, F-I slope, maximum
-  firing frequency, and spike-frequency adaptation ratio. Opens a popup
-  F-I scatter plot. Requires multi-trial recordings.
+  firing frequency, and spike-frequency adaptation index (normalized ISI-difference
+  method). Opens a popup F-I scatter plot. Requires multi-trial recordings.
 - **Burst Analysis** - Max-ISI burst detection; reports burst count, mean
   spikes per burst, mean burst duration, and intra-burst frequency.
 - **Spike Train Dynamics** - ISI statistics: mean ISI, coefficient of variation

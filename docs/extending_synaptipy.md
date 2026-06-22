@@ -282,6 +282,18 @@ written to the CSV.
 | `np.ndarray` values in `metrics` | Displayed as shape summary (e.g. `"array(150,)"`). |
 | `None` values in `metrics` | Displayed as `"N/A"`. |
 
+> [!NOTE]
+> **Custom plugins vs. core module return types.** Custom plugins must return a flat
+> `dict` as described above so the batch exporter and results table can process them
+> generically. However, the five **built-in** analysis modules (`passive_properties`,
+> `single_spike`, `firing_dynamics`, `synaptic_events`, `evoked_responses`) return
+> **strongly-typed Python dataclasses** internally (`SingleSpikeResult`,
+> `TrainDynamicsResult`, `RinResult`, etc.). If you are writing code that calls a
+> built-in analysis function directly—rather than through the registry wrapper—access
+> results via named dataclass attributes (e.g. `result.rin_mohm`) rather than dict
+> key access. The registry wrappers translate these dataclasses into the flat dict
+> format before returning them to the GUI and batch engine.
+
 ---
 
 ### 3.3 The `expects_list` Parameter

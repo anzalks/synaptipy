@@ -318,9 +318,9 @@ $$
 $$
 
 in the `onset_lookback` window preceding the spike peak. The discrete derivative is
-computed via `numpy.gradient(V) / dt` and reported in V/s. This strict gradient thresholding 
-replaces highly-sensitive second derivative ($d^2V/dt^2$) curvature methods to align natively 
-with IPFX standard scaling algorithms.
+computed via `numpy.gradient(V) / dt` and reported in V/s. This strict first-crossing
+thresholding is mathematically unambiguous, robust across sampling rates, and avoids
+the boundary artefacts introduced by second-derivative curvature methods.
 
 ### 6.3 Amplitude
 
@@ -338,7 +338,9 @@ $$
 
 Half-width is the time interval between the two crossings of $V_{50}$ on the
 rising and falling phases, computed using discrete sampling indices without
-sub-sample interpolation to match the rigid boundary scaling of standard tools like eFEL and IPFX.
+sub-sample interpolation. Measuring strictly between physical sampling boundaries
+maximises robustness against interpolative noise and preserves compatibility with
+widely-used electrophysiology analysis conventions.
 
 ### 6.5 Rise time (10-90%)
 
@@ -362,8 +364,8 @@ on the falling phase of the action potential.
 Half-width, rise time (10–90%), and decay time (90–10%) measurements use
 **discrete integer sampling indices** representing the closest actual recorded voltage
 sample crossing the target level. By measuring strictly between physical sampling boundaries,
-SynaptiPy maximizes robustness against interpolative noise artifacting and maintains perfect
-algorithmic parity with IPFX and eFEL scaling standards.
+SynaptiPy maximizes robustness against interpolative noise artifacting by measuring
+strictly between physical sampling boundaries rather than relying on sub-sample interpolation.
 
 ### 6.7 Afterhyperpolarisation (AHP)
 
@@ -430,8 +432,9 @@ $$
 
 An overshoot of 0 indicates the AP peaked below $0\,\text{mV}$ (e.g. in
 immature neurons or under pharmacological block of Na$^+$ channels).
-Both metrics are returned as `absolute_peak_mv` and `overshoot_mv` in the
-per-spike feature dictionaries produced by `calculate_spike_features`.
+Both metrics are returned as `absolute_peak_mv` and `overshoot_mv` fields
+on the `SingleSpikeResult` dataclass instances produced by
+`calculate_spike_features`.
 
 ---
 
@@ -639,11 +642,26 @@ $$
 
 **F-I slope** from linear regression $f = \alpha \cdot I + \beta$ (Hz/pA).
 
-**Spike Frequency Adaptation** per sweep:
+**Spike Frequency Adaptation (Adaptation Index)** per sweep:
+
+SynaptiPy computes the adaptation index as the mean normalized difference between
+consecutive inter-spike intervals, measuring how firing regularity changes across
+a spike train:
 
 $$
-\text{SFA} = \frac{\text{ISI}_{\text{last}}}{\text{ISI}_{\text{first}}}
+\text{SFA} = \frac{1}{N-1} \sum_{i=1}^{N-1}
+  \frac{\text{ISI}_{i} - \text{ISI}_{i-1}}{\text{ISI}_{i} + \text{ISI}_{i-1}}
 $$
+
+where $N$ is the number of spikes and $\text{ISI}_i = t_{\text{spike},i+1} - t_{\text{spike},i}$.
+A value of 0 indicates a perfectly regular (non-adapting) train;
+a positive value indicates slowing (adaptation); a negative value
+indicates acceleration (facilitation). The metric is `NaN` for trains
+with fewer than 3 spikes.
+
+> **Numerical stability guard:** the denominator $\text{ISI}_i + \text{ISI}_{i-1}$ is
+> checked against $\varepsilon = 10^{-9}\,\text{s}$ before division; duplicate
+> spike-time pairs contribute `NaN` and are excluded via `numpy.nanmean`.
 
 ---
 
@@ -798,9 +816,8 @@ relative to the neighboring baseline band identifies mains interference.
 - **Sekerli, M., Del Negro, C. A., Lee, R. H., & Bhatt, D. L. (2004).** Estimating
   action potential thresholds from neuronal time-series: new metrics and evaluation of
   methodologies. *IEEE Transactions on Biomedical Engineering*, 51(9), 1665-1672.
-  [doi:10.1109/TBME.2004.827827](https://doi.org/10.1109/TBME.2004.827827)
-  - **Used in:** §6.2 (onset detection via $d^2V/dt^2$ maximum curvature) and
-    §15.2 (dynamic AP threshold fallback).
+  - **Referenced in:** §15.2 — methodological background for the second-derivative
+    curvature approach that SynaptiPy does not use; included for bibliographic completeness.
 
 - **Henze, D. A., & Buzsaki, G. (2001).** Action potential threshold of hippocampal
   pyramidal cells in vivo is increased by recent spiking activity. *Neuroscience*,
@@ -1077,38 +1094,28 @@ If the exponential fit fails (insufficient samples or poor convergence), the
 function falls back to the charge-integral (AUC) method for $C_m$ while still
 reporting the Ohm's-law $R_s$.
 
-### 15.2 Dynamic AP Threshold via Maximum Curvature ($d^2V/dt^2$)
+### 15.2 AP Threshold: Strict $dV/dt$ First-Crossing
 
-*(Method described in Sekerli et al., 2004; dynamic threshold motivated by Henze & Buzsaki, 2001.
-Foundational AP model: Hodgkin & Huxley, 1952.)*
+*(Default threshold $\theta_{dV/dt}$ = 20 V/s, calibrated for rodent cortical
+pyramidal neurons; Bean, 2007. Artifact ceiling 300 V/s; Naundorf et al., 2006.)*
 
-A fixed dV/dt threshold fails during spike trains because Na$^+$ channel
-inactivation progressively slows the AP upstroke.  The physiological onset is
-instead defined as the point of **maximum curvature** of the voltage trace:
-
-$$
-\text{threshold index} = \operatorname{argmax}_{j \in \mathcal{W}} \frac{d^2V}{dt^2}(j)
-$$
-
-where $\mathcal{W}$ is a lookback window of `onset_lookback` seconds immediately
-before each spike peak.  Both $dV/dt$ and $d^2V/dt^2$ are computed via
-`numpy.gradient` on the voltage array.
-
-**Fallback rule:** if the $d^2V/dt^2$ maximum lies at the edge of $\mathcal{W}$
-(index 0 or $|\mathcal{W}|-1$), the estimate is unreliable (boundary artefact).
-In that case the algorithm uses a **dynamic per-spike threshold**: the first
-$dV/dt$ crossing above $\theta_{\text{dyn}}$ within $\mathcal{W}$, where
+SynaptiPy identifies the action potential onset (threshold) as the **first
+sample** in the `onset_lookback` window preceding each spike peak at which the
+discrete first derivative exceeds the user-specified threshold:
 
 $$
-\theta_{\text{dyn}} = \max\!\left(0.20 \cdot \max_{j \in \mathcal{W}}
-  \frac{dV}{dt}(j),\ \ 2{,}000\,\text{mV/s}\right)
+t_{\text{threshold}} = \min\!\bigl\{ t \in \mathcal{W} : \tfrac{dV}{dt}(t) > \theta_{dV/dt} \bigr\}
 $$
 
-The 20 % fraction of the spike-specific peak rising rate captures onset
-consistently across spikes with attenuated upstrokes (Na$^+$ inactivation in
-high-frequency trains). The 2,000 mV/s floor prevents false triggering during
-subthreshold depolarisations at rest. A hardcoded 20 V/s absolute threshold is
-**not** used.
+where $\mathcal{W}$ is the lookback window, $dV/dt$ is computed via
+`numpy.gradient(V) / dt` and expressed in V/s.
+
+This strict first-crossing definition is unambiguous across the full range of
+cortical firing rates and sampling rates (10–50 kHz). Methods based on the second
+derivative ($d^2V/dt^2$ maximum curvature, Sekerli et al., 2004) are **not**
+used in SynaptiPy; they are highly sensitive to sampling-rate-dependent
+numerical artefacts and yield threshold voltages that shift systematically at
+high firing frequencies due to Na$^+$ channel inactivation.
 
 ### 15.3 Separation of Fast AHP and Medium AHP
 
