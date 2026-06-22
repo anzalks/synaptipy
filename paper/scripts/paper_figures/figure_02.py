@@ -1,18 +1,17 @@
 import sys
 from pathlib import Path
 
+import matplotlib  # noqa: E402
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 
-import matplotlib # noqa: E402
-
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from plot_utils import ( # noqa: E402
+from plot_utils import (  # noqa: E402
     COLORS,
     add_legend,
     add_panel_label,

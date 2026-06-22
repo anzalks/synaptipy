@@ -75,6 +75,17 @@ class QtLoggingHandler(logging.Handler):
             # Call emit on the bridge QObject (which has no Python 'emit'
             # method) to avoid the PySide6 6.7.x dispatch conflict.
             self._bridge.log_emitted.emit(msg)
+        except RuntimeError as e:
+            if "deleted" in str(e):
+                # The C++ object is gone. Remove ourselves from all loggers to stop the errors.
+                for name in logging.root.manager.loggerDict:
+                    logger = logging.getLogger(name)
+                    if self in logger.handlers:
+                        logger.removeHandler(self)
+                if self in logging.root.handlers:
+                    logging.root.removeHandler(self)
+            else:
+                self.handleError(record)
         except Exception:
             self.handleError(record)
 

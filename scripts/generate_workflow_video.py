@@ -5,9 +5,18 @@ from pathlib import Path
 
 import imageio
 import numpy as np
-from PySide6.QtCore import Qt, QPoint, QTimer, QRect, QPointF, QSize
-from PySide6.QtGui import QImage, QPainter, QColor, QPen
-from PySide6.QtWidgets import QApplication, QWidget, QGraphicsRectItem, QScrollArea, QFileDialog, QLineEdit, QPushButton, QMessageBox
+from PySide6.QtCore import QPoint, QPointF, QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QImage, QPainter, QPen
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QGraphicsRectItem,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QWidget,
+)
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["QT_MAC_WANTS_LAYER"] = "1"
@@ -20,6 +29,7 @@ _OUTPUT_DIR = _PROJECT_ROOT / "docs" / "tutorial"
 
 global_vg = None
 
+
 def _pump(n_frames=1):
     """Process UI events and capture one frame synchronously."""
     for _ in range(n_frames):
@@ -27,6 +37,7 @@ def _pump(n_frames=1):
         if global_vg is not None:
             global_vg.capture_frame()
         time.sleep(0.01)
+
 
 class VideoGenerator:
     def __init__(self, window):
@@ -49,21 +60,30 @@ class VideoGenerator:
         print(f"Captured {len(self.frames)} frames. Saving videos...")
         mp4_path = _OUTPUT_DIR / f"{stem}.mp4"
         gif_path = _OUTPUT_DIR / f"{stem}.gif"
-        
+
         print(f"Writing {mp4_path} ...")
         writer = imageio.get_writer(str(mp4_path), fps=30)
         for f in self.frames:
             writer.append_data(f)
         writer.close()
-        
+
         print(f"Writing {gif_path} ...")
         import subprocess
-        subprocess.run([
-            "ffmpeg", "-y", "-i", str(mp4_path),
-            "-vf", "fps=15,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
-            str(gif_path)
-        ], check=True)
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(mp4_path),
+                "-vf",
+                "fps=15,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                str(gif_path),
+            ],
+            check=True,
+        )
         print("Done!")
+
 
 class FakeCursor(QWidget):
     def __init__(self, parent=None):
@@ -84,21 +104,24 @@ class FakeCursor(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
+
         if self.click_ripple_opacity > 0:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(255, 255, 0, int(150 * self.click_ripple_opacity)))
-            painter.drawEllipse(QPoint(int(self.pos_x), int(self.pos_y)), self.click_ripple_radius, self.click_ripple_radius)
-            
+            painter.drawEllipse(
+                QPoint(int(self.pos_x), int(self.pos_y)), self.click_ripple_radius, self.click_ripple_radius
+            )
+
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.setBrush(QColor(0, 0, 0))
         pts = [
             QPoint(int(self.pos_x), int(self.pos_y)),
             QPoint(int(self.pos_x) + 12, int(self.pos_y) + 12),
             QPoint(int(self.pos_x) + 4, int(self.pos_y) + 12),
-            QPoint(int(self.pos_x), int(self.pos_y) + 18)
+            QPoint(int(self.pos_x), int(self.pos_y) + 18),
         ]
         painter.drawPolygon(pts)
+
 
 class Choreographer:
     def __init__(self, window):
@@ -159,10 +182,12 @@ class Choreographer:
                 break
             parent = parent.parentWidget()
 
+
 def _os_is_dark() -> bool:
     if sys.platform == "darwin":
         try:
             import subprocess
+
             out = subprocess.check_output(
                 ["defaults", "read", "-g", "AppleInterfaceStyle"],
                 stderr=subprocess.DEVNULL,
@@ -173,77 +198,80 @@ def _os_is_dark() -> bool:
             pass
     return False
 
+
 def run_choreography():
     global global_vg
-    
+
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs)
-    
+
     app = QApplication.instance() or QApplication(sys.argv)
-    
+
     from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+
     mode = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
     apply_theme(mode)
     print(f"Theme selected: {mode.value}")
-    
+
     MainWindow._offer_session_restore = lambda self: None
     window = MainWindow()
     window.resize(1280, 800)
     window.show()
-    
+
     global_vg = VideoGenerator(window)
     choreo = Choreographer(window)
-    
+
     _pump(15)
-    
+
     # --- 1. EXPLORER TAB ---
     print("Loading file...")
     window.explorer_tab.load_recording_data(_ABF21, [_ABF21], 0)
     if hasattr(window.explorer_tab, "config_panel"):
         window.explorer_tab.config_panel.downsample_cb.setChecked(False)
-        
+
     deadline = time.monotonic() + 10.0
     while getattr(window.explorer_tab, "_is_loading", False) and time.monotonic() < deadline:
         _pump(1)
     _pump(30)
-    
+
     print("Simulating zoom...")
     try:
         pw = list(window.explorer_tab.plot_canvas.channel_plots.values())[0]
         import pyqtgraph as pg
+
         view = pw.getViewWidget()
         view_box = pw.getViewBox()
-        
+
         start_scene = view_box.mapViewToScene(QPointF(0.150, 60.0))
         start_view = view.mapFromScene(start_scene)
         start_global = view.mapTo(window, start_view)
-        
+
         end_scene = view_box.mapViewToScene(QPointF(0.200, -40.0))
         end_view = view.mapFromScene(end_scene)
         end_global = view.mapTo(window, end_view)
-        
+
         choreo.move_mouse_to_pos(start_global.x(), start_global.y(), 15)
-        
+
         choreo.cursor.click_ripple_radius = 5
         choreo.cursor.click_ripple_opacity = 1.0
-        
+
         roi = QGraphicsRectItem(0.150, -40.0, 0.0, 100.0)
         roi.setPen(pg.mkPen(color=(255, 255, 0), width=2))
         roi.setBrush(QColor(255, 255, 0, 128))
         pw.addItem(roi)
-        
+
         for i in range(20):
-            t = (i+1)/20.0
+            t = (i + 1) / 20.0
             roi.setRect(0.150, -40.0, 0.050 * t, 100.0)
             cur_x = start_global.x() + (end_global.x() - start_global.x()) * t
             cur_y = start_global.y() + (end_global.y() - start_global.y()) * t
             choreo.cursor.move_to(cur_x, cur_y)
             _pump(1)
-            
+
         choreo.cursor.click_ripple_opacity = 0.0
         choreo.cursor.update()
         _pump(10)
-        
+
         pw.setXRange(0.150, 0.200, padding=0)
         pw.setYRange(-40.0, 60.0, padding=0)
         pw.removeItem(roi)
@@ -253,7 +281,7 @@ def run_choreography():
 
     # Inject recording into session
     window.session_manager.selected_analysis_items = [{"path": _ABF21, "target_type": "Recording", "trial_index": None}]
-    
+
     # --- 2. ANALYSER TAB ---
     print("Switching to Analyser...")
     rect = window.tab_widget.tabBar().tabRect(1)
@@ -262,19 +290,19 @@ def run_choreography():
     choreo.click()
     window.tab_widget.setCurrentIndex(1)
     _pump(30)
-    
+
     analyser = window.analyser_tab
     for i in range(analyser.sub_tab_widget.count()):
         if analyser.sub_tab_widget.tabText(i) == "Spike Analysis":
             analyser.sub_tab_widget.setCurrentIndex(i)
             break
-            
+
     tab = analyser.sub_tab_widget.currentWidget()
     deadline = time.monotonic() + 10.0
     while not tab.isEnabled() and time.monotonic() < deadline:
         _pump(1)
     _pump(30)
-    
+
     # Change Trial to 17
     print("Setting Data Source to Trial 17")
     cb = getattr(tab, "data_source_combobox", None)
@@ -286,14 +314,14 @@ def run_choreography():
                 cb.setCurrentIndex(i)
                 break
         _pump(15)
-        
+
     # Adjust Refractory Period
     print("Adjusting Refractory Period")
     ref_widget = None
     pg_obj = getattr(tab, "param_generator", None)
     if pg_obj:
         ref_widget = pg_obj.widgets.get("refractory_period")
-        
+
     for val in [0.020, 0.002]:
         if ref_widget:
             choreo.scroll_to_widget(ref_widget)
@@ -301,7 +329,7 @@ def run_choreography():
             choreo.click()
             ref_widget.setValue(val)
             _pump(15)
-            
+
     # Click Save Result
     print("Clicking Save Result")
     save_btn = getattr(tab, "save_button", None)
@@ -310,7 +338,7 @@ def run_choreography():
             if btn.text() and "Save" in btn.text() and "Result" in btn.text():
                 save_btn = btn
                 break
-            
+
     if save_btn:
         choreo.scroll_to_widget(save_btn)
         choreo.move_mouse_to(save_btn)
@@ -326,7 +354,7 @@ def run_choreography():
     choreo.click()
     window.tab_widget.setCurrentIndex(2)
     _pump(30)
-    
+
     exporter = window.exporter_tab
     sub_rect = exporter.sub_tab_widget.tabBar().tabRect(1)
     sub_pos = exporter.sub_tab_widget.tabBar().mapTo(window, sub_rect.center())
@@ -334,7 +362,7 @@ def run_choreography():
     choreo.click()
     exporter.sub_tab_widget.setCurrentIndex(1)
     _pump(30)
-    
+
     print("Refreshing results")
     refresh_btn = getattr(exporter, "analysis_results_refresh_button", None)
     if refresh_btn:
@@ -342,7 +370,7 @@ def run_choreography():
         choreo.click()
         refresh_btn.click()
         _pump(30)
-    
+
     print("Selecting all")
     sel_all_btn = getattr(exporter, "analysis_results_select_all_button", None)
     if sel_all_btn:
@@ -350,13 +378,13 @@ def run_choreography():
         choreo.click()
         sel_all_btn.click()
         _pump(15)
-    
+
     print("Exporting...")
     export_btn = getattr(exporter, "analysis_results_export_button", None)
     if export_btn:
         choreo.move_mouse_to(export_btn)
         choreo.click()
-        
+
         def handle_modals():
             active = QApplication.activeModalWidget()
             if active and isinstance(active, QFileDialog):
@@ -365,10 +393,10 @@ def run_choreography():
                 if line_edits:
                     text = "detected_spikes.csv"
                     for i in range(len(text)):
-                        line_edits[0].setText(text[:i+1])
+                        line_edits[0].setText(text[: i + 1])
                         _pump(2)
                 _pump(10)
-                
+
                 for b in active.findChildren(QPushButton):
                     if b.text() and ("Save" in b.text() or "Open" in b.text() or "Choose" in b.text()):
                         choreo.move_mouse_to(b)
@@ -377,18 +405,19 @@ def run_choreography():
                         break
                 active.accept()
                 QTimer.singleShot(200, handle_msgbox)
-                
+
         def handle_msgbox():
             msg_active = QApplication.activeModalWidget()
             if msg_active and isinstance(msg_active, QMessageBox):
                 print("Intercepted QMessageBox!")
                 msg_active.accept()
-                
+
         QTimer.singleShot(500, handle_modals)
-        export_btn.click() 
-    
+        export_btn.click()
+
     _pump(60)
     global_vg.save_video()
+
 
 if __name__ == "__main__":
     _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

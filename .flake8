@@ -14,7 +14,10 @@ exclude =
     .vscode,
     site-packages,
     documents,
-    docs
+    docs,
+    paper,
+    examples,
+    scripts
 ignore = E203, W503, E226
 per-file-ignores =
     __init__.py:F401

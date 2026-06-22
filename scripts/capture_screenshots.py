@@ -181,15 +181,16 @@ def _grab(widget: Any, dest: Path) -> None:
     pixmap.save(str(dest), "PNG")
     print(f"  [ok] {dest.name}")
 
+
 def _grab_annotated(main_window: Any, dest: Path, target_widget: Any, style: str = "box") -> None:
     """Capture main_window to dest, drawing an annotation over target_widget.
-    
+
     Before grabbing, scrolls the target_widget into view if it is inside a QScrollArea.
     style: "box" (red bounding box) or "circle" (semi-transparent yellow circle).
     """
-    from PySide6.QtWidgets import QScrollArea, QApplication
-    from PySide6.QtGui import QPainter, QColor, QPen
-    from PySide6.QtCore import Qt, QRect, QPoint
+    from PySide6.QtCore import QPoint, QRect, Qt
+    from PySide6.QtGui import QColor, QPainter, QPen
+    from PySide6.QtWidgets import QApplication, QScrollArea
 
     if target_widget is None:
         return _grab(main_window, dest)
@@ -226,9 +227,9 @@ def _grab_annotated(main_window: Any, dest: Path, target_widget: Any, style: str
     # 4. Draw annotation
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    
+
     if style == "box":
-        pen = QPen(QColor(255, 0, 0, 200)) # Red
+        pen = QPen(QColor(255, 0, 0, 200))  # Red
         pen.setWidth(4)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -237,13 +238,13 @@ def _grab_annotated(main_window: Any, dest: Path, target_widget: Any, style: str
         pen = QPen(QColor(255, 200, 0, 255))
         pen.setWidth(2)
         painter.setPen(pen)
-        painter.setBrush(QColor(255, 200, 0, 100)) # Transparent yellow
+        painter.setBrush(QColor(255, 200, 0, 100))  # Transparent yellow
         center = mapped_rect.center()
         radius = max(mapped_rect.width(), mapped_rect.height()) // 2 + 5
         painter.drawEllipse(center, radius, radius)
 
     painter.end()
-    
+
     pixmap.save(str(dest), "PNG")
     print(f"  [ok] {dest.name} (annotated)")
 
@@ -312,10 +313,12 @@ def _set_method(tab: Any, method_label: str) -> None:
         return
     cb.setCurrentText(method_label)
     from PySide6.QtWidgets import QApplication
+
     QApplication.sendPostedEvents()
     _pump(30)
     # Force any scroll area adjustments
     from PySide6.QtWidgets import QScrollArea
+
     for scroll in tab.findChildren(QScrollArea):
         if scroll.widget():
             scroll.widget().layout().activate()
@@ -522,7 +525,12 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     # ---- Baseline (RMP) ----
     _set_method(tab, "Baseline (RMP)")
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_intrinsic_properties_baseline_rmp.png", getattr(tab, "method_combobox", None), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_intrinsic_properties_baseline_rmp.png",
+        getattr(tab, "method_combobox", None),
+        style="box",
+    )
     captured.append("analyser_intrinsic_properties_baseline_rmp.png")
     captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_baseline_rmp", output_dir))
 
@@ -533,7 +541,12 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     _set_param(tab, "response_start", 0.05)
     _set_param(tab, "response_end", 0.08)
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_intrinsic_properties_input_resistance.png", _get_param_widget(tab, "response_end"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_intrinsic_properties_input_resistance.png",
+        _get_param_widget(tab, "response_end"),
+        style="box",
+    )
     captured.append("analyser_intrinsic_properties_input_resistance.png")
 
     # ---- Tau (Time Constant) ----
@@ -541,7 +554,12 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     _set_param(tab, "stim_start_time", 0.05)
     _set_param(tab, "fit_duration", 0.03)
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_intrinsic_properties_tau_time_constant.png", _get_param_widget(tab, "fit_duration"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_intrinsic_properties_tau_time_constant.png",
+        _get_param_widget(tab, "fit_duration"),
+        style="box",
+    )
     captured.append("analyser_intrinsic_properties_tau_time_constant.png")
 
     # ---- Sag Ratio (Ih) ----
@@ -562,7 +580,12 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
             _set_param(tab, "response_start_s", 0.215)
             _set_param(tab, "response_end_s", 0.55)
             _run_analysis(tab)
-            _grab_annotated(window, output_dir / "analyser_intrinsic_properties_capacitance.png", _get_param_widget(tab, "response_end_s"), style="box")
+            _grab_annotated(
+                window,
+                output_dir / "analyser_intrinsic_properties_capacitance.png",
+                _get_param_widget(tab, "response_end_s"),
+                style="box",
+            )
             captured.append("analyser_intrinsic_properties_capacitance.png")
 
             # ---- Sag Ratio (Ih) on ABF19 ----
@@ -576,7 +599,12 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
             _set_param(tab, "ss_window_start", 0.45)
             _set_param(tab, "ss_window_end", 0.55)
             _run_analysis(tab)
-            _grab_annotated(window, output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png", _get_param_widget(tab, "ss_window_end"), style="box")
+            _grab_annotated(
+                window,
+                output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png",
+                _get_param_widget(tab, "ss_window_end"),
+                style="box",
+            )
             captured.append("analyser_intrinsic_properties_sag_ratio_ih.png")
 
     # ---- I-V Curve (ABF21: CC, current steps, current injection 75-325 ms) ----
@@ -589,7 +617,12 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
         _set_param(tab, "response_start", 0.075)
         _set_param(tab, "response_end", 0.325)
         _run_analysis(tab)
-        _grab_annotated(window, output_dir / "analyser_intrinsic_properties_i-v_curve.png", _get_param_widget(tab, "response_end"), style="box")
+        _grab_annotated(
+            window,
+            output_dir / "analyser_intrinsic_properties_i-v_curve.png",
+            _get_param_widget(tab, "response_end"),
+            style="box",
+        )
         captured.append("analyser_intrinsic_properties_i-v_curve.png")
         captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_i-v_curve", output_dir))
 
@@ -621,7 +654,12 @@ def _capture_spike_analysis(window: Any, analyser: Any, sm: Any, output_dir: Pat
     _set_param(tab, "threshold", -20.0)
     _set_trial(tab, 17)
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_spike_analysis_spike_detection.png", _get_param_widget(tab, "threshold"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_spike_analysis_spike_detection.png",
+        _get_param_widget(tab, "threshold"),
+        style="box",
+    )
     captured.append("analyser_spike_analysis_spike_detection.png")
 
     # ---- Phase Plane (produces a popup dV/dt vs V plot) ----
@@ -662,7 +700,12 @@ def _capture_excitability(window: Any, analyser: Any, sm: Any, output_dir: Path)
     _set_param(tab, "analysis_start_s", 0.075)
     _set_param(tab, "analysis_end_s", 0.325)
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_excitability_excitability.png", _get_param_widget(tab, "analysis_end_s"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_excitability_excitability.png",
+        _get_param_widget(tab, "analysis_end_s"),
+        style="box",
+    )
     captured.append("analyser_excitability_excitability.png")
     captured.extend(_grab_popups(tab, "analyser_excitability_excitability", output_dir))
 
@@ -717,20 +760,35 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
     _set_method(tab, "Threshold Based")
     _set_param(tab, "direction", "positive")
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_synaptic_events_threshold_based.png", _get_param_widget(tab, "direction"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_synaptic_events_threshold_based.png",
+        _get_param_widget(tab, "direction"),
+        style="box",
+    )
     captured.append("analyser_synaptic_events_threshold_based.png")
 
     # ---- Deconvolution ----
     _set_method(tab, "Deconvolution (Custom)")
     _set_param(tab, "direction", "positive")
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_synaptic_events_deconvolution_custom.png", _get_param_widget(tab, "direction"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_synaptic_events_deconvolution_custom.png",
+        _get_param_widget(tab, "direction"),
+        style="box",
+    )
     captured.append("analyser_synaptic_events_deconvolution_custom.png")
 
     # ---- Baseline + Peak + Kinetics ----
     _set_method(tab, "Baseline + Peak + Kinetics")
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_synaptic_events_baseline_peak_kinetics.png", getattr(tab, "method_combobox", None), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_synaptic_events_baseline_peak_kinetics.png",
+        getattr(tab, "method_combobox", None),
+        style="box",
+    )
     captured.append("analyser_synaptic_events_baseline_peak_kinetics.png")
 
     return captured
@@ -776,7 +834,12 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
     _set_method(tab, "Paired-Pulse Ratio")
     _set_param(tab, "polarity", "positive")
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_evoked_responses_paired-pulse_ratio.png", _get_param_widget(tab, "polarity"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_evoked_responses_paired-pulse_ratio.png",
+        _get_param_widget(tab, "polarity"),
+        style="box",
+    )
     captured.append("analyser_evoked_responses_paired-pulse_ratio.png")
 
     # ---- Stimulus Train (STP) ----
@@ -784,7 +847,12 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
     _set_param(tab, "polarity", "positive")
     _set_param(tab, "use_ttl", True)
     _run_analysis(tab)
-    _grab_annotated(window, output_dir / "analyser_evoked_responses_stimulus_train_stp.png", _get_param_widget(tab, "use_ttl"), style="box")
+    _grab_annotated(
+        window,
+        output_dir / "analyser_evoked_responses_stimulus_train_stp.png",
+        _get_param_widget(tab, "use_ttl"),
+        style="box",
+    )
     captured.append("analyser_evoked_responses_stimulus_train_stp.png")
     captured.extend(_grab_popups(tab, "analyser_evoked_responses_stimulus_train_stp", output_dir))
 
@@ -1096,7 +1164,7 @@ def _remove_stale(output_dir: Path, captured: List[str]) -> None:
 
 def run(output_dir: Path) -> bool:  # noqa: C901
     """Execute the full capture pipeline. Return *True* on success."""
-    from PySide6.QtCore import QTimer, Qt  # noqa: PLC0415
+    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
     from Synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415

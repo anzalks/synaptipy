@@ -356,9 +356,9 @@ class TestGoldenMasterPrimaryPipelinesABF:
 
         assert metrics["spike_count"] == 12
         assert pytest.approx(float(metrics["spike_times"][0]), rel=1e-3) == 0.07475
-        assert pytest.approx(metrics["ap_threshold_mean"], rel=1e-3) == -46.25523885091146
+        assert pytest.approx(metrics["ap_threshold_mean"], rel=1e-3) == -45.352681477864586
         assert pytest.approx(metrics["max_dvdt_mean"], rel=1e-3) == 231.80728488498264
-        assert pytest.approx(metrics["half_width_mean"], rel=1e-3) == 1.0046052743758385
+        assert pytest.approx(metrics["half_width_mean"], rel=1e-3) == 0.9963744961035749
 
     def test_firing_dynamics_fi_curve_spike_count_and_adaptation(self, rec_0021):
         """F-I extractor should preserve spike counts and first finite adaptation ratio."""

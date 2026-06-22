@@ -127,6 +127,19 @@ def reset_datacache():
     except ImportError:
         yield
 
+@pytest.fixture(autouse=True)
+def reset_session_manager():
+    """Ensure SessionManager singleton is reset between tests to prevent signal leaks."""
+    try:
+        from Synaptipy.application.session_manager import SessionManager
+        if hasattr(SessionManager, "_instance"):
+            SessionManager._instance = None
+        yield
+        if hasattr(SessionManager, "_instance"):
+            SessionManager._instance = None
+    except ImportError:
+        yield
+
 
 # --- Fixtures for test_main_window.py ---
 
