@@ -189,7 +189,7 @@ def _grab_annotated(main_window: Any, dest: Path, target_widget: Any, style: str
     """
     from PySide6.QtWidgets import QScrollArea, QApplication
     from PySide6.QtGui import QPainter, QColor, QPen
-    from PySide6.QtCore import Qt, QRect
+    from PySide6.QtCore import Qt, QRect, QPoint
 
     if target_widget is None:
         return _grab(main_window, dest)
@@ -202,13 +202,12 @@ def _grab_annotated(main_window: Any, dest: Path, target_widget: Any, style: str
             QApplication.sendPostedEvents()
             content_widget = parent.widget()
             if content_widget:
-                if content_widget.layout():
-                    content_widget.layout().activate()
-                content_widget.adjustSize()
                 _pump(10)
-                widget_y = target_widget.mapTo(content_widget, target_widget.rect().topLeft()).y()
+                # Ensure mapping is correct from the target widget to the scroll area's content
+                widget_y = target_widget.mapTo(content_widget, QPoint(0, 0)).y()
                 bar = parent.verticalScrollBar()
-                target_val = widget_y - parent.height() // 2 + target_widget.height() // 2
+                # Center the widget vertically in the scroll area viewport
+                target_val = widget_y - (parent.viewport().height() // 2) + (target_widget.height() // 2)
                 bar.setValue(int(max(bar.minimum(), min(target_val, bar.maximum()))))
                 _pump(25)  # give enough time to render completely
             break
@@ -1097,7 +1096,7 @@ def _remove_stale(output_dir: Path, captured: List[str]) -> None:
 
 def run(output_dir: Path) -> bool:  # noqa: C901
     """Execute the full capture pipeline. Return *True* on success."""
-    from PySide6.QtCore import QTimer  # noqa: PLC0415
+    from PySide6.QtCore import QTimer, Qt  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
     from Synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
@@ -1107,12 +1106,14 @@ def run(output_dir: Path) -> bool:  # noqa: C901
     captured: List[str] = []
     success = False
 
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     app = QApplication.instance() or QApplication(sys.argv)
 
     # Apply the theme according to user configuration so screenshots look identical to
     # what users see on their own system.
-    apply_theme()
-    print("[theme] using configured theme")
+    mode = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
+    apply_theme(mode)
+    print(f"[theme] using configured theme: {mode.value}")
 
     try:
         # Register all built-in analyses and load example plugins before the

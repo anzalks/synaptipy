@@ -151,6 +151,7 @@ class Choreographer:
             _pump(1)
 
     def scroll_to_widget(self, target_widget):
+        print(f"    - scroll_to_widget({target_widget})")
         from PySide6.QtWidgets import QScrollArea
         from PySide6.QtCore import QPoint
         parent = target_widget.parentWidget()
@@ -158,6 +159,7 @@ class Choreographer:
             if isinstance(parent, QScrollArea):
                 content_widget = parent.widget()
                 if content_widget:
+                    print(f"      - scrolling parent {parent}")
                     pos = target_widget.mapTo(content_widget, QPoint(0, 0))
                     sb = parent.verticalScrollBar()
                     start_val = sb.value()
@@ -169,12 +171,30 @@ class Choreographer:
                         _pump(1)
                 break
             parent = parent.parentWidget()
+        print(f"    - finished scroll_to_widget")
+
+def _os_is_dark() -> bool:
+    """Return True when the host OS is configured for a dark colour scheme."""
+    if sys.platform == "darwin":
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+            return out.lower() == "dark"
+        except subprocess.CalledProcessError:
+            return False
+    return False
 
 def run_choreography():
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs)
     app = QApplication.instance() or QApplication(sys.argv)
-    from Synaptipy.shared.theme_manager import apply_theme
-    apply_theme()
+    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    mode = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
+    apply_theme(mode)
+    print(f"Applying theme: {mode.value}")
     MainWindow._offer_session_restore = lambda self: None
     window = MainWindow()
     window.resize(1280, 800)
@@ -201,6 +221,7 @@ def run_choreography():
     # 3. Zooming animation
     print("Zooming in...")
     try:
+        print("  - getting plot widget")
         pw = list(window.explorer_tab.plot_canvas.channel_plots.values())[0]
         from PySide6.QtWidgets import QGraphicsRectItem
         from PySide6.QtCore import QPointF
@@ -209,6 +230,7 @@ def run_choreography():
         view = pw.getViewWidget()
         view_box = pw.getViewBox()
         
+        print("  - calculating coordinates")
         # Calculate screen coordinates for the zoom bounds
         start_scene = view_box.mapViewToScene(QPointF(0.150, 60.0))
         start_view = view.mapFromScene(start_scene)
@@ -218,6 +240,7 @@ def run_choreography():
         end_view = view.mapFromScene(end_scene)
         end_global = view.mapTo(window, end_view)
         
+        print("  - moving mouse")
         # Move mouse to start of the box
         choreo.move_mouse_to_pos(start_global.x(), start_global.y(), 15)
         
@@ -229,6 +252,8 @@ def run_choreography():
         roi.setPen(pg.mkPen(color=(255, 255, 0), width=2))
         roi.setBrush(QColor(255, 255, 0, 128))
         pw.addItem(roi)
+        
+        print("  - animating rect")
         # animate width of ROI and drag mouse
         for i in range(20):
             t = (i+1)/20.0
@@ -239,6 +264,7 @@ def run_choreography():
             choreo.cursor.move_to(cur_x, cur_y)
             _pump(1)
             
+        print("  - finishing zoom")
         # Simulate click release
         choreo.cursor.click_ripple_opacity = 0.0
         choreo.cursor.update()
@@ -249,6 +275,7 @@ def run_choreography():
         pw.setYRange(-40.0, 60.0, padding=0)
         pw.removeItem(roi)
         _pump(30)
+        print("  - zoom completed")
     except Exception as e:
         print("Zoom failed:", e)
         
@@ -280,6 +307,7 @@ def run_choreography():
         return None
         
     # Set Trial to 17
+    print("Setting data source to Trial 17...")
     cb = getattr(tab, "data_source_combobox", None)
     if cb:
         choreo.move_mouse_to(cb)
@@ -294,9 +322,11 @@ def run_choreography():
         _pump(15)
         
     # Tinkering with Refractory Period
+    print("Adjusting refractory period...")
     ref_widget = get_widget("refractory_period")
     for val in [0.020, 0.002]:
         if ref_widget:
+            print(f"Scrolling to refractory period ({val})...")
             choreo.scroll_to_widget(ref_widget)
             choreo.move_mouse_to(ref_widget)
             choreo.click()
@@ -335,19 +365,19 @@ def run_choreography():
         reset_btn.click()
         _pump(40)
         
-    # Click Add to Session
-    add_session_btn = getattr(tab, "add_to_session_button", None)
-    if not add_session_btn:
+    # Click Save Result
+    save_btn = getattr(tab, "save_button", None)
+    if not save_btn:
         for btn in tab.findChildren(QPushButton):
-            if btn.text() and "Add to Session" in btn.text():
-                add_session_btn = btn
+            if btn.text() and "Save" in btn.text() and "Result" in btn.text():
+                save_btn = btn
                 break
                 
-    if add_session_btn:
-        choreo.scroll_to_widget(add_session_btn)
-        choreo.move_mouse_to(add_session_btn)
+    if save_btn:
+        choreo.scroll_to_widget(save_btn)
+        choreo.move_mouse_to(save_btn)
         choreo.click()
-        add_session_btn.click()
+        save_btn.click()
         _pump(30)
         
     # 5. Switch to Exporter Tab
@@ -391,12 +421,16 @@ def run_choreography():
     choreo.click()
         
     def handle_dialog():
+        print("Handling dialog...")
         from PySide6.QtWidgets import QFileDialog, QLineEdit, QPushButton
         active = QApplication.activeModalWidget()
+        print(f"Active modal: {active}")
         if active and isinstance(active, QFileDialog):
+            print("Is file dialog!")
             # We need to simulate typing
             line_edits = active.findChildren(QLineEdit)
             if line_edits:
+                print("Found line edits, typing...")
                 # Animate typing
                 text = "detected_spikes.csv"
                 for i in range(len(text)):
@@ -406,11 +440,17 @@ def run_choreography():
             # Find Save/Open/Choose button
             for b in active.findChildren(QPushButton):
                 if b.text() and ("Save" in b.text() or "Open" in b.text() or "Choose" in b.text()):
+                    print(f"Clicking save button: {b.text()}")
                     choreo.move_mouse_to(b)
                     choreo.click()
                     b.click()
                     break
+            print("Accepting dialog...")
             active.accept()
+        else:
+            print("No active QFileDialog found!")
+            
+    print("Clicking export button...")
     
     from PySide6.QtCore import QTimer
     QTimer.singleShot(1000, handle_dialog)
