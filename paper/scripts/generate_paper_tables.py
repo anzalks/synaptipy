@@ -74,15 +74,44 @@ def corr_summary(x: np.ndarray, y: np.ndarray) -> dict:
     x, y = x[mask], y[mask]
     n = len(x)
     if n < 3:
-        return dict(n=n, r=np.nan, p=np.nan, bias=np.nan)
+        return dict(n=n, r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
     r, p = pearsonr(x, y)
-    return dict(n=n, r=round(r, 4), p=p, bias=round(float(np.mean(y - x)), 3))
+    diff = y - x
+    mean_diff = float(np.mean(diff))
+    std_diff = float(np.std(diff, ddof=1))
+    return dict(
+        n=n,
+        r=round(r, 4),
+        p=p,
+        bias=round(mean_diff, 3),
+        loa_upper=round(mean_diff + 1.96 * std_diff, 3),
+        loa_lower=round(mean_diff - 1.96 * std_diff, 3),
+    )
+
+
+def bland_altman_summary(x: np.ndarray, y: np.ndarray) -> dict:
+    """Return Bland-Altman agreement statistics (x=reference, y=SynaptiPy)."""
+    mask = ~(np.isnan(x) | np.isnan(y))
+    x, y = x[mask], y[mask]
+    n = len(x)
+    if n < 3:
+        return dict(n=n, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+    diff = y - x
+    mean_diff = float(np.mean(diff))
+    std_diff = float(np.std(diff, ddof=1))
+    return dict(
+        n=n,
+        bias=round(mean_diff, 3),
+        loa_upper=round(mean_diff + 1.96 * std_diff, 3),
+        loa_lower=round(mean_diff - 1.96 * std_diff, 3),
+    )
 
 
 def fmt_p(p: float) -> str:
     if np.isnan(p):
         return "N/A"
     return "< 0.0001" if p < 0.0001 else f"{p:.4f}"
+
 
 
 # ── Allen Helpers ─────────────────────────────────────────────────────────────
@@ -377,10 +406,12 @@ class SynaptiPyRunner:
                 "params": {
                     "baseline_start": max(0.0, s_t - 0.1),
                     "baseline_end": max(0.01, s_t - 0.01),
+                    # Peak window spans the FULL step so the true trough is always found
                     "peak_window_start": s_t,
-                    "peak_window_end": s_t + 0.3,
-                    "ss_window_start": e_t - 0.1,
-                    "ss_window_end": e_t - 0.01,
+                    "peak_window_end": e_t - 0.01,
+                    # Steady-state = last 15% of step (after charging transient settles)
+                    "ss_window_start": e_t - max(0.15, (e_t - s_t) * 0.15),
+                    "ss_window_end": e_t - 0.02,
                 },
             },
         ]
@@ -847,41 +878,93 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
 
 
 def make_table2_md(cmp_df: pd.DataFrame) -> str:
+    # (label, syn_col, efel_col, ipfx_col, unit)
+    # None means no direct equivalent for that benchmark
     metrics = [
-        ("Resting Membrane Potential (mV)", "syn_rmp_mV", "efel_rmp_mV", "ipfx_rmp_mV", "mV"),
-        ("Input Resistance (MΩ)", "syn_rin_mohm", "efel_rin_mohm", "ipfx_rin_mohm", "MΩ"),
-        # ("Peak Input Resistance (MΩ)", "syn_rin_peak_mohm", "efel_rin_peak_mohm", "ipfx_rin_peak_mohm", "MΩ"),
-        ("Membrane Time Constant (ms)", "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
-        # ("Decay Time Constant (ms)", "syn_tau_decay_ms", "efel_tau_decay_ms", "ipfx_tau_decay_ms", "ms"),
-        ("Sag Ratio", "syn_sag_ratio", "efel_sag_ratio", "ipfx_sag_ratio", "Ratio"),
-        # ("Sag Percentage (%)", "syn_sag_pct", "efel_sag_pct", "ipfx_sag_pct", "%"),
+        ("Resting Membrane Potential (mV)",
+         "syn_rmp_mV", "efel_rmp_mV", "ipfx_rmp_mV", "mV"),
+        # SS-Rin: SynaptiPy mean last-100ms window == eFEL ohmic_input_resistance
+        ("Input Resistance \u2014 Steady-State (M\u03a9) \u2020",
+         "syn_rin_mohm", "efel_rin_mohm", None, "M\u03a9"),
+        # Peak-Rin: SynaptiPy peak deflection == IPFX voltage_deflection
+        ("Input Resistance \u2014 Peak (M\u03a9) \u2021",
+         "syn_rin_peak_mohm", None, "ipfx_rin_mohm", "M\u03a9"),
+        ("Membrane Time Constant (ms)",
+         "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
+        # Sag as percentage (0-100%) -- eFEL sag_ratio2*100, IPFX sag_pct
+        ("Sag Percentage (%)",
+         "syn_sag_pct", "efel_sag_pct", "ipfx_sag_pct", "%"),
     ]
-    md = "**Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**\n\n"
-    md += "| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |\n"
-    md += "|--------|-------------------------------|-------------------------------|-------------------|-------------------|\n"
+    md = (
+        "**Extended Data Table 2: Subthreshold passive properties benchmark "
+        "on hyperpolarizing steps (Allen Dataset).**\n\n"
+    )
+    md += (
+        "| Metric | Valid *N* | "
+        "SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL | "
+        "SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX |\n"
+    )
+    md += (
+        "|--------|-----------|-------------------------------|-------------------"
+        "|-------------|-------------------------------|-------------------|-------------|\n"
+    )
+
+    def _fmt_r(vs):
+        if np.isnan(vs.get("r", np.nan)):
+            return "N/A"
+        s = f"{vs['r']:.4f}"
+        if not np.isnan(vs.get("p", np.nan)):
+            s += "***" if vs["p"] < 0.0001 else f" (*p*={vs['p']:.4f})"
+        return s
+
+    def _fmt_bias(vs, unit):
+        return f"{vs['bias']:+.3f} {unit}" if not np.isnan(vs.get("bias", np.nan)) else "N/A"
+
+    def _fmt_loa(vs, unit):
+        if np.isnan(vs.get("loa_upper", np.nan)):
+            return "N/A"
+        return f"[{vs['loa_lower']:+.2f}, {vs['loa_upper']:+.2f}] {unit}"
+
     for label, s_col, e_col, i_col, unit in metrics:
         if s_col not in cmp_df.columns:
             continue
         s = cmp_df[s_col].values
-        e = cmp_df[e_col].values if e_col in cmp_df.columns else np.full(len(s), np.nan)
-        i = cmp_df[i_col].values if i_col in cmp_df.columns else np.full(len(s), np.nan)
-        vs_i, vs_e = corr_summary(i, s), corr_summary(e, s)
-        
-        r_i = f"{vs_i['r']:.4f}" if not np.isnan(vs_i["r"]) else "N/A"
-        if not np.isnan(vs_i.get('p', np.nan)):
-            r_i += "***" if vs_i['p'] < 0.0001 else f" (*p*={vs_i['p']:.4f})"
-            
-        r_e = f"{vs_e['r']:.4f}" if not np.isnan(vs_e["r"]) else "N/A"
-        if not np.isnan(vs_e.get('p', np.nan)):
-            r_e += "***" if vs_e['p'] < 0.0001 else f" (*p*={vs_e['p']:.4f})"
-            
-        b_i = f"{vs_i['bias']:+.3f} {unit}" if not np.isnan(vs_i["bias"]) else "N/A"
-        b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
-        
-        md += f"| {label} | {r_i} | {r_e} | {b_i} | {b_e} |\n"
 
-    md += "\n*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 34 valid sweeps (unless otherwise missing) containing a < -15 pA hyperpolarizing current injection step. SynaptiPy passive properties extracted via BatchAnalysisEngine using `rmp_analysis`, `rin_analysis`, `tau_analysis`, and `sag_ratio_analysis` modules. IPFX extraction via `subthresh_features`. N/A = no direct benchmark equivalent.*"
+        if e_col and e_col in cmp_df.columns:
+            e = cmp_df[e_col].values
+            vs_e = corr_summary(e, s)
+            n_val = vs_e["n"]
+        else:
+            vs_e = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+            n_val = int(np.sum(~np.isnan(s)))
+
+        if i_col and i_col in cmp_df.columns:
+            iv = cmp_df[i_col].values
+            vs_i = corr_summary(iv, s)
+            if n_val == 0:
+                n_val = vs_i["n"]
+        else:
+            vs_i = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+
+        md += (
+            f"| {label} | {n_val} | "
+            f"{_fmt_r(vs_e)} | {_fmt_bias(vs_e, unit)} | {_fmt_loa(vs_e, unit)} | "
+            f"{_fmt_r(vs_i)} | {_fmt_bias(vs_i, unit)} | {_fmt_loa(vs_i, unit)} |\n"
+        )
+
+    md += (
+        "\n*All correlations are Pearson's r (two-sided); *** = p < 0.0001. "
+        "LoA = 95% Bland-Altman limits of agreement (mean \u00b1 1.96 SD of "
+        "sweep-level differences). "
+        "\u2020 SS-Rin: mean voltage in last 100 ms of step (matches eFEL "
+        "ohmic_input_resistance). "
+        "\u2021 Peak-Rin: maximum hyperpolarization deflection (matches IPFX "
+        "voltage_deflection). "
+        "N/A = no direct benchmark equivalent.*"
+    )
     return md
+
+
 
 
 def main():

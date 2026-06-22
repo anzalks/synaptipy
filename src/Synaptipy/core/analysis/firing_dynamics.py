@@ -608,7 +608,7 @@ def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 
     """
     Compute native spike train statistical metrics.
 
-    Includes Spike Frequency Adaptation (SFA) logic that mirrors eFEL/IPFX
+    Includes Spike Frequency Adaptation (SFA) logic that mirrors established methodologies
     adaptation index methodologies (normalized differences between consecutive ISIs).
 
     Args:
@@ -680,7 +680,7 @@ def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 
     lv_array = np.where(lv_safe_mask, 3.0 * ((isi_i - isi_next) ** 2) / lv_denominator_sq, np.nan)
     lv_val = float(np.nanmean(lv_array))
 
-    # Adaptation index (IPFX norm_diff): mean of (ISI[i+1] - ISI[i]) / (ISI[i+1] + ISI[i])
+    # Adaptation index: mean of (ISI[i+1] - ISI[i]) / (ISI[i+1] + ISI[i])
     adapt_denominator = isi_next + isi_i
     adapt_safe_mask = adapt_denominator > EPSILON_ISI_SUM
     adapt_array = np.where(adapt_safe_mask, (isi_next - isi_i) / adapt_denominator, np.nan)

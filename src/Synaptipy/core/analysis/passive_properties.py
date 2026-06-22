@@ -997,7 +997,7 @@ def calculate_tau(  # noqa: C901
             _peak_idx = int(np.argmax(V_fit)) if V_fit[-1] > V_fit[0] else int(np.argmin(V_fit))
             # Only truncate when:
             #   1. The peak is not at the extremes (indices 0 or end)
-            #      enough pre-peak data to reliably estimate tau. (Removed IPFX half-window constraint)
+            #      enough pre-peak data to reliably estimate tau. (Removed half-window constraint)
             if _peak_idx > 2 and _peak_idx < len(V_fit) - 1:
                 t_fit_truncated = t_fit[: _peak_idx + 1]
                 V_fit_truncated = V_fit[: _peak_idx + 1]

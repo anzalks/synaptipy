@@ -238,12 +238,13 @@ def calculate_spike_features(  # noqa: C901
     ap_threshold, amplitude, half_width, rise_time_10_90, decay_time_90_10,
     fahp_depth, mahp_depth, ahp_duration_half, adp_amplitude, max_dvdt, min_dvdt.
 
-    Methodology aligns with IPFX standards:
+    Methodology aligns with established electrophysiology standards:
+
     - AP threshold (onset) is strictly defined as the first point in the pre-spike
       lookback window where the discrete derivative dV/dt exceeds the specified
       ``dvdt_threshold`` (default 20 V/s).
     - ADP and AHP logic strictly follows the exact trough/peak finding methodology
-      to ensure results mirror eFEL and IPFX algorithms.
+      to ensure accurate feature extraction.
 
     Args:
         data: 1-D voltage array (mV).
@@ -272,7 +273,7 @@ def calculate_spike_features(  # noqa: C901
         log.warning("Invalid time vector (dt <= 0). Cannot calculate features.")
         return []
 
-    # Apply 9.9 kHz low-pass Bessel filter for clean derivative calculation (matches IPFX standard)
+    # Apply 9.9 kHz low-pass Bessel filter for clean derivative calculation
     from scipy.signal import bessel, sosfiltfilt
 
     nyq = 0.5 / dt
@@ -549,7 +550,7 @@ def calculate_spike_features(  # noqa: C901
         has_trough = np.any(valid_min_mask, axis=1)
         first_trough_idx = np.argmax(valid_min_mask, axis=1)
 
-        # The ADP peak is the FIRST local maximum after the fast trough (IPFX gating rules)
+        # The ADP peak is the FIRST local maximum after the fast trough
         is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
         is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
 
@@ -595,7 +596,7 @@ def calculate_spike_features(  # noqa: C901
     raw_dvdt = np.gradient(waveforms, axis=1) / dt / 1000.0
 
     # Apply a dynamic sampling-rate dependent rolling window (standard ~0.1 ms)
-    # to smooth the derivative, matching standard IPFX/eFEL smoothing behavior
+    # to smooth the derivative, matching standard smoothing behavior
     # and preventing single-sample noise spikes from inflating the rate.
     window_ms = 0.1
     window_size = max(3, int(window_ms / (dt * 1000.0)))
