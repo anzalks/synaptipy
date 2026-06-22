@@ -633,169 +633,7 @@ Green draggable region; solid red h-line at RMP; dashed red h-lines at ±SD.
 
 ---
 
-### 4.2 Spike Detection
-
-![Spike Detection interface](screenshots/analyser_spike_analysis_spike_detection.png)
-
-**Registry name**: `spike_detection` | **Tab label**: *Spike Detection*
-
-Automated detection and comprehensive parameterization of action potentials.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Threshold | float (mV) | Detection threshold (default −20 mV) |
-| Refractory Period | float (s) | Minimum inter-spike interval (default 2 ms) |
-| Peak Search Window | float (s) | Post-threshold window to find peak |
-| dV/dt Threshold | float (V/s) | Derivative threshold for onset |
-| AHP Window | float (s) | Post-peak window for AHP minimum |
-| Onset Lookback | float (s) | Lookback for onset refinement |
-
-#### Methods
-
-- **Onset** - `numpy.gradient` computes dV/dt; onset where dV/dt > `dvdt_threshold`.
-  More robust against baseline drift than amplitude thresholding.
-- **Per-spike features** (vectorized NumPy):
-  - Amplitude = V_peak − V_threshold
-  - Half-width at 50% amplitude (discrete boundaries)
-  - Rise time 10-90%, Decay time 90-10%
-  - AHP depth = V_threshold − V_min_post (Savitzky-Golay smoothed)
-  - AHP duration = repolarization to AHP recovery
-  - ADP amplitude = local max after AHP trough
-  - Max / Min dV/dt (V/s)
-- **ISI statistics** via `numpy.diff(spike_times)`.
-- **Multi-sweep**: `analyze_multi_sweep_spikes()` aggregates across all trials.
-
-#### Results
-
-`spike_count`, `mean_freq_hz`, `spike_times`, mean ± SD for: `amplitude`,
-`half_width`, `rise_time`, `decay_time`, `ahp_depth`, `ahp_duration`,
-`adp_amplitude`, `max_dvdt`, `min_dvdt`
-
-#### Visualization
-
-Red dashed threshold h-line; red dot markers at spike peaks.
-
----
-
-### 4.3 Event Detection - Threshold Based
-
-![Event Detection - Threshold interface](screenshots/analyser_synaptic_events_threshold_based.png)
-
-**Registry name**: `event_detection_threshold` | **Tab label**: *Event Detection*
-
-Detects mEPSCs / mIPSCs using adaptive prominence-based thresholding.
-A **method selector** dropdown switches between all three event detection
-algorithms (sections 4.3 - 4.5).
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Threshold | float (pA/mV) | Minimum event amplitude |
-| Direction | combo | `negative` or `positive` |
-| Refractory Period | float (s) | Minimum inter-event interval |
-| Rolling Baseline Window | float (ms) | Rolling median baseline window |
-| Reject Artifacts | bool | Gradient-based artifact rejection |
-| Artifact Slope Threshold | float | Gradient threshold for artifacts |
-| Artifact Padding | float (ms) | Dilation padding around artifacts |
-
-#### Methods
-
-1. Rolling median subtraction removes slow drift.
-2. MAD noise estimate: σ = 1.4826 × MAD.
-3. Adaptive prominence = max(threshold, 2σ).
-4. `scipy.signal.find_peaks` with prominence, height, refractory distance,
-   and min-width constraints. Events < 0.2 ms rejected as non-physiological.
-5. Artifact rejection: gradient thresholding + asymmetric binary dilation.
-
-#### Results
-
-`event_count`, `frequency_hz`, `mean_amplitude`, `amplitude_sd`,
-`event_times`, `event_indices`, `event_amplitudes`
-
-#### Visualization
-
-Interactive scatter markers (click to remove; Ctrl+click to add);
-draggable threshold line; artifact overlay.
-
----
-
-### 4.4 Event Detection - Template Match / Deconvolution
-
-![Event Detection - Deconvolution interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
-
-**Registry name**: `event_detection_deconvolution` | **Tab label**: *Event (Template Match)*
-
-Detects events via a matched-filter approach using a bi-exponential template.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| τ Rise | float (ms) | Rise time constant |
-| τ Decay | float (ms) | Decay time constant |
-| Threshold (SD) | float | Z-score detection threshold |
-| Direction | combo | Event polarity |
-| Rolling Baseline Window | float (ms) | Baseline subtraction window |
-| Reject Artifacts | bool | Enable artifact rejection |
-| Min Event Distance | float (ms) | Minimum event separation |
-| Kernel Multipliers | string | Comma-separated scaling factors for tau_decay (e.g. `1.0, 2.0, 3.0`). Allows the kernel bank to cover slower, dendritically filtered events. Cable theory predicts ~2-3x decay slowing for distal inputs. |
-
-#### Methods
-
-1. Bi-exponential kernel: K(t) = exp(−t/τ_decay) − exp(−t/τ_rise), normalized.
-2. FFT cross-correlation (matched filter) with the time-reversed template.
-3. Z-score normalization by MAD; peaks above `threshold_sd` are events.
-4. Local argmax refinement aligns detected times to true event peaks.
-
-#### Results
-
-Same as threshold method plus `tau_rise_ms`, `tau_decay_ms`.
-
-#### Visualization
-
-Same interactive markers / threshold line / artifact overlay.
-
----
-
-### 4.5 Event Detection - Baseline Peak / Kinetics
-
-![Event Detection - Baseline Peak interface](screenshots/analyser_synaptic_events_baseline_peak_kinetics.png)
-
-**Registry name**: `event_detection_baseline_peak` | **Tab label**: *Event (Baseline Peak)*
-
-Detects events by finding the most stable baseline and locating peaks above the
-noise floor.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Direction | combo | Event polarity |
-| Auto Baseline | bool | Variance-minimization baseline search |
-| Threshold (SD Factor) | float | Multiples of noise SD |
-| Min Event Separation | float (ms) | Minimum inter-event gap |
-| Rolling Baseline Window | float (ms) | Rolling baseline size |
-| Baseline Window | float (s) | Manual window (if auto disabled) |
-| Baseline Step | float (s) | Manual step size |
-
-#### Methods
-
-1. Stable baseline via sliding-window variance minimization.
-2. MAD noise estimate from baseline region.
-3. Prominence-based peaks, min prominence = 0.5 × threshold.
-4. Optional Butterworth lowpass pre-filter.
-5. Biological minimum event width ≥ 0.2 ms.
-
-#### Results
-
-`event_count`, `event_indices`, `event_times`, `event_amplitudes`
-
----
-
-### 4.6 Input Resistance (Rin)
+### 4.2 Input Resistance (Rin)
 
 ![Input Resistance interface](screenshots/analyser_intrinsic_properties_input_resistance.png)
 
@@ -842,7 +680,7 @@ voltage; red h-line at steady-state voltage.
 
 ---
 
-### 4.7 Tau (Membrane Time Constant)
+### 4.3 Tau (Membrane Time Constant)
 
 ![Tau interface](screenshots/analyser_intrinsic_properties_tau_time_constant.png)
 
@@ -879,7 +717,56 @@ Red exponential fit curve overlaid on the raw voltage trace.
 
 ---
 
-### 4.8 I-V Curve
+### 4.4 Sag Ratio (I_h)
+
+![Sag Ratio interface](screenshots/analyser_intrinsic_properties_sag_ratio_ih.png)
+
+**Registry name**: `sag_ratio_analysis` | **Tab label**: *Sag Ratio (Ih)*
+
+Quantifies hyperpolarisation-activated sag (I_h current) from a hyperpolarising
+current-step protocol. This is a standalone analysis module - while the Rin
+analysis (§4.6) includes sag ratio in its output, this dedicated tab provides
+finer control over the measurement windows and smoothing.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Baseline Start | float (s) | Start of baseline window |
+| Baseline End | float (s) | End of baseline window |
+| Peak Window Start | float (s) | Start of the peak search window (initial sag) |
+| Peak Window End | float (s) | End of the peak search window |
+| Steady-State Start | float (s) | Start of the steady-state measurement window |
+| Steady-State End | float (s) | End of the steady-state measurement window |
+| Peak Smoothing | float (ms) | Savitzky-Golay smoothing window for peak detection (default 5 ms) |
+| Rebound Window | float (ms) | Window after stimulus offset for rebound measurement (default 100 ms) |
+
+#### Methods
+
+1. **V_baseline** = mean voltage in baseline window.
+2. **V_peak** = minimum of Savitzky-Golay-smoothed voltage in the peak window
+   (polynomial order 3, window = `peak_smoothing_ms`).
+3. **V_ss** = mean voltage in steady-state window.
+4. **Sag Ratio** = (V_peak − V_baseline) / (V_ss − V_baseline). A value > 1
+   indicates I_h sag; a value of 1 indicates no sag.
+5. **Sag Percentage** = 100 × (V_peak − V_ss) / (V_peak − V_baseline).
+6. **Rebound Depolarisation** = max(V in rebound window) − V_baseline.
+
+See [Algorithmic Definitions §4](../algorithmic_definitions.md) for the full
+LaTeX-formatted formulae.
+
+#### Results
+
+`sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`, `v_baseline`,
+`rebound_depolarization`
+
+#### Visualization
+
+Blue h-line at V_baseline; magenta h-line at V_peak; red h-line at V_ss.
+
+---
+
+### 4.5 I-V Curve
 
 ![I-V Curve interface](screenshots/analyser_intrinsic_properties_i-v_curve.png)
 
@@ -914,41 +801,7 @@ Popup I-V scatter + linear regression line with slope annotation and R².
 
 ---
 
-### 4.9 Burst Analysis
-
-![Burst Analysis interface](screenshots/analyser_excitability_burst_analysis.png)
-
-**Registry name**: `burst_analysis` | **Tab label**: *Burst*
-
-Identifies firing bursts based on inter-spike interval (ISI) criteria.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Threshold | float (mV) | Spike detection threshold |
-| Max ISI (Start) | float (s) | Maximum ISI to start a burst |
-| Max ISI (End) | float (s) | Maximum ISI to continue a burst |
-| Min Spikes | int | Minimum spikes per burst |
-
-#### Methods
-
-1. Threshold-crossing spike detection.
-2. ISI-based detector: burst starts when ISI ≤ max_isi_start; continues while
-   ISI ≤ max_isi_end; groups with < min_spikes are discarded.
-
-#### Results
-
-`burst_count`, `spikes_per_burst_avg`, `burst_duration_avg_s`,
-`burst_freq_hz`, `bursts`
-
-#### Visualization
-
-Red bracket lines spanning each burst, with spike markers inside each burst.
-
----
-
-### 4.10 Capacitance
+### 4.6 Capacitance
 
 ![Capacitance interface](screenshots/analyser_intrinsic_properties_capacitance.png)
 
@@ -978,7 +831,93 @@ Estimates whole-cell membrane capacitance from step protocols.
 
 ---
 
-### 4.11 Excitability (F-I Curve)
+### 4.7 Spike Detection
+
+![Spike Detection interface](screenshots/analyser_spike_analysis_spike_detection.png)
+
+**Registry name**: `spike_detection` | **Tab label**: *Spike Detection*
+
+Automated detection and comprehensive parameterization of action potentials.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Threshold | float (mV) | Detection threshold (default −20 mV) |
+| Refractory Period | float (s) | Minimum inter-spike interval (default 2 ms) |
+| Peak Search Window | float (s) | Post-threshold window to find peak |
+| dV/dt Threshold | float (V/s) | Derivative threshold for onset |
+| AHP Window | float (s) | Post-peak window for AHP minimum |
+| Onset Lookback | float (s) | Lookback for onset refinement |
+
+#### Methods
+
+- **Onset** - `numpy.gradient` computes dV/dt; onset where dV/dt > `dvdt_threshold`.
+  More robust against baseline drift than amplitude thresholding.
+- **Per-spike features** (vectorized NumPy):
+  - Amplitude = V_peak − V_threshold
+  - Half-width at 50% amplitude (discrete boundaries)
+  - Rise time 10-90%, Decay time 90-10%
+  - AHP depth = V_threshold − V_min_post (Savitzky-Golay smoothed)
+  - AHP duration = repolarization to AHP recovery
+  - ADP amplitude = local max after AHP trough
+  - Max / Min dV/dt (V/s)
+- **ISI statistics** via `numpy.diff(spike_times)`.
+- **Multi-sweep**: `analyze_multi_sweep_spikes()` aggregates across all trials.
+
+#### Results
+
+`spike_count`, `mean_freq_hz`, `spike_times`, mean ± SD for: `amplitude`,
+`half_width`, `rise_time`, `decay_time`, `ahp_depth`, `ahp_duration`,
+`adp_amplitude`, `max_dvdt`, `min_dvdt`
+
+#### Visualization
+
+Red dashed threshold h-line; red dot markers at spike peaks.
+
+---
+
+### 4.8 Phase Plane Analysis
+
+![Phase Plane interface](screenshots/analyser_spike_analysis_phase_plane.png)
+
+**Registry name**: `phase_plane_analysis` | **Tab label**: *Phase Plane*
+
+Visualizes AP dynamics in phase space (dV/dt vs. V).
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Sigma | float (ms) | Gaussian smoothing for dV/dt |
+| dV/dt Threshold | float (V/s) | Phase-plane crossing threshold |
+| Spike Threshold | float (mV) | Voltage threshold for spike detection |
+| Kink Slope | float | dV/dt value defining initiation "kink" |
+| Search Window | float (ms) | Lookback window for kink detection |
+
+#### Methods
+
+1. dV/dt via `numpy.gradient` + `scipy.ndimage.gaussian_filter1d`.
+2. Phase-plane trajectory = V(t) vs. dV/dt(t).
+3. Kink detection: first point where dV/dt crosses kink_slope in the lookback
+   window before the spike peak - reflects axonal AP initiation.
+4. Max dV/dt = peak upstroke velocity.
+
+#### Results
+
+`voltage`, `dvdt` arrays; `threshold_indices`, `threshold_v`,
+`threshold_dvdt`, `threshold_mean`, `max_dvdt`
+
+#### Visualization
+
+Popup phase-plane plot: red circles at threshold, green crosses at max dV/dt.
+H-line on main trace at threshold voltage.
+
+![Phase Plane popup](screenshots/analyser_spike_analysis_phase_plane_popup.png)
+
+---
+
+### 4.9 Excitability (F-I Curve)
 
 ![Excitability interface](screenshots/analyser_excitability_excitability.png)
 
@@ -1014,7 +953,192 @@ Popup F-I scatter with regression line and slope annotation.
 
 ---
 
-### 4.12 Optogenetic Synchronization
+### 4.10 Burst Analysis
+
+![Burst Analysis interface](screenshots/analyser_excitability_burst_analysis.png)
+
+**Registry name**: `burst_analysis` | **Tab label**: *Burst*
+
+Identifies firing bursts based on inter-spike interval (ISI) criteria.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Threshold | float (mV) | Spike detection threshold |
+| Max ISI (Start) | float (s) | Maximum ISI to start a burst |
+| Max ISI (End) | float (s) | Maximum ISI to continue a burst |
+| Min Spikes | int | Minimum spikes per burst |
+
+#### Methods
+
+1. Threshold-crossing spike detection.
+2. ISI-based detector: burst starts when ISI ≤ max_isi_start; continues while
+   ISI ≤ max_isi_end; groups with < min_spikes are discarded.
+
+#### Results
+
+`burst_count`, `spikes_per_burst_avg`, `burst_duration_avg_s`,
+`burst_freq_hz`, `bursts`
+
+#### Visualization
+
+Red bracket lines spanning each burst, with spike markers inside each burst.
+
+---
+
+### 4.11 Spike Train Dynamics
+
+![Spike Train Dynamics interface](screenshots/analyser_excitability_spike_train_dynamics.png)
+
+**Registry name**: `train_dynamics` | **Tab label**: *Spike Train Dynamics*
+
+Quantifies spike train regularity and temporal structure with ISI statistics.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Spike Threshold | float (mV) | AP detection threshold |
+
+#### Methods
+
+1. ISI = numpy.diff(spike_times).
+2. **CV** = σ_ISI / μ_ISI - global variability (0 = regular, 1 = Poisson).
+3. **CV₂** (Holt et al. 1996) = mean(2|ISI_(i+1) − ISI_i| / (ISI_(i+1) + ISI_i))
+   - local variability, insensitive to slow rate changes.
+4. **LV** (Shinomoto et al. 2003) = mean(3(ISI_i − ISI_(i+1))² / (ISI_i + ISI_(i+1))²)
+   - LV < 1 regular, LV ≈ 1 Poisson, LV > 1 bursty.
+
+#### Results
+
+`spike_count`, `mean_isi_s`, `cv`, `cv2`, `lv`, `isi_numbers`, `isi_ms`
+
+#### Visualization
+
+Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
+
+![Spike Train Dynamics popup](screenshots/analyser_excitability_spike_train_dynamics_popup.png)
+
+---
+
+### 4.12 Event Detection - Threshold Based
+
+![Event Detection - Threshold interface](screenshots/analyser_synaptic_events_threshold_based.png)
+
+**Registry name**: `event_detection_threshold` | **Tab label**: *Event Detection*
+
+Detects mEPSCs / mIPSCs using adaptive prominence-based thresholding.
+A **method selector** dropdown switches between all three event detection
+algorithms (sections 4.3 - 4.5).
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Threshold | float (pA/mV) | Minimum event amplitude |
+| Direction | combo | `negative` or `positive` |
+| Refractory Period | float (s) | Minimum inter-event interval |
+| Rolling Baseline Window | float (ms) | Rolling median baseline window |
+| Reject Artifacts | bool | Gradient-based artifact rejection |
+| Artifact Slope Threshold | float | Gradient threshold for artifacts |
+| Artifact Padding | float (ms) | Dilation padding around artifacts |
+
+#### Methods
+
+1. Rolling median subtraction removes slow drift.
+2. MAD noise estimate: σ = 1.4826 × MAD.
+3. Adaptive prominence = max(threshold, 2σ).
+4. `scipy.signal.find_peaks` with prominence, height, refractory distance,
+   and min-width constraints. Events < 0.2 ms rejected as non-physiological.
+5. Artifact rejection: gradient thresholding + asymmetric binary dilation.
+
+#### Results
+
+`event_count`, `frequency_hz`, `mean_amplitude`, `amplitude_sd`,
+`event_times`, `event_indices`, `event_amplitudes`
+
+#### Visualization
+
+Interactive scatter markers (click to remove; Ctrl+click to add);
+draggable threshold line; artifact overlay.
+
+---
+
+### 4.13 Event Detection - Template Match / Deconvolution
+
+![Event Detection - Deconvolution interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
+
+**Registry name**: `event_detection_deconvolution` | **Tab label**: *Event (Template Match)*
+
+Detects events via a matched-filter approach using a bi-exponential template.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| τ Rise | float (ms) | Rise time constant |
+| τ Decay | float (ms) | Decay time constant |
+| Threshold (SD) | float | Z-score detection threshold |
+| Direction | combo | Event polarity |
+| Rolling Baseline Window | float (ms) | Baseline subtraction window |
+| Reject Artifacts | bool | Enable artifact rejection |
+| Min Event Distance | float (ms) | Minimum event separation |
+| Kernel Multipliers | string | Comma-separated scaling factors for tau_decay (e.g. `1.0, 2.0, 3.0`). Allows the kernel bank to cover slower, dendritically filtered events. Cable theory predicts ~2-3x decay slowing for distal inputs. |
+
+#### Methods
+
+1. Bi-exponential kernel: K(t) = exp(−t/τ_decay) − exp(−t/τ_rise), normalized.
+2. FFT cross-correlation (matched filter) with the time-reversed template.
+3. Z-score normalization by MAD; peaks above `threshold_sd` are events.
+4. Local argmax refinement aligns detected times to true event peaks.
+
+#### Results
+
+Same as threshold method plus `tau_rise_ms`, `tau_decay_ms`.
+
+#### Visualization
+
+Same interactive markers / threshold line / artifact overlay.
+
+---
+
+### 4.14 Event Detection - Baseline Peak / Kinetics
+
+![Event Detection - Baseline Peak interface](screenshots/analyser_synaptic_events_baseline_peak_kinetics.png)
+
+**Registry name**: `event_detection_baseline_peak` | **Tab label**: *Event (Baseline Peak)*
+
+Detects events by finding the most stable baseline and locating peaks above the
+noise floor.
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| Direction | combo | Event polarity |
+| Auto Baseline | bool | Variance-minimization baseline search |
+| Threshold (SD Factor) | float | Multiples of noise SD |
+| Min Event Separation | float (ms) | Minimum inter-event gap |
+| Rolling Baseline Window | float (ms) | Rolling baseline size |
+| Baseline Window | float (s) | Manual window (if auto disabled) |
+| Baseline Step | float (s) | Manual step size |
+
+#### Methods
+
+1. Stable baseline via sliding-window variance minimization.
+2. MAD noise estimate from baseline region.
+3. Prominence-based peaks, min prominence = 0.5 × threshold.
+4. Optional Butterworth lowpass pre-filter.
+5. Biological minimum event width ≥ 0.2 ms.
+
+#### Results
+
+`event_count`, `event_indices`, `event_times`, `event_amplitudes`
+
+---
+
+### 4.15 Optogenetic Synchronization
 
 ![Evoked Synchronization interface](screenshots/analyser_evoked_responses_evoked_sync.png)
 
@@ -1079,7 +1203,7 @@ Event markers on signal trace; cyan dashed vertical lines at TTL onsets.
 
 ---
 
-### 4.13 Paired-Pulse Ratio (PPR)
+### 4.16 Paired-Pulse Ratio (PPR)
 
 ![Paired-Pulse Ratio interface](screenshots/analyser_evoked_responses_paired-pulse_ratio.png)
 
@@ -1124,7 +1248,7 @@ decay fit overlay; diamond scatter markers at R1 and R2 peak positions.
 
 ---
 
-### 4.14 Stimulus Train (STP)
+### 4.17 Stimulus Train (STP)
 
 ![Stimulus Train STP interface](screenshots/analyser_evoked_responses_stimulus_train_stp.png)
 
@@ -1167,130 +1291,6 @@ Vertical lines at each stimulus onset; diamond scatter markers at each peak;
 popup scatter plot of normalised amplitude vs. pulse number.
 
 ![STP popup](screenshots/analyser_evoked_responses_stimulus_train_stp_popup.png)
-
----
-
-### 4.15 Phase Plane Analysis
-
-![Phase Plane interface](screenshots/analyser_spike_analysis_phase_plane.png)
-
-**Registry name**: `phase_plane_analysis` | **Tab label**: *Phase Plane*
-
-Visualizes AP dynamics in phase space (dV/dt vs. V).
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Sigma | float (ms) | Gaussian smoothing for dV/dt |
-| dV/dt Threshold | float (V/s) | Phase-plane crossing threshold |
-| Spike Threshold | float (mV) | Voltage threshold for spike detection |
-| Kink Slope | float | dV/dt value defining initiation "kink" |
-| Search Window | float (ms) | Lookback window for kink detection |
-
-#### Methods
-
-1. dV/dt via `numpy.gradient` + `scipy.ndimage.gaussian_filter1d`.
-2. Phase-plane trajectory = V(t) vs. dV/dt(t).
-3. Kink detection: first point where dV/dt crosses kink_slope in the lookback
-   window before the spike peak - reflects axonal AP initiation.
-4. Max dV/dt = peak upstroke velocity.
-
-#### Results
-
-`voltage`, `dvdt` arrays; `threshold_indices`, `threshold_v`,
-`threshold_dvdt`, `threshold_mean`, `max_dvdt`
-
-#### Visualization
-
-Popup phase-plane plot: red circles at threshold, green crosses at max dV/dt.
-H-line on main trace at threshold voltage.
-
-![Phase Plane popup](screenshots/analyser_spike_analysis_phase_plane_popup.png)
-
----
-
-### 4.16 Spike Train Dynamics
-
-![Spike Train Dynamics interface](screenshots/analyser_excitability_spike_train_dynamics.png)
-
-**Registry name**: `train_dynamics` | **Tab label**: *Spike Train Dynamics*
-
-Quantifies spike train regularity and temporal structure with ISI statistics.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Spike Threshold | float (mV) | AP detection threshold |
-
-#### Methods
-
-1. ISI = numpy.diff(spike_times).
-2. **CV** = σ_ISI / μ_ISI - global variability (0 = regular, 1 = Poisson).
-3. **CV₂** (Holt et al. 1996) = mean(2|ISI_(i+1) − ISI_i| / (ISI_(i+1) + ISI_i))
-   - local variability, insensitive to slow rate changes.
-4. **LV** (Shinomoto et al. 2003) = mean(3(ISI_i − ISI_(i+1))² / (ISI_i + ISI_(i+1))²)
-   - LV < 1 regular, LV ≈ 1 Poisson, LV > 1 bursty.
-
-#### Results
-
-`spike_count`, `mean_isi_s`, `cv`, `cv2`, `lv`, `isi_numbers`, `isi_ms`
-
-#### Visualization
-
-Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
-
-![Spike Train Dynamics popup](screenshots/analyser_excitability_spike_train_dynamics_popup.png)
-
----
-
-### 4.17 Sag Ratio (I_h)
-
-![Sag Ratio interface](screenshots/analyser_intrinsic_properties_sag_ratio_ih.png)
-
-**Registry name**: `sag_ratio_analysis` | **Tab label**: *Sag Ratio (Ih)*
-
-Quantifies hyperpolarisation-activated sag (I_h current) from a hyperpolarising
-current-step protocol. This is a standalone analysis module - while the Rin
-analysis (§4.6) includes sag ratio in its output, this dedicated tab provides
-finer control over the measurement windows and smoothing.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Baseline Start | float (s) | Start of baseline window |
-| Baseline End | float (s) | End of baseline window |
-| Peak Window Start | float (s) | Start of the peak search window (initial sag) |
-| Peak Window End | float (s) | End of the peak search window |
-| Steady-State Start | float (s) | Start of the steady-state measurement window |
-| Steady-State End | float (s) | End of the steady-state measurement window |
-| Peak Smoothing | float (ms) | Savitzky-Golay smoothing window for peak detection (default 5 ms) |
-| Rebound Window | float (ms) | Window after stimulus offset for rebound measurement (default 100 ms) |
-
-#### Methods
-
-1. **V_baseline** = mean voltage in baseline window.
-2. **V_peak** = minimum of Savitzky-Golay-smoothed voltage in the peak window
-   (polynomial order 3, window = `peak_smoothing_ms`).
-3. **V_ss** = mean voltage in steady-state window.
-4. **Sag Ratio** = (V_peak − V_baseline) / (V_ss − V_baseline). A value > 1
-   indicates I_h sag; a value of 1 indicates no sag.
-5. **Sag Percentage** = 100 × (V_peak − V_ss) / (V_peak − V_baseline).
-6. **Rebound Depolarisation** = max(V in rebound window) − V_baseline.
-
-See [Algorithmic Definitions §4](../algorithmic_definitions.md) for the full
-LaTeX-formatted formulae.
-
-#### Results
-
-`sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`, `v_baseline`,
-`rebound_depolarization`
-
-#### Visualization
-
-Blue h-line at V_baseline; magenta h-line at V_peak; red h-line at V_ss.
 
 ---
 
@@ -1592,3 +1592,4 @@ driven by metadata in the decorator.
 A ready-to-copy template is included at `src/Synaptipy/templates/plugin_template.py`.
 For the full step-by-step guide, parameter reference, and annotated examples,
 see **[Writing Custom Analysis Plugins](../extending_synaptipy.md)**.
+

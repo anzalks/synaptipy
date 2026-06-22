@@ -181,6 +181,73 @@ def _grab(widget: Any, dest: Path) -> None:
     pixmap.save(str(dest), "PNG")
     print(f"  [ok] {dest.name}")
 
+def _grab_annotated(main_window: Any, dest: Path, target_widget: Any, style: str = "box") -> None:
+    """Capture main_window to dest, drawing an annotation over target_widget.
+    
+    Before grabbing, scrolls the target_widget into view if it is inside a QScrollArea.
+    style: "box" (red bounding box) or "circle" (semi-transparent yellow circle).
+    """
+    from PySide6.QtWidgets import QScrollArea, QApplication
+    from PySide6.QtGui import QPainter, QColor, QPen
+    from PySide6.QtCore import Qt, QRect
+
+    if target_widget is None:
+        return _grab(main_window, dest)
+
+    # 1. Scroll target widget into view (centered)
+    parent = target_widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QScrollArea):
+            # force layout updates
+            QApplication.sendPostedEvents()
+            content_widget = parent.widget()
+            if content_widget:
+                if content_widget.layout():
+                    content_widget.layout().activate()
+                content_widget.adjustSize()
+                _pump(10)
+                widget_y = target_widget.mapTo(content_widget, target_widget.rect().topLeft()).y()
+                bar = parent.verticalScrollBar()
+                target_val = widget_y - parent.height() // 2 + target_widget.height() // 2
+                bar.setValue(int(max(bar.minimum(), min(target_val, bar.maximum()))))
+                _pump(25)  # give enough time to render completely
+            break
+        parent = parent.parentWidget()
+
+    # 2. Grab the pixmap
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    pixmap = main_window.grab()
+
+    # 3. Map coordinates
+    rect = target_widget.rect()
+    top_left = target_widget.mapTo(main_window, rect.topLeft())
+    bottom_right = target_widget.mapTo(main_window, rect.bottomRight())
+    mapped_rect = QRect(top_left, bottom_right)
+
+    # 4. Draw annotation
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    
+    if style == "box":
+        pen = QPen(QColor(255, 0, 0, 200)) # Red
+        pen.setWidth(4)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(mapped_rect.adjusted(-4, -4, 4, 4))
+    elif style == "circle":
+        pen = QPen(QColor(255, 200, 0, 255))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.setBrush(QColor(255, 200, 0, 100)) # Transparent yellow
+        center = mapped_rect.center()
+        radius = max(mapped_rect.width(), mapped_rect.height()) // 2 + 5
+        painter.drawEllipse(center, radius, radius)
+
+    painter.end()
+    
+    pixmap.save(str(dest), "PNG")
+    print(f"  [ok] {dest.name} (annotated)")
+
 
 # ---------------------------------------------------------------------------
 # Data-loading helpers
@@ -245,7 +312,16 @@ def _set_method(tab: Any, method_label: str) -> None:
     if cb is None:
         return
     cb.setCurrentText(method_label)
-    _pump(5)
+    from PySide6.QtWidgets import QApplication
+    QApplication.sendPostedEvents()
+    _pump(30)
+    # Force any scroll area adjustments
+    from PySide6.QtWidgets import QScrollArea
+    for scroll in tab.findChildren(QScrollArea):
+        if scroll.widget():
+            scroll.widget().layout().activate()
+            scroll.widget().adjustSize()
+    _pump(30)
 
 
 def _set_channel(tab: Any, chan_id: str) -> None:
@@ -260,12 +336,17 @@ def _set_channel(tab: Any, chan_id: str) -> None:
             return
 
 
-def _set_param(tab: Any, name: str, value: Any) -> None:
-    """Set a scalar parameter widget by name via the tab's param_generator."""
+def _get_param_widget(tab: Any, name: str) -> Optional[Any]:
+    """Retrieve a parameter widget by name from the tab's param_generator."""
     pg = getattr(tab, "param_generator", None)
     if pg is None:
-        return
-    widget = pg.widgets.get(name)
+        return None
+    return pg.widgets.get(name)
+
+
+def _set_param(tab: Any, name: str, value: Any) -> None:
+    """Set a scalar parameter widget by name via the tab's param_generator."""
+    widget = _get_param_widget(tab, name)
     if widget is None:
         return
     if hasattr(widget, "setValue"):
@@ -442,7 +523,7 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     # ---- Baseline (RMP) ----
     _set_method(tab, "Baseline (RMP)")
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_intrinsic_properties_baseline_rmp.png")
+    _grab_annotated(window, output_dir / "analyser_intrinsic_properties_baseline_rmp.png", getattr(tab, "method_combobox", None), style="box")
     captured.append("analyser_intrinsic_properties_baseline_rmp.png")
     captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_baseline_rmp", output_dir))
 
@@ -453,7 +534,7 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     _set_param(tab, "response_start", 0.05)
     _set_param(tab, "response_end", 0.08)
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_intrinsic_properties_input_resistance.png")
+    _grab_annotated(window, output_dir / "analyser_intrinsic_properties_input_resistance.png", _get_param_widget(tab, "response_end"), style="box")
     captured.append("analyser_intrinsic_properties_input_resistance.png")
 
     # ---- Tau (Time Constant) ----
@@ -461,7 +542,7 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     _set_param(tab, "stim_start_time", 0.05)
     _set_param(tab, "fit_duration", 0.03)
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_intrinsic_properties_tau_time_constant.png")
+    _grab_annotated(window, output_dir / "analyser_intrinsic_properties_tau_time_constant.png", _get_param_widget(tab, "fit_duration"), style="box")
     captured.append("analyser_intrinsic_properties_tau_time_constant.png")
 
     # ---- Sag Ratio (Ih) ----
@@ -482,7 +563,7 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
             _set_param(tab, "response_start_s", 0.215)
             _set_param(tab, "response_end_s", 0.55)
             _run_analysis(tab)
-            _grab(window, output_dir / "analyser_intrinsic_properties_capacitance.png")
+            _grab_annotated(window, output_dir / "analyser_intrinsic_properties_capacitance.png", _get_param_widget(tab, "response_end_s"), style="box")
             captured.append("analyser_intrinsic_properties_capacitance.png")
 
             # ---- Sag Ratio (Ih) on ABF19 ----
@@ -496,7 +577,7 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
             _set_param(tab, "ss_window_start", 0.45)
             _set_param(tab, "ss_window_end", 0.55)
             _run_analysis(tab)
-            _grab(window, output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png")
+            _grab_annotated(window, output_dir / "analyser_intrinsic_properties_sag_ratio_ih.png", _get_param_widget(tab, "ss_window_end"), style="box")
             captured.append("analyser_intrinsic_properties_sag_ratio_ih.png")
 
     # ---- I-V Curve (ABF21: CC, current steps, current injection 75-325 ms) ----
@@ -509,7 +590,7 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
         _set_param(tab, "response_start", 0.075)
         _set_param(tab, "response_end", 0.325)
         _run_analysis(tab)
-        _grab(window, output_dir / "analyser_intrinsic_properties_i-v_curve.png")
+        _grab_annotated(window, output_dir / "analyser_intrinsic_properties_i-v_curve.png", _get_param_widget(tab, "response_end"), style="box")
         captured.append("analyser_intrinsic_properties_i-v_curve.png")
         captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_i-v_curve", output_dir))
 
@@ -541,7 +622,7 @@ def _capture_spike_analysis(window: Any, analyser: Any, sm: Any, output_dir: Pat
     _set_param(tab, "threshold", -20.0)
     _set_trial(tab, 17)
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_spike_analysis_spike_detection.png")
+    _grab_annotated(window, output_dir / "analyser_spike_analysis_spike_detection.png", _get_param_widget(tab, "threshold"), style="box")
     captured.append("analyser_spike_analysis_spike_detection.png")
 
     # ---- Phase Plane (produces a popup dV/dt vs V plot) ----
@@ -582,7 +663,7 @@ def _capture_excitability(window: Any, analyser: Any, sm: Any, output_dir: Path)
     _set_param(tab, "analysis_start_s", 0.075)
     _set_param(tab, "analysis_end_s", 0.325)
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_excitability_excitability.png")
+    _grab_annotated(window, output_dir / "analyser_excitability_excitability.png", _get_param_widget(tab, "analysis_end_s"), style="box")
     captured.append("analyser_excitability_excitability.png")
     captured.extend(_grab_popups(tab, "analyser_excitability_excitability", output_dir))
 
@@ -637,20 +718,20 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
     _set_method(tab, "Threshold Based")
     _set_param(tab, "direction", "positive")
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_synaptic_events_threshold_based.png")
+    _grab_annotated(window, output_dir / "analyser_synaptic_events_threshold_based.png", _get_param_widget(tab, "direction"), style="box")
     captured.append("analyser_synaptic_events_threshold_based.png")
 
     # ---- Deconvolution ----
     _set_method(tab, "Deconvolution (Custom)")
     _set_param(tab, "direction", "positive")
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_synaptic_events_deconvolution_custom.png")
+    _grab_annotated(window, output_dir / "analyser_synaptic_events_deconvolution_custom.png", _get_param_widget(tab, "direction"), style="box")
     captured.append("analyser_synaptic_events_deconvolution_custom.png")
 
     # ---- Baseline + Peak + Kinetics ----
     _set_method(tab, "Baseline + Peak + Kinetics")
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_synaptic_events_baseline_peak_kinetics.png")
+    _grab_annotated(window, output_dir / "analyser_synaptic_events_baseline_peak_kinetics.png", getattr(tab, "method_combobox", None), style="box")
     captured.append("analyser_synaptic_events_baseline_peak_kinetics.png")
 
     return captured
@@ -696,7 +777,7 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
     _set_method(tab, "Paired-Pulse Ratio")
     _set_param(tab, "polarity", "positive")
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_evoked_responses_paired-pulse_ratio.png")
+    _grab_annotated(window, output_dir / "analyser_evoked_responses_paired-pulse_ratio.png", _get_param_widget(tab, "polarity"), style="box")
     captured.append("analyser_evoked_responses_paired-pulse_ratio.png")
 
     # ---- Stimulus Train (STP) ----
@@ -704,7 +785,7 @@ def _capture_evoked_responses(window: Any, analyser: Any, sm: Any, output_dir: P
     _set_param(tab, "polarity", "positive")
     _set_param(tab, "use_ttl", True)
     _run_analysis(tab)
-    _grab(window, output_dir / "analyser_evoked_responses_stimulus_train_stp.png")
+    _grab_annotated(window, output_dir / "analyser_evoked_responses_stimulus_train_stp.png", _get_param_widget(tab, "use_ttl"), style="box")
     captured.append("analyser_evoked_responses_stimulus_train_stp.png")
     captured.extend(_grab_popups(tab, "analyser_evoked_responses_stimulus_train_stp", output_dir))
 
@@ -1028,12 +1109,10 @@ def run(output_dir: Path) -> bool:  # noqa: C901
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    # Apply the theme matching the host OS so screenshots look identical to
-    # what users see on their own system.  ThemeMode.SYSTEM cannot be used
-    # because the offscreen platform always initialises a light palette.
-    target_theme = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
-    apply_theme(target_theme)
-    print(f"[theme] {target_theme.value}")
+    # Apply the theme according to user configuration so screenshots look identical to
+    # what users see on their own system.
+    apply_theme()
+    print("[theme] using configured theme")
 
     try:
         # Register all built-in analyses and load example plugins before the
@@ -1048,6 +1127,11 @@ def run(output_dir: Path) -> bool:  # noqa: C901
 
         window = MainWindow()
         window.resize(_WINDOW_W, _WINDOW_H)
+
+        # Turn off downsampling for high-fidelity screenshots
+        if hasattr(window.explorer_tab, "config_panel"):
+            window.explorer_tab.config_panel.downsample_cb.setChecked(False)
+
         window.show()
         _pump(10)
 

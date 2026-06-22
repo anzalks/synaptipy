@@ -57,11 +57,16 @@ Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releas
 
 ### Graphical interface
 
+To launch the graphical user interface:
+
 ```bash
-synaptipy
+synaptipy  # launch the application
+
 # or equivalently:
 python -m Synaptipy
 ```
+
+![Synaptipy Workflow Demo](docs/tutorial/workflow_demo.gif)
 
 ![Synaptipy Explorer - multi-trial current-clamp recording with action potentials](https://raw.githubusercontent.com/anzalks/synaptipy/main/docs/tutorial/screenshots/explorer_tab.png)
 
@@ -133,7 +138,7 @@ Trace rendering is implemented via PyQtGraph. GPU-accelerated rendering via Open
 
 ### Cross-file trial averaging
 
-The Explorer tab implements grand-average construction across multiple files and trials. In **Cycle Single Trial** mode, the user captures individual trials via **Add Current Trial to Avg Set**. Trials from different files may be accumulated; the selection persists across the session. Activation of **Plot Selected Avg** overlays the mean trace. When recordings of different durations are selected, all trials are truncated to the minimum array length before averaging to resolve shape mismatches.
+The Explorer tab implements grand-average construction across multiple files and trials. In **Cycle Single Trial** mode, the user captures individual trials via **Add Current Trial to Avg Set**. Trials from different files may be accumulated; the selection persists across the session. Activation of **Plot Selected Avg** overlays the mean trace. When recordings of different durations are selected, shorter trials are padded with `NaN` up to the maximum array length. This allows the application to produce a grand average that preserves the full length of the longest recording, smoothly dropping the statistical $N$ at the tails rather than truncating data.
 
 ---
 

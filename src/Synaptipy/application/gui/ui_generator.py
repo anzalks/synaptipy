@@ -156,11 +156,15 @@ class ParameterWidgetGenerator:
 
     def clear_widgets(self):
         """Remove all generated widgets from the layout."""
-        while self.layout.count():
-            item = self.layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+        if isinstance(self.layout, QtWidgets.QFormLayout):
+            while self.layout.rowCount() > 0:
+                self.layout.removeRow(0)
+        else:
+            while self.layout.count():
+                item = self.layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
         self.widgets.clear()
         self.visibility_map.clear()
         self.callbacks.clear()
