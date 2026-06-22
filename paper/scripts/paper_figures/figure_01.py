@@ -4,16 +4,22 @@ import time
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from plot_utils import (
-    add_panel_label, set_paper_styles, add_panel_title, add_figure_suptitle,
-    create_paper_figure, save_paper_figure
+    add_figure_suptitle,
+    add_panel_label,
+    add_panel_title,
+    create_paper_figure,
+    save_paper_figure,
+    set_paper_styles,
 )
+
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -30,6 +36,7 @@ repo_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 from Synaptipy.application.gui.main_window import MainWindow
 from Synaptipy.infrastructure.file_readers import NeoAdapter
+
 
 def main():
     repo_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -59,14 +66,16 @@ def main():
     idx = model.index(0, 0)
     win.explorer_tab.sidebar.project_tree.expand(idx)
     app.processEvents()
-    
+
     pm_b = win.explorer_tab.grab()
     pm_b.save(str(out_dir / "temp_b.png"))
 
     win.tab_widget.setCurrentIndex(1)
     app.processEvents()
     for i in range(win.analyser_tab.sub_tab_widget.count()):
-        if "Passive" in win.analyser_tab.sub_tab_widget.tabText(i) or "Intrinsic" in win.analyser_tab.sub_tab_widget.tabText(i):
+        if "Passive" in win.analyser_tab.sub_tab_widget.tabText(
+            i
+        ) or "Intrinsic" in win.analyser_tab.sub_tab_widget.tabText(i):
             win.analyser_tab.sub_tab_widget.setCurrentIndex(i)
             break
     app.processEvents()
@@ -89,9 +98,11 @@ def main():
         overview_src = repo_root / "docs" / "_build" / "html" / "_images" / "synaptipy_overview.png"
         if overview_src.exists():
             import shutil
+
             shutil.copy(overview_src, img_a_path)
         else:
             import numpy as np
+
             dummy = np.ones((800, 1280, 3)) * 0.9  # Light gray
             plt.imsave(img_a_path, dummy)
 
@@ -141,16 +152,16 @@ def main():
     final_path = out_dir / "figure_01.png"
     save_paper_figure(fig, final_path)
     print(f"Figure 1 saved to {final_path}")
-    
+
     # Cleanup temporary screenshots
     for temp_img in [img_b_path, img_c_path, img_d_path]:
         if temp_img.exists():
             temp_img.unlink()
     print("Cleaned up temporary screenshot files.")
 
-    
     # Safe exit to prevent Qt crash
     app.quit()
+
 
 if __name__ == "__main__":
     main()

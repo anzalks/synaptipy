@@ -135,21 +135,25 @@ def _timed_run(file_list: list, pipeline: list, max_workers: int) -> dict:
     t0 = time.perf_counter()
     df = engine.run_batch(file_list, pipeline)
     wall_time = time.perf_counter() - t0
-    
+
     io_and_overhead_time_s = 0.0
     active_compute_time_s = 0.0
-    
+
     if not df.empty and "compute_time_s" in df.columns:
         df_files = df.drop_duplicates(subset=["file_path"])
         total_compute_s = float(df_files["compute_time_s"].sum())
         active_compute_time_s = total_compute_s / max_workers
-        
+
         io_and_overhead_time_s = wall_time - active_compute_time_s
         if io_and_overhead_time_s < 0:
             io_and_overhead_time_s = 0.0
             active_compute_time_s = wall_time
-            
-    return {"wall_time": wall_time, "io_and_overhead_time_s": io_and_overhead_time_s, "active_compute_time_s": active_compute_time_s}
+
+    return {
+        "wall_time": wall_time,
+        "io_and_overhead_time_s": io_and_overhead_time_s,
+        "active_compute_time_s": active_compute_time_s,
+    }
 
 
 def _run_dataset(label: str, file_list: list, pipeline: list) -> list:
@@ -167,15 +171,16 @@ def _run_dataset(label: str, file_list: list, pipeline: list) -> list:
             compute_times.append(elapsed["active_compute_time_s"])
             print(f"rep{rep + 1}={elapsed['wall_time']:.1f}s", end=" ", flush=True)
         import numpy as np
+
         mean_time = np.mean(times)
         sem_time = np.std(times, ddof=1) / np.sqrt(len(times)) if len(times) > 1 else 0.0
-        
+
         mean_io = np.mean(io_times)
         sem_io = np.std(io_times, ddof=1) / np.sqrt(len(io_times)) if len(io_times) > 1 else 0.0
-        
+
         mean_compute = np.mean(compute_times)
         sem_compute = np.std(compute_times, ddof=1) / np.sqrt(len(compute_times)) if len(compute_times) > 1 else 0.0
-        
+
         print(f"-> mean={mean_time:.2f}s ± {sem_time:.3f}s")
         results.append(
             {

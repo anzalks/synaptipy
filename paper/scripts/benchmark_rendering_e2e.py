@@ -73,6 +73,7 @@ _N_E2E_CYCLES = 500
 # SUITE 1 — Raw rendering child worker
 # ===========================================================================
 
+
 def _child_raw_rendering(mode: str) -> None:
     """Run the raw pyqtgraph rendering benchmark in-process. Print JSON."""
     use_opengl = mode.startswith("opengl")
@@ -90,9 +91,11 @@ def _child_raw_rendering(mode: str) -> None:
     pg.setConfigOption("foreground", "w")
 
     from Synaptipy.shared.plot_customization import set_force_opaque_trials
+
     set_force_opaque_trials(force_opaque)
 
     from PySide6.QtWidgets import QApplication, QGridLayout, QWidget
+
     app = QApplication.instance() or QApplication(sys.argv)
 
     from Synaptipy.application.gui.explorer.plot_canvas import ExplorerPlotCanvas
@@ -124,7 +127,7 @@ def _child_raw_rendering(mode: str) -> None:
             name=src_channel.name,
             units=src_channel.units,
             sampling_rate=src_channel.sampling_rate,
-            data_trials=all_trials[:min(n_trials, len(all_trials))],
+            data_trials=all_trials[: min(n_trials, len(all_trials))],
         )
         subset_rec = Recording(source_file=_ABF_0021)
         subset_rec.channels = {src_channel.id: subset_channel}
@@ -171,6 +174,7 @@ def _child_raw_rendering(mode: str) -> None:
 # SUITE 2 — E2E full application child worker
 # ===========================================================================
 
+
 def _child_e2e(mode: str) -> None:
     """Boot the full MainWindow, load ABF, time _update_plot(). Print JSON."""
     use_opengl = mode == "opengl"
@@ -178,17 +182,20 @@ def _child_e2e(mode: str) -> None:
     if str(_SRC_DIR) not in sys.path:
         sys.path.insert(0, str(_SRC_DIR))
 
-    import warnings
     import logging
+    import warnings
+
     warnings.filterwarnings("ignore")
     logging.disable(logging.ERROR)
 
     import numpy as np
     import pyqtgraph as pg
+
     pg.setConfigOption("useOpenGL", use_opengl)
     pg.setConfigOption("antialias", False)
 
     from PySide6.QtWidgets import QApplication, QMessageBox
+
     # Suppress all popups upfront
     QMessageBox.information = lambda *a, **kw: None
     QMessageBox.warning = lambda *a, **kw: None
@@ -198,13 +205,16 @@ def _child_e2e(mode: str) -> None:
     app = QApplication.instance() or QApplication(sys.argv)
 
     from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+
     apply_theme(ThemeMode.LIGHT)
 
     import Synaptipy.core.analysis  # noqa: F401 — triggers registry decorators
     from Synaptipy.application.plugin_manager import PluginManager
+
     PluginManager.load_plugins()
 
     from Synaptipy.application.gui.main_window import MainWindow
+
     window = MainWindow()
 
     # Suppress the "Restore Previous Session?" popup and all startup banners
@@ -297,8 +307,11 @@ def _child_e2e(mode: str) -> None:
             "sem_ms": round(sem_val, 3),
         }
         results["overlay"].append(entry)
-        print(f"  [{mode}] overlay N={n:>2}: mean={entry['mean_ms']:.2f} ± {entry['sem_ms']:.2f} ms",
-              file=sys.stderr, flush=True)
+        print(
+            f"  [{mode}] overlay N={n:>2}: mean={entry['mean_ms']:.2f} ± {entry['sem_ms']:.2f} ms",
+            file=sys.stderr,
+            flush=True,
+        )
 
     # CYCLE_SINGLE
     explorer.current_plot_mode = explorer.PlotMode.CYCLE_SINGLE
@@ -325,8 +338,7 @@ def _child_e2e(mode: str) -> None:
         "mean_ms": round(float(np.mean(times_arr)), 3),
         "sem_ms": round(float(np.std(times_arr, ddof=1) / np.sqrt(len(times_arr))), 3) if len(times_arr) > 1 else 0.0,
     }
-    print(f"  [{mode}] cycle_single: mean={results['cycle_single']['mean_ms']:.2f} ms",
-          file=sys.stderr, flush=True)
+    print(f"  [{mode}] cycle_single: mean={results['cycle_single']['mean_ms']:.2f} ms", file=sys.stderr, flush=True)
 
     print(json.dumps(results))
     window.close()
@@ -337,6 +349,7 @@ def _child_e2e(mode: str) -> None:
 # ===========================================================================
 # Subprocess helpers
 # ===========================================================================
+
 
 def _spawn_child(suite: str, mode: str, timeout: int = 900) -> dict:
     """Spawn this script as a subprocess with --_suite and --_mode flags."""
@@ -377,6 +390,7 @@ def _spawn_child(suite: str, mode: str, timeout: int = 900) -> dict:
 # CSV savers
 # ===========================================================================
 
+
 def _save_rendering_csv(results_dict: dict, output_path: Path) -> None:
     fieldnames = ["renderer_mode", "n_trials", "mean_ms", "sem_ms"]
     rows = []
@@ -399,24 +413,28 @@ def _save_e2e_csv(sw: dict, gl: dict, output_path: Path) -> None:
     rows = []
     for label, data in [("software", sw), ("opengl", gl)]:
         for entry in data.get("overlay", []):
-            rows.append({
-                "renderer": label,
-                "benchmark_mode": "overlay_avg",
-                "n_trials": entry["n_trials"],
-                "total_samples": entry["total_samples"],
-                "mean_ms": entry["mean_ms"],
-                "sem_ms": entry["sem_ms"],
-            })
+            rows.append(
+                {
+                    "renderer": label,
+                    "benchmark_mode": "overlay_avg",
+                    "n_trials": entry["n_trials"],
+                    "total_samples": entry["total_samples"],
+                    "mean_ms": entry["mean_ms"],
+                    "sem_ms": entry["sem_ms"],
+                }
+            )
         cs = data.get("cycle_single")
         if cs:
-            rows.append({
-                "renderer": label,
-                "benchmark_mode": "cycle_single",
-                "n_trials": cs["n_trials"],
-                "total_samples": cs["total_samples"],
-                "mean_ms": cs["mean_ms"],
-                "sem_ms": cs["sem_ms"],
-            })
+            rows.append(
+                {
+                    "renderer": label,
+                    "benchmark_mode": "cycle_single",
+                    "n_trials": cs["n_trials"],
+                    "total_samples": cs["total_samples"],
+                    "mean_ms": cs["mean_ms"],
+                    "sem_ms": cs["sem_ms"],
+                }
+            )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
@@ -428,6 +446,7 @@ def _save_e2e_csv(sw: dict, gl: dict, output_path: Path) -> None:
 # ===========================================================================
 # Orchestrator
 # ===========================================================================
+
 
 def run(output_dir: Path) -> bool:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -494,6 +513,7 @@ def run(output_dir: Path) -> bool:
     fig3_script = _SCRIPT_DIR / "paper_figures" / "figure_03.py"
     if fig3_script.exists():
         import subprocess as sp
+
         sp.run([sys.executable, str(fig3_script)], check=False)
     else:
         print(f"WARNING: {fig3_script} not found — skipping figure regeneration.")
@@ -505,10 +525,9 @@ def run(output_dir: Path) -> bool:
 # Entry point
 # ===========================================================================
 
+
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="SynaptiPy consolidated rendering benchmark (raw + E2E, serial)."
-    )
+    parser = argparse.ArgumentParser(description="SynaptiPy consolidated rendering benchmark (raw + E2E, serial).")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -520,7 +539,14 @@ def main() -> int:
     parser.add_argument("--_suite", choices=["rendering", "e2e"], help=argparse.SUPPRESS)
     parser.add_argument(
         "--_mode",
-        choices=["software_transparent", "software_opaque", "opengl_transparent", "opengl_opaque", "software", "opengl"],
+        choices=[
+            "software_transparent",
+            "software_opaque",
+            "opengl_transparent",
+            "opengl_opaque",
+            "software",
+            "opengl",
+        ],
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
