@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from plot_utils import (  # noqa: E402
     COLORS,
+    SCATTER_AREA,
+    SCATTER_EDGE_WIDTH,
     add_legend,
     add_panel_label,
     add_panel_title,
@@ -33,7 +35,7 @@ def main():
 
     bench_df = pd.read_csv(data_dir / "benchmark_comparison.csv")
 
-    fig_bio, axes_bio = create_paper_figure(2, 2, figsize=(12, 11))
+    fig_bio, axes_bio = create_paper_figure(2, 2)
     axes_bio = axes_bio.flatten()
 
     metrics = [
@@ -47,9 +49,6 @@ def main():
         if p < 0.0001:
             return "< 0.0001"
         return f"= {p:.4f}"
-
-    SCATTER_AREA = 50
-    SCATTER_EDGE_WIDTH = 0.75
 
     for i, (title, c_syn, c_efel, c_ipfx, unit, panel_label) in enumerate(metrics):
         ax = axes_bio[i]
@@ -114,7 +113,6 @@ def main():
         ylabel = f"SynaptiPy Value ({unit})"
         style_scatter_axis(ax, unity_line=True, lims=lims, xlabel=xlabel, ylabel=ylabel)
 
-    plt.tight_layout(pad=3.0)
     final_path = fig_dir / "figure_02.png"
     save_paper_figure(fig_bio, final_path)
     print(f"Figure 2 saved to {final_path}")

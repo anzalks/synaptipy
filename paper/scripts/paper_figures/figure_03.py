@@ -63,8 +63,7 @@ def main():
     e2e_res = load_csv("e2e_rendering_results", data_dir, os_tag)
 
     # 2x2 grid for the final 4-panel Figure 3
-    fig, axes = create_paper_figure(2, 2, figsize=(12, 10))
-    add_figure_suptitle(fig, "Figure 3: Computational Performance and Rendering Benchmarks", y=0.98)
+    fig, axes = create_paper_figure(2, 2)
 
     datasets = list(dict.fromkeys(r["dataset"] for r in bench_res))
     colors_map = {"0021 spike_detection": COLORS["blue"], "0022 event_detection": COLORS["blue"]}
@@ -121,7 +120,6 @@ def main():
             marker=marker,
             label="Compute Track",
             zorder=3,
-            capsize=4,
         )
         # Point plots connecting the top of the Stack (Total Wall Time)
         ax_time.errorbar(
@@ -133,7 +131,6 @@ def main():
             marker="^",
             label="Total Wall Time",
             zorder=4,
-            capsize=4,
         )
 
         add_panel_label(ax_time, "A" if col_idx == 0 else "B")
@@ -207,9 +204,7 @@ def main():
                 yerr=sw_rend_sem,
                 fmt="o--",
                 color=COLORS["black"],
-                capsize=4,
                 label="Raw pyqtgraph",
-                linewidth=2,
             )
             ax_rend.errorbar(
                 sw_e2e_n,
@@ -217,9 +212,7 @@ def main():
                 yerr=sw_e2e_sem,
                 fmt="s-",
                 color=COLORS["blue"],
-                capsize=4,
                 label="Full Application",
-                linewidth=2,
             )
 
             add_legend(ax_rend, loc="upper left")
@@ -253,9 +246,7 @@ def main():
                 yerr=gl_rend_sem,
                 fmt="o--",
                 color=COLORS["black"],
-                capsize=4,
                 label="Raw pyqtgraph",
-                linewidth=2,
             )
             ax_e2e.errorbar(
                 gl_e2e_n,
@@ -263,9 +254,7 @@ def main():
                 yerr=gl_e2e_sem,
                 fmt="s-",
                 color=COLORS["blue"],
-                capsize=4,
                 label="Full Application",
-                linewidth=2,
             )
 
             add_panel_label(ax_e2e, "D")

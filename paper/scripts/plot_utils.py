@@ -26,21 +26,21 @@ FONT_FAMILY = "sans-serif"
 FONT_SANS_SERIF = ["Arial", "Helvetica", "DejaVu Sans"]
 
 # Font Sizes
-SUPTITLE_SIZE = 14
-TITLE_SIZE = 12
-PANEL_LABEL_SIZE = 14
-AXES_LABEL_SIZE = 10
-TICK_LABEL_SIZE = 8
-LEGEND_SIZE = 8
+SUPTITLE_SIZE = 16
+TITLE_SIZE = 14
+PANEL_LABEL_SIZE = 16
+AXES_LABEL_SIZE = 12
+TICK_LABEL_SIZE = 10
+LEGEND_SIZE = 10
 
 # Aesthetics
 LINE_WIDTH = 2.0
-MARKER_SIZE = 5
-ERRORBAR_CAPSIZE = 6
+MARKER_SIZE = 6
+ERRORBAR_CAPSIZE = 4
 
 # Geometry & Transparencies
 BAR_WIDTH = 0.6
-SCATTER_AREA = 50
+SCATTER_AREA = 60
 SCATTER_EDGE_WIDTH = 0.75
 ALPHA_SOLID = 0.9
 ALPHA_MUTED = 0.8
@@ -73,8 +73,8 @@ def set_paper_styles():
 def create_paper_figure(nrows=1, ncols=1, figsize=None):
     """Standardized figure creation for eNeuro sizing."""
     if nrows == 0 and ncols == 0:
-        return plt.figure(figsize=figsize if figsize else (18, 12))
-    return plt.subplots(nrows, ncols, figsize=figsize if figsize else (12, 10))
+        return plt.figure(figsize=figsize if figsize else (10, 8))
+    return plt.subplots(nrows, ncols, figsize=figsize if figsize else (10, 10))
 
 
 def save_paper_figure(fig, filename, rect=[0, 0, 1, 0.95], dpi=300):

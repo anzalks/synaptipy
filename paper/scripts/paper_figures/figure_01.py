@@ -116,35 +116,35 @@ def main():
     img_d = mpimg.imread(str(img_d_path))
 
     # Create a figure with a 2x2 gridspec
-    fig = create_paper_figure(0, 0, figsize=(18, 12))
+    fig = create_paper_figure(0, 0)
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], width_ratios=[1, 1])
 
     # Top-left: img_a
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.imshow(img_a)
     ax1.axis("off")
-    add_panel_title(ax1, "A. Overview & Project Architecture")
+    add_panel_title(ax1, "Overview & Project Architecture")
     add_panel_label(ax1, "A", x=-0.05, y=1.05)
 
     # Top-right: img_b
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.imshow(img_b)
     ax2.axis("off")
-    add_panel_title(ax2, "B. Data Explorer & Metadata View")
+    add_panel_title(ax2, "Data Explorer & Metadata View")
     add_panel_label(ax2, "B", x=-0.05, y=1.05)
 
     # Bottom-left: img_c
     ax3 = fig.add_subplot(gs[1, 0])
     ax3.imshow(img_c)
     ax3.axis("off")
-    add_panel_title(ax3, "C. Analysis Pipeline Builder")
+    add_panel_title(ax3, "Analysis Pipeline Builder")
     add_panel_label(ax3, "C", x=-0.05, y=1.05)
 
     # Bottom-right: img_d
     ax4 = fig.add_subplot(gs[1, 1])
     ax4.imshow(img_d)
     ax4.axis("off")
-    add_panel_title(ax4, "D. Data Exporter & Summary Results")
+    add_panel_title(ax4, "Data Exporter & Summary Results")
     add_panel_label(ax4, "D", x=-0.05, y=1.05)
 
     # Removed suptitle to comply with eNeuro publishing guidelines
