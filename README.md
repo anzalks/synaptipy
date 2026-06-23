@@ -15,8 +15,12 @@
 | src/Synaptipy/application/gui/\_\_init\_\_.py                       |        1 |        0 |    100% |           |
 | src/Synaptipy/application/gui/analysis\_tabs/\_\_init\_\_.py        |        3 |        0 |    100% |           |
 | src/Synaptipy/application/gui/explorer/\_\_init\_\_.py              |        2 |        0 |    100% |           |
+| src/Synaptipy/application/gui/explorer/config\_panel.py             |      245 |       25 |     90% |301-304, 319, 326, 333, 346, 358-360, 363-369, 374-378, 381-385 |
+| src/Synaptipy/application/gui/explorer/plot\_canvas.py              |      324 |       77 |     76% |63, 66, 69-70, 78, 81, 91, 94, 98-99, 105, 109-110, 121, 128-129, 164, 185-186, 192-193, 206, 210-212, 245-247, 252, 261-262, 321-322, 325-326, 329-330, 333-336, 354-358, 386-390, 435-436, 459-467, 480, 485-486, 496-499, 503-506, 510-511, 515-516 |
 | src/Synaptipy/application/gui/explorer/toolbar.py                   |       80 |        0 |    100% |           |
-| src/Synaptipy/application/gui/widgets/log\_streamer.py              |       97 |        6 |     94% |199, 240, 244-246, 250 |
+| src/Synaptipy/application/gui/explorer/y\_controls.py               |      175 |       26 |     85% |131, 203-204, 210, 213-220, 223-225, 228-235, 238-240 |
+| src/Synaptipy/application/gui/ui\_generator.py                      |      204 |       65 |     68% |29-40, 48, 52, 56, 60-61, 69-81, 108, 113-118, 163-167, 225, 228-239, 249, 284-285, 299, 306-311, 318, 338-339, 349-354 |
+| src/Synaptipy/application/gui/widgets/log\_streamer.py              |      106 |        9 |     92% |84, 89-90, 210, 251, 255-257, 261 |
 | src/Synaptipy/application/services/\_\_init\_\_.py                  |        0 |        0 |    100% |           |
 | src/Synaptipy/application/services/data\_loader\_service.py         |       36 |        1 |     97% |        92 |
 | src/Synaptipy/application/services/methods\_generator.py            |       33 |        0 |    100% |           |
@@ -24,29 +28,29 @@
 | src/Synaptipy/application/session\_manager.py                       |      188 |        0 |    100% |           |
 | src/Synaptipy/core/\_\_init\_\_.py                                  |        2 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/\_\_init\_\_.py                         |       13 |        0 |    100% |           |
-| src/Synaptipy/core/analysis/batch\_engine.py                        |      614 |       72 |     88% |198, 566, 572-579, 585, 589, 612-613, 618, 628, 632-633, 653, 661-669, 688-690, 702-703, 857-858, 860, 908-910, 941-942, 996, 1042-1052, 1061, 1064, 1081-1082, 1122, 1130-1151, 1162-1166, 1204-1206, 1236-1238, 1408-1430 |
+| src/Synaptipy/core/analysis/batch\_engine.py                        |      625 |       72 |     88% |198, 566, 572-579, 585, 589, 612-613, 618, 628, 632-633, 653, 661-669, 688-690, 702-703, 866-867, 869, 917-919, 958-959, 1013, 1059-1069, 1078, 1081, 1098-1099, 1139, 1147-1168, 1179-1183, 1221-1223, 1253-1255, 1425-1447 |
 | src/Synaptipy/core/analysis/cross\_file\_utils.py                   |      135 |       12 |     91% |27, 252-253, 267-271, 286-287, 361, 371-375 |
 | src/Synaptipy/core/analysis/epoch\_manager.py                       |       96 |        0 |    100% |           |
 | src/Synaptipy/core/analysis/evoked\_responses.py                    |      394 |       12 |     97% |373, 430, 434, 455-465, 796, 1038-1040, 1369 |
-| src/Synaptipy/core/analysis/firing\_dynamics.py                     |      270 |        2 |     99% |   765-766 |
-| src/Synaptipy/core/analysis/passive\_properties.py                  |      790 |       26 |     97% |156, 185, 248, 352-356, 393, 759-763, 1006-1018, 1149-1155, 1213-1214 |
+| src/Synaptipy/core/analysis/firing\_dynamics.py                     |      292 |       11 |     96% |412-420, 806-807 |
+| src/Synaptipy/core/analysis/passive\_properties.py                  |      798 |       20 |     97% |156, 185, 248, 352-356, 393, 759-763, 1014, 1145-1151, 1209-1210 |
 | src/Synaptipy/core/analysis/registry.py                             |       96 |        0 |    100% |           |
-| src/Synaptipy/core/analysis/single\_spike.py                        |      329 |       13 |     96% |154, 177-178, 387, 454, 539-545, 797-799 |
-| src/Synaptipy/core/analysis/synaptic\_events.py                     |      519 |       22 |     96% |285-287, 339, 422, 425-449, 856-857, 976, 992, 1337 |
+| src/Synaptipy/core/analysis/single\_spike.py                        |      428 |       13 |     97% |165, 188-189, 489, 587, 718-724, 1001-1003 |
+| src/Synaptipy/core/analysis/synaptic\_events.py                     |      521 |       28 |     95% |285-287, 339, 422, 425-449, 860-867, 986, 1002, 1347 |
 | src/Synaptipy/core/constants.py                                     |       15 |        0 |    100% |           |
-| src/Synaptipy/core/data\_model.py                                   |      288 |        5 |     98% |214-215, 276-278 |
+| src/Synaptipy/core/data\_model.py                                   |      302 |        5 |     98% |214-215, 276-278 |
 | src/Synaptipy/core/error\_handler.py                                |       77 |        1 |     99% |       138 |
 | src/Synaptipy/core/processing\_pipeline.py                          |      137 |        0 |    100% |           |
-| src/Synaptipy/core/results.py                                       |      119 |        0 |    100% |           |
+| src/Synaptipy/core/results.py                                       |      149 |        4 |     97% |   119-122 |
 | src/Synaptipy/core/signal\_processor.py                             |      395 |        0 |    100% |           |
 | src/Synaptipy/core/source\_interfaces.py                            |        2 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/\_\_init\_\_.py                        |        1 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/exporters/\_\_init\_\_.py              |        2 |        0 |    100% |           |
-| src/Synaptipy/infrastructure/exporters/csv\_exporter.py             |      311 |        2 |     99% |     22-23 |
+| src/Synaptipy/infrastructure/exporters/csv\_exporter.py             |      310 |        2 |     99% |     22-23 |
 | src/Synaptipy/infrastructure/exporters/nwb\_exporter.py             |      361 |       67 |     81% |36-37, 103-121, 223-224, 336, 338, 343, 345, 347, 359, 379-380, 409, 427-428, 480, 482, 502, 521-523, 528, 565-568, 570-573, 650-665, 686, 690, 704-714, 730, 758-759, 777-778, 785-788 |
 | src/Synaptipy/infrastructure/file\_readers/\_\_init\_\_.py          |        2 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/file\_readers/abf\_reader.py           |        0 |        0 |    100% |           |
-| src/Synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      426 |       34 |     92% |52-53, 153, 166-168, 235, 263-265, 275-277, 407-410, 444-445, 493, 537-538, 540-541, 555, 563, 628-629, 837-839, 899-903 |
+| src/Synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      539 |      137 |     75% |52-53, 155, 168-170, 237, 265-267, 277-279, 409-412, 446-447, 477-519, 528-623, 643-646, 657-660, 669, 686, 720-721, 723-724, 728-736, 750, 758, 762, 826-827, 1035-1037, 1097-1101 |
 | src/Synaptipy/infrastructure/file\_readers/neo\_source\_handle.py   |       50 |        0 |    100% |           |
 | src/Synaptipy/infrastructure/neo\_patches.py                        |      153 |       18 |     88% |49-50, 58-59, 87-90, 118-120, 128, 174, 187-189, 197-198 |
 | src/Synaptipy/shared/\_\_init\_\_.py                                |       10 |        0 |    100% |           |
@@ -58,7 +62,7 @@
 | src/Synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/Synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
 | src/Synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **6839** |  **321** | **95%** |           |
+| **TOTAL**                                                           | **8094** |  **633** | **92%** |           |
 
 
 ## Setup coverage badge
