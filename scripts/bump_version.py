@@ -43,6 +43,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def _replace(path: Path, old: str, new: str) -> None:
     """Replace the first occurrence of *old* with *new* in *path*."""
+    if not path.exists():
+        print(f"  WARNING: file not found: {path.relative_to(ROOT)}")
+        return
     text = path.read_text(encoding="utf-8")
     if old not in text:
         print(f"  WARNING: '{old}' not found in {path.relative_to(ROOT)}")
@@ -53,6 +56,9 @@ def _replace(path: Path, old: str, new: str) -> None:
 
 def _replace_all(path: Path, old: str, new: str) -> None:
     """Replace *all* occurrences of *old* with *new* in *path*."""
+    if not path.exists():
+        print(f"  WARNING: file not found: {path.relative_to(ROOT)}")
+        return
     text = path.read_text(encoding="utf-8")
     count = text.count(old)
     if count == 0:
@@ -105,6 +111,23 @@ def bump(old_version: str, new_version: str) -> None:
         f'release = "{old_version}"',
         f'release = "{new_version}"',
     )
+
+    # docs/references.md
+    _replace(
+        ROOT / "docs" / "references.md",
+        f'Visualization and Analysis Suite (v{old_version}).',
+        f'Visualization and Analysis Suite (v{new_version}).',
+    )
+
+    # paper/envs/*.txt
+    envs_dir = ROOT / "paper" / "envs"
+    if envs_dir.exists():
+        for env_file in envs_dir.glob("*.txt"):
+            _replace(
+                env_file,
+                f'# Synaptipy version: {old_version}',
+                f'# Synaptipy version: {new_version}',
+            )
 
     # installer/windows_setup.iss
     _replace(
