@@ -66,20 +66,20 @@ For active properties, SynaptiPy utilized a standard dynamic derivative-crossing
 
 **Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**
 
-| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |
-|--------|-------------------------------|-------------------------------|-------------------|-------------------|
-| AP threshold (mV) | 0.9277*** | 0.9330*** | +0.052 mV | +0.001 mV |
-| AP amplitude (mV) | 0.9952*** | 0.9902*** | -0.052 mV | +0.706 mV |
-| AP half-width (ms) | 0.9873*** | 0.9949*** | -0.094 ms | -0.012 ms |
-| Max dV/dt (V/s) | 0.9884*** | 0.7056*** | -6.352 V/s | +79.539 V/s |
-| AP Delay (Time to first spike) (ms) | 1.0000*** | 1.0000*** | -0.000 ms | -0.002 ms |
-| Upstroke/Downstroke Ratio | 0.9998*** | 0.9971*** | -0.070 Ratio | +0.519 Ratio |
-| Fast AHP depth (mV) | 0.9807*** | 0.9513*** | +0.725 mV | -1.884 mV |
-| ADP amplitude (mV) | -0.3867 (*p*=0.5203) | 0.5881*** | -6.561 mV | +2.929 mV |
-| Mean Firing Frequency (Hz) | 1.0000*** | 0.5951*** | +0.000 Hz | +23.921 Hz |
-| Spike Frequency Adaptation | 1.0000*** | 0.7569*** | -0.000 Ratio | +0.014 Ratio |
+| Metric | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL |
+|--------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|
+| AP threshold (mV) | 0.9277*** | +0.052 mV | [-1.58, +1.68] mV | 0.9330*** | +0.001 mV | [-1.51, +1.52] mV |
+| AP amplitude (mV) | 0.9952*** | -0.052 mV | [-1.68, +1.58] mV | 0.9902*** | +0.706 mV | [-1.83, +3.24] mV |
+| AP half-width (ms) | 0.9873*** | -0.094 ms | [-0.19, +0.00] ms | 0.9949*** | -0.012 ms | [-0.06, +0.03] ms |
+| Max dV/dt (V/s) | 0.9884*** | -6.352 V/s | [-21.84, +9.13] V/s | 0.7056*** | +79.539 V/s | [+3.61, +155.47] V/s |
+| AP Delay (Time to first spike) (ms) | 1.0000*** | -0.000 ms | [-0.00, +0.00] ms | 1.0000*** | -0.002 ms | [-0.06, +0.05] ms |
+| Upstroke/Downstroke Ratio | 0.9998*** | -0.070 Ratio | [-0.15, +0.01] Ratio | 0.9971*** | +0.519 Ratio | [+0.22, +0.81] Ratio |
+| Fast AHP depth (mV) | 0.9807*** | +0.725 mV | [-3.79, +5.24] mV | 0.9513*** | -1.884 mV | [-5.13, +1.36] mV |
+| ADP amplitude (mV) | -0.3867 (*p*=0.5203) | -6.561 mV | [-13.62, +0.49] mV | 0.5881*** | +2.929 mV | [-14.78, +20.64] mV |
+| Mean Firing Frequency (Hz) | 1.0000*** | +0.000 Hz | [-0.00, +0.00] Hz | 0.5951*** | +23.921 Hz | [-50.78, +98.62] Hz |
+| Spike Frequency Adaptation | 1.0000*** | -0.000 Ratio | [-0.00, +0.00] Ratio | 0.7569*** | +0.014 Ratio | [-0.03, +0.05] Ratio |
 
-*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*
+*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*
 
 **Extended Data Table 2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**
 

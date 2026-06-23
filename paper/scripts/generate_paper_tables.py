@@ -1068,10 +1068,19 @@ def main():
             log.warning(f"  Failed to download Cell {cell_id}: {exc}")
 
     log.info("Phase 2: Analysis")
-    t1_df = build_table1(downloaded_cells)
+    
+    t1_csv = OUT_DIR / "benchmark_comparison.csv"
+    if not t1_csv.exists():
+        t1_df = build_table1(downloaded_cells)
+    else:
+        t1_df = pd.read_csv(t1_csv)
     t1_md = make_table1_md(t1_df)
 
-    t2_df = build_table2(downloaded_cells)
+    t2_csv = OUT_DIR / "passive_properties.csv"
+    if not t2_csv.exists():
+        t2_df = build_table2(downloaded_cells)
+    else:
+        t2_df = pd.read_csv(t2_csv)
     t2_md = make_table2_md(t2_df)
 
     plot_cell_summaries(downloaded_cells)
