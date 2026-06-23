@@ -25,12 +25,25 @@ Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/
 
 **WARNING: PySide6 must remain pinned to version 6.7.3 due to QTBUG-130070.**
 
-### Prerequisites
+### Default Install (PyPI)
 
-- [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-- Python 3.10-3.12 (3.11 recommended)
+The recommended approach for most users is to install Synaptipy directly via pip into a standard Python environment (Python 3.10-3.12).
 
-### From source
+```bash
+pip install Synaptipy
+```
+
+### Standalone Application
+
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.5b7 release assets:
+
+- **Windows:** `Synaptipy_Setup_v0.1.5b7.exe`
+- **macOS:** `Synaptipy_v0.1.5b7.dmg` - open the disk image and drag to Applications
+- **Linux:** `Synaptipy-v0.1.5b7-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+
+### Advanced: From Source
+
+For developers and users who want to modify the application, you can install directly from the source repository using Conda/Miniconda:
 
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
@@ -42,14 +55,6 @@ synaptipy  # launch the application
 ```
 
 For detailed installation instructions, system requirements, and troubleshooting, see the [full documentation](https://synaptipy.readthedocs.io/en/latest/user_guide.html#installation).
-
-### Standalone application
-
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.5b7 release assets:
-
-- **Windows:** `Synaptipy_Setup_v0.1.5b7.exe`
-- **macOS:** `Synaptipy_v0.1.5b7.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.5b7-x86_64.AppImage` - mark as executable (`chmod +x`) and run
 
 ---
 
@@ -245,16 +250,6 @@ PySide6 is pinned to 6.7.3 on all platforms. PySide6 6.8.0 contains a known cras
 
 Contributions are welcome. The preferred contribution pathway for new analysis routines is the plugin interface, which requires no modification to the core package. For changes to the core, infrastructure, or application layers, refer to [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions, coding standards, and the contribution workflow.
 
-### Releasing a new version
-
-Use the bump script — never edit version strings by hand:
-
-```bash
-python scripts/bump_version.py 0.1.6b1   # for a beta
-python scripts/bump_version.py 1.0.0     # for a stable release
-```
-
-The script updates `pyproject.toml`, `src/Synaptipy/__init__.py`, `CITATION.cff` (version + date-released), `docs/conf.py`, installer files, installer filename references in `README.md`, and prepends a CHANGELOG header. It **never** touches dependency version constraints. After the file edits, it offers to create a local `git tag vX.Y.Z` — pushing to the remote is always a manual step.
 
 ---
 
@@ -266,6 +261,8 @@ Synaptipy builds on the following open-source libraries. When using Synaptipy in
 |---|---|---|
 | [Neo](https://neo.readthedocs.io) | Electrophysiology file I/O | Garcia S et al. (2014). *Front. Neuroinformatics* 8:10. [doi:10.3389/fninf.2014.00010](https://doi.org/10.3389/fninf.2014.00010) |
 | [PyNWB](https://pynwb.readthedocs.io) | NWB data export | Rubel O et al. (2022). *eLife* 11:e78362. [doi:10.7554/eLife.78362](https://doi.org/10.7554/eLife.78362) |
+| [SpikeInterface](https://spikeinterface.readthedocs.io) | Spike sorting integration (Plugin) | Buccino AP et al. (2020). *eLife* 9:e61834. [doi:10.7554/eLife.61834](https://doi.org/10.7554/eLife.61834) |
+| [miniML](https://github.com/delvendahl/miniML) | Deep learning event detection (Plugin) | O'Neill PS et al. (2025). *eLife* 13:RP98485. [doi:10.7554/eLife.98485](https://doi.org/10.7554/eLife.98485) |
 | [PySide6](https://doc.qt.io/qtforpython/) | Qt6 GUI framework | Qt for Python, The Qt Company. https://doc.qt.io/qtforpython/ |
 | [PyQtGraph](https://www.pyqtgraph.org) | Signal rendering | Campagnola L et al. PyQtGraph. https://www.pyqtgraph.org |
 | [SciPy](https://scipy.org) | Signal processing and curve fitting | Virtanen P et al. (2020). *Nature Methods* 17:261-272. [doi:10.1038/s41592-019-0686-2](https://doi.org/10.1038/s41592-019-0686-2) |

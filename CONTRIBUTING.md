@@ -136,3 +136,14 @@ Bug reports should include:
 
 By contributing to Synaptipy, you agree that your contributions will be
 licensed under the [AGPL-3.0](LICENSE) license.
+
+## Releasing a new version
+
+Use the bump script — never edit version strings by hand:
+
+```bash
+python scripts/bump_version.py 0.1.6b1   # for a beta
+python scripts/bump_version.py 1.0.0     # for a stable release
+```
+
+The script updates `pyproject.toml`, `src/Synaptipy/__init__.py`, `CITATION.cff` (version + date-released), `docs/conf.py`, installer files, installer filename references in `README.md`, and prepends a CHANGELOG header. It **never** touches dependency version constraints. After the file edits, it offers to create a local `git tag vX.Y.Z` — pushing to the remote is always a manual step.
