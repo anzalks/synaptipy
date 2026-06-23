@@ -124,28 +124,28 @@ def main():
     ax1.imshow(img_a)
     ax1.axis("off")
     add_panel_title(ax1, "Overview & Project Architecture")
-    add_panel_label(ax1, "A", x=-0.05, y=1.05)
+    add_panel_label(ax1, "A")
 
     # Top-right: img_b
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.imshow(img_b)
     ax2.axis("off")
     add_panel_title(ax2, "Data Explorer & Metadata View")
-    add_panel_label(ax2, "B", x=-0.05, y=1.05)
+    add_panel_label(ax2, "B")
 
     # Bottom-left: img_c
     ax3 = fig.add_subplot(gs[1, 0])
     ax3.imshow(img_c)
     ax3.axis("off")
     add_panel_title(ax3, "Analysis Pipeline Builder")
-    add_panel_label(ax3, "C", x=-0.05, y=1.05)
+    add_panel_label(ax3, "C")
 
     # Bottom-right: img_d
     ax4 = fig.add_subplot(gs[1, 1])
     ax4.imshow(img_d)
     ax4.axis("off")
     add_panel_title(ax4, "Data Exporter & Summary Results")
-    add_panel_label(ax4, "D", x=-0.05, y=1.05)
+    add_panel_label(ax4, "D")
 
     # Removed suptitle to comply with eNeuro publishing guidelines
 

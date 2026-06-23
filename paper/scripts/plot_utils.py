@@ -94,9 +94,9 @@ def add_panel_title(ax, title, pad=15):
     ax.set_title(title, fontsize=TITLE_SIZE, pad=pad)
 
 
-def add_panel_label(ax, label, x=-0.15, y=1.05):
+def add_panel_label(ax, label, x=-0.05, y=1.05):
     """Standardized panel label generator (A, B, C...)."""
-    ax.text(x, y, label, transform=ax.transAxes, fontsize=PANEL_LABEL_SIZE, fontweight="bold", va="top", ha="right")
+    ax.text(x, y, label, transform=ax.transAxes, fontsize=PANEL_LABEL_SIZE, fontweight="bold", va="bottom", ha="right")
 
 
 def add_legend(ax, loc="best", **kwargs):
