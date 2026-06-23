@@ -292,6 +292,20 @@ Array programming with NumPy. *Nature*, 585, 357-362.
 
 ---
 
+## Plugin Integrations
+
+**O'Neill, P. S., Baccino-Calace, M., Rupprecht, P., Lee, S., Hao, Y. A., Lin, M. Z., Friedrich, R. W., Müller, M., & Delvendahl, I. (2025).**
+A deep learning framework for automated and generalized synaptic event analysis. *eLife*, 13:RP98485.
+[doi:10.7554/eLife.98485](https://doi.org/10.7554/eLife.98485)
+> Citation for the deep-learning event detection used in the `miniml_integration.py` plugin.
+
+**Buccino, A. P., Hurwitz, C. L., Garcia, S., Magland, J., Siegle, J. H., Hurwitz, R., & Hennig, M. H. (2020).**
+SpikeInterface, a unified framework for spike sorting. *eLife*, 9:e61834.
+[doi:10.7554/eLife.61834](https://doi.org/10.7554/eLife.61834)
+> Citation for the spike sorting pipeline used in the `spike_interface_integration.py` plugin.
+
+---
+
 ## How to Cite Synaptipy
 
 If you use Synaptipy in published research, please cite the software directly
@@ -299,7 +313,7 @@ using the metadata in [`CITATION.cff`](https://github.com/anzalks/synaptipy/blob
 
 ```
 Shahul, A. K. (2026). SynaptiPy: An Open-Source Electrophysiology
-Visualization and Analysis Suite (v0.1.3b7).
+Visualization and Analysis Suite (v0.1.5b7).
 https://github.com/anzalks/synaptipy
 ```
 

@@ -69,27 +69,24 @@ Dependencies are automatically installed during package installation:
 
 Synaptipy is available both as a standalone application and as a Python package.
 
+#### Default Install (PyPI)
+
+The recommended approach for most users is to install Synaptipy directly via pip into a standard Python environment (Python 3.10-3.12).
+
+```bash
+pip install Synaptipy
+```
+
 #### Standalone Application
+
 Pre-built installers for macOS (`.dmg`), Windows (`.exe`), and Linux (`.AppImage`) are available on the [GitHub Releases page](https://github.com/anzalks/synaptipy/releases).
 - **macOS**: Open the `.dmg` and drag Synaptipy to the Applications folder.
 - **Windows**: Execute the `_Setup.exe` installer.
 - **Linux**: Mark the `.AppImage` file executable (`chmod +x Synaptipy-*.AppImage`) and execute.
 
-#### Python Package Installation
-
-Install from source using the conda environment:
-
-```bash
-git clone https://github.com/anzalks/synaptipy.git
-cd synaptipy
-conda env create -f environment.yml
-conda activate synaptipy
-pip install .
-```
-
 ### Developer Installation
 
-For contributing to Synaptipy, install in editable mode with development dependencies:
+For developers, users who want to modify the application, or users who want the bleeding-edge main branch, install from source using Conda/Miniconda:
 
 ```bash
 git clone https://github.com/anzalks/synaptipy.git
@@ -727,7 +724,7 @@ is caught and logged; remaining plugins still load normally.
 
 #### Included Example Plugins
 
-Synaptipy ships three ready-to-run example plugins in `examples/plugins/`.
+Synaptipy ships five ready-to-run example plugins in `examples/plugins/`.
 With **Enable Custom Plugins** active they load automatically:
 
 | Plugin file | Analyser tab label | What it measures |
