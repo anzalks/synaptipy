@@ -914,30 +914,49 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         ("Spike Frequency Adaptation", "syn_sfa", "efel_sfa", "ipfx_sfa", "Ratio"),
     ]
     md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
-    md += "| Metric | SynaptiPy vs IPFX Pearson *r* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs IPFX | Mean bias vs eFEL |\n"
-    md += "|--------|-------------------------------|-------------------------------|-------------------|-------------------|\n"
+    md += "| Metric | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL |\n"
+    md += "|--------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|\n"
+    
+    def _fmt_r(vs):
+        if np.isnan(vs.get("r", np.nan)):
+            return "N/A"
+        s = f"{vs['r']:.4f}"
+        if not np.isnan(vs.get("p", np.nan)):
+            s += "***" if vs["p"] < 0.0001 else f" (*p*={vs['p']:.4f})"
+        return s
+
+    def _fmt_bias(vs, unit):
+        return f"{vs['bias']:+.3f} {unit}" if not np.isnan(vs.get("bias", np.nan)) else "N/A"
+
+    def _fmt_loa(vs, unit):
+        if np.isnan(vs.get("loa_upper", np.nan)):
+            return "N/A"
+        return f"[{vs['loa_lower']:+.2f}, {vs['loa_upper']:+.2f}] {unit}"
+
     for label, s_col, e_col, i_col, unit in metrics:
         if s_col not in cmp_df.columns:
             continue
         s = cmp_df[s_col].values
-        e = cmp_df[e_col].values if e_col in cmp_df.columns else np.full(len(s), np.nan)
-        i = cmp_df[i_col].values if i_col in cmp_df.columns else np.full(len(s), np.nan)
-        vs_i, vs_e = corr_summary(i, s), corr_summary(e, s)
+        
+        if e_col and e_col in cmp_df.columns:
+            e = cmp_df[e_col].values
+            vs_e = corr_summary(e, s)
+        else:
+            vs_e = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
 
-        r_i = f"{vs_i['r']:.4f}" if not np.isnan(vs_i["r"]) else "N/A"
-        if not np.isnan(vs_i.get("p", np.nan)):
-            r_i += "***" if vs_i["p"] < 0.0001 else f" (*p*={vs_i['p']:.4f})"
+        if i_col and i_col in cmp_df.columns:
+            i = cmp_df[i_col].values
+            vs_i = corr_summary(i, s)
+        else:
+            vs_i = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
 
-        r_e = f"{vs_e['r']:.4f}" if not np.isnan(vs_e["r"]) else "N/A"
-        if not np.isnan(vs_e.get("p", np.nan)):
-            r_e += "***" if vs_e["p"] < 0.0001 else f" (*p*={vs_e['p']:.4f})"
+        md += (
+            f"| {label} | "
+            f"{_fmt_r(vs_i)} | {_fmt_bias(vs_i, unit)} | {_fmt_loa(vs_i, unit)} | "
+            f"{_fmt_r(vs_e)} | {_fmt_bias(vs_e, unit)} | {_fmt_loa(vs_e, unit)} |\n"
+        )
 
-        b_i = f"{vs_i['bias']:+.3f} {unit}" if not np.isnan(vs_i["bias"]) else "N/A"
-        b_e = f"{vs_e['bias']:+.3f} {unit}" if not np.isnan(vs_e["bias"]) else "N/A"
-
-        md += f"| {label} | {r_i} | {r_e} | {b_i} | {b_e} |\n"
-
-    md += "\n*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*"
+    md += "\n*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*"
     return md
 
 
@@ -1061,18 +1080,15 @@ def main():
     paper_path = REPO_ROOT / "paper" / "paper.md"
     text = paper_path.read_text(encoding="utf-8")
 
-    T1_START = "**Extended Data Table 1:"
+    T1_START = "<!-- TABLES_START -->"
+    T1_END = "<!-- TABLES_END -->"
     idx1s = text.find(T1_START)
-    if idx1s == -1:
-        log.error("Could not find Extended Data Table 1 in paper.md")
+    idx1e = text.find(T1_END)
+    if idx1s == -1 or idx1e == -1:
+        log.error("Could not find <!-- TABLES_START --> or <!-- TABLES_END --> markers in paper.md")
         return
 
-    import re
-
-    match = re.search(r"\n#{1,3}\s", text[idx1s:])
-    end_idx = idx1s + match.start() if match else len(text)
-
-    new_text = text[:idx1s] + t1_md + "\n\n" + t2_md + "\n\n" + text[end_idx:]
+    new_text = text[:idx1s + len(T1_START)] + "\n\n" + t1_md + "\n\n" + t2_md + "\n" + text[idx1e:]
     paper_path.write_text(new_text, encoding="utf-8")
     log.info(f"Success! Updated paper at {paper_path}")
 
