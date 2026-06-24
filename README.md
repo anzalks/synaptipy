@@ -71,7 +71,7 @@ synaptipy  # launch the application
 python -m Synaptipy
 ```
 
-![Synaptipy Interactive Workflow Demonstration](docs/tutorial/workflow_demo.gif)
+![Synaptipy Interactive Workflow Demonstration](https://raw.githubusercontent.com/anzalks/synaptipy/main/docs/tutorial/workflow_demo.gif)
 
 Load a recording by dragging a file into the **Explorer** tab, then navigate to the **Analyser** tab to select a channel and run an analysis. Results are displayed in a table and can be exported to CSV.
 
