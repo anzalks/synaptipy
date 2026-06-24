@@ -4,7 +4,7 @@
 # used to produce all paper results.
 # Platform: macOS (Apple M1 Pro, arm64)
 # Generated: 2026-06-14 with: pip freeze
-# Synaptipy version: 0.1.5
+# Synaptipy version: 0.1.6.1
 # -----------------------------------------------
 
 absl-py==2.4.0

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6.1] - 2026-06-24
+
+### Fixed
+
+- **PyPI README GIF not rendering**: The workflow demo GIF used a relative path
+  (`docs/tutorial/workflow_demo.gif`) which is invisible on PyPI. Changed to the
+  absolute raw GitHub URL so the animation displays correctly on the PyPI project page.
+
+### Changed
+
+- Bumped version to `0.1.6.1` across all canonical locations.
+
+
 ## [0.1.5] - 2026-06-23
 
 ### Changed

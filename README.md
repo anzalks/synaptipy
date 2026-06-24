@@ -35,11 +35,11 @@ pip install Synaptipy
 
 ### Standalone Application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.5 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.6.1 release assets:
 
-- **Windows:** `Synaptipy_Setup_v0.1.5.exe`
-- **macOS:** `Synaptipy_v0.1.5.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.5-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Windows:** `Synaptipy_Setup_v0.1.6.1.exe`
+- **macOS:** `Synaptipy_v0.1.6.1.dmg` - open the disk image and drag to Applications
+- **Linux:** `Synaptipy-v0.1.6.1-x86_64.AppImage` - mark as executable (`chmod +x`) and run
 
 ### Advanced: From Source
 
