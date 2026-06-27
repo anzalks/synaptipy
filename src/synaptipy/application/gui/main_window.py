@@ -657,7 +657,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             import synaptipy
 
-            version = getattr(Synaptipy, "__version__", "unknown")
+            version = getattr(synaptipy, "__version__", "unknown")
         except Exception:
             version = "unknown"
         dialog = AboutDialog(version=version, parent=self)

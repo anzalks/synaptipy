@@ -18,7 +18,7 @@ import numpy as np
 try:
     import synaptipy
 
-    _SYNAPTIPY_VERSION = getattr(Synaptipy, "__version__", "unknown")
+    _SYNAPTIPY_VERSION = getattr(synaptipy, "__version__", "unknown")
 except Exception:
     _SYNAPTIPY_VERSION = "unknown"
 

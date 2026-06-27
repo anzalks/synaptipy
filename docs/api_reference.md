@@ -23,7 +23,7 @@ section alongside usage examples.
 ### Data Model
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.data_model
+.. automodule:: synaptipy.core.data_model
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -45,7 +45,7 @@ channel = recording.get_channel_by_name("Vm")
 ### File Readers
 
 ```{eval-rst}
-.. automodule:: Synaptipy.infrastructure.file_readers.neo_adapter
+.. automodule:: synaptipy.infrastructure.file_readers.neo_adapter
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -75,7 +75,7 @@ Baseline (RMP), Input Resistance, Membrane Time Constant (Tau), Sag Ratio,
 I-V Curve, and Capacitance.
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.passive_properties
+.. automodule:: synaptipy.core.analysis.passive_properties
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -86,7 +86,7 @@ I-V Curve, and Capacitance.
 Spike Detection and Phase Plane (dV/dt vs V) analysis.
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.single_spike
+.. automodule:: synaptipy.core.analysis.single_spike
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -97,7 +97,7 @@ Spike Detection and Phase Plane (dV/dt vs V) analysis.
 Excitability (F-I Curve), Burst Analysis, and Spike Train Dynamics.
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.firing_dynamics
+.. automodule:: synaptipy.core.analysis.firing_dynamics
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -109,7 +109,7 @@ Threshold-based detection, Template Match detection, and Baseline-Peak
 detection.
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.synaptic_events
+.. automodule:: synaptipy.core.analysis.synaptic_events
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -122,7 +122,7 @@ and jitter), Paired-Pulse Ratio with residual decay subtraction, and
 Stimulus Train short-term plasticity (STP) analysis.
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.evoked_responses
+.. automodule:: synaptipy.core.analysis.evoked_responses
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -134,7 +134,7 @@ The central decorator-based registry that maps named analysis functions to the
 GUI and batch engine.
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.registry
+.. automodule:: synaptipy.core.analysis.registry
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -157,7 +157,7 @@ result = func(data, time, sampling_rate, baseline_start=0.0, baseline_end=0.1)
 ### Batch Processing
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.batch_engine
+.. automodule:: synaptipy.core.analysis.batch_engine
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -186,7 +186,7 @@ results_df = engine.run_batch(files, pipeline)
 #### Epoch Manager
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.analysis.epoch_manager
+.. automodule:: synaptipy.core.analysis.epoch_manager
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -198,7 +198,7 @@ results_df = engine.run_batch(files, pipeline)
 ### Signal Processing
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.signal_processor
+.. automodule:: synaptipy.core.signal_processor
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -207,7 +207,7 @@ results_df = engine.run_batch(files, pipeline)
 #### Processing Pipeline
 
 ```{eval-rst}
-.. automodule:: Synaptipy.core.processing_pipeline
+.. automodule:: synaptipy.core.processing_pipeline
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -218,7 +218,7 @@ results_df = engine.run_batch(files, pipeline)
 ### Plugin System
 
 ```{eval-rst}
-.. automodule:: Synaptipy.application.plugin_manager
+.. automodule:: synaptipy.application.plugin_manager
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -240,7 +240,7 @@ PluginManager.reload_plugins()
 #### CSV Exporter
 
 ```{eval-rst}
-.. automodule:: Synaptipy.infrastructure.exporters.csv_exporter
+.. automodule:: synaptipy.infrastructure.exporters.csv_exporter
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -296,7 +296,7 @@ A companion `_provenance.json` is written alongside every exported file.
 #### NWB Exporter
 
 ```{eval-rst}
-.. automodule:: Synaptipy.infrastructure.exporters.nwb_exporter
+.. automodule:: synaptipy.infrastructure.exporters.nwb_exporter
    :members:
    :undoc-members: False
    :show-inheritance:
