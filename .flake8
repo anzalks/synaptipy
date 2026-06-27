@@ -21,12 +21,12 @@ exclude =
 ignore = E203, W503, E226
 per-file-ignores =
     __init__.py:F401
-    src/Synaptipy/application/gui/analysis_tabs/metadata_driven.py:C901
-    src/Synaptipy/application/gui/batch_dialog.py:C901
-    src/Synaptipy/application/gui/ui_generator.py:C901
-    src/Synaptipy/core/data_model.py:C901
-    src/Synaptipy/shared/utils.py:C901
-    src/Synaptipy/application/gui/explorer/sidebar.py:C901
-    src/Synaptipy/core/analysis/firing_dynamics.py:C901
-    src/Synaptipy/core/analysis/passive_properties.py:C901
-    src/Synaptipy/infrastructure/file_readers/neo_adapter.py:C901
+    src/synaptipy/application/gui/analysis_tabs/metadata_driven.py:C901
+    src/synaptipy/application/gui/batch_dialog.py:C901
+    src/synaptipy/application/gui/ui_generator.py:C901
+    src/synaptipy/core/data_model.py:C901
+    src/synaptipy/shared/utils.py:C901
+    src/synaptipy/application/gui/explorer/sidebar.py:C901
+    src/synaptipy/core/analysis/firing_dynamics.py:C901
+    src/synaptipy/core/analysis/passive_properties.py:C901
+    src/synaptipy/infrastructure/file_readers/neo_adapter.py:C901
