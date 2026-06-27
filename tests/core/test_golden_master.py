@@ -44,7 +44,7 @@ _SKIP_REASON = "Example ABF data files not found - skipping golden master tests"
 @pytest.fixture(scope="module")
 def neo_adapter():
     """Return a NeoAdapter instance (module-scoped to avoid repeated init)."""
-    from Synaptipy.infrastructure.file_readers import NeoAdapter
+    from synaptipy.infrastructure.file_readers import NeoAdapter
 
     return NeoAdapter()
 
@@ -134,7 +134,7 @@ class TestGoldenMaster0019:
 
     def test_rmp_trial0(self, rec_0019):
         """RMP from trial 0 baseline (0-0.15 s) should match reference."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+        from synaptipy.core.analysis.passive_properties import calculate_rmp
 
         ch = _ch0(rec_0019)
         d = ch.get_data(0)
@@ -147,7 +147,7 @@ class TestGoldenMaster0019:
 
     def test_rin_trial0(self, rec_0019):
         """Rin (steady-state) from trial 0 (-20 pA step) should match reference."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rin
+        from synaptipy.core.analysis.passive_properties import calculate_rin
 
         ch = _ch0(rec_0019)
         d = ch.get_data(0)
@@ -167,7 +167,7 @@ class TestGoldenMaster0019:
 
     def test_tau_trial0(self, rec_0019):
         """Membrane time constant from trial 0 should match reference."""
-        from Synaptipy.core.analysis.passive_properties import calculate_tau
+        from synaptipy.core.analysis.passive_properties import calculate_tau
 
         ch = _ch0(rec_0019)
         d = ch.get_data(0)
@@ -199,7 +199,7 @@ class TestGoldenMaster0022:
 
     def test_rmp_trial0(self, rec_0022):
         """RMP from trial 0, baseline window 0-15.9 s, should match reference."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+        from synaptipy.core.analysis.passive_properties import calculate_rmp
 
         ch = _ch0(rec_0022)
         d = ch.get_data(0)
@@ -211,7 +211,7 @@ class TestGoldenMaster0022:
 
     def test_rin_trial0(self, rec_0022):
         """Rin from trial 0, step window 15.95-16.35 s, should match reference."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rin
+        from synaptipy.core.analysis.passive_properties import calculate_rin
 
         ch = _ch0(rec_0022)
         d = ch.get_data(0)
@@ -249,7 +249,7 @@ class TestGoldenMaster0021:
 
     def test_rmp_baseline_trial0(self, rec_0021):
         """RMP from trial 0 baseline (0-0.1 s) should match reference."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+        from synaptipy.core.analysis.passive_properties import calculate_rmp
 
         ch = _ch0(rec_0021)
         d = ch.get_data(0)
@@ -282,7 +282,7 @@ class TestGoldenMasterPrimaryPipelinesABF:
 
     def test_passive_wrappers_rmp_rin_cm_sag(self, rec_0019):
         """Passive wrapper outputs should remain stable across dependency updates."""
-        from Synaptipy.core.analysis.passive_properties import (
+        from synaptipy.core.analysis.passive_properties import (
             run_capacitance_analysis_wrapper,
             run_rin_analysis_wrapper,
             run_rmp_analysis_wrapper,
@@ -336,7 +336,7 @@ class TestGoldenMasterPrimaryPipelinesABF:
 
     def test_single_spike_wrapper_threshold_max_dvdt_half_width(self, rec_0021):
         """Single-spike kinetic features should remain stable on the last sweep."""
-        from Synaptipy.core.analysis.single_spike import run_spike_detection_wrapper
+        from synaptipy.core.analysis.single_spike import run_spike_detection_wrapper
 
         ch = _ch0(rec_0021)
         last_idx = ch.num_trials - 1
@@ -362,7 +362,7 @@ class TestGoldenMasterPrimaryPipelinesABF:
 
     def test_firing_dynamics_fi_curve_spike_count_and_adaptation(self, rec_0021):
         """F-I extractor should preserve spike counts and first finite adaptation ratio."""
-        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+        from synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
 
         ch = _ch0(rec_0021)
         sweeps = [ch.get_data(i) for i in range(ch.num_trials)]
@@ -386,7 +386,7 @@ class TestGoldenMasterPrimaryPipelinesSynthetic:
 
     def test_synaptic_threshold_event_detection_count_amplitude_tau(self):
         """Threshold event detector should preserve event count, amplitude, and kinetics."""
-        from Synaptipy.core.analysis.synaptic_events import run_event_detection_threshold_wrapper
+        from synaptipy.core.analysis.synaptic_events import run_event_detection_threshold_wrapper
 
         data, time, sampling_rate = _make_synaptic_trace()
         result = run_event_detection_threshold_wrapper(
@@ -409,7 +409,7 @@ class TestGoldenMasterPrimaryPipelinesSynthetic:
 
     def test_evoked_opto_latency_jitter_and_integrated_charge(self):
         """Opto wrapper latency/jitter and AUC proxy should remain numerically stable."""
-        from Synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
+        from synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
 
         data, time, ttl, onsets, sampling_rate = _make_opto_trace()
         result = run_opto_sync_wrapper(
@@ -565,7 +565,7 @@ class TestGoldenMasterExtendedSynthetic:
           I_peak = V_step / Rs = -1000 pA
           tau_c  = Rs * Cm = 1.0 ms
         """
-        from Synaptipy.core.analysis.passive_properties import calculate_vc_transient_parameters
+        from synaptipy.core.analysis.passive_properties import calculate_vc_transient_parameters
 
         i_trace, t = _make_vc_transient(rs_mohm=10.0, cm_pf=100.0, v_step_mv=-10.0)
         result = calculate_vc_transient_parameters(
@@ -608,7 +608,7 @@ class TestGoldenMasterExtendedSynthetic:
           Rs (MΩ)      = 0.3 mV / 20 pA * 1e3 = 15 MΩ
           Cm_derived   = tau / Rin = 20 ms / 200 MΩ = 100 pF
         """
-        from Synaptipy.core.analysis.passive_properties import calculate_cc_series_resistance_fast
+        from synaptipy.core.analysis.passive_properties import calculate_cc_series_resistance_fast
 
         v_trace, t = _make_cc_rs_trace(rs_mohm=15.0, rin_mohm=200.0, tau_ms=20.0, i_step_pa=-20.0)
         result = calculate_cc_series_resistance_fast(
@@ -640,7 +640,7 @@ class TestGoldenMasterExtendedSynthetic:
           R² = 1.0 for a perfect linear I-V.
           Intercept ≈ 0 V (floating-point machine epsilon).
         """
-        from Synaptipy.core.analysis.passive_properties import calculate_iv_curve
+        from synaptipy.core.analysis.passive_properties import calculate_iv_curve
 
         sweeps, tvecs, isteps = _make_iv_sweeps(
             rin_mohm=200.0,
@@ -684,7 +684,7 @@ class TestGoldenMasterExtendedSynthetic:
           fAHP window (1-5 ms post-peak): AHP depth ≈ 9.565 mV.
           mAHP window (10-50 ms post-peak): AHP depth ≈ 1.295 mV.
         """
-        from Synaptipy.core.analysis.single_spike import calculate_spike_features, detect_spikes_threshold
+        from synaptipy.core.analysis.single_spike import calculate_spike_features, detect_spikes_threshold
 
         v_trace, t = _make_spike_trace(spike_times_s=(0.1, 0.3))
         spike_result = detect_spikes_threshold(

@@ -9,7 +9,7 @@ Usage
 Files updated
 -------------
 - pyproject.toml          — version = "X.Y.Z"
-- src/Synaptipy/__init__.py — __version__ = "X.Y.Z"
+- src/synaptipy/__init__.py — __version__ = "X.Y.Z"
 - CITATION.cff            — version: "X.Y.Z" and date-released → today
 - docs/conf.py            — version and release fields
 - installer/windows_setup.iss — installer version string
@@ -81,7 +81,7 @@ def bump(old_version: str, new_version: str) -> None:
         f'version = "{new_version}"',
     )
 
-    # src/Synaptipy/__init__.py
+    # src/synaptipy/__init__.py
     _replace(
         ROOT / "src" / "Synaptipy" / "__init__.py",
         f'__version__ = "{old_version}"',

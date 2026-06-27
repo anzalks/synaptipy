@@ -1,6 +1,6 @@
 import pytest
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 
 # Save and restore registry around each test to ensure isolation
@@ -72,7 +72,7 @@ def test_spike_detection_metadata():
     # Re-import to ensure registration runs after clear()
     import importlib
 
-    import Synaptipy.core.analysis.single_spike as sa
+    import synaptipy.core.analysis.single_spike as sa
 
     importlib.reload(sa)
 
@@ -95,7 +95,7 @@ def test_spike_detection_metadata():
 # Regression test for Windows analysis-tab population bug
 # ---------------------------------------------------------------------------
 # Root cause: analyser_tab._load_analysis_tabs() called
-#   ``from Synaptipy.core.analysis.registry import AnalysisRegistry``
+#   ``from synaptipy.core.analysis.registry import AnalysisRegistry``
 # which only imports the registry *class* — it does NOT import the package
 # __init__.py, so the ``from . import basic_features`` (etc.) lines in
 # core/analysis/__init__.py were never executed and the registry remained
@@ -138,11 +138,11 @@ def test_full_package_import_populates_registry():
     """
     import importlib
 
-    import Synaptipy.core.analysis.evoked_responses as m4
-    import Synaptipy.core.analysis.firing_dynamics as m2
-    import Synaptipy.core.analysis.passive_properties as m0
-    import Synaptipy.core.analysis.single_spike as m1
-    import Synaptipy.core.analysis.synaptic_events as m3
+    import synaptipy.core.analysis.evoked_responses as m4
+    import synaptipy.core.analysis.firing_dynamics as m2
+    import synaptipy.core.analysis.passive_properties as m0
+    import synaptipy.core.analysis.single_spike as m1
+    import synaptipy.core.analysis.synaptic_events as m3
 
     for module in (m0, m1, m2, m3, m4):
         importlib.reload(module)
@@ -163,7 +163,7 @@ def test_registry_only_import_does_not_populate():
     registry, so we just check it is still empty after a registry-only re-import."""
     import importlib
 
-    import Synaptipy.core.analysis.registry as reg_mod
+    import synaptipy.core.analysis.registry as reg_mod
 
     importlib.reload(reg_mod)
 

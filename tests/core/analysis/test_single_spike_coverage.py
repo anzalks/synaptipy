@@ -1,6 +1,6 @@
 import numpy as np
 
-from Synaptipy.core.analysis.single_spike import (
+from synaptipy.core.analysis.single_spike import (
     analyze_multi_sweep_spikes,
     calculate_dvdt,
     calculate_isi,

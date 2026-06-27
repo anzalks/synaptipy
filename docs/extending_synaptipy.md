@@ -57,7 +57,7 @@ function and its metadata (parameter definitions, plot overlays, label, etc.).
 
 At startup, Synaptipy:
 
-1. Loads all **built-in** analyses from `src/Synaptipy/core/analysis/`.
+1. Loads all **built-in** analyses from `src/synaptipy/core/analysis/`.
 2. Scans **two** plugin directories in order:
    - `examples/plugins/` inside the Synaptipy installation - shipped example
      plugins that work out-of-the-box without any extra setup.
@@ -122,7 +122,7 @@ metadata.
 1. Copy the template:
    ```bash
    # macOS / Linux
-   cp src/Synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
+   cp src/synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
 
    # Windows (PowerShell)
    Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
@@ -211,7 +211,7 @@ parameters from `kwargs`, calls your logic function, and returns a dict that
 follows the **nested output schema**.
 
 ```python
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 @AnalysisRegistry.register(
     name="synaptic_charge",              # unique internal name
@@ -817,13 +817,13 @@ To customise one, copy the file to `~/.synaptipy/plugins/` and edit your copy.  
 
 If you are contributing to the Synaptipy repository itself:
 
-1. Create your module in `src/Synaptipy/core/analysis/my_analysis.py`.
-2. Add the import to `src/Synaptipy/core/analysis/__init__.py`:
+1. Create your module in `src/synaptipy/core/analysis/my_analysis.py`.
+2. Add the import to `src/synaptipy/core/analysis/__init__.py`:
    ```python
    from . import my_analysis  # noqa: F401 - registers: my_analysis_name
    ```
 3. (Optional) Create a custom tab class in
-   `src/Synaptipy/application/gui/analysis_tabs/` if you need GUI behaviour
+   `src/synaptipy/application/gui/analysis_tabs/` if you need GUI behaviour
    beyond what the metadata-driven tab provides.
 4. Add a test in `tests/core/test_my_analysis.py`.
 
@@ -839,8 +839,8 @@ Step-by-step:
 
 | Step | File | What to do |
 |---|---|---|
-| 1 | `src/Synaptipy/core/analysis/my_module.py` | Write pure logic + registry wrapper (see §3) |
-| 2 | `src/Synaptipy/core/analysis/__init__.py` | Add `from . import my_module  # noqa: F401` |
+| 1 | `src/synaptipy/core/analysis/my_module.py` | Write pure logic + registry wrapper (see §3) |
+| 2 | `src/synaptipy/core/analysis/__init__.py` | Add `from . import my_module  # noqa: F401` |
 | 3 | `tests/core/test_my_module.py` | Write pytest tests for the pure logic function |
 | 4 | `tests/core/test_registry_metadata.py` | Add your `name` to `EXPECTED_BUILTIN_ANALYSES` |
 
@@ -889,11 +889,11 @@ def test_auc_error_on_narrow_window():
 
 ```python
 import numpy as np
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 def test_auc_registered():
     # Ensure the plugin is loaded
-    from Synaptipy.application.plugin_manager import PluginManager
+    from synaptipy.application.plugin_manager import PluginManager
     PluginManager.load_plugins()
 
     func = AnalysisRegistry.get_function("synaptic_charge")
@@ -939,7 +939,7 @@ from typing import Any, Dict
 
 import numpy as np
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 
@@ -1171,7 +1171,7 @@ If your plugin opens a secondary `pg.PlotWidget` popup (via the `popup_xy`
 plot type), connect to the global signal so it re-styles on the fly:
 
 ```python
-from Synaptipy.shared.plot_customization import get_plot_customization_signals
+from synaptipy.shared.plot_customization import get_plot_customization_signals
 
 signals = get_plot_customization_signals()
 signals.preferences_updated.connect(my_popup_widget.update_pens)

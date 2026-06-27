@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers

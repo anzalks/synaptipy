@@ -1,0 +1,1339 @@
+# src/synaptipy/application/gui/batch_dialog.py
+# -*- coding: utf-8 -*-
+"""
+Batch Analysis Dialog for Synaptipy.
+
+Provides a user-friendly dialog for configuring and running batch analysis
+across multiple files using a pipeline-based approach.
+
+Author: Anzal K Shahul <anzal.ks@gmail.com>
+"""
+
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
+from PySide6 import QtCore, QtWidgets
+
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.shared.styling import style_button, style_label
+
+log = logging.getLogger(__name__)
+
+
+# ==============================================================================
+# Worker Thread for Background Processing
+# ==============================================================================
+
+
+class BatchWorkerSignals(QtCore.QObject):
+    """Signals for the batch worker thread."""
+
+    progress = QtCore.Signal(int, int, str)  # current, total, message
+    finished = QtCore.Signal(object)  # DataFrame result
+    error = QtCore.Signal(str)  # Error message
+
+
+class BatchWorker(QtCore.QThread):
+    """
+    Worker thread for running batch analysis in the background.
+
+    This prevents the UI from freezing during long-running batch operations.
+    """
+
+    def __init__(
+        self,
+        engine: BatchAnalysisEngine,
+        files: List[Path],
+        pipeline_config: List[Dict[str, Any]],
+        channel_filter: Optional[List[str]] = None,
+        cross_file_average: bool = False,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.engine = engine
+        self.files = files
+        self.pipeline_config = pipeline_config
+        self.channel_filter = channel_filter
+        self.cross_file_average = cross_file_average
+        self.signals = BatchWorkerSignals()
+        self._cancelled = False
+
+    def run(self):
+        """Execute the batch analysis."""
+        try:
+
+            def progress_callback(current, total, message):
+                if not self._cancelled:
+                    self.signals.progress.emit(current, total, message)
+
+            result_df = self.engine.run_batch(
+                files=self.files,
+                pipeline_config=self.pipeline_config,
+                progress_callback=progress_callback,
+                channel_filter=self.channel_filter,
+                cross_file_average=self.cross_file_average,
+            )
+
+            if not self._cancelled:
+                self.signals.finished.emit(result_df)
+
+        except Exception as e:
+            log.error(f"Batch analysis error: {e}", exc_info=True)
+            self.signals.error.emit(str(e))
+
+    def cancel(self):
+        """Request cancellation of the batch analysis."""
+        self._cancelled = True
+        self.engine.cancel()
+
+
+# ==============================================================================
+# Pipeline Step Configuration Widget
+# ==============================================================================
+
+
+class PipelineStepWidget(QtWidgets.QFrame):
+    """Widget for displaying and editing a single pipeline step."""
+
+    remove_requested = QtCore.Signal(object)  # Emits self when remove is clicked
+
+    def __init__(self, step_config: Dict[str, Any], step_index: int, parent=None):
+        super().__init__(parent)
+        self.step_config = step_config
+        self.step_index = step_index
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup the UI for this pipeline step."""
+        self.setFrameStyle(QtWidgets.QFrame.Shape.StyledPanel | QtWidgets.QFrame.Shadow.Raised)
+        self.setLineWidth(1)
+
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(8)
+
+        # Step number
+        step_label = QtWidgets.QLabel(f"#{self.step_index + 1}")
+        step_label.setMinimumWidth(30)
+        style_label(step_label, "subheading")
+        layout.addWidget(step_label)
+
+        # Analysis name
+        analysis_name = self.step_config.get("analysis", "Unknown")
+        name_label = QtWidgets.QLabel(analysis_name)
+        name_label.setMinimumWidth(120)
+        layout.addWidget(name_label)
+
+        # Scope
+        scope = self.step_config.get("scope", "first_trial")
+        scope_label = QtWidgets.QLabel(f"[{scope}]")
+        scope_label.setMinimumWidth(80)
+        layout.addWidget(scope_label)
+
+        # Parameters summary
+        params = self.step_config.get("params", {})
+        if params:
+            params_str = ", ".join(f"{k}={v}" for k, v in list(params.items())[:3])
+            if len(params) > 3:
+                params_str += "..."
+        else:
+            params_str = "(default params)"
+        params_label = QtWidgets.QLabel(params_str)
+        params_label.setStyleSheet("color: gray;")
+        layout.addWidget(params_label, stretch=1)
+
+        # Remove button
+        remove_btn = QtWidgets.QPushButton("×")
+        remove_btn.setFixedSize(24, 24)
+        remove_btn.setToolTip("Remove this step")
+        remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+        layout.addWidget(remove_btn)
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return the step configuration."""
+        return self.step_config
+
+
+# ==============================================================================
+# Add Pipeline Step Dialog
+# ==============================================================================
+
+
+class AddStepDialog(QtWidgets.QDialog):
+    """Dialog for adding a new analysis step to the pipeline."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Analysis Step")
+        self.setMinimumWidth(450)
+        self._result_config = None
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup the dialog UI."""
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        # Analysis Type Selection
+        type_group = QtWidgets.QGroupBox("Analysis Type")
+        type_layout = QtWidgets.QFormLayout(type_group)
+
+        self.analysis_combo = QtWidgets.QComboBox()
+        analysis_names = sorted(AnalysisRegistry.list_analysis())
+        preprocessing_names = sorted(AnalysisRegistry.list_preprocessing())
+
+        # Populate combo with parent analyses and expand method_selector children (HIGH-9)
+        if analysis_names or preprocessing_names:
+            if analysis_names:
+                for name in analysis_names:
+                    meta = AnalysisRegistry.get_metadata(name)
+                    # Check if this is a parent module with method_selector
+                    method_selector = meta.get("method_selector")
+                    if method_selector:
+                        # Add separator and child methods
+                        self.analysis_combo.insertSeparator(self.analysis_combo.count())
+                        label = meta.get("label", name)
+                        self.analysis_combo.addItem(f"── {label} ──")
+                        self.analysis_combo.setItemData(self.analysis_combo.count() - 1, None, QtCore.Qt.UserRole)
+                        # Make it non-selectable
+                        idx = self.analysis_combo.count() - 1
+                        self.analysis_combo.model().item(idx).setEnabled(False)
+                        # Add child analyses
+                        for display_name, child_id in method_selector.items():
+                            self.analysis_combo.addItem(f"  {display_name}", userData=child_id)
+                    else:
+                        # Regular analysis
+                        self.analysis_combo.addItem(name, userData=name)
+            if preprocessing_names:
+                self.analysis_combo.insertSeparator(self.analysis_combo.count())
+                for name in preprocessing_names:
+                    self.analysis_combo.addItem(name, userData=name)
+        else:
+            self.analysis_combo.addItem("No analyses registered")
+            self.analysis_combo.setEnabled(False)
+        self.analysis_combo.currentIndexChanged.connect(self._on_analysis_combo_changed)
+        type_layout.addRow("Analysis:", self.analysis_combo)
+
+        # Description
+        self.description_label = QtWidgets.QLabel()
+        self.description_label.setWordWrap(True)
+        self.description_label.setStyleSheet("color: gray; font-style: italic;")
+        type_layout.addRow("", self.description_label)
+
+        layout.addWidget(type_group)
+
+        # Scope Selection
+        scope_group = QtWidgets.QGroupBox("Data Scope")
+        scope_layout = QtWidgets.QVBoxLayout(scope_group)
+
+        self.scope_group = QtWidgets.QButtonGroup(self)
+
+        scope_options = [
+            ("average", "Average Trace", "Analyze the averaged trace across all trials"),
+            ("selected_trials_average", "Average Selected", "Analyze the average of explicit trials (e.g. 0, 2, 4)"),
+            ("all_trials", "All Trials", "Analyze each trial separately"),
+            ("selected_trials", "Selected Trials", "Analyze specific trials separately"),
+            ("first_trial", "First Trial Only", "Analyze only the first trial"),
+            ("specific_trial", "Specific Trial", "Analyze a specific trial index"),
+            ("channel_set", "Channel Set", "Analyze all trials together (e.g. F-I Curve)"),
+        ]
+
+        for scope_id, scope_name, scope_desc in scope_options:
+            radio = QtWidgets.QRadioButton(f"{scope_name} - {scope_desc}")
+            radio.setProperty("scope_id", scope_id)
+            self.scope_group.addButton(radio)
+            scope_layout.addWidget(radio)
+            if scope_id == "average":
+                radio.setChecked(True)
+            self.scope_group.buttonClicked.connect(self._on_scope_changed)
+
+        layout.addWidget(scope_group)
+
+        # Specific Trial Input (Hidden by default)
+        self.trial_index_group = QtWidgets.QWidget()
+        self.trial_index_layout = QtWidgets.QHBoxLayout(self.trial_index_group)
+        self.trial_index_layout.setContentsMargins(0, 0, 0, 0)
+        self.trial_index_spin = QtWidgets.QSpinBox()
+        self.trial_index_spin.setRange(0, 9999)
+        self.trial_index_spin.setValue(0)
+        self.trial_index_spin.setToolTip("Index of the trial to analyze (0-based)")
+        self.trial_index_layout.addWidget(QtWidgets.QLabel("Trial Index:"))
+        self.trial_index_layout.addWidget(self.trial_index_spin)
+        self.trial_index_layout.addStretch()
+        self.trial_index_group.setVisible(False)
+        layout.addWidget(self.trial_index_group)
+
+        # Selected Trials Input (Hidden by default)
+        self.selected_trials_group = QtWidgets.QWidget()
+        self.selected_trials_layout = QtWidgets.QHBoxLayout(self.selected_trials_group)
+        self.selected_trials_layout.setContentsMargins(0, 0, 0, 0)
+        self.selected_trials_input = QtWidgets.QLineEdit()
+        self.selected_trials_input.setPlaceholderText("e.g. 0, 2-4, 6")
+        self.selected_trials_input.setToolTip("Subset of trials to analyze")
+        self.selected_trials_layout.addWidget(QtWidgets.QLabel("Selected Trials:"))
+        self.selected_trials_layout.addWidget(self.selected_trials_input)
+        self.selected_trials_group.setVisible(False)
+        layout.addWidget(self.selected_trials_group)
+
+        # Parameters Section
+        params_group = QtWidgets.QGroupBox("Parameters")
+        self.params_layout = QtWidgets.QFormLayout(params_group)
+        self.params_layout.setSpacing(8)
+
+        # Dynamic parameter widgets will be added here
+        self.param_widgets = {}
+
+        layout.addWidget(params_group)
+
+        # Buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+
+        add_btn = QtWidgets.QPushButton("Add Step")
+        style_button(add_btn, "primary")
+        add_btn.clicked.connect(self._on_add_clicked)
+        button_layout.addWidget(add_btn)
+
+        layout.addLayout(button_layout)
+
+        # Initialize with first selectable analysis
+        if analysis_names or preprocessing_names:
+            # Find first valid item
+            for idx in range(self.analysis_combo.count()):
+                if self.analysis_combo.itemData(idx, QtCore.Qt.UserRole) is not None:
+                    self.analysis_combo.setCurrentIndex(idx)
+                    break
+            self._on_analysis_combo_changed(self.analysis_combo.currentIndex())
+
+    def _on_analysis_combo_changed(self, index: int):
+        """Update UI when analysis type changes."""
+        # Get actual analysis ID from combo userData
+        analysis_name = self.analysis_combo.itemData(index, QtCore.Qt.UserRole)
+        if analysis_name is None:
+            # Separator or disabled item
+            return
+        self._on_analysis_changed(analysis_name)
+
+    def _on_analysis_changed(self, analysis_name: str):
+        """Update UI when analysis type changes."""
+        if not analysis_name:
+            return
+
+        # Clear existing parameter widgets
+        for widget in self.param_widgets.values():
+            self.params_layout.removeRow(widget)
+        self.param_widgets.clear()
+
+        # Hide scope when preprocessing is selected
+        meta = AnalysisRegistry.get_metadata(analysis_name)
+        is_preprocessing = meta.get("type") == "preprocessing" if meta else False
+        scope_parent = self.scope_group.buttons()[0].parentWidget() if self.scope_group.buttons() else None
+        if scope_parent:
+            scope_parent.parentWidget().setVisible(not is_preprocessing)
+
+        # Get analysis info
+        info = BatchAnalysisEngine.get_analysis_info(analysis_name)
+        if info:
+            docstring = info.get("docstring", "No description available.")
+            # Extract first paragraph
+            first_para = docstring.split("\n\n")[0].strip()
+            self.description_label.setText(first_para[:200] + "..." if len(first_para) > 200 else first_para)
+        else:
+            self.description_label.setText("No description available.")
+
+        # Add common parameter widgets based on analysis type
+        self._add_parameter_widgets(analysis_name)
+
+    def _add_parameter_widgets(self, analysis_name: str):
+        """Add parameter widgets based on the analysis type."""
+        # Get metadata from registry
+        metadata = AnalysisRegistry.get_metadata(analysis_name)
+        ui_params = metadata.get("ui_params", [])
+
+        if ui_params:
+            for param in ui_params:
+                param_type = param.get("type", "float")
+                name = param.get("name")
+                label = param.get("label", name)
+
+                if param_type == "float":
+                    default = param.get("default", 0.0)
+                    min_val = param.get("min", -10000.0)
+                    max_val = param.get("max", 10000.0)
+                    decimals = param.get("decimals", 2)
+                    self._add_param(name, label, default, min_val, max_val, decimals)
+
+                elif param_type == "choice":
+                    choices = param.get("choices", [])
+                    default = param.get("default")
+
+                    combo = QtWidgets.QComboBox()
+                    combo.addItems(choices)
+                    if default and default in choices:
+                        combo.setCurrentText(default)
+
+                    self.params_layout.addRow(label, combo)
+                    self.param_widgets[name] = combo
+
+                elif param_type == "bool":
+                    checkbox = QtWidgets.QCheckBox()
+                    checkbox.setChecked(bool(param.get("default", False)))
+                    self.params_layout.addRow(label, checkbox)
+                    self.param_widgets[name] = checkbox
+
+                elif param_type in ("string", "str"):
+                    line_edit = QtWidgets.QLineEdit()
+                    line_edit.setText(str(param.get("default", "")))
+                    tooltip = param.get("tooltip", "")
+                    if tooltip:
+                        line_edit.setToolTip(tooltip)
+                    self.params_layout.addRow(label, line_edit)
+                    self.param_widgets[name] = line_edit
+
+        else:
+            # Fallback for legacy/unmigrated analysis types
+            # This ensures we don't break existing analyses that haven't been migrated yet
+            self._add_legacy_parameter_widgets(analysis_name)
+
+    def _on_scope_changed(self, button):
+        """Show/hide trial index input based on scope selection."""
+        scope_id = button.property("scope_id")
+        self.trial_index_group.setVisible(scope_id == "specific_trial")
+        self.selected_trials_group.setVisible(scope_id in ("selected_trials", "selected_trials_average"))
+
+    def _add_legacy_parameter_widgets(self, analysis_name: str):
+        """Fallback for analysis types not yet migrated to metadata system."""
+        if analysis_name == "rmp_analysis":
+            self._add_param("baseline_start", "Baseline Start (s):", 0.0, 0.0, 10.0, 3)
+            self._add_param("baseline_end", "Baseline End (s):", 0.1, 0.0, 10.0, 3)
+
+        elif analysis_name == "rin_analysis":
+            self._add_param("current_amplitude", "Current (pA):", -50.0, -1000.0, 1000.0, 1)
+            self._add_param("baseline_start", "Baseline Start (s):", 0.0, 0.0, 10.0, 3)
+            self._add_param("baseline_end", "Baseline End (s):", 0.1, 0.0, 10.0, 3)
+            self._add_param("response_start", "Response Start (s):", 0.3, 0.0, 10.0, 3)
+            self._add_param("response_end", "Response End (s):", 0.4, 0.0, 10.0, 3)
+
+        elif analysis_name == "tau_analysis":
+            self._add_param("stim_start_time", "Stim Start (s):", 0.1, 0.0, 10.0, 3)
+            self._add_param("fit_duration", "Fit Duration (s):", 0.05, 0.001, 1.0, 3)
+
+        elif analysis_name == "mini_detection":
+            self._add_param("threshold", "Threshold:", 5.0, 0.1, 1000.0, 1)
+            # Direction combo
+            direction_combo = QtWidgets.QComboBox()
+            direction_combo.addItems(["negative", "positive"])
+            self.params_layout.addRow("Direction:", direction_combo)
+            self.param_widgets["direction"] = direction_combo
+
+        elif analysis_name in [
+            "event_detection_threshold",
+            "event_detection_deconvolution",
+            "event_detection_baseline_peak",
+        ]:
+            self._add_param("threshold", "Threshold:", 5.0, 0.1, 1000.0, 1)
+            # Direction combo
+            direction_combo = QtWidgets.QComboBox()
+            direction_combo.addItems(["negative", "positive"])
+            self.params_layout.addRow("Direction:", direction_combo)
+            self.param_widgets["direction"] = direction_combo
+        else:
+            # Generic message for unknown analysis types
+            info_label = QtWidgets.QLabel("Default parameters will be used.")
+            info_label.setStyleSheet("color: gray; font-style: italic;")
+            self.params_layout.addRow("", info_label)
+            self.param_widgets["_info"] = info_label
+
+    def _add_param(self, name: str, label: str, default: float, min_val: float, max_val: float, decimals: int):
+        """Add a numeric parameter input."""
+        spinbox = QtWidgets.QDoubleSpinBox()
+        spinbox.setRange(min_val, max_val)
+        spinbox.setDecimals(decimals)
+        spinbox.setValue(default)
+        spinbox.setSingleStep(10 ** (-decimals))
+        self.params_layout.addRow(label, spinbox)
+        self.param_widgets[name] = spinbox
+
+    def _on_add_clicked(self):
+        """Handle add button click."""
+        # Get analysis ID from userData
+        analysis_name = self.analysis_combo.currentData(QtCore.Qt.UserRole)
+        if not analysis_name:
+            return
+
+        # Get selected scope
+        selected_scope = "average"
+        for button in self.scope_group.buttons():
+            if button.isChecked():
+                selected_scope = button.property("scope_id")
+                break
+
+        # Gather parameters
+        params = {}
+
+        # Add trial index if specific trial scope
+        if selected_scope == "specific_trial":
+            params["trial_index"] = self.trial_index_spin.value()
+        elif selected_scope in ("selected_trials", "selected_trials_average"):
+            params["trial_indices"] = self.selected_trials_input.text().strip()
+
+        for name, widget in self.param_widgets.items():
+            if name.startswith("_"):
+                continue
+            if isinstance(widget, QtWidgets.QDoubleSpinBox):
+                params[name] = widget.value()
+            elif isinstance(widget, QtWidgets.QComboBox):
+                params[name] = widget.currentText()
+            elif isinstance(widget, QtWidgets.QSpinBox):
+                params[name] = widget.value()
+            elif isinstance(widget, QtWidgets.QCheckBox):
+                params[name] = widget.isChecked()
+            elif isinstance(widget, QtWidgets.QLineEdit):
+                params[name] = widget.text()
+
+        self._result_config = {"analysis": analysis_name, "scope": selected_scope, "params": params}
+
+        self.accept()
+
+    def get_step_config(self) -> Optional[Dict[str, Any]]:
+        """Get the configured step, or None if cancelled."""
+        return self._result_config
+
+
+# ==============================================================================
+# Main Batch Analysis Dialog
+# ==============================================================================
+
+
+class BatchAnalysisDialog(QtWidgets.QDialog):
+    # Signal emitted when user double clicks a result row to inspect it
+    # Arguments: file_path (str), params (dict), channel (str/None), trial (int/None)
+    load_file_request = QtCore.Signal(str, dict, object, object)
+
+    """
+    Main dialog for configuring and running batch analysis.
+
+    Allows users to:
+    - View the list of files to be processed
+    - Build a pipeline of analysis steps
+    - Run the batch analysis
+    - Export results to CSV
+    """
+
+    def __init__(
+        self,
+        files: List[Any],
+        pipeline_config: Optional[List[Dict[str, Any]]] = None,
+        default_channels: Optional[List[str]] = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.files = files
+        self.pipeline_steps: List[Dict[str, Any]] = []
+        self.default_channels = default_channels  # List of channel names to pre-fill
+        self.result_df: Optional[pd.DataFrame] = None
+        self.worker: Optional[BatchWorker] = None
+        self.engine = BatchAnalysisEngine()
+
+        self.setWindowTitle("Batch Analysis")
+        self.setMinimumSize(700, 600)
+        self.resize(800, 700)
+
+        self._setup_ui()
+
+        # Pre-populate pipeline if config provided
+        if pipeline_config:
+            for step in pipeline_config:
+                self._add_pipeline_step(step)
+
+    def _setup_ui(self):
+        """Setup the dialog UI."""
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setSpacing(12)
+
+        # ==== Files Section ====
+        files_group = QtWidgets.QGroupBox(f"Files to Process ({len(self.files)} files)")
+        files_layout = QtWidgets.QVBoxLayout(files_group)
+
+        self.files_list = QtWidgets.QListWidget()
+        self.files_list.setMaximumHeight(100)
+        self.files_list.setAlternatingRowColors(True)
+        for f in self.files:
+            # Handle Path or Recording object
+            if isinstance(f, (str, Path)):
+                f_path = Path(f)
+                name = f_path.name
+                tooltip = str(f_path)
+            else:
+                # Assume Recording object
+                if hasattr(f, "source_file") and f.source_file:
+                    name = f.source_file.name
+                    tooltip = str(f.source_file)
+                else:
+                    name = "InMemory Recording"
+                    tooltip = "In-memory data object"
+
+            item = QtWidgets.QListWidgetItem(name)
+            item.setToolTip(tooltip)
+            item.setData(QtCore.Qt.UserRole, f)  # Store object (Path or Recording)
+            self.files_list.addItem(item)
+        files_layout.addWidget(self.files_list)
+
+        # File Action Buttons
+        files_btn_layout = QtWidgets.QHBoxLayout()
+        self.add_files_btn = QtWidgets.QPushButton("Add Files...")
+        self.add_files_btn.clicked.connect(self._on_add_files)
+        files_btn_layout.addWidget(self.add_files_btn)
+
+        self.remove_files_btn = QtWidgets.QPushButton("Remove Selected")
+        self.remove_files_btn.clicked.connect(self._on_remove_files)
+        files_btn_layout.addWidget(self.remove_files_btn)
+
+        files_btn_layout.addStretch()
+        files_layout.addLayout(files_btn_layout)
+
+        main_layout.addWidget(files_group)
+
+        # ==== Channel Selection Section ====
+        channel_group = QtWidgets.QGroupBox("Channels to Process")
+        channel_layout = QtWidgets.QVBoxLayout(channel_group)
+
+        self.channel_input = QtWidgets.QLineEdit()
+        self.channel_input.setPlaceholderText("e.g. Vm_1, Im_1 (Leave empty to process all channels)")
+        if self.default_channels:
+            # Ensure it's a list of strings
+            channels = self.default_channels
+            if isinstance(channels, str):
+                channels = [channels]
+            elif not isinstance(channels, (list, tuple)):
+                channels = [str(channels)]
+
+            self.channel_input.setText(", ".join([str(c) for c in channels]))
+        channel_layout.addWidget(self.channel_input)
+
+        channel_help = QtWidgets.QLabel(
+            "Enter comma-separated channel names. Leave empty to process all channels found in each file."
+        )
+        channel_help.setStyleSheet("color: gray; font-style: italic; font-size: 10pt;")
+        channel_layout.addWidget(channel_help)
+
+        main_layout.addWidget(channel_group)
+
+        # ==== Pipeline Section ====
+        pipeline_group = QtWidgets.QGroupBox("Analysis Pipeline")
+        pipeline_layout = QtWidgets.QVBoxLayout(pipeline_group)
+
+        # Pipeline steps container with list widget to support drag and drop
+        self.pipeline_list = QtWidgets.QListWidget()
+        self.pipeline_list.setMinimumHeight(150)
+        self.pipeline_list.setMaximumHeight(200)
+        self.pipeline_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.pipeline_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+        self.pipeline_list.model().rowsMoved.connect(self._on_pipeline_reordered)
+
+        # Placeholder behavior via empty state
+        self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+        self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)  # Make non-selectable/draggable
+        self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
+
+        pipeline_layout.addWidget(self.pipeline_list)
+
+        # Pipeline buttons
+        pipeline_btn_layout = QtWidgets.QHBoxLayout()
+
+        add_step_btn = QtWidgets.QPushButton("+ Add Step")
+        add_step_btn.setToolTip("Add an analysis step to the pipeline")
+
+        available_count = len(AnalysisRegistry.list_registered())
+        if available_count == 0:
+            add_step_btn.setEnabled(False)
+            add_step_btn.setText("No Analyses Registered")
+
+        add_step_btn.clicked.connect(self._on_add_step)
+        pipeline_btn_layout.addWidget(add_step_btn)
+
+        clear_pipeline_btn = QtWidgets.QPushButton("Clear All")
+        clear_pipeline_btn.setToolTip("Remove all pipeline steps")
+        clear_pipeline_btn.clicked.connect(self._on_clear_pipeline)
+        pipeline_btn_layout.addWidget(clear_pipeline_btn)
+
+        pipeline_btn_layout.addStretch()
+
+        # Available analyses info
+        available_count = len(AnalysisRegistry.list_registered())
+        info_label = QtWidgets.QLabel(f"{available_count} analysis types available")
+        info_label.setStyleSheet("color: gray;")
+        pipeline_btn_layout.addWidget(info_label)
+
+        pipeline_layout.addLayout(pipeline_btn_layout)
+        main_layout.addWidget(pipeline_group)
+
+        # ==== Aggregation Options Section ====
+        options_group = QtWidgets.QGroupBox("Aggregation Options")
+        options_layout = QtWidgets.QVBoxLayout(options_group)
+
+        self.cross_file_avg_checkbox = QtWidgets.QCheckBox("Pool & Average All Files (Outputs 1 Master Row)")
+        self.cross_file_avg_checkbox.setToolTip(
+            "Aggregate all trials from every file into a single grand-average trace, "
+            "then run the analysis pipeline exactly once per channel. "
+            "Produces one result row per channel instead of one per file."
+        )
+        options_layout.addWidget(self.cross_file_avg_checkbox)
+        main_layout.addWidget(options_group)
+
+        # ==== Progress Section ====
+        progress_group = QtWidgets.QGroupBox("Progress")
+        progress_layout = QtWidgets.QVBoxLayout(progress_group)
+
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        progress_layout.addWidget(self.progress_bar)
+
+        self.status_label = QtWidgets.QLabel("Ready")
+        self.status_label.setStyleSheet("color: gray;")
+        progress_layout.addWidget(self.status_label)
+
+        main_layout.addWidget(progress_group)
+
+        # ==== Results Section ====
+        results_group = QtWidgets.QGroupBox("Results")
+        results_layout = QtWidgets.QVBoxLayout(results_group)
+
+        self.results_table = QtWidgets.QTableWidget()
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setMinimumHeight(150)
+        self.results_table.horizontalHeader().setStretchLastSection(True)
+        results_layout.addWidget(self.results_table)
+
+        # Results info
+        self.results_info_label = QtWidgets.QLabel("No results yet")
+        self.results_info_label.setStyleSheet("color: gray;")
+        results_layout.addWidget(self.results_info_label)
+
+        main_layout.addWidget(results_group, stretch=1)
+
+        # ==== Action Buttons ====
+        button_layout = QtWidgets.QHBoxLayout()
+
+        # View Error Log Button (MEDIUM-7)
+        self.view_error_log_btn = QtWidgets.QPushButton("View Error Log")
+        self.view_error_log_btn.setToolTip("Open batch error log file")
+        self.view_error_log_btn.clicked.connect(self._on_view_error_log)
+        button_layout.addWidget(self.view_error_log_btn)
+
+        self.export_btn = QtWidgets.QPushButton("Export Results...")
+        self.export_btn.setToolTip("Export results to CSV, Excel, or JSON")
+        self.export_btn.setEnabled(False)
+        self.export_btn.clicked.connect(self._on_export)
+        button_layout.addWidget(self.export_btn)
+
+        button_layout.addStretch()
+
+        self.cancel_btn = QtWidgets.QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._on_cancel)
+        button_layout.addWidget(self.cancel_btn)
+
+        self.run_btn = QtWidgets.QPushButton("Run Batch Analysis")
+        style_button(self.run_btn, "primary")
+        self.run_btn.clicked.connect(self._on_run)
+        button_layout.addWidget(self.run_btn)
+
+        main_layout.addLayout(button_layout)
+
+    def _on_add_step(self):
+        """Open dialog to add a new pipeline step."""
+        dialog = AddStepDialog(self)
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            step_config = dialog.get_step_config()
+            if step_config:
+                self._add_pipeline_step(step_config)
+
+    def _add_pipeline_step(self, step_config: Dict[str, Any]):
+        """Add a step to the pipeline list."""
+        # Remove empty state placeholder if it exists
+        if self.pipeline_list.count() == 1 and self.pipeline_list.item(0).flags() == QtCore.Qt.ItemFlag.NoItemFlags:
+            self.pipeline_list.takeItem(0)
+
+        # Create step widget
+        step_index = len(self.pipeline_steps)
+        step_widget = PipelineStepWidget(step_config, step_index, self)
+
+        # Connect remove requested signal
+        step_widget.remove_requested.connect(lambda w=step_widget: self._on_remove_step(w))
+
+        # Add to ListWidget
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(step_widget.sizeHint())
+
+        # Store dict reference in user data to track reordering
+        item.setData(QtCore.Qt.ItemDataRole.UserRole, step_config)
+
+        self.pipeline_list.addItem(item)
+        self.pipeline_list.setItemWidget(item, step_widget)
+
+        self.pipeline_steps.append(step_config)
+
+        log.debug(f"Added pipeline step: {step_config.get('analysis')} [{step_config.get('scope')}]")
+
+    def _on_pipeline_reordered(self, sourceParent, sourceStart, sourceEnd, destinationParent, destinationRow):
+        """Handle user drag-and-drop reordering."""
+        self.pipeline_steps.clear()
+
+        # Re-build internal steps array from accurate visual list order
+        for i in range(self.pipeline_list.count()):
+            item = self.pipeline_list.item(i)
+            step_config = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if step_config:
+                self.pipeline_steps.append(step_config)
+
+            # Optionally update step index label on the widget
+            widget = self.pipeline_list.itemWidget(item)
+            if widget and hasattr(widget, "update_index"):
+                widget.update_index(i)
+
+        log.debug(f"Pipeline reordered. New count: {len(self.pipeline_steps)}")
+
+    def _on_add_files(self):
+        """Open file dialog to add files to the list."""
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Select Recording Files", "", "All Files (*.*)")
+        if file_paths:
+            added_count = 0
+            for path_str in file_paths:
+                path = Path(path_str)
+                # Check duplication
+                if path not in self.files:
+                    self.files.append(path)
+                    item = QtWidgets.QListWidgetItem(path.name)
+                    item.setToolTip(str(path))
+                    item.setData(QtCore.Qt.UserRole, path)
+                    self.files_list.addItem(item)
+                    added_count += 1
+
+            if added_count > 0:
+                # Update group box title
+                for gb in self.findChildren(QtWidgets.QGroupBox):
+                    if gb.title().startswith("Files to Process"):
+                        gb.setTitle(f"Files to Process ({len(self.files)} files)")
+                        break
+
+    def _on_remove_files(self):
+        """Remove selected files from list."""
+        selected_items = self.files_list.selectedItems()
+        if not selected_items:
+            return
+
+        for item in selected_items:
+            path = item.data(QtCore.Qt.UserRole)
+            if path in self.files:
+                self.files.remove(path)
+            self.files_list.takeItem(self.files_list.row(item))
+
+        for gb in self.findChildren(QtWidgets.QGroupBox):
+            if gb.title().startswith("Files to Process"):
+                gb.setTitle(f"Files to Process ({len(self.files)} files)")
+                break
+
+    def _on_remove_step(self, step_widget: PipelineStepWidget):
+        """Remove a step from the pipeline list."""
+        step_config = step_widget.get_config()
+
+        # Find item in list widget and remove
+        for i in range(self.pipeline_list.count()):
+            item = self.pipeline_list.item(i)
+            if item.data(QtCore.Qt.ItemDataRole.UserRole) == step_config:
+                self.pipeline_list.takeItem(i)
+                break
+
+        if step_config in self.pipeline_steps:
+            self.pipeline_steps.remove(step_config)
+
+        # Show empty label if no steps
+        if self.pipeline_list.count() == 0:
+            self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+            self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
+        else:
+            # Reindex remaining updates visuals
+            for i in range(self.pipeline_list.count()):
+                item = self.pipeline_list.item(i)
+                widget = self.pipeline_list.itemWidget(item)
+                if widget and hasattr(widget, "update_index"):
+                    widget.update_index(i)
+
+    def _on_clear_pipeline(self):
+        """Clear all pipeline steps."""
+        if not self.pipeline_steps:
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Clear Pipeline",
+            "Are you sure you want to remove all pipeline steps?",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+            self.pipeline_list.clear()
+            self.pipeline_steps.clear()
+
+            self.pipeline_list.addItem("No analysis steps added. Click 'Add Step' to begin.")
+            self.pipeline_list.item(0).setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            self.pipeline_list.item(0).setForeground(QtCore.Qt.GlobalColor.gray)
+
+    def _on_run(self):
+        """Start the batch analysis."""
+        if not self.pipeline_steps:
+            QtWidgets.QMessageBox.warning(
+                self, "No Pipeline Steps", "Please add at least one analysis step to the pipeline."
+            )
+            return
+
+        if not self.files:
+            QtWidgets.QMessageBox.warning(self, "No Files", "No files available for batch analysis.")
+            return
+
+        # Disable UI during processing
+        self.run_btn.setEnabled(False)
+        self.export_btn.setEnabled(False)
+        self.cancel_btn.setText("Stop")
+        self.progress_bar.setValue(0)
+        self.status_label.setText("Starting batch analysis...")
+
+        # Parse channel filter
+        channel_filter_text = self.channel_input.text().strip()
+        channel_filter = None
+        if channel_filter_text:
+            channel_filter = [c.strip() for c in channel_filter_text.split(",") if c.strip()]
+
+        # Create and start worker
+        cross_file_average = self.cross_file_avg_checkbox.isChecked()
+        self.worker = BatchWorker(
+            engine=self.engine,
+            files=self.files,
+            pipeline_config=self.pipeline_steps,
+            channel_filter=channel_filter,
+            cross_file_average=cross_file_average,
+        )
+        self.worker.signals.progress.connect(self._on_progress)
+        self.worker.signals.finished.connect(self._on_finished)
+        self.worker.signals.error.connect(self._on_error)
+        # Connect built-in finished signal for cleanup
+        self.worker.finished.connect(self._cleanup_worker)
+        self.worker.start()
+
+    def _on_progress(self, current: int, total: int, message: str):
+        """Update progress display."""
+        if total > 0:
+            percent = int((current / total) * 100)
+            self.progress_bar.setValue(percent)
+        self.status_label.setText(message)
+
+    def _on_finished(self, result_df: pd.DataFrame):
+        """Handle batch analysis completion."""
+        self.result_df = result_df
+        # Don't set self.worker = None here, wait for thread to finish
+
+        # Re-enable UI
+        self.run_btn.setEnabled(True)
+        self.cancel_btn.setText("Close")
+
+        if result_df is not None and not result_df.empty:
+            self.export_btn.setEnabled(True)
+            self.progress_bar.setValue(100)
+            self.status_label.setText(f"Completed: {len(result_df)} result rows")
+            self._display_results(result_df)
+            self._save_results_to_main_window(result_df)
+        else:
+            self.status_label.setText("Completed with no results")
+            self.results_info_label.setText("No results generated")
+
+    def _on_error(self, error_message: str):
+        """Handle batch analysis error."""
+        # Don't set self.worker = None here, wait for thread to finish
+
+        # Re-enable UI
+        self.run_btn.setEnabled(True)
+        self.cancel_btn.setText("Close")
+        self.progress_bar.setValue(0)
+        self.status_label.setText(f"Error: {error_message}")
+
+        QtWidgets.QMessageBox.critical(
+            self, "Batch Analysis Error", f"An error occurred during batch analysis:\n\n{error_message}"
+        )
+
+    def _on_cancel(self):
+        """Cancel or close the dialog."""
+        if self.worker and self.worker.isRunning():
+            # Cancel running analysis
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Cancel Analysis",
+                "Are you sure you want to cancel the running analysis?",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No,
+            )
+
+            if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+                self.worker.cancel()
+                self.status_label.setText("Cancelling...")
+        else:
+            # Close dialog
+            self.accept()
+
+    def _cleanup_worker(self):
+        """Cleanup worker reference after thread has truly finished."""
+        self.worker = None
+        log.debug("Batch worker thread cleaned up.")
+
+    def _display_results(self, df: pd.DataFrame):
+        """Display results in the table widget."""
+        self.results_table.clear()
+
+        if df.empty:
+            self.results_info_label.setText("No results to display")
+            return
+
+        # Filter out private/internal columns for display
+        display_cols = [c for c in df.columns if not c.startswith("_")]
+        display_df = df[display_cols]
+
+        # Setup table
+        self.results_table.setRowCount(min(100, len(display_df)))
+        self.results_table.setColumnCount(len(display_df.columns))
+        self.results_table.setHorizontalHeaderLabels(display_df.columns.tolist())
+
+        # Populate table
+        for row_idx in range(min(100, len(display_df))):
+            for col_idx, col_name in enumerate(display_df.columns):
+                value = display_df.iloc[row_idx, col_idx]
+                # Handle arrays/lists safely
+                if isinstance(value, (list, np.ndarray)):
+                    # For arrays, show summary or short representation
+                    if hasattr(value, "shape"):
+                        display_value = f"Array {value.shape}"
+                    else:
+                        display_value = f"List [{len(value)}]"
+                elif pd.isna(value):
+                    display_value = ""
+                elif isinstance(value, float):
+                    display_value = f"{value:.4g}"
+                else:
+                    display_value = str(value)
+
+                item = QtWidgets.QTableWidgetItem(display_value)
+                self.results_table.setItem(row_idx, col_idx, item)
+
+        # Update info label
+        if len(df) > 100:
+            self.results_info_label.setText(f"Showing first 100 of {len(df)} rows")
+        else:
+            self.results_info_label.setText(f"{len(df)} rows")
+
+        # Resize columns to content
+        self.results_table.resizeColumnsToContents()
+        if not getattr(self, "_result_click_connected", False):
+            self.results_table.cellDoubleClicked.connect(self._on_result_row_clicked)
+            self._result_click_connected = True
+
+    def _on_result_row_clicked(self, row, col):  # noqa: C901
+        """Handle double click on result row to load file."""
+        if self.result_df is None or self.result_df.empty:
+            return
+
+        try:
+            if row < len(self.result_df):
+                record = self.result_df.iloc[row]
+
+                # Try multiple keys for file path
+                file_path = record.get("file_path") or record.get("file") or record.get("source_file")
+                if not file_path:
+                    return
+
+                channel = record.get("channel")
+                trial = record.get("trial_index")
+
+                # Extract analysis name and parameters from the result row
+                params = {}
+                analysis_name = record.get("analysis")
+                if analysis_name:
+                    params["analysis_name"] = analysis_name
+                # Include any numeric result columns as context
+                skip_keys = {
+                    "file_path",
+                    "file",
+                    "source_file",
+                    "channel",
+                    "trial_index",
+                    "analysis",
+                    "status",
+                    "error",
+                }
+                for key, val in record.items():
+                    if key not in skip_keys and val is not None:
+                        try:
+                            params[key] = float(val)
+                        except (ValueError, TypeError):
+                            pass
+
+                log.debug(f"Requesting load for: {file_path}, Ch={channel}, Trial={trial}, Params={params}")
+                self.load_file_request.emit(str(file_path), params, channel, trial)
+
+        except Exception as e:
+            log.error(f"Error handling row click: {e}")
+
+    def _on_view_error_log(self):
+        """Open batch error log file (MEDIUM-7)."""
+        from pathlib import Path
+
+        error_log_path = Path.home() / ".synaptipy" / "logs" / "batch_errors.log"
+
+        if not error_log_path.exists():
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Error Log",
+                "No batch error log file found.\n\nErrors will be logged to:\n" + str(error_log_path),
+            )
+            return
+
+        # Read and display log in a dialog
+        try:
+            with open(error_log_path, "r", encoding="utf-8") as f:
+                log_content = f.read()
+
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Batch Error Log")
+            dialog.resize(800, 600)
+
+            layout = QtWidgets.QVBoxLayout(dialog)
+
+            # Text display
+            text_edit = QtWidgets.QTextEdit()
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(log_content)
+            text_edit.setLineWrapMode(QtWidgets.QTextEdit.LineWrapMode.NoWrap)
+            layout.addWidget(text_edit)
+
+            # Buttons
+            btn_layout = QtWidgets.QHBoxLayout()
+            clear_btn = QtWidgets.QPushButton("Clear Log")
+            clear_btn.clicked.connect(lambda: self._clear_error_log(error_log_path, text_edit))
+            btn_layout.addWidget(clear_btn)
+
+            btn_layout.addStretch()
+
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(dialog.accept)
+            btn_layout.addWidget(close_btn)
+
+            layout.addLayout(btn_layout)
+            dialog.exec()
+
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "Error Reading Log", f"Could not read error log:\n\n{e}")
+
+    def _clear_error_log(self, log_path, text_widget):
+        """Clear the batch error log file."""
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Clear Error Log",
+            "Are you sure you want to clear the error log?",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+            try:
+                with open(log_path, "w", encoding="utf-8") as f:
+                    f.write("")
+                text_widget.setPlainText("")
+                QtWidgets.QMessageBox.information(self, "Success", "Error log cleared.")
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(self, "Error", f"Could not clear log:\n\n{e}")
+
+    def _on_export(self):
+        """Export results to CSV, Excel (.xlsx), or JSON with full metadata."""
+        if self.result_df is None or self.result_df.empty:
+            QtWidgets.QMessageBox.warning(self, "No Results", "No results available to export.")
+            return
+
+        # Generate default filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"batch_analysis_{timestamp}.csv"
+
+        file_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Export Results",
+            default_name,
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;JSON Files (*.json);;All Files (*)",
+        )
+
+        if file_path:
+            try:
+                # Prepare export DataFrame — strip private/raw columns for tabular formats
+                export_df = self.result_df.copy()
+                private_cols = [c for c in export_df.columns if c.startswith("_")]
+                export_df_clean = export_df.drop(columns=private_cols, errors="ignore")
+
+                if file_path.lower().endswith(".json"):
+                    # JSON Export — keep arrays as lists for programmatic consumption
+                    # Convert numpy types to native Python for JSON serialisation
+                    json_df = export_df.copy()
+                    for col in json_df.columns:
+                        json_df[col] = json_df[col].apply(lambda v: v.tolist() if isinstance(v, np.ndarray) else v)
+                    json_df.to_json(file_path, orient="records", indent=2, default_handler=str)
+                    log.debug(f"Exported batch results to JSON: {file_path}")
+
+                elif file_path.lower().endswith(".xlsx"):
+                    # Excel Export — requires openpyxl
+                    try:
+                        export_df_clean.to_excel(file_path, index=False, sheet_name="Batch Results")
+                        log.debug(f"Exported batch results to Excel: {file_path}")
+                    except ImportError:
+                        # openpyxl not installed — fall back to CSV
+                        csv_path = file_path.replace(".xlsx", ".csv")
+                        self._write_csv_with_header(export_df_clean, csv_path)
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Excel Not Available",
+                            f"openpyxl is not installed. Results saved as CSV instead:\n{csv_path}",
+                        )
+                        return
+
+                else:
+                    # CSV Export with metadata header
+                    self._write_csv_with_header(export_df_clean, file_path)
+
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{file_path}")
+            except Exception as e:
+                log.error(f"Failed to export results: {e}", exc_info=True)
+                QtWidgets.QMessageBox.critical(self, "Export Failed", f"Failed to export results:\n{str(e)}")
+
+    def _write_csv_with_header(self, df: pd.DataFrame, file_path: str):
+        """Write CSV with a comment header block for reproducibility."""
+        # Build metadata header lines
+        header_lines = [
+            "# Synaptipy Batch Analysis Export",
+            f"# Exported: {datetime.now().isoformat()}",
+            f"# Files processed: {len(self.files)}",
+        ]
+        if self.pipeline_steps:
+            analyses = [s.get("analysis", "?") for s in self.pipeline_steps]
+            header_lines.append(f"# Pipeline: {' -> '.join(analyses)}")
+        header_lines.append(f"# Rows: {len(df)}")
+        header_lines.append("#")
+
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            for line in header_lines:
+                f.write(line + "\n")
+            df.to_csv(f, index=False)
+        log.debug(f"Exported batch results to CSV: {file_path}")
+
+    def closeEvent(self, event):
+        """Handle dialog close."""
+        if self.worker and self.worker.isRunning():
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Analysis Running",
+                "An analysis is still running. Cancel it and close?",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No,
+            )
+
+            if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+                self.worker.cancel()
+                self.worker.wait(5000)  # Wait up to 5 seconds
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
+
+    def _save_results_to_main_window(self, df: pd.DataFrame):  # noqa: C901
+        """
+        Saves the batch analysis results to the MainWindow's global list
+        so they appear in the Exporter Tab.
+        """
+        main_window = self.parent()
+        while main_window and not hasattr(main_window, "add_saved_result"):
+            main_window = main_window.parent()
+
+        if not main_window or not hasattr(main_window, "add_saved_result"):
+            log.warning("Could not find MainWindow to save batch results.")
+            return
+
+        log.debug(f"Saving {len(df)} batch results to MainWindow...")
+
+        from synaptipy.core.analysis.registry import AnalysisRegistry
+
+        for _, row in df.iterrows():
+            # Convert row to dict
+            result_data = row.to_dict()
+
+            # --- 1. Map File Name ---
+            if "file_name" in result_data and "source_file_name" not in result_data:
+                result_data["source_file_name"] = result_data["file_name"]
+            elif "file" in result_data and "source_file_name" not in result_data:
+                result_data["source_file_name"] = Path(str(result_data["file"])).name
+
+            # --- 2. Map Analysis Type (Registry Key -> Display Name) ---
+            if "analysis" in result_data:
+                registry_key = result_data["analysis"]
+                # Try to get display label from metadata
+                try:
+                    metadata = AnalysisRegistry.get_metadata(registry_key)
+                    label = metadata.get("label")
+
+                    if label:
+                        result_data["analysis_type"] = label
+                    else:
+                        result_data["analysis_type"] = registry_key.replace("_", " ").title()
+                except Exception:
+                    result_data["analysis_type"] = registry_key.replace("_", " ").title()
+
+            # Fallback if analysis_type still missing
+            if "analysis_type" not in result_data:
+                if self.pipeline_steps:
+                    analyses = [s.get("analysis", "Unknown") for s in self.pipeline_steps]
+                    result_data["analysis_type"] = "+".join(analyses)
+                else:
+                    result_data["analysis_type"] = "Batch Analysis"
+
+            # --- 3. Map Scope -> Data Source ---
+            if "scope" in result_data:
+                scope = result_data["scope"]
+                if scope == "average":
+                    result_data["data_source_used"] = "Average"
+                elif scope == "selected_trials_average":
+                    result_data["data_source_used"] = "Selected Average"
+                elif scope in ["specific_trial", "all_trials", "first_trial", "selected_trials"]:
+                    result_data["data_source_used"] = "Trial"
+                elif scope == "channel_set":
+                    result_data["data_source_used"] = "Channel Set"
+                else:
+                    result_data["data_source_used"] = scope.capitalize()
+
+            # --- 4. Map Trial Index ---
+            if "trial_index" in result_data:
+                result_data["trial_index_used"] = result_data["trial_index"]
+            # Implicit trial index for all_trials/first_trial if the engine didn't provide it explicitly,
+            # but usually engine provides it in the row if iterating.
+
+            # --- 5. Add Timestamp ---
+            if "timestamp_saved" not in result_data:
+                result_data["timestamp_saved"] = datetime.now().isoformat()
+
+            # Add to main window
+            main_window.add_saved_result(result_data)
+
+        log.debug("Batch results saved to MainWindow successfully.")

@@ -1,0 +1,267 @@
+# src/synaptipy/core/analysis/registry.py
+# -*- coding: utf-8 -*-
+"""
+Analysis Registry for dynamic function registration and lookup.
+
+This module provides a registry pattern that allows analysis functions
+to register themselves via decorators, enabling flexible pipeline configuration.
+"""
+
+import logging
+from typing import Any, Callable, Dict, Optional, Set
+
+log = logging.getLogger(__name__)
+
+
+class AnalysisRegistry:
+    """
+    Registry for analysis functions.
+
+    Functions can be registered using the @AnalysisRegistry.register decorator,
+    and then retrieved by name for use in batch processing pipelines.
+    """
+
+    _registry: Dict[str, Callable] = {}
+    _metadata: Dict[str, Dict[str, Any]] = {}
+    _original_metadata: Dict[str, Dict[str, Any]] = {}  # Store factory defaults
+    _core_analyses: Set[str] = set()  # Names registered by core package (not plugins)
+
+    @classmethod
+    def register(cls, name: str, type: str = "analysis", **kwargs) -> Callable:
+        """
+        Decorator to register an analysis or preprocessing function.
+
+        Args:
+            name: Unique identifier for the function (e.g., ``"spike_detection"``).
+            type: The type of function - ``"analysis"`` (default) or
+                ``"preprocessing"``.
+            expects_list: ``bool``, default ``False``.  Controls how the batch
+                engine delivers data to the registered function.
+
+                - ``False`` (default) - the function receives a **single 1-D
+                  NumPy array** (one trial or a pre-averaged master trace).
+                  The batch engine automatically averages all available trials
+                  when the pipeline scope would otherwise yield a list.  Use
+                  this for all analyses that operate on a single sweep, e.g.
+                  synaptic charge, AP repolarization, or any metric derived
+                  from a single trace.
+                - ``True`` - the function receives the **raw list of per-trial
+                  NumPy arrays**.  Use this only when the analysis inherently
+                  requires comparing multiple trials, e.g. jitter calculations
+                  or trial-to-trial variance.
+
+                This flag is stored in the registry metadata so tools,
+                documentation generators, and the GUI can inspect it.
+            **kwargs: Additional metadata stored with the function
+                (e.g., ``ui_params``, ``plots``, ``label``).
+
+        Returns:
+            Decorator function that registers *func* and returns it unchanged.
+
+        Example::
+
+            @AnalysisRegistry.register(
+                "spike_detection",
+                expects_list=False,
+                ui_params=[...],
+            )
+            def run_spike_detection(data, time, sampling_rate, **kwargs):
+                # data is a single 1-D array (one trial or average)
+                return results_dict
+        """
+        import copy
+
+        def decorator(func: Callable) -> Callable:
+            effective_name = name
+            if effective_name in cls._registry:
+                if effective_name in cls._core_analyses:
+                    # Plugin is trying to shadow a core analysis: rename the plugin
+                    # by appending an integer suffix to prevent silent overwrite.
+                    log.critical(
+                        "Plugin attempted to register '%s' which collides with a core "
+                        "analysis. The plugin will be registered under a suffixed name.",
+                        effective_name,
+                    )
+                    counter = 1
+                    while f"{effective_name}_{counter}" in cls._registry:
+                        counter += 1
+                    effective_name = f"{effective_name}_{counter}"
+                    log.critical(
+                        "Plugin registration collision resolved: '%s' -> '%s'.",
+                        name,
+                        effective_name,
+                    )
+                else:
+                    # Two plugins clash with each other: the later-registered plugin
+                    # wins silently (expected when plugins reload or when a user copy
+                    # overrides a bundled copy).  Log at INFO level for traceability.
+                    log.info(
+                        "Analysis name '%s' is already registered; overwriting with the "
+                        "new registration (plugin reload or user-plugin override).",
+                        effective_name,
+                    )
+            cls._registry[effective_name] = func
+            # Ensure type is stored in metadata
+            meta = kwargs.copy()
+            meta["type"] = type
+            cls._metadata[effective_name] = meta
+            # Store deep copy as factory default
+            cls._original_metadata[effective_name] = copy.deepcopy(meta)
+            log.debug(
+                "Registered %s function: %s with metadata: %s",
+                type,
+                effective_name,
+                list(meta.keys()),
+            )
+            return func
+
+        return decorator
+
+    @classmethod
+    def register_processor(cls, name: str, **kwargs) -> Callable:
+        """
+        Decorator to register a preprocessing function.
+        Alias for ``register(name, type="preprocessing", **kwargs)``.
+        """
+        return cls.register(name, type="preprocessing", **kwargs)
+
+    @classmethod
+    def get_function(cls, name: str) -> Optional[Callable]:
+        """
+        Retrieve a registered analysis function by name.
+
+        Args:
+            name: The registered name of the function
+
+        Returns:
+            The registered function, or None if not found
+        """
+        func = cls._registry.get(name)
+        if func is None:
+            log.warning(f"Analysis function '{name}' not found in registry. Available: {list(cls._registry.keys())}")
+        return func
+
+    @classmethod
+    def get_metadata(cls, name: str) -> Dict[str, Any]:
+        """
+        Retrieve metadata for a registered analysis function.
+
+        Args:
+            name: The registered name of the function
+
+        Returns:
+            Dictionary of metadata, or empty dict if not found
+        """
+        return cls._metadata.get(name, {})
+
+    @classmethod
+    def list_registered(cls) -> list:
+        """
+        Get a list of all registered analysis function names.
+
+        Returns:
+            List of registered function names
+        """
+        return list(cls._registry.keys())
+
+    @classmethod
+    def list_by_type(cls, type_str: str) -> list:
+        """
+        Get registered function names filtered by type.
+
+        Args:
+            type_str: The type to filter by (e.g., "analysis", "preprocessing")
+
+        Returns:
+            List of function names matching the given type
+        """
+        return [name for name, meta in cls._metadata.items() if meta.get("type") == type_str]
+
+    @classmethod
+    def list_preprocessing(cls) -> list:
+        """Get all registered preprocessing function names."""
+        return cls.list_by_type("preprocessing")
+
+    @classmethod
+    def list_analysis(cls) -> list:
+        """Get all registered analysis function names (excludes preprocessing)."""
+        return [name for name, meta in cls._metadata.items() if meta.get("type", "analysis") == "analysis"]
+
+    @classmethod
+    def mark_core_snapshot(cls):
+        """
+        Record the current registry keys as the immutable core set.
+
+        Call this once after importing the built-in analysis package but
+        *before* loading any external plugins.  ``unregister_plugins()``
+        uses this snapshot to know which entries must never be removed.
+        """
+        cls._core_analyses = set(cls._registry.keys())
+        log.debug(f"Core analysis snapshot taken: {len(cls._core_analyses)} entries.")
+
+    @classmethod
+    def unregister_plugins(cls):
+        """
+        Remove all analyses that are NOT part of the core package.
+
+        Safe to call multiple times.  Only affects entries added after the
+        last ``mark_core_snapshot()`` call (i.e. plugin-contributed entries).
+        """
+        keys_to_remove = [k for k in list(cls._registry.keys()) if k not in cls._core_analyses]
+        for k in keys_to_remove:
+            cls._registry.pop(k, None)
+            cls._metadata.pop(k, None)
+            cls._original_metadata.pop(k, None)
+        log.debug(f"Unregistered {len(keys_to_remove)} plugin analyses: {keys_to_remove}")
+
+    @classmethod
+    def clear(cls):
+        """
+        Clear all registered functions (mainly for testing).
+        """
+        cls._registry.clear()
+        cls._metadata.clear()
+        cls._original_metadata.clear()
+        cls._core_analyses.clear()
+        log.debug("Analysis registry cleared")
+
+    @classmethod
+    def update_default_params(cls, analysis_name: str, new_defaults: Dict[str, Any]):
+        """
+        Update default values for a registered analysis.
+
+        Args:
+            analysis_name: Name of anylsis
+            new_defaults: Dictionary of {param_name: new_value}
+        """
+        if analysis_name not in cls._metadata:
+            log.warning(f"Cannot update defaults: {analysis_name} not found.")
+            return
+
+        meta = cls._metadata[analysis_name]
+        ui_params = meta.get("ui_params", [])
+
+        updated_count = 0
+        for param in ui_params:
+            p_name = param.get("name")
+            if p_name in new_defaults:
+                param["default"] = new_defaults[p_name]
+                updated_count += 1
+
+        log.debug(f"Updated {updated_count} default parameters for {analysis_name}")
+
+    @classmethod
+    def reset_to_factory(cls, analysis_name: str = None):
+        """
+        Reset metadata to factory defaults.
+        If analysis_name is None, resets ALL.
+        """
+        import copy
+
+        if analysis_name:
+            if analysis_name in cls._original_metadata:
+                cls._metadata[analysis_name] = copy.deepcopy(cls._original_metadata[analysis_name])
+                log.debug(f"Reset {analysis_name} to factory defaults.")
+        else:
+            cls._metadata = copy.deepcopy(cls._original_metadata)
+            log.debug("Reset ALL analyses to factory defaults.")

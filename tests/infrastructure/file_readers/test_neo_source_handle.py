@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from Synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
+from synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
 
 
 class TestNeoSourceHandle:

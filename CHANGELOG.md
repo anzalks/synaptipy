@@ -181,7 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Added `-W --keep-going` so warnings are treated as errors while all issues are
   reported before stopping.
 - **CI - coverage source path in release job** (`release.yml`): `--cov=Synaptipy`
-  changed to `--cov=src/Synaptipy` to align with `[tool.coverage.paths]` remapping
+  changed to `--cov=src/synaptipy` to align with `[tool.coverage.paths]` remapping
   in `pyproject.toml` and produce correct release coverage artefacts.
 - **README - broken PyPI screenshot**: Relative image path replaced with the
   absolute `raw.githubusercontent.com` URL so the screenshot renders on PyPI.
@@ -581,7 +581,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     package.
   - Added an explicit `os.makedirs(DEST_DIR, exist_ok=True)` guard before the
     `shutil.copy2` loop so PyInstaller's `datas` collector never encounters a
-    missing `src/Synaptipy/resources/docs/` directory.
+    missing `src/synaptipy/resources/docs/` directory.
 
 ### Changed
 
@@ -610,7 +610,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bumped version to `0.1.1b6` across `pyproject.toml`,
-  `src/Synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`,
+  `src/synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`,
   `installer/windows_setup.iss`, and `synaptipy.spec`.
 - Updated installer download links in `README.md` to `v0.1.1b6`.
 
@@ -627,7 +627,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bumped version to `0.1.1b5` across `pyproject.toml`,
-  `src/Synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`,
+  `src/synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`,
   `installer/windows_setup.iss`.
 
 ## [0.1.1b4] - 2026-04-29
@@ -635,7 +635,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Sync `main` branch with `paper_compliance` branch; exclude `paper/` manuscript directory from PyPI distribution.
-- Bump version to 0.1.1b4 across `pyproject.toml`, `src/Synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`, `installer/windows_setup.iss`, and `synaptipy.spec`.
+- Bump version to 0.1.1b4 across `pyproject.toml`, `src/synaptipy/__init__.py`, `docs/conf.py`, `CITATION.cff`, `installer/windows_setup.iss`, and `synaptipy.spec`.
 - Fix bundled app icon: `main_window.py` and `welcome_screen.py` now resolve icon path via `sys._MEIPASS` when running as a PyInstaller executable.
 - Configure official PyPI release pipeline: OIDC Trusted Publishing with strict job chain (test -> build -> testpypi-publish -> smoke_test -> pypi-publish -> release).
 
@@ -716,7 +716,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  `_deferred_initial_reset()` catches post-layout `sigResized` shifts for
  multichannel recordings without interfering with view state restoration.
 - **Custom Analysis Plugin Documentation**: Comprehensive guide (`extending_synaptipy.md`) for writing analysis plugins without modifying source code
-- **Plugin Template**: Ready-to-copy template at `src/Synaptipy/templates/plugin_template.py` with inline comments for all parameter types and plot overlays
+- **Plugin Template**: Ready-to-copy template at `src/synaptipy/templates/plugin_template.py` with inline comments for all parameter types and plot overlays
 - **Plugin Tests**: 16 tests validating plugin template logic, PluginManager loading, and wrapper conventions
 - **Tutorial Section 3.6**: Step-by-step "Adding Your Own Analysis Tab" section in the user tutorial under the Analyser Tab
 - **Stress Tests**: File cycling stress tests for plot canvas rebuild stability (100 iterations)
@@ -752,7 +752,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Windows Analysis Loading**: Fixed registry import bug where `AnalysisRegistry` remained
  empty on Windows because only `registry.py` was imported (not the full
  `Synaptipy.core.analysis` package that triggers `@register` decorators). Added
- `import Synaptipy.core.analysis` in `analyser_tab.py` and `startup_manager.py`.
+ `import synaptipy.core.analysis` in `analyser_tab.py` and `startup_manager.py`.
 - **Preprocessing Reset**: Connected the `preprocessing_reset_requested` signal in
  `BaseAnalysisTab` and added `_handle_preprocessing_reset()` handler. Added
  `reset_ui()` method to `PreprocessingWidget`. Reset now propagates globally to

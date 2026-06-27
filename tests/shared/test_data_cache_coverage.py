@@ -24,8 +24,8 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.shared.data_cache import DataCache
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.shared.data_cache import DataCache
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -12,8 +12,8 @@ Covers missing lines: 281-283, 335, 377, 416, 419-443, 459, 464,
 import numpy as np
 import pytest
 
-import Synaptipy.core.analysis  # noqa: F401 - populate registry
-from Synaptipy.core.analysis.synaptic_events import (
+import synaptipy.core.analysis  # noqa: F401 - populate registry
+from synaptipy.core.analysis.synaptic_events import (
     _fit_p1_decay_residual,
     _measure_ppr_peak,
     calculate_paired_pulse_ratio,
@@ -575,7 +575,7 @@ class TestThresholdWrapperInvalidResult:
         """Line 824: wrapper returns error dict when detect_events_threshold fails."""
         from unittest.mock import MagicMock, patch
 
-        from Synaptipy.core.analysis.synaptic_events import (
+        from synaptipy.core.analysis.synaptic_events import (
             EventDetectionResult,
             run_event_detection_threshold_wrapper,
         )
@@ -584,7 +584,7 @@ class TestThresholdWrapperInvalidResult:
         fake.is_valid = False
         fake.error_message = "forced invalid"
         with patch(
-            "Synaptipy.core.analysis.synaptic_events.detect_events_threshold",
+            "synaptipy.core.analysis.synaptic_events.detect_events_threshold",
             return_value=fake,
         ):
             n = int(0.3 * FS)
@@ -603,7 +603,7 @@ class TestTemplateWrapperInvalidResult:
         """Line 1205: wrapper returns error dict when detect_events_template fails."""
         from unittest.mock import MagicMock, patch
 
-        from Synaptipy.core.analysis.synaptic_events import (
+        from synaptipy.core.analysis.synaptic_events import (
             EventDetectionResult,
             run_event_detection_template_wrapper,
         )
@@ -612,7 +612,7 @@ class TestTemplateWrapperInvalidResult:
         fake.is_valid = False
         fake.error_message = "template failed"
         with patch(
-            "Synaptipy.core.analysis.synaptic_events.detect_events_template",
+            "synaptipy.core.analysis.synaptic_events.detect_events_template",
             return_value=fake,
         ):
             n = int(0.3 * FS)
@@ -631,7 +631,7 @@ class TestBaselinePeakWrapperInvalidResult:
         """Line 1425: wrapper returns error dict when detect_events_baseline_peak_kinetics fails."""
         from unittest.mock import MagicMock, patch
 
-        from Synaptipy.core.analysis.synaptic_events import (
+        from synaptipy.core.analysis.synaptic_events import (
             EventDetectionResult,
             run_event_detection_baseline_peak_wrapper,
         )
@@ -640,7 +640,7 @@ class TestBaselinePeakWrapperInvalidResult:
         fake.is_valid = False
         fake.error_message = "baseline-peak failed"
         with patch(
-            "Synaptipy.core.analysis.synaptic_events.detect_events_baseline_peak_kinetics",
+            "synaptipy.core.analysis.synaptic_events.detect_events_baseline_peak_kinetics",
             return_value=fake,
         ):
             n = int(0.5 * FS)
@@ -660,12 +660,12 @@ class TestBaselinePeakNoStableBaseline:
         """Line 1290: _find_stable_baseline_segment returns None → event_count=0."""
         from unittest.mock import patch
 
-        from Synaptipy.core.analysis.synaptic_events import detect_events_baseline_peak_kinetics
+        from synaptipy.core.analysis.synaptic_events import detect_events_baseline_peak_kinetics
 
         n = int(0.2 * FS)
         data = np.zeros(n)
         with patch(
-            "Synaptipy.core.analysis.synaptic_events._find_stable_baseline_segment",
+            "synaptipy.core.analysis.synaptic_events._find_stable_baseline_segment",
             return_value=(None, None, None),
         ):
             result = detect_events_baseline_peak_kinetics(data, FS)
@@ -683,13 +683,13 @@ class TestDetectEventsThresholdException:
         """Lines 721-723: detect_events_threshold catches exceptions and returns invalid."""
         from unittest.mock import patch
 
-        from Synaptipy.core.analysis.synaptic_events import detect_events_threshold
+        from synaptipy.core.analysis.synaptic_events import detect_events_threshold
 
         n = int(0.1 * FS)
         t = np.arange(n) / FS
         data = np.zeros(n)
         with patch(
-            "Synaptipy.core.analysis.synaptic_events.find_quiescent_baseline_rms",
+            "synaptipy.core.analysis.synaptic_events.find_quiescent_baseline_rms",
             side_effect=RuntimeError("forced exception"),
         ):
             result = detect_events_threshold(data, t, FS)
@@ -710,7 +710,7 @@ class TestPairedPulseRatioException:
         t = np.arange(n) / FS
         data = np.zeros(n)
         with patch(
-            "Synaptipy.core.analysis.synaptic_events._measure_ppr_peak",
+            "synaptipy.core.analysis.synaptic_events._measure_ppr_peak",
             side_effect=ValueError("forced ppr error"),
         ):
             result = calculate_paired_pulse_ratio(
@@ -852,7 +852,7 @@ class TestDetectEventsTemplateExceptionHandler:
         n = 2000
         data = np.zeros(n)
         with patch(
-            "Synaptipy.core.analysis.synaptic_events.signal.fftconvolve",
+            "synaptipy.core.analysis.synaptic_events.signal.fftconvolve",
             side_effect=ValueError("forced template error"),
         ):
             result = detect_events_template(

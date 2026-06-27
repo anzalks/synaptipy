@@ -13,10 +13,10 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-import Synaptipy.core.analysis  # noqa: F401 – populate registry
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine, _worker_process_file
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.data_model import Channel, Recording
+import synaptipy.core.analysis  # noqa: F401 – populate registry
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine, _worker_process_file
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -180,15 +180,15 @@ class TestParallelPathTasks:
             return holder["executor"]
 
         monkeypatch.setattr(
-            "Synaptipy.core.analysis.batch_engine.ProcessPoolExecutor",
+            "synaptipy.core.analysis.batch_engine.ProcessPoolExecutor",
             _executor_factory,
         )
         monkeypatch.setattr(
-            "Synaptipy.core.analysis.batch_engine.as_completed",
+            "synaptipy.core.analysis.batch_engine.as_completed",
             lambda future_to_idx: list(future_to_idx.keys()),
         )
         monkeypatch.setattr(
-            "Synaptipy.core.analysis.batch_engine.multiprocessing.get_context",
+            "synaptipy.core.analysis.batch_engine.multiprocessing.get_context",
             lambda mode: object(),
         )
         return holder
@@ -560,7 +560,7 @@ class TestProcessTaskContextAdaptation:
             raise ValueError("Invalid trial selection string 'broken': bad selection")
 
         monkeypatch.setattr(
-            "Synaptipy.shared.utils.parse_trial_selection_string",
+            "synaptipy.shared.utils.parse_trial_selection_string",
             _parse_fail,
         )
 
@@ -707,7 +707,7 @@ class TestPreprocessingTask:
 
     def test_preprocessing_single_trace(self):
         """Preprocessing with scope=first_trial returns updated context."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         @AnalysisRegistry.register("_test_preproc", type="preprocessing")
         def _preproc(data, time, fs, **kwargs):
@@ -726,7 +726,7 @@ class TestPreprocessingTask:
 
     def test_preprocessing_all_trials_iterates(self):
         """Preprocessing with scope=all_trials applies to each trial."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         @AnalysisRegistry.register("_test_preproc_all", type="preprocessing")
         def _preproc_all(data, time, fs, **kwargs):
@@ -745,7 +745,7 @@ class TestPreprocessingTask:
 
     def test_preprocessing_failure_returns_error_dict(self):
         """Preprocessing function raises → error dict returned (lines 880-891)."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         @AnalysisRegistry.register("_test_preproc_fail", type="preprocessing")
         def _preproc_fail(data, time, fs, **kwargs):
@@ -763,7 +763,7 @@ class TestPreprocessingTask:
 
     def test_preprocessing_context_used_in_next_task(self):
         """Context update propagates: covers line 606 in _run_batch_sequential."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         @AnalysisRegistry.register("_test_preproc_ctx", type="preprocessing")
         def _preproc_ctx(data, time, fs, **kwargs):

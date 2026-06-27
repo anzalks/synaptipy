@@ -1,21 +1,27 @@
 # environment.yml — INSTALL RECIPE (pinned, cross-platform)
 # ----------------------------------------------------------------
-# This file is the user-facing install recipe. Version pins here are
-# tested and must not be changed without re-running the full test suite.
+# This file is the user-facing install recipe providing the base dependencies.
+# Version pins here are tested and must not be changed without re-running the full test suite.
 #
 # For exact reproducibility of paper results, use instead:
 #   paper/frozen_environment_macos_arm64.txt  (pip freeze, Apple M1 Pro)
 #   paper/conda_env_macos_arm64.yml           (conda export, Apple M1 Pro)
 #
-# Usage:
+# Usage (Standard Users):
 #   conda env create -f environment.yml
-#   conda activate synaptipy-repro
-name: synaptipy-repro
+#   conda activate synaptipy
+#   pip install synaptipy
+#
+# Usage (Developers):
+#   conda env create -f environment.yml
+#   conda activate synaptipy
+#   pip install -e ".[dev]"
+name: synaptipy
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11.9
+  - python=3.11
   - numpy=2.0.2
   - scipy=1.14.1
   - pandas=2.3.0
@@ -41,4 +47,3 @@ dependencies:
       - pytz==2025.1
       - typing-extensions==4.14.0
       - tzlocal==5.3.0
-      - synaptipy==0.1.3b5

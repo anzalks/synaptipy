@@ -9,7 +9,7 @@ def test_nwb_exporter_missing_pynwb_fallback():
     Test that the fallback sentinel classes are properly defined and raise
     ImportError when pynwb is not installed.
     """
-    from Synaptipy.infrastructure.exporters import nwb_exporter
+    from synaptipy.infrastructure.exporters import nwb_exporter
 
     # Save original state
     original_pynwb = sys.modules.get("pynwb")

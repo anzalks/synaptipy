@@ -22,7 +22,7 @@ Default PyQtGraph settings render all data points even when zoomed in, and don't
 Applied aggressive downsampling and view clipping to all plot items.
 
 ### Code Changes
-**File:** `src/Synaptipy/application/gui/explorer_tab.py` (Lines 1422-1462)
+**File:** `src/synaptipy/application/gui/explorer_tab.py` (Lines 1422-1462)
 
 **For every plot item created (trials and averages):**
 ```python
@@ -50,7 +50,7 @@ Added a global "Force Opaque Trials" option that disables transparency for singl
 
 ### Code Changes
 
-**File 1:** `src/Synaptipy/shared/plot_customization.py`
+**File 1:** `src/synaptipy/shared/plot_customization.py`
 
 **Added global flag and functions (Lines 20-21, 545-557):**
 ```python
@@ -79,7 +79,7 @@ if _force_opaque_trials:
  alpha = 1.0
 ```
 
-**File 2:** `src/Synaptipy/application/gui/plot_customization_dialog.py`
+**File 2:** `src/synaptipy/application/gui/plot_customization_dialog.py`
 
 **Added checkbox attribute (Line 45):**
 ```python
@@ -98,7 +98,7 @@ self.force_opaque_checkbox.setToolTip(
  "Check this to disable transparency for single trials.\n"
  "This can significantly improve performance when many trials are overlaid."
 )
-from Synaptipy.shared.plot_customization import get_force_opaque_trials
+from synaptipy.shared.plot_customization import get_force_opaque_trials
 self.force_opaque_checkbox.setChecked(get_force_opaque_trials())
 self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed)
 ```
@@ -107,16 +107,16 @@ self.force_opaque_checkbox.stateChanged.connect(self._on_force_opaque_changed)
 ```python
 def _on_force_opaque_changed(self, state):
  is_checked = state == QtCore.Qt.CheckState.Checked.value
- from Synaptipy.shared.plot_customization import set_force_opaque_trials
+ from synaptipy.shared.plot_customization import set_force_opaque_trials
  set_force_opaque_trials(is_checked)
  log.info(f"Force opaque trials toggled to: {is_checked}")
 ```
 
-**File 3:** `src/Synaptipy/application/gui/main_window.py`
+**File 3:** `src/synaptipy/application/gui/main_window.py`
 
 **Added logging in _on_plot_preferences_updated (Lines 278-280):**
 ```python
-from Synaptipy.shared.plot_customization import get_force_opaque_trials
+from synaptipy.shared.plot_customization import get_force_opaque_trials
 log.info(f"[_on_plot_preferences_updated] Refreshing plots. Force opaque state: {get_force_opaque_trials()}")
 ```
 
@@ -138,7 +138,7 @@ Moving sliders/scrollbars rapidly triggered immediate plot redraws for every val
 Added 50ms debounce timers that batch rapid slider changes and apply the final value only after user stops moving the control.
 
 ### Code Changes
-**File:** `src/Synaptipy/application/gui/explorer_tab.py`
+**File:** `src/synaptipy/application/gui/explorer_tab.py`
 
 **Added debounce timers in __init__ (Lines 135-158):**
 ```python
@@ -245,22 +245,22 @@ collected 74 items
 
 ## Files Modified
 
-1. **`src/Synaptipy/application/gui/explorer_tab.py`**
+1. **`src/synaptipy/application/gui/explorer_tab.py`**
  - Lines 135-158: Added debounce timers
  - Lines 1422-1462: Optimized downsampling for all plot items
  - Lines 1632-1692: Modified handlers and added debounced apply methods
 
-2. **`src/Synaptipy/shared/plot_customization.py`**
+2. **`src/synaptipy/shared/plot_customization.py`**
  - Lines 20-21: Added global _force_opaque_trials flag
  - Lines 245-249: Modified get_single_trial_pen() to respect flag
  - Lines 545-557: Added setter/getter functions
 
-3. **`src/Synaptipy/application/gui/plot_customization_dialog.py`**
+3. **`src/synaptipy/application/gui/plot_customization_dialog.py`**
  - Line 45: Added checkbox attribute
  - Lines 74-89: Added performance group UI
  - Lines 487-494: Added checkbox handler
 
-4. **`src/Synaptipy/application/gui/main_window.py`**
+4. **`src/synaptipy/application/gui/main_window.py`**
  - Lines 278-280: Added force opaque logging
 
 ---

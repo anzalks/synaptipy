@@ -4,7 +4,7 @@
 import logging
 import sys
 
-from Synaptipy.shared.logging_config import get_logger, setup_logging
+from synaptipy.shared.logging_config import get_logger, setup_logging
 
 
 class TestSetupLogging:
@@ -44,7 +44,7 @@ class TestEnsureStdioStreamsSupportFileno:
         import faulthandler
         import io
 
-        from Synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno
+        from synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno
 
         saved_o, saved_e = sys.stdout, sys.stderr
         try:
@@ -66,21 +66,21 @@ class TestEnsureStdioStreamsSupportFileno:
         monkeypatch.setattr(sys, "stdout", io.StringIO())
         monkeypatch.setattr(sys, "stderr", io.StringIO())
 
-        import Synaptipy.__main__ as syn_entry
+        import synaptipy.__main__ as syn_entry
 
         syn_entry = importlib.reload(syn_entry)
-        monkeypatch.setattr(sys, "argv", ["Synaptipy", "--version"])
+        monkeypatch.setattr(sys, "argv", ["synaptipy", "--version"])
         assert syn_entry.main() == 0
 
 
 class TestGetLogger:
     def test_get_logger_namespaced(self):
         logger = get_logger("mymodule")
-        assert logger.name == "Synaptipy.mymodule"
+        assert logger.name == "synaptipy.mymodule"
 
     def test_get_logger_already_namespaced(self):
-        logger = get_logger("Synaptipy.core.analysis")
-        assert logger.name == "Synaptipy.core.analysis"
+        logger = get_logger("synaptipy.core.analysis")
+        assert logger.name == "synaptipy.core.analysis"
 
     def test_get_logger_returns_logger_instance(self):
         result = get_logger("test")

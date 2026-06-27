@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from Synaptipy.application.session_manager import SessionManager
+from synaptipy.application.session_manager import SessionManager
 
 # ---------------------------------------------------------------------------
 # Reset singleton state between tests so they are independent
@@ -75,7 +75,7 @@ class TestLjpProperty:
 class TestCurrentRecordingSetter:
     def test_same_value_does_not_emit(self, qtbot):
         """Lines 88-90: if recording does not change, no signal is emitted."""
-        from Synaptipy.core.data_model import Recording
+        from synaptipy.core.data_model import Recording
 
         sm = SessionManager()
         rec = Recording(source_file=Path("/fake/test.abf"))
@@ -310,7 +310,7 @@ class TestPerformanceSettings:
         sm = SessionManager()
         received = []
         sm.preferences_changed.connect(received.append)
-        with caplog.at_level(logging.WARNING, logger="Synaptipy.application.session_manager"):
+        with caplog.at_level(logging.WARNING, logger="synaptipy.application.session_manager"):
             sm.performance_settings = "not a dict"  # type: ignore[assignment]
         assert len(received) == 0
         assert any("dict" in r.message for r in caplog.records)
@@ -333,7 +333,7 @@ class TestPerformanceSettings:
 class TestSessionPersistence:
     def test_save_returns_false_on_io_error(self, tmp_path, monkeypatch):
         """Lines 297-299: write failure must return False without raising."""
-        import Synaptipy.application.session_manager as sm_mod
+        import synaptipy.application.session_manager as sm_mod
 
         monkeypatch.setattr(sm_mod, "_SESSION_DIR", tmp_path / "no_perms")
         monkeypatch.setattr(sm_mod, "_SESSION_FILE", tmp_path / "no_perms" / "session.json")
@@ -347,7 +347,7 @@ class TestSessionPersistence:
 
     def test_load_returns_none_for_corrupt_json(self, tmp_path, monkeypatch):
         """Lines 319-321: corrupt JSON returns None."""
-        import Synaptipy.application.session_manager as sm_mod
+        import synaptipy.application.session_manager as sm_mod
 
         session_file = tmp_path / "bad.json"
         session_file.write_text("NOT JSON {{{", encoding="utf-8")
@@ -357,7 +357,7 @@ class TestSessionPersistence:
 
     def test_load_returns_none_for_non_dict_json(self, tmp_path, monkeypatch):
         """Lines 324: JSON that is not a dict returns None."""
-        import Synaptipy.application.session_manager as sm_mod
+        import synaptipy.application.session_manager as sm_mod
 
         session_file = tmp_path / "list.json"
         session_file.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
@@ -374,7 +374,7 @@ class TestSessionPersistence:
 
     def test_apply_session_restores_settings(self, tmp_path, monkeypatch):
         """Lines 355-358: apply_session updates global and performance settings."""
-        import Synaptipy.application.session_manager as sm_mod
+        import synaptipy.application.session_manager as sm_mod
 
         session_file = tmp_path / "session.json"
         monkeypatch.setattr(sm_mod, "_SESSION_DIR", tmp_path)
@@ -393,7 +393,7 @@ class TestSessionPersistence:
 
     def test_save_and_load_round_trip_with_analysis_params(self, tmp_path, monkeypatch):
         """Lines 297-309: analysis_params are preserved in round-trip."""
-        import Synaptipy.application.session_manager as sm_mod
+        import synaptipy.application.session_manager as sm_mod
 
         session_file = tmp_path / "session_ap.json"
         monkeypatch.setattr(sm_mod, "_SESSION_DIR", tmp_path)

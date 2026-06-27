@@ -4,10 +4,10 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
+from synaptipy.application.session_manager import SessionManager
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture

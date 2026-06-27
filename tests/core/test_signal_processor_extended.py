@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from Synaptipy.core import signal_processor
+from synaptipy.core import signal_processor
 
 # ---------------------------------------------------------------------------
 # Helpers

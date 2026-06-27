@@ -32,8 +32,8 @@ import numpy as np
 import pytest
 import quantities as pq
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 
 # ---------------------------------------------------------------------------
 # Helper factory
@@ -88,7 +88,7 @@ class TestGetNeoIoClassPaths:
         fake_file = tmp_path / "test.xyzfake"
         fake_file.touch()
         fake_dict = {"GhostIO123": ["xyzfake"]}
-        with patch("Synaptipy.infrastructure.file_readers.neo_adapter.IODict", fake_dict):
+        with patch("synaptipy.infrastructure.file_readers.neo_adapter.IODict", fake_dict):
             with pytest.raises(ValueError, match="GhostIO123"):
                 neo_adapter_instance._get_neo_io_class(fake_file)
 
@@ -106,12 +106,12 @@ class TestGetSupportedFileFilter:
         extra = {"FakeIO": ["bin.special"]}
         original_dict = dict(
             __import__(
-                "Synaptipy.infrastructure.file_readers.neo_adapter",
+                "synaptipy.infrastructure.file_readers.neo_adapter",
                 fromlist=["IODict"],
             ).IODict
         )
         patched = {**original_dict, **extra}
-        with patch("Synaptipy.infrastructure.file_readers.neo_adapter.IODict", patched):
+        with patch("synaptipy.infrastructure.file_readers.neo_adapter.IODict", patched):
             result = neo_adapter_instance.get_supported_file_filter()
         # Just verify the call completes without error
         assert isinstance(result, str)
@@ -593,6 +593,6 @@ class TestWinwcpPatchFailure:
 
     def test_module_loaded_successfully(self):
         """Smoke: NeoAdapter importable, meaning lines 48-53 ran without crash."""
-        from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter as _NA
+        from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter as _NA
 
         assert _NA is not None

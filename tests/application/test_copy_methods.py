@@ -1,5 +1,5 @@
-from Synaptipy.application.controllers.analysis_formatter import generate_methods_text
-from Synaptipy.core.results import SpikeTrainResult
+from synaptipy.application.controllers.analysis_formatter import generate_methods_text
+from synaptipy.core.results import SpikeTrainResult
 
 
 def test_generate_methods_text_spike_detection():

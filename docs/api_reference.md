@@ -32,7 +32,7 @@ section alongside usage examples.
 #### Usage Example
 
 ```python
-from Synaptipy.core.data_model import Recording, Channel
+from synaptipy.core.data_model import Recording, Channel
 from pathlib import Path
 
 recording = Recording(source_file=Path("/path/to/file.abf"))
@@ -54,7 +54,7 @@ channel = recording.get_channel_by_name("Vm")
 #### Usage Example
 
 ```python
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 
 adapter = NeoAdapter()
 recording = adapter.read_recording("/path/to/data.abf")
@@ -143,8 +143,8 @@ GUI and batch engine.
 #### Usage Example - Registry
 
 ```python
-import Synaptipy.core.analysis  # triggers all @register decorators
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+import synaptipy.core.analysis  # triggers all @register decorators
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 names = AnalysisRegistry.list_registered()
 meta = AnalysisRegistry.get_metadata("sag_ratio_analysis")
@@ -166,7 +166,7 @@ result = func(data, time, sampling_rate, baseline_start=0.0, baseline_end=0.1)
 #### Usage Example
 
 ```python
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from pathlib import Path
 
 engine = BatchAnalysisEngine(max_workers=4)
@@ -227,7 +227,7 @@ results_df = engine.run_batch(files, pipeline)
 #### Usage Example
 
 ```python
-from Synaptipy.application.plugin_manager import PluginManager
+from synaptipy.application.plugin_manager import PluginManager
 
 PluginManager.load_plugins()
 PluginManager.reload_plugins()
@@ -252,7 +252,7 @@ PluginManager.reload_plugins()
 
 ```python
 from pathlib import Path
-from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
+from synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 
 exporter = CSVExporter()
 exporter.export_analysis_results(results, Path("summary.csv"))
@@ -305,7 +305,7 @@ A companion `_provenance.json` is written alongside every exported file.
 #### Usage Example
 
 ```python
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 exporter = NWBExporter()
 metadata = {

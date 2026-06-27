@@ -27,7 +27,7 @@ OUT_DIR = REPO_ROOT / "paper" / "results"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Public API imports only ──────────────────────────────────────────────────
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 
 # ── Files to analyse ─────────────────────────────────────────────────────────
 FILES = [

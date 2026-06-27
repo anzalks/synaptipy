@@ -12,8 +12,8 @@ import numpy as np
 import pytest
 
 # Ensure the analysis modules are imported so registrations are active
-import Synaptipy.core.analysis  # noqa: F401
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+import synaptipy.core.analysis  # noqa: F401
+from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 
 
 @pytest.fixture(scope="session")

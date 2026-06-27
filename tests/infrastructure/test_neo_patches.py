@@ -9,7 +9,7 @@ def test_patch_is_applied():
     """apply_winwcp_patch() replaces WinWcpRawIO._parse_header."""
     from neo.rawio.winwcprawio import WinWcpRawIO
 
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     original = WinWcpRawIO._parse_header
     apply_winwcp_patch()
@@ -21,7 +21,7 @@ def test_patch_is_applied():
 
 def test_patch_idempotent():
     """Calling apply_winwcp_patch twice does not raise."""
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
     apply_winwcp_patch()
@@ -96,7 +96,7 @@ def test_patched_parse_header_valid_file(tmp_path):
     """patched_parse_header handles a minimal valid WCP file."""
     from neo.rawio.winwcprawio import WinWcpRawIO
 
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
     fpath = _make_minimal_wcp_file(tmp_path, nr=2, nc=1)
@@ -116,7 +116,7 @@ def test_patched_parse_header_nr_zero(tmp_path):
     """NR=0 in header triggers size-based estimation without crash."""
     from neo.rawio.winwcprawio import WinWcpRawIO
 
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
 
@@ -143,7 +143,7 @@ def test_patched_parse_header_missing_keys(tmp_path):
     """Patched header fills default NR/NC/NBD/NBA/ADCMAX when keys are absent."""
     from neo.rawio.winwcprawio import WinWcpRawIO
 
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
     fpath = _make_empty_header_wcp_file(tmp_path)
@@ -160,7 +160,7 @@ def test_patched_parse_header_with_rtime(tmp_path):
 
     from neo.rawio.winwcprawio import WinWcpRawIO
 
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
 
@@ -234,7 +234,7 @@ def test_patched_parse_header_bad_rtime(tmp_path):
 
     from neo.rawio.winwcprawio import WinWcpRawIO
 
-    from Synaptipy.infrastructure.neo_patches import apply_winwcp_patch
+    from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
 

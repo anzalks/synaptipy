@@ -14,9 +14,9 @@ Steps
 3. Locate the ``qhelpgenerator`` binary (shipped with PySide6's Qt tools or
    available as a system Qt6 package) and invoke it to compile the project
    into a ``.qch`` compressed help file and a ``.qhc`` collection file.
-4. Copy the HTML tree into ``src/Synaptipy/resources/docs/html/``.
+4. Copy the HTML tree into ``src/synaptipy/resources/docs/html/``.
 5. Copy the ``.qch`` / ``.qhc`` artefacts into
-   ``src/Synaptipy/resources/docs/`` so they are picked up by both the
+   ``src/synaptipy/resources/docs/`` so they are picked up by both the
    ``pyproject.toml`` package-data rule and the PyInstaller ``datas`` rule
    in ``synaptipy.spec``.
 
@@ -221,7 +221,7 @@ def step_copy_artefacts() -> None:
 
     # Qt Help artefacts (tier-1 QHelpEngine)
     # Explicit makedirs guard: PyInstaller's datas collector walks
-    # src/Synaptipy/resources/ at spec-parse time and will error if the
+    # src/synaptipy/resources/ at spec-parse time and will error if the
     # docs/ subdirectory is missing, even when qhelpgenerator was unavailable.
     os.makedirs(DEST_DIR, exist_ok=True)
     for src in (QCH_FILE, QHC_FILE):

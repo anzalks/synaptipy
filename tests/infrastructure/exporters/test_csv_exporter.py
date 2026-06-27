@@ -6,8 +6,8 @@ import json
 import numpy as np
 import pytest
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.exporters.csv_exporter import (
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.exporters.csv_exporter import (
     CSVExporter,
     _build_tidy_row,
     _get_dependency_versions,
@@ -345,7 +345,7 @@ def test_sanitize_csv_value_numpy_array_no_wrapper():
 
 
 def test_sanitize_csv_value_large_array_truncated():
-    from Synaptipy.infrastructure.exporters.csv_exporter import _MAX_ARRAY_PREVIEW
+    from synaptipy.infrastructure.exporters.csv_exporter import _MAX_ARRAY_PREVIEW
 
     arr = list(range(_MAX_ARRAY_PREVIEW + 5))
     result = _sanitize_csv_value(arr)

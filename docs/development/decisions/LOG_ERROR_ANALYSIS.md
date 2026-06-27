@@ -18,7 +18,7 @@ Found and fixed **6 critical errors** (Bugs 7-12) that would have prevented the 
 Logic Error - String Comparison Mismatch
 
 ### Location
-- **File**: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- **File**: `src/synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
 - **Method**: `_gather_analysis_parameters` (line 767)
 - **UI Definition**: `_setup_ui` (line 132)
 
@@ -71,7 +71,7 @@ elif selected_method == "Baseline + Peak + Kinetics":
 Logic Error - String Comparison Mismatch
 
 ### Location
-- **File**: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- **File**: `src/synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
 - **Method**: `_execute_core_analysis` (line 825)
 - **Related**: UI Definition at line 132
 
@@ -132,7 +132,7 @@ elif selected_method == "Baseline + Peak + Kinetics":
 Runtime Error - ValueError
 
 ### Location
-- **File**: `src/Synaptipy/application/gui/analysis_tabs/rmp_tab.py`
+- **File**: `src/synaptipy/application/gui/analysis_tabs/rmp_tab.py`
 - **Method**: `_execute_core_analysis` (line 915)
 
 ### Problem Description
@@ -186,7 +186,7 @@ This explicitly checks for `None` rather than relying on boolean evaluation of t
 AttributeError - Accessing Uninitialized Attribute
 
 ### Location
-- **File**: `src/Synaptipy/application/gui/explorer_tab.py`
+- **File**: `src/synaptipy/application/gui/explorer_tab.py`
 - **Method**: `_reset_ui_and_state_for_new_file` (lines 709, 723)
 - **Stack Trace**: Lines 5826-5836 in log
 
@@ -318,7 +318,7 @@ tests/application/gui/test_rin_tab.py::test_get_specific_result_data PASSED [100
 AttributeError - Accessing Non-Existent Class Attributes
 
 ### Location
-- **File**: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- **File**: `src/synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
 - **Method**: `_gather_analysis_parameters` (lines 768-772)
 
 ### Problem Description
@@ -373,9 +373,9 @@ params['peak_prominence_factor'] = self.mini_baseline_prominence_spinbox.value()
 AttributeError - Calling Non-Existent Function
 
 ### Location
-- **File**: `src/Synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
+- **File**: `src/synaptipy/application/gui/analysis_tabs/event_detection_tab.py`
 - **Method**: `_execute_core_analysis` (line 832)
-- **Actual Function**: `src/Synaptipy/core/analysis/event_detection.py` (line 452)
+- **Actual Function**: `src/synaptipy/core/analysis/event_detection.py` (line 452)
 
 ### Problem Description
 The code attempts to call `ed.detect_events_baseline_peak()` which doesn't exist. The actual function name is `detect_events_baseline_peak_kinetics()`. Additionally:

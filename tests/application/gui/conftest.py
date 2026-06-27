@@ -34,7 +34,7 @@ def main_window(qapp):  # noqa: C901
         mock_msgbox.information.return_value = None
 
         # Import and create MainWindow
-        from Synaptipy.application.gui.main_window import MainWindow
+        from synaptipy.application.gui.main_window import MainWindow
 
         window = MainWindow()
 

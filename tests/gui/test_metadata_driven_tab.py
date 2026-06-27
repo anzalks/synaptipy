@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.application.gui.ui_generator import FlexibleDoubleSpinBox, ParameterWidgetGenerator
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+from synaptipy.application.gui.ui_generator import FlexibleDoubleSpinBox, ParameterWidgetGenerator
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 
 # Register a dummy analysis for testing - MOVED TO FIXTURE
@@ -37,7 +37,7 @@ def registered_analysis():
 def test_tab(qtbot, registered_analysis, monkeypatch):
     neo_adapter = MagicMock()
     # Prevent heavy pyqtgraph instantiation to avoid macOS SIGABRT in offscreen runner
-    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
+    monkeypatch.setattr("synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
     tab = MetadataDrivenAnalysisTab("test_analysis", neo_adapter)
     qtbot.addWidget(tab)
     return tab
@@ -186,14 +186,14 @@ def test_param_based_visibility_in_generator(qtbot):
 @pytest.fixture
 def rin_analysis_registered():
     """Ensure rin_analysis is registered (it is by default via imports)."""
-    import Synaptipy.core.analysis.passive_properties  # noqa: F401
+    import synaptipy.core.analysis.passive_properties  # noqa: F401
 
     yield
 
 
 @pytest.fixture
 def rin_tab(qtbot, rin_analysis_registered, monkeypatch):
-    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
+    monkeypatch.setattr("synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab("rin_analysis", neo_adapter)
     qtbot.addWidget(tab)
@@ -250,10 +250,10 @@ def test_manual_mode_enables_spinboxes(rin_tab):
 def test_intrinsic_analysis_with_empty_data_raises_or_returns(qtbot, monkeypatch, analysis_name):
     """Tau, Sag, and Rin raise or return a dict (not crash silently) when data dict is empty."""
     monkeypatch.setattr(
-        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
+        "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
         MagicMock(),
     )
-    import Synaptipy.core.analysis.passive_properties  # noqa: F401
+    import synaptipy.core.analysis.passive_properties  # noqa: F401
 
     neo_adapter = MagicMock()
     tab = MetadataDrivenAnalysisTab(analysis_name, neo_adapter)

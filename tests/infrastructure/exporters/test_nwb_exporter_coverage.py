@@ -6,9 +6,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.shared.error_handling import ExportError
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.shared.error_handling import ExportError
 
 
 @pytest.fixture
@@ -38,13 +38,13 @@ def base_metadata(base_recording):
 
 def test_export_pynwb_unavailable(base_recording, base_metadata, tmp_path):
     exporter = NWBExporter()
-    with patch("Synaptipy.infrastructure.exporters.nwb_exporter.PYNWB_AVAILABLE", False):
+    with patch("synaptipy.infrastructure.exporters.nwb_exporter.PYNWB_AVAILABLE", False):
         with pytest.raises(ExportError, match="pynwb library is not installed"):
             exporter.export(base_recording, tmp_path / "out.nwb", base_metadata)
 
 
 def test_make_stim_series_coverage():
-    from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+    from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
     try:
         from datetime import datetime, timezone
@@ -82,7 +82,7 @@ def test_make_stim_series_coverage():
 
 
 def test_build_stim_from_abf_epochs():
-    from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+    from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
     epochs = [
         {
@@ -114,7 +114,7 @@ def test_build_stim_from_abf_epochs():
 
 
 def test_resolve_stimulus_series(base_recording):
-    from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+    from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
     try:
         from datetime import datetime, timezone

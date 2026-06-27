@@ -23,10 +23,10 @@ class TestPluginTemplateWrapper:
         import sys
 
         # Import the template module (it self-registers but that's OK)
-        if "Synaptipy.templates.plugin_template" in sys.modules:
-            mod = sys.modules["Synaptipy.templates.plugin_template"]
+        if "synaptipy.templates.plugin_template" in sys.modules:
+            mod = sys.modules["synaptipy.templates.plugin_template"]
         else:
-            mod = importlib.import_module("Synaptipy.templates.plugin_template")
+            mod = importlib.import_module("synaptipy.templates.plugin_template")
 
         wrapper = mod.run_my_custom_metric_wrapper
 
@@ -41,11 +41,11 @@ class TestPluginTemplateWrapper:
         """calculate_my_metric returns error dict for empty data."""
         import sys
 
-        mod = sys.modules.get("Synaptipy.templates.plugin_template")
+        mod = sys.modules.get("synaptipy.templates.plugin_template")
         if mod is None:
             import importlib
 
-            mod = importlib.import_module("Synaptipy.templates.plugin_template")
+            mod = importlib.import_module("synaptipy.templates.plugin_template")
 
         wrapper = mod.run_my_custom_metric_wrapper
         result = wrapper(data=np.array([]), time=np.array([]), sampling_rate=10_000.0)
@@ -60,7 +60,7 @@ class TestPluginTemplateWrapper:
 class TestCliInit:
     def test_cli_import_succeeds(self):
         """Importing the CLI subpackage must not raise."""
-        import Synaptipy.application.cli as cli  # noqa: F401
+        import synaptipy.application.cli as cli  # noqa: F401
 
         assert hasattr(cli, "__all__")
         assert cli.__all__ == []
@@ -73,7 +73,7 @@ class TestCliInit:
 
 class TestEpochManagerMutations:
     def _make_manager(self):
-        from Synaptipy.core.analysis.epoch_manager import EpochManager
+        from synaptipy.core.analysis.epoch_manager import EpochManager
 
         return EpochManager()
 
@@ -106,7 +106,7 @@ class TestEpochManagerMutations:
 
 class TestRegistryCollision:
     def setup_method(self):
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         self._saved_registry = dict(AnalysisRegistry._registry)
         self._saved_metadata = dict(AnalysisRegistry._metadata)
@@ -115,7 +115,7 @@ class TestRegistryCollision:
         AnalysisRegistry.clear()
 
     def teardown_method(self):
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         AnalysisRegistry.clear()
         AnalysisRegistry._registry.update(self._saved_registry)
@@ -125,7 +125,7 @@ class TestRegistryCollision:
 
     def test_plugin_collision_with_core_gets_suffixed(self):
         """Lines 57-66: plugin that shadows a core name is renamed."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         @AnalysisRegistry.register("core_analysis")
         def core_fn(**kwargs):
@@ -146,7 +146,7 @@ class TestRegistryCollision:
 
     def test_two_plugin_collisions_both_suffixed_incrementally(self):
         """Counter keeps incrementing on repeated collisions."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         @AnalysisRegistry.register("base")
         def fn_core(**kwargs):

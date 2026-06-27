@@ -7,12 +7,12 @@ code style used across the Synaptipy codebase.
 
 Synaptipy follows a strict three-layer architecture:
 
-- **Core layer** (`src/Synaptipy/core/`) - Pure Python analysis logic, fully
+- **Core layer** (`src/synaptipy/core/`) - Pure Python analysis logic, fully
   decoupled from the GUI and independently testable. All analysis functions
   are registered via the `@AnalysisRegistry.register()` decorator.
-- **Application layer** (`src/Synaptipy/application/`) - PySide6 (Qt6) user
+- **Application layer** (`src/synaptipy/application/`) - PySide6 (Qt6) user
   interface, plugin manager, session state, and controllers.
-- **Infrastructure layer** (`src/Synaptipy/infrastructure/`) - File I/O via
+- **Infrastructure layer** (`src/synaptipy/infrastructure/`) - File I/O via
   Neo and PyNWB; NWB export.
 
 ## Code Quality
@@ -38,8 +38,8 @@ python scripts/run_tests.py
 
 ## Key Design Rules
 
-1. **Registry import rule** - Always `import Synaptipy.core.analysis` (the
-   full package), never just `from Synaptipy.core.analysis.registry import
+1. **Registry import rule** - Always `import synaptipy.core.analysis` (the
+   full package), never just `from synaptipy.core.analysis.registry import
    AnalysisRegistry`. The full import triggers sub-module decorators.
 2. **PySide6 == 6.7.3** - Do not widen or loosen this pin.
 3. **GC disabled in offscreen mode** - `gc.disable()` in test conftest.

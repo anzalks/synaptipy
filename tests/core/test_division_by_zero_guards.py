@@ -16,8 +16,8 @@ The functionality they test is covered by the existing 1078 passing tests.
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
-from Synaptipy.core.analysis.passive_properties import calculate_capacitance_cc
+from synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
+from synaptipy.core.analysis.passive_properties import calculate_capacitance_cc
 
 
 class TestCV2LVDivisionGuards:

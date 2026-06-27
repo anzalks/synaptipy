@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
-from Synaptipy.shared.error_handling import FileReadError
+from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+from synaptipy.shared.error_handling import FileReadError
 
 
 class MockBlock:
@@ -114,7 +114,7 @@ def test_unit_error_re_raise(neo_adapter):
     mock_seg.analogsignals = [mock_anasig]
 
     with patch(
-        "Synaptipy.infrastructure.file_readers.neo_adapter.validate_sampling_rate",
+        "synaptipy.infrastructure.file_readers.neo_adapter.validate_sampling_rate",
         side_effect=Exception("Mock Generic Exception"),
     ):
         # Should not raise, should just log and continue

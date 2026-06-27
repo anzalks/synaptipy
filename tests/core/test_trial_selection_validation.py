@@ -13,7 +13,7 @@ Covers:
 
 import pytest
 
-from Synaptipy.shared.utils import parse_trial_selection_string
+from synaptipy.shared.utils import parse_trial_selection_string
 
 
 class TestTrialSelectionParsing:

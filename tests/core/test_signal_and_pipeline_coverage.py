@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-from Synaptipy.core import signal_processor
-from Synaptipy.core.data_model import Channel, Experiment, Recording
-from Synaptipy.core.processing_pipeline import SignalProcessingPipeline, apply_trace_corrections
+from synaptipy.core import signal_processor
+from synaptipy.core.data_model import Channel, Experiment, Recording
+from synaptipy.core.processing_pipeline import SignalProcessingPipeline, apply_trace_corrections
 
 # ---------------------------------------------------------------------------
 # Helpers

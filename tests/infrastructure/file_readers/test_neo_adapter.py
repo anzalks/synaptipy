@@ -5,8 +5,8 @@ import pytest
 
 # Assuming neo_adapter_instance fixture is in conftest.py
 # Assuming sample_abf_path fixture is in conftest.py providing a valid Path object
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.shared.error_handling import SynaptipyFileNotFoundError, UnsupportedFormatError
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.shared.error_handling import UnsupportedFormatError, SynaptipyFileNotFoundError
 
 # --- Test _get_neo_io_class ---
 
@@ -206,7 +206,7 @@ def test_pyabf_fallback_rescue(mocker, neo_adapter_instance, tmp_path):
 
 def test_pyabf_fallback_rescue_import_error(mocker, neo_adapter_instance, tmp_path):
     """Test that a missing pyabf raises FileReadError with the install hint."""
-    from Synaptipy.shared.error_handling import FileReadError
+    from synaptipy.shared.error_handling import FileReadError
 
     abf_file = tmp_path / "synthetic.abf"
     abf_file.touch()

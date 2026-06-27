@@ -11,9 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from unittest.mock import patch  # noqa: E402
 
-from Synaptipy.core.data_model import Channel, Recording  # noqa: E402
-from Synaptipy.infrastructure.exporters import NWBExporter  # noqa: E402
-from Synaptipy.shared.error_handling import ExportError  # noqa: E402
+from synaptipy.core.data_model import Channel, Recording  # noqa: E402
+from synaptipy.infrastructure.exporters import NWBExporter  # noqa: E402
+from synaptipy.shared.error_handling import ExportError  # noqa: E402
 
 
 # Fixture for a sample recording object (can reuse from test_data_model or create new)

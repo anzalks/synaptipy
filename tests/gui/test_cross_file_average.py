@@ -16,8 +16,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,7 +75,7 @@ def registered_passthrough():
 def analysis_tab(qtbot, registered_passthrough, monkeypatch):
     """Create a MetadataDrivenAnalysisTab with heavy pyqtgraph bits mocked out."""
     monkeypatch.setattr(
-        "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
+        "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
         MagicMock(),
     )
     neo_adapter = MagicMock()

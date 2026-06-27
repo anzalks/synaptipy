@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PySide6 import QtCore
 
-import Synaptipy.shared.scroll_settings as ss
-from Synaptipy.shared.scroll_settings import (
+import synaptipy.shared.scroll_settings as ss
+from synaptipy.shared.scroll_settings import (
     ScrollDirection,
     _detect_system_scroll_direction,
     _get_settings,
@@ -87,7 +87,7 @@ class TestGetScrollDirection:
     def test_valid_value_returns_enum(self):
         mock_settings = MagicMock(spec=QtCore.QSettings)
         mock_settings.value.return_value = ScrollDirection.NATURAL.value
-        with patch("Synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
+        with patch("synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
             result = get_scroll_direction()
         assert result == ScrollDirection.NATURAL
 
@@ -95,14 +95,14 @@ class TestGetScrollDirection:
         """Lines 65-72: invalid stored value → defaults to NATURAL with warning."""
         mock_settings = MagicMock(spec=QtCore.QSettings)
         mock_settings.value.return_value = "completely_invalid_value"
-        with patch("Synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
+        with patch("synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
             result = get_scroll_direction()
         assert result == ScrollDirection.NATURAL
 
     def test_inverted_value_returns_inverted(self):
         mock_settings = MagicMock(spec=QtCore.QSettings)
         mock_settings.value.return_value = ScrollDirection.INVERTED.value
-        with patch("Synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
+        with patch("synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
             result = get_scroll_direction()
         assert result == ScrollDirection.INVERTED
 
@@ -122,7 +122,7 @@ class TestSetScrollDirection:
         received = []
         sig_instance.direction_changed.connect(received.append)
 
-        with patch("Synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
+        with patch("synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
             set_scroll_direction(ScrollDirection.INVERTED)
 
         mock_settings.setValue.assert_called_once_with("scroll/direction", ScrollDirection.INVERTED.value)
@@ -135,7 +135,7 @@ class TestSetScrollDirection:
         received = []
         sig_instance.direction_changed.connect(received.append)
 
-        with patch("Synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
+        with patch("synaptipy.shared.scroll_settings._get_settings", return_value=mock_settings):
             set_scroll_direction(ScrollDirection.NATURAL)
 
         assert received == [ScrollDirection.NATURAL.value]
@@ -154,14 +154,14 @@ class TestGetScrollMultiplier:
 
     def test_natural_returns_1(self):
         with patch(
-            "Synaptipy.shared.scroll_settings.get_scroll_direction",
+            "synaptipy.shared.scroll_settings.get_scroll_direction",
             return_value=ScrollDirection.NATURAL,
         ):
             assert get_scroll_multiplier() == 1
 
     def test_inverted_returns_minus_1(self):
         with patch(
-            "Synaptipy.shared.scroll_settings.get_scroll_direction",
+            "synaptipy.shared.scroll_settings.get_scroll_direction",
             return_value=ScrollDirection.INVERTED,
         ):
             assert get_scroll_multiplier() == -1
@@ -169,11 +169,11 @@ class TestGetScrollMultiplier:
     def test_system_calls_detect(self):
         """Lines 109-116: SYSTEM branch delegates to _detect_system_scroll_direction."""
         with patch(
-            "Synaptipy.shared.scroll_settings.get_scroll_direction",
+            "synaptipy.shared.scroll_settings.get_scroll_direction",
             return_value=ScrollDirection.SYSTEM,
         ):
             with patch(
-                "Synaptipy.shared.scroll_settings._detect_system_scroll_direction",
+                "synaptipy.shared.scroll_settings._detect_system_scroll_direction",
                 return_value=1,
             ) as mock_detect:
                 result = get_scroll_multiplier()
@@ -208,14 +208,14 @@ class TestDetectSystemScrollDirection:
 class TestIsScrollInverted:
     def test_natural_not_inverted(self):
         with patch(
-            "Synaptipy.shared.scroll_settings.get_scroll_multiplier",
+            "synaptipy.shared.scroll_settings.get_scroll_multiplier",
             return_value=1,
         ):
             assert is_scroll_inverted() is False
 
     def test_inverted_is_inverted(self):
         with patch(
-            "Synaptipy.shared.scroll_settings.get_scroll_multiplier",
+            "synaptipy.shared.scroll_settings.get_scroll_multiplier",
             return_value=-1,
         ):
             assert is_scroll_inverted() is True

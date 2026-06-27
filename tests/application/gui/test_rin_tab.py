@@ -9,10 +9,10 @@ import pytest
 from PySide6 import QtWidgets
 
 # Ensure the analysis modules are imported so registrations are active
-import Synaptipy.core.analysis  # noqa: F401
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+import synaptipy.core.analysis  # noqa: F401
+from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 # Fixtures for reuse in multiple tests

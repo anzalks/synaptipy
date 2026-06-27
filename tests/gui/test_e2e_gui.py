@@ -50,7 +50,7 @@ def _make_synthetic_recording(
     No disk I/O is performed; this is purely in-memory.  The returned object
     mirrors the interface expected by ``ExplorerTab`` and ``SessionManager``.
     """
-    from Synaptipy.core.data_model import Channel, Recording
+    from synaptipy.core.data_model import Channel, Recording
 
     rng = np.random.default_rng(42)
     rec = Recording(source_file=source_file)
@@ -131,7 +131,7 @@ def main_window_e2e(qtbot):
         _mock_mb.information.return_value = None
         _mock_mb.question.return_value = QtWidgets.QMessageBox.StandardButton.No
 
-        from Synaptipy.application.gui.main_window import MainWindow
+        from synaptipy.application.gui.main_window import MainWindow
 
         window = MainWindow()
         qtbot.addWidget(window)
@@ -174,7 +174,7 @@ class TestMainWindowInitialisation:
 
     def test_session_manager_singleton(self, main_window_e2e):
         """SessionManager must be the application singleton."""
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         sm = SessionManager()
         assert main_window_e2e.session_manager is sm
@@ -191,7 +191,7 @@ class TestSyntheticRecordingInjection:
     def test_recording_reaches_session_manager(self, main_window_e2e, qtbot):
         """Setting SessionManager.current_recording must not raise any exception."""
         rec = _make_synthetic_recording(n_channels=2, n_trials=3, n_samples=5_000)
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         sm = SessionManager()
         sm.set_file_context([rec.source_file], 0)
@@ -203,7 +203,7 @@ class TestSyntheticRecordingInjection:
     def test_recording_channel_count_accessible(self, main_window_e2e, qtbot):
         """A loaded Recording's channel count must be readable after injection."""
         rec = _make_synthetic_recording(n_channels=3, n_trials=2, n_samples=4_000)
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         sm = SessionManager()
         sm.current_recording = rec
@@ -214,7 +214,7 @@ class TestSyntheticRecordingInjection:
         """Trial data must remain intact after passing through SessionManager."""
         n_samples = 8_000
         rec = _make_synthetic_recording(n_channels=1, n_trials=4, n_samples=n_samples)
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         sm = SessionManager()
         sm.current_recording = rec
@@ -236,7 +236,7 @@ class TestDataLoaderLargeFileGuard:
 
     def test_small_file_not_promoted(self, tmp_path):
         """A file smaller than the 500 MB threshold must not trigger lazy promotion."""
-        from Synaptipy.application.data_loader import _LARGE_FILE_THRESHOLD_BYTES, DataLoader
+        from synaptipy.application.data_loader import _LARGE_FILE_THRESHOLD_BYTES, DataLoader
 
         small_file = tmp_path / "small.bin"
         small_file.write_bytes(b"\x00" * 1024)  # 1 KB — well below threshold
@@ -256,7 +256,7 @@ class TestDataLoaderLargeFileGuard:
         """A file >= 500 MB must be promoted to lazy mode with a warning log entry."""
         import logging
 
-        from Synaptipy.application.data_loader import _LARGE_FILE_THRESHOLD_BYTES, DataLoader
+        from synaptipy.application.data_loader import _LARGE_FILE_THRESHOLD_BYTES, DataLoader
 
         large_file = tmp_path / "large.bin"
         # Write exactly the threshold bytes to trigger promotion
@@ -265,7 +265,7 @@ class TestDataLoaderLargeFileGuard:
         loader = DataLoader()
         with (
             patch.object(loader.neo_adapter, "read_recording") as mock_read,
-            caplog.at_level(logging.WARNING, logger="Synaptipy.application.data_loader"),
+            caplog.at_level(logging.WARNING, logger="synaptipy.application.data_loader"),
         ):
             mock_read.return_value = _make_synthetic_recording(source_file=large_file)
             loader.load_file(large_file, lazy_load=False)
@@ -290,12 +290,12 @@ class TestSessionManagerPersistence:
 
     def test_save_creates_json_file(self, tmp_path, monkeypatch):
         """save_session() must create session.json in the configured directory."""
-        from Synaptipy.application import session_manager as sm_module
+        from synaptipy.application import session_manager as sm_module
 
         monkeypatch.setattr(sm_module, "_SESSION_DIR", tmp_path)
         monkeypatch.setattr(sm_module, "_SESSION_FILE", tmp_path / "session.json")
 
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         sm = SessionManager()
         sm._file_list = [Path("/fake/file_a.abf"), Path("/fake/file_b.abf")]
@@ -307,23 +307,23 @@ class TestSessionManagerPersistence:
 
     def test_load_returns_none_when_no_file(self, tmp_path, monkeypatch):
         """load_session() must return None when no session file exists."""
-        from Synaptipy.application import session_manager as sm_module
+        from synaptipy.application import session_manager as sm_module
 
         monkeypatch.setattr(sm_module, "_SESSION_FILE", tmp_path / "nonexistent.json")
 
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         assert SessionManager.load_session() is None
 
     def test_round_trip_settings(self, tmp_path, monkeypatch):
         """Global settings written by save_session must be readable by load_session."""
-        from Synaptipy.application import session_manager as sm_module
+        from synaptipy.application import session_manager as sm_module
 
         session_file = tmp_path / "session.json"
         monkeypatch.setattr(sm_module, "_SESSION_DIR", tmp_path)
         monkeypatch.setattr(sm_module, "_SESSION_FILE", session_file)
 
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         sm = SessionManager()
         sm._global_settings["liquid_junction_potential_mv"] = 12.5
@@ -338,7 +338,7 @@ class TestSessionManagerPersistence:
 
     def test_schema_version_mismatch_returns_none(self, tmp_path, monkeypatch):
         """load_session() must return None when schema_version does not match."""
-        from Synaptipy.application import session_manager as sm_module
+        from synaptipy.application import session_manager as sm_module
 
         session_file = tmp_path / "session.json"
         monkeypatch.setattr(sm_module, "_SESSION_FILE", session_file)
@@ -346,7 +346,7 @@ class TestSessionManagerPersistence:
         bad_payload = {"schema_version": 99, "file_paths": [], "active_tab_index": 0}
         session_file.write_text(json.dumps(bad_payload), encoding="utf-8")
 
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         assert SessionManager.load_session() is None
 
@@ -361,8 +361,8 @@ class TestCrashReporterMarkdown:
 
     def test_markdown_contains_synaptipy_version(self):
         """The Markdown report must include the Synaptipy version string."""
-        from Synaptipy import __version__
-        from Synaptipy.application.__main__ import CrashReportDialog
+        from synaptipy import __version__
+        from synaptipy.application.__main__ import CrashReportDialog
 
         report = CrashReportDialog._build_markdown_report("Traceback (most recent call last):\n  ...\n")
         assert __version__ in report, f"Synaptipy version '{__version__}' not found in crash report."
@@ -371,7 +371,7 @@ class TestCrashReporterMarkdown:
         """The Markdown report must include the OS platform string."""
         import platform
 
-        from Synaptipy.application.__main__ import CrashReportDialog
+        from synaptipy.application.__main__ import CrashReportDialog
 
         report = CrashReportDialog._build_markdown_report("SomeError: boom\n")
         # platform.platform() is included verbatim in the report
@@ -379,7 +379,7 @@ class TestCrashReporterMarkdown:
 
     def test_markdown_contains_traceback(self):
         """The Markdown report must embed the original traceback text."""
-        from Synaptipy.application.__main__ import CrashReportDialog
+        from synaptipy.application.__main__ import CrashReportDialog
 
         tb_text = "Traceback (most recent call last):\n  File 'x.py', line 1, in <module>\nRuntimeError: test\n"
         report = CrashReportDialog._build_markdown_report(tb_text)
@@ -387,15 +387,15 @@ class TestCrashReporterMarkdown:
 
     def test_markdown_github_link_present(self):
         """The Markdown report must contain the GitHub Issues URL."""
-        from Synaptipy.application.__main__ import CrashReportDialog
+        from synaptipy.application.__main__ import CrashReportDialog
 
         report = CrashReportDialog._build_markdown_report("error\n")
         assert "github.com/anzalks/synaptipy/issues" in report
 
     def test_core_error_handler_build_crash_markdown(self):
         """core.error_handler.build_crash_markdown must produce valid Markdown."""
-        from Synaptipy import __version__
-        from Synaptipy.core.error_handler import GITHUB_ISSUES_URL, build_crash_markdown
+        from synaptipy import __version__
+        from synaptipy.core.error_handler import GITHUB_ISSUES_URL, build_crash_markdown
 
         report = build_crash_markdown("ValueError: synthetic\n")
         assert __version__ in report

@@ -90,7 +90,7 @@ def _child_raw_rendering(mode: str) -> None:
     pg.setConfigOption("background", "k")
     pg.setConfigOption("foreground", "w")
 
-    from Synaptipy.shared.plot_customization import set_force_opaque_trials
+    from synaptipy.shared.plot_customization import set_force_opaque_trials
 
     set_force_opaque_trials(force_opaque)
 
@@ -98,9 +98,9 @@ def _child_raw_rendering(mode: str) -> None:
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    from Synaptipy.application.gui.explorer.plot_canvas import ExplorerPlotCanvas
-    from Synaptipy.core.data_model import Channel, Recording
-    from Synaptipy.infrastructure.file_readers import NeoAdapter
+    from synaptipy.application.gui.explorer.plot_canvas import ExplorerPlotCanvas
+    from synaptipy.core.data_model import Channel, Recording
+    from synaptipy.infrastructure.file_readers import NeoAdapter
 
     adapter = NeoAdapter()
     rec = adapter.read_recording(str(_ABF_0021))
@@ -204,16 +204,16 @@ def _child_e2e(mode: str) -> None:
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     apply_theme(ThemeMode.LIGHT)
 
-    import Synaptipy.core.analysis  # noqa: F401 — triggers registry decorators
-    from Synaptipy.application.plugin_manager import PluginManager
+    import synaptipy.core.analysis  # noqa: F401 — triggers registry decorators
+    from synaptipy.application.plugin_manager import PluginManager
 
     PluginManager.load_plugins()
 
-    from Synaptipy.application.gui.main_window import MainWindow
+    from synaptipy.application.gui.main_window import MainWindow
 
     window = MainWindow()
 

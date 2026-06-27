@@ -27,10 +27,10 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from Synaptipy.core.analysis.firing_dynamics import calculate_bursts_logic
-from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
-from Synaptipy.core.analysis.synaptic_events import detect_events_threshold
-from Synaptipy.core.constants import (
+from synaptipy.core.analysis.firing_dynamics import calculate_bursts_logic
+from synaptipy.core.analysis.single_spike import detect_spikes_threshold
+from synaptipy.core.analysis.synaptic_events import detect_events_threshold
+from synaptipy.core.constants import (
     BURST_ISI_FRACTION,
     DVDT_THRESHOLD_VS,
     FAHP_WINDOW_MS,
@@ -263,7 +263,7 @@ def sweep_ahp_windows(
 
     # For AHP, we just verify that the default window captures the AHP.
     # The metric is whether fAHP depth changes with window size.
-    from Synaptipy.core.analysis.single_spike import calculate_spike_features
+    from synaptipy.core.analysis.single_spike import calculate_spike_features
 
     voltage, time = _generate_standard_spike_trace()
     sampling_rate = 1.0 / (time[1] - time[0])

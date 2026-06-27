@@ -34,8 +34,8 @@ app = QApplication.instance() or QApplication(sys.argv)
 
 repo_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(repo_root / "src"))
-from Synaptipy.application.gui.main_window import MainWindow
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.main_window import MainWindow
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 def main():

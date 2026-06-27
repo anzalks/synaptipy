@@ -410,7 +410,7 @@ def _get_or_create_cursor_manager(canvas: Any) -> Optional[Any]:
     """Return the canvas cursor manager, creating a headless instance if absent."""
     cm = getattr(canvas, "cursor_manager", None)
     if cm is None:
-        from Synaptipy.shared.cursor_manager import CursorToolManager  # noqa: PLC0415
+        from synaptipy.shared.cursor_manager import CursorToolManager  # noqa: PLC0415
 
         plots = list(canvas.channel_plots.values())
         if plots:
@@ -1023,7 +1023,7 @@ def _mark_trial(explorer: Any, path: Path, trial_index: int) -> None:
     This avoids the need to click through the UI; the data is loaded on the fly
     from the recording that is already in memory (via neo_adapter cache).
     """
-    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter  # noqa: PLC0415
+    from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter  # noqa: PLC0415
 
     adapter = NeoAdapter()
     rec = adapter.read_recording(path)
@@ -1167,9 +1167,9 @@ def run(output_dir: Path) -> bool:  # noqa: C901
     from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
-    from Synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
-    from Synaptipy.application.session_manager import SessionManager  # noqa: PLC0415
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
+    from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
+    from synaptipy.application.session_manager import SessionManager  # noqa: PLC0415
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
 
     captured: List[str] = []
     success = False
@@ -1186,8 +1186,8 @@ def run(output_dir: Path) -> bool:  # noqa: C901
     try:
         # Register all built-in analyses and load example plugins before the
         # MainWindow is constructed so every analysis tab is present.
-        import Synaptipy.core.analysis  # noqa: F401 — registers built-in analyses
-        from Synaptipy.application.plugin_manager import PluginManager  # noqa: PLC0415
+        import synaptipy.core.analysis  # noqa: F401 — registers built-in analyses
+        from synaptipy.application.plugin_manager import PluginManager  # noqa: PLC0415
 
         PluginManager.load_plugins()
 

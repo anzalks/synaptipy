@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.firing_dynamics import calculate_bursts_logic, calculate_fi_curve
-from Synaptipy.core.analysis.passive_properties import run_rin_analysis_wrapper
-from Synaptipy.core.analysis.single_spike import run_spike_detection_wrapper
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.firing_dynamics import calculate_bursts_logic, calculate_fi_curve
+from synaptipy.core.analysis.passive_properties import run_rin_analysis_wrapper
+from synaptipy.core.analysis.single_spike import run_spike_detection_wrapper
 
 
 # --- 1. Batch Engine Update Tests ---
@@ -28,7 +28,7 @@ def test_batch_engine_channel_set_scope():
 
     # Define a dummy analysis function
     mock_analysis = MagicMock(return_value={"result": "ok"})
-    from Synaptipy.core.analysis.registry import AnalysisRegistry
+    from synaptipy.core.analysis.registry import AnalysisRegistry
 
     # Register dummy analysis
     AnalysisRegistry.register("dummy_set_analysis")(mock_analysis)

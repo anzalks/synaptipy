@@ -13,9 +13,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-from Synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+from synaptipy.application.gui.widgets.preprocessing import PreprocessingWidget
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 # --- Fixtures ---
 
@@ -83,7 +83,7 @@ class TestAnalysisTabPreprocessingReset:
         """_handle_preprocessing_reset clears pipeline and settings."""
         neo_adapter = MagicMock()
         monkeypatch.setattr(
-            "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
+            "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
         )
         tab = MetadataDrivenAnalysisTab("test_preproc_reset", neo_adapter)
         qtbot.addWidget(tab)
@@ -104,7 +104,7 @@ class TestAnalysisTabPreprocessingReset:
         """_handle_preprocessing_reset resets the PreprocessingWidget combos."""
         neo_adapter = MagicMock()
         monkeypatch.setattr(
-            "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
+            "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
         )
         tab = MetadataDrivenAnalysisTab("test_preproc_reset", neo_adapter)
         qtbot.addWidget(tab)
@@ -122,7 +122,7 @@ class TestAnalysisTabPreprocessingReset:
         """The reset signal from PreprocessingWidget should be connected."""
         neo_adapter = MagicMock()
         monkeypatch.setattr(
-            "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
+            "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
         )
         tab = MetadataDrivenAnalysisTab("test_preproc_reset", neo_adapter)
         qtbot.addWidget(tab)
@@ -142,7 +142,7 @@ class TestAnalysisTabPreprocessingReset:
         """apply_global_preprocessing(None) should reset widget UI too."""
         neo_adapter = MagicMock()
         monkeypatch.setattr(
-            "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
+            "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock()
         )
         tab = MetadataDrivenAnalysisTab("test_preproc_reset", neo_adapter)
         qtbot.addWidget(tab)

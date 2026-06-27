@@ -134,7 +134,7 @@ class TestTauNoiseRobustness:
     """Tau fitting must converge within 25% of the true value under noise."""
 
     def _fit_tau(self, voltage, time, known):
-        from Synaptipy.core.analysis.passive_properties import calculate_tau
+        from synaptipy.core.analysis.passive_properties import calculate_tau
 
         step_start = known["step_start_s"]
         fit_duration = known["step_end_s"] - step_start
@@ -180,7 +180,7 @@ class TestSpikeFeatureNoiseRobustness:
     """Spike detection must find exactly 1 spike; peak amplitude within 30% of true."""
 
     def _detect(self, voltage, time, known):
-        from Synaptipy.core.analysis.single_spike import (
+        from synaptipy.core.analysis.single_spike import (
             calculate_spike_features,
             detect_spikes_threshold,
         )
@@ -228,7 +228,7 @@ class TestBiExpNoiseRobustness:
     """Bi-exp decay fit must recover tau_fast and tau_slow within 40% under noise."""
 
     def _fit(self, current, t, known):
-        from Synaptipy.core.analysis.synaptic_events import fit_biexponential_decay
+        from synaptipy.core.analysis.synaptic_events import fit_biexponential_decay
 
         sampling_rate = 1.0 / (t[1] - t[0])
         # Use peak of clean signal as event index
@@ -272,7 +272,7 @@ class TestPPRNoiseRobustness:
     """PPR calculation must produce a finite ratio under noise."""
 
     def _calc_ppr(self, voltage, t, known):
-        from Synaptipy.core.analysis.synaptic_events import calculate_paired_pulse_ratio
+        from synaptipy.core.analysis.synaptic_events import calculate_paired_pulse_ratio
 
         sampling_rate = 1.0 / (t[1] - t[0])
         stim_onsets = np.array([known["stim1_s"], known["stim2_s"]])

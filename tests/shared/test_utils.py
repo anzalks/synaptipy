@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for shared.utils.parse_trial_selection_string."""
 
-from Synaptipy.shared.utils import parse_trial_selection_string
+from synaptipy.shared.utils import parse_trial_selection_string
 
 
 class TestParseTrialSelectionString:

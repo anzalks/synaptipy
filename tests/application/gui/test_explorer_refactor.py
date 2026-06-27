@@ -5,10 +5,10 @@ import numpy as np
 import pytest
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture(scope="session")

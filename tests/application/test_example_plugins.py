@@ -23,7 +23,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 # ---------------------------------------------------------------------------
 # Constant path to examples/plugins/
@@ -174,7 +174,7 @@ class TestPluginDiscovery:
         PluginManager with EXAMPLES_PLUGIN_DIR patched to examples/plugins/
         loads both plugins and registers them.
         """
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         # Patch the EXAMPLES_PLUGIN_DIR used inside PluginManager, and set
         # user PLUGIN_DIR to a non-existent path to avoid interference.
@@ -182,10 +182,10 @@ class TestPluginDiscovery:
 
         with (
             patch(
-                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                "synaptipy.application.plugin_manager._get_bundled_plugin_dir",
                 return_value=EXAMPLES_PLUGIN_DIR,
             ),
-            patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", fake_user_dir),
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", fake_user_dir),
         ):
             PluginManager.load_plugins()
 
@@ -203,7 +203,7 @@ class TestPluginDiscovery:
         """
         import shutil
 
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         # Copy ap_repolarization.py to a fake user dir
         user_plugins = tmp_path / "user_plugins"
@@ -212,10 +212,10 @@ class TestPluginDiscovery:
 
         with (
             patch(
-                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                "synaptipy.application.plugin_manager._get_bundled_plugin_dir",
                 return_value=EXAMPLES_PLUGIN_DIR,
             ),
-            patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", user_plugins),
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", user_plugins),
         ):
             # The collision warning is logged at WARNING level, not raised as an exception.
             PluginManager.load_plugins()

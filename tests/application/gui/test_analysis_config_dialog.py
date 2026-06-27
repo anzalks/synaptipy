@@ -1,8 +1,8 @@
 # tests/application/gui/test_analysis_config_dialog.py
 import pytest
 
-from Synaptipy.application.gui.analysis_config_dialog import AnalysisConfigDialog
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.application.gui.analysis_config_dialog import AnalysisConfigDialog
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 
 @pytest.fixture

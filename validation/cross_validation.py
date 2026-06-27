@@ -33,8 +33,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from scipy.stats import pearsonr
 
-from Synaptipy.core.analysis.passive_properties import calculate_rmp
-from Synaptipy.core.analysis.single_spike import detect_spikes_threshold
+from synaptipy.core.analysis.passive_properties import calculate_rmp
+from synaptipy.core.analysis.single_spike import detect_spikes_threshold
 
 # ---------------------------------------------------------------------------
 # Reference values from published datasets / established software

@@ -19,10 +19,10 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
-import Synaptipy.core.analysis  # noqa: F401 – populate registry
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.data_model import Channel, Recording
+import synaptipy.core.analysis  # noqa: F401 – populate registry
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests
@@ -103,7 +103,7 @@ class TestUpdatePerformanceSettings:
 
     def test_update_ram_allocation_logged(self, caplog):
         engine = BatchAnalysisEngine()
-        with caplog.at_level("INFO", logger="Synaptipy.core.analysis.batch_engine"):
+        with caplog.at_level("INFO", logger="synaptipy.core.analysis.batch_engine"):
             engine.update_performance_settings({"max_ram_allocation_gb": 8.0})
         assert "max_ram_allocation_gb" in caplog.text or True  # log at least not crashing
 
@@ -124,7 +124,7 @@ class TestAppendBatchErrorLog:
         log_dir = tmp_path / ".synaptipy" / "logs"
         _ = log_dir  # referenced for clarity only
         monkeypatch.setattr(
-            "Synaptipy.core.analysis.batch_engine.Path.home",
+            "synaptipy.core.analysis.batch_engine.Path.home",
             lambda: tmp_path,
         )
         exc = ValueError("test error")

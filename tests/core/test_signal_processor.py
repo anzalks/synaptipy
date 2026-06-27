@@ -5,7 +5,7 @@ Tests for signal processing utilities.
 
 import numpy as np
 
-from Synaptipy.core import signal_processor
+from synaptipy.core import signal_processor
 
 
 class TestFilters:

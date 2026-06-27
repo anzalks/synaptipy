@@ -33,9 +33,9 @@ if not hasattr(np, "VisibleDeprecationWarning"):
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
 
 CACHE_DIR = REPO_ROOT / "paper" / "data" / "allen_cache"
 OUT_DIR = REPO_ROOT / "paper" / "analysis_results"
@@ -147,7 +147,7 @@ def get_valid_sweeps(ephys_data, cell_id):
 def plot_cell_summaries(downloaded_cells):
     log.info("Generating overlaid summary plots for each cell...")
 
-    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+    from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 
     adapter = NeoAdapter()
 
@@ -189,7 +189,7 @@ def plot_cell_summaries(downloaded_cells):
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
 
-            from Synaptipy.shared.constants import TRIAL_COLOR
+            from synaptipy.shared.constants import TRIAL_COLOR
 
             rgb_color = tuple(c / 255.0 for c in TRIAL_COLOR)
             colors = [rgb_color] * len(p_sweeps)
@@ -643,7 +643,7 @@ def build_table1(downloaded_cells: list) -> pd.DataFrame:
     log.info("Building Table 1 (Active Properties)...")
     rows = []
 
-    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+    from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 
     adapter = NeoAdapter()
 
@@ -806,7 +806,7 @@ def build_table2(downloaded_cells: list) -> pd.DataFrame:
     log.info("Building Table 2 (Passive Properties)...")
     rows = []
 
-    from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+    from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 
     adapter = NeoAdapter()
 

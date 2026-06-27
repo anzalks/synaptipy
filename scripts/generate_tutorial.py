@@ -2,13 +2,13 @@ import sys
 import time
 from pathlib import Path
 
-# Add the src folder to path so we can import Synaptipy
+# Add the src folder to path so we can import synaptipy
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from Synaptipy.application.gui.main_window import MainWindow  # noqa: E402
+from synaptipy.application.gui.main_window import MainWindow  # noqa: E402
 
 DOCS_DIR = Path(__file__).parent.parent / "docs" / "tutorial"
 SCREENSHOTS_DIR = DOCS_DIR / "screenshots"

@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture(scope="session")
@@ -19,7 +19,7 @@ def explorer_tab(qapp):
     status_bar = QtWidgets.QStatusBar()
 
     # Mock styles to avoid theme issues; patch only wraps construction
-    with patch("Synaptipy.shared.styling.style_button"):
+    with patch("synaptipy.shared.styling.style_button"):
         tab = ExplorerTab(neo_adapter, nwb_exporter, status_bar)
     return tab
 
@@ -84,7 +84,7 @@ def test_preprocessing_integration(explorer_tab, qtbot):
     # We simulate the signal emission
     settings = {"type": "baseline", "method": "mean"}
 
-    with patch("Synaptipy.core.signal_processor.subtract_baseline_mean") as mock_process:
+    with patch("synaptipy.core.signal_processor.subtract_baseline_mean") as mock_process:
         # Mock processor to return modified data
         mock_process.return_value = np.zeros(1000)  # Flat zero
 

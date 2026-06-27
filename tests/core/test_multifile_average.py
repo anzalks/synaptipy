@@ -13,11 +13,11 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from Synaptipy.core.analysis.cross_file_utils import (
+from synaptipy.core.analysis.cross_file_utils import (
     _make_mfa_label,
     build_averaged_recording,
 )
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -185,7 +185,7 @@ class TestBuildAveragedRecording:
 class TestLoadRecordingDirect:
     def test_emits_recording_without_thread(self):
         """load_recording_direct emits the recording synchronously."""
-        from Synaptipy.application.services.data_loader_service import DataLoaderService
+        from synaptipy.application.services.data_loader_service import DataLoaderService
 
         adapter = MagicMock()
         service = DataLoaderService(neo_adapter=adapter)
@@ -205,7 +205,7 @@ class TestLoadRecordingDirect:
 
     def test_emits_none_directly(self):
         """load_recording_direct works for None (e.g. cleared state)."""
-        from Synaptipy.application.services.data_loader_service import DataLoaderService
+        from synaptipy.application.services.data_loader_service import DataLoaderService
 
         adapter = MagicMock()
         service = DataLoaderService(neo_adapter=adapter)

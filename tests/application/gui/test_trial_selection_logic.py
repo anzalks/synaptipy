@@ -5,10 +5,10 @@ from unittest.mock import MagicMock
 import numpy as np
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
+from synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
 
 # Mock imports if needed, but we can import directly
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.data_model import Channel, Recording
 
 
 class TestTrialSelection(unittest.TestCase):

@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from Synaptipy.core.analysis.evoked_responses import (
+from synaptipy.core.analysis.evoked_responses import (
     calculate_stimulus_train_stp,
     extract_ttl_epochs,
     run_ppr_wrapper,
@@ -294,7 +294,7 @@ class TestRunStimulusTrainStpWrapper:
 class TestPeakPosFallback:
     def test_i1_le_i0_returns_fallback(self):
         """Lines 242-243: blank_s >= win_s causes i1 <= i0, falls back to onset value."""
-        from Synaptipy.core.analysis.evoked_responses import _peak_pos_s
+        from synaptipy.core.analysis.evoked_responses import _peak_pos_s
 
         fs = 10_000.0
         t = np.arange(int(0.5 * fs)) / fs
@@ -314,7 +314,7 @@ class TestPeakPosFallback:
 class TestOptoSyncWrapperEdgePaths:
     def test_artifact_rejection_path(self):
         """Lines 754-756: reject_artifacts=True triggers artifact window detection."""
-        from Synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
+        from synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
 
         fs = 10_000.0
         n = int(0.5 * fs)
@@ -332,7 +332,7 @@ class TestOptoSyncWrapperEdgePaths:
 
     def test_template_km_parse_error_fallback(self):
         """Lines 796-798: invalid template_kernel_multipliers falls back to default."""
-        from Synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
+        from synaptipy.core.analysis.evoked_responses import run_opto_sync_wrapper
 
         fs = 10_000.0
         n = int(0.5 * fs)
@@ -356,7 +356,7 @@ class TestOptoSyncWrapperEdgePaths:
 class TestPPRR1AmplitudeZero:
     def test_flat_signal_r1_zero(self):
         """Line 373: flat signal → r1_amp=0 → ppr_error set."""
-        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+        from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
 
         fs = 1_000.0
         n = 500

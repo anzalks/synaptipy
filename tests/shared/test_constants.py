@@ -10,7 +10,7 @@ class TestConstants(TestCase):
 
     def test_z_order_constant_exists(self):
         """Test that Z_ORDER constant is properly defined."""
-        from Synaptipy.shared.constants import Z_ORDER
+        from synaptipy.shared.constants import Z_ORDER
 
         # Test Z_ORDER is a dictionary
         self.assertIsInstance(Z_ORDER, dict)
@@ -32,7 +32,7 @@ class TestConstants(TestCase):
 
     def test_z_order_in_all_exports(self):
         """Test that Z_ORDER is included in __all__ exports."""
-        from Synaptipy.shared import constants
+        from synaptipy.shared import constants
 
         self.assertIn("Z_ORDER", constants.__all__)
 

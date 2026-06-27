@@ -6,7 +6,7 @@ import pytest
 
 # Assuming main_window fixture is in conftest.py providing a MainWindow instance
 # Assuming qtbot fixture is available from pytest-qt
-from Synaptipy.core.data_model import Channel, Recording  # For creating mock data
+from synaptipy.core.data_model import Channel, Recording  # For creating mock data
 
 
 @pytest.fixture(autouse=True)

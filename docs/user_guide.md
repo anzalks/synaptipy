@@ -67,6 +67,8 @@ Dependencies are automatically installed during package installation:
 
 ### Standard Installation
 
+**WARNING: PySide6 must remain pinned to version 6.7.3 due to QTBUG-130070.**
+
 Synaptipy is available both as a standalone application and as a Python package.
 
 #### Default Install (PyPI)
@@ -74,7 +76,19 @@ Synaptipy is available both as a standalone application and as a Python package.
 The recommended approach for most users is to install Synaptipy directly via pip into a standard Python environment (Python 3.10-3.12).
 
 ```bash
-pip install Synaptipy
+pip install synaptipy
+```
+
+#### Conda Install
+
+If you prefer using Anaconda or Miniconda, you can create a dedicated environment using our repository's environment file:
+
+```bash
+git clone https://github.com/anzalks/synaptipy.git
+cd synaptipy
+conda env create -f environment.yml
+conda activate synaptipy
+pip install synaptipy
 ```
 
 #### Standalone Application
@@ -531,7 +545,7 @@ so Prism can compute group statistics without warnings.
 
 ```python
 from pathlib import Path
-from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
+from synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 
 exporter = CSVExporter()
 exporter.export_to_prism_format(
@@ -632,8 +646,8 @@ The `BatchAnalysisEngine` accepts a list of file paths plus a parameter
 dictionary in exactly the same format produced by `_gather_analysis_parameters()`:
 
 ```python
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-import Synaptipy.core.analysis  # populates the registry
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+import synaptipy.core.analysis  # populates the registry
 
 engine = BatchAnalysisEngine()
 

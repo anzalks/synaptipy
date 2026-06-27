@@ -10,14 +10,14 @@ to run multiple analyses on different data scopes.
 import sys
 from pathlib import Path
 
-# Add the src directory to the path so we can import Synaptipy
+# Add the src directory to the path so we can import synaptipy
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
 # Import analysis modules to trigger registration
-import Synaptipy.core.analysis.spike_analysis  # noqa: F401, E402
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
-from Synaptipy.core.analysis.registry import AnalysisRegistry  # noqa: E402
+import synaptipy.core.analysis.spike_analysis  # noqa: F401, E402
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
+from synaptipy.core.analysis.registry import AnalysisRegistry  # noqa: E402
 
 
 def main():  # noqa: C901

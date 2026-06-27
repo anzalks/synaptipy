@@ -25,7 +25,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -144,17 +144,17 @@ class TestSettingsGate:
 
     def test_skips_loading_when_disabled(self):
         """load_plugins() must be a no-op when enable_plugins=False."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         before = dict(AnalysisRegistry._registry)
 
         with (
             patch(
-                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                "synaptipy.application.plugin_manager._get_bundled_plugin_dir",
                 return_value=EXAMPLES_PLUGIN_DIR,
             ),
-            patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", _FAKE_USER_DIR),
-            patch("Synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", _FAKE_USER_DIR),
+            patch("synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.value.return_value = False
             PluginManager.load_plugins()
@@ -166,15 +166,15 @@ class TestSettingsGate:
 
     def test_loads_plugins_when_enabled(self):
         """load_plugins() registers opto_jitter and ap_repolarization when enable_plugins=True."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         with (
             patch(
-                "Synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                "synaptipy.application.plugin_manager._get_bundled_plugin_dir",
                 return_value=EXAMPLES_PLUGIN_DIR,
             ),
-            patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", _FAKE_USER_DIR),
-            patch("Synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", _FAKE_USER_DIR),
+            patch("synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
         ):
             mock_settings_cls.return_value.value.return_value = True
             PluginManager.load_plugins()
@@ -240,7 +240,7 @@ class TestOptoJitterSchema:
 
     def test_empty_data_returns_error(self, opto_module):
         """Empty arrays must return an error dict, not raise."""
-        from Synaptipy.application.plugin_manager import PluginManager  # noqa: F401
+        from synaptipy.application.plugin_manager import PluginManager  # noqa: F401
 
         mod = opto_module
         result = mod.calculate_opto_jitter(

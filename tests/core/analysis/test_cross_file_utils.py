@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from Synaptipy.core.analysis.cross_file_utils import (
+from synaptipy.core.analysis.cross_file_utils import (
     extract_per_file_trace,
     get_cross_file_average,
 )

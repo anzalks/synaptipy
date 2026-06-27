@@ -49,7 +49,7 @@ def run_tests(args):
 
     # Add coverage options
     if args.coverage:
-        cmd.append("--cov=src/Synaptipy")
+        cmd.append("--cov=src/synaptipy")
 
         if args.html:
             cmd.append("--cov-report=html")

@@ -22,8 +22,8 @@ import numpy as np
 import pytest
 from PySide6 import QtCore, QtWidgets  # noqa: F401
 
-from Synaptipy.application.gui.explorer.plot_canvas import ExplorerPlotCanvas
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.application.gui.explorer.plot_canvas import ExplorerPlotCanvas
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers

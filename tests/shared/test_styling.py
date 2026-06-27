@@ -34,7 +34,7 @@ except ImportError:
     PYQTGRAPH_AVAILABLE = False
 
 # Import styling module - this should always succeed
-from Synaptipy.shared.styling import (  # noqa: E402
+from synaptipy.shared.styling import (  # noqa: E402
     PLOT_COLORS,
     configure_plot_widget,
     get_average_pen,

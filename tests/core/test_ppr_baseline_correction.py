@@ -14,7 +14,7 @@ Covers:
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
 
 
 class TestPPRBaselineCorrection:

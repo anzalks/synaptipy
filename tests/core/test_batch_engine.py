@@ -14,9 +14,9 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Synthetic signal generators — shared by tests
@@ -478,11 +478,11 @@ class TestRegisteredAnalyses:
         # We need to reload the modules to re-register the functions
         import importlib
 
-        import Synaptipy.core.analysis.evoked_responses as er_mod
-        import Synaptipy.core.analysis.firing_dynamics as fd_mod
-        import Synaptipy.core.analysis.passive_properties as passive_mod
-        import Synaptipy.core.analysis.single_spike as spike_mod
-        import Synaptipy.core.analysis.synaptic_events as event_mod
+        import synaptipy.core.analysis.evoked_responses as er_mod
+        import synaptipy.core.analysis.firing_dynamics as fd_mod
+        import synaptipy.core.analysis.passive_properties as passive_mod
+        import synaptipy.core.analysis.single_spike as spike_mod
+        import synaptipy.core.analysis.synaptic_events as event_mod
 
         # Reload to trigger decorator registration
         importlib.reload(passive_mod)
@@ -780,11 +780,11 @@ class TestBatchAllAnalysisTypes:
     @classmethod
     def setup_class(cls):
         """Ensure all analysis modules are imported and registered."""
-        import Synaptipy.core.analysis.evoked_responses as er_mod
-        import Synaptipy.core.analysis.firing_dynamics as fd_mod
-        import Synaptipy.core.analysis.passive_properties as pp_mod
-        import Synaptipy.core.analysis.single_spike as ss_mod
-        import Synaptipy.core.analysis.synaptic_events as se_mod
+        import synaptipy.core.analysis.evoked_responses as er_mod
+        import synaptipy.core.analysis.firing_dynamics as fd_mod
+        import synaptipy.core.analysis.passive_properties as pp_mod
+        import synaptipy.core.analysis.single_spike as ss_mod
+        import synaptipy.core.analysis.synaptic_events as se_mod
 
         for mod in [pp_mod, ss_mod, fd_mod, se_mod, er_mod]:
             importlib.reload(mod)

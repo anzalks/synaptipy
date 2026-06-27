@@ -67,9 +67,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-            xvfb-run python -m pytest --cov=src/Synaptipy --cov-report=xml
+            xvfb-run python -m pytest --cov=src/synaptipy --cov-report=xml
           else
-            python -m pytest --cov=src/Synaptipy --cov-report=xml
+            python -m pytest --cov=src/synaptipy --cov-report=xml
           fi
 
   # ── 1b. Build docs + linkcheck (must pass before release) ───────────────────
@@ -218,7 +218,7 @@ jobs:
             echo "Attempt $i: Installing synaptipy==$APP_VERSION..."
             if python -m pip install --pre --no-cache-dir "synaptipy==$APP_VERSION" -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/; then
               echo "Install successful!"
-              python -c "import Synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
+              python -c "import synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
               exit 0
             fi
             echo "Version not found yet. Waiting $RETRY_DELAY seconds..."

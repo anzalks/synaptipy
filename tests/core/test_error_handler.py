@@ -40,7 +40,7 @@ class TestBuildCrashMarkdown:
 
     def test_returns_string(self):
         """Return value must be a non-empty string."""
-        from Synaptipy.core.error_handler import build_crash_markdown
+        from synaptipy.core.error_handler import build_crash_markdown
 
         result = build_crash_markdown(_FAKE_TB)
         assert isinstance(result, str)
@@ -48,21 +48,21 @@ class TestBuildCrashMarkdown:
 
     def test_contains_traceback_text(self):
         """The traceback text must appear verbatim in the output."""
-        from Synaptipy.core.error_handler import build_crash_markdown
+        from synaptipy.core.error_handler import build_crash_markdown
 
         result = build_crash_markdown(_FAKE_TB)
         assert "RuntimeError: synthetic crash for testing" in result
 
     def test_contains_github_url(self):
         """The GitHub Issues URL must be present."""
-        from Synaptipy.core.error_handler import GITHUB_ISSUES_URL, build_crash_markdown
+        from synaptipy.core.error_handler import GITHUB_ISSUES_URL, build_crash_markdown
 
         result = build_crash_markdown(_FAKE_TB)
         assert GITHUB_ISSUES_URL in result
 
     def test_contains_all_environment_sections(self):
         """Markdown must contain the Environment table with all required rows."""
-        from Synaptipy.core.error_handler import build_crash_markdown
+        from synaptipy.core.error_handler import build_crash_markdown
 
         result = build_crash_markdown(_FAKE_TB)
         assert "## Environment" in result
@@ -74,26 +74,26 @@ class TestBuildCrashMarkdown:
 
     def test_synaptipy_version_fallback_when_import_fails(self):
         """Lines 78-79: if Synaptipy.__version__ cannot be imported, use 'unknown'."""
-        from Synaptipy.core import error_handler as eh_module
+        from synaptipy.core import error_handler as eh_module
 
         # Temporarily hide the Synaptipy package from sys.modules so the
-        # local `from Synaptipy import __version__` inside build_crash_markdown
+        # local `from synaptipy import __version__` inside build_crash_markdown
         # raises ImportError, triggering the except branch.
-        saved = sys.modules.get("Synaptipy")
+        saved = sys.modules.get("synaptipy")
         try:
-            sys.modules["Synaptipy"] = None  # type: ignore[assignment]
+            sys.modules["synaptipy"] = None  # type: ignore[assignment]
             result = eh_module.build_crash_markdown("error text\n")
         finally:
             if saved is None:
-                del sys.modules["Synaptipy"]
+                del sys.modules["synaptipy"]
             else:
-                sys.modules["Synaptipy"] = saved
+                sys.modules["synaptipy"] = saved
 
         assert "unknown" in result
 
     def test_pyside6_version_fallback_when_import_fails(self):
         """Lines 88-89: if PySide6 cannot be imported, use 'unknown'."""
-        from Synaptipy.core import error_handler as eh_module
+        from synaptipy.core import error_handler as eh_module
 
         saved = sys.modules.get("PySide6")
         try:
@@ -109,7 +109,7 @@ class TestBuildCrashMarkdown:
 
     def test_traceback_stripped_of_trailing_whitespace(self):
         """Traceback text must be rstrip()-ed inside the code fence."""
-        from Synaptipy.core.error_handler import build_crash_markdown
+        from synaptipy.core.error_handler import build_crash_markdown
 
         tb_with_trailing = "SomeError: x\n\n\n"
         result = build_crash_markdown(tb_with_trailing)
@@ -131,14 +131,14 @@ class TestShowCrashDialog:
 
     def test_dialog_opens_and_closes_without_error(self, qtbot):
         """Lines 132-184: the dialog must be created and exec'd without raising."""
-        from Synaptipy.core.error_handler import _show_crash_dialog
+        from synaptipy.core.error_handler import _show_crash_dialog
 
         with patch("PySide6.QtWidgets.QDialog.exec", return_value=0):
             _show_crash_dialog("# Crash Report\n\nTest crash.\n")
 
     def test_dialog_copies_report_to_clipboard(self, qtbot):
         """The 'Copy to Clipboard' button callback must call clipboard().setText."""
-        from Synaptipy.core.error_handler import _show_crash_dialog
+        from synaptipy.core.error_handler import _show_crash_dialog
 
         report = "# Crash\n\nSome error here.\n"
         with patch("PySide6.QtWidgets.QDialog.exec", return_value=0) as _mock_exec:
@@ -148,7 +148,7 @@ class TestShowCrashDialog:
 
     def test_dialog_exit_button_closes_dialog(self, qtbot):
         """exec() return value of 0 (Rejected) means the Exit button worked."""
-        from Synaptipy.core.error_handler import _show_crash_dialog
+        from synaptipy.core.error_handler import _show_crash_dialog
 
         with patch("PySide6.QtWidgets.QDialog.exec", return_value=0):
             # Should complete without hanging or raising
@@ -156,7 +156,7 @@ class TestShowCrashDialog:
 
     def test_dialog_emergency_fallback_when_widget_creation_fails(self, capsys):
         """Lines 180-184: if Qt widget creation raises, fallback prints to stderr."""
-        from Synaptipy.core.error_handler import _show_crash_dialog
+        from synaptipy.core.error_handler import _show_crash_dialog
 
         with patch("PySide6.QtWidgets.QDialog", side_effect=RuntimeError("Qt broke")):
             _show_crash_dialog("# Emergency Fallback\n\nTest.\n")
@@ -192,14 +192,14 @@ class TestInstallExcepthook:
 
     def test_install_sets_excepthook(self):
         """After install_excepthook(), sys.excepthook must be the Synaptipy hook."""
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
         assert getattr(sys.excepthook, "_synaptipy_crash_reporter", False) is True
 
     def test_install_is_idempotent(self):
         """Calling install_excepthook() twice must not double-wrap the hook."""
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
         hook_after_first = sys.excepthook
@@ -208,7 +208,7 @@ class TestInstallExcepthook:
 
     def test_system_exit_passes_through(self):
         """Lines 214-215: SystemExit must be delegated to sys.__excepthook__."""
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
         with patch("sys.__excepthook__") as mock_orig:
@@ -217,7 +217,7 @@ class TestInstallExcepthook:
 
     def test_keyboard_interrupt_passes_through(self):
         """Lines 214-215: KeyboardInterrupt must be delegated to sys.__excepthook__."""
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
         with patch("sys.__excepthook__") as mock_orig:
@@ -226,7 +226,7 @@ class TestInstallExcepthook:
 
     def test_exception_falls_back_to_stderr_when_no_qt_app(self, capsys):
         """Lines 232-240: without a QApplication the report is printed to stderr."""
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
 
@@ -247,14 +247,14 @@ class TestInstallExcepthook:
         """Lines 224-228: with a running QApplication, _show_crash_dialog is called."""
         from PySide6.QtWidgets import QApplication
 
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
 
         # qtbot ensures a QApplication exists, so QApplication.instance() is truthy
         assert QApplication.instance() is not None
 
-        with patch("Synaptipy.core.error_handler._show_crash_dialog") as mock_dlg:
+        with patch("synaptipy.core.error_handler._show_crash_dialog") as mock_dlg:
             try:
                 raise ValueError("qt-app crash test")
             except ValueError:
@@ -269,13 +269,13 @@ class TestInstallExcepthook:
         """Lines 218-219: the crash traceback must be logged at CRITICAL."""
         import logging
 
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
 
         with (
-            patch("Synaptipy.core.error_handler._show_crash_dialog"),
-            caplog.at_level(logging.CRITICAL, logger="Synaptipy.core.error_handler"),
+            patch("synaptipy.core.error_handler._show_crash_dialog"),
+            caplog.at_level(logging.CRITICAL, logger="synaptipy.core.error_handler"),
         ):
             try:
                 raise TypeError("log-level crash test")
@@ -288,13 +288,13 @@ class TestInstallExcepthook:
     def test_qt_import_error_triggers_stderr_fallback(self, capsys):
         """Lines 228-232 (except Exception pass): if PySide6.QtWidgets is broken,
         fall through to the stderr path without raising."""
-        from Synaptipy.core.error_handler import install_excepthook
+        from synaptipy.core.error_handler import install_excepthook
 
         install_excepthook()
 
         with (
             patch(
-                "Synaptipy.core.error_handler._show_crash_dialog",
+                "synaptipy.core.error_handler._show_crash_dialog",
                 side_effect=ImportError("PySide6 unavailable"),
             ),
             patch("sys.__excepthook__"),
@@ -319,11 +319,11 @@ class TestGithubIssuesUrl:
     """Sanity check the exported constant."""
 
     def test_url_starts_with_https(self):
-        from Synaptipy.core.error_handler import GITHUB_ISSUES_URL
+        from synaptipy.core.error_handler import GITHUB_ISSUES_URL
 
         assert GITHUB_ISSUES_URL.startswith("https://")
 
     def test_url_contains_github(self):
-        from Synaptipy.core.error_handler import GITHUB_ISSUES_URL
+        from synaptipy.core.error_handler import GITHUB_ISSUES_URL
 
         assert "github.com" in GITHUB_ISSUES_URL

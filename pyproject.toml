@@ -99,13 +99,13 @@ docs = [
 ]
 
 [project.scripts]
-synaptipy = "Synaptipy.application.__main__:run_gui"
+synaptipy = "synaptipy.application.__main__:run_gui"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-Synaptipy = [
+synaptipy = [
     "*.yml", "*.yaml", "*.txt", "*.json",
     "resources/**/*",
     "templates/**/*",
@@ -126,7 +126,7 @@ python_functions = ["test_*"]
 # Coverage flags are NOT in addopts: including --cov here causes pytest
 # --collect-only (and any partial run) to measure coverage against 0 hits
 # and immediately fail the 90 % threshold.  Each CI step that needs coverage
-# passes --cov=src/Synaptipy --cov-report=... --cov-fail-under=90 explicitly.
+# passes --cov=src/synaptipy --cov-report=... --cov-fail-under=90 explicitly.
 # The fail_under threshold is enforced by [tool.coverage.report] below.
 addopts = "-v --tb=short"
 filterwarnings = [
@@ -140,10 +140,10 @@ target-version = ["py310"]
 [tool.isort]
 profile = "black"
 line_length = 120
-known_first_party = ["Synaptipy"]
+known_first_party = ["synaptipy"]
 
 [tool.coverage.run]
-source = ["src/Synaptipy"]
+source = ["src/synaptipy"]
 relative_files = true
 omit = [
     "*/tests/*",

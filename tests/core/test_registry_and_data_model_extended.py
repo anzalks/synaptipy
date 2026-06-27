@@ -3,8 +3,8 @@
 
 import numpy as np
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.data_model import Channel
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.data_model import Channel
 
 # ===========================================================================
 # Registry extended tests

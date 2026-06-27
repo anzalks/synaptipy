@@ -37,16 +37,16 @@ def cursor_manager(mock_plot_item):
     """Return a CursorToolManager backed by mock widget/scene."""
     # Patch pyqtgraph constructors that would require a real display
     with (
-        patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as mock_scatter,
-        patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mock_text,
-        patch("Synaptipy.shared.cursor_manager.pg.PlotDataItem") as mock_line,
+        patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as mock_scatter,
+        patch("synaptipy.shared.cursor_manager.pg.TextItem") as mock_text,
+        patch("synaptipy.shared.cursor_manager.pg.PlotDataItem") as mock_line,
     ):
 
         mock_scatter.return_value = MagicMock()
         mock_text.return_value = MagicMock()
         mock_line.return_value = MagicMock()
 
-        from Synaptipy.shared.cursor_manager import CursorToolManager
+        from synaptipy.shared.cursor_manager import CursorToolManager
 
         mock_widget = MagicMock()
         mock_scene = MagicMock()
@@ -67,7 +67,7 @@ def cursor_manager(mock_plot_item):
 
 class TestSetEnabled:
     def test_cursor_disabled_by_default(self):
-        from Synaptipy.shared.cursor_manager import CursorToolManager
+        from synaptipy.shared.cursor_manager import CursorToolManager
 
         mgr = CursorToolManager(widget=MagicMock(), scene=MagicMock())
         assert mgr._cursor_mode_enabled is False
@@ -87,8 +87,8 @@ class TestSetEnabled:
     def test_set_delta_mode_enabled_false_clears_anchor(self, cursor_manager, mock_plot_item):
         """Disabling delta mode while an anchor is pending must clean it up."""
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -108,8 +108,8 @@ class TestSetEnabled:
 class TestAddCursorBox:
     def test_adds_entry_to_history(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -122,8 +122,8 @@ class TestAddCursorBox:
 
     def test_multiple_single_cursors(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -134,8 +134,8 @@ class TestAddCursorBox:
 
     def test_items_added_to_plot(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -148,8 +148,8 @@ class TestAddCursorBox:
         received = []
         cursor_manager.cursor_added.connect(lambda x, y: received.append((x, y)))
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -166,9 +166,9 @@ class TestAddCursorBox:
 class TestHandleDeltaClick:
     def _click_pair(self, cursor_manager, plot_item, x1=0.0, y1=0.0, x2=1.0, y2=1.0):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
-            patch("Synaptipy.shared.cursor_manager.pg.PlotDataItem") as ml,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.PlotDataItem") as ml,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -178,8 +178,8 @@ class TestHandleDeltaClick:
 
     def test_first_click_sets_anchor(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -209,8 +209,8 @@ class TestHandleDeltaClick:
         """If second click is on a different plot, anchor is cancelled."""
         other_plot = MagicMock()
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -232,8 +232,8 @@ class TestHandleDeltaClick:
 class TestUndo:
     def test_undo_removes_last_single_cursor(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -246,9 +246,9 @@ class TestUndo:
 
     def test_undo_removes_last_delta_pair_and_decrements_counter(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
-            patch("Synaptipy.shared.cursor_manager.pg.PlotDataItem") as ml,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.PlotDataItem") as ml,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -264,8 +264,8 @@ class TestUndo:
     def test_undo_pending_anchor_cancels_it(self, cursor_manager, mock_plot_item):
         """Calling undo with a pending (unconfirmed) anchor should cancel it."""
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -283,8 +283,8 @@ class TestUndo:
     def test_undo_last_cursor_alias(self, cursor_manager, mock_plot_item):
         """undo_last_cursor() is an alias for undo()."""
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -302,8 +302,8 @@ class TestUndo:
 class TestClear:
     def test_clear_empties_history(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -315,9 +315,9 @@ class TestClear:
 
     def test_clear_resets_pair_counter(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
-            patch("Synaptipy.shared.cursor_manager.pg.PlotDataItem") as ml,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.PlotDataItem") as ml,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -330,8 +330,8 @@ class TestClear:
 
     def test_clear_removes_pending_anchor(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -343,8 +343,8 @@ class TestClear:
     def test_clear_all_cursors_alias(self, cursor_manager, mock_plot_item):
         """clear_all_cursors() is an alias for clear()."""
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -362,8 +362,8 @@ class TestClear:
 class TestGetHistory:
     def test_get_history_returns_copy(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()
@@ -377,8 +377,8 @@ class TestGetHistory:
 
     def test_get_cursor_history_alias(self, cursor_manager, mock_plot_item):
         with (
-            patch("Synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
-            patch("Synaptipy.shared.cursor_manager.pg.TextItem") as mt,
+            patch("synaptipy.shared.cursor_manager.pg.ScatterPlotItem") as ms,
+            patch("synaptipy.shared.cursor_manager.pg.TextItem") as mt,
         ):
             ms.return_value = MagicMock()
             mt.return_value = MagicMock()

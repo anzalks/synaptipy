@@ -14,7 +14,7 @@ A clear and concise description of the bug.
 
 - **OS**: [e.g., Windows 11, macOS 14.5, Ubuntu 24.04]
 - **Python version**: [e.g., 3.11.9]
-- **Synaptipy version**: [e.g., 0.1.0b6 - check with `python -c "import Synaptipy; print(Synaptipy.__version__)"`]
+- **Synaptipy version**: [e.g., 0.1.0b6 - check with `python -c "import synaptipy; print(Synaptipy.__version__)"`]
 - **Installation method**: [conda environment / pip / standalone installer]
 
 ## Steps to Reproduce

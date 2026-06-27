@@ -22,9 +22,9 @@
 
 ### Registry import rule — DO NOT import only registry.py
 To populate the `AnalysisRegistry`, **import the full package**
-`import Synaptipy.core.analysis` (which triggers `__init__.py` → `from . import
+`import synaptipy.core.analysis` (which triggers `__init__.py` → `from . import
 basic_features`, etc.).  **Never** rely on
-`from Synaptipy.core.analysis.registry import AnalysisRegistry` alone — that
+`from synaptipy.core.analysis.registry import AnalysisRegistry` alone — that
 only imports the class and does NOT execute the analysis sub-modules' decorators.
 This was the root cause of the Windows bug where the Analyser tab showed 0 tabs
 while macOS showed 15 (on macOS the batch engine happened to be imported earlier
@@ -324,7 +324,7 @@ returns truncated unit strings (e.g. `"p"`, `"n"`, `"m"` instead of `"pA"`,
 
 ### Do NOT add fixes: to .codecov.yml when using relative_files=true
 When `pyproject.toml` sets `[tool.coverage.run] relative_files = true`, coverage.xml
-already contains repo-relative paths (e.g. `src/Synaptipy/__init__.py`). Codecov
+already contains repo-relative paths (e.g. `src/synaptipy/__init__.py`). Codecov
 resolves these directly in the git tree without any prefix stripping.
 
 **DO NOT add a `fixes:` section** — even at the top level. When `fixes:` is present

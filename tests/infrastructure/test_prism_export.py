@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from Synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
+from synaptipy.infrastructure.exporters.csv_exporter import CSVExporter
 
 # ---------------------------------------------------------------------------
 # Fixtures

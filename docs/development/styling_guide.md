@@ -4,7 +4,7 @@ This document explains the styling system used in Synaptipy, how it's organized,
 
 ## Overview
 
-Synaptipy uses Qt's native theming system (`src/Synaptipy/shared/styling.py`) for consistent application appearance. The styling system is designed to:
+Synaptipy uses Qt's native theming system (`src/synaptipy/shared/styling.py`) for consistent application appearance. The styling system is designed to:
 
 1. Ensure visual consistency throughout the application using Qt's built-in palette system
 2. Support seamless light/dark theme switching
@@ -58,7 +58,7 @@ Use the minimal styling helpers when needed:
 
 ```python
 from PySide6 import QtWidgets
-from Synaptipy.shared.styling import style_button, style_label
+from synaptipy.shared.styling import style_button, style_label
 
 # Create widgets
 button = QtWidgets.QPushButton("Save")
@@ -75,7 +75,7 @@ Use the PyQtGraph helper functions:
 
 ```python
 import pyqtgraph as pg
-from Synaptipy.shared.styling import configure_plot_widget, get_trial_pen, get_average_pen
+from synaptipy.shared.styling import configure_plot_widget, get_trial_pen, get_average_pen
 
 # Create plot widget with theme-appropriate styling
 plot_widget = pg.PlotWidget()
@@ -91,7 +91,7 @@ plot_widget.plot(time, avg_data, pen=get_average_pen())
 Theme switching is handled automatically by the main window, but can be controlled programmatically:
 
 ```python
-from Synaptipy.shared.styling import set_theme_mode, toggle_theme_mode, apply_stylesheet
+from synaptipy.shared.styling import set_theme_mode, toggle_theme_mode, apply_stylesheet
 from PySide6 import QtWidgets
 
 # Switch to dark theme

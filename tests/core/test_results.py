@@ -3,7 +3,7 @@
 
 import numpy as np
 
-from Synaptipy.core.results import (
+from synaptipy.core.results import (
     AnalysisResult,
     BurstResult,
     EventDetectionResult,
@@ -162,7 +162,7 @@ class TestEventDetectionResult:
 
 class TestCursorResultRepr:
     def test_repr_valid(self):
-        from Synaptipy.core.results import CursorResult
+        from synaptipy.core.results import CursorResult
 
         r = CursorResult(value=(0.5, -65.0), unit="mV", x_cursor=0.5, y_cursor=-65.0)
         s = repr(r)
@@ -170,7 +170,7 @@ class TestCursorResultRepr:
         assert "0.5000" in s
 
     def test_repr_invalid(self):
-        from Synaptipy.core.results import CursorResult
+        from synaptipy.core.results import CursorResult
 
         r = CursorResult(value=None, unit="mV", is_valid=False, error_message="no data")
         s = repr(r)
@@ -180,7 +180,7 @@ class TestCursorResultRepr:
 
 class TestCursorDeltaResultRepr:
     def test_repr_valid(self):
-        from Synaptipy.core.results import CursorDeltaResult
+        from synaptipy.core.results import CursorDeltaResult
 
         r = CursorDeltaResult(value=None, unit="mV", delta_x=0.1, delta_y=10.0, pair_id=1)
         s = repr(r)
@@ -188,7 +188,7 @@ class TestCursorDeltaResultRepr:
         assert "Pair 1" in s
 
     def test_repr_invalid(self):
-        from Synaptipy.core.results import CursorDeltaResult
+        from synaptipy.core.results import CursorDeltaResult
 
         r = CursorDeltaResult(value=None, unit="mV", is_valid=False, error_message="no pair")
         s = repr(r)

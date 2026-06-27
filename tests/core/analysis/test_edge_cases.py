@@ -11,12 +11,12 @@ real-world batch processing.
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.firing_dynamics import (
+from synaptipy.core.analysis.firing_dynamics import (
     analyze_spikes_and_bursts,
     calculate_bursts_logic,
     calculate_train_dynamics,
 )
-from Synaptipy.core.analysis.passive_properties import (
+from synaptipy.core.analysis.passive_properties import (
     calculate_capacitance_cc,
     calculate_capacitance_vc,
     calculate_iv_curve,
@@ -26,11 +26,11 @@ from Synaptipy.core.analysis.passive_properties import (
     calculate_tau,
     find_stable_baseline,
 )
-from Synaptipy.core.analysis.single_spike import (
+from synaptipy.core.analysis.single_spike import (
     calculate_spike_features,
     detect_spikes_threshold,
 )
-from Synaptipy.core.signal_processor import blank_artifact
+from synaptipy.core.signal_processor import blank_artifact
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +467,7 @@ class TestPipelineArtifactStep:
 
     def test_artifact_step_integration(self):
         """Pipeline with artifact step blanks the correct window."""
-        from Synaptipy.core.processing_pipeline import SignalProcessingPipeline
+        from synaptipy.core.processing_pipeline import SignalProcessingPipeline
 
         v, t, fs = _make_trace()
         # Add a huge artifact
@@ -574,7 +574,7 @@ class TestIhSagRin:
 
     def test_wrapper_exposes_both_metrics(self):
         """run_rin_analysis_wrapper must return rin_peak_mohm and rin_steady_state_mohm."""
-        from Synaptipy.core.analysis.passive_properties import run_rin_analysis_wrapper
+        from synaptipy.core.analysis.passive_properties import run_rin_analysis_wrapper
 
         v, t, fs, i_pa = self._make_ih_sag_trace()
         out = run_rin_analysis_wrapper(
@@ -638,7 +638,7 @@ class TestSummatingEvents:
 
     def test_local_baseline_differs_from_global_rmp(self):
         """At 55 ms, the trace is below global RMP due to first event's tail."""
-        from Synaptipy.core.analysis.synaptic_events import compute_local_pre_event_baseline
+        from synaptipy.core.analysis.synaptic_events import compute_local_pre_event_baseline
 
         v, t, fs, ev1_idx, ev2_idx, global_baseline = self._make_two_event_trace()
         event_indices = np.array([ev1_idx, ev2_idx], dtype=int)
@@ -653,7 +653,7 @@ class TestSummatingEvents:
 
     def test_local_amplitude_less_than_global_amplitude(self):
         """Local amplitude for the second event should be less than global amplitude."""
-        from Synaptipy.core.analysis.synaptic_events import compute_local_pre_event_baseline
+        from synaptipy.core.analysis.synaptic_events import compute_local_pre_event_baseline
 
         v, t, fs, ev1_idx, ev2_idx, global_baseline = self._make_two_event_trace()
         event_indices = np.array([ev1_idx, ev2_idx], dtype=int)
@@ -671,7 +671,7 @@ class TestSummatingEvents:
 
     def test_wrapper_returns_local_amplitudes(self):
         """The threshold-detection wrapper must return _local_amplitudes and _local_baselines."""
-        from Synaptipy.core.analysis.synaptic_events import run_event_detection_threshold_wrapper
+        from synaptipy.core.analysis.synaptic_events import run_event_detection_threshold_wrapper
 
         v, t, fs, ev1_idx, ev2_idx, global_baseline = self._make_two_event_trace()
         out = run_event_detection_threshold_wrapper(
@@ -880,7 +880,7 @@ class TestQuiescentNoiseFloor:
     def test_finds_quiet_region_not_start(self):
         """When the first 500 ms has heavy activity, the quiescent window must
         NOT be located at the very beginning."""
-        from Synaptipy.core.analysis.synaptic_events import find_quiescent_baseline_rms
+        from synaptipy.core.analysis.synaptic_events import find_quiescent_baseline_rms
 
         fs = 20000.0
         dt = 1.0 / fs
@@ -906,7 +906,7 @@ class TestQuiescentNoiseFloor:
 
     def test_quiescent_rms_lower_than_global_rms(self):
         """RMS of the quiescent chunk must be lower than the global trace RMS."""
-        from Synaptipy.core.analysis.synaptic_events import find_quiescent_baseline_rms
+        from synaptipy.core.analysis.synaptic_events import find_quiescent_baseline_rms
 
         fs = 20000.0
         dt = 1.0 / fs
@@ -925,7 +925,7 @@ class TestQuiescentNoiseFloor:
 
     def test_quiescent_rms_returns_positive(self):
         """RMS must always be a positive finite float."""
-        from Synaptipy.core.analysis.synaptic_events import find_quiescent_baseline_rms
+        from synaptipy.core.analysis.synaptic_events import find_quiescent_baseline_rms
 
         fs = 10000.0
         data = np.sin(np.linspace(0, 10 * np.pi, int(fs))) * 5.0
@@ -1025,7 +1025,7 @@ class TestBluntedSpikeDetection:
 
     def test_train_dynamics_default_threshold_allows_blunted_spikes(self):
         """The train dynamics wrapper's default threshold (-20 mV) must detect -5 mV spikes."""
-        from Synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
+        from synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
 
         v, t, fs = self._make_blunted_spike_trace(n_spikes=4, peak_mv=-5.0)
         out = run_train_dynamics_wrapper(v, t, fs, spike_threshold=-20.0)

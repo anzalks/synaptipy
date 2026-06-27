@@ -21,8 +21,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from Synaptipy.application.data_loader import _LARGE_FILE_THRESHOLD_BYTES, DataLoader
-from Synaptipy.shared.error_handling import SynaptipyError
+from synaptipy.application.data_loader import _LARGE_FILE_THRESHOLD_BYTES, DataLoader
+from synaptipy.shared.error_handling import SynaptipyError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,7 +31,7 @@ from Synaptipy.shared.error_handling import SynaptipyError
 
 def _make_recording(n_channels: int = 2, source_file: Path = Path("/fake/test.abf")):
     """Return a minimal synthetic Recording with the requested channel count."""
-    from Synaptipy.core.data_model import Channel, Recording
+    from synaptipy.core.data_model import Channel, Recording
 
     rec = Recording(source_file=source_file)
     rec.sampling_rate = 10_000.0

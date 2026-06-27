@@ -23,7 +23,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -183,10 +183,10 @@ class TestPluginManagerLoading:
         PluginManager.load_plugins() loads the template from a custom dir
         and registers the analysis in AnalysisRegistry.
         """
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         # Patch PLUGIN_DIR to point to our temp directory
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         # The template registers "my_custom_metric"
@@ -197,9 +197,9 @@ class TestPluginManagerLoading:
 
     def test_loaded_plugin_metadata(self, plugin_dir):
         """Metadata (label, ui_params, plots) is correctly stored."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         meta = AnalysisRegistry.get_metadata("my_custom_metric")
@@ -211,9 +211,9 @@ class TestPluginManagerLoading:
 
     def test_loaded_plugin_ui_param_types(self, plugin_dir):
         """All ui_params have valid type fields."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         meta = AnalysisRegistry.get_metadata("my_custom_metric")
@@ -225,9 +225,9 @@ class TestPluginManagerLoading:
 
     def test_loaded_plugin_callable(self, plugin_dir, synthetic_trace):
         """The registered wrapper function is callable and returns results."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         func = AnalysisRegistry.get_function("my_custom_metric")
@@ -243,9 +243,9 @@ class TestPluginManagerLoading:
         Plot overlay data keys must either reference ui_param names
         (for interactive_region) or result-dict keys.
         """
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         meta = AnalysisRegistry.get_metadata("my_custom_metric")
@@ -279,33 +279,33 @@ class TestPluginManagerLoading:
 
     def test_no_plugins_does_not_crash(self, tmp_path):
         """Loading from an empty directory succeeds without errors."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         empty_dir = tmp_path / "empty_plugins"
         empty_dir.mkdir()
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", empty_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", empty_dir):
             PluginManager.load_plugins()  # should not raise
 
     def test_bad_plugin_does_not_crash(self, tmp_path):
         """A plugin with a syntax error is skipped gracefully."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         bad_dir = tmp_path / "bad_plugins"
         bad_dir.mkdir()
         (bad_dir / "broken.py").write_text("def oops(\n")  # syntax error
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", bad_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", bad_dir):
             PluginManager.load_plugins()  # should not raise
 
     def test_plugin_dir_creation(self, tmp_path):
         """PluginManager.create_plugin_directory() creates missing dirs."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
         new_dir = tmp_path / "new" / "plugin" / "path"
         assert not new_dir.exists()
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", new_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", new_dir):
             PluginManager.create_plugin_directory()
 
         assert new_dir.exists()
@@ -321,9 +321,9 @@ class TestWrapperConventions:
 
     def test_wrapper_signature(self, plugin_dir, synthetic_trace):
         """Wrapper accepts (data, time, sampling_rate, **kwargs)."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         func = AnalysisRegistry.get_function("my_custom_metric")
@@ -335,9 +335,9 @@ class TestWrapperConventions:
 
     def test_wrapper_defaults_work(self, plugin_dir, synthetic_trace):
         """Wrapper works with zero kwargs (uses defaults)."""
-        from Synaptipy.application.plugin_manager import PluginManager
+        from synaptipy.application.plugin_manager import PluginManager
 
-        with patch("Synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
+        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir):
             PluginManager.load_plugins()
 
         func = AnalysisRegistry.get_function("my_custom_metric")

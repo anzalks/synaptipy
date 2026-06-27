@@ -68,7 +68,7 @@ _SRC_DIR = _REPO_ROOT / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Source recordings and analysis pipelines

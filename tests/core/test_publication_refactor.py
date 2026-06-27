@@ -9,18 +9,18 @@ import time as time_mod
 
 import numpy as np
 
-from Synaptipy.core import signal_processor
-from Synaptipy.core.analysis.passive_properties import (
+from synaptipy.core import signal_processor
+from synaptipy.core.analysis.passive_properties import (
     _bi_exp_growth,
     _exp_growth,
     calculate_tau,
     run_tau_analysis_wrapper,
 )
-from Synaptipy.core.analysis.single_spike import (
+from synaptipy.core.analysis.single_spike import (
     calculate_spike_features,
     run_spike_detection_wrapper,
 )
-from Synaptipy.core.results import BurstResult, RinResult, SpikeTrainResult
+from synaptipy.core.results import BurstResult, RinResult, SpikeTrainResult
 
 # ============================================================
 # Phase 1: Tau Fitting Tests

@@ -17,7 +17,7 @@ import numpy as np
 import pyqtgraph as pg
 import pytest
 
-from Synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
+from synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
 # ---------------------------------------------------------------------------
 # Shared synthetic data

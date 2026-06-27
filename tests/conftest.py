@@ -119,7 +119,7 @@ def pytest_ignore_collect(collection_path, config):
 def reset_datacache():
     """Ensure DataCache singleton is reset between tests."""
     try:
-        from Synaptipy.shared.data_cache import DataCache
+        from synaptipy.shared.data_cache import DataCache
 
         DataCache.reset_instance()
         yield
@@ -132,7 +132,7 @@ def reset_datacache():
 def reset_session_manager():
     """Ensure SessionManager singleton is reset between tests to prevent signal leaks."""
     try:
-        from Synaptipy.application.session_manager import SessionManager
+        from synaptipy.application.session_manager import SessionManager
 
         if hasattr(SessionManager, "_instance"):
             SessionManager._instance = None
@@ -160,7 +160,7 @@ def main_window(qtbot):
         mock_msgbox.warning.return_value = None
         mock_msgbox.information.return_value = None
 
-        from Synaptipy.application.gui.main_window import MainWindow
+        from synaptipy.application.gui.main_window import MainWindow
 
         window = MainWindow()
         qtbot.addWidget(window)
@@ -196,7 +196,7 @@ def main_window(qtbot):
 @pytest.fixture
 def neo_adapter_instance():
     """Create a NeoAdapter instance for testing."""
-    from Synaptipy.infrastructure.file_readers import NeoAdapter
+    from synaptipy.infrastructure.file_readers import NeoAdapter
 
     return NeoAdapter()
 

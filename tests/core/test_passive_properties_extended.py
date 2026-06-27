@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.passive_properties import (
+from synaptipy.core.analysis.passive_properties import (
     _fit_vc_transient_decay,
     _sag_nan_payload,
     apply_ljp_correction,

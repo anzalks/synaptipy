@@ -11,7 +11,7 @@ in pyproject.toml).  Run it manually alongside the plugin:
 
 Architecture
 ------------
-The plugin accepts a plain 1-D numpy array from Synaptipy's channel selector,
+The plugin accepts a plain 1-D numpy array from synaptipy's channel selector,
 wraps it in ``spikeinterface.core.NumpyRecording``, bandpass-filters it, and
 runs ``detect_peaks`` - exactly the same way as using any other analysis on a
 selected channel.  No sorter binary and no file path are needed.
@@ -48,7 +48,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 # ---------------------------------------------------------------------------
 # Load plugin module once at import time (lazy SI imports mean the file loads

@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["QT_MAC_WANTS_LAYER"] = "1"
 
-from Synaptipy.application.gui.main_window import MainWindow
+from synaptipy.application.gui.main_window import MainWindow
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _ABF21 = _PROJECT_ROOT / "examples" / "data" / "2023_04_11_0021.abf"
@@ -207,7 +207,7 @@ def run_choreography():
 
     app = QApplication.instance() or QApplication(sys.argv)
 
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     mode = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
     apply_theme(mode)

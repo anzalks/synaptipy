@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from Synaptipy.application.services.parameter_templates import ParameterTemplateManager
+from synaptipy.application.services.parameter_templates import ParameterTemplateManager
 
 
 @pytest.fixture
@@ -117,7 +117,7 @@ class TestDefaultDirectory:
         # Re-import to get fresh default path evaluation
         import importlib
 
-        import Synaptipy.application.services.parameter_templates as mod
+        import synaptipy.application.services.parameter_templates as mod
 
         importlib.reload(mod)
         mgr2 = mod.ParameterTemplateManager()

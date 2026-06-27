@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.data_model import Channel, Recording
 
 # Sample data for testing
 SAMPLE_RATE = 10000.0  # Hz
@@ -129,7 +129,7 @@ def test_channel_get_averaged_time_vector_fail(sample_channel):
 
 
 def test_undo_stack_push_pop():
-    from Synaptipy.core.data_model import UndoStack
+    from synaptipy.core.data_model import UndoStack
 
     stack = UndoStack(max_depth=5)
     assert not stack.can_undo()
@@ -143,7 +143,7 @@ def test_undo_stack_push_pop():
 
 
 def test_undo_stack_max_depth():
-    from Synaptipy.core.data_model import UndoStack
+    from synaptipy.core.data_model import UndoStack
 
     stack = UndoStack(max_depth=3)
     for i in range(6):
@@ -155,14 +155,14 @@ def test_undo_stack_max_depth():
 
 
 def test_undo_stack_pop_empty_returns_none():
-    from Synaptipy.core.data_model import UndoStack
+    from synaptipy.core.data_model import UndoStack
 
     stack = UndoStack()
     assert stack.pop() is None
 
 
 def test_undo_stack_clear():
-    from Synaptipy.core.data_model import UndoStack
+    from synaptipy.core.data_model import UndoStack
 
     stack = UndoStack()
     stack.push("x", {})
@@ -171,7 +171,7 @@ def test_undo_stack_clear():
 
 
 def test_undo_stack_repr():
-    from Synaptipy.core.data_model import UndoStack
+    from synaptipy.core.data_model import UndoStack
 
     stack = UndoStack()
     stack.push("my_op", {})

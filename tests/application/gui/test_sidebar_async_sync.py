@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 
 from PySide6 import QtCore
 
-from Synaptipy.application.gui.explorer.sidebar import ExplorerSidebar
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.explorer.sidebar import ExplorerSidebar
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 class MockFileSystemModel(QtCore.QObject):

@@ -8,11 +8,11 @@ that were identified and fixed during the publication readiness audit.
 
 import numpy as np
 
-from Synaptipy.core.analysis.passive_properties import (
+from synaptipy.core.analysis.passive_properties import (
     calculate_rin,
     calculate_sag_ratio,
 )
-from Synaptipy.core.analysis.single_spike import (
+from synaptipy.core.analysis.single_spike import (
     calculate_spike_features,
 )
 
@@ -225,7 +225,7 @@ class TestVCSeriesResistanceAccuracy:
         duration_s: float = 0.05,
     ):
         """Synthesise an ideal mono-exponential VC transient for a given Rs and Cm."""
-        from Synaptipy.core.analysis.passive_properties import calculate_capacitance_vc
+        from synaptipy.core.analysis.passive_properties import calculate_capacitance_vc
 
         dt = 1.0 / sampling_rate
         t = np.arange(0, duration_s, dt)
@@ -385,7 +385,7 @@ class TestLJPCorrection:
 
     def test_ljp_shifts_rmp_by_exact_value(self):
         """RMP with LJP=10 mV should equal (raw_rmp - 10) mV."""
-        from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
+        from synaptipy.core.analysis.passive_properties import apply_ljp_correction
 
         raw_mv = -70.0
         ljp_mv = 10.0
@@ -399,7 +399,7 @@ class TestLJPCorrection:
 
     def test_zero_ljp_returns_original_array(self):
         """When LJP=0, apply_ljp_correction must return the original array (no copy)."""
-        from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
+        from synaptipy.core.analysis.passive_properties import apply_ljp_correction
 
         v, _ = self._make_rmp_data(-65.0)
         result = apply_ljp_correction(v, 0.0)
@@ -409,7 +409,7 @@ class TestLJPCorrection:
 
     def test_negative_ljp_increases_apparent_voltage(self):
         """A negative LJP shifts recorded voltage positive (V_true = V_recorded - LJP)."""
-        from Synaptipy.core.analysis.passive_properties import apply_ljp_correction
+        from synaptipy.core.analysis.passive_properties import apply_ljp_correction
 
         raw_mv = -70.0
         ljp_mv = -5.0  # negative LJP → add 5 mV
@@ -459,7 +459,7 @@ class TestPPRResidualSubtraction:
 
     def test_ppr_corrected_differs_from_raw_when_residual_present(self):
         """When stim2 rides on a decaying tail from stim1, corrected PPR != raw peak division."""
-        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+        from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
 
         v, t = self._make_ppr_trace(r1_amp=-50.0, r2_amp=-30.0, decay_tau_s=0.04, fs=10000.0)
 
@@ -490,7 +490,7 @@ class TestPPRResidualSubtraction:
 
     def test_ppr_close_to_one_for_identical_events_no_decay(self):
         """When both events are equal amplitude and tail decay is negligible, PPR ≈ 1."""
-        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+        from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
 
         # Build trace with a very fast decay so residual under stim2 is negligible
         v, t = self._make_ppr_trace(
@@ -629,7 +629,7 @@ class TestGroundTruthFiringDynamics:
         """Adaptation index computed from a geometric ISI train must match to 0.1%."""
         import math
 
-        from Synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
+        from synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
         from tests.shared.test_data_generation import make_spike_train_trace
 
         true_ai = 2.5
@@ -654,7 +654,7 @@ class TestGroundTruthFiringDynamics:
         """Mean ISI computed from spike times with known ISIs must be correct to 0.1%."""
         import math
 
-        from Synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
+        from synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
         from tests.shared.test_data_generation import make_spike_train_trace
 
         _v, _t, known = make_spike_train_trace(
@@ -729,7 +729,7 @@ class TestGroundTruthEvokedPPR:
         """Analytically known residual at stim2 must match calculated residual to 1%."""
         import math
 
-        from Synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
+        from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
         from tests.shared.test_data_generation import make_ppr_evoked_trace
 
         r1 = -5.0  # mV

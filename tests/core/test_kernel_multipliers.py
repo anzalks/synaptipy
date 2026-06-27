@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import numpy as np
 
-import Synaptipy.core.analysis  # noqa: F401 - populate AnalysisRegistry
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.analysis.synaptic_events import (
+import synaptipy.core.analysis  # noqa: F401 - populate AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.synaptic_events import (
     detect_events_template,
     run_event_detection_template_wrapper,
 )

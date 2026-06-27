@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch  # noqa: F401
 
 import numpy as np
 
-import Synaptipy.core.analysis  # noqa: F401 - populate registry
-from Synaptipy.core.analysis.passive_properties import (
+import synaptipy.core.analysis  # noqa: F401 - populate registry
+from synaptipy.core.analysis.passive_properties import (
     _fit_vc_transient_decay,
     calculate_capacitance_cc,
     calculate_cc_series_resistance_fast,
@@ -87,7 +87,7 @@ class TestFitVcTransientDecay:
     def test_runtime_error_returns_nan(self):
         """Mocked RuntimeError from curve_fit returns (nan, nan)."""
         with patch(
-            "Synaptipy.core.analysis.passive_properties.curve_fit",
+            "synaptipy.core.analysis.passive_properties.curve_fit",
             side_effect=RuntimeError("fit failed"),
         ):
             tau_c, cm_fit = _fit_vc_transient_decay(
@@ -247,7 +247,7 @@ class TestCalculateTau:
         """Patched RuntimeError during mono-exp curve_fit returns nan tau dict (lines 814-816)."""
         v, t = _rc_trace()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.curve_fit",
+            "synaptipy.core.analysis.passive_properties.curve_fit",
             side_effect=RuntimeError("no convergence"),
         ):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.1, model="mono")
@@ -256,7 +256,7 @@ class TestCalculateTau:
 
     def test_polyfit_exception_in_tau_estimation(self):
         """Poly-fit raising ValueError triggers the except fallback (lines 803-804)."""
-        import Synaptipy.core.analysis.passive_properties as _pp
+        import synaptipy.core.analysis.passive_properties as _pp
 
         v, t = _rc_trace()
         # Patch polyfit on the numpy object in the passive_properties module
@@ -284,7 +284,7 @@ class TestCalculateTau:
         """Patched RuntimeError during bi-exp curve_fit returns nan bi-exp dict (lines 841-852)."""
         v, t = _rc_trace(n=10000)
         with patch(
-            "Synaptipy.core.analysis.passive_properties.curve_fit",
+            "synaptipy.core.analysis.passive_properties.curve_fit",
             side_effect=RuntimeError("no convergence"),
         ):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.3, model="bi")
@@ -299,7 +299,7 @@ class TestCalculateTau:
         mock_popt = np.array([-75.0, 5.0, 0.05, 3.0, 0.01])  # tau_fast=0.05 > tau_slow=0.01
         mock_cov = np.eye(5)
         with patch(
-            "Synaptipy.core.analysis.passive_properties.curve_fit",
+            "synaptipy.core.analysis.passive_properties.curve_fit",
             return_value=(mock_popt, mock_cov),
         ):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.3, model="bi")
@@ -407,7 +407,7 @@ class TestRunSagRatioWrapper:
         """When sag result is None, sag_error is set."""
         v, t = _step_trace()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.calculate_sag_ratio",
+            "synaptipy.core.analysis.passive_properties.calculate_sag_ratio",
             return_value=None,
         ):
             result = run_sag_ratio_wrapper(
@@ -460,7 +460,7 @@ class TestRunTauAnalysisWrapper:
         """When mono-exp tau is NaN, tau_error key is added (line 1780)."""
         v, t = _step_trace()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.curve_fit",
+            "synaptipy.core.analysis.passive_properties.curve_fit",
             side_effect=RuntimeError("failed"),
         ):
             result = run_tau_analysis_wrapper(
@@ -492,7 +492,7 @@ class TestRunTauAnalysisWrapper:
         """When calculate_tau returns None, tau_error is set (line 1820)."""
         v, t = _step_trace()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.calculate_tau",
+            "synaptipy.core.analysis.passive_properties.calculate_tau",
             return_value=None,
         ):
             result = run_tau_analysis_wrapper(
@@ -658,7 +658,7 @@ class TestRunCapacitanceAnalysisWrapper:
         """When tau calculation fails, error dict is returned (line 2049)."""
         v, t = _rc_trace(n=10000, step_amp=-10.0)
         with patch(
-            "Synaptipy.core.analysis.passive_properties.calculate_tau",
+            "synaptipy.core.analysis.passive_properties.calculate_tau",
             return_value=None,
         ):
             result = run_capacitance_analysis_wrapper(
@@ -701,7 +701,7 @@ class TestCcSeriesResistanceFastAdditional:
         n = 5000
         t = np.arange(n, dtype=float) * DT
         v = np.full(n, -65.0)
-        import Synaptipy.core.analysis.passive_properties as _pp
+        import synaptipy.core.analysis.passive_properties as _pp
 
         with patch.object(_pp.np, "mean", side_effect=ValueError("bad value")):
             result = calculate_cc_series_resistance_fast(
@@ -739,7 +739,7 @@ class TestRunTauAnalysisWrapperAdditional:
         """Bi-exp RuntimeError produces NaN tau_fast_ms and tau_error is set (line 1776)."""
         v, t = _rc_trace(n=10000)
         with patch(
-            "Synaptipy.core.analysis.passive_properties.curve_fit",
+            "synaptipy.core.analysis.passive_properties.curve_fit",
             side_effect=RuntimeError("fail"),
         ):
             result = run_tau_analysis_wrapper(
@@ -757,7 +757,7 @@ class TestRunTauAnalysisWrapperAdditional:
         """calculate_tau returning a float triggers the else branch (lines 1807-1812)."""
         v, t = _step_trace()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.calculate_tau",
+            "synaptipy.core.analysis.passive_properties.calculate_tau",
             return_value=20.0,  # numeric, not a dict
         ):
             result = run_tau_analysis_wrapper(
@@ -776,7 +776,7 @@ class TestRunTauAnalysisWrapperAdditional:
         """Exception in tau wrapper body returns error dict (lines 1820-1822)."""
         v, t = _step_trace()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.calculate_tau",
+            "synaptipy.core.analysis.passive_properties.calculate_tau",
             side_effect=KeyError("bad_key"),
         ):
             result = run_tau_analysis_wrapper(
@@ -814,7 +814,7 @@ class TestRunCapacitanceAnalysisWrapperAdditional:
         """When tau_result is a float (not dict), tau_ms = tau_result (line 2049)."""
         v, t = _rc_trace(n=10000, step_amp=-10.0)
         with patch(
-            "Synaptipy.core.analysis.passive_properties.calculate_tau",
+            "synaptipy.core.analysis.passive_properties.calculate_tau",
             return_value=20.0,  # return float, not dict
         ):
             result = run_capacitance_analysis_wrapper(
@@ -833,7 +833,7 @@ class TestRunCapacitanceAnalysisWrapperAdditional:
     def test_nan_rs_becomes_none(self):
         """When calculate_cc_series_resistance_fast returns NaN rs, rs_mohm=None (line 2064)."""
         v, t = _rc_trace(n=10000, step_amp=-10.0)
-        import Synaptipy.core.analysis.passive_properties as _pp
+        import synaptipy.core.analysis.passive_properties as _pp
 
         with patch.object(
             _pp,
@@ -857,7 +857,7 @@ class TestRunCapacitanceAnalysisWrapperAdditional:
 class TestPassivePropertiesModuleEntry:
     def test_module_entry_point_returns_empty_dict(self):
         """passive_properties_module() returns an empty dict (line 2119)."""
-        from Synaptipy.core.analysis.passive_properties import passive_properties_module
+        from synaptipy.core.analysis.passive_properties import passive_properties_module
 
         result = passive_properties_module()
         assert result == {}
@@ -871,7 +871,7 @@ class TestPassivePropertiesModuleEntry:
 class TestCalculateSagRatioShortPeakWindow:
     def test_short_peak_window_skips_savgol(self):
         """Peak window shorter than savgol filter → else branch at line 932."""
-        from Synaptipy.core.analysis.passive_properties import calculate_sag_ratio
+        from synaptipy.core.analysis.passive_properties import calculate_sag_ratio
 
         n = 10000
         t = np.arange(n) * DT
@@ -893,7 +893,7 @@ class TestCalculateSagRatioShortPeakWindow:
 class TestResolveSweepBaselineFallback:
     def test_no_stable_baseline_window_uses_full_sweep(self):
         """When find_stable_baseline finds no window, uses full sweep range (lines 1191-1192)."""
-        import Synaptipy.core.analysis.passive_properties as _pp
+        import synaptipy.core.analysis.passive_properties as _pp
 
         n = 5000
         t = np.arange(n) * DT
@@ -923,7 +923,7 @@ class TestRunSagRatioWrapperException:
         """Exception inside run_sag_ratio_wrapper body triggers lines 1470-1472."""
         v, t = _step_trace(step_amp=-20.0)
 
-        import Synaptipy.core.analysis.passive_properties as _pp
+        import synaptipy.core.analysis.passive_properties as _pp
 
         with patch.object(_pp, "calculate_sag_ratio", side_effect=KeyError("unexpected")):
             result = run_sag_ratio_wrapper(
@@ -991,7 +991,7 @@ class TestCalculateRinZeroCurrent:
 class TestRmpDriftLinregressException:
     def test_linregress_exception_covered(self):
         """Lines 1651-1652: linregress raises inside run_rmp_analysis_wrapper."""
-        from Synaptipy.core.analysis.passive_properties import run_rmp_analysis_wrapper
+        from synaptipy.core.analysis.passive_properties import run_rmp_analysis_wrapper
 
         n = int(0.2 * FS)
         t = np.arange(n) / FS
@@ -999,7 +999,7 @@ class TestRmpDriftLinregressException:
         data_list = [np.full(n, -65.0), np.full(n, -65.0)]
         time_list = [t, t]
         with patch(
-            "Synaptipy.core.analysis.passive_properties.linregress",
+            "synaptipy.core.analysis.passive_properties.linregress",
             side_effect=ValueError("forced"),
         ):
             result = run_rmp_analysis_wrapper(
@@ -1021,7 +1021,7 @@ class TestRmpDriftLinregressException:
 class TestCalculateRmpNoDataInWindow:
     def test_window_beyond_time_range_returns_error(self):
         """Line 155: baseline window beyond time array → start_idx >= end_idx."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+        from synaptipy.core.analysis.passive_properties import calculate_rmp
 
         n = 10
         time = np.arange(n) * 0.001  # 0.0 to 0.009 s
@@ -1039,7 +1039,7 @@ class TestCalculateRmpNoDataInWindow:
 class TestCalculateRmpSinglePointBaseline:
     def test_single_point_baseline_slope_none(self):
         """Line 183: baseline window maps to 1 sample → len(fit_time) < 2 → slope = None."""
-        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+        from synaptipy.core.analysis.passive_properties import calculate_rmp
 
         fs = 1_000.0
         n = 100
@@ -1061,14 +1061,14 @@ class TestCalculateRmpPolyfitException:
         """Line 184: np.polyfit raises LinAlgError → slope = None."""
         from unittest.mock import patch
 
-        from Synaptipy.core.analysis.passive_properties import calculate_rmp
+        from synaptipy.core.analysis.passive_properties import calculate_rmp
 
         fs = 1_000.0
         n = 500
         time = np.arange(n) / fs
         data = np.full(n, -65.0)
         with patch(
-            "Synaptipy.core.analysis.passive_properties.np.polyfit",
+            "synaptipy.core.analysis.passive_properties.np.polyfit",
             side_effect=np.linalg.LinAlgError("forced"),
         ):
             result = calculate_rmp(data=data, time=time, baseline_window=(0.0, 0.1))

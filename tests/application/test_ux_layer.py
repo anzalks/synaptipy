@@ -4,11 +4,11 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 from PySide6 import QtCore, QtGui
 
-from Synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
-from Synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
-from Synaptipy.application.controllers.shortcut_manager import ShortcutManager
-from Synaptipy.core.results import SpikeTrainResult
-from Synaptipy.shared.data_cache import DataCache
+from synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
+from synaptipy.application.controllers.live_analysis_controller import LiveAnalysisController
+from synaptipy.application.controllers.shortcut_manager import ShortcutManager
+from synaptipy.core.results import SpikeTrainResult
+from synaptipy.shared.data_cache import DataCache
 
 # --- DataCache Tests ---
 
@@ -101,7 +101,7 @@ def test_analysis_formatter_spike_result():
 # --- LiveAnalysisController Tests ---
 
 
-@patch("Synaptipy.application.controllers.live_analysis_controller.DataCache")
+@patch("synaptipy.application.controllers.live_analysis_controller.DataCache")
 def test_live_analysis_controller_fetch(mock_datacache_cls, qtbot):
     # Setup Mock DataCache
     mock_instance = MagicMock()

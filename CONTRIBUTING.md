@@ -105,13 +105,13 @@ behaviour needs a test in `tests/gui/`.
 Synaptipy uses a registry pattern for analysis functions. To add a new
 analysis:
 
-1. Create your function in `src/Synaptipy/core/analysis/`.
+1. Create your function in `src/synaptipy/core/analysis/`.
 2. Decorate it with `@AnalysisRegistry.register(name=..., ui_params=[...], plots=[...])`.
-3. Import the module in `src/Synaptipy/core/analysis/__init__.py` so the
+3. Import the module in `src/synaptipy/core/analysis/__init__.py` so the
    decorator executes at package import time.
 4. Add a corresponding test in `tests/core/`.
 
-See `src/Synaptipy/templates/analysis_template.py` and
+See `src/synaptipy/templates/analysis_template.py` and
 `docs/extending_synaptipy.md` for the full specification.
 
 ## Writing Plugins
@@ -146,4 +146,4 @@ python scripts/bump_version.py 0.1.6b1   # for a beta
 python scripts/bump_version.py 1.0.0     # for a stable release
 ```
 
-The script updates `pyproject.toml`, `src/Synaptipy/__init__.py`, `CITATION.cff` (version + date-released), `docs/conf.py`, installer files, installer filename references in `README.md`, and prepends a CHANGELOG header. It **never** touches dependency version constraints. After the file edits, it offers to create a local `git tag vX.Y.Z` — pushing to the remote is always a manual step.
+The script updates `pyproject.toml`, `src/synaptipy/__init__.py`, `CITATION.cff` (version + date-released), `docs/conf.py`, installer files, installer filename references in `README.md`, and prepends a CHANGELOG header. It **never** touches dependency version constraints. After the file edits, it offers to create a local `git tag vX.Y.Z` — pushing to the remote is always a manual step.

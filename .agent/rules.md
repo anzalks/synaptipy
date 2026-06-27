@@ -3,14 +3,14 @@
 ## I. ARCHITECTURAL COMPLIANCE
 
 **1. Separation of Concerns (Core vs. Application)**
-* **Core Layer (`src/Synaptipy/core/`)**: Must contain **PURE LOGIC ONLY**.
+* **Core Layer (`src/synaptipy/core/`)**: Must contain **PURE LOGIC ONLY**.
     * **FORBIDDEN IMPORTS**: `PySide6`, `PyQt6`, `matplotlib.pyplot`, or any GUI-related libraries.
     * **Input/Output**: Functions must accept standard data types (NumPy arrays) and return structured objects (Dataclasses/Result Objects).
-* **Application Layer (`src/Synaptipy/application/`)**: Handles all GUI interactions, widget management, and user feedback.
+* **Application Layer (`src/synaptipy/application/`)**: Handles all GUI interactions, widget management, and user feedback.
 
 **2. Dependency & Import Integrity**
 * **No "Dummy" Imports**: NEVER import core classes (`Recording`, `Channel`) from `dummy_classes.py` or similar hacks.
-    * **Correct Usage**: Import from `src/Synaptipy/core/data_model.py`.
+    * **Correct Usage**: Import from `src/synaptipy/core/data_model.py`.
     * **Circular Imports**: Resolve them using `from typing import TYPE_CHECKING` blocks.
 
 **3. Logging Standard**
@@ -33,7 +33,7 @@ All analysis features must be split into two distinct parts:
     * *Constraint:* Wrappers MUST NOT contain orchestration logic (e.g., calling function A then function B).
 
 ### 2. Data Contracts & Default Values
-* **Primitive Obsession**: Core functions must never return unstructured tuples or dicts. Use `dataclasses` defined in `src/Synaptipy/core/results.py`.
+* **Primitive Obsession**: Core functions must never return unstructured tuples or dicts. Use `dataclasses` defined in `src/synaptipy/core/results.py`.
 * **Single Source of Truth**: Wrappers MUST NOT hardcode default values that differ from the Core function.
     * *Pattern:* The Wrapper should extract parameters using `.get()`. If the parameter is missing, pass `None` to the Core function and let the Core function apply the scientific default.
 
@@ -41,7 +41,7 @@ All analysis features must be split into two distinct parts:
 * **Strict Prohibition**: Direct instantiation of `pg.PlotWidget` or `pg.GraphicsLayoutWidget` is **FORBIDDEN**.
     * *Reason:* Windows-specific OpenGL crashes and styling inconsistencies.
 * **Mandatory Factory**: Always use `SynaptipyPlotFactory`.
-    * *Code:* `from Synaptipy.shared.plot_factory import SynaptipyPlotFactory`
+    * *Code:* `from synaptipy.shared.plot_factory import synaptipyPlotFactory`
     * *Usage:* `self.plot = SynaptipyPlotFactory.create_plot_widget(...)`
 * **Performance Throttling**:
     * **Downsampling**: For traces > 100,000 points, plotting widgets MUST implement 'Peak-to-Peak' or 'Subsample' downsampling logic to maintain 60 FPS.
@@ -55,7 +55,7 @@ All analysis features must be split into two distinct parts:
 
 ### 5. Persistence Safety (No Magic Strings)
 * **QSettings**: Do not hardcode app names or keys in `QSettings`.
-* **Requirement**: Use constants from `src/Synaptipy/shared/constants.py` (e.g., `APP_NAME`).
+* **Requirement**: Use constants from `src/synaptipy/shared/constants.py` (e.g., `APP_NAME`).
 
 ### 6. Zero-Tolerance for Dead Code & Duplication (AUDIT LESSON)
 * **Unused Variables & Imports**: Must be aggressively cleared. Do not leave `dt = 0.001` if `dt` is never used. Do not import types like `List` if unused. Flake8 F401/F841 rules MUST be respected.
@@ -66,20 +66,20 @@ All analysis features must be split into two distinct parts:
 **CRITICAL INSTRUCTION:** You MUST read the **Template Files** below before writing any code.
 
 * **The Analysis Standard (Immutable)**:
-    * **File:** `src/Synaptipy/templates/analysis_template.py`
+    * **File:** `src/synaptipy/templates/analysis_template.py`
     * **Action:** Copy this structure for `core/analysis/`. Enforce Logic vs. Wrapper separation.
 
 * **The GUI Tab Standard (Immutable)**:
-    * **File:** `src/Synaptipy/templates/tab_template.py`
+    * **File:** `src/synaptipy/templates/tab_template.py`
     * **Action:** Use this for all files in `application/gui/analysis_tabs/`.
     * **Crucial:** Must define `ANALYSIS_TAB_CLASS` at the end. Must override `_plot_analysis_visualizations`.
 
 * **The Unit Test Standard (Immutable)**:
-    * **File:** `src/Synaptipy/templates/test_template.py`
+    * **File:** `src/synaptipy/templates/test_template.py`
     * **Action:** Use `pytest` fixtures. Never import GUI widgets in `tests/core/`.
 
 * **The Visualization Factory**:
-    * **File:** `src/Synaptipy/shared/plot_factory.py`
+    * **File:** `src/synaptipy/shared/plot_factory.py`
     * **Action:** Use `create_plot_widget` for all plotting.
 
 ## IV. CI/CD & QUALITY ASSURANCE
@@ -179,11 +179,11 @@ All analysis features must be split into two distinct parts:
 **2. Source-Verified Accuracy (The "Ground Truth" Rule)**
 *   **CRITICAL**: Every technical statement in documentation MUST be verified against the actual source code before being written. Never document from memory, assumption, or from other documentation files.
 *   **CLI entry points**: ALWAYS read `pyproject.toml` `[project.scripts]` to confirm the exact command name(s) before documenting CLI usage. The command is `synaptipy` (NOT `synaptipy-gui`).
-*   **CLI flags**: ALWAYS read `src/Synaptipy/__main__.py` to confirm argument names before documenting them.
+*   **CLI flags**: ALWAYS read `src/synaptipy/__main__.py` to confirm argument names before documenting them.
 *   **Python version floor**: ALWAYS check `pyproject.toml` `requires-python` field. Current floor is `>=3.10`.
-*   **Import paths**: ALWAYS verify module paths by reading the actual `src/` tree. Do not invent paths. Analysis functions live in `src/Synaptipy/core/analysis/`, not in a top-level `analysis/` module.
+*   **Import paths**: ALWAYS verify module paths by reading the actual `src/` tree. Do not invent paths. Analysis functions live in `src/synaptipy/core/analysis/`, not in a top-level `analysis/` module.
 *   **Function signatures**: ALWAYS read the function definition before documenting its arguments. Do not add parameters that do not exist in the actual code.
-*   **Default paths**: ALWAYS read the relevant config/shared module to verify default directory paths (e.g., log directory is `~/.synaptipy/logs/` — confirmed from `src/Synaptipy/shared/logging_config.py`).
+*   **Default paths**: ALWAYS read the relevant config/shared module to verify default directory paths (e.g., log directory is `~/.synaptipy/logs/` — confirmed from `src/synaptipy/shared/logging_config.py`).
 
 **3. Publication-Quality Language**
 *   **Objective Language**: Use formal, precise, technical language throughout. Avoid marketing language, casual phrasing, or informal abbreviations.
@@ -251,7 +251,7 @@ dedicated plot button. Auto-popup on file load is forbidden without exception.
 
 **3. Domain Purity (Strict)**
 * **FORBIDDEN**: Core domain objects (`Channel`, `Recording`, `Experiment`) must NOT hold direct references to infrastructure objects (e.g., `neo_block`, `neo.io` readers, file handles).
-* **Requirement**: Use the `SourceHandle` protocol (`src/Synaptipy/core/source_interfaces.py`) for abstract data access.
+* **Requirement**: Use the `SourceHandle` protocol (`src/synaptipy/core/source_interfaces.py`) for abstract data access.
 * *Reason*: Decouples the core domain from specific I/O libraries (Neo), enabling easier testing and future library swaps.
 
 ## VIII. NATIVE CI/CD & TELEMETRY

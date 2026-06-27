@@ -47,7 +47,7 @@ This will install Synaptipy in development mode with all development dependencie
 The Synaptipy codebase is organized as follows:
 
 ```
-src/Synaptipy/                       # Main package
+src/synaptipy/                       # Main package
 ├── __init__.py                      # Package initialization
 ├── __main__.py                      # Entry point for `python -m Synaptipy`
 ├── application/                     # GUI application layer
@@ -178,7 +178,7 @@ Synaptipy supports two ways to add new analysis functions:
  Analyser tab. This is the recommended approach for end users.
 
 2. **Built-in modules (core contributors):** Add a module to
- `src/Synaptipy/core/analysis/`, register the import in `__init__.py`,
+ `src/synaptipy/core/analysis/`, register the import in `__init__.py`,
  and add tests.
 
 Three bundled example plugins ship in `examples/plugins/` and are loaded
@@ -192,7 +192,7 @@ automatically when **Enable Custom Plugins** is checked in Preferences:
 | `miniml_integration.py` | miniML Events | Deep-learning event detection via miniML (optional dep; requires tensorflow + cloned miniML repo) |
 | `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via SpikeInterface (optional dep; `pip install spikeinterface`) |
 
-A ready-to-copy template is at `src/Synaptipy/templates/plugin_template.py`.
+A ready-to-copy template is at `src/synaptipy/templates/plugin_template.py`.
 For the complete reference - including all `ui_params` types, `plots` types,
 return-dict conventions, `visible_when` rules, and a fully annotated example -
 see the dedicated guide: **[Writing Custom Analysis Plugins](extending_synaptipy.md)**.
@@ -306,8 +306,8 @@ updating. Do this with a dedicated commit:
 ```bash
 # Re-run the probe script to get new values
 conda run -n synaptipy python -c "
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
-from Synaptipy.core.analysis.passive_properties import calculate_rmp, calculate_rin
+from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
+from synaptipy.core.analysis.passive_properties import calculate_rmp, calculate_rin
 adapter = NeoAdapter()
 rec = adapter.load_recording('examples/data/24o18002.abf')
 ch = list(rec.channels.values())[0]
@@ -352,10 +352,10 @@ real discard sink (``os.devnull``) when needed.
 
 To populate the `AnalysisRegistry`, **always import the full package**:
 ```python
-import Synaptipy.core.analysis # triggers __init__.py → from . import basic_features, etc.
+import synaptipy.core.analysis # triggers __init__.py → from . import basic_features, etc.
 ```
 
-**Never** rely on `from Synaptipy.core.analysis.registry import AnalysisRegistry`
+**Never** rely on `from synaptipy.core.analysis.registry import AnalysisRegistry`
 alone - that only imports the registry *class* and does NOT execute the analysis
 sub-modules' `@AnalysisRegistry.register` decorators.
 

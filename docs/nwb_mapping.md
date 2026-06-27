@@ -247,7 +247,7 @@ Spike times and synaptic event times will be stored in `pynwb.misc.Units`
 ## Programmatic Usage
 
 ```python
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 exporter = NWBExporter()
 exporter.export(

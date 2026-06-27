@@ -10,7 +10,7 @@ real file dialogs or real pop-up windows.
 
 import pytest
 
-from Synaptipy.application.gui.dialogs.export_manager import ExportManager
+from synaptipy.application.gui.dialogs.export_manager import ExportManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -112,7 +112,7 @@ class TestSavePlot:
         from unittest.mock import MagicMock, patch
 
         mock_plot = MagicMock()
-        with patch("Synaptipy.application.gui.dialogs.export_manager.PlotExportDialog") as MockDialog:
+        with patch("synaptipy.application.gui.dialogs.export_manager.PlotExportDialog") as MockDialog:
             instance = MockDialog.return_value
             instance.exec.return_value = False  # user cancels
             # Should not raise
@@ -127,12 +127,12 @@ class TestSavePlot:
         mock_plot = MagicMock()
 
         with (
-            patch("Synaptipy.application.gui.dialogs.export_manager.PlotExportDialog") as MockDialog,
+            patch("synaptipy.application.gui.dialogs.export_manager.PlotExportDialog") as MockDialog,
             patch(
-                "Synaptipy.application.gui.dialogs.export_manager.QtWidgets.QFileDialog.getSaveFileName",
+                "synaptipy.application.gui.dialogs.export_manager.QtWidgets.QFileDialog.getSaveFileName",
                 return_value=(save_path, "Images (*.png)"),
             ),
-            patch("Synaptipy.application.gui.dialogs.export_manager.PlotExporter") as MockExporter,
+            patch("synaptipy.application.gui.dialogs.export_manager.PlotExporter") as MockExporter,
         ):
             mock_dialog_inst = MockDialog.return_value
             mock_dialog_inst.exec.return_value = True

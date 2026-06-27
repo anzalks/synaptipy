@@ -69,9 +69,9 @@ jobs:
         QT_QPA_PLATFORM: offscreen
       run: |
         if [ "$RUNNER_OS" == "Linux" ]; then
-          xvfb-run python -m pytest -p faulthandler --cov=src/Synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+          xvfb-run python -m pytest -p faulthandler --cov=src/synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
         else
-          python -m pytest -p faulthandler --cov=src/Synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+          python -m pytest -p faulthandler --cov=src/synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
         fi
 
     # High-DPI scaling check — runs a focused subset of plot tests with
@@ -212,7 +212,7 @@ jobs:
       # -c bandit.yaml         -> project-level skip list (documented in bandit.yaml)
       # --format txt           -> human-readable output in CI logs
       run: |
-        bandit -r src/Synaptipy/ \
+        bandit -r src/synaptipy/ \
           -c bandit.yaml \
           --severity-level high \
           --confidence-level low \

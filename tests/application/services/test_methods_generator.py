@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for application.services.methods_generator.MethodsGenerator."""
 
-from Synaptipy.application.services.methods_generator import MethodsGenerator
+from synaptipy.application.services.methods_generator import MethodsGenerator
 
 
 class TestMethodsGeneratorParagraph:
@@ -83,9 +83,9 @@ class TestMethodsGeneratorCitation:
         assert "Shahul" in citation
 
     def test_contains_version(self):
-        import Synaptipy
+        import synaptipy
 
-        version = getattr(Synaptipy, "__version__", "unknown")
+        version = getattr(synaptipy, "__version__", "unknown")
         assert version in self.gen.generate_software_citation()
 
 

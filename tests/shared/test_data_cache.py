@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.shared.data_cache import DataCache
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.shared.data_cache import DataCache
 
 
 @pytest.fixture

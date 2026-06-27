@@ -14,8 +14,8 @@ import matplotlib
 import numpy as np
 from matplotlib import pyplot as plt
 
-from Synaptipy.analysis.resistance_analysis import calculate_input_resistance
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.analysis.resistance_analysis import calculate_input_resistance
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Publication-quality rcParams -- inject before any figure is created
@@ -236,7 +236,7 @@ def main():
 
     # Set metadata
     metadata = {
-        'session_description': 'Example recording from Synaptipy',
+        'session_description': 'Example recording from synaptipy',
         'experimenter': 'Example User',
         'lab': 'Example Lab',
         'institution': 'Example Institution',

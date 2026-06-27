@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6 import QtWidgets
 
-from Synaptipy.application.gui.analyser_tab import AnalyserTab
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.analyser_tab import AnalyserTab
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture
@@ -30,11 +30,11 @@ def _ensure_registry_populated():
     subsequent tests.  Reloading every analysis sub-module here re-executes the
     decorators and repopulates the registry so the GUI tests see all 15 analyses.
     """
-    import Synaptipy.core.analysis.evoked_responses as m4
-    import Synaptipy.core.analysis.firing_dynamics as m2
-    import Synaptipy.core.analysis.passive_properties as m0
-    import Synaptipy.core.analysis.single_spike as m1
-    import Synaptipy.core.analysis.synaptic_events as m3
+    import synaptipy.core.analysis.evoked_responses as m4
+    import synaptipy.core.analysis.firing_dynamics as m2
+    import synaptipy.core.analysis.passive_properties as m0
+    import synaptipy.core.analysis.single_spike as m1
+    import synaptipy.core.analysis.synaptic_events as m3
 
     for module in (m0, m1, m2, m3, m4):
         importlib.reload(module)
@@ -66,7 +66,7 @@ def test_analyser_tab_loads_analysis_tabs(qtbot, mock_neo_adapter, monkeypatch):
     ``Synaptipy.core.analysis`` package before calling list_registered().
     """
     # Suppress heavy pyqtgraph plot-area creation to stay safe in offscreen mode
-    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
+    monkeypatch.setattr("synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
     tab = AnalyserTab(neo_adapter=mock_neo_adapter)
     qtbot.addWidget(tab)
     n_tabs = len(tab._loaded_analysis_tabs)
@@ -74,7 +74,7 @@ def test_analyser_tab_loads_analysis_tabs(qtbot, mock_neo_adapter, monkeypatch):
         f"AnalyserTab loaded {n_tabs} analysis sub-tabs (expected > 0). "
         "This is the Windows-specific bug where importing only "
         "registry.py leaves the AnalysisRegistry empty. "
-        "The fix is: 'import Synaptipy.core.analysis' (full package) in "
+        "The fix is: 'import synaptipy.core.analysis' (full package) in "
         "_load_analysis_tabs() before calling list_registered()."
     )
 
@@ -86,9 +86,9 @@ def test_cursor_group_box_present(qtbot, mock_neo_adapter, monkeypatch):
     We call the method directly on a minimal stub to avoid heavy pyqtgraph
     initialisation in offscreen mode.
     """
-    from Synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
+    from synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 
-    monkeypatch.setattr("Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
+    monkeypatch.setattr("synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())
 
     class _StubTab(BaseAnalysisTab):
         def get_display_name(self) -> str:

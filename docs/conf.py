@@ -55,7 +55,7 @@ author = "Anzal K. Shahul"
 
 # Retrieve version from the package itself
 try:
-    from Synaptipy import __version__ as _version  # noqa: E402
+    from synaptipy import __version__ as _version  # noqa: E402
 
     release = _version
     version = _version
@@ -198,7 +198,7 @@ latex_elements: dict = {}
 latex_documents = [
     (
         master_doc,
-        "Synaptipy.tex",
+        "synaptipy.tex",
         "Synaptipy Documentation",
         "Anzal K. Shahul",
         "manual",

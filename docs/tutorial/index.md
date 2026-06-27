@@ -210,7 +210,7 @@ that can be applied before any analysis:
 Configure via the pipeline API:
 
 ```python
-from Synaptipy.core.processing_pipeline import ProcessingPipeline
+from synaptipy.core.processing_pipeline import ProcessingPipeline
 
 pipeline = ProcessingPipeline()
 pipeline.add_step({
@@ -367,7 +367,7 @@ Copy the starter template that ships with Synaptipy:
 
 ```bash
 # macOS / Linux
-cp src/Synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
+cp src/synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
 
 # Windows (PowerShell)
 Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
@@ -430,7 +430,7 @@ def calculate_area_under_curve(data, time, sampling_rate,
 **Part B - Register it with the decorator:**
 
 ```python
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 @AnalysisRegistry.register(
     name="synaptic_charge",              # unique internal ID
@@ -559,7 +559,7 @@ immediately.
 - **Use any installed package** - your plugin can import SciPy, scikit-learn,
   or anything installed in the same Python environment.
 - **Template location** - the ready-to-copy template is at
-  `src/Synaptipy/templates/plugin_template.py`.
+  `src/synaptipy/templates/plugin_template.py`.
 - **Full reference** - for the complete list of all parameter types, all 12
   plot overlay types, and advanced features like conditional visibility, see
   [Writing Custom Analysis Plugins](../extending_synaptipy.md).
@@ -1423,10 +1423,10 @@ The engine can be used from Python scripts without the GUI:
 
 ```python
 from pathlib import Path
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 
 # IMPORTANT: import the full package to register all analysis functions
-import Synaptipy.core.analysis  # noqa: F401
+import synaptipy.core.analysis  # noqa: F401
 
 engine = BatchAnalysisEngine()
 
@@ -1462,7 +1462,7 @@ The context is not shared across channels or files.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| 0 analyses in Add Step dialog | Registry not populated | Ensure `import Synaptipy.core.analysis` runs before opening dialog (automatic in GUI) |
+| 0 analyses in Add Step dialog | Registry not populated | Ensure `import synaptipy.core.analysis` runs before opening dialog (automatic in GUI) |
 | Channel filter matches nothing | Name mismatch | Check exact channel names in Explorer tab; filter is case-sensitive |
 | Empty results DataFrame | No data in requested scope | Verify the file has trials and the scope matches (e.g. `all_trials` on a file with 1 trial still works) |
 | `error` column filled | Analysis function raised exception | Check the `debug_trace` column or export to JSON for the full traceback |
@@ -1589,7 +1589,7 @@ Your analysis will appear as a new tab in the Analyser, complete with
 auto-generated parameter widgets, a results table, and plot overlays - all
 driven by metadata in the decorator.
 
-A ready-to-copy template is included at `src/Synaptipy/templates/plugin_template.py`.
+A ready-to-copy template is included at `src/synaptipy/templates/plugin_template.py`.
 For the full step-by-step guide, parameter reference, and annotated examples,
 see **[Writing Custom Analysis Plugins](../extending_synaptipy.md)**.
 

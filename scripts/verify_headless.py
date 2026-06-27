@@ -29,7 +29,7 @@ def check_imports(file_path):
 
 
 def main():
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/Synaptipy/core"))
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/synaptipy/core"))
     print(f"Scanning {root_dir}...")
 
     failures = []

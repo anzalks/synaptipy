@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from Synaptipy.application.services.data_loader_service import DataLoaderService
+from synaptipy.application.services.data_loader_service import DataLoaderService
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -171,11 +171,11 @@ class TestBaseAnalysisTabBackwardCompat:
         from unittest.mock import MagicMock
 
         monkeypatch.setattr(
-            "Synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
+            "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
             MagicMock(),
         )
-        from Synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         # Register a minimal analysis function for the duration of the test
         name = "_dls_compat_test"

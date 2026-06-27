@@ -3,7 +3,7 @@
 <!-- BADGES_START -->
 [![CI](https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg)](https://codecov.io/gh/anzalks/synaptipy)
-[![PyPI](https://img.shields.io/pypi/v/Synaptipy?color=blue&label=PyPI)](https://pypi.org/project/Synaptipy/)
+[![PyPI](https://img.shields.io/pypi/v/synaptipy?color=blue&label=PyPI)](https://pypi.org/project/synaptipy/)
 [![PyPI Downloads](https://img.shields.io/pepy/dt/synaptipy?label=pypi%20downloads&color=blue)](https://pepy.tech/project/synaptipy)
 [![App Downloads](https://img.shields.io/github/downloads/anzalks/synaptipy/total?label=app%20downloads&color=orange)](https://github.com/anzalks/synaptipy/releases)
 [![Release](https://flat.badgen.net/github/tag/anzalks/synaptipy?color=orange&label=release)](https://github.com/anzalks/synaptipy/releases)
@@ -30,12 +30,12 @@ Full documentation: [synaptipy.readthedocs.io](https://synaptipy.readthedocs.io/
 The recommended approach for most users is to install Synaptipy directly via pip into a standard Python environment (Python 3.10-3.12).
 
 ```bash
-pip install Synaptipy
+pip install synaptipy
 ```
 
 ### Standalone Application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/Synaptipy/releases). Download the file matching your operating system from the v0.1.6.1 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the file matching your operating system from the v0.1.6.1 release assets:
 
 - **Windows:** `Synaptipy_Setup_v0.1.6.1.exe`
 - **macOS:** `Synaptipy_v0.1.6.1.dmg` - open the disk image and drag to Applications
@@ -80,7 +80,7 @@ Load a recording by dragging a file into the **Explorer** tab, then navigate to 
 The batch engine operates independently of the graphical interface:
 
 ```python
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from pathlib import Path
 
 engine = BatchAnalysisEngine()
@@ -155,7 +155,7 @@ The batch processing engine implements a composable pipeline architecture in whi
 
 The software architecture comprises a central `AnalysisRegistry` that maps named analysis functions to the graphical interface and batch engine via a decorator pattern. Python scripts placed in `~/.synaptipy/plugins/` that use the `@AnalysisRegistry.register` decorator are discovered at startup and integrated into both the interactive analyser and batch pipeline without modification to the core package.
 
-A documented template at `src/Synaptipy/templates/analysis_template.py` defines the required function signature and return schema.
+A documented template at `src/synaptipy/templates/analysis_template.py` defines the required function signature and return schema.
 
 ```python
 @AnalysisRegistry.register(

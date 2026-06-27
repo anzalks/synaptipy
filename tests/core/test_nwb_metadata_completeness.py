@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from Synaptipy.core.data_model import Channel, Recording
-from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+from synaptipy.core.data_model import Channel, Recording
+from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 try:
     from pynwb import NWBHDF5IO, validate

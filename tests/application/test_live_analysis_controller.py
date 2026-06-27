@@ -17,11 +17,11 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from Synaptipy.application.controllers.live_analysis_controller import (
+from synaptipy.application.controllers.live_analysis_controller import (
     AnalysisRunnable,
     LiveAnalysisController,
 )
-from Synaptipy.core.results import SpikeTrainResult
+from synaptipy.core.results import SpikeTrainResult
 
 # ---------------------------------------------------------------------------
 # AnalysisRunnable
@@ -58,7 +58,7 @@ class TestAnalysisRunnable:
         runnable.signals.error.connect(errors.append)
 
         with patch(
-            "Synaptipy.application.controllers.live_analysis_controller.detect_spikes_threshold",
+            "synaptipy.application.controllers.live_analysis_controller.detect_spikes_threshold",
             side_effect=ValueError("Boom"),
         ):
             runnable.run()
@@ -91,7 +91,7 @@ class TestAnalysisRunnable:
             return SpikeTrainResult(spike_times=np.array([]), parameters=parameters)
 
         with patch(
-            "Synaptipy.application.controllers.live_analysis_controller.detect_spikes_threshold",
+            "synaptipy.application.controllers.live_analysis_controller.detect_spikes_threshold",
             side_effect=fake_detect,
         ):
             runnable = AnalysisRunnable(data, fs=10_000.0, params=params, metadata=meta)
@@ -119,7 +119,7 @@ class TestLiveAnalysisController:
         mock_cache.get_active_trace.return_value = None
 
         with patch(
-            "Synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
+            "synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
             return_value=mock_cache,
         ):
             self.controller._pending_params = {"threshold": -20.0}
@@ -136,7 +136,7 @@ class TestLiveAnalysisController:
         mock_cache.get_active_trace.return_value = (np.array([]), 10_000.0, {})
 
         with patch(
-            "Synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
+            "synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
             return_value=mock_cache,
         ):
             self.controller._pending_params = {"threshold": -20.0}
@@ -152,7 +152,7 @@ class TestLiveAnalysisController:
         mock_cache.get_active_trace.return_value = (None, 10_000.0, {})
 
         with patch(
-            "Synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
+            "synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
             return_value=mock_cache,
         ):
             self.controller._pending_params = {"threshold": -20.0}
@@ -169,7 +169,7 @@ class TestLiveAnalysisController:
         mock_cache.get_active_trace.return_value = (rng.normal(-65, 1, 1000), 10_000.0, {})
 
         with patch(
-            "Synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
+            "synaptipy.application.controllers.live_analysis_controller.DataCache.get_instance",
             return_value=mock_cache,
         ):
             self.controller._pending_params = None

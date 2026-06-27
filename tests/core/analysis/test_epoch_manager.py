@@ -4,8 +4,8 @@
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.epoch_manager import Epoch, EpochManager
-from Synaptipy.core.data_model import Channel
+from synaptipy.core.analysis.epoch_manager import Epoch, EpochManager
+from synaptipy.core.data_model import Channel
 
 # ---------------------------------------------------------------------------
 # Epoch dataclass tests

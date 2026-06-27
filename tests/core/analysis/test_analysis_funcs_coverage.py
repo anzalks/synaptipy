@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 import numpy as np
 
-import Synaptipy.core.analysis  # noqa: F401 – populate registry
-from Synaptipy.core.analysis.evoked_responses import (
+import synaptipy.core.analysis  # noqa: F401 – populate registry
+from synaptipy.core.analysis.evoked_responses import (
     OptoSyncResult,
     calculate_optogenetic_sync,
     calculate_paired_pulse_ratio,
@@ -19,7 +19,7 @@ from Synaptipy.core.analysis.evoked_responses import (
     run_opto_sync_wrapper,
     run_ppr_wrapper,
 )
-from Synaptipy.core.analysis.firing_dynamics import (
+from synaptipy.core.analysis.firing_dynamics import (
     TrainDynamicsResult,
     calculate_fi_curve,
     firing_dynamics_module,
@@ -27,7 +27,7 @@ from Synaptipy.core.analysis.firing_dynamics import (
     run_excitability_analysis_wrapper,
     run_train_dynamics_wrapper,
 )
-from Synaptipy.core.analysis.single_spike import (
+from synaptipy.core.analysis.single_spike import (
     analyze_multi_sweep_spikes,
     calculate_isi,
     calculate_spike_features,
@@ -35,7 +35,7 @@ from Synaptipy.core.analysis.single_spike import (
     run_spike_detection_wrapper,
     single_spike_module,
 )
-from Synaptipy.core.analysis.synaptic_events import (
+from synaptipy.core.analysis.synaptic_events import (
     calculate_event_charge_dynamic,
     compute_local_pre_event_baseline,
     fit_biexponential_decay,
@@ -617,7 +617,7 @@ class TestCalculatePairedPulseRatio:
         """Lines 387-389: decay fit raises exception."""
         v, t = _psc_trace(n_events=2)
         # Make curve_fit raise
-        with patch("Synaptipy.core.analysis.evoked_responses.curve_fit", side_effect=RuntimeError("fail")):
+        with patch("synaptipy.core.analysis.evoked_responses.curve_fit", side_effect=RuntimeError("fail")):
             result = calculate_paired_pulse_ratio(
                 data=v,
                 time=t,
@@ -747,7 +747,7 @@ class TestFitBiexponentialDecay:
 
         n = 50
         data = -5.0 * np.exp(-np.arange(n) / 10.0)
-        with patch("Synaptipy.core.analysis.synaptic_events.curve_fit", side_effect=RuntimeError("fail")):
+        with patch("synaptipy.core.analysis.synaptic_events.curve_fit", side_effect=RuntimeError("fail")):
             result = fit_biexponential_decay(data, 0, FS, 0.0, polarity="negative")
         assert "decay_fit_error" in result
 
@@ -773,14 +773,14 @@ class TestComputeLocalPreEventBaseline:
 class TestDetectEventsThresholdEdgeCases:
     def test_invalid_data_shape(self):
         """Line 558: data.size < 2 or shape mismatch."""
-        from Synaptipy.core.analysis.synaptic_events import detect_events_threshold
+        from synaptipy.core.analysis.synaptic_events import detect_events_threshold
 
         result = detect_events_threshold(data=np.array([1.0]), time=np.array([0.0, 1.0]), threshold=-20.0)
         assert not result.is_valid
 
     def test_rolling_baseline_too_small_window(self):
         """Line 573: rolling_baseline_window_ms too small → baseline_corrected_data = data."""
-        from Synaptipy.core.analysis.synaptic_events import detect_events_threshold
+        from synaptipy.core.analysis.synaptic_events import detect_events_threshold
 
         v, t = _psc_trace()
         result = detect_events_threshold(
@@ -790,7 +790,7 @@ class TestDetectEventsThresholdEdgeCases:
 
     def test_quiescent_noise_floor(self):
         """Lines 582-583: use_quiescent_noise_floor=True path."""
-        from Synaptipy.core.analysis.synaptic_events import detect_events_threshold
+        from synaptipy.core.analysis.synaptic_events import detect_events_threshold
 
         v, t = _psc_trace()
         result = detect_events_threshold(v, t, threshold=-5.0, use_quiescent_noise_floor=True)
@@ -830,7 +830,7 @@ class TestFiringDynamicsModule:
 
     def test_calculate_train_dynamics_single_isi(self):
         """Line 540: calculate_train_dynamics with only 1 positive ISI."""
-        from Synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
+        from synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
 
         spike_times = np.array([0.0, 0.1])  # only 1 ISI
         result = calculate_train_dynamics(spike_times)
@@ -854,11 +854,11 @@ class TestFiringDynamicsModule:
         """Lines 105-106: calculate_fi_curve broadening index exception path."""
         from unittest.mock import patch
 
-        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+        from synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
 
         v, t = _spiking_trace(n_spikes=4, isi_s=0.05, duration=0.5)
         with patch(
-            "Synaptipy.core.analysis.firing_dynamics.calculate_spike_features",
+            "synaptipy.core.analysis.firing_dynamics.calculate_spike_features",
             side_effect=ValueError("feature fail"),
         ):
             result = calculate_fi_curve(
@@ -873,11 +873,11 @@ class TestFiringDynamicsModule:
         """Lines 133-134: linear regression fails in calculate_fi_curve."""
         from unittest.mock import patch
 
-        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+        from synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
 
         v, t = _spiking_trace(n_spikes=3, isi_s=0.1, duration=0.5)
         with patch(
-            "Synaptipy.core.analysis.firing_dynamics.linregress",
+            "synaptipy.core.analysis.firing_dynamics.linregress",
             side_effect=ValueError("regression fail"),
         ):
             result = calculate_fi_curve(
@@ -925,7 +925,7 @@ class TestFiringDynamicsGaps:
         """Line 95: isis[0] <= 1e-6 appends np.nan for adaptation ratio."""
         from unittest.mock import MagicMock
 
-        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+        from synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
 
         # Mock spike detection to return 3 spikes with a near-zero first ISI
         fake_result = MagicMock()
@@ -937,7 +937,7 @@ class TestFiringDynamicsGaps:
         fake_result.spike_indices = np.array([0, 1, 2])
 
         with patch(
-            "Synaptipy.core.analysis.firing_dynamics.detect_spikes_threshold",
+            "synaptipy.core.analysis.firing_dynamics.detect_spikes_threshold",
             return_value=fake_result,
         ):
             fs = 20_000.0
@@ -953,7 +953,7 @@ class TestFiringDynamicsGaps:
 
     def test_fi_curve_linregress_exception(self):
         """Lines 147-148: linregress raises inside calculate_fi_curve."""
-        from Synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
+        from synaptipy.core.analysis.firing_dynamics import calculate_fi_curve
 
         # Build two sweeps with different spike counts so linregress is actually called.
         # Sweep A: fewer spikes, Sweep B: more spikes → rheobase at index 0,
@@ -961,7 +961,7 @@ class TestFiringDynamicsGaps:
         v_low, t = _spiking_trace_local(n_spikes=2, isi_s=0.15, duration=0.5)
         v_high, _ = _spiking_trace_local(n_spikes=8, isi_s=0.04, duration=0.5)
         with patch(
-            "Synaptipy.core.analysis.firing_dynamics.linregress",
+            "synaptipy.core.analysis.firing_dynamics.linregress",
             side_effect=ValueError("forced failure"),
         ):
             result = calculate_fi_curve(
@@ -977,13 +977,13 @@ class TestFiringDynamicsGaps:
         """Line 432: analyze_spikes_and_bursts returns early when spike_times is None."""
         from unittest.mock import MagicMock
 
-        from Synaptipy.core.analysis.firing_dynamics import analyze_spikes_and_bursts
+        from synaptipy.core.analysis.firing_dynamics import analyze_spikes_and_bursts
 
         fake = MagicMock()
         fake.is_valid = True
         fake.spike_times = None  # triggers line 432
         with patch(
-            "Synaptipy.core.analysis.firing_dynamics.detect_spikes_threshold",
+            "synaptipy.core.analysis.firing_dynamics.detect_spikes_threshold",
             return_value=fake,
         ):
             data = np.zeros(100)
@@ -1001,7 +1001,7 @@ class TestFiringDynamicsGaps:
 
     def test_train_dynamics_three_spikes_all_zero_isis(self):
         """Line 620: 3 spikes but all positive ISIs filtered out → len(isis)<2."""
-        from Synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
+        from synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
 
         # 3 spikes: first two at same time → isis = [0.0, 0.2]
         # after isis[isis>0] = [0.2] → len==1 < 2 → hits line 620
@@ -1012,11 +1012,11 @@ class TestFiringDynamicsGaps:
 
     def test_spike_broadening_index_three_or_more_widths(self):
         """Lines 765-766: broadening index computed when >= 3 valid widths."""
-        from Synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
+        from synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
 
         mock_features = [{"half_width": 0.001 * (i + 1)} for i in range(5)]
         with patch(
-            "Synaptipy.core.analysis.firing_dynamics.calculate_spike_features",
+            "synaptipy.core.analysis.firing_dynamics.calculate_spike_features",
             return_value=mock_features,
         ):
             v, t = _spiking_trace_local(n_spikes=5, isi_s=0.08, duration=0.6)
@@ -1115,7 +1115,7 @@ class TestDetectSpikesExceptionHandler:
         n = 200
         time = np.arange(n) / fs
         data = np.full(n, -65.0)
-        with patch("Synaptipy.core.analysis.single_spike.np.gradient", side_effect=ValueError("mock gradient")):
+        with patch("synaptipy.core.analysis.single_spike.np.gradient", side_effect=ValueError("mock gradient")):
             result = detect_spikes_threshold(data, time, threshold=-20.0, refractory_samples=40)
         assert not result.is_valid
 
@@ -1128,7 +1128,7 @@ class TestDetectSpikesExceptionHandler:
 class TestDetectThresholdKinkFallback:
     def test_very_high_dvdt_threshold_uses_fallback(self):
         """Line 670: dvdt_threshold so large no crossing found → fallback index."""
-        from Synaptipy.core.analysis.single_spike import detect_threshold_kink
+        from synaptipy.core.analysis.single_spike import detect_threshold_kink
 
         fs = 20_000.0
         n = 1000

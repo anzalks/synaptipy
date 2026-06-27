@@ -1,6 +1,6 @@
 import numpy as np
 
-from Synaptipy.core.processing_pipeline import (
+from synaptipy.core.processing_pipeline import (
     SignalProcessingPipeline,
     _apply_noise_floor_zeroing,
     _apply_pn_subtraction,

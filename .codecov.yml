@@ -3,7 +3,7 @@ codecov:
 
 # NOTE: do NOT add a fixes: section here.
 # Our coverage.xml uses relative paths (relative_files=true in pyproject.toml),
-# so Codecov resolves src/Synaptipy/__init__.py directly in the git tree without
+# so Codecov resolves src/synaptipy/__init__.py directly in the git tree without
 # any prefix stripping.  Adding fixes: with absolute runner paths causes Codecov
 # to switch to strict (non-fuzzy) path matching, which fails because the paths
 # in the XML are already relative and the fixes are no-ops — yet Codecov still

@@ -17,9 +17,9 @@ from PySide6 import QtCore, QtWidgets
 
 def test_explorer_layout_uses_splitter(qtbot):
     """The main layout of ExplorerTab must contain a QSplitter with 3 children."""
-    from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-    from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-    from Synaptipy.infrastructure.file_readers import NeoAdapter
+    from synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
+    from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+    from synaptipy.infrastructure.file_readers import NeoAdapter
 
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
@@ -44,9 +44,9 @@ def test_explorer_layout_uses_splitter(qtbot):
 
 def test_explorer_splitter_sizes(qtbot):
     """Splitter must have 3 panels; centre must be wider than either side panel."""
-    from Synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
-    from Synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
-    from Synaptipy.infrastructure.file_readers import NeoAdapter
+    from synaptipy.application.gui.explorer.explorer_tab import ExplorerTab
+    from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+    from synaptipy.infrastructure.file_readers import NeoAdapter
 
     neo_adapter = MagicMock(spec=NeoAdapter)
     nwb_exporter = MagicMock(spec=NWBExporter)
@@ -78,8 +78,8 @@ def test_explorer_splitter_sizes(qtbot):
 
 def test_preferences_no_theme_preview_on_open(qapp, qtbot):
     """Opening PreferencesDialog must not call apply_theme."""
-    with patch("Synaptipy.application.gui.preferences_dialog.apply_theme") as mock_apply:
-        from Synaptipy.application.gui.preferences_dialog import PreferencesDialog
+    with patch("synaptipy.application.gui.preferences_dialog.apply_theme") as mock_apply:
+        from synaptipy.application.gui.preferences_dialog import PreferencesDialog
 
         dlg = PreferencesDialog()
         qtbot.addWidget(dlg)
@@ -89,8 +89,8 @@ def test_preferences_no_theme_preview_on_open(qapp, qtbot):
 
 def test_preferences_theme_radios_initialized_correctly(qapp, qtbot):
     """After opening, exactly one theme radio is checked and signals work."""
-    from Synaptipy.application.gui.preferences_dialog import PreferencesDialog
-    from Synaptipy.shared.theme_manager import ThemeMode, get_theme_mode
+    from synaptipy.application.gui.preferences_dialog import PreferencesDialog
+    from synaptipy.shared.theme_manager import ThemeMode, get_theme_mode
 
     dlg = PreferencesDialog()
     qtbot.addWidget(dlg)
@@ -137,8 +137,8 @@ class _FakeStyle:
 
 def test_apply_theme_dark_uses_fusion(qapp):
     """apply_theme(DARK) must call app.setStyle('Fusion')."""
-    from Synaptipy.shared import theme_manager
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared import theme_manager
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     # Reset module-level cached style name so the test is isolated.
     theme_manager._initial_style_name = None
@@ -155,8 +155,8 @@ def test_apply_theme_dark_uses_fusion(qapp):
 
 def test_apply_theme_light_uses_fusion(qapp):
     """apply_theme(LIGHT) must call app.setStyle('Fusion')."""
-    from Synaptipy.shared import theme_manager
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared import theme_manager
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     theme_manager._initial_style_name = None
 
@@ -172,8 +172,8 @@ def test_apply_theme_light_uses_fusion(qapp):
 
 def test_apply_theme_system_restores_native(qapp):
     """apply_theme(SYSTEM) must restore the saved native style name."""
-    from Synaptipy.shared import theme_manager
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared import theme_manager
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     # Pre-seed a known native style name.
     theme_manager._initial_style_name = "macintosh"
@@ -190,8 +190,8 @@ def test_apply_theme_system_restores_native(qapp):
 
 def test_initial_style_name_captured_on_first_call(qapp):
     """_initial_style_name must be captured from app on the first apply_theme call."""
-    from Synaptipy.shared import theme_manager
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared import theme_manager
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     theme_manager._initial_style_name = None  # reset
 
@@ -205,8 +205,8 @@ def test_initial_style_name_captured_on_first_call(qapp):
 
 def test_apply_theme_system_clears_stylesheet(qapp):
     """apply_theme(SYSTEM) must call setStyleSheet('') to remove any custom CSS."""
-    from Synaptipy.shared import theme_manager
-    from Synaptipy.shared.theme_manager import ThemeMode, apply_theme
+    from synaptipy.shared import theme_manager
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
     theme_manager._initial_style_name = "fusion"
 

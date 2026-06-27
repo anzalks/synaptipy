@@ -30,7 +30,7 @@ from typing import Any, Dict
 
 import numpy as np
 
-from Synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 

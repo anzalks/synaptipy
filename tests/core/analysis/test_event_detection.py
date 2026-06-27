@@ -1,7 +1,7 @@
 import numpy as np
 
-from Synaptipy.core.analysis.synaptic_events import detect_events_template, detect_events_threshold
-from Synaptipy.core.signal_processor import find_artifact_windows
+from synaptipy.core.analysis.synaptic_events import detect_events_template, detect_events_threshold
+from synaptipy.core.signal_processor import find_artifact_windows
 
 
 class TestEventDetectionThreshold:

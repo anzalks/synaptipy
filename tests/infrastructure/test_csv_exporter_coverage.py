@@ -25,7 +25,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from Synaptipy.infrastructure.exporters.csv_exporter import (
+from synaptipy.infrastructure.exporters.csv_exporter import (
     CSVExporter,
     _build_tidy_row,
     _get_dependency_versions,
@@ -127,7 +127,7 @@ class TestGetDependencyVersions:
             return original_version(pkg)
 
         with patch("importlib.metadata.version", side_effect=patched):
-            from Synaptipy.infrastructure.exporters import csv_exporter as csv_mod
+            from synaptipy.infrastructure.exporters import csv_exporter as csv_mod
 
             saved = csv_mod._DEP_PACKAGES
             csv_mod._DEP_PACKAGES = ("nonexistent-pkg-xyz",)
@@ -248,7 +248,7 @@ def _make_recording_with_channels(
     n_samples: int = 1000,
     source_file: Path = Path("/fake/test.abf"),
 ):
-    from Synaptipy.core.data_model import Channel, Recording
+    from synaptipy.core.data_model import Channel, Recording
 
     rec = Recording(source_file=source_file)
     rec.sampling_rate = 10_000.0
@@ -280,7 +280,7 @@ class TestCSVExporterExportRecording:
         assert ok == 1
 
     def test_skips_channel_with_no_trials(self, tmp_path):
-        from Synaptipy.core.data_model import Channel, Recording
+        from synaptipy.core.data_model import Channel, Recording
 
         rec = Recording(source_file=Path("/fake/empty.abf"))
         ch = Channel(id="0", name="Ch0", units="mV", sampling_rate=10_000.0, data_trials=[])
@@ -292,7 +292,7 @@ class TestCSVExporterExportRecording:
 
     def test_error_on_shape_mismatch(self, tmp_path):
         """Lines 490-492: time/data mismatch → error_count incremented."""
-        from Synaptipy.core.data_model import Channel, Recording
+        from synaptipy.core.data_model import Channel, Recording
 
         rec = Recording(source_file=Path("/fake/mismatch.abf"))
         trials = [np.zeros(100)]
@@ -554,7 +554,7 @@ class TestWriteProvenanceException:
 class TestPrismGetGroup:
     def test_returns_unknown_when_no_key_matches(self):
         """Line 201: _prism_get_group returns 'Unknown' when no fallback key is found."""
-        from Synaptipy.infrastructure.exporters.csv_exporter import _prism_get_group
+        from synaptipy.infrastructure.exporters.csv_exporter import _prism_get_group
 
         row = {"other_key": "value"}
         result = _prism_get_group(row, ["missing_key1", "missing_key2"])
@@ -562,7 +562,7 @@ class TestPrismGetGroup:
 
     def test_returns_first_non_none(self):
         """Returns the first fallback key that has a non-None value."""
-        from Synaptipy.infrastructure.exporters.csv_exporter import _prism_get_group
+        from synaptipy.infrastructure.exporters.csv_exporter import _prism_get_group
 
         row = {"k1": None, "k2": "group_A"}
         result = _prism_get_group(row, ["k1", "k2"])

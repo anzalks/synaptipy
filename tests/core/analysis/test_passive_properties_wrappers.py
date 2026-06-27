@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 import numpy as np
 
-import Synaptipy.core.analysis  # noqa: F401 – populate registry
-from Synaptipy.core.analysis.passive_properties import (
+import synaptipy.core.analysis  # noqa: F401 – populate registry
+from synaptipy.core.analysis.passive_properties import (
     _coerce_trial_lists,
     _resolve_sweep_baseline,
     calculate_capacitance_vc,
@@ -554,7 +554,7 @@ class TestCalculateRmpErrorPaths:
     def test_polyfit_raises(self):
         """Lines 137-138: np.polyfit raises → slope = None."""
         v, t = _resting(v_rest=-65.0)
-        with patch("Synaptipy.core.analysis.passive_properties.np.polyfit", side_effect=ValueError("polyfit fail")):
+        with patch("synaptipy.core.analysis.passive_properties.np.polyfit", side_effect=ValueError("polyfit fail")):
             result = calculate_rmp(v, t, baseline_window=(0.0, 0.5))
         assert result.is_valid
         assert result.drift is None
@@ -563,7 +563,7 @@ class TestCalculateRmpErrorPaths:
         """Lines 148-150: IndexError in outer except."""
         v = np.array([-65.0] * 100)
         t = np.linspace(0, 0.01, 100)
-        with patch("Synaptipy.core.analysis.passive_properties.np.mean", side_effect=IndexError("bad idx")):
+        with patch("synaptipy.core.analysis.passive_properties.np.mean", side_effect=IndexError("bad idx")):
             result = calculate_rmp(v, t, baseline_window=(0.0, 0.005))
         assert not result.is_valid
 
@@ -571,7 +571,7 @@ class TestCalculateRmpErrorPaths:
         """Lines 151-153: ValueError in outer except."""
         v = np.array([-65.0] * 100)
         t = np.linspace(0, 0.01, 100)
-        with patch("Synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("bad val")):
+        with patch("synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("bad val")):
             result = calculate_rmp(v, t, baseline_window=(0.0, 0.005))
         assert not result.is_valid
 
@@ -595,7 +595,7 @@ class TestCalculateRinErrorPaths:
     def test_exception_returns_invalid(self):
         """Lines 330-332: caught exception."""
         v, t = _resting()
-        with patch("Synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("rin fail")):
+        with patch("synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("rin fail")):
             result = calculate_rin(
                 v,
                 t,
@@ -613,7 +613,7 @@ class TestCalculateTauErrorPaths:
         """Lines 803-804: polyfit in log regression raises → fallback tau used."""
         v, t = _step_response()
         with patch(
-            "Synaptipy.core.analysis.passive_properties.np.polyfit", side_effect=np.linalg.LinAlgError("svd fail")
+            "synaptipy.core.analysis.passive_properties.np.polyfit", side_effect=np.linalg.LinAlgError("svd fail")
         ):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.2, model="mono")
         # Should still attempt curve_fit with fallback tau
@@ -629,7 +629,7 @@ class TestCalculateTauErrorPaths:
             # Allow polyfit to succeed but make curve_fit raise
             raise RuntimeError("mono fail")
 
-        with patch("Synaptipy.core.analysis.passive_properties.curve_fit", side_effect=selective_raise):
+        with patch("synaptipy.core.analysis.passive_properties.curve_fit", side_effect=selective_raise):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.2, model="mono")
         assert result is not None
         assert "tau_ms" in result
@@ -646,7 +646,7 @@ class TestCalculateTauErrorPaths:
     def test_bi_exp_runtime_error(self):
         """Lines 841-844: RuntimeError in bi-exp curve_fit."""
         v, t = _step_response()
-        with patch("Synaptipy.core.analysis.passive_properties.curve_fit", side_effect=RuntimeError("bi fail")):
+        with patch("synaptipy.core.analysis.passive_properties.curve_fit", side_effect=RuntimeError("bi fail")):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.3, model="bi")
         # Should return a dict with NaN values
         assert result is not None
@@ -655,7 +655,7 @@ class TestCalculateTauErrorPaths:
     def test_outer_runtime_error(self):
         """Lines 880-882: outer RuntimeError → return None."""
         v, t = _step_response()
-        with patch("Synaptipy.core.analysis.passive_properties.curve_fit", side_effect=RuntimeError("fail")):
+        with patch("synaptipy.core.analysis.passive_properties.curve_fit", side_effect=RuntimeError("fail")):
             result = calculate_tau(v, t, stim_start_time=0.1, fit_duration=0.3, model="mono")
         assert result is not None  # inner except catches and returns nan dict
 
@@ -694,7 +694,7 @@ class TestCalculateVcTransientParams:
         n = int(0.1 * FS)
         t = np.linspace(0.0, 0.1, n, endpoint=False)
         current = np.zeros(n)
-        with patch("Synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("transient fail")):
+        with patch("synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("transient fail")):
             result = calculate_vc_transient_parameters(
                 current_trace=current,
                 time_vector=t,
@@ -761,7 +761,7 @@ class TestCalculateCapacitanceVc:
         n = int(0.1 * FS)
         t = np.linspace(0.0, 0.1, n, endpoint=False)
         current = np.zeros(n)
-        with patch("Synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("vc fail")):
+        with patch("synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("vc fail")):
             result = calculate_capacitance_vc(
                 current_trace=current,
                 time_vector=t,
@@ -778,7 +778,7 @@ class TestCalculateConductanceErrorPath:
     def test_exception_returns_invalid(self):
         """Lines 646-648: caught exception → RinResult with is_valid=False."""
         v, t = _resting()
-        with patch("Synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("conductance fail")):
+        with patch("synaptipy.core.analysis.passive_properties.np.mean", side_effect=ValueError("conductance fail")):
             result = calculate_conductance(
                 current_trace=v,
                 time_vector=t,

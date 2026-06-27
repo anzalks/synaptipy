@@ -89,7 +89,7 @@ jobs:
         run: python scripts/build_icons.py
 
       # Build the Sphinx qthelp output and compile .qch/.qhc artefacts so
-      # they land in src/Synaptipy/resources/docs/ before PyInstaller runs.
+      # they land in src/synaptipy/resources/docs/ before PyInstaller runs.
       # On macOS/Windows the qhelpgenerator binary is shipped inside the
       # pyside6 wheel (already installed above); on Linux we install the
       # system qt6-tools-dev-tools package (see step above).
@@ -196,7 +196,7 @@ jobs:
 
           # 3. Copy the desktop file and icon to the root of AppDir
           cp installer/linux/synaptipy.desktop AppDir/
-          cp src/Synaptipy/resources/icons/logo.png AppDir/synaptipy.png
+          cp src/synaptipy/resources/icons/logo.png AppDir/synaptipy.png
 
           # 4. Create the standard AppRun symlink pointing to our binary
           cd AppDir

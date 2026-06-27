@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PySide6 import QtCore, QtWidgets
 
-from Synaptipy.application.gui.exporter_tab import ExporterTab
+from synaptipy.application.gui.exporter_tab import ExporterTab
 
 
 @pytest.fixture

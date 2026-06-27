@@ -3,9 +3,9 @@ from unittest.mock import MagicMock, patch  # noqa: F401
 import pytest
 from PySide6 import QtCore, QtWidgets  # noqa: F401
 
-from Synaptipy.application.gui.analyser_tab import AnalyserTab
-from Synaptipy.application.session_manager import SessionManager
-from Synaptipy.infrastructure.file_readers import NeoAdapter
+from synaptipy.application.gui.analyser_tab import AnalyserTab
+from synaptipy.application.session_manager import SessionManager
+from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 @pytest.fixture(scope="session")

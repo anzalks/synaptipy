@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from Synaptipy.shared.plot_customization import (
+from synaptipy.shared.plot_customization import (
     PlotCustomizationManager,
     get_average_pen,
     get_grid_pen,
@@ -97,11 +97,11 @@ class TestPlotCustomizationManager:
 class TestPlotCustomizationFunctions:
     """Test the convenience functions."""
 
-    @patch("Synaptipy.shared.plot_customization._plot_customization_manager")
+    @patch("synaptipy.shared.plot_customization._plot_customization_manager")
     def test_get_plot_customization_manager(self, mock_manager):
         """Test getting the global manager instance."""
         # Reset the global instance
-        import Synaptipy.shared.plot_customization as pc
+        import synaptipy.shared.plot_customization as pc
 
         pc._plot_customization_manager = None
 
@@ -109,7 +109,7 @@ class TestPlotCustomizationFunctions:
         manager = get_plot_customization_manager()
         assert manager is not None
 
-    @patch("Synaptipy.shared.plot_customization.get_plot_customization_manager")
+    @patch("synaptipy.shared.plot_customization.get_plot_customization_manager")
     def test_get_average_pen(self, mock_get_manager):
         """Test getting average pen."""
         mock_manager = MagicMock()
@@ -121,7 +121,7 @@ class TestPlotCustomizationFunctions:
         assert pen == mock_pen
         mock_manager.get_average_pen.assert_called_once()
 
-    @patch("Synaptipy.shared.plot_customization.get_plot_customization_manager")
+    @patch("synaptipy.shared.plot_customization.get_plot_customization_manager")
     def test_get_single_trial_pen(self, mock_get_manager):
         """Test getting single trial pen."""
         mock_manager = MagicMock()
@@ -133,7 +133,7 @@ class TestPlotCustomizationFunctions:
         assert pen == mock_pen
         mock_manager.get_single_trial_pen.assert_called_once()
 
-    @patch("Synaptipy.shared.plot_customization.get_plot_customization_manager")
+    @patch("synaptipy.shared.plot_customization.get_plot_customization_manager")
     def test_get_grid_pen(self, mock_get_manager):
         """Test getting grid pen."""
         mock_manager = MagicMock()
@@ -145,7 +145,7 @@ class TestPlotCustomizationFunctions:
         assert pen == mock_pen
         mock_manager.get_grid_pen.assert_called_once()
 
-    @patch("Synaptipy.shared.plot_customization.get_plot_customization_manager")
+    @patch("synaptipy.shared.plot_customization.get_plot_customization_manager")
     def test_update_plot_preference(self, mock_get_manager):
         """Test updating plot preference."""
         mock_manager = MagicMock()
@@ -154,7 +154,7 @@ class TestPlotCustomizationFunctions:
         update_plot_preference("average", "color", "red")
         mock_manager.update_preference.assert_called_once_with("average", "color", "red")
 
-    @patch("Synaptipy.shared.plot_customization.get_plot_customization_manager")
+    @patch("synaptipy.shared.plot_customization.get_plot_customization_manager")
     def test_save_plot_preferences(self, mock_get_manager):
         """Test saving plot preferences."""
         mock_manager = MagicMock()

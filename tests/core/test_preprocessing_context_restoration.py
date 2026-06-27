@@ -15,8 +15,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.data_model import Channel, Recording
 
 
 class TestPreprocessingContextRestoration:
@@ -29,7 +29,7 @@ class TestPreprocessingContextRestoration:
         # the original context is returned so subsequent tasks are not contaminated
 
         # Setup: Create a mock preprocessing function that fails
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         def failing_preprocessing(data, time, sampling_rate, **kwargs):
             raise ValueError("Intentional preprocessing failure")
@@ -202,7 +202,7 @@ class TestErrorPropagation:
 
     def test_preprocessing_error_includes_traceback(self):
         """Preprocessing errors should include debug traceback."""
-        from Synaptipy.core.analysis.registry import AnalysisRegistry
+        from synaptipy.core.analysis.registry import AnalysisRegistry
 
         def error_preprocessing(data, time, sampling_rate, **kwargs):
             # Raise specific error for testing

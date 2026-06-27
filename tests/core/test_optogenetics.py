@@ -9,7 +9,7 @@ Events (Template)).
 import numpy as np
 import pytest
 
-from Synaptipy.core.analysis.evoked_responses import (
+from synaptipy.core.analysis.evoked_responses import (
     extract_ttl_epochs,
     run_opto_sync_wrapper,
 )
@@ -224,7 +224,7 @@ class TestOptoSyncFailureHandling:
 
     def test_zero_percent_failure_rate(self):
         """100 % success: all stimuli evoke a spike - Failure Count must be 0."""
-        from Synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
+        from synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
 
         sr = 10_000.0
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.1, 0.4, 0.7], pulse_duration=0.02)
@@ -243,7 +243,7 @@ class TestOptoSyncFailureHandling:
 
     def test_hundred_percent_failure_rate(self):
         """0 % success: no spike detected after any stimulus."""
-        from Synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
+        from synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
 
         sr = 10_000.0
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.1, 0.4, 0.7], pulse_duration=0.02)
@@ -262,7 +262,7 @@ class TestOptoSyncFailureHandling:
 
     def test_partial_failure_rate(self):
         """50% success: latency/jitter only computed over successful trials."""
-        from Synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
+        from synaptipy.core.analysis.evoked_responses import calculate_optogenetic_sync
 
         sr = 10_000.0
         t, ttl = _make_ttl(sr, 1.0, onsets=[0.1, 0.5], pulse_duration=0.02)

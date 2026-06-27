@@ -17,10 +17,10 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-import Synaptipy.core.analysis  # noqa: F401 – populate the AnalysisRegistry
-from Synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
-from Synaptipy.core.analysis.registry import AnalysisRegistry
-from Synaptipy.core.data_model import Channel, Recording
+import synaptipy.core.analysis  # noqa: F401 – populate the AnalysisRegistry
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
 # Helpers

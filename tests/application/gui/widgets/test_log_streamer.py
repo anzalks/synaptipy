@@ -5,7 +5,7 @@ import logging
 from PySide6 import QtWidgets
 from PySide6.QtCore import QCoreApplication, QEventLoop
 
-from Synaptipy.application.gui.widgets.log_streamer import AnalysisStatusWindow, QtLoggingHandler
+from synaptipy.application.gui.widgets.log_streamer import AnalysisStatusWindow, QtLoggingHandler
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,7 +75,7 @@ def test_window_receives_log_via_handler(qapp):
             "msg": "hello_world",
             "levelno": logging.INFO,
             "levelname": "INFO",
-            "name": "Synaptipy.test",
+            "name": "synaptipy.test",
         }
     )
     handler.emit(record)
@@ -98,7 +98,7 @@ def test_pause_suppresses_output(qapp):
             "msg": "should_not_appear",
             "levelno": logging.INFO,
             "levelname": "INFO",
-            "name": "Synaptipy.test",
+            "name": "synaptipy.test",
         }
     )
     handler.emit(record)

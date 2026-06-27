@@ -2,7 +2,7 @@
 
 This page provides formal mathematical definitions for all metrics computed by
 Synaptipy's analysis modules. Every formula below corresponds directly to the
-implementation in `src/Synaptipy/core/analysis/`. Parameter names in the
+implementation in `src/synaptipy/core/analysis/`. Parameter names in the
 equations match the variable names in the source code.
 
 ---

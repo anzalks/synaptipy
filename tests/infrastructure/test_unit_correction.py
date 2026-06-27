@@ -2,7 +2,7 @@ import neo
 import pytest
 import quantities as pq
 
-from Synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter, UnitError
+from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter, UnitError
 
 
 class TestUnitCorrection:
