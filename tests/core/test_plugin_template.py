@@ -65,7 +65,7 @@ def plugin_dir(tmp_path):
     Copy the plugin template to a temporary directory and return the path.
     Cleans up the module from sys.modules after the test.
     """
-    template_src = Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"
+    template_src = Path(__file__).resolve().parents[2] / "src" / "synaptipy" / "templates" / "plugin_template.py"
     assert template_src.exists(), f"Plugin template not found at {template_src}"
 
     dest = tmp_path / "plugins"
@@ -92,7 +92,7 @@ class TestPluginTemplateLogic:
         """The plugin template module can be imported directly."""
         spec = importlib.util.spec_from_file_location(
             "plugin_template",
-            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -105,7 +105,7 @@ class TestPluginTemplateLogic:
         # Import the logic function
         spec = importlib.util.spec_from_file_location(
             "plugin_template_logic",
-            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -126,7 +126,7 @@ class TestPluginTemplateLogic:
         """Logic function returns error dict for empty data."""
         spec = importlib.util.spec_from_file_location(
             "plugin_template_empty",
-            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -142,7 +142,7 @@ class TestPluginTemplateLogic:
         """Logic function computes mean correctly for a simple array."""
         spec = importlib.util.spec_from_file_location(
             "plugin_template_mean",
-            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -159,7 +159,7 @@ class TestPluginTemplateLogic:
         data, time, fs = synthetic_trace
         spec = importlib.util.spec_from_file_location(
             "plugin_template_keys",
-            str(Path(__file__).resolve().parents[2] / "src" / "Synaptipy" / "templates" / "plugin_template.py"),
+            str(Path(__file__).resolve().parents[2] / "src" / "synaptipy" / "templates" / "plugin_template.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
