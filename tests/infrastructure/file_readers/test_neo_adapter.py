@@ -6,7 +6,7 @@ import pytest
 # Assuming neo_adapter_instance fixture is in conftest.py
 # Assuming sample_abf_path fixture is in conftest.py providing a valid Path object
 from synaptipy.core.data_model import Channel, Recording
-from synaptipy.shared.error_handling import UnsupportedFormatError, SynaptipyFileNotFoundError
+from synaptipy.shared.error_handling import SynaptipyFileNotFoundError, UnsupportedFormatError
 
 # --- Test _get_neo_io_class ---
 

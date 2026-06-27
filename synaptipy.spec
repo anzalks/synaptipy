@@ -32,19 +32,19 @@ hiddenimports += collect_submodules("hdmf")
 hiddenimports += collect_submodules("dask")
 
 # Include our local resources (icons, stylesheets, and compiled Qt Help docs)
-datas = [("src/Synaptipy/resources", "Synaptipy/resources")]
+datas = [("src/synaptipy/resources", "synaptipy/resources")]
 # Example plugins shipped in-repo -- consumed via EXAMPLES_PLUGIN_DIR in frozen builds
-datas += [("examples/plugins", "Synaptipy/examples/plugins")]
+datas += [("examples/plugins", "synaptipy/examples/plugins")]
 datas += collect_data_files("pynwb")
 datas += collect_data_files("hdmf")
 datas += collect_data_files("neo")
 
 # Determine appropriate icon based on OS
 icon_ext = ".icns" if sys.platform == "darwin" else ".ico"
-icon_path = os.path.join("src", "Synaptipy", "resources", "icons", f"logo{icon_ext}")
+icon_path = os.path.join("src", "synaptipy", "resources", "icons", f"logo{icon_ext}")
 
 a = Analysis(
-    ["src/Synaptipy/application/__main__.py"],
+    ["src/synaptipy/application/__main__.py"],
     pathex=["src"],
     binaries=[],
     datas=datas,

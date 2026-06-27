@@ -7,9 +7,9 @@ from PIL import Image
 
 def main():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logo_path = os.path.join(base_dir, "src", "Synaptipy", "resources", "icons", "logo.png")
-    ico_path = os.path.join(base_dir, "src", "Synaptipy", "resources", "icons", "logo.ico")
-    icns_path = os.path.join(base_dir, "src", "Synaptipy", "resources", "icons", "logo.icns")
+    logo_path = os.path.join(base_dir, "src", "synaptipy", "resources", "icons", "logo.png")
+    ico_path = os.path.join(base_dir, "src", "synaptipy", "resources", "icons", "logo.ico")
+    icns_path = os.path.join(base_dir, "src", "synaptipy", "resources", "icons", "logo.icns")
 
     if not os.path.exists(logo_path):
         print(f"Logo not found at {logo_path}")

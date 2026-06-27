@@ -46,7 +46,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_SRC = REPO_ROOT / "docs"
 HTML_BUILD = REPO_ROOT / "docs" / "_build" / "html"
 QTHELP_BUILD = REPO_ROOT / "docs" / "_build" / "qthelp"
-DEST_DIR = REPO_ROOT / "src" / "Synaptipy" / "resources" / "docs"
+DEST_DIR = REPO_ROOT / "src" / "synaptipy" / "resources" / "docs"
 HTML_DEST_DIR = DEST_DIR / "html"
 
 # The sphinx qthelp builder derives these filenames from `qthelp_basename`

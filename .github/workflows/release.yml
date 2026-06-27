@@ -218,7 +218,7 @@ jobs:
             echo "Attempt $i: Installing synaptipy==$APP_VERSION..."
             if python -m pip install --pre --no-cache-dir "synaptipy==$APP_VERSION" -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/; then
               echo "Install successful!"
-              python -c "import synaptipy; print('Synaptipy', Synaptipy.__version__, 'import OK')"
+              python -c "import synaptipy; print('synaptipy', synaptipy.__version__, 'import OK')"
               exit 0
             fi
             echo "Version not found yet. Waiting $RETRY_DELAY seconds..."

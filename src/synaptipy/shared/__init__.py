@@ -37,7 +37,7 @@ from .error_handling import (
     UnsupportedFormatError,
 )
 from .logging_config import setup_logging
-from .plot_factory import configure_plot_safely, create_analysis_plot, create_explorer_plot, SynaptipyPlotFactory
+from .plot_factory import SynaptipyPlotFactory, configure_plot_safely, create_analysis_plot, create_explorer_plot
 from .styling import PLOT_COLORS as STYLING_PLOT_COLORS
 from .styling import (
     apply_stylesheet,

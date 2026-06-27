@@ -20,7 +20,7 @@ OutputDir=..
 
 [Files]
 Source: "..\dist\Synaptipy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\src\Synaptipy\resources\icons\logo.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\synaptipy\resources\icons\logo.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Synaptipy"; Filename: "{app}\Synaptipy.exe"; IconFilename: "{app}\logo.ico"
