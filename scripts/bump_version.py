@@ -83,7 +83,7 @@ def bump(old_version: str, new_version: str) -> None:
 
     # src/synaptipy/__init__.py
     _replace(
-        ROOT / "src" / "Synaptipy" / "__init__.py",
+        ROOT / "src" / "synaptipy" / "__init__.py",
         f'__version__ = "{old_version}"',
         f'__version__ = "{new_version}"',
     )
