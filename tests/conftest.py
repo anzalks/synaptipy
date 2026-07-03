@@ -1,6 +1,7 @@
 import gc
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -129,8 +130,21 @@ def reset_datacache():
 
 
 @pytest.fixture(autouse=True)
-def reset_session_manager():
-    """Ensure SessionManager singleton is reset between tests to prevent signal leaks."""
+def reset_session_manager(request):
+    """Reset SessionManager without importing Qt into non-GUI tests."""
+    qt_fixtures = {"qtbot", "qapp", "main_window"}
+    fixturenames = set(getattr(request, "fixturenames", ()))
+    test_path = Path(str(getattr(request.node, "path", ""))).as_posix()
+    is_gui_test = (
+        bool(fixturenames & qt_fixtures)
+        or "/gui/" in test_path
+        or test_path.startswith("tests/gui/")
+        or "synaptipy.application.session_manager" in sys.modules
+    )
+    if not is_gui_test:
+        yield
+        return
+
     try:
         from synaptipy.application.session_manager import SessionManager
 

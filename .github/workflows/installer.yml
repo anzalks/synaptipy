@@ -42,7 +42,7 @@ jobs:
             artifact_name: Synaptipy_Setup.exe
             artifact_path: Synaptipy_Setup_*.exe
           - os: macos-latest
-            artifact_name: Synaptipy.dmg
+            artifact_name: synaptipy.dmg
             artifact_path: dist/*.dmg
 
     steps:
@@ -127,7 +127,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          dist/Synaptipy.app/Contents/MacOS/Synaptipy --version > /tmp/smoke.txt 2>&1
+          dist/synaptipy.app/Contents/MacOS/Synaptipy --version > /tmp/smoke.txt 2>&1
           CODE=$?
           cat /tmp/smoke.txt
           if [ "$CODE" -ne 0 ]; then
@@ -144,7 +144,7 @@ jobs:
           # PowerShell's exit-code propagation is unpredictable for GUI apps.
           # Verify existence + minimum size (a broken PyInstaller bundle would
           # be tiny or absent) which gives equivalent packaging assurance.
-          $binaryPath = "dist\Synaptipy\Synaptipy.exe"
+          $binaryPath = "dist\Synaptipy\synaptipy.exe"
           if (-not (Test-Path $binaryPath)) {
             Write-Error "Binary not found: $binaryPath"
             exit 1
@@ -177,11 +177,11 @@ jobs:
             --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
-            --icon "Synaptipy.app" 200 190 \
-            --hide-extension "Synaptipy.app" \
+            --icon "synaptipy.app" 200 190 \
+            --hide-extension "synaptipy.app" \
             --app-drop-link 600 185 \
             "dist/Synaptipy_${VERSION}.dmg" \
-            "dist/Synaptipy.app"
+            "dist/synaptipy.app"
 
       - name: Package for Linux (AppImage)
         if: runner.os == 'Linux'

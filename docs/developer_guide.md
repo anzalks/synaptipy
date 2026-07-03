@@ -1,6 +1,6 @@
 # Synaptipy Developer Guide
 
-This guide is intended for developers who want to understand, modify, or contribute to Synaptipy.
+This guide is intended for developers who want to understand, modify, or contribute to synaptipy.
 
 ## Table of Contents
 
@@ -49,7 +49,7 @@ The Synaptipy codebase is organized as follows:
 ```
 src/synaptipy/                       # Main package
 ├── __init__.py                      # Package initialization
-├── __main__.py                      # Entry point for `python -m Synaptipy`
+├── __main__.py                      # Entry point for `python -m synaptipy`
 ├── application/                     # GUI application layer
 │   ├── __main__.py                  # GUI entry point (run_gui)
 │   ├── cli/                         # Command-line interface
@@ -345,7 +345,7 @@ to ``None`` or to streams without an OS file descriptor. The standard library's
 ``faulthandler.enable()`` calls ``sys.stderr.fileno()``; replacing ``None`` with
 ``io.StringIO`` avoids ``AttributeError`` but still raises ``io.UnsupportedOperation``
 on ``fileno()``. Entry points call ``ensure_stdio_streams_support_fileno()`` in
-``Synaptipy.shared.logging_config`` before Qt imports so both streams point at a
+``synaptipy.shared.logging_config`` before Qt imports so both streams point at a
 real discard sink (``os.devnull``) when needed.
 
 ### Analysis Registry import rule - DO NOT import only registry.py
@@ -380,7 +380,7 @@ Symptom: modules visible on disk (e.g. `capacitance.py`, `optogenetics.py`,
 `train_dynamics.py`) throw `ModuleNotFoundError` because Python resolves the
 package from the stale path. Verify with:
 ```bash
-pip show Synaptipy | grep "Editable project location"
+pip show synaptipy | grep "Editable project location"
 ```
 
 ### Why local macOS tests always exit non-zero

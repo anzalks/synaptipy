@@ -155,7 +155,7 @@ def run_my_custom_metric_wrapper(
         avg_color   = theme_config.get("average_color", (255, 255, 0))
 
     The dict contains the same keys as
-    :func:`~Synaptipy.shared.plot_customization.get_plot_customization_manager`
+    :func:`~synaptipy.shared.plot_customization.get_plot_customization_manager`
     properties (``single_trial_color``, ``average_color``, ``scatter_color``,
     ``line_width``, etc.).  If the key is absent, fall back to a sensible
     default so your plugin works even without custom styling.

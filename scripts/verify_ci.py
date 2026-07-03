@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Local CI Verification Script for Synaptipy.
+Local CI Verification Script for synaptipy.
 Runs the same checks as the GitHub Actions workflow to ensure cross-platform compatibility.
 """
 
@@ -247,7 +247,7 @@ def check_screenshots() -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Local CI verification for Synaptipy.")
+    parser = argparse.ArgumentParser(description="Local CI verification for synaptipy.")
     parser.add_argument(
         "--with-screenshots",
         action="store_true",

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Core Domain Layer for Synaptipy.
+Core Domain Layer for synaptipy.
 
 Contains the fundamental business logic and data models representing
 electrophysiology concepts, independent of UI or infrastructure details.

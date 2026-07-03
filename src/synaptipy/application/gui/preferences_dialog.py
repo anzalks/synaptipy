@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/preferences_dialog.py
 # -*- coding: utf-8 -*-
 """
-Preferences Dialog for Synaptipy.
+Preferences Dialog for synaptipy.
 
 Provides a unified preferences interface for scroll direction, theme,
 plugin, and performance settings.

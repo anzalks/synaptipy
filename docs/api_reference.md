@@ -324,5 +324,4 @@ exporter.export(recording, "/path/to/output.nwb", metadata)
 ## Licensing
 
 Synaptipy is released under the GNU Affero General Public License Version 3
-(AGPL-3.0). See the [LICENSE](https://github.com/anzalks/synaptipy/blob/main/LICENSE)
-file for full terms.
+(AGPL-3.0). See the repository `LICENSE` file for full terms.

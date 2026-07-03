@@ -344,14 +344,14 @@ jobs:
           name: Synaptipy_Setup.exe
           path: installer-artifacts/
 
-      - name: Download Synaptipy.dmg artifact
+      - name: Download synaptipy.dmg artifact
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
           run-id: ${{ steps.installer_run.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          name: Synaptipy.dmg
+          name: synaptipy.dmg
           path: installer-artifacts/
 
       - name: Determine pre-release flag

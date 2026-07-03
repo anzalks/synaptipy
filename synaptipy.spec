@@ -88,7 +88,7 @@ coll = COLLECT(
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="Synaptipy.app",
+        name="synaptipy.app",
         icon=icon_path if os.path.exists(icon_path) else None,
         bundle_identifier="com.anzalks.synaptipy",
         info_plist={

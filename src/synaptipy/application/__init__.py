@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Application Layer for Synaptipy.
+Application Layer for synaptipy.
 
 Contains the user interface (GUI, CLI) and logic that orchestrates
 user interactions with the core domain and infrastructure layers.

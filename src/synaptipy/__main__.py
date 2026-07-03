@@ -3,7 +3,7 @@
 Synaptipy - Multi-channel Electrophysiology Visualization and Analysis Toolkit
 
 This module serves as the entry point for the package when run as:
-    python -m Synaptipy
+    python -m synaptipy
 
 It parses command line arguments and launches the application with the appropriate settings.
 
@@ -68,7 +68,7 @@ def main():
     setup_logging(dev_mode=args.dev, log_dir=args.log_dir)
     logger = logging.getLogger(__name__)
 
-    logger.info("Starting Synaptipy...")
+    logger.info("Starting synaptipy...")
     logger.debug(f"Command line arguments: {args}")
 
     # Import GUI components here to avoid circular imports

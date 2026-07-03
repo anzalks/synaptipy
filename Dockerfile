@@ -15,8 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md requirements.txt ./
 COPY src/ src/
+COPY tests/ tests/
+COPY validation/ validation/
+COPY examples/ examples/
+COPY paper/ paper/
 RUN pip install --no-cache-dir ".[dev]"
 
 # Default to offscreen rendering for headless environments

@@ -1,7 +1,7 @@
 # src/synaptipy/shared/theme_manager.py
 # -*- coding: utf-8 -*-
 """
-Theme Manager Module for Synaptipy.
+Theme Manager Module for synaptipy.
 
 Manages application theme preferences with persistence via QSettings.
 Supports Light, Dark, and System theme modes.

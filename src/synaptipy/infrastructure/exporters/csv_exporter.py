@@ -1,7 +1,7 @@
 # src/synaptipy/infrastructure/exporters/csv_exporter.py
 # -*- coding: utf-8 -*-
 """
-CSV Exporter for Synaptipy.
+CSV Exporter for synaptipy.
 Handles exporting recording data and analysis results to CSV format.
 Automatically writes a companion provenance JSON alongside every results CSV.
 """

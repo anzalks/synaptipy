@@ -1626,9 +1626,9 @@ class ExplorerTab(QtWidgets.QWidget):
         """Average selected trial(s) across project-tree files and add to the Analysis Set.
 
         Reads the trial selection from the config panel (free-text range input).
-        Calls :func:`~Synaptipy.core.analysis.cross_file_utils.build_averaged_recording`
+        Calls :func:`~synaptipy.core.analysis.cross_file_utils.build_averaged_recording`
         to compute the grand average across all files selected in the Project Tree,
-        then stores the resulting synthetic :class:`~Synaptipy.core.data_model.Recording`
+        then stores the resulting synthetic :class:`~synaptipy.core.data_model.Recording`
         as a ``MultifileAverage`` item in the Analysis Set.
         """
         from synaptipy.core.analysis.cross_file_utils import (

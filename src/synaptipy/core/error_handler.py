@@ -1,7 +1,7 @@
 # src/synaptipy/core/error_handler.py
 # -*- coding: utf-8 -*-
 """
-Offline, privacy-respecting crash reporter for Synaptipy.
+Offline, privacy-respecting crash reporter for synaptipy.
 
 This module intercepts fatal unhandled Python exceptions **before** they
 silently terminate the process.  It assembles a GitHub-ready Markdown

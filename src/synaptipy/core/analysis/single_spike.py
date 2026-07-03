@@ -78,7 +78,7 @@ def detect_spikes_threshold(  # noqa: C901
         voltage peak.  Defaults to *refractory_samples* when ``None``.
     parameters : dict, optional
         Arbitrary parameter dict stored verbatim in the returned
-        :class:`~Synaptipy.core.results.SpikeTrainResult` for provenance.
+        :class:`~synaptipy.core.results.SpikeTrainResult` for provenance.
     dvdt_threshold : float, optional
         dV/dt threshold for onset detection (V s⁻¹, default 20.0).
         Converted internally to mV s⁻¹ by multiplication with 1000.

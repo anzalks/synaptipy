@@ -10,11 +10,13 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
+from pathlib import Path
+
 import matplotlib
 import numpy as np
 from matplotlib import pyplot as plt
 
-from synaptipy.analysis.resistance_analysis import calculate_input_resistance
+from synaptipy.core.analysis.passive_properties import calculate_rin
 from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
@@ -67,7 +69,7 @@ def _draw_l_scale_bar(ax, x0, y0, dx, dy, x_label, y_label, fontsize=7):
 def create_synthetic_data():
     """Create a synthetic voltage clamp recording for demonstration"""
     # Create a recording
-    recording = Recording(source_file=None)
+    recording = Recording(source_file=Path("synthetic_basic_usage.abf"))
     recording.sampling_rate = 10000.0  # 10 kHz
     recording.t_start = 0.0
     recording.duration = 1.0  # 1 second
@@ -81,9 +83,8 @@ def create_synthetic_data():
     voltage_data += np.random.normal(0, 0.2, size=voltage_data.shape)
 
     # Create a mock voltage channel
-    v_channel = Channel(
-        id="1", name="Vm", units="mV", sampling_rate=10000.0, data_trials=[voltage_data], trial_t_starts=[0.0]
-    )
+    v_channel = Channel(id="1", name="Vm", units="mV", sampling_rate=10000.0, data_trials=[voltage_data])
+    v_channel.t_start = 0.0
 
     # Create current channel with a step response
     current_data = np.zeros_like(time_vec)
@@ -93,13 +94,12 @@ def create_synthetic_data():
     current_data += np.random.normal(0, 1.0, size=current_data.shape)
 
     # Create a mock current channel
-    i_channel = Channel(
-        id="2", name="Im", units="pA", sampling_rate=10000.0, data_trials=[current_data], trial_t_starts=[0.0]
-    )
+    i_channel = Channel(id="2", name="Im", units="pA", sampling_rate=10000.0, data_trials=[current_data])
+    i_channel.t_start = 0.0
 
     # Add channels to recording
-    recording.add_channel(v_channel)
-    recording.add_channel(i_channel)
+    recording.channels[v_channel.id] = v_channel
+    recording.channels[i_channel.id] = i_channel
 
     return recording, time_vec
 
@@ -138,34 +138,40 @@ def main():
     print("\nAnalyzing input resistance...")
 
     # Get voltage and current channels
-    v_channel = recording.get_channel_by_name("Vm")
-    i_channel = recording.get_channel_by_name("Im")
+    v_channel = next(ch for ch in recording.channels.values() if ch.name == "Vm")
+    i_channel = next(ch for ch in recording.channels.values() if ch.name == "Im")
 
     # Define baseline and response windows
-    baseline_window = [0.0, 0.15]  # seconds
-    response_window = [0.3, 0.45]  # seconds
+    baseline_window = (0.0, 0.15)  # seconds
+    response_window = (0.3, 0.45)  # seconds
+
+    v_data = v_channel.data_trials[0]
+    i_data = i_channel.data_trials[0]
+    baseline_mask = (time_vec >= baseline_window[0]) & (time_vec < baseline_window[1])
+    response_mask = (time_vec >= response_window[0]) & (time_vec < response_window[1])
+    current_step_pa = float(np.mean(i_data[response_mask]) - np.mean(i_data[baseline_mask]))
 
     # Calculate input resistance
-    result = calculate_input_resistance(
-        v_channel=v_channel,
-        i_channel=i_channel,
+    result = calculate_rin(
+        voltage_trace=v_data,
+        time_vector=time_vec,
+        current_amplitude=current_step_pa,
         baseline_window=baseline_window,
         response_window=response_window,
-        trial_index=0,  # Use first trial
+        parameters={"example": "basic_usage", "trial_index": 0},
     )
+    if not result.is_valid:
+        raise RuntimeError(f"Input resistance analysis failed: {result.error_message}")
 
     # Print results
-    print(f"Input Resistance: {result['Rin (MΩ)']:.2f} MΩ")
-    print(f"Conductance: {result['Conductance (μS)']:.2f} μS")
-    print(f"ΔV: {result['ΔV (mV)']:.2f} mV")
-    print(f"ΔI: {result['ΔI (pA)']:.2f} pA")
+    print(f"Input Resistance: {result.value:.2f} MΩ")
+    print(f"Conductance: {result.conductance:.4f} μS")
+    print(f"ΔV: {result.voltage_deflection:.2f} mV")
+    print(f"ΔI: {result.current_injection:.2f} pA")
 
     # -----------------------------------------------------------------------
     # Publication-quality figure: voltage + current traces with L-scale bars
     # -----------------------------------------------------------------------
-    v_data = v_channel.data_trials[0]
-    i_data = i_channel.data_trials[0]
-
     fig, (ax_v, ax_i) = plt.subplots(
         2,
         1,
@@ -216,7 +222,7 @@ def main():
     ax_v.text(
         0.02,
         0.95,
-        f"Rin = {result['Rin (MΩ)']:.1f} MΩ",
+        f"Rin = {result.value:.1f} MΩ",
         transform=ax_v.transAxes,
         va="top",
         ha="left",

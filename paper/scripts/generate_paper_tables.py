@@ -12,17 +12,19 @@ Usage:
 """
 
 import argparse
+import json
 import logging
+import platform
+import subprocess
 import sys
 import warnings
+from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import neo
 import numpy as np
 import pandas as pd
-import quantities as pq
-from scipy.stats import pearsonr, t
+from scipy.stats import pearsonr
 
 # Fix for xarray/allensdk with NumPy 2.0+
 if not hasattr(np, "unicode_"):
@@ -40,6 +42,7 @@ from synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHan
 CACHE_DIR = REPO_ROOT / "paper" / "data" / "allen_cache"
 OUT_DIR = REPO_ROOT / "paper" / "analysis_results"
 PLOTS_DIR = REPO_ROOT / "paper" / "raw_nwb_plots"
+DEFAULT_MANIFEST = REPO_ROOT / "paper" / "data_manifest.json"
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -51,11 +54,9 @@ if not hasattr(np, "unicode_"):
 if not hasattr(np, "VisibleDeprecationWarning"):
     np.VisibleDeprecationWarning = DeprecationWarning
 
-from allensdk.api.queries.cell_types_api import CellTypesApi
-from allensdk.core.cell_types_cache import CellTypesCache
-
-# Global ctc instance so it can be used for sweep metadata
-ctc = CellTypesCache(manifest_file=str(CACHE_DIR / "manifest.json"))
+# Created lazily in main(). This lets --help and --check-only run without
+# installing the heavy paper-only AllenSDK/IPFX/eFEL stack.
+ctc = None
 
 TARGET_N = 10
 
@@ -65,6 +66,75 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+
+
+# -- Reproduction Metadata ----------------------------------------------------
+
+
+def load_data_manifest(path: Path) -> dict:
+    """Load and validate the paper dataset manifest."""
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    cells = manifest.get("cells", [])
+    if not cells:
+        raise ValueError(f"No cells listed in data manifest: {path}")
+    missing = [c for c in cells if "cell_id" not in c]
+    if missing:
+        raise ValueError(f"Every manifest cell entry must include cell_id: {path}")
+    return manifest
+
+
+def _git_commit() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _package_version(name: str) -> str:
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        return "not-installed"
+
+
+def write_run_provenance(manifest: dict, args: argparse.Namespace, downloaded_cells: list) -> None:
+    """Write a machine-readable provenance sidecar for regenerated paper tables."""
+    payload = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "git_commit": _git_commit(),
+        "python": sys.version,
+        "platform": platform.platform(),
+        "arguments": {
+            "manifest": str(args.manifest),
+            "force": bool(args.force),
+            "skip_plots": bool(args.skip_plots),
+            "no_paper_update": bool(args.no_paper_update),
+            "cache_dir": str(args.cache_dir),
+            "output_dir": str(args.output_dir),
+            "plots_dir": str(args.plots_dir),
+        },
+        "manifest": manifest,
+        "downloaded_cell_ids": [int(cell_id) for cell_id, *_ in downloaded_cells],
+        "versions": {
+            "synaptipy": _package_version("synaptipy"),
+            "numpy": np.__version__,
+            "pandas": pd.__version__,
+            "scipy": _package_version("scipy"),
+            "matplotlib": _package_version("matplotlib"),
+            "allensdk": _package_version("allensdk"),
+            "efel": _package_version("efel"),
+            "ipfx": _package_version("ipfx"),
+        },
+    }
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "paper_tables_provenance.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 # ── Stats Helpers ─────────────────────────────────────────────────────────────
@@ -127,6 +197,8 @@ def get_stimulus_name(ephys_data, sn):
 
 def get_valid_sweeps(ephys_data, cell_id):
     """Return sweep numbers whose stimulus type contains 'Square' or 'Ramp'."""
+    if ctc is None:
+        raise RuntimeError("Allen CellTypesCache is not initialised. Run through main(), not this helper directly.")
     out = []
     # Fetch sweep metadata
     sweeps_meta = ctc.get_ephys_sweeps(cell_id)
@@ -146,6 +218,8 @@ def get_valid_sweeps(ephys_data, cell_id):
 
 def plot_cell_summaries(downloaded_cells):
     log.info("Generating overlaid summary plots for each cell...")
+
+    import matplotlib.pyplot as plt
 
     from synaptipy.infrastructure.file_readers.neo_adapter import NeoAdapter
 
@@ -256,6 +330,9 @@ def plot_cell_summaries(downloaded_cells):
 class SynaptiPyRunner:
     @staticmethod
     def run_spikes(syn_rec, sweep_name: str) -> dict:
+        import neo
+        import quantities as pq
+
         # Provide pipeline directly to the loaded recording
         pipeline = [
             {
@@ -301,8 +378,6 @@ class SynaptiPyRunner:
         blk = neo.Block()
         seg = neo.Segment(name=sweep_name)
         blk.segments.append(seg)
-        import quantities as pq
-
         anasig = neo.AnalogSignal(v, units="mV", sampling_rate=sr * pq.Hz, name="Voltage")
         seg.analogsignals.append(anasig)
 
@@ -327,6 +402,9 @@ class SynaptiPyRunner:
 
     @staticmethod
     def run_passive(syn_rec, sweep_name: str, i: np.ndarray, t: np.ndarray) -> dict:
+        import neo
+        import quantities as pq
+
         ch_0 = syn_rec.channels.get("0")
         if not ch_0:
             return {}
@@ -361,8 +439,6 @@ class SynaptiPyRunner:
         blk = neo.Block()
         seg = neo.Segment(name=sweep_name)
         blk.segments.append(seg)
-        import quantities as pq
-
         anasig = neo.AnalogSignal(v, units="mV", sampling_rate=sr * pq.Hz, name="Voltage")
         seg.analogsignals.append(anasig)
 
@@ -916,7 +992,7 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
     md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
     md += "| Metric | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL |\n"
     md += "|--------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|\n"
-    
+
     def _fmt_r(vs):
         if np.isnan(vs.get("r", np.nan)):
             return "N/A"
@@ -937,7 +1013,7 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
         if s_col not in cmp_df.columns:
             continue
         s = cmp_df[s_col].values
-        
+
         if e_col and e_col in cmp_df.columns:
             e = cmp_df[e_col].values
             vs_e = corr_summary(e, s)
@@ -1043,47 +1119,94 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
     return md
 
 
-def main():
+def main(argv=None):
+    global CACHE_DIR, OUT_DIR, PLOTS_DIR, ctc
+
+    parser = argparse.ArgumentParser(description="Generate SynaptiPy paper benchmark tables.")
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST, help="Dataset manifest JSON.")
+    parser.add_argument("--force", action="store_true", help="Regenerate CSV tables even if cached outputs exist.")
+    parser.add_argument("--skip-plots", action="store_true", help="Skip raw per-cell verification plots.")
+    parser.add_argument(
+        "--no-paper-update", action="store_true", help="Do not rewrite the TABLES block in paper/paper.md."
+    )
+    parser.add_argument(
+        "--check-only", action="store_true", help="Validate manifest and paths without downloading data."
+    )
+    parser.add_argument("--cache-dir", type=Path, default=CACHE_DIR, help="Allen NWB cache directory.")
+    parser.add_argument("--output-dir", type=Path, default=OUT_DIR, help="Directory for generated CSV/JSON outputs.")
+    parser.add_argument("--plots-dir", type=Path, default=PLOTS_DIR, help="Directory for raw verification plots.")
+    args = parser.parse_args(argv)
+
+    CACHE_DIR = args.cache_dir
+    OUT_DIR = args.output_dir
+    PLOTS_DIR = args.plots_dir
+
+    manifest = load_data_manifest(args.manifest)
+    manifest_cells = manifest["cells"]
+    manifest_cell_targets = [(int(cell["cell_id"]), cell.get("structure", "unknown")) for cell in manifest_cells]
+
     print("=" * 60)
     print("SynaptiPy — generate_paper_tables.py (Unified Benchmark)")
-
-    # Hardcoded requested Allen cells
-    requested_cells = [480087928, 323865917, 476135066, 481127932, 502614426, 504615116]
-    print(f"Targeting {len(requested_cells)} Allen Institute cells")
+    print(f"Targeting {len(manifest_cell_targets)} Allen Institute cells")
+    print(f"Manifest: {args.manifest}")
     print("=" * 60)
 
-    log.info(f"Targeting {len(requested_cells)} hardcoded high-quality cells...")
+    if args.check_only:
+        missing_dirs = [p for p in [CACHE_DIR.parent, OUT_DIR.parent, PLOTS_DIR.parent] if not p.exists()]
+        if missing_dirs:
+            for path in missing_dirs:
+                log.warning("Parent directory does not exist yet: %s", path)
+        log.info("Manifest check passed for %d cells.", len(manifest_cell_targets))
+        return 0
+
+    from allensdk.core.cell_types_cache import CellTypesCache
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    ctc = CellTypesCache(manifest_file=str(CACHE_DIR / "manifest.json"))
+
+    log.info("Targeting %d manifest-listed high-quality cells...", len(manifest_cell_targets))
 
     downloaded_cells = []
-    for cell_id in requested_cells:
-        structure = "VISp"
+    for cell_id, structure in manifest_cell_targets:
         nwb_path = CACHE_DIR / f"cell_{cell_id}.nwb"
 
         try:
             if not nwb_path.exists():
-                log.info(f"[Download {len(downloaded_cells) + 1}/{len(requested_cells)}] Fetching Cell {cell_id} ...")
+                log.info(
+                    f"[Download {len(downloaded_cells) + 1}/{len(manifest_cell_targets)}] "
+                    f"Fetching Cell {cell_id} ..."
+                )
             ephys_data = ctc.get_ephys_data(cell_id, file_name=str(nwb_path))
             downloaded_cells.append((cell_id, structure, ephys_data, nwb_path))
         except Exception as exc:
             log.warning(f"  Failed to download Cell {cell_id}: {exc}")
 
     log.info("Phase 2: Analysis")
-    
+
     t1_csv = OUT_DIR / "benchmark_comparison.csv"
-    if not t1_csv.exists():
+    if args.force or not t1_csv.exists():
         t1_df = build_table1(downloaded_cells)
     else:
         t1_df = pd.read_csv(t1_csv)
     t1_md = make_table1_md(t1_df)
 
     t2_csv = OUT_DIR / "passive_properties.csv"
-    if not t2_csv.exists():
+    if args.force or not t2_csv.exists():
         t2_df = build_table2(downloaded_cells)
     else:
         t2_df = pd.read_csv(t2_csv)
     t2_md = make_table2_md(t2_df)
 
-    plot_cell_summaries(downloaded_cells)
+    if not args.skip_plots:
+        plot_cell_summaries(downloaded_cells)
+
+    write_run_provenance(manifest, args, downloaded_cells)
+
+    if args.no_paper_update:
+        log.info("Skipping paper.md table-block update (--no-paper-update).")
+        return 0
 
     log.info("Phase 3: Updating Paper")
     paper_path = REPO_ROOT / "paper" / "paper.md"
@@ -1097,10 +1220,11 @@ def main():
         log.error("Could not find <!-- TABLES_START --> or <!-- TABLES_END --> markers in paper.md")
         return
 
-    new_text = text[:idx1s + len(T1_START)] + "\n\n" + t1_md + "\n\n" + t2_md + "\n" + text[idx1e:]
+    new_text = text[: idx1s + len(T1_START)] + "\n\n" + t1_md + "\n\n" + t2_md + "\n" + text[idx1e:]
     paper_path.write_text(new_text, encoding="utf-8")
     log.info(f"Success! Updated paper at {paper_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

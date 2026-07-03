@@ -8,7 +8,7 @@ Washout).  :class:`EpochManager` either auto-detects these boundaries from a
 TTL/Digital-Input channel or lets the researcher define them manually.
 
 Once epochs are defined, per-epoch data slices can be extracted from any
-:class:`~Synaptipy.core.data_model.Channel` for downstream analysis
+:class:`~synaptipy.core.data_model.Channel` for downstream analysis
 (e.g. tracking plasticity changes across Stim vs. Baseline).
 """
 
@@ -160,7 +160,7 @@ class EpochManager:
     ) -> List[Epoch]:
         """Auto-generate epochs from a TTL / Digital-Input channel.
 
-        Detects TTL pulse boundaries using :func:`~Synaptipy.core.analysis.evoked_responses.extract_ttl_epochs`,
+        Detects TTL pulse boundaries using :func:`~synaptipy.core.analysis.evoked_responses.extract_ttl_epochs`,
         then creates:
 
         * A *Baseline* epoch from ``time[0]`` to ``first_onset - pre_stim_s``.
@@ -244,7 +244,7 @@ class EpochManager:
         """Extract (data, time) slices for every epoch from a channel trial.
 
         Args:
-            channel: A :class:`~Synaptipy.core.data_model.Channel` instance.
+            channel: A :class:`~synaptipy.core.data_model.Channel` instance.
             trial_index: Which trial to slice (default 0).
 
         Returns:

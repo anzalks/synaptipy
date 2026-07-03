@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 class SynaptipyPlotCanvas(QtCore.QObject):
     """
-    Base class for plot canvases in Synaptipy.
+    Base class for plot canvases in synaptipy.
     Wraps a GraphicsLayoutWidget and manages plot items.
     """
 

@@ -309,7 +309,7 @@ SpikeInterface, a unified framework for spike sorting. *eLife*, 9:e61834.
 ## How to Cite Synaptipy
 
 If you use Synaptipy in published research, please cite the software directly
-using the metadata in [`CITATION.cff`](https://github.com/anzalks/synaptipy/blob/main/CITATION.cff):
+using the metadata in the repository `CITATION.cff` file:
 
 ```
 Shahul, A. K. (2026). SynaptiPy: An Open-Source Electrophysiology

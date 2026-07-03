@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/help_window.py
 # -*- coding: utf-8 -*-
 """
-Offline Help viewer for Synaptipy.
+Offline Help viewer for synaptipy.
 
 Provides :class:`HelpWindow`, a standalone desktop window that displays the
 bundled documentation without requiring an internet connection.

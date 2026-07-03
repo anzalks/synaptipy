@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Graphical User Interface (GUI) subpackage for Synaptipy.
+Graphical User Interface (GUI) subpackage for synaptipy.
 
 Contains the main window definition and related UI components built with PySide6.
 """

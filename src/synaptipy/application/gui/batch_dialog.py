@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/batch_dialog.py
 # -*- coding: utf-8 -*-
 """
-Batch Analysis Dialog for Synaptipy.
+Batch Analysis Dialog for synaptipy.
 
 Provides a user-friendly dialog for configuring and running batch analysis
 across multiple files using a pipeline-based approach.

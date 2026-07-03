@@ -102,7 +102,7 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
       Browse the source code, open issues, or submit pull requests on GitHub.
 
    .. grid-item-card:: Changelog
-      :link: https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md
+      :link: https://github.com/anzalks/synaptipy/releases
       :link-type: url
 
       Release history and notable changes between versions.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Test runner script for Synaptipy.
+Test runner script for synaptipy.
 
 This script provides a convenient way to run tests with various options like
 coverage reporting and filtering by test name. It specifically targets the

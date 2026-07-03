@@ -100,6 +100,7 @@ docs = [
 
 [project.scripts]
 synaptipy = "synaptipy.application.__main__:run_gui"
+synaptipy-batch = "synaptipy.application.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

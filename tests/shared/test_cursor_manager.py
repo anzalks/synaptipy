@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Tests for CursorToolManager in Synaptipy.shared.cursor_manager.
+Tests for CursorToolManager in synaptipy.shared.cursor_manager.
 
 Covers:
 - set_cursor_enabled / set_delta_mode_enabled

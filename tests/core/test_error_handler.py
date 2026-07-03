@@ -1,7 +1,7 @@
 # tests/core/test_error_handler.py
 # -*- coding: utf-8 -*-
 """
-Comprehensive tests for Synaptipy.core.error_handler.
+Comprehensive tests for synaptipy.core.error_handler.
 
 Covers the previously-uncovered lines:
   78-79  : synaptipy_version fallback when __version__ import fails
@@ -73,7 +73,7 @@ class TestBuildCrashMarkdown:
         assert "| **OS**" in result
 
     def test_synaptipy_version_fallback_when_import_fails(self):
-        """Lines 78-79: if Synaptipy.__version__ cannot be imported, use 'unknown'."""
+        """Lines 78-79: if synaptipy.__version__ cannot be imported, use 'unknown'."""
         from synaptipy.core import error_handler as eh_module
 
         # Temporarily hide the Synaptipy package from sys.modules so the

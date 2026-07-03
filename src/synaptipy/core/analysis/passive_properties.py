@@ -312,7 +312,7 @@ def calculate_rin(  # noqa: C901
         ``(start, end)`` of the current-step response period (s).
     parameters : dict, optional
         Arbitrary parameter dict stored verbatim in the returned
-        :class:`~Synaptipy.core.results.RinResult` for provenance tracking.
+        :class:`~synaptipy.core.results.RinResult` for provenance tracking.
     rs_artifact_blanking_ms : float, optional
         Duration (ms) to skip at the onset of the response window, excluding
         the fast series-resistance voltage jump from all Rin estimates

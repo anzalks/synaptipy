@@ -1,5 +1,5 @@
 """
-Batch Analysis Engine for Synaptipy.
+Batch Analysis Engine for synaptipy.
 Handles processing multiple files and aggregating results using a flexible registry-based pipeline.
 
 The engine uses a registry-based architecture where analysis functions register
@@ -501,7 +501,7 @@ class BatchAnalysisEngine:
         file-level loop is distributed across worker processes via
         :class:`~concurrent.futures.ProcessPoolExecutor`.  The GUI thread is never
         blocked in either mode — callers should wrap this in a
-        :class:`~Synaptipy.application.gui.analysis_worker.BatchWorker` QThread.
+        :class:`~synaptipy.application.gui.analysis_worker.BatchWorker` QThread.
 
         Args:
             files: List of file paths OR Recording objects to process.

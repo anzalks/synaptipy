@@ -1,5 +1,5 @@
 """
-Signal processing utilities for Synaptipy.
+Signal processing utilities for synaptipy.
 Includes filtering and trace quality checks.
 """
 

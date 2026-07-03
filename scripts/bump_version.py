@@ -115,8 +115,8 @@ def bump(old_version: str, new_version: str) -> None:
     # docs/references.md
     _replace(
         ROOT / "docs" / "references.md",
-        f'Visualization and Analysis Suite (v{old_version}).',
-        f'Visualization and Analysis Suite (v{new_version}).',
+        f"Visualization and Analysis Suite (v{old_version}).",
+        f"Visualization and Analysis Suite (v{new_version}).",
     )
 
     # paper/envs/*.txt
@@ -125,8 +125,8 @@ def bump(old_version: str, new_version: str) -> None:
         for env_file in envs_dir.glob("*.txt"):
             _replace(
                 env_file,
-                f'# Synaptipy version: {old_version}',
-                f'# Synaptipy version: {new_version}',
+                f"# Synaptipy version: {old_version}",
+                f"# Synaptipy version: {new_version}",
             )
 
     # installer/windows_setup.iss

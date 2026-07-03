@@ -549,7 +549,7 @@ immediately.
 
 #### Tips
 
-- **No rebuild needed** - just save the `.py` file and restart Synaptipy.
+- **No rebuild needed** - just save the `.py` file and restart synaptipy.
 - **Errors are safe** - if your plugin has a syntax error or crashes, Synaptipy
   logs the error and keeps running (your tab simply won't appear).  Check the log
   at `~/.synaptipy/logs/` (Windows: `C:\Users\<YourUsername>\.synaptipy\logs\`).

@@ -2,14 +2,14 @@
 
 <!-- BADGES_START -->
 [![CI](https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg)](https://codecov.io/gh/anzalks/synaptipy)
+[![codecov](https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg)](https://app.codecov.io/gh/anzalks/synaptipy)
 [![PyPI](https://img.shields.io/pypi/v/synaptipy?color=blue&label=PyPI)](https://pypi.org/project/synaptipy/)
-[![PyPI Downloads](https://img.shields.io/pepy/dt/synaptipy?label=pypi%20downloads&color=blue)](https://pepy.tech/project/synaptipy)
+[![PyPI Downloads](https://img.shields.io/pepy/dt/synaptipy?label=pypi%20downloads&color=blue)](https://pepy.tech/projects/synaptipy)
 [![App Downloads](https://img.shields.io/github/downloads/anzalks/synaptipy/total?label=app%20downloads&color=orange)](https://github.com/anzalks/synaptipy/releases)
 [![Release](https://flat.badgen.net/github/tag/anzalks/synaptipy?color=orange&label=release)](https://github.com/anzalks/synaptipy/releases)
 [![Python](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
-[![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
+[![Documentation Status](https://app.readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/anzalks/synaptipy)
 <!-- BADGES_END -->
 
@@ -68,7 +68,7 @@ To launch the graphical user interface:
 synaptipy  # launch the application
 
 # or equivalently:
-python -m Synaptipy
+python -m synaptipy
 ```
 
 ![Synaptipy Interactive Workflow Demonstration](https://raw.githubusercontent.com/anzalks/synaptipy/main/docs/tutorial/workflow_demo.gif)
@@ -94,6 +94,19 @@ pipeline = [
 results = engine.run_batch([Path("recording.abf")], pipeline)
 print(results)
 ```
+
+The same batch engine is available from the command line for reproducible
+methods workflows:
+
+```bash
+synaptipy-batch run \
+  --pipeline pipeline.json \
+  --output results.csv \
+  recording.abf
+```
+
+The CLI writes `results.csv` plus a companion `results_provenance.json` file
+containing the software version, input files, and full pipeline configuration.
 
 ---
 

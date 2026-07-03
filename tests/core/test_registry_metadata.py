@@ -101,7 +101,7 @@ def test_spike_detection_metadata():
 # core/analysis/__init__.py were never executed and the registry remained
 # empty.  On macOS the batch engine happened to be imported earlier via a
 # different path, masking the bug.
-# The fix imports ``Synaptipy.core.analysis`` (the full package) immediately
+# The fix imports ``synaptipy.core.analysis`` (the full package) immediately
 # before calling list_registered().
 # ---------------------------------------------------------------------------
 
@@ -126,7 +126,7 @@ EXPECTED_BUILTIN_ANALYSES = {
 
 def test_full_package_import_populates_registry():
     """Regression test: importing only registry.py leaves the registry empty;
-    the full Synaptipy.core.analysis package must be imported to trigger all
+    the full synaptipy.core.analysis package must be imported to trigger all
     @AnalysisRegistry.register decorators.
 
     The autouse clear_registry fixture has already cleared the registry before

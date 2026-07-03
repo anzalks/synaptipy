@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Infrastructure Layer for Synaptipy.
+Infrastructure Layer for synaptipy.
 
 Handles interactions with external systems like the file system (reading/writing),
 external libraries (neo, pynwb), and potentially databases or hardware interfaces.

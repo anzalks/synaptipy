@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 class DataLoaderService(QtCore.QObject):
-    """Service that loads :class:`~Synaptipy.core.data_model.Recording` objects
+    """Service that loads :class:`~synaptipy.core.data_model.Recording` objects
     in background threads and notifies subscribers via Qt signals.
 
     Usage::
@@ -49,7 +49,7 @@ class DataLoaderService(QtCore.QObject):
 
         Args:
             neo_adapter: An object with a ``read_recording(path)`` method that
-                         returns a :class:`~Synaptipy.core.data_model.Recording`
+                         returns a :class:`~synaptipy.core.data_model.Recording`
                          or ``None``.
             parent:      Optional Qt parent for memory-management purposes.
         """
@@ -106,7 +106,7 @@ class DataLoaderService(QtCore.QObject):
         that do not need to be read from disk.
 
         Args:
-            recording: A :class:`~Synaptipy.core.data_model.Recording` instance
+            recording: A :class:`~synaptipy.core.data_model.Recording` instance
                        (or ``None``) to deliver to connected slots immediately.
         """
         log.debug("DataLoaderService: emitting in-memory recording directly.")

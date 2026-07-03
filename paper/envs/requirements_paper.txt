@@ -1,10 +1,14 @@
 # Isolated reproducibility environment for paper validation scripts.
-# Install with: pip install -r paper/requirements_paper.txt
+# Install with: pip install -r paper/envs/requirements_paper.txt
 # Do NOT add these to the core SynaptiPy package.
+#
+# These versions mirror the environment used to regenerate the paper tables on
+# the paper_compliance branch. For full platform-level reproduction, prefer the
+# conda export and pip freeze files in this same directory.
 -e .
-allensdk>=2.16.0
-ipfx @ git+https://github.com/AllenInstitute/ipfx.git
-efel
-pandas
-matplotlib
-scipy
+allensdk==2.16.2
+ipfx==2.1.2
+efel==5.7.24
+pandas==3.0.2
+matplotlib==3.10.9
+scipy==1.17.1

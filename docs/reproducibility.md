@@ -5,11 +5,19 @@ results exactly.
 
 ## Pinned Environment
 
-For exact reproduction of published results, use the pinned conda
-environment:
+For day-to-day development, use the cross-platform install recipe:
 
 ```bash
 conda env create -f environment.yml
+conda activate synaptipy
+pip install -e ".[dev]"
+```
+
+For exact reproduction of paper outputs on the original paper platform, use the
+frozen files in `paper/envs/`:
+
+```bash
+conda env create -f paper/envs/conda_env_macos_arm64.yml
 conda activate synaptipy
 ```
 
@@ -19,8 +27,33 @@ For full system-level reproducibility:
 
 ```bash
 docker build -t synaptipy .
-docker run -v /path/to/data:/data synaptipy validation/ -v
+docker run synaptipy validation/ -v
 ```
+
+The Docker image copies `src/`, `tests/`, `validation/`, `examples/`, and
+`paper/` so validation commands operate on the same tree used by reviewers.
+
+## Paper Reproduction
+
+The paper pipeline is manifest-driven. The fixed Allen Institute validation
+cohort is listed in `paper/data_manifest.json`; NWB files are downloaded into
+`paper/data/allen_cache/`, which is not committed to git.
+
+Run lightweight checks before downloading data:
+
+```bash
+python paper/scripts/paper_figures/generate_paper_figures.py --check-only
+python paper/scripts/generate_paper_tables.py --check-only
+```
+
+Regenerate tables and figures:
+
+```bash
+python paper/scripts/paper_figures/generate_paper_figures.py --run-analysis --force
+```
+
+Generated tables include companion provenance JSON files containing the manifest,
+software versions, command-line options, and git commit.
 
 ## Random Seed Policy
 

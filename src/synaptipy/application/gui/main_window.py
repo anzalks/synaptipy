@@ -231,7 +231,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Help Menu ---
         help_menu = menu_bar.addMenu("&Help")
-        self.about_action = help_menu.addAction("&About Synaptipy...")
+        self.about_action = help_menu.addAction("&About synaptipy...")
         self.about_action.setToolTip("Show version and citation information")
         self.about_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.about_action.triggered.connect(self._show_about_dialog)
@@ -495,7 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_update_banner(self, latest_version: str) -> None:
         """Show a non-intrusive update-available banner below the menu bar.
 
-        Called from :class:`~Synaptipy.application.startup_manager.VersionCheckerWorker`
+        Called from :class:`~synaptipy.application.startup_manager.VersionCheckerWorker`
         via a cross-thread Qt signal when a newer release is detected.
 
         Args:

@@ -407,7 +407,7 @@ ed.detect_events_baseline_peak_kinetics(
 ### Impact
 - **Severity**: CRITICAL
 - **User Impact**: Analysis execution completely fails
-- **Error Type**: `AttributeError: module 'Synaptipy.core.analysis.event_detection' has no attribute 'detect_events_baseline_peak'`
+- **Error Type**: `AttributeError: module 'synaptipy.core.analysis.event_detection' has no attribute 'detect_events_baseline_peak'`
 - **Frequency**: 100% failure when "Baseline + Peak + Kinetics" analysis is triggered
 - **Data Loss**: Results never computed or displayed
 

@@ -1,7 +1,7 @@
 # src/synaptipy/application/plugin_manager.py
 # -*- coding: utf-8 -*-
 """
-Plugin Manager for Synaptipy.
+Plugin Manager for synaptipy.
 
 Scans two plugin directories and dynamically loads external Python scripts.
 Any script using the @AnalysisRegistry.register decorator will automatically

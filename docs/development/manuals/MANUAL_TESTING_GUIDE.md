@@ -17,7 +17,7 @@
  ```bash
  cd /Users/anzalks/PycharmProjects/Synaptipy
  conda activate synaptipy
- python -m Synaptipy
+ python -m synaptipy
  ```
 
 ---

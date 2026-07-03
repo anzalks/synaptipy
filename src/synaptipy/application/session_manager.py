@@ -225,7 +225,7 @@ class SessionManager(QObject):
         """Update performance settings and emit :attr:`preferences_changed`.
 
         This is the *publisher* side of the pub/sub architecture.  Connecting
-        a :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`'s
+        a :class:`~synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`'s
         :meth:`~BatchAnalysisEngine.update_performance_settings` slot to
         :attr:`preferences_changed` keeps the engine in sync without restarts.
 

@@ -147,7 +147,7 @@ metadata.
 3. Rename the function, change the `name=` and `label=`, adjust the `ui_params`
    and `plots` lists, and write your analysis logic.
 
-4. (Re)start Synaptipy.  Your analysis appears as a new tab in the Analyser.
+4. (Re)start synaptipy.  Your analysis appears as a new tab in the Analyser.
 
 No `pip install`, no editing `__init__.py`, no rebuilding - just save and restart.
 
@@ -780,7 +780,7 @@ The user can customise both overlay types via
 Synaptipy ships ready-to-run example plugins in `examples/plugins/`.  These are
 loaded automatically at startup so you can try them immediately and use them as
 templates.  Enable them via **Edit > Preferences** (or **Synaptipy > Preferences**
-on macOS) by checking **Enable Custom Plugins**, then restart Synaptipy.
+on macOS) by checking **Enable Custom Plugins**, then restart synaptipy.
 
 ---
 
@@ -796,7 +796,7 @@ To use these plugins:
 
 1. Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).
 2. Check **Enable Custom Plugins**.
-3. Restart Synaptipy.  Each plugin appears as a new sub-tab in the Analyser.
+3. Restart synaptipy.  Each plugin appears as a new sub-tab in the Analyser.
 
 To customise one, copy the file to `~/.synaptipy/plugins/` and edit your copy.  Synaptipy prefers the user copy over the bundled example, so your changes take effect immediately on the next restart.
 
@@ -931,7 +931,7 @@ Save this as `~/.synaptipy/plugins/synaptic_charge.py` (or copy it from
 """
 Custom Synaptipy Plugin: Synaptic Charge Transfer (Area Under Curve).
 
-Drop this file in ~/.synaptipy/plugins/ and restart Synaptipy.
+Drop this file in ~/.synaptipy/plugins/ and restart synaptipy.
 A new "Synaptic Charge Transfer" tab will appear in the Analyser.
 """
 import logging
@@ -1182,7 +1182,7 @@ signals.preferences_updated.connect(my_popup_widget.update_pens)
 ## 11. SpikeInterface Integration Plugin
 
 Synaptipy ships a ready-to-use plugin that integrates
-[SpikeInterface](https://spikeinterface.readthedocs.io/) spike detection
+[SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/) spike detection
 directly into the standard Analyser workflow.  Because SpikeInterface is an
 optional dependency it is **not** listed in `requirements.txt`; install it once
 with `pip install spikeinterface`.

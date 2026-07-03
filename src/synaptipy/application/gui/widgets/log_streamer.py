@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/widgets/log_streamer.py
 # -*- coding: utf-8 -*-
 """
-Analysis Status Window for Synaptipy.
+Analysis Status Window for synaptipy.
 
 Provides two public components:
 
@@ -193,7 +193,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         """Show if hidden, hide if visible.
 
         This is the only method that shows the window; called by the View
-        menu action in :class:`~Synaptipy.application.gui.main_window.MainWindow`.
+        menu action in :class:`~synaptipy.application.gui.main_window.MainWindow`.
         """
         if self.isVisible():
             self.hide()
@@ -204,7 +204,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         """Return ``True`` - the handler is always attached.
 
         Exists for testability; the handler lifetime is managed by
-        :class:`~Synaptipy.application.gui.analyser_tab.AnalyserTab`,
+        :class:`~synaptipy.application.gui.analyser_tab.AnalyserTab`,
         not by this window.
         """
         return True

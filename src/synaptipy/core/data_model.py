@@ -1,7 +1,7 @@
 # src/synaptipy/core/data_model.py
 # -*- coding: utf-8 -*-
 """
-Core Domain Data Models for Synaptipy.
+Core Domain Data Models for synaptipy.
 
 Defines the central classes representing electrophysiology concepts like
 Recording sessions and individual data Channels.
