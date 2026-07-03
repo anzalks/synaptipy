@@ -59,8 +59,16 @@ notebooks/.ipynb_checkpoints
 .coverage
 htmlcov/
 .pytest_cache/
+.mypy_cache/
 .verify_venv*/
 coverage.json
+
+# Generated verification / validation output
+verification_output/
+validation/report.json
+validation/report.md
+validation/sensitivity_report.md
+validation/sensitivity_results.json
 
 # Sphinx documentation build output and bundled resources (all generated; not committed)
 # CI runs build_offline_help.py before python -m build / PyInstaller to populate these.

@@ -609,8 +609,9 @@ def inject_pink_noise(
     white = rng.standard_normal(n)
     fft_white = np.fft.rfft(white)
     freqs = np.fft.rfftfreq(n, d=1.0 / sampling_rate)
-    # Avoid division-by-zero at DC (f=0); leave DC component unscaled
-    scale = np.where(freqs > 0, 1.0 / np.sqrt(freqs), 1.0)
+    scale = np.ones_like(freqs)
+    pos = freqs > 0
+    scale[pos] = 1.0 / np.sqrt(freqs[pos])
     pink_fft = fft_white * scale
     pink = np.fft.irfft(pink_fft, n=n)
     # Normalise to target RMS

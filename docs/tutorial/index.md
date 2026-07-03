@@ -343,7 +343,7 @@ automatically from the metadata you provide.
 
 #### Bundled Example Plugins
 
-Three ready-to-run example plugins ship with every Synaptipy installation.
+Five ready-to-run example plugins ship with every Synaptipy installation.
 When **Enable Custom Plugins** is checked in **Edit > Preferences** (it is on
 by default), they appear automatically as new sub-tabs in the Analyser and are
 the fastest way to see what the plugin system can do before writing your own.
@@ -353,6 +353,8 @@ the fastest way to see what the plugin system can do before writing your own.
 | `examples/plugins/synaptic_charge.py` | **Synaptic Charge (AUC)** | Total charge (pC) of a postsynaptic current via trapezoidal integration over a user-defined window; shaded fill overlay marks the integrated area and a star marks the detected peak amplitude. |
 | `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for optogenetically evoked spikes; requires a secondary digital/TTL channel. |
 | `examples/plugins/ap_repolarization.py` | **Max Repolarization Rate** | Steepest falling dV/dt of the first action potential in a window (V/s), a proxy for voltage-gated potassium-channel dynamics. |
+| `examples/plugins/miniml_integration.py` | **miniML Events** | Deep-learning event detection via miniML (optional dep; requires tensorflow + cloned miniML repo). |
+| `examples/plugins/spike_interface_integration.py` | **SpikeInterface Spikes** | Spike detection via SpikeInterface (optional dep; `pip install spikeinterface`). |
 
 ![Analyser tab overview](screenshots/analyser_tab.png)
 
@@ -370,7 +372,7 @@ Copy the starter template that ships with Synaptipy:
 cp src/synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
 
 # Windows (PowerShell)
-Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
+Copy-Item src\synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
 ```
 
 > **Plugin folder location by platform:**

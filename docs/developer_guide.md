@@ -181,7 +181,7 @@ Synaptipy supports two ways to add new analysis functions:
  `src/synaptipy/core/analysis/`, register the import in `__init__.py`,
  and add tests.
 
-Three bundled example plugins ship in `examples/plugins/` and are loaded
+Five bundled example plugins ship in `examples/plugins/` and are loaded
 automatically when **Enable Custom Plugins** is checked in Preferences:
 
 | Plugin file | Tab label | Purpose |

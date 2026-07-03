@@ -483,7 +483,7 @@ underlying data.
 
 **Customising overlay appearance:**
 
-1. Open **Edit > Plot Preferences** (or the settings toolbar button).
+1. Open **View > Plot Customization...** (or the settings toolbar button).
 2. Switch to the **Trace Overlay** tab to adjust the highlight colour, line
    width, and opacity with a slider.
 3. Switch to the **Event Fit Overlay** tab to adjust the fitted-curve colour,
@@ -685,7 +685,7 @@ trace the user visually validated.
 
 ### Preferences
 
-Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access the application settings:
+Open **Edit > Preferences** to access the application settings:
 
 | Setting | Description |
 |---------|-------------|

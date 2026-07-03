@@ -40,7 +40,8 @@ def _synthetic_trace(n_events: int = 3, tau_rise: float = 0.5e-3, tau_decay: flo
     for et in event_times:
         t_rel = t - et
         mask = t_rel >= 0
-        kernel = np.where(mask, np.exp(-t_rel / tau_decay) - np.exp(-t_rel / tau_rise), 0.0)
+        kernel = np.zeros_like(t_rel)
+        kernel[mask] = np.exp(-t_rel[mask] / tau_decay) - np.exp(-t_rel[mask] / tau_rise)
         trace -= 5e-2 * kernel  # negative PSCs
     return trace.astype(np.float64)
 

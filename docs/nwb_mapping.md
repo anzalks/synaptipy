@@ -216,15 +216,14 @@ export (marked **✓**) or the planned container for future embedding.
 | 4 | Sag Ratio (Ih) | `sag_ratio_analysis` | `CurrentClampSeries` | `ProcessingModule` - scalars V_peak, V_ss, sag_ratio, rebound (planned) |
 | 5 | Capacitance (Cm) | `capacitance_analysis` | `CurrentClampSeries` (CC) / `VoltageClampSeries` (VC) | `ProcessingModule` - scalars Cm_pF, Rs_MOhm (planned) |
 | 6 | Spike Detection | `spike_detection` | `CurrentClampSeries` | `Units` table - spike_times column (planned) |
-| 7 | Single-Spike Features | `single_spike_features` | `CurrentClampSeries` | `Units` table - threshold_mv, amplitude_mv, half_width_ms, fAHP, mAHP (planned) |
-| 8 | Paired-Pulse Ratio (PPR) | `ppr_analysis` | `CurrentClampSeries` / `VoltageClampSeries` | `ProcessingModule` - scalars R1, R2, PPR, decay_tau_ms (planned) |
+| 7 | Phase Plane | `phase_plane_analysis` | `CurrentClampSeries` | `ProcessingModule` - 2-D `TimeSeries` (V vs dV/dt) per sweep (planned) |
+| 8 | Paired-Pulse Ratio (PPR) | `paired_pulse_ratio` | `CurrentClampSeries` / `VoltageClampSeries` | `ProcessingModule` - scalars R1, R2, PPR, decay_tau_ms (planned) |
 | 9 | Event Detection | `event_detection_threshold` / `event_detection_deconvolution` | `CurrentClampSeries` | **✓** `ProcessingModule` → `DynamicTable` with `time_s` and `amplitude` columns per channel/trial (requires HDMF; populated from batch-engine `_raw_arrays`) |
 | 10 | I-V Curve | `iv_curve_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays delta_V, delta_I; scalar Rin_aggregate, R2 (planned) |
 | 11 | Burst Analysis | `burst_analysis` | `CurrentClampSeries` | `ProcessingModule` - burst times, durations, intra-burst frequency (planned) |
 | 12 | F-I Curve / Excitability | `excitability_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays firing_rate, current_step; scalars rheobase, fi_slope (planned) |
-| 13 | Phase Plane | `phase_plane_analysis` | `CurrentClampSeries` | `ProcessingModule` - 2-D `TimeSeries` (V vs dV/dt) per sweep (planned) |
-| 14 | Spike Train Dynamics | `train_dynamics` | `CurrentClampSeries` | `Units` table plus `ProcessingModule` scalars CV, CV2, LV, adaptation_index (planned) |
-| 15 | Optogenetic Synchronisation | `optogenetic_sync` | `CurrentClampSeries` + `VoltageClampSeries` (opto channel) | `ProcessingModule` - scalars latency_ms, jitter_ms, response_probability (planned) |
+| 13 | Spike Train Dynamics | `train_dynamics` | `CurrentClampSeries` | `Units` table plus `ProcessingModule` scalars CV, CV2, LV, adaptation_index (planned) |
+| 14 | Optogenetic Synchronisation | `optogenetic_sync` | `CurrentClampSeries` + `VoltageClampSeries` (opto channel) | `ProcessingModule` - scalars latency_ms, jitter_ms, response_probability (planned) |
 
 ### Notes on icephys best-practice containers
 

@@ -125,7 +125,7 @@ metadata.
    cp src/synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
 
    # Windows (PowerShell)
-   Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
+   Copy-Item src\synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
    ```
    The plugin directory is created automatically the first time Synaptipy runs.
    If it does not exist yet, create it manually:
@@ -755,14 +755,13 @@ The user can customise both overlay types via
 
 > **Prerequisite - Enable Custom Plugins:** Before your plugin will load you
 > must ensure the "Enable Custom Plugins" checkbox is checked in
-> **Edit > Preferences > Extensions** (or **Synaptipy > Preferences** on
-> macOS).  This setting is on by default.  After changing it, restart
-> Synaptipy for the change to take effect.
+> **Edit > Preferences > Extensions**.  This setting is on by default.
+> Changes take effect immediately via hot-reload; no restart is required.
 
 ### Real-world templates in `examples/plugins/`
 
 > **Looking for a working starting point?**  The `examples/plugins/` directory
-> ships three fully annotated, copy-pasteable plugin templates that cover the
+> ships five fully annotated, copy-pasteable plugin templates that cover the
 > most common use cases:
 >
 > | File | What it demonstrates |
@@ -770,6 +769,8 @@ The user can customise both overlay types via
 > | `synaptic_charge.py` | Baseline subtraction, trapezoidal integration, `fill_between` + star overlays |
 > | `opto_jitter.py` | Multi-channel access (TTL + voltage), per-trial loop, jitter statistics |
 > | `ap_repolarization.py` | Derivative-based detection, `vlines` + `hlines` overlays |
+> | `miniml_integration.py` | Deep-learning event detection via miniML (optional dep) |
+> | `spike_interface_integration.py` | Spike detection via SpikeInterface (optional dep) |
 >
 > Copy any file to `~/.synaptipy/plugins/`, rename the function and the
 > `name=` / `label=` fields in the decorator, and you have a working plugin

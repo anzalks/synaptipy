@@ -11,7 +11,6 @@ Files updated
 - pyproject.toml          — version = "X.Y.Z"
 - src/synaptipy/__init__.py — __version__ = "X.Y.Z"
 - CITATION.cff            — version: "X.Y.Z" and date-released → today
-- docs/conf.py            — version and release fields
 - installer/windows_setup.iss — installer version string
 - installer/linux/synaptipy.desktop — X-AppVersion field
 - README.md               — installer filename strings vX.Y.Z
@@ -100,17 +99,8 @@ def bump(old_version: str, new_version: str) -> None:
         f'date-released: "{today}"',
     )
 
-    # docs/conf.py
-    _replace(
-        ROOT / "docs" / "conf.py",
-        f'version = "{old_version}"',
-        f'version = "{new_version}"',
-    )
-    _replace(
-        ROOT / "docs" / "conf.py",
-        f'release = "{old_version}"',
-        f'release = "{new_version}"',
-    )
+    # docs/conf.py — version is now read dynamically from pyproject.toml;
+    # no hardcoded string to bump.
 
     # docs/references.md
     _replace(

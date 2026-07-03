@@ -15,18 +15,21 @@ Synaptipy uses Qt's native theming system (`src/synaptipy/shared/styling.py`) fo
 
 ### Theme Mode Management
 
-The styling module provides simple theme management functions:
+Theme management lives in `src/synaptipy/shared/theme_manager.py`:
 
-- `get_current_theme_mode()`: Returns current theme ('light' or 'dark')
-- `set_theme_mode(mode)`: Set theme to 'light' or 'dark'
-- `toggle_theme_mode()`: Switch between light and dark themes
+- `get_theme_mode()`: Returns the current `ThemeMode` enum (`LIGHT`, `DARK`, or `SYSTEM`)
+- `set_theme_mode(mode)`: Set theme to a `ThemeMode` value; emits `theme_changed` signal
+- `is_dark_mode()`: Returns `True` if dark mode should be active
+
+The `styling.py` module provides `get_system_theme_mode()` for OS-level detection and `apply_stylesheet(app)` to apply the resolved theme.
 
 ### Qt Native Theming
 
-The system uses Qt's native palette and style system:
+The system uses Qt's native palette and style system with three modes:
 
-- **Dark Theme**: Uses "Fusion" style with custom dark palette
-- **Light Theme**: Uses system native style with default palette
+- **Dark**: Uses "Fusion" style with custom dark palette
+- **Light**: Uses "Fusion" style with custom light palette
+- **System**: Restores the OS-native style and palette from application startup
 
 ### PyQtGraph Plot Styling
 
@@ -91,16 +94,13 @@ plot_widget.plot(time, avg_data, pen=get_average_pen())
 Theme switching is handled automatically by the main window, but can be controlled programmatically:
 
 ```python
-from synaptipy.shared.styling import set_theme_mode, toggle_theme_mode, apply_stylesheet
+from synaptipy.shared.theme_manager import set_theme_mode, ThemeMode
+from synaptipy.shared.styling import apply_stylesheet
 from PySide6 import QtWidgets
 
 # Switch to dark theme
-set_theme_mode('dark')
+set_theme_mode(ThemeMode.DARK)
 app = QtWidgets.QApplication.instance()
-apply_stylesheet(app)
-
-# Or toggle theme
-new_mode = toggle_theme_mode()
 apply_stylesheet(app)
 ```
 
