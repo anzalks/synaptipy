@@ -20,7 +20,7 @@ def _read(path: str) -> str:
 def test_package_metadata_uses_canonical_lowercase_package() -> None:
     pyproject = _read("pyproject.toml")
 
-    assert 'synaptipy = "synaptipy.application.__main__:run_gui"' in pyproject
+    assert 'synaptipy = "synaptipy.__main__:main"' in pyproject
     assert 'synaptipy-batch = "synaptipy.application.cli.main:main"' in pyproject
     assert "[tool.setuptools.package-data]\nsynaptipy = [" in pyproject
     assert 'known_first_party = ["synaptipy"]' in pyproject

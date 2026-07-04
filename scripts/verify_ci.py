@@ -35,30 +35,35 @@ def run_command(command: List[str], description: str) -> Tuple[bool, str]:
 
 def check_dependencies():
     """Check if required tools are installed, install if missing."""
-    tools = ["flake8", "pytest"]
+    tools = ["flake8", "black", "isort", "pytest"]
     for tool in tools:
         print(f"Checking for {tool}...")
         try:
             subprocess.run([sys.executable, "-m", "pip", "show", tool], capture_output=True, check=True)
         except subprocess.CalledProcessError:
             print(f"[WARN] {tool} not found. Installing...")
-            try:
-                subprocess.run([sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock"], check=True)
-            except subprocess.CalledProcessError:
-                print("[WARN] Standard install failed (PEP 668?). Retrying with --break-system-packages...")
-                subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "install",
-                        tool,
-                        "pytest-qt",
-                        "pytest-mock",
-                        "--break-system-packages",
-                    ],
-                    check=True,
-                )
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock"],
+                check=True,
+            )
+
+
+def check_black() -> bool:
+    """Run black formatting check (matches GitHub Actions)."""
+    success, _ = run_command(
+        [sys.executable, "-m", "black", "--check", "--diff", "src/", "tests/"],
+        "Black Formatting Check",
+    )
+    return success
+
+
+def check_isort() -> bool:
+    """Run isort import ordering check (matches GitHub Actions)."""
+    success, _ = run_command(
+        [sys.executable, "-m", "isort", "--check", "--diff", "src/", "tests/"],
+        "isort Import Order Check",
+    )
+    return success
 
 
 def check_flake8() -> bool:
@@ -265,6 +270,8 @@ def main():
         print("Proceeding with checks anyway...")
 
     checks = [
+        check_black(),
+        check_isort(),
         check_flake8(),
         check_tests(),
         check_no_emojis(),
